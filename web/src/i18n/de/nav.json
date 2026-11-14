@@ -28,5 +28,8 @@
   "app": "App installieren",
   "templates": "Vorlagen",
   "banners": "Banner",
-  "sources": "Quellen"
+  "sources": "Quellen",
+  "warnings": "Warnung",
+  "warningCases": "Warnentwürfe",
+  "warningConfig": "Stichwörter & Regeln"
 }

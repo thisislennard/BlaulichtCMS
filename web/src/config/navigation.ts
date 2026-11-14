@@ -44,6 +44,13 @@ export const navigation: NavGroup[] = [
     ],
   },
   {
+    group: 'nav.warnings',
+    items: [
+      { id: 'warnings', path: '/warnungen', label: 'nav.warningCases', icon: 'Siren', perm: ['warning.draft', 'warning.level', 'warning.approve', 'warning.send', 'warning.rules'] },
+      { id: 'warningConfig', path: '/warnungen/pflege', label: 'nav.warningConfig', icon: 'ListChecks', perm: ['warning.rules', 'warning.approve', 'system.manage'] },
+    ],
+  },
+  {
     group: 'nav.admin',
     items: [
       { id: 'users', path: '/benutzer', label: 'nav.users', icon: 'Users', perm: ['user.read'] },

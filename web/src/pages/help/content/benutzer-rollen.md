@@ -9,12 +9,12 @@ Rechte werden immer **auf dem Server** geprüft – bei jeder Seite, jeder API-A
 | Redaktion | Beiträge schreiben, Medien übernehmen, zur Freigabe einreichen (inkl. Medienverwaltung) |
 | Freigabe | Fassungen freigeben oder zurückweisen, Aktivitäten lesen |
 | Veröffentlichung | Freigegebene Fassungen an Websites übergeben, Fehler neu starten |
-| Warnentwurf | Warnentwürfe erfassen (in Vorbereitung) |
-| Warnfreigabe | Warnentwürfe freigeben (in Vorbereitung) |
-| Warnversand | Freigegebene Warnentwürfe versenden (in Vorbereitung) |
+| Warnentwurf | Warnentwürfe erfassen (Erstmeldung, Aktualisierung, Entwarnung) und einreichen |
+| Warnfreigabe | Warnstufe bestätigen, PDF-Fassungen freigeben, Lagefragen und Regeln fachlich freigeben |
+| Warnversand | Freigegebene Warnentwürfe versenden, unklare Zustellungen prüfen, Eingang bestätigen |
 | Lesezugriff | Beiträge, Medien und Status ansehen |
 
-Entwurf, Freigabe und Versand von Warnentwürfen sind bewusst **getrennte** Rechte.
+Entwurf, Bestätigung der Warnstufe, Freigabe und Versand von Warnentwürfen sind bewusst **getrennte** Rechte. Stichwörter, Regeln, Vorlagen und Zuständigkeiten pflegt die Administration (Recht „Stichwörter und Regeln pflegen“); Regeln und Lagefragen gibt immer eine **andere** Person fachlich frei.
 
 ## Einladen
 

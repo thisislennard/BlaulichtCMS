@@ -28,5 +28,8 @@
   "app": "Install app",
   "templates": "Templates",
   "banners": "Banners",
-  "sources": "Sources"
+  "sources": "Sources",
+  "warnings": "Warnings",
+  "warningCases": "Warning drafts",
+  "warningConfig": "Keywords & rules"
 }

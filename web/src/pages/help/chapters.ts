@@ -40,6 +40,10 @@ export const GROUPS: ChapterGroup[] = [
     ['dashboard', 'LayoutDashboard'],
     ['quellen', 'Newspaper'],
   ]),
+  G('warnings', [
+    ['warnentwurf', 'Siren'],
+    ['stichwoerter-regeln', 'ListChecks'],
+  ]),
   G('channels', [
     ['wordpress', 'Globe'],
     ['banner', 'Megaphone'],

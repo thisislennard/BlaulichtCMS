@@ -57,6 +57,7 @@ flowchart LR
 - **Sichten am Handy:** Datei für Datei auswählen oder überspringen – per Button, Wischgeste oder Tastatur.
 - **Fassungen und Freigaben:** Jede Änderung an Text, Medien oder Zielkanal erzeugt eine neue Fassung. Eine Freigabe gilt genau für eine Fassung (Prüfsumme).
 - **Veröffentlichen ohne offenen Eingang:** Die **LifeLink Bridge** (WordPress-Plugin, als ZIP direkt aus LifeLink) holt Aufträge per HTTPS ab und meldet WordPress-ID und URL zurück. Doppelte Abholung erzeugt nie einen zweiten Beitrag.
+- **Warnentwurf per Handy (MoWaS-Übergabe):** Sechs-Schritte-Assistent für Erstmeldung, Aktualisierung und Entwarnung. Der **Warnstufen-Assistent** schlägt anhand lokal gepflegter, versionierter und fachlich freigegebener Regeln eine Stufe vor – oder sagt ehrlich „Keine eindeutige Empfehlung – fachlich prüfen“. Die Stufe bestätigt immer eine berechtigte Person; die Freigabe fixiert die PDF mit Prüfsumme, der Versand per SMTP läuft ab Werk im **Testmodus**. Die amtliche Auslösung bleibt bei der zuständigen Stelle.
 - **Auch ganz ohne Website:** Der interne Redaktionsablauf funktioniert vollständig ohne externe Dienste.
 - **Ein Container:** Webanwendung, Bediener-PWA, Worker und PostgreSQL in einem Image, Daten in einem Volume.
 - **Schnell und schlank:** rund 180 KB beim ersten Aufruf (vorkomprimiert mit Brotli), danach fast alles aus dem Browser-Cache; Sichtung ohne Wartezeit, zwei parallele Uploads, Bilder werden nur einmal dekodiert.
@@ -77,7 +78,12 @@ flowchart LR
   </tr>
   <tr>
     <td colspan="2"><b>Auf der WordPress-Testseite</b><br/>veröffentlicht von der LifeLink Bridge<br/><br/><img src="docs/bilder/wordpress-beitrag.webp" alt="Beitrag auf WordPress"/></td>
-    <td><b>Hilfe-Center</b><br/>18 Kapitel mit Volltextsuche<br/><br/><img src="docs/bilder/hilfe.webp" alt="Hilfe-Center"/></td>
+    <td><b>Hilfe-Center</b><br/>23 Kapitel mit Volltextsuche<br/><br/><img src="docs/bilder/hilfe.webp" alt="Hilfe-Center"/></td>
+  </tr>
+  <tr>
+    <td><b>Warnentwurf am Handy</b><br/>Stichwort, Lagefragen, Vorschlag<br/><br/><img src="docs/bilder/warnentwurf-handy.webp" alt="Warnentwurf-Assistent am Handy"/></td>
+    <td><b>Freigegebene PDF</b><br/>mit bestätigter Warnstufe und Prüfsumme<br/><br/><img src="docs/bilder/warnentwurf-pdf.webp" alt="PDF eines Warnentwurfs"/></td>
+    <td><b>Regeln pflegen</b><br/>versioniert, fachlich freigegeben<br/><br/><img src="docs/bilder/warnstufen-regeln.webp" alt="Pflege der Warnstufen-Regeln"/></td>
   </tr>
 </table>
 

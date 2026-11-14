@@ -20,6 +20,10 @@ const MAP: Record<string, string[][]> = {
   wp_sites: [['sites'], ['dashboard']],
   notifications: [['notifications']],
   rss_items: [['rss'], ['dashboard']],
+  warnings: [['warnings'], ['warning']],
+  warning_revisions: [['warnings'], ['warning']],
+  warning_approvals: [['warnings'], ['warning']],
+  warning_sends: [['warnings'], ['warning'], ['dashboard']],
 };
 
 export function LiveProvider({ children, enabled }: { children: ReactNode; enabled: boolean }) {

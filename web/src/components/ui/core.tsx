@@ -117,6 +117,13 @@ export const STATUS: Record<string, { tone: Tone; label: string; pulse?: boolean
   active: { tone: 'success', label: 'Aktiv' },
   expired: { tone: 'neutral', label: 'Abgelaufen' },
   revoked: { tone: 'error', label: 'Widerrufen' },
+  // Warnentwürfe und Versand
+  sending: { tone: 'primary', label: 'Wird versendet', pulse: true },
+  accepted: { tone: 'success', label: 'Vom Mailserver angenommen' },
+  send_failed: { tone: 'error', label: 'Versand fehlgeschlagen' },
+  send_unknown: { tone: 'warning', label: 'Versand unklar – prüfen' },
+  acknowledged: { tone: 'success', label: 'Eingang bestätigt' },
+  retired: { tone: 'neutral', label: 'Außer Kraft' },
 };
 
 export function StatusBadge({ status, className, labels }: { status: string; className?: string; labels?: Record<string, string> }) {

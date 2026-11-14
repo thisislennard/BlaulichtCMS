@@ -37,13 +37,15 @@ export function renderWarningPdf(i: PdfInput): Promise<Buffer> {
   doc.rect(0, 0, doc.page.width, 8).fill(i.warning.kind === 'all_clear' ? '#17692F' : '#C8102E');
   doc.fillColor('#0B1726').font('Helvetica').fontSize(10).text(i.organization, 56, 28);
   doc.font('Helvetica-Bold').fontSize(20).text(`${i.template.pdf_title} – ${KIND_LABEL[i.warning.kind]}`, 56, 48, { width: W });
+  let y = doc.y + 6;
   if (i.draft) {
-    doc.moveDown(0.3).rect(56, doc.y, W, 26).fill('#FDE8EA');
-    doc.fillColor('#A3121C').font('Helvetica-Bold').fontSize(12).text('ENTWURF – nicht freigegeben, nicht zur Weitergabe', 64, doc.y - 19, { width: W - 16 });
+    doc.rect(56, y, W, 26).fill('#FDE8EA');
+    doc.fillColor('#A3121C').font('Helvetica-Bold').fontSize(12).text('ENTWURF – nicht freigegeben, nicht zur Weitergabe', 64, y + 7, { width: W - 16, lineBreak: false });
+    y += 26;
   }
-  doc.moveDown(1);
+  y += 16;
 
-  // Metadaten
+  // Metadaten (zweispaltig, Höhe je Zeile gemessen)
   const meta: [string, string][] = [
     ['Vorgangs-ID', i.warning.case_no],
     ['Art', KIND_LABEL[i.warning.kind] + (i.warning.parent_case_no ? ` (zu Vorgang ${i.warning.parent_case_no})` : '')],
@@ -52,28 +54,36 @@ export function renderWarningPdf(i: PdfInput): Promise<Buffer> {
   ];
   if (i.revision.keyword) meta.push(['Feuerwehrstichwort', `${i.revision.keyword.code} – ${i.revision.keyword.label}`]);
   if (i.approval) meta.push(['Freigabe', `${i.approval.decided_by_name}, ${fmt(i.approval.decided_at, i.timeZone)}`]);
-  doc.font('Helvetica').fontSize(10).fillColor('#44546A');
-  const y0 = doc.y;
+  const boxTop = y;
+  y += 8;
+  doc.fontSize(10);
   for (const [k, v] of meta) {
-    doc.font('Helvetica-Bold').fillColor('#44546A').text(k, 56, doc.y, { width: 130, continued: false });
-    doc.moveUp().font('Helvetica').fillColor('#0B1726').text(v, 190, doc.y, { width: W - 134 });
-    doc.moveDown(0.2);
+    doc.font('Helvetica').fillColor('#0B1726');
+    const h = Math.max(doc.heightOfString(v, { width: W - 150 }), 12);
+    doc.font('Helvetica-Bold').fillColor('#44546A').text(k, 64, y, { width: 130, lineBreak: false });
+    doc.font('Helvetica').fillColor('#0B1726').text(v, 196, y, { width: W - 150 });
+    y += h + 4;
   }
-  doc.rect(50, y0 - 6, W + 12, doc.y - y0 + 10).lineWidth(0.8).strokeColor('#C7D0DB').stroke();
-  doc.moveDown(1);
+  y += 4;
+  doc.rect(56, boxTop, W, y - boxTop).lineWidth(0.8).strokeColor('#C7D0DB').stroke();
+  y += 16;
 
   // Warnstufe (bestätigt) – bei Entwarnung keine Stufe
+  let barText: string;
+  let barColor: string;
   if (i.warning.kind !== 'all_clear') {
     const lvl = i.revision.level_decision?.level;
-    const label = lvl ? (i.template.level_labels[String(lvl)] ?? `Warnstufe ${lvl}`) : 'Warnstufe nicht bestätigt';
-    doc.rect(56, doc.y, W, 30).fill(lvl ? '#0E2440' : '#8F4A00');
-    doc.fillColor('#FFFFFF').font('Helvetica-Bold').fontSize(14).text(label + (lvl ? ' (bestätigt)' : ''), 66, doc.y - 22, { width: W - 20 });
-    doc.moveDown(1.2);
+    barText = (lvl ? (i.template.level_labels[String(lvl)] ?? `Warnstufe ${lvl}`) : 'Warnstufe nicht bestätigt') + (lvl ? ' (bestätigt)' : '');
+    barColor = lvl ? '#0E2440' : '#8F4A00';
   } else {
-    doc.rect(56, doc.y, W, 30).fill('#17692F');
-    doc.fillColor('#FFFFFF').font('Helvetica-Bold').fontSize(14).text('ENTWARNUNG', 66, doc.y - 22, { width: W - 20 });
-    doc.moveDown(1.2);
+    barText = 'ENTWARNUNG';
+    barColor = '#17692F';
   }
+  doc.rect(56, y, W, 34).fill(barColor);
+  doc.fillColor('#FFFFFF').font('Helvetica-Bold').fontSize(15).text(barText, 68, y + 10, { width: W - 24, lineBreak: false });
+  y += 34 + 20;
+  doc.x = 56;
+  doc.y = y;
 
   // Felder in Reihenfolge der Vorlage
   for (const f of i.template.fields) {
@@ -95,7 +105,7 @@ export function renderWarningPdf(i: PdfInput): Promise<Buffer> {
     doc.fillColor('#44546A').font('Helvetica').fontSize(8).text(i.template.pdf_footer, 56, fy, { width: W - 70 });
     doc.text(`${i.warning.case_no} · Fassung ${i.revision.number} · Seite ${p + 1}/${range.count}`, 56 + W - 160, fy + 18, { width: 160, align: 'right' });
     if (i.draft) {
-      doc.save().rotate(-35, { origin: [doc.page.width / 2, doc.page.height / 2] }).fillColor('#C8102E').opacity(0.1).font('Helvetica-Bold').fontSize(96).text('ENTWURF', 60, doc.page.height / 2 - 50, { width: doc.page.width - 120, align: 'center' }).restore();
+      doc.save().rotate(-35, { origin: [doc.page.width / 2, doc.page.height / 2] }).fillColor('#C8102E').opacity(0.1).font('Helvetica-Bold').fontSize(84).text('ENTWURF', 0, doc.page.height / 2 - 40, { width: doc.page.width, align: 'center', lineBreak: false }).restore();
     }
   }
   doc.end();

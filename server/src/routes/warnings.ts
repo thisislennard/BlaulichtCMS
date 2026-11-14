@@ -428,7 +428,9 @@ export async function warningRoutes(app: FastifyInstance) {
 
   /* ------------------------------------------------------------ Pflege (warning.rules) */
 
-  app.get('/warning-config', { preHandler: anyWarn }, async () => {
+  app.get('/responsibilities', { preHandler: anyWarn }, async () => many<any>(`SELECT id, name, area, recipients FROM responsibilities WHERE active ORDER BY name`));
+
+  app.get('/warning-config', { preHandler: requireAnyAuth('warning.rules', 'warning.approve', 'system.manage') }, async () => {
     const s = await getSettings();
     return {
       templates: await many<any>(`SELECT t.*, u.name AS created_by_name FROM warning_templates t LEFT JOIN users u ON u.id = t.created_by ORDER BY family, version DESC`),

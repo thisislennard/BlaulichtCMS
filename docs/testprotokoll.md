@@ -11,6 +11,8 @@ TEST_DATABASE_URL=postgresql://lifelink:lifelink@127.0.0.1:5442/lifelink_test np
 npm run build
 docker compose build                                                                # Image lifelink:local
 node test/e2e/m1-flow.mjs                                                           # Abnahme M1 (setzt Volumes zurück!)
+node test/e2e/m2-flow.mjs                                                           # Abnahme M2
+node test/e2e/m3-flow.mjs                                                           # Abnahme M3 (lokales Test-Postfach auf Port 2525)
 ```
 
 ## Letzte Ergebnisse (14.11.2026)
@@ -112,3 +114,39 @@ Zielsystem, Chromium (Playwright) als Desktop (1360×900), Pixel 7 (Bediener) un
 | Banner mit Cache und getrennter Verbindung | Banner live → LifeLink gestoppt → Banner läuft auf der Website trotzdem ab; zwischengespeichertes HTML blendet es per Skript aus; nach Wiederverbindung fehlerfreier Abgleich |
 | RSS-Import | Vorschau, Import, Themenidee mit Quelle, erneuter Abruf ohne Duplikate (WordPress-Feed als Quelle, interner Host ausdrücklich freigegeben) |
 | Dashboard nach Wiederverbindung | Browser offline → „Unterbrochen“ → Einreichung während der Unterbrechung → nach Wiederverbindung sichtbar, „Live“ wieder aktiv; mobile Reihenfolge geprüft |
+
+## Meilenstein 3 (14.11.2026)
+
+| Prüfung | Ergebnis |
+|---|---|
+| Server-Tests | ✅ 54/54 (davon 12 für Warnentwürfe und Warnstufen-Assistent) |
+| **Abnahmetest M3** (`node test/e2e/m3-flow.mjs`) | ✅ **9/9** – Handy (Pixel 7) für den Wizard, Desktop für die Pflege |
+
+Versand ausschließlich an einen **lokalen Test-Mailserver** im Testskript; keine Mail an operative Empfänger.
+Alle Stichwörter, Fragen, Regeln und Lagen sind fiktiv.
+
+| Abnahmekriterium | Nachweis |
+|---|---|
+| Wizard am Handy (Erstmeldung, Aktualisierung, Entwarnung; speichern und fortsetzen) | Stichwort per Alias gesucht, Lage beantwortet, Felder ausgefüllt; jeder Schrittwechsel speichert eine Fassung |
+| Ausgeliefert ohne aktive Regeln | `warning_rules` nach Erstinstallation leer; Stichwort ohne Regel → „Keine eindeutige Empfehlung – fachlich prüfen“ |
+| Dasselbe Stichwort, zwei Lagebilder | Rauch ohne Evakuierung → Stufe 3; Evakuierung → Stufe 2, jeweils mit Begründung und Regelversion |
+| Unbekanntes Stichwort, fehlende Angaben, widersprüchliche Regeln | jeweils kein Vorschlag mit Grund; „unbekannt“ zählt als fehlend; Regel auf nicht freigegebene Frage trifft nie zu |
+| Manuelle Änderung | Abweichung ohne Begründung abgelehnt (API und Oberfläche); mit Begründung gespeichert inkl. Vorschlag, Regelversion, Person, Zeit |
+| Geänderte Lage | neue Antworten → Bestätigung verfällt; reine Textänderung behält sie |
+| Aktualisierung | zeigt bisherige Stufe, Stufe muss neu bestätigt werden |
+| Entwarnung | eigener Vorgang ohne Stufe, PDF mit „ENTWARNUNG“, keine Stufe 3 |
+| Bestätigte Stufe im richtigen PDF | Freigabe erzeugt PDF mit SHA-256; Text „Warnstufe 2 … (bestätigt)“ und Vorgangs-ID per `pdftotext` geprüft; Entwurfs-PDF trägt „ENTWURF“ |
+| Vorschlag allein löst nichts aus | nach Vorschlag weder Versandauftrag noch Mail noch Veröffentlichung |
+| Getrennte Rechte | Entwurf kann Stufe nicht bestätigen (403), nicht versenden (403); Regel-/Fragenfreigabe durch die anlegende Person abgelehnt |
+| Testmodus | Mail nur an das Testpostfach, Betreff `[TEST]`, vorgesehene Empfänger nur im Text, PDF-Prüfsumme im Mailkopf |
+| Versandfehler | 550-Ablehnung → „fehlgeschlagen“, erneuter Versand möglich und angenommen |
+| Unbekannter Zustellstatus | Abbruch nach DATA → „unbekannt – prüfen“; Neuversand gesperrt (409), erst nach Prüfung „nicht angekommen“ wieder möglich |
+| Vorlagenänderung | neue Vorlagenversion; Entwurfs-PDF eines bestehenden Vorgangs byte-gleich, neuer Vorgang nutzt die neue Version |
+
+**Befund und Korrektur während der Abnahme:** Nodemailer meldet einen Socket-Timeout nach DATA mit `command: CONN`. Die
+Einordnung ist deshalb konservativ: Nur eindeutige Fehler (Serverantwort, Verbindungsaufbau, Anmeldung) gelten als
+„fehlgeschlagen“, jeder Abbruch einer bestehenden Verbindung als „unbekannt“. Außerdem überlappten im PDF
+Metadatenkasten und Warnstufen-Balken; das Layout arbeitet jetzt mit gemessenen Zeilenhöhen.
+
+**Offen (#30):** Abstimmung von Feldsatz, PDF-Aufbau, Empfängern und Rückmeldeweg mit der zuständigen Stelle; Versand über
+den echten Mailserver an ein abgestimmtes Testpostfach.

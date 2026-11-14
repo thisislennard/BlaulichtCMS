@@ -37,6 +37,7 @@
   "groups": {
     "basics": "Grundlagen",
     "work": "Arbeiten mit LifeLink",
+    "warnings": "Warnentwürfe",
     "channels": "Kanäle",
     "admin": "Administration",
     "reference": "Nachschlagen"
@@ -125,6 +126,14 @@
     "dashboard": {
       "title": "Dashboard und Live-Status",
       "summary": "Widgets anordnen, mobile Reihenfolge, Vorlagen für Rollen, bestätigter Stand."
+    },
+    "warnentwurf": {
+      "title": "Warnentwurf und Übergabe",
+      "summary": "Wizard, Stichwort und Warnstufe, Freigabe der PDF, Versand und Eingangsbestätigung."
+    },
+    "stichwoerter-regeln": {
+      "title": "Stichwörter, Regeln und Versand pflegen",
+      "summary": "Lagefragen, versionierte Regeln mit fachlicher Freigabe, Zuständigkeiten, Vorlagen, SMTP und Testmodus."
     }
   },
   "tiles": {

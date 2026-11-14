@@ -23,6 +23,9 @@ const Users = lazy(() => import('./pages/admin/Users'));
 const SystemStatus = lazy(() => import('./pages/admin/SystemStatus'));
 const Logs = lazy(() => import('./pages/admin/Logs'));
 const Settings = lazy(() => import('./pages/admin/Settings'));
+const Warnings = lazy(() => import('./pages/warnings/Warnings'));
+const WarningCase = lazy(() => import('./pages/warnings/WarningCase'));
+const WarningConfig = lazy(() => import('./pages/warnings/WarningConfig'));
 const Help = lazy(() => import('./pages/help/Help'));
 const PrintSheet = lazy(() => import('./pages/print/PrintSheet'));
 const InstallApp = lazy(() => import('./pages/InstallApp'));
@@ -88,6 +91,9 @@ const router = createBrowserRouter([
       { path: 'quellen', element: <Page perm={['post.read']}><Sources /></Page> },
       { path: 'banner', element: <Page perm={['post.read']}><Banners /></Page> },
       { path: 'kanaele', element: <Page perm={['post.read', 'channel.manage']}><Sites /></Page> },
+      { path: 'warnungen', element: <Page perm={['warning.draft', 'warning.level', 'warning.approve', 'warning.send', 'warning.rules']}><Warnings /></Page> },
+      { path: 'warnungen/pflege', element: <Page perm={['warning.rules', 'warning.approve', 'system.manage']}><WarningConfig /></Page> },
+      { path: 'warnungen/:id', element: <Page perm={['warning.draft', 'warning.level', 'warning.approve', 'warning.send', 'warning.rules']}><WarningCase /></Page> },
       { path: 'benutzer', element: <Page perm={['user.read']}><Users /></Page> },
       { path: 'system', element: <Page perm={['system.read']}><SystemStatus /></Page> },
       { path: 'protokolle', element: <Page perm={['system.read']}><Logs /></Page> },

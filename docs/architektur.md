@@ -108,6 +108,24 @@ Sachlicher Behörden-/Einsatz-Look: hell als Standard (Lesbarkeit draußen), Mar
 Signalrot nur als Akzent (Marke, aktive Navigation, Dringliches), Status immer mit Farbe und Text, kleine Radien.
 Alles über Tokens in `web/src/theme/tokens.css` – das endgültige Design lässt sich dort zentral austauschen.
 
+### E14 – Warnentwürfe und Warnstufen-Assistent (M3, #41)
+
+- **Vorgang ≠ Fassung:** Ein Vorgang (`warnings`, Art Erstmeldung/Aktualisierung/Entwarnung, Bezug über `parent_id`/`root_id`)
+  hat unveränderliche Fassungen (`warning_revisions`). Die Prüfsumme umfasst Vorlage, Art, Felder, Zuständigkeiten,
+  Stichwort, Antworten und die Stufenentscheidung – die Freigabe gilt genau für diese Fassung.
+- **Vorschlag ist nur Hilfe:** `warnings/levels.ts` wertet nur fachlich freigegebene Regeln auf freigegebene Fragen aus.
+  Kein Vorschlag bei unbekanntem Stichwort, fehlenden Angaben, Widerspruch oder wenn eine unvollständige Regel zu einer
+  anderen Stufe führen könnte. Ein Vorschlag erzeugt nie einen Auftrag.
+- **Bestätigung als eigenes Recht** (`warning.level`), Abweichung nur mit Begründung; gespeichert werden Vorschlag,
+  Regel-IDs und -Versionen, Person und Zeit. Ändern sich Stichwort oder Antworten, verfällt die Bestätigung.
+- **Regeln versioniert** (Linie + Version); Freigabe durch eine andere Person setzt ältere Versionen außer Kraft.
+- **PDF bei Freigabe fixiert** (pdfkit, deterministische Metadaten), Datei unter `/data/warnings/<id>/` mit SHA-256.
+  Vorlagen sind versioniert; ein Vorgang behält seine Vorlagenversion.
+- **Versand genau einmal:** Auftrag `warning.send` mit `max_attempts = 1`. Status `accepted` (Mailserver-Annahme,
+  keine fachliche Bestätigung), `failed` (sicher nicht angenommen) oder `unknown` (Abbruch einer bestehenden
+  Verbindung, auch nach Neustart während „sending“). `unknown` sperrt jeden Neuversand bis zur menschlichen Prüfung.
+  Testmodus ab Werk: nur an das Testpostfach.
+
 ## Offene Architekturpunkte
 
 - LiFeOS-Quellcode liegt nicht vor: Abgleich von Sicherheitslogik und Update-Bedienung (#1) sowie das Importformat (#35) sind offen.
