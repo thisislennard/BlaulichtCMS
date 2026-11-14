@@ -13,3 +13,5 @@ if ( ! defined( 'WP_UNINSTALL_PLUGIN' ) ) {
 delete_option( 'lifelink_bridge_settings' );
 delete_transient( 'lifelink_bridge_lock' );
 wp_clear_scheduled_hook( 'lifelink_bridge_poll' );
+delete_option( 'lifelink_bridge_banners' );
+wp_clear_scheduled_hook( 'lifelink_bridge_banner_edge' );

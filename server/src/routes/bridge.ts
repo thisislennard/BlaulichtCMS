@@ -75,6 +75,7 @@ function jobPayload(p: any, media: any[], base: string) {
     id: p.id,
     type: 'post.upsert',
     lifelink_post_id: p.post_id,
+    kind: p.kind,
     revision: p.number,
     content_hash: p.content_hash,
     post: {
@@ -216,12 +217,25 @@ export async function bridgeRoutes(app: FastifyInstance) {
         RETURNING pb.id`,
       [site.id, REDELIVER_AFTER_SEC],
     );
-    if (!rows.length) return { jobs: [], poll_interval: POLL_SECONDS };
+    const bannerRows = await many<any>(
+      `UPDATE banner_jobs SET status = 'sent', fetched_at = now(), attempts = attempts + 1
+        WHERE id IN (SELECT id FROM banner_jobs WHERE site_id = $1 AND (status = 'queued' OR (status = 'sent' AND fetched_at < now() - make_interval(secs => $2)))
+                     ORDER BY created_at LIMIT 20 FOR UPDATE SKIP LOCKED)
+        RETURNING id, action, payload`,
+      [site.id, REDELIVER_AFTER_SEC],
+    );
+    const jobs: any[] = bannerRows.map((b) => ({ id: b.id, type: b.action === 'upsert' ? 'banner.upsert' : 'banner.delete', banner: b.payload }));
+    // Vollständige Liste aktiver Banner: Die Bridge gleicht damit ihren lokalen Stand ab (auch nach Datenverlust in WordPress)
+    const active = await many<any>(
+      `SELECT b.* FROM banners b WHERE b.site_id = $1 AND b.ended_at IS NULL AND b.ends_at > now()
+          AND EXISTS (SELECT 1 FROM banner_jobs j WHERE j.banner_id = b.id AND j.action = 'upsert' AND j.status IN ('sent','done'))`,
+      [site.id],
+    );
+    if (!rows.length) return { jobs, banner_ids: active.map((b) => b.id), poll_interval: POLL_SECONDS };
     const base = await publicBase(req);
-    const jobs = [];
     for (const r of rows) {
       const p = await one<any>(
-        `SELECT pb.id, pb.post_id, pb.action, rv.number, rv.title, rv.body, rv.excerpt, rv.variants, rv.media_ids, rv.cover_id, rv.content_hash
+        `SELECT pb.id, pb.post_id, pb.action, (SELECT kind FROM posts WHERE id = pb.post_id) AS kind, rv.number, rv.title, rv.body, rv.excerpt, rv.variants, rv.media_ids, rv.cover_id, rv.content_hash
            FROM publications pb JOIN post_revisions rv ON rv.id = pb.revision_id WHERE pb.id = $1`,
         [r.id],
       );
@@ -234,7 +248,7 @@ export async function bridgeRoutes(app: FastifyInstance) {
       jobs.push(jobPayload(p, ordered, base));
     }
     await audit(bridgeActor(site, req), 'publication.fetched', { type: 'site', id: site.id, label: site.name }, { auftraege: rows.map((r) => r.id) });
-    return { jobs, poll_interval: POLL_SECONDS };
+    return { jobs, banner_ids: active.map((b) => b.id), poll_interval: POLL_SECONDS };
   });
 
   /** Ergebnis melden. Wiederholte Meldungen desselben Ergebnisses ändern nichts. */
@@ -251,7 +265,17 @@ export async function bridgeRoutes(app: FastifyInstance) {
       })
       .parse(req.body);
     const pub = await one<any>(`SELECT pb.*, rv.title FROM publications pb JOIN post_revisions rv ON rv.id = pb.revision_id WHERE pb.id = $1 AND pb.site_id = $2`, [id, site.id]);
-    if (!pub) throw notFound('Auftrag nicht gefunden.');
+    if (!pub) {
+      // Banner-Auftrag?
+      const bj = await one<any>(`SELECT j.*, b.title FROM banner_jobs j JOIN banners b ON b.id = j.banner_id WHERE j.id = $1 AND j.site_id = $2`, [id, site.id]);
+      if (!bj) throw notFound('Auftrag nicht gefunden.');
+      if (bj.status === 'done') return { ok: true, status: 'published', duplicate: true };
+      const ok = body.status === 'published';
+      await pool.query(`UPDATE banner_jobs SET status = $2, error = $3, result_at = now() WHERE id = $1`, [id, ok ? 'done' : 'failed', ok ? null : (body.error ?? 'Unbekannter Fehler').slice(0, 1000)]);
+      await audit(bridgeActor(site, req), ok ? 'banner.synced' : 'banner.sync_failed', { type: 'banner', id: bj.banner_id, label: bj.title }, { auftrag: id, aktion: bj.action }, ok ? 'ok' : 'failed');
+      if (!ok) await notify({ kind: 'error', title: `Banner nicht übertragen: ${bj.title}`.slice(0, 200), body: body.error ?? '', link: '/banner', permission: 'post.publish' });
+      return { ok: true, status: body.status };
+    }
     if (pub.status === 'published') {
       return { ok: true, status: 'published', duplicate: true };
     }

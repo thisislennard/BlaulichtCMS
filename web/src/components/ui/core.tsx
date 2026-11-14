@@ -96,6 +96,8 @@ export const STATUS: Record<string, { tone: Tone; label: string; pulse?: boolean
   approved: { tone: 'success', label: 'Freigegeben' },
   scheduled: { tone: 'primary', label: 'Geplant' },
   deactivated: { tone: 'neutral', label: 'Zurückgezogen' },
+  live: { tone: 'success', label: 'Aktiv', pulse: true },
+  ended: { tone: 'neutral', label: 'Beendet' },
   rejected: { tone: 'error', label: 'Zurückgewiesen' },
   publishing: { tone: 'primary', label: 'Wird veröffentlicht', pulse: true },
   published: { tone: 'success', label: 'Veröffentlicht' },

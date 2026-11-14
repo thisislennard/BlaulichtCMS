@@ -160,6 +160,7 @@ final class LifeLink_Bridge_Publisher {
 		$post_id = (int) $r;
 		update_post_meta( $post_id, '_lifelink_post_id', $llid );
 		update_post_meta( $post_id, '_lifelink_revision', (int) ( $job['revision'] ?? 0 ) );
+		update_post_meta( $post_id, '_lifelink_kind', sanitize_key( (string) ( $job['kind'] ?? 'news' ) ) );
 		update_post_meta( $post_id, '_lifelink_content_hash', sanitize_text_field( (string) ( $job['content_hash'] ?? '' ) ) );
 
 		// Medien: Titelbild setzen, weitere Bilder und Videos unter dem Text anhängen.

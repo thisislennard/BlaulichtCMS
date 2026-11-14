@@ -78,7 +78,21 @@ final class LifeLink_Bridge_Sync {
 				if ( '' === $id ) {
 					continue;
 				}
-				$out = 'post.unpublish' === ( $job['type'] ?? '' ) ? LifeLink_Bridge_Publisher::unpublish( $job ) : LifeLink_Bridge_Publisher::upsert( $job );
+				$type = (string) ( $job['type'] ?? '' );
+				if ( 'banner.upsert' === $type || 'banner.delete' === $type ) {
+					if ( 'banner.upsert' === $type ) {
+						LifeLink_Bridge_Banners::upsert( (array) ( $job['banner'] ?? array() ) );
+					} else {
+						LifeLink_Bridge_Banners::delete( (string) ( $job['banner']['id'] ?? '' ) );
+					}
+					$out = array(
+						'remote_id'     => 0,
+						'url'           => '',
+						'remote_status' => 'ok',
+					);
+				} else {
+					$out = 'post.unpublish' === $type ? LifeLink_Bridge_Publisher::unpublish( $job ) : LifeLink_Bridge_Publisher::upsert( $job );
+				}
 				if ( is_wp_error( $out ) ) {
 					$report = array(
 						'status' => 'failed',
@@ -101,6 +115,9 @@ final class LifeLink_Bridge_Sync {
 					$ack_error = 'Rückmeldung fehlgeschlagen: ' . $ack->get_error_message();
 				}
 				++$count;
+			}
+			if ( isset( $res['banner_ids'] ) && is_array( $res['banner_ids'] ) ) {
+				LifeLink_Bridge_Banners::reconcile( array_map( 'strval', $res['banner_ids'] ) );
 			}
 			LifeLink_Bridge_Settings::update(
 				array(

@@ -20,6 +20,7 @@ import { mediaRoutes } from './routes/media.js';
 import { postRoutes } from './routes/posts.js';
 import { bridgeRoutes } from './routes/bridge.js';
 import { uploadRoutes } from './routes/uploads.js';
+import { bannerRoutes } from './routes/banners.js';
 import { healthStatus } from './routes/health.js';
 
 export async function buildApp(): Promise<FastifyInstance> {
@@ -97,6 +98,7 @@ export async function buildApp(): Promise<FastifyInstance> {
       await api.register(postRoutes);
       await api.register(bridgeRoutes);
       await api.register(uploadRoutes);
+      await api.register(bannerRoutes);
     },
     { prefix: '/api/v1' },
   );

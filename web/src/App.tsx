@@ -13,6 +13,7 @@ const Profile = lazy(() => import('./pages/Profile'));
 const Posts = lazy(() => import('./pages/posts/Posts'));
 const PostEditor = lazy(() => import('./pages/posts/PostEditor'));
 const Templates = lazy(() => import('./pages/posts/Templates'));
+const Banners = lazy(() => import('./pages/banners/Banners'));
 const Collections = lazy(() => import('./pages/media/Collections'));
 const CollectionDetail = lazy(() => import('./pages/media/CollectionDetail'));
 const Sites = lazy(() => import('./pages/channels/Sites'));
@@ -80,6 +81,7 @@ const router = createBrowserRouter([
       { path: 'freigaben', element: <Page perm={['post.read']}><Posts mode="approvals" /></Page> },
       { path: 'medien', element: <Page perm={['media.read']}><Collections /></Page> },
       { path: 'medien/:id', element: <Page perm={['media.read']}><CollectionDetail /></Page> },
+      { path: 'banner', element: <Page perm={['post.read']}><Banners /></Page> },
       { path: 'kanaele', element: <Page perm={['post.read', 'channel.manage']}><Sites /></Page> },
       { path: 'benutzer', element: <Page perm={['user.read']}><Users /></Page> },
       { path: 'system', element: <Page perm={['system.read']}><SystemStatus /></Page> },

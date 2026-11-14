@@ -26,6 +26,7 @@ final class LifeLink_Bridge_Settings {
 			'last_success'  => 0,
 			'last_error'    => '',
 			'last_jobs'     => 0,
+			'banner_auto'   => true,
 		);
 	}
 

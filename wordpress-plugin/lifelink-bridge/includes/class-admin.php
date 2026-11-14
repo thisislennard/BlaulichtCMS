@@ -61,6 +61,7 @@ final class LifeLink_Bridge_Admin {
 			array(
 				'author_id'   => isset( $_POST['author_id'] ) ? absint( $_POST['author_id'] ) : 0,
 				'category_id' => isset( $_POST['category_id'] ) ? absint( $_POST['category_id'] ) : 0,
+				'banner_auto' => ! empty( $_POST['banner_auto'] ),
 			)
 		);
 		self::back( 'Gespeichert.' );
@@ -181,6 +182,13 @@ final class LifeLink_Bridge_Admin {
 									)
 								);
 								?>
+							</td>
+						</tr>
+						<tr>
+							<th scope="row">Hinweis-Banner</th>
+							<td>
+								<label><input type="checkbox" name="banner_auto" value="1" <?php checked( false !== $s['banner_auto'] ); ?> /> automatisch am Seitenanfang anzeigen</label>
+								<p class="description">Alternativ per Shortcode <code>[lifelink_banner]</code> oder Block „LifeLink: Hinweise“ platzieren. Einsatzübersicht: <code>[lifelink_einsaetze anzahl="10"]</code>. Aktuell gespeichert: <?php echo (int) count( LifeLink_Bridge_Banners::all() ); ?> Banner.</p>
 							</td>
 						</tr>
 					</table>

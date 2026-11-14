@@ -1,8 +1,8 @@
 <?php
 /**
  * Plugin Name:       LifeLink Bridge
- * Description:       Verbindet diese Website mit LifeLink. Die Bridge holt freigegebene Beiträge per HTTPS ab, veröffentlicht sie und meldet WordPress-ID und Adresse zurück.
- * Version:           0.2.0
+ * Description:       Verbindet diese Website mit LifeLink: holt freigegebene Beiträge und Hinweis-Banner per HTTPS ab, veröffentlicht sie und meldet WordPress-ID und Adresse zurück. Shortcodes [lifelink_banner] und [lifelink_einsaetze].
+ * Version:           0.3.0
  * Requires at least: 6.4
  * Requires PHP:      8.1
  * Author:            LifeLink
@@ -17,7 +17,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'LIFELINK_BRIDGE_VERSION', '0.2.0' );
+define( 'LIFELINK_BRIDGE_VERSION', '0.3.0' );
 define( 'LIFELINK_BRIDGE_FILE', __FILE__ );
 define( 'LIFELINK_BRIDGE_DIR', plugin_dir_path( __FILE__ ) );
 
@@ -34,6 +34,7 @@ if ( version_compare( PHP_VERSION, '8.1', '<' ) ) {
 require_once LIFELINK_BRIDGE_DIR . 'includes/class-settings.php';
 require_once LIFELINK_BRIDGE_DIR . 'includes/class-client.php';
 require_once LIFELINK_BRIDGE_DIR . 'includes/class-publisher.php';
+require_once LIFELINK_BRIDGE_DIR . 'includes/class-banners.php';
 require_once LIFELINK_BRIDGE_DIR . 'includes/class-sync.php';
 require_once LIFELINK_BRIDGE_DIR . 'includes/class-admin.php';
 
@@ -42,6 +43,7 @@ register_deactivation_hook( __FILE__, array( 'LifeLink_Bridge_Sync', 'deactivate
 
 LifeLink_Bridge_Sync::boot();
 LifeLink_Bridge_Admin::boot();
+LifeLink_Bridge_Banners::boot();
 
 if ( defined( 'WP_CLI' ) && WP_CLI ) {
 	/**

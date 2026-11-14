@@ -551,3 +551,54 @@ describe('Redaktion: Vorlagen, Kanaltexte, Termin, Zurückziehen (M2)', () => {
     expect(list.state).toBe('deactivated');
   });
 });
+
+describe('Banner (M2)', () => {
+  let bid = '';
+  let siteId3 = '';
+  let key3 = '';
+  const auth = () => ({ authorization: `Bearer ${key3}` });
+  const list = async () => (await editor.get('/banners')).json.find((b: any) => b.id === bid);
+
+  it('Entwurf → Freigabe → Veröffentlichen, Banner-Auftrag für die Bridge', async () => {
+    const s = await admin.post('/sites', { name: 'Banner-Testseite' });
+    siteId3 = s.json.site.id;
+    key3 = (await anonymous.post('/bridge/pair', { code: s.json.pairingCode, site_url: 'https://banner.example.org' })).json.key;
+    const ends = new Date(Date.now() + 2 * 3600_000).toISOString();
+    const b = await editor.post('/banners', { siteId: siteId3, title: 'Straßensperrung Hauptstraße', text: 'Bitte Umleitung beachten.', tone: 'warning', priority: 3, endsAt: ends, linkUrl: 'https://banner.example.org/info', linkText: 'Details' });
+    expect(b.status).toBe(200);
+    bid = b.json.id;
+    expect((await editor.post('/banners', { siteId: siteId3, title: 'Falsch', endsAt: new Date(Date.now() - 1000).toISOString() })).status).toBe(400);
+    let st = await list();
+    expect(st.state).toBe('draft');
+    expect((await publisher.post(`/banners/${bid}/publish`, { contentHash: st.content_hash })).status).toBe(409);
+    await editor.post(`/banners/${bid}/submit`);
+    expect((await editor.post(`/banners/${bid}/approve`, { contentHash: st.content_hash })).status).toBe(403);
+    await approver.post(`/banners/${bid}/approve`, { contentHash: st.content_hash });
+    st = await list();
+    expect(st.state).toBe('approved');
+    await publisher.post(`/banners/${bid}/publish`, { contentHash: st.content_hash });
+    const r = await anonymous.get('/bridge/jobs', auth());
+    const job = r.json.jobs.find((j: any) => j.type === 'banner.upsert');
+    expect(job.banner.title).toBe('Straßensperrung Hauptstraße');
+    expect(job.banner.priority).toBe(3);
+    // Das gerade ausgelieferte Banner zählt schon zur Abgleichsliste
+    expect(r.json.banner_ids).toContain(bid);
+    await anonymous.post(`/bridge/jobs/${job.id}/result`, { status: 'published' }, auth());
+    expect((await list()).state).toBe('live');
+  });
+
+  it('Änderung braucht neue Freigabe; Beenden entfernt das Banner auf der Website', async () => {
+    let st = await list();
+    const ends = new Date(Date.now() + 3 * 3600_000).toISOString();
+    const u = await editor.put(`/banners/${bid}`, { siteId: siteId3, title: 'Straßensperrung Hauptstraße', text: 'Umleitung über Nebenweg.', tone: 'warning', priority: 3, endsAt: ends });
+    expect(u.json.changed).toBe(true);
+    st = await list();
+    expect(st.state).toBe('draft');
+    expect((await publisher.post(`/banners/${bid}/publish`, { contentHash: st.content_hash })).status).toBe(409);
+    await publisher.post(`/banners/${bid}/end`);
+    const r = await anonymous.get('/bridge/jobs', auth());
+    expect(r.json.jobs.find((j: any) => j.type === 'banner.delete').banner.id).toBe(bid);
+    expect(r.json.banner_ids).not.toContain(bid);
+    expect((await list()).state).toBe('ended');
+  });
+});

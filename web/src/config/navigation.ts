@@ -37,7 +37,10 @@ export const navigation: NavGroup[] = [
   },
   {
     group: 'nav.channels',
-    items: [{ id: 'sites', path: '/kanaele', label: 'nav.sites', icon: 'Globe', perm: ['post.read', 'channel.manage'] }],
+    items: [
+      { id: 'banners', path: '/banner', label: 'nav.banners', icon: 'Megaphone', perm: ['post.read'] },
+      { id: 'sites', path: '/kanaele', label: 'nav.sites', icon: 'Globe', perm: ['post.read', 'channel.manage'] },
+    ],
   },
   {
     group: 'nav.admin',
