@@ -5,6 +5,7 @@ import { fileTypeFromFile } from 'file-type';
 import sharp, { type Metadata } from 'sharp';
 import { one, pool } from '../db/pool.js';
 import { log } from '../lib/log.js';
+import { getSettings } from '../lib/settings.js';
 import { mediaPaths, moveFile } from './storage.js';
 
 /** Zugelassene Formate – geprüft wird der Dateiinhalt, nicht Dateiname oder angegebener Typ. */
@@ -23,6 +24,7 @@ export const ACCEPT_ATTR = 'image/jpeg,image/png,image/webp,image/heic,image/hei
 
 // Höchstens 40 Megapixel dekodieren (Schutz vor „Dekompressionsbomben“)
 const MAX_PIXELS = 40_000_000;
+const MAX_VIDEO_PIXELS = 7680 * 4320;
 // Threads je Bild begrenzen: parallel laufen ohnehin mehrere Aufträge (Einstellung „Parallele Hintergrundaufträge“)
 sharp.concurrency(Math.max(1, Math.min(4, Math.floor(os.availableParallelism() / 2))));
 sharp.cache(false);
@@ -102,8 +104,15 @@ async function processVideo(id: string, file: string, ext: string) {
   }
   const v = (info.streams ?? []).find((s: any) => s.codec_type === 'video');
   if (!v) throw new Rejected('Datei enthält keine Videospur.');
+  // Ressourcenschutz: Länge und Auflösung begrenzen
+  const maxMin = (await getSettings())['media.max_video_minutes'];
+  const duration = Number(info.format?.duration ?? v.duration ?? 0);
+  if (duration > maxMin * 60) throw new Rejected(`Video ist länger als ${maxMin} Minuten.`);
+  if ((v.width ?? 0) * (v.height ?? 0) > MAX_VIDEO_PIXELS) throw new Rejected('Videoauflösung ist zu hoch (höchstens 8K).');
+  // Datenspuren (z. B. GPS-Telemetrie von Action-Kameras) und Untertitel gelten als Metadaten
+  const dataStreams = (info.streams ?? []).filter((s: any) => !['video', 'audio'].includes(s.codec_type));
   const tags = JSON.stringify(info.format?.tags ?? {}).toLowerCase();
-  const hadLocation = tags.includes('location') || tags.includes('xyz');
+  const hadLocation = tags.includes('location') || tags.includes('xyz') || dataStreams.some((s: any) => /gpmd|gps|camm|meta/i.test(`${s.codec_tag_string ?? ''} ${s.codec_name ?? ''} ${JSON.stringify(s.tags ?? {})}`));
   // Vorschau aus dem ersten Bild, öffentliche Fassung ohne Metadaten (Spuren nur umverpackt)
   const frame = mediaPaths.preview(id) + '.png';
   const fr = await run('ffmpeg', ['-v', 'error', '-y', '-i', file, '-frames:v', '1', '-vf', 'scale=1200:1200:force_original_aspect_ratio=decrease', frame], 120_000);
@@ -114,7 +123,7 @@ async function processVideo(id: string, file: string, ext: string) {
   }
   fs.rmSync(frame, { force: true });
   const outExt = ext === 'webm' ? 'webm' : 'mp4';
-  const pub = await run('ffmpeg', ['-v', 'error', '-y', '-i', file, '-map', '0', '-map_metadata', '-1', '-map_chapters', '-1', '-c', 'copy', ...(outExt === 'mp4' ? ['-movflags', '+faststart'] : []), mediaPaths.publicFile(id, outExt)], 600_000);
+  const pub = await run('ffmpeg', ['-v', 'error', '-y', '-i', file, '-map', '0:v', '-map', '0:a?', '-map_metadata', '-1', '-map_chapters', '-1', '-c', 'copy', ...(outExt === 'mp4' ? ['-movflags', '+faststart'] : []), mediaPaths.publicFile(id, outExt)], 600_000);
   return { width: v.width ?? null, height: v.height ?? null, hadLocation, hasPreview, hasPublic: pub.code === 0, takenAt: null };
 }
 

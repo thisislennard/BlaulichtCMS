@@ -1063,6 +1063,10 @@ describe('Verbindungen (M4): FE2, Facebook, Instagram, amtliche Warnfeeds', () =
           res.writeHead(200, { 'content-type': 'application/xml' });
           return res.end(capXml);
         }
+        // Facebook OAuth
+        if (u.pathname === '/fb/oauth/access_token') return json(200, { access_token: u.searchParams.get('fb_exchange_token') ? 'LANG-USER-TOKEN' : 'KURZ-USER-TOKEN' });
+        if (u.pathname === '/fb/me/permissions') return json(200, { data: ['pages_show_list', 'pages_manage_posts', 'pages_read_engagement'].map((permission) => ({ permission, status: 'granted' })) });
+        if (u.pathname === '/fb/me/accounts') return json(200, { data: [{ id: 'PAGE1', name: 'Testseite (fiktiv)', access_token: 'OAUTH-SEITEN-TOKEN', tasks: ['CREATE_CONTENT'] }] });
         // Facebook
         if (u.pathname === '/fb/PAGE1' && req.method === 'GET') return json(200, { id: 'PAGE1', name: 'Testseite (fiktiv)', link: 'https://facebook.example/PAGE1' });
         if ((u.pathname === '/fb/PAGE1/feed' || (u.pathname === '/fb/PAGE1/photos' && p.get('published') !== 'false')) && req.method === 'POST') {
@@ -1348,6 +1352,32 @@ describe('Verbindungen (M4): FE2, Facebook, Instagram, amtliche Warnfeeds', () =
     expect((await one<any>(`SELECT banner_id FROM official_warnings WHERE identifier = 'W-4'`))!.banner_id).toBeNull();
   });
 
+  it('OAuth-Rückweg funktioniert ohne Sitzungs-Cookie (SameSite=Strict) über den einmaligen state', async () => {
+    const c = await admin.post('/connections', { kind: 'facebook', name: 'Facebook per OAuth', config: { appId: '4711' } });
+    expect((await admin.post(`/connections/${c.json.id}/oauth/start`)).status).toBe(400); // App-Geheimnis fehlt
+    await admin.put(`/connections/${c.json.id}/secrets`, { appSecret: 'app-geheimnis-test' });
+    const start = await admin.post(`/connections/${c.json.id}/oauth/start`);
+    const state = new URL(start.json.url).searchParams.get('state')!;
+    expect(new URL(start.json.url).searchParams.get('redirect_uri')).toBe('https://lifelink.example.org/api/v1/connections/oauth/callback');
+    // Gefälschter state wird abgewiesen
+    const bad = await anonymous.raw('GET', `/connections/oauth/callback?state=${c.json.id}.falsch&code=x`);
+    expect(bad.status).toBe(302);
+    expect(decodeURIComponent(bad.headers.location as string)).toContain('ungültig');
+    const s2 = await admin.post(`/connections/${c.json.id}/oauth/start`);
+    const state2 = new URL(s2.json.url).searchParams.get('state')!;
+    void state;
+    const cb = await anonymous.raw('GET', `/connections/oauth/callback?state=${encodeURIComponent(state2)}&code=abc`);
+    expect(cb.status).toBe(302);
+    expect(decodeURIComponent(cb.headers.location as string)).toContain('Seite(n) wählen');
+    // state ist verbraucht
+    expect(decodeURIComponent((await anonymous.raw('GET', `/connections/oauth/callback?state=${encodeURIComponent(state2)}&code=abc`)).headers.location as string)).toContain('ungültig');
+    const v = await admin.get(`/connections/${c.json.id}`);
+    expect(v.json.pages).toEqual([{ id: 'PAGE1', name: 'Testseite (fiktiv)' }]);
+    expect(JSON.stringify(v.json)).not.toContain('OAUTH-SEITEN-TOKEN');
+    expect((await admin.post(`/connections/${c.json.id}/page`, { pageId: 'PAGE1' })).status).toBe(200);
+    expect((await admin.post(`/connections/${c.json.id}/test`)).json.ok).toBe(true);
+  });
+
   it('Widerruf löscht Zugangsdaten; Redaktion sieht keine Geheimnisse', async () => {
     const list = await editor.get('/connections');
     expect(list.json.every((c: any) => ['facebook', 'instagram'].includes(c.kind))).toBe(true);
@@ -1448,5 +1478,57 @@ describe('Sicherung, Updates und Wiederherstellung (M4)', () => {
     // Aufräumen: Testmigration entfernen
     await pool.query(`DROP TABLE test_halb_fertig; DELETE FROM schema_migrations WHERE name = '999_test_kaputt.sql'`);
     expect(await migrate(() => {})).toEqual([]);
+  });
+});
+
+describe('Sicherheitsprüfung (M4)', () => {
+  it('öffentliche Videofassung enthält nur Bild und Ton – keine Daten- oder Untertitelspuren', async () => {
+    const dir = fs.mkdtempSync(path.join(process.env.LIFELINK_DATA_DIR!, 'vid-'));
+    fs.writeFileSync(path.join(dir, 'gps.srt'), '1\n00:00:00,000 --> 00:00:02,000\nGPS 50.1100 8.6800\n');
+    const src = path.join(dir, 'clip.mp4');
+    execFileSync('ffmpeg', ['-v', 'error', '-y', '-f', 'lavfi', '-i', 'testsrc2=duration=2:size=320x240:rate=10', '-i', path.join(dir, 'gps.srt'), '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-c:s', 'mov_text', '-metadata', 'location=+50.1100+008.6800/', src]);
+    const streams = (f: string) => JSON.parse(execFileSync('ffprobe', ['-v', 'error', '-print_format', 'json', '-show_streams', f], { encoding: 'utf8' })).streams.map((s: any) => s.codec_type);
+    expect(streams(src)).toContain('subtitle');
+    const p = await editor.post('/posts', { title: 'Videotest Sicherheit' });
+    const c = await editor.post(`/posts/${p.json.id}/collect`, {});
+    const token = c.json.url.split('/u/')[1];
+    const mp = multipart({ name: 'clip.mp4', data: fs.readFileSync(src), type: 'video/mp4' });
+    const up = await anonymous.raw('POST', `/public/upload/${token}`, { payload: mp.payload, headers: mp.headers });
+    expect(up.status, JSON.stringify(up.json)).toBe(200);
+    const m = await one<any>(`SELECT id FROM media WHERE original_name = 'clip.mp4' ORDER BY created_at DESC LIMIT 1`);
+    expect(await processMedia(m.id)).toBe('ready');
+    const row = await one<any>(`SELECT * FROM media WHERE id = $1`, [m.id]);
+    expect(row.had_location).toBe(true);
+    const pub = mediaPaths.publicFile(m.id, 'mp4');
+    expect(streams(pub)).toEqual(['video']);
+    expect(execFileSync('ffprobe', ['-v', 'error', '-show_format', pub], { encoding: 'utf8' })).not.toContain('location');
+  });
+
+  it('zu lange Videos werden abgewiesen (Ressourcenschutz)', async () => {
+    await setSettings({ 'media.max_video_minutes': 0 } as any);
+    const { getSettings } = await import('../src/lib/settings.js');
+    await getSettings(true);
+    const dir = fs.mkdtempSync(path.join(process.env.LIFELINK_DATA_DIR!, 'vid-'));
+    const src = path.join(dir, 'lang.mp4');
+    execFileSync('ffmpeg', ['-v', 'error', '-y', '-f', 'lavfi', '-i', 'testsrc2=duration=2:size=160x120:rate=5', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', src]);
+    const p = await editor.post('/posts', { title: 'Videotest Länge' });
+    const c = await editor.post(`/posts/${p.json.id}/collect`, {});
+    const mp = multipart({ name: 'lang.mp4', data: fs.readFileSync(src), type: 'video/mp4' });
+    await anonymous.raw('POST', `/public/upload/${c.json.url.split('/u/')[1]}`, { payload: mp.payload, headers: mp.headers });
+    const m = await one<any>(`SELECT id FROM media WHERE original_name = 'lang.mp4' ORDER BY created_at DESC LIMIT 1`);
+    expect(await processMedia(m.id)).toBe('rejected');
+    expect((await one<any>(`SELECT reject_reason FROM media WHERE id = $1`, [m.id]))!.reject_reason).toContain('länger als');
+    await setSettings({ 'media.max_video_minutes': 30 } as any);
+    await getSettings(true);
+  });
+
+  it('Geheimnisse erscheinen nie in API-Antworten, Protokollen oder Audit', async () => {
+    const tokens = ['EAAG-geheimer-Seitentoken', 'IGQ-geheimer-token', 'llfe2_'];
+    const audit = await one<any>(`SELECT string_agg(details::text, ' ') AS t FROM audit_events`);
+    for (const t of tokens.slice(0, 2)) expect(audit!.t ?? '').not.toContain(t);
+    const settings = await admin.get('/settings');
+    expect(JSON.stringify(settings.json)).not.toMatch(/password_secret_id|geheim/);
+    const sec = await one<any>(`SELECT string_agg(ciphertext, '') AS c FROM secrets`);
+    for (const t of tokens.slice(0, 2)) expect(sec!.c).not.toContain(t);
   });
 });

@@ -30,6 +30,8 @@ export const DEFAULT_SETTINGS = {
   'media.collection_max_gb': 10,
   'media.min_free_gb': 2,
   'media.strip_location': true,
+  /** Höchstlänge von Videos (Ressourcenschutz bei der Verarbeitung). */
+  'media.max_video_minutes': 30,
 
   'editorial.four_eyes': false,
   'invites.valid_hours': 72,

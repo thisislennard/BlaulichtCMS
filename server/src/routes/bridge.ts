@@ -273,12 +273,15 @@ export async function bridgeRoutes(app: FastifyInstance) {
     const exp = Math.floor(Date.now() / 1000) + 3600;
     const sig = hmacHex(deriveKey('bridge-package'), `${site.id}.${pkg.version}.${exp}`);
     const base = await publicBase(req);
+    const pathQs = `/api/v1/bridge/update/package?s=${site.id}&v=${pkg.version}&e=${exp}&sig=${sig}`;
     return {
       available: true,
       channel: row?.update_channel,
       version: pkg.version,
       sha256: pkg.sha256,
-      package: `${base}/api/v1/bridge/update/package?s=${site.id}&v=${pkg.version}&e=${exp}&sig=${sig}`,
+      // Die Bridge setzt ihre gekoppelte LifeLink-Adresse davor (kann von der öffentlichen Adresse abweichen)
+      package_path: pathQs,
+      package: `${base}${pathQs}`,
       requires: pkg.requires,
       requires_php: pkg.requiresPhp,
       tested: pkg.tested,

@@ -46,7 +46,9 @@ final class LifeLink_Bridge_Updater {
 			'available'    => ! empty( $r['available'] ),
 			'version'      => (string) ( $r['version'] ?? '' ),
 			'sha256'       => strtolower( (string) ( $r['sha256'] ?? '' ) ),
-			'package'      => (string) ( $r['package'] ?? '' ),
+			'package'      => ! empty( $r['package_path'] ) && 0 === strpos( (string) $r['package_path'], '/api/v1/bridge/update/package?' )
+				? LifeLink_Bridge_Client::base_url() . (string) $r['package_path']
+				: (string) ( $r['package'] ?? '' ),
 			'requires'     => (string) ( $r['requires'] ?? '' ),
 			'requires_php' => (string) ( $r['requires_php'] ?? '' ),
 			'tested'       => (string) ( $r['tested'] ?? '' ),

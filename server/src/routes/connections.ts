@@ -4,6 +4,7 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { many, one, pool, tx } from '../db/pool.js';
 import { requireAnyAuth, requireAuth, requirePlatformAdmin } from '../auth/context.js';
+import { permissionsFor } from '../auth/permissions.js';
 import { audit } from '../lib/audit.js';
 import { randomToken, safeEqual, sha256Hex } from '../lib/crypto.js';
 import { AppError, badRequest, conflict, notFound } from '../lib/errors.js';
@@ -175,29 +176,37 @@ export async function connectionRoutes(app: FastifyInstance) {
     return { url: c.kind === 'facebook' ? facebookAuthorizeUrl(c.config.appId, redirect, s) : instagramAuthorizeUrl(c.config.appId, redirect, s) };
   });
 
-  /** Rückkehr von Meta (Browser mit Sitzung). Tokens landen verschlüsselt auf dem Server. */
-  app.get('/connections/oauth/callback', { preHandler: manage }, async (req, reply) => {
+  /**
+   * Rückkehr von Meta. Das Sitzungs-Cookie ist SameSite=Strict und wird bei der seitenübergreifenden Rückleitung nicht
+   * mitgeschickt – authentisiert wird deshalb über den einmaligen, befristeten state (an Verbindung und Person gebunden).
+   * Tokens landen verschlüsselt auf dem Server.
+   */
+  app.get('/connections/oauth/callback', { config: { rateLimit: { max: 20, timeWindow: '1 minute' } } }, async (req, reply) => {
     const q = z.object({ state: z.string().max(200), code: z.string().max(2000).optional(), error_description: z.string().max(500).optional() }).parse(req.query);
     const [id, state] = q.state.split('.');
     const c = await loadConnection(z.uuid().parse(id));
     const st = c.config.oauthState;
+    const u = st?.by ? await one<any>(`SELECT id, name, roles FROM users WHERE id = $1 AND status = 'active'`, [st.by]) : null;
+    // Die Person, die die Anmeldung gestartet hat, muss das Recht weiterhin haben
+    const by = u && permissionsFor(u.roles).has('connection.manage') ? u : null;
+    const actor = { id: by?.id ?? null, name: by?.name ?? 'Meta-Anmeldung', type: 'user' as const, ip: req.ip };
     await pool.query(`UPDATE connections SET config = config - 'oauthState' WHERE id = $1`, [c.id]);
     const back = (msg: string) => reply.redirect(`/verbindungen/${c.id}?meldung=${encodeURIComponent(msg)}`);
-    if (!st || st.exp < Date.now() || !safeEqual(st.hash, sha256Hex(state ?? ''))) return back('Anmeldung abgelaufen oder ungültig – bitte erneut verbinden.');
+    if (!st || !by || st.exp < Date.now() || !safeEqual(st.hash, sha256Hex(state ?? ''))) return back('Anmeldung abgelaufen oder ungültig – bitte erneut verbinden.');
     if (!q.code) return back(`Anmeldung abgebrochen${q.error_description ? `: ${q.error_description}` : ''}.`);
     const sec = await connectionSecrets(c);
     const redirect = `${await publicBase(req)}/api/v1/connections/oauth/callback`;
     try {
       if (c.kind === 'facebook') {
         const r = await facebookExchange(c.config.appId, sec.appSecret, redirect, q.code);
-        await updateConnectionSecrets(c, { userToken: r.userToken, pages: JSON.stringify(r.pages) }, req.auth!.user?.id ?? null);
-        await audit(req.auth!.actor, 'connection.oauth', { type: 'connection', id: c.id, label: c.name }, { seiten: r.pages.length });
+        await updateConnectionSecrets(c, { userToken: r.userToken, pages: JSON.stringify(r.pages) }, by.id);
+        await audit(actor, 'connection.oauth', { type: 'connection', id: c.id, label: c.name }, { seiten: r.pages.length });
         return back(r.pages.length ? `Angemeldet – bitte eine von ${r.pages.length} Seite(n) wählen.` : 'Angemeldet, aber keine verwaltbare Seite gefunden.');
       }
       const r = await instagramExchange(c.config.appId, sec.appSecret, redirect, q.code);
-      await updateConnectionSecrets(c, { token: r.token }, req.auth!.user?.id ?? null);
+      await updateConnectionSecrets(c, { token: r.token }, by.id);
       await pool.query(`UPDATE connections SET config = config || $2 WHERE id = $1`, [c.id, JSON.stringify({ userId: r.userId, tokenExpiresAt: r.expiresIn ? new Date(Date.now() + r.expiresIn * 1000).toISOString() : null })]);
-      await audit(req.auth!.actor, 'connection.oauth', { type: 'connection', id: c.id, label: c.name });
+      await audit(actor, 'connection.oauth', { type: 'connection', id: c.id, label: c.name });
       return back('Mit Instagram verbunden – jetzt testen.');
     } catch (e: any) {
       return back(`Anmeldung fehlgeschlagen: ${scrub(e?.message ?? String(e), sec)}`);
