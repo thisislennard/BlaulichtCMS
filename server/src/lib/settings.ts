@@ -20,6 +20,8 @@ export const DEFAULT_SETTINGS = {
   'security.lockout_attempts': 5,
   'security.lockout_minutes': 15,
   'security.password_min_length': 12,
+  /** Hosts, deren interne Adressen für Abrufe (RSS, Konnektoren) ausdrücklich erlaubt sind. */
+  'security.allowed_private_hosts': [] as string[],
 
   'media.max_file_mb': 2048,
   'media.link_max_files': 100,
@@ -31,6 +33,8 @@ export const DEFAULT_SETTINGS = {
 
   'editorial.four_eyes': false,
   'invites.valid_hours': 72,
+  /** Gemeinsame Dashboard-Vorlagen je Rolle ({ rolle: layout }) und allgemein ('*'). */
+  'dashboard.layouts': {} as Record<string, unknown>,
 
   'notify.on_connection_error': true,
 

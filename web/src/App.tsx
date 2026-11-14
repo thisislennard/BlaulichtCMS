@@ -5,6 +5,7 @@ import { SkeletonRows } from './components/ui/core';
 import { useAuth } from './lib/auth';
 import { InvitePage, LoginPage, MfaSetupPage, MfaVerifyPage, SetupPage } from './pages/auth/AuthPages';
 import { UploadPage } from './pages/public/UploadPage';
+import { LiveProvider } from './lib/live';
 
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const Activities = lazy(() => import('./pages/Activities'));
@@ -14,6 +15,7 @@ const Posts = lazy(() => import('./pages/posts/Posts'));
 const PostEditor = lazy(() => import('./pages/posts/PostEditor'));
 const Templates = lazy(() => import('./pages/posts/Templates'));
 const Banners = lazy(() => import('./pages/banners/Banners'));
+const Sources = lazy(() => import('./pages/sources/Sources'));
 const Collections = lazy(() => import('./pages/media/Collections'));
 const CollectionDetail = lazy(() => import('./pages/media/CollectionDetail'));
 const Sites = lazy(() => import('./pages/channels/Sites'));
@@ -68,7 +70,9 @@ const router = createBrowserRouter([
     path: '/',
     element: (
       <Protected>
-        <AppShell />
+        <LiveProvider enabled>
+          <AppShell />
+        </LiveProvider>
       </Protected>
     ),
     children: [
@@ -81,6 +85,7 @@ const router = createBrowserRouter([
       { path: 'freigaben', element: <Page perm={['post.read']}><Posts mode="approvals" /></Page> },
       { path: 'medien', element: <Page perm={['media.read']}><Collections /></Page> },
       { path: 'medien/:id', element: <Page perm={['media.read']}><CollectionDetail /></Page> },
+      { path: 'quellen', element: <Page perm={['post.read']}><Sources /></Page> },
       { path: 'banner', element: <Page perm={['post.read']}><Banners /></Page> },
       { path: 'kanaele', element: <Page perm={['post.read', 'channel.manage']}><Sites /></Page> },
       { path: 'benutzer', element: <Page perm={['user.read']}><Users /></Page> },

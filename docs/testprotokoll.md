@@ -83,7 +83,7 @@ Zielsystem, Chromium (Playwright) als Desktop (1360×900), Pixel 7 (Bediener) un
 | Thema | Was fehlt | Wo |
 |---|---|---|
 | WordPress produktionsnah | Bridge auf der echten Testwebsite über HTTPS mit der produktiven LifeLink-Adresse; WP-Cron ohne Host-Cron; Seitencache | #13, #21, `docs/integrationen.md` |
-| Echte Geräte | Upload-Link und gedruckter QR-Code mit echtem Android- und iOS-Gerät (bisher emuliert bzw. PDF geprüft) | #18 |
+| Echte Geräte | Upload-Link und gedruckter QR-Code mit echtem Android- und iOS-Gerät (bisher emuliert bzw. PDF geprüft); Banner mit echten Cache-Plugins (WP Super Cache, LiteSpeed) | #18 |
 | Reverse Proxy | Betrieb hinter HTTPS-Proxy mit `TRUST_PROXY=true` und großen Uploads | #8 |
 | Große Videos | Upload und Verarbeitung großer Videos, Verbindungsabbruch (fortsetzbarer Upload folgt in M2) | #16 |
 | PostgreSQL-Hauptversion | dokumentierter Weg (`pg_dumpall`/Import) noch nicht mit echtem Versionswechsel getestet | #37 |
@@ -96,3 +96,19 @@ Zielsystem, Chromium (Playwright) als Desktop (1360×900), Pixel 7 (Bediener) un
   `--secret id=build_ca` gebaut (siehe `docs/entwicklung.md`). Debian-/PGDG-Paketquellen waren gesperrt, daher das
   Image-Konzept ohne `apt` (Architekturentscheidung E3).
 - Server-Tests lokal gegen PostgreSQL 16; im Container läuft PostgreSQL 18.
+
+## Meilenstein 2 (14.11.2026)
+
+| Prüfung | Ergebnis |
+|---|---|
+| Server-Tests | ✅ 42/42 (u. a. Chunk-Upload mit Abbruch, ZIP-Export, Kanaltexte, Termin, Zurückziehen, Banner, RSS mit ETag, SSE, Dashboard-Vorlagen) |
+| Abnahmetest M1 nach den Änderungen | ✅ 34/34 |
+| **Abnahmetest M2** (`node test/e2e/m2-flow.mjs`) | ✅ **13/13** |
+
+| Abnahmekriterium M2 | Nachweis |
+|---|---|
+| Unterbrochene Uploads | 21-MB-Video im Browser (Pixel 7), Abbruch im 2. Teil, automatisch fortgesetzt, genau 1 Datei, Prüfsumme gleich; öffentliche Fassung ohne Standort |
+| Gedruckte QR-Codes | A4-PDF erzeugt; **Scan mit echten Android-/iOS-Geräten offen** |
+| Banner mit Cache und getrennter Verbindung | Banner live → LifeLink gestoppt → Banner läuft auf der Website trotzdem ab; zwischengespeichertes HTML blendet es per Skript aus; nach Wiederverbindung fehlerfreier Abgleich |
+| RSS-Import | Vorschau, Import, Themenidee mit Quelle, erneuter Abruf ohne Duplikate (WordPress-Feed als Quelle, interner Host ausdrücklich freigegeben) |
+| Dashboard nach Wiederverbindung | Browser offline → „Unterbrochen“ → Einreichung während der Unterbrechung → nach Wiederverbindung sichtbar, „Live“ wieder aktiv; mobile Reihenfolge geprüft |

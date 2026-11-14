@@ -37,9 +37,12 @@ export const GROUPS: ChapterGroup[] = [
     ['beitraege', 'FileText'],
     ['freigabe', 'ShieldCheck'],
     ['qr-codes', 'QrCode'],
+    ['dashboard', 'LayoutDashboard'],
+    ['quellen', 'Newspaper'],
   ]),
   G('channels', [
     ['wordpress', 'Globe'],
+    ['banner', 'Megaphone'],
     ['ohne-website', 'Unlink'],
   ]),
   G('admin', [

@@ -25,6 +25,7 @@
     "@node-rs/argon2": "^2.2.2",
     "@types/yazl": "^3.3.1",
     "adm-zip": "^0.6.1",
+    "fast-xml-parser": "^5.12.1",
     "fastify": "^5.12.7",
     "file-type": "^22.3.0",
     "ipaddr.js": "^2.5.0",

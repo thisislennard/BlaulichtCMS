@@ -53,6 +53,8 @@ services:
       WORDPRESS_DB_USER: wordpress
       WORDPRESS_DB_PASSWORD: wordpress-test
       WORDPRESS_DB_NAME: wordpress
+      WORDPRESS_CONFIG_EXTRA: |
+        define( 'LIFELINK_BRIDGE_ALLOW_HTTP', true );
     volumes:
       - wp:/var/www/html
       - ./tmp:/tmp/lifelink

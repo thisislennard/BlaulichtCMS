@@ -14,7 +14,7 @@ import { normalizePublicUrl } from '../lib/urls.js';
 const startedAt = Date.now();
 
 /** Einstellungen, die nicht über die allgemeine Einstellungsseite geändert werden dürfen. */
-const INTERNAL_KEYS = new Set<SettingKey>(['setup.completed']);
+const INTERNAL_KEYS = new Set<SettingKey>(['setup.completed', 'dashboard.layouts']);
 
 export async function systemStatus() {
   const t0 = Date.now();

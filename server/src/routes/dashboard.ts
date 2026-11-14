@@ -1,10 +1,30 @@
 import type { FastifyInstance } from 'fastify';
 import QRCode from 'qrcode';
 import { z } from 'zod';
-import { many, one } from '../db/pool.js';
+import { many, one, pool } from '../db/pool.js';
 import { requireAuth } from '../auth/context.js';
-import { badRequest } from '../lib/errors.js';
+import { AppError, badRequest } from '../lib/errors.js';
+import { audit } from '../lib/audit.js';
+import { getSettings, setSettings } from '../lib/settings.js';
+import { ROLE_IDS } from '../auth/permissions.js';
 import { POST_STATE_SQL } from './posts.js';
+
+export const WIDGETS = ['approvals', 'ready', 'publications', 'uploads', 'media', 'sites', 'banners', 'rss'] as const;
+type WidgetId = (typeof WIDGETS)[number];
+const WIDGET_PERM: Record<WidgetId, string> = { approvals: 'post.read', ready: 'post.read', publications: 'post.read', uploads: 'media.read', media: 'media.read', sites: 'post.read', banners: 'post.read', rss: 'post.read' };
+const DEFAULT_LAYOUT = {
+  desktop: [
+    { id: 'media', size: 'l' },
+    { id: 'approvals', size: 'm' },
+    { id: 'publications', size: 'm' },
+    { id: 'uploads', size: 'm' },
+    { id: 'banners', size: 'm' },
+    { id: 'rss', size: 'm' },
+    { id: 'sites', size: 'm' },
+  ],
+  mobile: ['approvals', 'ready', 'uploads', 'publications', 'banners'],
+};
+const availableWidgets = (perms: Set<string>) => WIDGETS.filter((w) => perms.has(WIDGET_PERM[w]));
 
 export async function dashboardRoutes(app: FastifyInstance) {
   /** Erstes Dashboard: offene Freigaben, bestätigter Veröffentlichungsstand, Medieneingang, Kanäle. */
@@ -47,7 +67,58 @@ export async function dashboardRoutes(app: FastifyInstance) {
           WHERE m.created_at > now() - interval '7 days' GROUP BY c.id ORDER BY last_upload DESC LIMIT 6`,
       );
     }
+    if (perms.has('post.read')) {
+      out.banners = await many<any>(
+        `SELECT b.id, b.title, b.tone, b.priority, b.ends_at, s.name AS site_name FROM banners b JOIN wp_sites s ON s.id = b.site_id
+          WHERE b.ended_at IS NULL AND b.ends_at > now() AND b.starts_at <= now()
+            AND EXISTS (SELECT 1 FROM banner_jobs j WHERE j.banner_id = b.id AND j.action = 'upsert' AND j.revision = b.revision AND j.status = 'done')
+          ORDER BY b.priority DESC, b.starts_at DESC LIMIT 10`,
+      );
+      out.rss = await many<any>(
+        `SELECT i.id, i.title, i.link, i.published_at, i.starred_at, f.title AS feed_title FROM rss_items i JOIN rss_feeds f ON f.id = i.feed_id
+          WHERE i.hidden_at IS NULL ORDER BY COALESCE(i.published_at, i.fetched_at) DESC LIMIT 8`,
+      );
+    }
+    out.confirmedAt = new Date().toISOString();
     return out;
+  });
+
+  /* ------------------------------ Dashboard-Layout ------------------------------ */
+
+  const layoutSchema = z.object({
+    desktop: z.array(z.object({ id: z.enum(WIDGETS), size: z.enum(['s', 'm', 'l']) })).max(20),
+    mobile: z.array(z.enum(WIDGETS)).max(20),
+  });
+
+  app.get('/dashboard/layout', { preHandler: requireAuth() }, async (req) => {
+    const a = req.auth!;
+    const s = await getSettings();
+    const personal = (a.user?.preferences as any)?.dashboard;
+    const shared = (s['dashboard.layouts'] ?? {}) as Record<string, unknown>;
+    const roleLayout = a.roles.map((r) => shared[r]).find(Boolean);
+    const layout = personal ?? roleLayout ?? shared['*'] ?? DEFAULT_LAYOUT;
+    return { layout, source: personal ? 'personal' : roleLayout ? 'role' : shared['*'] ? 'shared' : 'default', widgets: availableWidgets(a.permissions) };
+  });
+
+  app.put('/dashboard/layout', { preHandler: requireAuth() }, async (req) => {
+    const body = z.object({ scope: z.enum(['personal', 'role', 'all']).default('personal'), role: z.string().max(40).optional(), layout: layoutSchema.nullable() }).parse(req.body);
+    const a = req.auth!;
+    if (body.scope === 'personal') {
+      if (!a.user) throw badRequest('Nur für Benutzerkonten.');
+      if (body.layout) await pool.query(`UPDATE users SET preferences = preferences || jsonb_build_object('dashboard', $2::jsonb) WHERE id = $1`, [a.user.id, JSON.stringify(body.layout)]);
+      else await pool.query(`UPDATE users SET preferences = preferences - 'dashboard' WHERE id = $1`, [a.user.id]);
+      return { ok: true };
+    }
+    if (!a.permissions.has('system.manage')) throw new AppError(403, 'forbidden', 'Gemeinsame Dashboards darf nur die Administration speichern.');
+    const key = body.scope === 'all' ? '*' : body.role;
+    if (!key || (key !== '*' && !ROLE_IDS.includes(key))) throw badRequest('Unbekannte Rolle.');
+    const s = await getSettings(true);
+    const layouts = { ...(s['dashboard.layouts'] as Record<string, unknown>) };
+    if (body.layout) layouts[key] = body.layout;
+    else delete layouts[key];
+    await setSettings({ 'dashboard.layouts': layouts } as any, a.user?.id ?? null);
+    await audit(a.actor, 'dashboard.shared_saved', { type: 'settings', label: key === '*' ? 'alle' : key });
+    return { ok: true };
   });
 
   /** QR-Code lokal erzeugen (SVG). Der Code enthält nur die URL – Rechte, Ablauf und Widerruf gelten weiter. */

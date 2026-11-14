@@ -21,6 +21,8 @@ import { postRoutes } from './routes/posts.js';
 import { bridgeRoutes } from './routes/bridge.js';
 import { uploadRoutes } from './routes/uploads.js';
 import { bannerRoutes } from './routes/banners.js';
+import { eventRoutes, stopEvents } from './routes/events.js';
+import { rssRoutes } from './routes/rss.js';
 import { healthStatus } from './routes/health.js';
 
 export async function buildApp(): Promise<FastifyInstance> {
@@ -54,7 +56,7 @@ export async function buildApp(): Promise<FastifyInstance> {
     referrerPolicy: { policy: 'no-referrer' },
   });
   // Komprimierung für API-Antworten (JSON, SVG); Medien sind bereits komprimiert und bleiben unangetastet
-  await app.register(compress, { global: true, threshold: 1024, encodings: ['br', 'gzip'], customTypes: /^(application\/json|image\/svg\+xml|text\/)/, brotliOptions: { params: { 1: 4 } } as any });
+  await app.register(compress, { global: true, threshold: 1024, encodings: ['br', 'gzip'], customTypes: /^(application\/json|image\/svg\+xml|text\/(html|plain|css|javascript))/, brotliOptions: { params: { 1: 4 } } as any });
   await app.register(rateLimit, { global: false });
   await app.register(multipart, { limits: { fileSize: 4 * 1024 * 1024 * 1024, files: 1, fields: 10 } });
 
@@ -99,6 +101,8 @@ export async function buildApp(): Promise<FastifyInstance> {
       await api.register(bridgeRoutes);
       await api.register(uploadRoutes);
       await api.register(bannerRoutes);
+      await api.register(eventRoutes);
+      await api.register(rssRoutes);
     },
     { prefix: '/api/v1' },
   );
@@ -136,5 +140,6 @@ export async function buildApp(): Promise<FastifyInstance> {
     app.setNotFoundHandler((_req, reply) => reply.status(404).send({ error: 'not_found', message: 'Nicht gefunden.' }));
   }
 
+  app.addHook('onClose', async () => stopEvents());
   return app;
 }

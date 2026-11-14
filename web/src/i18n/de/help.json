@@ -113,6 +113,18 @@
     "begriffe": {
       "title": "Begriffe",
       "summary": "Glossar der LifeLink-Begriffe."
+    },
+    "banner": {
+      "title": "Banner auf der Website",
+      "summary": "Zeitgesteuerte Hinweise mit Priorität, Ablauf auch ohne Verbindung, Platzierung per Shortcode oder Block."
+    },
+    "quellen": {
+      "title": "Quellen (RSS/Atom)",
+      "summary": "Feeds hinzufügen, Einträge merken oder ausblenden, Themenideen mit Original-Link."
+    },
+    "dashboard": {
+      "title": "Dashboard und Live-Status",
+      "summary": "Widgets anordnen, mobile Reihenfolge, Vorlagen für Rollen, bestätigter Stand."
     }
   },
   "tiles": {

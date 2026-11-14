@@ -10,6 +10,7 @@ import { Avatar, cx, Kbd } from '../ui/core';
 import { Icon } from '../ui/Icon';
 import { Popover } from '../ui/overlays';
 import { CommandPalette } from './CommandPalette';
+import { useLive } from '../../lib/live';
 
 /* Seitentitel/Brotkrumen: Seiten ohne eigenen Menüpunkt (Editor, Details) setzen ihn selbst. */
 interface PageMeta {
@@ -208,6 +209,18 @@ function UserMenu() {
   );
 }
 
+function LiveDot() {
+  const live = useLive();
+  if (live === 'off') return null;
+  const label = live === 'live' ? 'Live' : live === 'reconnecting' ? 'Verbindung unterbrochen – Stand wird neu geladen' : 'Verbinde …';
+  return (
+    <span role="status" title={label} className={cx('inline-flex items-center gap-1.5 text-meta font-medium px-2 h-7 rounded-full border', live === 'live' ? 'border-line text-fg-muted' : 'border-warn/60 bg-warn-soft text-warn')}>
+      <span aria-hidden="true" className={cx('w-1.5 h-1.5 rounded-full', live === 'live' ? 'bg-ok' : 'bg-warn ll-pulse')} />
+      <span className={live === 'live' ? 'sr-only md:not-sr-only' : ''}>{live === 'live' ? 'Live' : live === 'reconnecting' ? 'Unterbrochen' : 'Verbinde'}</span>
+    </span>
+  );
+}
+
 function StatusPill() {
   const { status } = useCounts();
   const { can } = useAuth();
@@ -300,6 +313,7 @@ export function AppShell() {
             <button type="button" onClick={() => setPaletteOpen(true)} aria-label={t('nav.searchLabel')} className="lg:hidden w-9 h-9 rounded-control border border-line bg-card inline-flex items-center justify-center text-fg-muted">
               <Icon name="Search" size={16} />
             </button>
+            <LiveDot />
             <StatusPill />
             <NotificationsButton />
             <UserMenu />

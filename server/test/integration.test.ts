@@ -602,3 +602,101 @@ describe('Banner (M2)', () => {
     expect((await list()).state).toBe('ended');
   });
 });
+
+describe('RSS, Live-Status und Dashboard (M2)', () => {
+  it('fügt RSS und Atom mit Vorschau hinzu, dedupliziert, nutzt ETag und übernimmt Themenideen', async () => {
+    const http = await import('node:http');
+    let hits = 0;
+    let rssItems = 2;
+    const srv = http.createServer((req, res) => {
+      hits++;
+      if (req.url === '/atom') {
+        res.setHeader('content-type', 'application/atom+xml');
+        return res.end(`<?xml version="1.0"?><feed xmlns="http://www.w3.org/2005/Atom"><title>Atom-Quelle</title><link href="https://atom.example.org/"/><entry><id>urn:1</id><title>Atom-Eintrag</title><link href="https://atom.example.org/1"/><updated>2026-11-14T10:00:00Z</updated><summary>Kurz</summary></entry></feed>`);
+      }
+      if (req.headers['if-none-match'] === '"v1"' && rssItems === 2) {
+        res.statusCode = 304;
+        return res.end();
+      }
+      res.setHeader('content-type', 'application/rss+xml');
+      res.setHeader('etag', '"v1"');
+      const items = Array.from({ length: rssItems }, (_, i) => `<item><guid>id-${i}</guid><title>Meldung ${i} &amp; mehr</title><link>https://news.example.org/${i}</link><description>&lt;p&gt;Text ${i}&lt;/p&gt;</description><pubDate>Fri, 14 Nov 2026 0${i}:00:00 GMT</pubDate></item>`).join('');
+      res.end(`<?xml version="1.0"?><rss version="2.0"><channel><title>Testquelle</title><link>https://news.example.org/</link>${items}</channel></rss>`);
+    });
+    await new Promise<void>((r) => srv.listen(0, '127.0.0.1', () => r()));
+    const port = (srv.address() as any).port;
+    const url = `http://127.0.0.1:${port}/rss`;
+    // Interne Adresse ohne Freigabe wird abgewiesen
+    expect((await editor.post('/rss/preview', { url })).status).toBeGreaterThanOrEqual(400);
+    await setSettings({ 'security.allowed_private_hosts': ['127.0.0.1'] } as any);
+    const pv = await editor.post('/rss/preview', { url });
+    expect(pv.json.title).toBe('Testquelle');
+    expect(pv.json.items[0].title).toBe('Meldung 0 & mehr');
+    const add = await editor.post('/rss/feeds', { url });
+    expect(add.json.added).toBe(2);
+    expect((await editor.post('/rss/feeds', { url })).status).toBe(409);
+    const atom = await editor.post('/rss/feeds', { url: `http://127.0.0.1:${port}/atom` });
+    expect(atom.json.feed.title).toBe('Atom-Quelle');
+    // Erneuter Abruf: 304 (nichts Neues), danach neue Einträge ohne Duplikate
+    const { refreshFeed } = await import('../src/routes/rss.js');
+    await refreshFeed(await one('SELECT * FROM rss_feeds WHERE id = $1', [add.json.feed.id]));
+    rssItems = 3;
+    await refreshFeed(await one('SELECT * FROM rss_feeds WHERE id = $1', [add.json.feed.id]));
+    expect((await one<any>(`SELECT count(*)::int AS n FROM rss_items WHERE feed_id = $1`, [add.json.feed.id])).n).toBe(3);
+    const items = (await editor.get('/rss/items')).json;
+    const first = items.find((i: any) => i.title === 'Meldung 2 & mehr');
+    expect(first.summary).toBe('Text 2');
+    await editor.post(`/rss/items/${first.id}`, { action: 'hide' });
+    expect((await editor.get('/rss/items')).json.some((i: any) => i.id === first.id)).toBe(false);
+    const idea = await editor.post(`/rss/items/${items[1].id}/idea`);
+    const post = (await editor.get(`/posts/${idea.json.postId}`)).json;
+    expect(post.revision.body).toContain('https://news.example.org/');
+    expect((await editor.post(`/rss/items/${items[1].id}/idea`)).json.duplicate).toBe(true);
+    expect((await publisher.post(`/rss/items/${items[1].id}/idea`)).status).toBe(403);
+    srv.close();
+    expect(hits).toBeGreaterThan(3);
+  });
+
+  it('meldet Änderungen per Server-Sent Events', async () => {
+    const http = await import('node:http');
+    const addr = await app.listen({ port: 0, host: '127.0.0.1' });
+    const events: string[] = [];
+    await new Promise<void>((resolve, reject) => {
+      const req = http.get(`${addr}/api/v1/events`, { headers: { cookie: editor.cookie } }, (res) => {
+        expect(res.headers['content-type']).toContain('text/event-stream');
+        res.on('data', async (c) => {
+          events.push(c.toString());
+          const all = events.join('');
+          if (all.includes('event: hello') && !all.includes('event: change')) await pool.query(`INSERT INTO notifications (kind, title) VALUES ('info', 'SSE-Test')`);
+          if (all.includes('event: change') && all.includes('notifications')) {
+            req.destroy();
+            resolve();
+          }
+        });
+      });
+      req.on('error', (e: any) => (e.code === 'ECONNRESET' ? resolve() : reject(e)));
+      setTimeout(() => reject(new Error('kein Ereignis')), 8000);
+    });
+    expect(events.join('')).toContain('"notifications"');
+    const unauth = await anonymous.get('/events');
+    expect(unauth.status).toBe(401);
+  });
+
+  it('speichert Dashboards persönlich und als Rollenvorlage', async () => {
+    const def = await editor.get('/dashboard/layout');
+    expect(def.json.source).toBe('default');
+    const layout = { desktop: [{ id: 'rss', size: 'l' }, { id: 'approvals', size: 's' }], mobile: ['approvals'] };
+    expect((await editor.put('/dashboard/layout', { scope: 'role', role: 'editor', layout })).status).toBe(403);
+    expect((await admin.put('/dashboard/layout', { scope: 'role', role: 'editor', layout })).status).toBe(200);
+    expect((await editor.get('/dashboard/layout')).json.source).toBe('role');
+    await editor.put('/dashboard/layout', { scope: 'personal', layout: { ...layout, mobile: ['rss'] } });
+    const mine = await editor.get('/dashboard/layout');
+    expect(mine.json.source).toBe('personal');
+    expect(mine.json.layout.mobile).toEqual(['rss']);
+    await editor.put('/dashboard/layout', { scope: 'personal', layout: null });
+    expect((await editor.get('/dashboard/layout')).json.source).toBe('role');
+    const d = await editor.get('/dashboard');
+    expect(Array.isArray(d.json.rss)).toBe(true);
+    expect(d.json.confirmedAt).toBeTruthy();
+  });
+});

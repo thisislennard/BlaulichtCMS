@@ -15,6 +15,7 @@ import { processMedia } from './media/process.js';
 import { ensureMediaDirs, mediaPaths } from './media/storage.js';
 import { cleanupUploadSessions } from './routes/uploads.js';
 import { buildExport, cleanupExports } from './media/exports.js';
+import { refreshDueFeeds } from './routes/rss.js';
 
 process.env.LIFELINK_ROLE ??= 'worker';
 
@@ -131,6 +132,7 @@ async function maintenance(isLeader: boolean) {
   if (due('cleanup', 60 * 60_000)) await cleanup();
   if (due('publications', 60_000)) await markUnknownPublications();
   if (due('quarantine', 10 * 60_000)) await requeueQuarantine();
+  if (due('rss', 60_000)) await refreshDueFeeds().catch((e) => log('warn', 'rss', e.message));
   if (s['backup.enabled'] && due('backup-check', 10 * 60_000)) {
     const now = new Date(new Date().toLocaleString('en-US', { timeZone: s['general.timezone'] }));
     if (now.getHours() === s['backup.hour']) {
