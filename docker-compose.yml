@@ -1,0 +1,53 @@
+# LifeLink 2 – eigener Server mit Port
+#   cp .env.example .env   (Werte setzen, siehe Kommentare)
+#   docker compose up -d --build
+# Erreichbar unter http://<server>:${LIFELINK_PORT:-7310} – für den Echtbetrieb einen TLS-Proxy davor setzen.
+
+services:
+  lifelink:
+    build: .
+    image: lifelink:local
+    container_name: lifelink
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      NODE_ENV: production
+      LIFELINK_DATA_DIR: /data
+      DATABASE_URL: postgresql://lifelink:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD in .env setzen}@lifelink-db:5432/lifelink
+    ports:
+      - "${LIFELINK_BIND:-0.0.0.0}:${LIFELINK_PORT:-7310}:7310"
+    volumes:
+      - lifelink-data:/data
+    depends_on:
+      lifelink-db:
+        condition: service_healthy
+    read_only: true
+    tmpfs:
+      - /tmp:size=512m
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    stop_grace_period: 40s
+
+  lifelink-db:
+    image: postgres:18-alpine
+    container_name: lifelink-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: lifelink
+      POSTGRES_USER: lifelink
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD in .env setzen}
+    volumes:
+      - lifelink-pg:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lifelink -d lifelink"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  lifelink-data:
+  lifelink-pg:

@@ -1,0 +1,181 @@
+@import 'tailwindcss';
+@config './theme/tailwind.lifelink.js';
+@import './theme/tokens.css';
+
+@layer base {
+  html,
+  body,
+  #root {
+    min-height: 100%;
+  }
+  body {
+    margin: 0;
+    -webkit-font-smoothing: antialiased;
+  }
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
+    color: inherit;
+  }
+  button {
+    cursor: pointer;
+  }
+  button:disabled {
+    cursor: not-allowed;
+  }
+  ::selection {
+    background: rgba(99, 102, 241, 0.35);
+  }
+  input::placeholder,
+  textarea::placeholder {
+    color: var(--ll-text-2);
+    opacity: 0.8;
+  }
+  a {
+    color: var(--ll-link);
+    text-decoration: none;
+  }
+  a:hover {
+    color: var(--ll-text);
+  }
+  * {
+    scrollbar-color: var(--ll-border) transparent;
+  }
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+.ll-compact table td,
+.ll-compact table th {
+  padding-top: 6px !important;
+  padding-bottom: 6px !important;
+}
+
+/* React Flow an die Tokens anpassen */
+.react-flow {
+  --xy-background-color: transparent;
+  --xy-minimap-background-color: var(--ll-card);
+  --xy-minimap-mask-background-color: rgba(11, 16, 32, 0.55);
+  --xy-controls-button-background-color: var(--ll-card);
+  --xy-edge-stroke: var(--ll-text-2);
+  --xy-edge-stroke-selected: var(--ll-primary);
+  --xy-connectionline-stroke: var(--ll-primary);
+  --xy-selection-background-color: rgba(99, 102, 241, 0.08);
+  --xy-selection-border: 1px dashed var(--ll-primary);
+  --xy-attribution-background-color: transparent;
+}
+[data-theme='light'] .react-flow {
+  --xy-minimap-mask-background-color: rgba(248, 250, 252, 0.6);
+}
+.react-flow__attribution {
+  display: none;
+}
+.react-flow__handle {
+  width: 10px;
+  height: 10px;
+  background: var(--ll-card);
+  border: 2px solid var(--ll-text-2);
+}
+.react-flow__handle:hover,
+.react-flow__handle.connectingfrom {
+  border-color: var(--ll-primary);
+}
+.react-flow__edge-path {
+  stroke-width: 1.8;
+}
+
+/* Markdown in der Hilfe */
+.ll-prose {
+  line-height: 1.65;
+  font-size: 14px;
+}
+.ll-prose h1 {
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  margin: 0 0 12px;
+}
+.ll-prose h2 {
+  font-size: 18px;
+  font-weight: 600;
+  margin: 28px 0 10px;
+  letter-spacing: -0.01em;
+}
+.ll-prose h3 {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 20px 0 8px;
+}
+.ll-prose p,
+.ll-prose ul,
+.ll-prose ol {
+  margin: 0 0 12px;
+}
+.ll-prose ul,
+.ll-prose ol {
+  padding-left: 22px;
+}
+.ll-prose li {
+  margin: 4px 0;
+}
+.ll-prose code {
+  font-family: var(--ll-font-mono);
+  font-size: 12.5px;
+  background: var(--ll-raised);
+  padding: 1px 5px;
+  border-radius: 5px;
+}
+.ll-prose pre {
+  background: var(--ll-bg);
+  border: 1px solid var(--ll-border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  overflow-x: auto;
+  margin: 0 0 14px;
+}
+.ll-prose pre code {
+  background: none;
+  padding: 0;
+}
+.ll-prose table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 0 0 14px;
+  font-size: 13px;
+  display: block;
+  overflow-x: auto;
+}
+.ll-prose th,
+.ll-prose td {
+  border: 1px solid var(--ll-border);
+  padding: 7px 10px;
+  text-align: left;
+  vertical-align: top;
+}
+.ll-prose th {
+  background: var(--ll-raised);
+  font-weight: 600;
+}
+.ll-prose blockquote {
+  margin: 0 0 14px;
+  padding: 10px 14px;
+  border-left: 3px solid var(--ll-primary);
+  background: var(--ll-primary-soft);
+  border-radius: 0 10px 10px 0;
+}
+.ll-prose blockquote p:last-child {
+  margin: 0;
+}
+.ll-prose hr {
+  border: 0;
+  border-top: 1px solid var(--ll-border);
+  margin: 24px 0;
+}
+.ll-prose a {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}

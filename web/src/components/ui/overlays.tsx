@@ -1,0 +1,372 @@
+import { createContext, useCallback, useContext, useEffect, useId, useRef, useState, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
+import { Button, cx, Input } from './core';
+import { Icon } from './Icon';
+import { fmtDate } from '../../lib/format';
+
+/* ---------------------------------------- Toast ---------------------------------------- */
+
+interface ToastItem {
+  id: number;
+  tone: 'success' | 'error' | 'info' | 'warning';
+  title: string;
+  text?: string;
+  action?: { label: string; onClick: () => void };
+}
+
+const ToastCtx = createContext<(t: Omit<ToastItem, 'id'>) => void>(() => {});
+
+export function ToastProvider({ children }: { children: ReactNode }) {
+  const [items, setItems] = useState<ToastItem[]>([]);
+  const push = useCallback((t: Omit<ToastItem, 'id'>) => {
+    const id = Date.now() + Math.random();
+    setItems((s) => [...s.slice(-3), { ...t, id }]);
+    setTimeout(() => setItems((s) => s.filter((x) => x.id !== id)), t.action ? 8000 : 5000);
+  }, []);
+  return (
+    <ToastCtx.Provider value={push}>
+      {children}
+      {createPortal(
+        <div className="fixed bottom-4 right-4 left-4 sm:left-auto z-[100] flex flex-col gap-2 items-stretch sm:items-end pointer-events-none" role="status" aria-live="polite">
+          {items.map((t) => (
+            <div key={t.id} className="pointer-events-auto w-full sm:w-[380px] bg-raised border border-line rounded-card shadow-float p-3.5 flex gap-3 items-start">
+              <Icon
+                name={t.tone === 'success' ? 'CheckCircle2' : t.tone === 'error' ? 'XCircle' : t.tone === 'warning' ? 'AlertTriangle' : 'Info'}
+                size={16}
+                className={cx('mt-0.5 shrink-0', t.tone === 'success' ? 'text-ok' : t.tone === 'error' ? 'text-err' : t.tone === 'warning' ? 'text-warn' : 'text-fg-link')}
+              />
+              <div className="flex-1 min-w-0 flex flex-col gap-0.5">
+                <strong className="text-sm font-semibold">{t.title}</strong>
+                {t.text && <span className="text-meta text-fg-muted break-words">{t.text}</span>}
+              </div>
+              {t.action && (
+                <button
+                  type="button"
+                  className="text-sm font-medium text-fg-link hover:text-fg shrink-0"
+                  onClick={() => {
+                    t.action!.onClick();
+                    setItems((s) => s.filter((x) => x.id !== t.id));
+                  }}
+                >
+                  {t.action.label}
+                </button>
+              )}
+              <button type="button" aria-label="Schließen" className="text-fg-muted hover:text-fg shrink-0" onClick={() => setItems((s) => s.filter((x) => x.id !== t.id))}>
+                <Icon name="X" size={14} />
+              </button>
+            </div>
+          ))}
+        </div>,
+        document.body,
+      )}
+    </ToastCtx.Provider>
+  );
+}
+
+export function useToast() {
+  return useContext(ToastCtx);
+}
+
+/** Fehler einer API-Aktion als Toast mit verständlicher Meldung */
+export function useErrorToast() {
+  const toast = useToast();
+  return useCallback((e: unknown, title = 'Aktion fehlgeschlagen') => toast({ tone: 'error', title, text: (e as Error)?.message ?? String(e) }), [toast]);
+}
+
+/* --------------------------------------- Dialog ---------------------------------------- */
+
+export function Dialog({ open, onClose, title, children, footer, width = 520 }: { open: boolean; onClose: () => void; title: ReactNode; children: ReactNode; footer?: ReactNode; width?: number }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const hid = useId();
+  useEffect(() => {
+    if (!open) return;
+    const prev = document.activeElement as HTMLElement | null;
+    const el = ref.current;
+    el?.querySelector<HTMLElement>('input, textarea, select, button:not([data-close])')?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+      if (e.key === 'Tab' && el) {
+        const f = [...el.querySelectorAll<HTMLElement>('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])')].filter((x) => !x.hasAttribute('disabled'));
+        if (!f.length) return;
+        if (e.shiftKey && document.activeElement === f[0]) {
+          e.preventDefault();
+          f[f.length - 1].focus();
+        } else if (!e.shiftKey && document.activeElement === f[f.length - 1]) {
+          e.preventDefault();
+          f[0].focus();
+        }
+      }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      prev?.focus?.();
+    };
+  }, [open, onClose]);
+  if (!open) return null;
+  return createPortal(
+    <div className="fixed inset-0 z-[90] flex items-center justify-center p-4 bg-[rgba(2,6,23,.6)]" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+      <div ref={ref} role="dialog" aria-modal="true" aria-labelledby={hid} className="bg-card border border-line rounded-card shadow-float w-full max-h-[90vh] flex flex-col" style={{ maxWidth: width }}>
+        <div className="flex items-center justify-between gap-3 px-5 pt-4 pb-3 border-b border-line">
+          <h2 id={hid} className="m-0 text-section font-semibold">
+            {title}
+          </h2>
+          <button type="button" data-close aria-label="Schließen" onClick={onClose} className="text-fg-muted hover:text-fg w-8 h-8 inline-flex items-center justify-center rounded-chip hover:bg-raised">
+            <Icon name="X" size={16} />
+          </button>
+        </div>
+        <div className="px-5 py-4 overflow-y-auto">{children}</div>
+        {footer && <div className="flex justify-end gap-2 px-5 py-3 border-t border-line flex-wrap">{footer}</div>}
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
+/** Endgültiges Löschen: Bestätigung durch Eintippen des Namens, Button nennt das Objekt. */
+export function DeleteDialog({ open, onClose, objectType, name, confirmValue, onConfirm, extra }: { open: boolean; onClose: () => void; objectType: string; name: string; confirmValue?: string; onConfirm: (typed: string) => Promise<void>; extra?: ReactNode }) {
+  const [typed, setTyped] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const expected = confirmValue ?? name;
+  useEffect(() => {
+    if (open) {
+      setTyped('');
+      setError(null);
+    }
+  }, [open]);
+  return (
+    <Dialog
+      open={open}
+      onClose={onClose}
+      title={`${objectType} löschen?`}
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose}>
+            Abbrechen
+          </Button>
+          <Button
+            variant="danger"
+            icon="Trash2"
+            loading={busy}
+            disabled={typed.trim() !== expected.trim()}
+            onClick={async () => {
+              setBusy(true);
+              setError(null);
+              try {
+                await onConfirm(typed);
+                onClose();
+              } catch (e) {
+                setError((e as Error).message);
+              } finally {
+                setBusy(false);
+              }
+            }}
+          >
+            {objectType} „{name.length > 28 ? name.slice(0, 27) + '…' : name}“ löschen
+          </Button>
+        </>
+      }
+    >
+      <div className="flex flex-col gap-3 text-sm">
+        <p className="m-0">Das lässt sich nicht rückgängig machen.</p>
+        {extra}
+        <label className="flex flex-col gap-1.5">
+          <span>
+            Zur Bestätigung <strong className="font-mono">{expected}</strong> eingeben:
+          </span>
+          <Input value={typed} onChange={(e) => setTyped(e.target.value)} autoComplete="off" />
+        </label>
+        {error && <p className="m-0 text-err text-meta">{error}</p>}
+      </div>
+    </Dialog>
+  );
+}
+
+/* --------------------------------------- Popover --------------------------------------- */
+
+export function Popover({ open, onClose, anchor, children, align = 'end', width = 280, className }: { open: boolean; onClose: () => void; anchor: React.RefObject<HTMLElement | null>; children: ReactNode; align?: 'start' | 'end'; width?: number; className?: string }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+  useEffect(() => {
+    if (!open || !anchor.current) return;
+    const place = () => {
+      const r = anchor.current!.getBoundingClientRect();
+      const w = Math.min(width, window.innerWidth - 16);
+      let left = align === 'end' ? r.right - w : r.left;
+      left = Math.max(8, Math.min(left, window.innerWidth - w - 8));
+      setPos({ top: r.bottom + 6, left });
+    };
+    place();
+    window.addEventListener('resize', place);
+    window.addEventListener('scroll', place, true);
+    const onDown = (e: MouseEvent) => {
+      if (!ref.current?.contains(e.target as Node) && !anchor.current?.contains(e.target as Node)) onClose();
+    };
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('resize', place);
+      window.removeEventListener('scroll', place, true);
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open, anchor, onClose, align, width]);
+  if (!open || !pos) return null;
+  return createPortal(
+    <div ref={ref} className={cx('fixed z-[80] bg-card border border-line rounded-card shadow-float', className)} style={{ top: pos.top, left: pos.left, width: Math.min(width, window.innerWidth - 16) }}>
+      {children}
+    </div>,
+    document.body,
+  );
+}
+
+/** Menü mit Tastatursteuerung (↑↓ Enter Esc). */
+export function Menu({ items, label = 'Weitere Aktionen', icon = 'MoreHorizontal', size = 'md' }: { items: ({ label: string; icon?: string; onClick: () => void; danger?: boolean; disabled?: boolean; hint?: string } | null | false)[]; label?: string; icon?: string; size?: 'sm' | 'md' }) {
+  const [open, setOpen] = useState(false);
+  const btn = useRef<HTMLButtonElement>(null);
+  const list = items.filter(Boolean) as { label: string; icon?: string; onClick: () => void; danger?: boolean; disabled?: boolean; hint?: string }[];
+  const [active, setActive] = useState(0);
+  useEffect(() => {
+    if (open) setActive(0);
+  }, [open]);
+  return (
+    <>
+      <Button ref={btn} iconOnly icon={icon} size={size} aria-label={label} aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((o) => !o)} variant="secondary" />
+      <Popover open={open} onClose={() => setOpen(false)} anchor={btn} width={240}>
+        <div
+          role="menu"
+          tabIndex={-1}
+          ref={(el) => el?.focus()}
+          className="p-1.5 outline-none"
+          onKeyDown={(e) => {
+            if (e.key === 'ArrowDown') setActive((a) => (a + 1) % list.length);
+            if (e.key === 'ArrowUp') setActive((a) => (a - 1 + list.length) % list.length);
+            if (e.key === 'Enter' && list[active] && !list[active].disabled) {
+              setOpen(false);
+              list[active].onClick();
+            }
+          }}
+        >
+          {list.map((it, i) => (
+            <button
+              key={it.label}
+              role="menuitem"
+              type="button"
+              disabled={it.disabled}
+              title={it.hint}
+              onMouseEnter={() => setActive(i)}
+              onClick={() => {
+                setOpen(false);
+                it.onClick();
+              }}
+              className={cx('w-full flex items-center gap-2.5 h-9 px-2.5 rounded-chip text-sm text-left disabled:opacity-50', i === active && 'bg-raised', it.danger ? 'text-err' : 'text-fg')}
+            >
+              {it.icon && <Icon name={it.icon} size={15} />}
+              {it.label}
+            </button>
+          ))}
+        </div>
+      </Popover>
+    </>
+  );
+}
+
+/* ------------------------------------- SecretField -------------------------------------- */
+
+/** Geheimnisse nie im Klartext: maskiert + „Ersetzen“, kein „Anzeigen“. */
+export function SecretField({ label, set, savedAt, onReplace, value, editing, help, required, id }: { label: string; set: boolean; savedAt?: string | null; onReplace?: (v: string) => void; value?: string; editing?: boolean; help?: string; required?: boolean; id?: string }) {
+  const [replacing, setReplacing] = useState(!set || !!editing);
+  const auto = useId();
+  const fid = id ?? auto;
+  if (!replacing) {
+    return (
+      <div className="flex flex-col gap-1.5">
+        <span className="text-sm font-medium">{label}</span>
+        <div className="flex gap-2 items-center">
+          <div className="flex-1 h-field rounded-control bg-raised border border-line px-3 flex items-center gap-2 font-mono text-[13px] text-fg-muted" aria-label={`${label}: gespeichert, verborgen`}>
+            <Icon name="Lock" size={14} />
+            ••••••••••••
+          </div>
+          <Button onClick={() => setReplacing(true)}>Ersetzen</Button>
+        </div>
+        <p className="m-0 text-meta text-fg-muted">{savedAt ? `Gespeichert am ${fmtDate(savedAt)} · ` : ''}wird nie im Klartext angezeigt</p>
+      </div>
+    );
+  }
+  return (
+    <div className="flex flex-col gap-1.5">
+      <label htmlFor={fid} className="text-sm font-medium">
+        {label}
+        {required && <span className="text-err ml-0.5">*</span>}
+      </label>
+      <div className="flex gap-2">
+        <Input id={fid} type="password" autoComplete="new-password" mono value={value ?? ''} onChange={(e) => onReplace?.(e.target.value)} placeholder={set ? 'Neuen Wert eingeben' : ''} />
+        {set && (
+          <Button
+            variant="ghost"
+            onClick={() => {
+              onReplace?.('');
+              setReplacing(false);
+            }}
+          >
+            Abbrechen
+          </Button>
+        )}
+      </div>
+      <p className="m-0 text-meta text-fg-muted">{help ?? 'Wird verschlüsselt gespeichert und danach nie wieder angezeigt.'}</p>
+    </div>
+  );
+}
+
+/** Einmalige Anzeige eines neu erzeugten Geheimnisses (Webhook, API-Schlüssel). */
+export function OneTimeSecret({ value, label = 'Geheimnis' }: { value: string; label?: string }) {
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex gap-2">
+        <Input readOnly value={value} mono aria-label={label} onFocus={(e) => e.target.select()} />
+        <CopyButton value={value} />
+      </div>
+      <p className="m-0 text-meta text-warn flex items-center gap-1.5">
+        <Icon name="AlertTriangle" size={13} /> Jetzt kopieren – es wird nur dieses eine Mal angezeigt.
+      </p>
+    </div>
+  );
+}
+
+export function CopyButton({ value, label = 'Kopieren', size = 'md' }: { value: string; label?: string; size?: 'sm' | 'md' }) {
+  const [done, setDone] = useState(false);
+  return (
+    <Button
+      size={size}
+      icon={done ? 'Check' : 'Copy'}
+      onClick={async () => {
+        try {
+          await navigator.clipboard.writeText(value);
+        } catch {
+          const ta = document.createElement('textarea');
+          ta.value = value;
+          document.body.appendChild(ta);
+          ta.select();
+          document.execCommand('copy');
+          ta.remove();
+        }
+        setDone(true);
+        setTimeout(() => setDone(false), 1500);
+      }}
+    >
+      {done ? 'Kopiert' : label}
+    </Button>
+  );
+}
+
+/* ------------------------------------- VariableChip ------------------------------------- */
+
+export function VariableChip({ source, field, origin = 'trigger' }: { source: string; field: string; origin?: 'trigger' | 'data' }) {
+  return (
+    <span className={cx('inline-flex items-center gap-1 h-[22px] px-1.5 rounded-[5px] font-mono text-meta whitespace-nowrap', origin === 'trigger' ? 'bg-primary-soft text-fg-link' : 'bg-[rgba(6,182,212,.14)] text-cyan')}>
+      {source} <span aria-hidden="true">›</span> {field}
+    </span>
+  );
+}

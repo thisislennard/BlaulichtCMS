@@ -1,0 +1,134 @@
+/* LifeLink Design-Tokens
+   Dark Mode ist Standard. Light Mode über <html data-theme="light">.
+   "system" im ThemeProvider: data-theme je nach prefers-color-scheme setzen. */
+
+
+:root {
+  /* Marke */
+  --ll-primary: #6366F1;        /* Hover, Fokus, Auswahl, Akzentlinien */
+  --ll-primary-solid: #4F46E5;  /* Flächen mit weißer Schrift */
+  --ll-accent: #06B6D4;
+  --ll-success: #10B981;
+  --ll-warning: #F59E0B;
+  --ll-error: #EF4444;
+
+  /* Flächen – Dark */
+  --ll-bg: #0B1020;
+  --ll-sidebar: #101827;
+  --ll-card: #151E30;
+  --ll-raised: #1D2940;
+  --ll-border: #293449;
+  --ll-text: #F1F5F9;
+  --ll-text-2: #94A3B8;
+  --ll-canvas-dot: #1F2A40;
+
+  /* Status als Text + Soft-Hintergründe */
+  --ll-link: #A5B4FC;
+  --ll-primary-soft: rgba(99, 102, 241, .16);
+  --ll-cyan: #22D3EE;
+  --ll-ok: #34D399;
+  --ll-ok-soft: rgba(16, 185, 129, .14);
+  --ll-warn: #FBBF24;
+  --ll-warn-soft: rgba(245, 158, 11, .14);
+  --ll-err: #F87171;
+  --ll-err-soft: rgba(239, 68, 68, .14);
+
+  /* Node-Kategorien */
+  --ll-node-trigger: #818CF8;
+  --ll-node-condition: #FBBF24;
+  --ll-node-data: #22D3EE;
+  --ll-node-action: #34D399;
+  --ll-node-control: #94A3B8;
+
+  /* Typo */
+  --ll-font: 'Geist Variable', 'Geist', system-ui, sans-serif;
+  --ll-font-mono: 'Geist Mono Variable', 'Geist Mono', ui-monospace, monospace;
+
+  /* Radien */
+  --ll-r-chip: 6px;
+  --ll-r-control: 8px;
+  --ll-r-node: 10px;
+  --ll-r-card: 12px;
+
+  /* Schatten */
+  --ll-shadow-float: 0 16px 40px rgba(2, 6, 23, .45);
+  --ll-ring: 0 0 0 3px rgba(99, 102, 241, .22);
+  --ll-ring-selected: 0 0 0 3px rgba(99, 102, 241, .35);
+
+  /* Bewegung */
+  --ll-dur-fast: 120ms;
+  --ll-dur-panel: 180ms;
+  --ll-ease: cubic-bezier(.2, .7, .2, 1);
+
+  color-scheme: dark;
+}
+
+[data-theme="light"] {
+  --ll-bg: #F8FAFC;
+  --ll-sidebar: #FFFFFF;
+  --ll-card: #FFFFFF;
+  --ll-raised: #F1F5F9;
+  --ll-border: #E2E8F0;
+  --ll-text: #0F172A;
+  --ll-text-2: #64748B;
+  --ll-canvas-dot: #D8DEE8;
+
+  --ll-link: #4338CA;
+  --ll-primary-soft: rgba(99, 102, 241, .10);
+  --ll-cyan: #0E7490;
+  --ll-ok: #047857;
+  --ll-ok-soft: rgba(16, 185, 129, .12);
+  --ll-warn: #B45309;
+  --ll-warn-soft: rgba(245, 158, 11, .14);
+  --ll-err: #B91C1C;
+  --ll-err-soft: rgba(239, 68, 68, .10);
+
+  --ll-node-trigger: #4F46E5;
+  --ll-node-condition: #B45309;
+  --ll-node-data: #0E7490;
+  --ll-node-action: #047857;
+  --ll-node-control: #64748B;
+
+  --ll-shadow-float: 0 16px 40px rgba(15, 23, 42, .12);
+
+  color-scheme: light;
+}
+
+html, body {
+  background: var(--ll-bg);
+  color: var(--ll-text);
+  font-family: var(--ll-font);
+  font-size: 14px;
+}
+
+:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--ll-bg), 0 0 0 4px var(--ll-primary);
+}
+
+/* Datenfluss auf Kanten während Testläufen */
+.ll-edge-flow { stroke-dasharray: 6 5; animation: ll-flow .9s linear infinite; }
+@keyframes ll-flow { to { stroke-dashoffset: -22; } }
+
+.ll-pulse { animation: ll-pulse 1.4s ease-in-out infinite; }
+@keyframes ll-pulse { 50% { opacity: .35; } }
+
+.ll-skeleton {
+  background: linear-gradient(90deg, var(--ll-raised) 0%, var(--ll-border) 50%, var(--ll-raised) 100%);
+  background-size: 200% 100%;
+  animation: ll-skeleton 1.4s ease-in-out infinite;
+}
+@keyframes ll-skeleton { to { background-position: -200% 0; } }
+
+.ll-canvas-grid {
+  background-color: var(--ll-bg);
+  background-image: radial-gradient(var(--ll-canvas-dot) 1.2px, transparent 1.2px);
+  background-size: 20px 20px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
+[data-reduced-motion="true"] *, [data-reduced-motion="true"] *::before, [data-reduced-motion="true"] *::after {
+  animation: none !important; transition: none !important;
+}

@@ -1,0 +1,4 @@
+# Öffentlicher Ed25519-Schlüssel für signierte LifeLink-Updates (Base64 der 32 Rohbytes).
+# Erzeugen: node tools/update-signing.mjs keygen --out <pfad außerhalb des Repos> --write-public
+# Ohne Schlüssel lehnt LifeLink jedes Update ab.
+ZHvmJ1CFWCG0EaV6gPRqShULKKU4WQybg8nVXb/1G+k=

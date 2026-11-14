@@ -1,0 +1,46 @@
+{
+  "name": "@lifelink/server",
+  "version": "2.0.1",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "dev": "tsx watch --env-file-if-exists=../.env src/api.ts",
+    "dev:worker": "tsx watch --env-file-if-exists=../.env src/worker.ts",
+    "start": "node dist/main.js",
+    "cli": "tsx src/cli.ts",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@fastify/cookie": "^11.1.5",
+    "@fastify/helmet": "^13.2.0",
+    "@fastify/multipart": "^10.1.6",
+    "@fastify/rate-limit": "^11.2.1",
+    "@fastify/static": "^10.1.8",
+    "@node-rs/argon2": "^2.2.2",
+    "adm-zip": "^0.6.1",
+    "croner": "^11.0.0",
+    "fastify": "^5.12.7",
+    "imapflow": "^2.10.0",
+    "ipaddr.js": "^2.5.0",
+    "mqtt": "^5.16.1",
+    "nodemailer": "^10.3.1",
+    "pg": "^8.23.1",
+    "qrcode": "^1.5.4",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/adm-zip": "latest",
+    "@types/node": "^26.6.6",
+    "@types/nodemailer": "^8.0.2",
+    "@types/pg": "^8.23.1",
+    "@types/qrcode": "latest",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.5"
+  }
+}
