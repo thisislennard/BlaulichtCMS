@@ -1,3 +1,4 @@
+import { getSettings } from './lib/settings.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import Fastify, { type FastifyInstance } from 'fastify';
@@ -26,6 +27,13 @@ import { rssRoutes } from './routes/rss.js';
 import { warningRoutes } from './routes/warnings.js';
 import { connectionRoutes } from './routes/connections.js';
 import { healthStatus } from './routes/health.js';
+
+/** Im Wartungsmodus bleiben nur Anmeldung, Abmeldung und das Beenden des Wartungsmodus möglich. */
+const MAINTENANCE_ALLOWED = ['/api/v1/auth/', '/api/v1/system/maintenance', '/api/v1/notifications/read'];
+async function assertNotMaintenance() {
+  const m = (await getSettings())['system.maintenance'];
+  if (m) throw new AppError(503, 'maintenance', `Wartung: ${m.reason || 'Update wird vorbereitet'}. Änderungen sind kurz nicht möglich.`);
+}
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -86,12 +94,14 @@ export async function buildApp(): Promise<FastifyInstance> {
     // Die Bridge authentisiert sich per eigenem Schlüssel und nutzt keine Cookies
     if (req.url.startsWith('/api/v1/bridge/')) return;
     // FE2-Eingang (eigener Zugangsschlüssel) und zeitlich begrenzte Medien-URLs (Abruf durch Meta) ohne Sitzung
-    if (req.url.startsWith('/api/v1/inbound/') || req.url.startsWith('/api/v1/m/')) return;
+    if (req.url.startsWith('/api/v1/inbound/')) return assertNotMaintenance();
+    if (req.url.startsWith('/api/v1/m/')) return;
     req.auth = await resolveAuth(req);
     const changing = !['GET', 'HEAD', 'OPTIONS'].includes(req.method);
     if (changing && req.auth?.kind !== 'api_key' && req.headers[CSRF_HEADER] !== '1') {
       throw new AppError(403, 'csrf', 'Anfrage ohne Sicherheitskennung abgelehnt.');
     }
+    if (changing && !MAINTENANCE_ALLOWED.some((p) => req.url.startsWith(p))) await assertNotMaintenance();
   });
 
   await app.register(

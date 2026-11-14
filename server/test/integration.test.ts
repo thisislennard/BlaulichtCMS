@@ -1397,3 +1397,56 @@ describe('Bridge-Updates über den WordPress-Updateweg (M4)', () => {
     expect(bridgePackage().sha256).toBe(o.sha256);
   });
 });
+
+describe('Sicherung, Updates und Wiederherstellung (M4)', () => {
+  it('Wartungsmodus hält schreibende Vorgänge an, Banner auf Websites bleiben unberührt', async () => {
+    expect((await editor.post('/system/maintenance', { enabled: true })).status).toBe(403);
+    const pre0 = await admin.get('/system/update-preflight');
+    expect(pre0.json.ready).toBe(false);
+    expect(pre0.json.checks.find((c: any) => c.id === 'maintenance').ok).toBe(false);
+    expect((await admin.post('/system/maintenance', { enabled: true, reason: 'Update auf neue Version (Test)' })).status).toBe(200);
+    const { getSettings } = await import('../src/lib/settings.js');
+    await getSettings(true);
+    const w = await editor.post('/posts', { title: 'Während der Wartung' });
+    expect(w.status).toBe(503);
+    expect(w.json.error).toBe('maintenance');
+    // Lesen bleibt möglich, Anmeldung auch
+    expect((await editor.get('/posts')).status).toBe(200);
+    // Bridge bekommt keine neuen Aufträge und keine Banner-Liste (bestehende Banner bleiben)
+    const site = await one<any>(`SELECT id FROM wp_sites WHERE status = 'active' LIMIT 1`);
+    const s = await admin.post('/sites', { name: 'Wartungstest' });
+    expect(s.status).toBe(503);
+    void site;
+    const pre = await admin.get('/system/update-preflight');
+    expect(pre.json.checks.find((c: any) => c.id === 'maintenance').ok).toBe(true);
+    expect(pre.json.checks.find((c: any) => c.id === 'schema').ok).toBe(true);
+    expect(pre.json.postgres).toMatch(/^\d+/);
+    expect((await admin.post('/system/maintenance', { enabled: false })).status).toBe(200);
+    await getSettings(true);
+    expect((await editor.post('/posts', { title: 'Nach der Wartung' })).status).toBe(200);
+  });
+
+  it('fehlgeschlagene Migration wird vollständig zurückgerollt und kann nach Korrektur erneut laufen', async () => {
+    const { migrate, migrationFiles } = await import('../src/db/migrate.js');
+    const { config } = await import('../src/config.js');
+    const dir = fs.mkdtempSync(path.join(process.env.LIFELINK_DATA_DIR!, 'mig-'));
+    for (const f of migrationFiles()) fs.copyFileSync(path.join(config.migrationsDir, f), path.join(dir, f));
+    fs.writeFileSync(path.join(dir, '999_test_kaputt.sql'), `CREATE TABLE test_halb_fertig (id int);\nALTER TABLE gibt_es_nicht ADD COLUMN x int;`);
+    await expect(migrate(() => {}, dir)).rejects.toThrow(/999_test_kaputt\.sql/);
+    expect((await one<any>(`SELECT to_regclass('public.test_halb_fertig') AS t`))!.t).toBeNull();
+    expect((await one<any>(`SELECT count(*)::int AS n FROM schema_migrations WHERE name = '999_test_kaputt.sql'`))!.n).toBe(0);
+    // Bestehende Daten unverändert
+    expect((await one<any>(`SELECT count(*)::int AS n FROM users`))!.n).toBeGreaterThan(3);
+    fs.writeFileSync(path.join(dir, '999_test_kaputt.sql'), `CREATE TABLE test_halb_fertig (id int);`);
+    expect(await migrate(() => {}, dir)).toEqual(['999_test_kaputt.sql']);
+    // Rückkehr zum Image ohne diese Migration: Start wird verweigert (Datenstand neuer als Programm)
+    const { SchemaNewerError } = await import('../src/db/migrate.js');
+    await expect(migrate(() => {})).rejects.toBeInstanceOf(SchemaNewerError);
+    const h = await anonymous.raw('GET', '/healthz');
+    expect(h.json.checks.schema.ok).toBe(false);
+    expect(h.json.checks.schema.detail).toContain('neuer als Programm');
+    // Aufräumen: Testmigration entfernen
+    await pool.query(`DROP TABLE test_halb_fertig; DELETE FROM schema_migrations WHERE name = '999_test_kaputt.sql'`);
+    expect(await migrate(() => {})).toEqual([]);
+  });
+});

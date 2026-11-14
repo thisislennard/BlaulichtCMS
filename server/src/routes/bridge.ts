@@ -11,6 +11,7 @@ import { deriveKey, hmacHex, randomToken, safeEqual, sha256Hex } from '../lib/cr
 import { AppError, badRequest, notFound } from '../lib/errors.js';
 import { notify } from '../lib/notify.js';
 import { publicBase } from '../lib/urls.js';
+import { getSettings } from '../lib/settings.js';
 import { publicFileFor } from './media.js';
 import { textFor } from './posts.js';
 import { sendFileResponse } from './files.js';
@@ -298,6 +299,9 @@ export async function bridgeRoutes(app: FastifyInstance) {
   /** Offene Aufträge abholen. Mehrfaches Abholen ist erlaubt – die Bridge arbeitet idempotent. */
   app.get('/bridge/jobs', bridgeLimit, async (req) => {
     const site = await bridgeAuth(req);
+    // Wartungsmodus: keine neuen Aufträge ausgeben (Rückmeldungen bereits abgeholter Aufträge bleiben möglich)
+    // Bewusst ohne banner_ids: die Bridge lässt bestehende Banner dann unverändert
+    if ((await getSettings())['system.maintenance']) return { jobs: [], maintenance: true, poll_interval: POLL_SECONDS };
     const rows = await many<any>(
       `UPDATE publications pb SET status = CASE WHEN pb.status = 'queued' THEN 'sent' ELSE pb.status END,
               fetched_at = now(), attempts = pb.attempts + 1

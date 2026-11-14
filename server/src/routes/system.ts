@@ -14,7 +14,7 @@ import { normalizePublicUrl } from '../lib/urls.js';
 const startedAt = Date.now();
 
 /** Einstellungen, die nicht über die allgemeine Einstellungsseite geändert werden dürfen. */
-const INTERNAL_KEYS = new Set<SettingKey>(['setup.completed', 'dashboard.layouts', 'smtp.password_secret_id']);
+const INTERNAL_KEYS = new Set<SettingKey>(['setup.completed', 'dashboard.layouts', 'smtp.password_secret_id', 'system.maintenance']);
 
 export async function systemStatus() {
   const t0 = Date.now();
@@ -179,6 +179,19 @@ export async function systemRoutes(app: FastifyInstance) {
   });
 
   /* Sicherungen */
+  /** Update-Vorabprüfung und Wartungsmodus (Ablauf: Sichern → Wechseln → Prüfen → Wiederherstellen). */
+  app.get('/system/update-preflight', { preHandler: requireAuth('system.manage') }, async () => {
+    const { updatePreflight } = await import('../ops/update.js');
+    return updatePreflight();
+  });
+  app.post('/system/maintenance', { preHandler: requireAuth('system.manage') }, async (req) => {
+    const b = z.object({ enabled: z.boolean(), reason: z.string().trim().max(200).default('') }).parse(req.body);
+    const { setMaintenance } = await import('../ops/update.js');
+    await setMaintenance(b.enabled, req.auth!.user?.name ?? 'Administration', b.reason || 'Update wird vorbereitet', req.auth!.user?.id ?? null);
+    await audit(req.auth!.actor, b.enabled ? 'system.maintenance_on' : 'system.maintenance_off', { type: 'system', label: 'Wartungsmodus' }, { grund: b.reason || null });
+    return { ok: true };
+  });
+
   app.get('/backups', { preHandler: requireAuth('system.manage') }, async () =>
     many<any>(`SELECT b.*, u.name AS created_by_name FROM backups b LEFT JOIN users u ON u.id = b.created_by ORDER BY started_at DESC LIMIT 50`),
   );

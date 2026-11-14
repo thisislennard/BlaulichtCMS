@@ -502,6 +502,7 @@ export default function Settings() {
                     {t("admin.settings.restoreHelp")}
                   </Link>
                 </Notice>
+                {manage && <UpdatePreflight />}
                 {manage ? (
                   <BackupList />
                 ) : (
@@ -758,6 +759,55 @@ function OpsSection() {
         </dl>
       )}
     </SectionCard>
+  );
+}
+
+/** Update vorbereiten: Vorabprüfung und Wartungsmodus. Der Imagewechsel selbst passiert am Docker-Host. */
+function UpdatePreflight() {
+  const q = useQuery({ queryKey: ["update-preflight"], queryFn: () => get<any>("/system/update-preflight"), refetchInterval: 10_000 });
+  const toast = useToast();
+  const d = q.data;
+  const toggle = async (enabled: boolean) => {
+    try {
+      await post("/system/maintenance", { enabled, reason: enabled ? "Update wird vorbereitet" : "" });
+      toast({ tone: "success", title: enabled ? "Wartungsmodus aktiv" : "Wartungsmodus beendet" });
+      q.refetch();
+    } catch (e) {
+      toast({ tone: "error", title: (e as Error).message });
+    }
+  };
+  if (!d) return null;
+  const on = d.checks.find((c: any) => c.id === "maintenance")?.ok;
+  return (
+    <div className="border border-line rounded-card p-4 flex flex-col gap-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <strong>Update vorbereiten</strong>
+        <Badge tone={d.ready ? "success" : on ? "warning" : "neutral"}>{d.ready ? "bereit für das Update" : on ? "wartet auf laufende Vorgänge" : "Normalbetrieb"}</Badge>
+        <span className="text-meta text-fg-muted">LifeLink {d.version} · PostgreSQL {d.postgres} · {d.migrations} Migrationen</span>
+      </div>
+      <ul className="m-0 p-0 list-none flex flex-col gap-1 text-sm">
+        {d.checks.map((c: any) => (
+          <li key={c.id} className="flex gap-2 items-start">
+            <Icon name={c.ok ? "CheckCircle2" : c.blocking ? "XCircle" : "AlertTriangle"} size={15} className={c.ok ? "text-ok mt-0.5" : c.blocking ? "text-err mt-0.5" : "text-warn mt-0.5"} />
+            <span>
+              {c.label} <span className="text-fg-muted">– {c.detail}</span>
+            </span>
+          </li>
+        ))}
+      </ul>
+      <div className="flex flex-wrap gap-2">
+        {on ? (
+          <Button onClick={() => toggle(false)}>Wartungsmodus beenden</Button>
+        ) : (
+          <Button icon="Hourglass" onClick={() => confirm("Wartungsmodus einschalten? Schreibende Vorgänge und neue Aufträge pausieren.") && toggle(true)}>
+            Wartungsmodus einschalten
+          </Button>
+        )}
+        <Link to="/hilfe/updates" className="inline-flex items-center gap-1 text-sm">
+          <Icon name="BookOpen" size={13} /> Ablauf: Sichern → Wechseln → Prüfen → Wiederherstellen
+        </Link>
+      </div>
+    </div>
   );
 }
 

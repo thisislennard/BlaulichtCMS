@@ -37,6 +37,8 @@ export const DEFAULT_SETTINGS = {
   'dashboard.layouts': {} as Record<string, unknown>,
 
   'notify.on_connection_error': true,
+  /** Wartungsmodus vor Updates: schreibende Vorgänge angehalten ({ since, byName, reason } oder null). */
+  'system.maintenance': null as null | { since: string; byName: string; reason: string },
 
   /** Warnentwürfe: Testmodus sendet ausschließlich an den Testempfänger. Standard: an. */
   'warnings.test_mode': true,

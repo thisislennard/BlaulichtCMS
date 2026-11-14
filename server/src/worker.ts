@@ -69,6 +69,8 @@ async function processJob(job: Job) {
 async function pump() {
   if (stopping) return;
   const s = await getSettings();
+  // Wartungsmodus: laufende Aufträge zu Ende führen, aber keine neuen beginnen
+  if (s['system.maintenance']) return;
   const free = Math.max(0, Math.min(32, s['jobs.concurrency']) - running.size);
   if (!free) return;
   const jobs = await claimJobs(free);

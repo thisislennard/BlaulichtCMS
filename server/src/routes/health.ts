@@ -3,6 +3,7 @@ import { config } from '../config.js';
 import { one } from '../db/pool.js';
 import { getSettings } from '../lib/settings.js';
 import { freeBytes } from '../media/storage.js';
+import { schemaCompatibility } from '../db/migrate.js';
 
 /**
  * Bereitschaft: LifeLink kann Aufträge annehmen, wenn die Datenbank antwortet, das Schema aktuell ist,
@@ -18,9 +19,12 @@ export async function healthStatus() {
     return { ok: false, version: config.version, checks };
   }
   try {
-    const files = fs.readdirSync(config.migrationsDir).filter((f) => /^\d+_.+\.sql$/.test(f));
-    const applied = await one<{ n: number }>('SELECT count(*)::int AS n FROM schema_migrations WHERE name = ANY($1)', [files]);
-    checks.schema = { ok: applied!.n === files.length, detail: `${applied!.n}/${files.length} Migrationen` };
+    const c = await schemaCompatibility();
+    const total = c.applied.length - c.unknown.length + c.pending.length;
+    checks.schema = {
+      ok: !c.pending.length && !c.unknown.length,
+      detail: c.unknown.length ? `Datenstand neuer als Programm (${c.unknown.length} unbekannte Migrationen)` : `${total - c.pending.length}/${total} Migrationen`,
+    };
   } catch {
     checks.schema = { ok: false, detail: 'Schema nicht initialisiert' };
   }

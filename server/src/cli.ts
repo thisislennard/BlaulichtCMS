@@ -4,7 +4,9 @@ import { config } from './config.js';
 /**
  * Wartungsbefehle (im Container: `docker compose exec lifelink node server/dist/cli.js <befehl>`):
  *   gen-master-key                 neuen LIFELINK_MASTER_KEY ausgeben
- *   migrate                        Datenbankschema aktualisieren
+ *   migrate                        Datenbankschema aktualisieren (mit Startprüfung)
+ *   preflight [--json]             Update-Vorabprüfung (Exit 0 = bereit)
+ *   maintenance on|off [grund]     Wartungsmodus vor/nach einem Update
  *   self-check                     Programmdateien laden und Datenbankverbindung prüfen
  *   backup-decrypt <datei> <ziel>  verschlüsselte Sicherung in eine pg_restore-Datei umwandeln
  *   password-link <email>          Link zum Neusetzen des Passworts erzeugen (24 h gültig)
@@ -29,6 +31,27 @@ async function main() {
       const { migrate } = await import('./db/migrate.js');
       const applied = await migrate();
       console.log(applied.length ? `Angewendet: ${applied.join(', ')}` : 'Schema ist aktuell.');
+      break;
+    }
+    case 'preflight': {
+      const { updatePreflight } = await import('./ops/update.js');
+      const r = await updatePreflight();
+      if (args[0] === '--json') console.log(JSON.stringify(r));
+      else {
+        for (const c of r.checks) console.log(`${c.ok ? 'ok  ' : c.blocking ? 'FEHL' : 'HINW'} ${c.label}: ${c.detail}`);
+        console.log(r.ready ? `BEREIT für das Update (LifeLink ${r.version}, PostgreSQL ${r.postgres}).` : 'NICHT BEREIT.');
+      }
+      process.exitCode = r.ready ? 0 : 2;
+      break;
+    }
+    case 'maintenance': {
+      const on = args[0] === 'on';
+      if (!['on', 'off'].includes(args[0] ?? '')) throw new Error('Aufruf: maintenance on|off [grund]');
+      const { setMaintenance } = await import('./ops/update.js');
+      const { audit, SYSTEM_ACTOR } = await import('./lib/audit.js');
+      await setMaintenance(on, 'Kommandozeile', args.slice(1).join(' ') || 'Update wird vorbereitet', null);
+      await audit({ ...SYSTEM_ACTOR, name: 'Kommandozeile' }, on ? 'system.maintenance_on' : 'system.maintenance_off', { type: 'system', label: 'Wartungsmodus' });
+      console.log(on ? 'Wartungsmodus aktiv: keine neuen schreibenden Vorgänge, keine neuen Aufträge.' : 'Wartungsmodus beendet.');
       break;
     }
     case 'backup-decrypt': {
@@ -61,7 +84,7 @@ async function main() {
       break;
     }
     default:
-      console.log('Befehle: gen-master-key | migrate | self-check | backup-decrypt <datei> <ziel> | password-link <email> | reset-mfa <email>');
+      console.log('Befehle: gen-master-key | migrate | self-check | preflight [--json] | maintenance on|off [grund] | backup-decrypt <datei> <ziel> | password-link <email> | reset-mfa <email>');
       return;
   }
   const { pool } = await import('./db/pool.js');

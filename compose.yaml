@@ -12,7 +12,7 @@ name: lifelink
 services:
   lifelink:
     build: .
-    image: lifelink:local
+    image: ${LIFELINK_IMAGE:-lifelink:local}
     container_name: lifelink
     restart: unless-stopped
     # Init-Prozess (tini) räumt verwaiste Prozesse auf und leitet Signale weiter

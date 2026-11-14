@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import { fork, spawn, spawnSync, type ChildProcess } from 'node:child_process';
 import fs from 'node:fs';
+import http from 'node:http';
 import net from 'node:net';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -196,7 +197,40 @@ function spawnRole(role: Role): ChildProcess {
   return child;
 }
 
-/** API zuerst (führt Migrationen aus), dann Worker. */
+/* ------------------------------------ Schema-Migration ------------------------------- */
+
+/**
+ * Eigener Schritt vor dem Start der API: Startprüfung (Datenstand nicht neuer als das Programm) und fehlende
+ * Migrationen. Schlägt das fehl, startet LifeLink nicht – PostgreSQL läuft weiter (für Sicherung/Wiederherstellung),
+ * und auf dem Webport erscheint eine klare Meldung statt einer halb funktionierenden Anwendung.
+ */
+function runMigrations(): Promise<{ ok: boolean; output: string }> {
+  return new Promise((resolve) => {
+    const child = fork(path.join(APP_ROOT, 'server', 'dist', 'cli.js'), ['migrate'], { cwd: APP_ROOT, env: childEnv('api'), stdio: ['ignore', 'pipe', 'pipe', 'ipc'] });
+    let output = '';
+    child.stdout?.on('data', (d) => (output += d));
+    child.stderr?.on('data', (d) => (output += d));
+    child.on('exit', (code) => resolve({ ok: code === 0, output: output.trim().slice(-2000) }));
+  });
+}
+
+let blockedServer: http.Server | null = null;
+function serveBlocked(reason: string) {
+  const port = Number(process.env.PORT ?? 7310);
+  const body = { ok: false, blocked: true, error: reason, hint: 'Siehe docs/betrieb.md, Abschnitt „Rückweg nach fehlgeschlagenem Update“.' };
+  blockedServer = http.createServer((req, res) => {
+    if (req.url?.startsWith('/healthz') || req.url?.startsWith('/api/')) {
+      res.writeHead(503, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
+      return res.end(JSON.stringify(body));
+    }
+    res.writeHead(503, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });
+    const esc = (t: string) => t.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]!);
+    res.end(`<!doctype html><meta charset="utf-8"><title>LifeLink startet nicht</title><body style="font-family:system-ui;max-width:720px;margin:48px auto;padding:0 16px;line-height:1.5"><h1>LifeLink startet nicht</h1><p>${esc(reason)}</p><p>Die Daten sind unverändert. Rückweg: vorheriges Image starten <strong>und</strong> die Sicherung von vor dem Update wiederherstellen (docs/betrieb.md).</p></body>`);
+  });
+  blockedServer.listen(port, '0.0.0.0');
+}
+
+/** API zuerst, dann Worker. */
 function waitReady(child: ChildProcess, timeoutMs = 120_000): Promise<boolean> {
   return new Promise((resolve) => {
     const timer = setTimeout(() => done(false), timeoutMs);
@@ -276,6 +310,14 @@ async function main() {
     ensureDatabase();
     say('PostgreSQL bereit (nur Unix-Socket im Container).');
   }
+  const mig = await runMigrations();
+  if (!mig.ok) {
+    const reason = mig.output.split('\n').filter(Boolean).pop() ?? 'Schema-Migration fehlgeschlagen.';
+    say(`Start gesperrt: ${reason}`, 'error');
+    serveBlocked(reason);
+    return;
+  }
+  if (mig.output) say(mig.output.split('\n').pop()!);
   await startApp();
 }
 
@@ -284,6 +326,7 @@ for (const sig of ['SIGTERM', 'SIGINT'] as const) {
     if (shuttingDown) return;
     shuttingDown = true;
     say(`${sig} empfangen – geordneter Stopp: Worker → API → Datenbank`);
+    blockedServer?.close();
     await stopApp();
     await stopPostgres();
     say('Gestoppt.');
