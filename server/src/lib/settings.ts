@@ -3,21 +3,15 @@ import { many, pool, type Queryable } from '../db/pool.js';
 /** Systemeinstellungen mit Standardwerten. Neue Einstellungen nur hier ergänzen. */
 export const DEFAULT_SETTINGS = {
   'general.instance_name': 'LifeLink',
-  'general.instance_subtitle': 'Produktion',
+  'general.organization': '',
+  'general.sender_name': '',
+  'general.public_url': '',
   'general.timezone': 'Europe/Berlin',
   'general.language': 'de',
 
-  'execution.concurrency': 4,
-  'execution.default_timeout_sec': 30,
-  'execution.default_retries': 3,
-  'execution.max_run_minutes': 15,
-  'execution.preview_retention_days': 30,
-  'execution.replay_window_days': 7,
-  'execution.run_retention_days': 90,
-  'execution.event_retention_days': 14,
-  'execution.log_retention_days': 30,
-  'execution.audit_retention_days': 365,
-  'execution.four_eyes': false,
+  'jobs.concurrency': 4,
+  'retention.log_days': 30,
+  'retention.audit_days': 365,
 
   'security.require_2fa_admins': true,
   'security.require_2fa_all': false,
@@ -27,24 +21,22 @@ export const DEFAULT_SETTINGS = {
   'security.lockout_minutes': 15,
   'security.password_min_length': 12,
 
-  'notify.on_failure_inapp': true,
-  'notify.on_failure_email': false,
-  'notify.email_connection_id': '',
-  'notify.email_recipients': [] as string[],
+  'media.max_file_mb': 2048,
+  'media.link_max_files': 100,
+  'media.link_default_days': 7,
+  'media.collection_max_files': 500,
+  'media.collection_max_gb': 10,
+  'media.min_free_gb': 2,
+  'media.strip_location': true,
+
+  'editorial.four_eyes': false,
+  'invites.valid_hours': 72,
+
   'notify.on_connection_error': true,
-  'notify.on_update_available': true,
 
   'backup.enabled': true,
   'backup.hour': 3,
   'backup.keep': 14,
-
-  'updates.enabled': true,
-  'updates.repo': '',
-  'updates.check_hours': 6,
-  'updates.token_secret_id': '',
-  'updates.latest': null as null | Record<string, unknown>,
-  'updates.last_check_at': null as null | string,
-  'updates.last_check_error': null as null | string,
 
   'setup.completed': false,
 };

@@ -3,10 +3,9 @@ import { pool } from './db/pool.js';
 import { migrate } from './db/migrate.js';
 import { masterKey } from './lib/crypto.js';
 import { log } from './lib/log.js';
-import { notify } from './lib/notify.js';
 import { buildApp } from './app.js';
 import { ensureSetupToken } from './routes/auth.js';
-import { recordActivationResult } from './updates/installer.js';
+import { ensureMediaDirs } from './media/storage.js';
 
 process.env.LIFELINK_ROLE ??= 'api';
 
@@ -17,22 +16,7 @@ async function main() {
   masterKey(); // bricht ohne gültigen Schlüssel sofort ab
   await migrate((m) => log('info', 'migrate', m));
   await ensureSetupToken();
-  const recordActivation = async () => {
-    const activation = await recordActivationResult();
-    if (!activation) return;
-    await notify({
-      kind: activation.status === 'activated' ? 'success' : 'error',
-      title: activation.status === 'activated' ? `Update auf ${activation.version} aktiv` : `Update auf ${activation.version} zurückgerollt`,
-      body: activation.message ?? '',
-      link: '/updates',
-      permission: 'system.manage',
-    });
-  };
-  await recordActivation();
-  // Der Supervisor meldet das Ergebnis einer Umschaltung erst, nachdem diese API schon läuft
-  process.on('message', (m: any) => {
-    if (m?.type === 'activation-written') recordActivation().catch((e) => log('error', 'updates', e.message));
-  });
+  ensureMediaDirs();
   const app = await buildApp();
   await app.listen({ port: config.port, host: config.host });
   log('info', 'api', `LifeLink ${config.version} hört auf ${config.host}:${config.port}`);

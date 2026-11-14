@@ -13,14 +13,12 @@ import { AppError } from './lib/errors.js';
 import { log } from './lib/log.js';
 import { authRoutes } from './routes/auth.js';
 import { userRoutes } from './routes/users.js';
-import { workflowRoutes } from './routes/workflows.js';
-import { runRoutes } from './routes/runs.js';
-import { connectionRoutes } from './routes/connections.js';
-import { contentRoutes } from './routes/content.js';
 import { systemRoutes } from './routes/system.js';
-import { updateRoutes } from './routes/updates.js';
-import { hookRoutes } from './routes/hooks.js';
 import { dashboardRoutes } from './routes/dashboard.js';
+import { mediaRoutes } from './routes/media.js';
+import { postRoutes } from './routes/posts.js';
+import { bridgeRoutes } from './routes/bridge.js';
+import { healthStatus } from './routes/health.js';
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -37,7 +35,8 @@ export async function buildApp(): Promise<FastifyInstance> {
         defaultSrc: ["'self'"],
         scriptSrc: ["'self'"],
         styleSrc: ["'self'", "'unsafe-inline'"],
-        imgSrc: ["'self'", 'data:'],
+        imgSrc: ["'self'", 'data:', 'blob:'],
+        mediaSrc: ["'self'", 'blob:'],
         fontSrc: ["'self'", 'data:'],
         connectSrc: ["'self'"],
         frameAncestors: ["'none'"],
@@ -52,7 +51,7 @@ export async function buildApp(): Promise<FastifyInstance> {
     referrerPolicy: { policy: 'no-referrer' },
   });
   await app.register(rateLimit, { global: false });
-  await app.register(multipart, { limits: { fileSize: 60 * 1024 * 1024, files: 2, fields: 10 } });
+  await app.register(multipart, { limits: { fileSize: 4 * 1024 * 1024 * 1024, files: 1, fields: 10 } });
 
   app.decorateRequest('auth', null);
 
@@ -75,6 +74,8 @@ export async function buildApp(): Promise<FastifyInstance> {
   app.addHook('onRequest', async (req, reply) => {
     if (!req.url.startsWith('/api/')) return;
     reply.header('cache-control', 'no-store');
+    // Die Bridge authentisiert sich per eigenem Schlüssel und nutzt keine Cookies
+    if (req.url.startsWith('/api/v1/bridge/')) return;
     req.auth = await resolveAuth(req);
     const changing = !['GET', 'HEAD', 'OPTIONS'].includes(req.method);
     if (changing && req.auth?.kind !== 'api_key' && req.headers[CSRF_HEADER] !== '1') {
@@ -82,30 +83,31 @@ export async function buildApp(): Promise<FastifyInstance> {
     }
   });
 
-  await app.register(hookRoutes);
   await app.register(
     async (api) => {
       await api.register(authRoutes);
       await api.register(userRoutes);
-      await api.register(workflowRoutes);
-      await api.register(runRoutes);
-      await api.register(connectionRoutes);
-      await api.register(contentRoutes);
       await api.register(systemRoutes);
-      await api.register(updateRoutes);
       await api.register(dashboardRoutes);
+      await api.register(mediaRoutes);
+      await api.register(postRoutes);
+      await api.register(bridgeRoutes);
     },
     { prefix: '/api/v1' },
   );
 
-  app.get('/healthz', async () => ({ ok: true, version: config.version }));
+  // Gesundheit: 200 nur, wenn LifeLink Aufträge annehmen kann (Datenbank, Schema, Worker, Speicher)
+  app.get('/healthz', async (_req, reply) => {
+    const h = await healthStatus();
+    return reply.status(h.ok ? 200 : 503).send(h);
+  });
 
   // Weboberfläche (gebautes React-Frontend) mit SPA-Fallback
   if (fs.existsSync(path.join(config.webDist, 'index.html'))) {
     await app.register(fastifyStatic, { root: config.webDist, prefix: '/', wildcard: false, maxAge: '1h', immutable: false });
     const indexHtml = fs.readFileSync(path.join(config.webDist, 'index.html'), 'utf8');
     app.setNotFoundHandler((req, reply) => {
-      if (req.method === 'GET' && !req.url.startsWith('/api/') && !req.url.startsWith('/hooks/')) {
+      if (req.method === 'GET' && !req.url.startsWith('/api/')) {
         return reply.header('cache-control', 'no-cache').type('text/html').send(indexHtml);
       }
       return reply.status(404).send({ error: 'not_found', message: 'Nicht gefunden.' });

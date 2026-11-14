@@ -7,13 +7,14 @@ import { requireAnyAuth, requireAuth } from '../auth/context.js';
 import { audit } from '../lib/audit.js';
 import { badRequest } from '../lib/errors.js';
 import { DEFAULT_SETTINGS, getSettings, setSettings, type SettingKey } from '../lib/settings.js';
-import { queueStats } from '../engine/queue.js';
+import { queueStats } from '../jobs/queue.js';
 import { backupPath, runBackup } from '../ops/backup.js';
+import { normalizePublicUrl } from '../lib/urls.js';
 
 const startedAt = Date.now();
 
 /** Einstellungen, die nicht über die allgemeine Einstellungsseite geändert werden dürfen. */
-const INTERNAL_KEYS = new Set<SettingKey>(['updates.latest', 'updates.last_check_at', 'updates.last_check_error', 'updates.token_secret_id', 'setup.completed']);
+const INTERNAL_KEYS = new Set<SettingKey>(['setup.completed']);
 
 export async function systemStatus() {
   const t0 = Date.now();
@@ -31,8 +32,8 @@ export async function systemStatus() {
   const workers = await many<any>(`SELECT worker_id, started_at, last_seen_at, version, jobs_running, info FROM worker_heartbeats WHERE last_seen_at > now() - interval '1 day' ORDER BY last_seen_at DESC`);
   const liveWorkers = workers.filter((w) => Date.now() - new Date(w.last_seen_at).getTime() < 45_000);
   const queue = await queueStats();
-  const bindingErrors = await many<any>(`SELECT b.kind, b.last_error, w.name FROM trigger_bindings b JOIN workflows w ON w.id = b.workflow_id WHERE b.last_error IS NOT NULL`);
-  const connections = await many<any>(`SELECT id, name, connector, status, status_message, last_test_ms, last_test_at, last_used_at FROM connections WHERE status <> 'disabled' ORDER BY name`);
+  const sites = await many<any>(`SELECT id, name, site_url, status, last_seen_at, plugin_version FROM wp_sites WHERE status <> 'revoked' ORDER BY name`);
+  const quarantine = await one<{ n: number }>(`SELECT count(*)::int AS n FROM media WHERE status = 'quarantine' AND deleted_at IS NULL`);
   const lastBackup = await one<any>(`SELECT file_name, status, started_at, finished_at, size_bytes, error FROM backups ORDER BY started_at DESC LIMIT 1`);
   let disk: { free: number; total: number } | null = null;
   try {
@@ -48,7 +49,7 @@ export async function systemStatus() {
       id: 'worker',
       name: 'Worker',
       state: liveWorkers.length ? 'ok' : 'error',
-      detail: liveWorkers.length ? `${liveWorkers.length} aktiv · ${liveWorkers.reduce((a, w) => a + w.jobs_running, 0)} Aufträge laufen` : 'kein Worker aktiv – Läufe werden nicht ausgeführt',
+      detail: liveWorkers.length ? `${liveWorkers.length} aktiv · ${liveWorkers.reduce((a, w) => a + w.jobs_running, 0)} Aufträge laufen` : 'kein Worker aktiv – Aufträge werden nicht bearbeitet',
       ms: null,
     },
     {
@@ -59,18 +60,25 @@ export async function systemStatus() {
       ms: null,
     },
     {
-      id: 'triggers',
-      name: 'Trigger & Zeitpläne',
-      state: bindingErrors.length ? 'warning' : 'ok',
-      detail: bindingErrors.length ? `${bindingErrors.length} mit Fehler` : 'alle ohne Fehler',
+      id: 'media',
+      name: 'Medienprüfung',
+      state: quarantine!.n > 50 ? 'warning' : 'ok',
+      detail: `${quarantine!.n} Datei(en) in Quarantäne`,
+      ms: null,
+    },
+    {
+      id: 'disk',
+      name: 'Speicher',
+      state: disk && disk.free < (await getSettings())['media.min_free_gb'] * 1024 ** 3 ? 'error' : 'ok',
+      detail: disk ? `${(disk.free / 1024 ** 3).toFixed(1)} GB frei von ${(disk.total / 1024 ** 3).toFixed(1)} GB` : 'unbekannt',
       ms: null,
     },
   ];
-  return { services, workers, queue, bindingErrors, connections, lastBackup, disk, dbSize, version: config.version, uptimeSec: Math.round((Date.now() - startedAt) / 1000), node: process.version };
+  return { services, workers, queue, sites, lastBackup, disk, dbSize, version: config.version, uptimeSec: Math.round((Date.now() - startedAt) / 1000), node: process.version };
 }
 
 export async function systemRoutes(app: FastifyInstance) {
-  app.get('/system/status', { preHandler: requireAnyAuth('system.read', 'run.read') }, async () => systemStatus());
+  app.get('/system/status', { preHandler: requireAnyAuth('system.read', 'post.read') }, async () => systemStatus());
 
   app.get('/system/logs', { preHandler: requireAuth('system.read') }, async (req) => {
     const q = z
@@ -161,7 +169,10 @@ export async function systemRoutes(app: FastifyInstance) {
     }
     if (patch['security.password_min_length'] != null && Number(patch['security.password_min_length']) < 10) throw badRequest('Mindestens 10 Zeichen für Passwörter.');
     if (patch['security.session_idle_minutes'] != null && Number(patch['security.session_idle_minutes']) < 5) throw badRequest('Leerlaufzeit mindestens 5 Minuten.');
-    if (patch['execution.concurrency'] != null && (Number(patch['execution.concurrency']) < 1 || Number(patch['execution.concurrency']) > 32)) throw badRequest('Parallele Ausführungen: 1 bis 32.');
+    if (patch['jobs.concurrency'] != null && (Number(patch['jobs.concurrency']) < 1 || Number(patch['jobs.concurrency']) > 32)) throw badRequest('Parallele Aufträge: 1 bis 32.');
+    if (patch['general.public_url'] != null && patch['general.public_url'] !== '') {
+      patch['general.public_url'] = normalizePublicUrl(String(patch['general.public_url']));
+    }
     await setSettings(patch as any, req.auth!.user?.id ?? null);
     await audit(req.auth!.actor, 'settings.changed', { type: 'settings' }, { felder: Object.keys(patch) });
     return { ok: true };
@@ -230,31 +241,19 @@ export async function systemRoutes(app: FastifyInstance) {
     const perms = req.auth!.permissions;
     const like = `%${q}%`;
     const out: { type: string; id: string; title: string; subtitle: string; href: string }[] = [];
-    if (perms.has('workflow.read')) {
-      for (const w of await many<any>(`SELECT id, name, status FROM workflows WHERE name ILIKE $1 OR description ILIKE $1 ORDER BY name LIMIT 8`, [like])) {
-        out.push({ type: 'workflow', id: w.id, title: w.name, subtitle: 'Workflow', href: `/workflows/${w.id}` });
+    if (perms.has('post.read')) {
+      for (const p of await many<any>(`SELECT id, title FROM posts WHERE title ILIKE $1 AND archived_at IS NULL ORDER BY updated_at DESC LIMIT 8`, [like])) {
+        out.push({ type: 'post', id: p.id, title: p.title, subtitle: 'Beitrag', href: `/beitraege/${p.id}` });
       }
     }
-    if (perms.has('run.read')) {
-      const idq = q.replace(/^#/, '');
-      if (/^\d+$/.test(idq)) {
-        const r = await one<any>(`SELECT r.id, w.name FROM runs r JOIN workflows w ON w.id = r.workflow_id WHERE r.id = $1`, [Number(idq)]);
-        if (r) out.push({ type: 'run', id: String(r.id), title: `Lauf #${r.id}`, subtitle: r.name, href: `/ausfuehrungen/${r.id}` });
-      }
-    }
-    if (perms.has('connection.read')) {
-      for (const c of await many<any>(`SELECT id, name, connector FROM connections WHERE name ILIKE $1 ORDER BY name LIMIT 6`, [like])) {
-        out.push({ type: 'connection', id: c.id, title: c.name, subtitle: 'Verbindung', href: `/verbindungen/${c.id}` });
+    if (perms.has('media.read')) {
+      for (const c of await many<any>(`SELECT id, title FROM collections WHERE title ILIKE $1 AND archived_at IS NULL ORDER BY created_at DESC LIMIT 6`, [like])) {
+        out.push({ type: 'collection', id: c.id, title: c.title, subtitle: 'Sammlung', href: `/medien/${c.id}` });
       }
     }
     if (perms.has('user.read')) {
       for (const u of await many<any>(`SELECT id, name, email FROM users WHERE name ILIKE $1 OR email ILIKE $1 ORDER BY name LIMIT 5`, [like])) {
         out.push({ type: 'user', id: u.id, title: u.name, subtitle: u.email, href: `/benutzer` });
-      }
-    }
-    if (perms.has('wordpress.read')) {
-      for (const b of await many<any>(`SELECT id, title FROM banners WHERE title ILIKE $1 ORDER BY updated_at DESC LIMIT 5`, [like])) {
-        out.push({ type: 'banner', id: b.id, title: b.title, subtitle: 'Banner', href: `/wordpress?banner=${b.id}` });
       }
     }
     return { results: out };

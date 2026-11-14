@@ -14,6 +14,7 @@ import { decrypt, encrypt, randomToken, safeEqual, sha256Hex } from '../lib/cryp
 import { AppError, badRequest, unauthorized } from '../lib/errors.js';
 import { getSettings, setSettings } from '../lib/settings.js';
 import { log } from '../lib/log.js';
+import { normalizePublicUrl } from '../lib/urls.js';
 
 const SETUP_FILE = () => path.join(config.dataDir, 'setup-token.txt');
 
@@ -53,14 +54,30 @@ export async function authRoutes(app: FastifyInstance) {
   app.get('/auth/state', async () => {
     const s = await getSettings();
     const count = await one<{ n: number }>('SELECT count(*)::int AS n FROM users');
-    return { setupRequired: count!.n === 0, instanceName: s['general.instance_name'], version: config.version };
+    return { setupRequired: count!.n === 0, instanceName: s['general.instance_name'], organization: s['general.organization'], version: config.version, suggestedPublicUrl: config.publicUrl || null };
   });
 
   app.post('/auth/setup', { ...loginLimit }, async (req, reply) => {
-    const body = z.object({ token: z.string().min(1), name: z.string().trim().min(2).max(80), email: z.email().max(200), password: z.string() }).parse(req.body);
+    const body = z
+      .object({
+        token: z.string().min(1),
+        name: z.string().trim().min(2).max(80),
+        email: z.email().max(200),
+        password: z.string(),
+        organization: z.string().trim().min(2).max(120),
+        publicUrl: z.string().trim().min(1).max(300),
+        timezone: z.string().trim().min(1).max(60).default('Europe/Berlin'),
+      })
+      .parse(req.body);
     const s = await getSettings();
     const problem = passwordProblems(body.password, s['security.password_min_length']);
     if (problem) throw badRequest(problem);
+    const publicUrl = normalizePublicUrl(body.publicUrl);
+    try {
+      new Intl.DateTimeFormat('de-DE', { timeZone: body.timezone });
+    } catch {
+      throw badRequest('Unbekannte Zeitzone.');
+    }
     const expected = fs.existsSync(SETUP_FILE()) ? fs.readFileSync(SETUP_FILE(), 'utf8').trim() : '';
     if (!expected || !safeEqual(expected, body.token.trim())) throw new AppError(403, 'bad_setup_token', 'Einrichtungsschlüssel ist falsch.');
     const user = await tx(async (db) => {
@@ -74,7 +91,10 @@ export async function authRoutes(app: FastifyInstance) {
       );
     });
     fs.rmSync(SETUP_FILE(), { force: true });
-    await setSettings({ 'setup.completed': true }, user.id);
+    await setSettings(
+      { 'setup.completed': true, 'general.organization': body.organization, 'general.sender_name': body.organization, 'general.public_url': publicUrl, 'general.timezone': body.timezone },
+      user.id,
+    );
     await audit({ id: user.id, name: user.name, type: 'user', ip: req.ip }, 'setup.complete', { type: 'user', id: user.id, label: user.email });
     const stage = mustUse2fa(user.roles, s) ? 'mfa_setup' : 'full';
     await createSession(reply, req, user.id, stage);
@@ -212,7 +232,7 @@ export async function authRoutes(app: FastifyInstance) {
       user: userPayload(u),
       permissions: [...permissionsFor(req.auth.stage === 'full' ? u.roles : [])],
       roleLabels: ROLES.filter((r) => u.roles.includes(r.id)).map((r) => r.label),
-      instance: { name: s['general.instance_name'], subtitle: s['general.instance_subtitle'], timezone: s['general.timezone'], language: s['general.language'] },
+      instance: { name: s['general.instance_name'], organization: s['general.organization'], timezone: s['general.timezone'], language: s['general.language'], publicUrl: s['general.public_url'] || config.publicUrl || null },
       version: config.version,
       recoveryCodesLeft: u.recovery_codes.length,
       mfaRequired: mustUse2fa(u.roles, s),
@@ -266,7 +286,7 @@ export async function authRoutes(app: FastifyInstance) {
   app.get('/auth/invite/:token', async (req) => {
     const { token } = z.object({ token: z.string().min(10).max(200) }).parse(req.params);
     const inv = await one<any>(
-      `SELECT i.*, u.email, u.name, u.status FROM invitations i JOIN users u ON u.id = i.user_id WHERE i.token_hash = $1 AND i.used_at IS NULL AND i.expires_at > now()`,
+      `SELECT i.*, u.email, u.name, u.status FROM invitations i JOIN users u ON u.id = i.user_id WHERE i.token_hash = $1 AND i.used_at IS NULL AND i.revoked_at IS NULL AND i.expires_at > now()`,
       [sha256Hex(token)],
     );
     if (!inv) throw new AppError(404, 'invite_invalid', 'Der Link ist ungültig oder abgelaufen. Bitte einen neuen anfordern.');
@@ -281,7 +301,7 @@ export async function authRoutes(app: FastifyInstance) {
     const problem = passwordProblems(body.password, s['security.password_min_length']);
     if (problem) throw badRequest(problem);
     const user = await tx(async (db) => {
-      const inv = await one<any>(`SELECT * FROM invitations WHERE token_hash = $1 AND used_at IS NULL AND expires_at > now() FOR UPDATE`, [sha256Hex(token)], db);
+      const inv = await one<any>(`SELECT * FROM invitations WHERE token_hash = $1 AND used_at IS NULL AND revoked_at IS NULL AND expires_at > now() FOR UPDATE`, [sha256Hex(token)], db);
       if (!inv) throw new AppError(404, 'invite_invalid', 'Der Link ist ungültig oder abgelaufen.');
       await db.query('UPDATE invitations SET used_at = now() WHERE id = $1', [inv.id]);
       const u = await one<any>(

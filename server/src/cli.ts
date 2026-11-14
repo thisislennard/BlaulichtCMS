@@ -5,7 +5,7 @@ import { config } from './config.js';
  * Wartungsbefehle (im Container: `docker compose exec lifelink node server/dist/cli.js <befehl>`):
  *   gen-master-key                 neuen LIFELINK_MASTER_KEY ausgeben
  *   migrate                        Datenbankschema aktualisieren
- *   self-check                     Programmdateien und Signaturschlüssel prüfen (wird vom Update-Installer genutzt)
+ *   self-check                     Programmdateien laden und Datenbankverbindung prüfen
  *   backup-decrypt <datei> <ziel>  verschlüsselte Sicherung in eine pg_restore-Datei umwandeln
  *   password-link <email>          Link zum Neusetzen des Passworts erzeugen (24 h gültig)
  *   reset-mfa <email>              Zwei-Faktor-Anmeldung eines Kontos zurücksetzen
@@ -18,13 +18,12 @@ async function main() {
       return;
     case 'self-check': {
       await import('./app.js');
-      await import('./engine/executor.js');
-      await import('./engine/triggers.js');
       await import('./ops/backup.js');
-      const { publicKeyStatus } = await import('./updates/signing.js');
-      if (publicKeyStatus() !== 'ok') throw new Error('Öffentlicher Update-Signaturschlüssel fehlt oder ist ungültig.');
-      console.log(`ok ${config.version}`);
-      return;
+      const { healthStatus } = await import('./routes/health.js');
+      const h = await healthStatus();
+      for (const [k, v] of Object.entries(h.checks)) console.log(`${v.ok ? 'ok  ' : 'FEHL'} ${k}: ${v.detail}`);
+      console.log(h.ok ? `ok ${config.version}` : 'Nicht bereit.');
+      break;
     }
     case 'migrate': {
       const { migrate } = await import('./db/migrate.js');

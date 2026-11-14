@@ -1,6 +1,6 @@
 /**
- * Rechte-Registry: Jedes Modul registriert seine Rechte, die
- * Berechtigungsmatrix in der Oberfläche wird daraus erzeugt. Standard ist verweigern.
+ * Rechte-Registry. Jedes Recht gehört zu einem Bereich; die Berechtigungsmatrix in der
+ * Oberfläche wird daraus erzeugt. Grundsatz: Standard ist verweigern. Rollen sind kombinierbar.
  */
 export interface PermissionDef {
   id: string;
@@ -17,30 +17,28 @@ export interface ModuleDef {
 }
 
 export const MODULES: ModuleDef[] = [
-  { id: 'workflows', label: 'Workflows' },
-  { id: 'runs', label: 'Ausführungen' },
-  { id: 'connections', label: 'Schnittstellen' },
-  { id: 'credentials', label: 'Zugangsdaten' },
-  { id: 'wordpress', label: 'WordPress-Inhalte' },
+  { id: 'media', label: 'Medien' },
+  { id: 'editorial', label: 'Redaktion' },
+  { id: 'approval', label: 'Freigabe' },
+  { id: 'publishing', label: 'Veröffentlichung' },
+  { id: 'warnings', label: 'Warnentwürfe' },
   { id: 'users', label: 'Benutzer' },
   { id: 'system', label: 'System & Protokolle' },
 ];
 
 export const PERMISSIONS: PermissionDef[] = [
-  { id: 'workflow.read', module: 'workflows', label: 'Workflows ansehen', level: 'read', description: 'Workflows, Versionen und Vorlagen ansehen.' },
-  { id: 'workflow.edit', module: 'workflows', label: 'Workflows bearbeiten', level: 'write', description: 'Entwürfe anlegen, bearbeiten, testen, Freigabe beantragen.' },
-  { id: 'workflow.publish', module: 'workflows', label: 'Aktivieren & veröffentlichen', level: 'critical', description: 'Versionen veröffentlichen, Workflows aktivieren, deaktivieren und zurückrollen.' },
-  { id: 'workflow.approve', module: 'workflows', label: 'Freigeben', level: 'critical', description: 'Bei Vier-Augen-Freigabe die Version einer anderen Person freigeben.' },
-  { id: 'run.read', module: 'runs', label: 'Ausführungen ansehen', level: 'read', description: 'Ausführungsverlauf, Schritte und maskierte Daten ansehen.' },
-  { id: 'run.replay', module: 'runs', label: 'Erneut ausführen', level: 'critical', description: 'Läufe manuell wiederholen oder abbrechen (mögliche Doppelwirkung).' },
-  { id: 'connection.read', module: 'connections', label: 'Schnittstellen ansehen', level: 'read', description: 'Verbindungen, Status und Webhooks ansehen.' },
-  { id: 'connection.edit', module: 'connections', label: 'Schnittstellen verwalten', level: 'write', description: 'Verbindungen anlegen, konfigurieren, testen und löschen.' },
-  { id: 'credential.manage', module: 'credentials', label: 'Zugangsdaten verwalten', level: 'critical', description: 'Zugangsdaten hinterlegen, ersetzen, Webhook-Geheimnisse rotieren und widerrufen.' },
-  { id: 'wordpress.read', module: 'wordpress', label: 'Banner & Beiträge ansehen', level: 'read', description: 'Banner und Beiträge ansehen.' },
-  { id: 'wordpress.edit', module: 'wordpress', label: 'Banner & Beiträge bearbeiten', level: 'write', description: 'Entwürfe anlegen und bearbeiten.' },
-  { id: 'wordpress.publish', module: 'wordpress', label: 'Veröffentlichen', level: 'critical', description: 'Banner veröffentlichen/deaktivieren und Beiträge an WordPress senden.' },
+  { id: 'media.read', module: 'media', label: 'Medien sichten', level: 'read', description: 'Sammlungen und geprüfte Medien ansehen und herunterladen.' },
+  { id: 'media.manage', module: 'media', label: 'Medien verwalten', level: 'write', description: 'Sammlungen anlegen, Upload-Links erstellen und widerrufen, Medien auswählen, sortieren und löschen.' },
+  { id: 'post.read', module: 'editorial', label: 'Beiträge ansehen', level: 'read', description: 'Beiträge, Fassungen und Veröffentlichungsstatus ansehen.' },
+  { id: 'post.edit', module: 'editorial', label: 'Beiträge bearbeiten', level: 'write', description: 'Beiträge anlegen, bearbeiten, Medien übernehmen und zur Freigabe einreichen.' },
+  { id: 'post.approve', module: 'approval', label: 'Fassungen freigeben', level: 'critical', description: 'Eine konkrete Fassung eines Beitrags freigeben oder zurückweisen.' },
+  { id: 'post.publish', module: 'publishing', label: 'Veröffentlichen', level: 'critical', description: 'Freigegebene Fassungen an einen Zielkanal (z. B. WordPress) übergeben.' },
+  { id: 'channel.manage', module: 'publishing', label: 'Kanäle verwalten', level: 'critical', description: 'Websites mit der LifeLink Bridge koppeln, Schlüssel widerrufen.' },
+  { id: 'warning.draft', module: 'warnings', label: 'Warnentwurf erstellen', level: 'write', description: 'Warnentwürfe erfassen, speichern und zur Freigabe einreichen.' },
+  { id: 'warning.approve', module: 'warnings', label: 'Warnentwurf freigeben', level: 'critical', description: 'Eine erzeugte PDF-Fassung eines Warnentwurfs freigeben.' },
+  { id: 'warning.send', module: 'warnings', label: 'Warnentwurf versenden', level: 'critical', description: 'Freigegebene Warnentwürfe per E-Mail an die zuständige Stelle senden.' },
   { id: 'user.read', module: 'users', label: 'Benutzer ansehen', level: 'read', description: 'Benutzerliste und Rollen ansehen.' },
-  { id: 'user.manage', module: 'users', label: 'Benutzer verwalten', level: 'critical', description: 'Einladen, Rollen ändern, deaktivieren, 2FA zurücksetzen.' },
+  { id: 'user.manage', module: 'users', label: 'Benutzer verwalten', level: 'critical', description: 'Einladen, Rollen ändern, deaktivieren, Zwei-Faktor zurücksetzen.' },
   { id: 'audit.read', module: 'system', label: 'Audit-Protokoll ansehen', level: 'read', description: 'Wer hat wann was geändert.' },
   { id: 'system.read', module: 'system', label: 'Systemstatus ansehen', level: 'read', description: 'Systemstatus und Protokolle ansehen.' },
   { id: 'system.manage', module: 'system', label: 'System verwalten', level: 'critical', description: 'Einstellungen, Sicherungen und API-Schlüssel verwalten.' },
@@ -58,39 +56,57 @@ const ALL = PERMISSIONS.map((p) => p.id);
 export const ROLES: RoleDef[] = [
   {
     id: 'platform_admin',
-    label: 'Plattform-Admin',
-    description: 'Vollzugriff inklusive Benutzer, System, Sicherungen und Updates.',
+    label: 'Administration',
+    description: 'Vollzugriff: Konten, Rechte, Kanäle, Systemzustand, Sicherungen.',
     permissions: ALL,
   },
   {
-    id: 'integration_admin',
-    label: 'Integrations-Admin',
-    description: 'Verwaltet Schnittstellen, Zugangsdaten und Webhooks.',
-    permissions: ['connection.read', 'connection.edit', 'credential.manage', 'workflow.read', 'run.read', 'wordpress.read', 'system.read', 'audit.read'],
+    id: 'media_manager',
+    label: 'Medienverwaltung',
+    description: 'Pflegt Sammlungen und Upload-Links, sichtet und wählt Medien aus.',
+    permissions: ['media.read', 'media.manage', 'post.read'],
   },
   {
-    id: 'workflow_editor',
-    label: 'Workflow-Editor',
-    description: 'Entwirft und testet Workflows, beantragt Freigaben.',
-    permissions: ['workflow.read', 'workflow.edit', 'run.read', 'connection.read', 'wordpress.read'],
+    id: 'editor',
+    label: 'Redaktion',
+    description: 'Erstellt Beiträge, übernimmt Medien und reicht Fassungen zur Freigabe ein.',
+    permissions: ['media.read', 'media.manage', 'post.read', 'post.edit'],
   },
   {
     id: 'approver',
-    label: 'Freigebender',
-    description: 'Gibt Workflow-Versionen frei, aktiviert sie und darf Läufe wiederholen.',
-    permissions: ['workflow.read', 'workflow.approve', 'workflow.publish', 'run.read', 'run.replay', 'connection.read', 'audit.read'],
+    label: 'Freigabe',
+    description: 'Gibt geprüfte Fassungen frei.',
+    permissions: ['media.read', 'post.read', 'post.approve', 'audit.read'],
   },
   {
-    id: 'operator',
-    label: 'Betriebsleser',
-    description: 'Sieht Status, Läufe und Protokolle, ändert nichts.',
-    permissions: ['workflow.read', 'run.read', 'connection.read', 'wordpress.read', 'system.read'],
+    id: 'publisher',
+    label: 'Veröffentlichung',
+    description: 'Übergibt freigegebene Fassungen an die Zielkanäle.',
+    permissions: ['media.read', 'post.read', 'post.publish'],
   },
   {
-    id: 'wp_editor',
-    label: 'WordPress-Redakteur',
-    description: 'Betreut Banner und Beiträge auf der Website.',
-    permissions: ['wordpress.read', 'wordpress.edit', 'wordpress.publish'],
+    id: 'warning_author',
+    label: 'Warnentwurf',
+    description: 'Erfasst Warnentwürfe (Erstmeldung, Aktualisierung, Entwarnung).',
+    permissions: ['warning.draft'],
+  },
+  {
+    id: 'warning_approver',
+    label: 'Warnfreigabe',
+    description: 'Gibt Warnentwürfe frei.',
+    permissions: ['warning.draft', 'warning.approve'],
+  },
+  {
+    id: 'warning_sender',
+    label: 'Warnversand',
+    description: 'Versendet freigegebene Warnentwürfe an die zuständige Stelle.',
+    permissions: ['warning.send'],
+  },
+  {
+    id: 'viewer',
+    label: 'Lesezugriff',
+    description: 'Sieht Beiträge, Medien und Status, ändert nichts.',
+    permissions: ['media.read', 'post.read', 'system.read'],
   },
 ];
 
@@ -103,10 +119,10 @@ export function permissionsFor(roles: string[]): Set<string> {
 }
 
 export function isAdminRoleSet(roles: string[]): boolean {
-  return roles.includes('platform_admin') || roles.includes('integration_admin');
+  return roles.includes('platform_admin');
 }
 
-/** Matrix-Zelle je Modul und Rolle: full | edit | read | none */
+/** Matrix-Zelle je Bereich und Rolle: full | edit | read | none */
 export function matrix() {
   return MODULES.map((m) => {
     const perms = PERMISSIONS.filter((p) => p.module === m.id);

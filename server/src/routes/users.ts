@@ -1,21 +1,21 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { config } from '../config.js';
 import { many, one, pool, tx } from '../db/pool.js';
 import { requireAuth } from '../auth/context.js';
 import { matrix, MODULES, PERMISSIONS, ROLE_IDS, ROLES } from '../auth/permissions.js';
 import { audit } from '../lib/audit.js';
 import { randomToken, sha256Hex } from '../lib/crypto.js';
 import { badRequest, conflict, notFound } from '../lib/errors.js';
+import { getSettings } from '../lib/settings.js';
+import { publicBase } from '../lib/urls.js';
 
-function inviteLink(req: any, token: string) {
-  const base = config.publicUrl || `${req.protocol}://${req.headers.host}`;
-  return `${base}/einladung/${token}`;
+async function inviteLink(req: any, token: string) {
+  return `${await publicBase(req)}/einladung/${token}`;
 }
 
 async function createInvite(userId: string, createdBy: string | null, hours: number) {
   const token = randomToken(24);
-  await pool.query('UPDATE invitations SET used_at = now() WHERE user_id = $1 AND used_at IS NULL', [userId]);
+  await pool.query('UPDATE invitations SET revoked_at = now(), revoked_by = $2 WHERE user_id = $1 AND used_at IS NULL AND revoked_at IS NULL', [userId, createdBy]);
   await pool.query(`INSERT INTO invitations (user_id, token_hash, expires_at, created_by) VALUES ($1,$2, now() + make_interval(hours => $3), $4)`, [userId, sha256Hex(token), hours, createdBy]);
   return token;
 }
@@ -37,7 +37,7 @@ export async function userRoutes(app: FastifyInstance) {
   app.get('/users', { preHandler: requireAuth('user.read') }, async () => {
     const users = await many<any>(
       `SELECT u.id, u.email, u.name, u.roles, u.status, u.totp_enabled, u.last_active_at, u.last_login_at, u.created_at,
-              (SELECT max(expires_at) FROM invitations i WHERE i.user_id = u.id AND i.used_at IS NULL) AS invite_expires_at
+              (SELECT max(expires_at) FROM invitations i WHERE i.user_id = u.id AND i.used_at IS NULL AND i.revoked_at IS NULL) AS invite_expires_at
          FROM users u ORDER BY u.status = 'disabled', lower(u.name)`,
     );
     const keys = await many<any>(`SELECT id, name, roles, last_used_at, created_at FROM api_keys WHERE revoked_at IS NULL ORDER BY name`);
@@ -52,9 +52,10 @@ export async function userRoutes(app: FastifyInstance) {
       `INSERT INTO users (email, name, roles, status, created_by) VALUES ($1,$2,$3,'invited',$4) RETURNING id, email, name`,
       [body.email.toLowerCase(), body.name || body.email.split('@')[0], body.roles, req.auth!.user?.id ?? null],
     );
-    const token = await createInvite(user.id, req.auth!.user?.id ?? null, 72);
+    const hours = (await getSettings())['invites.valid_hours'];
+    const token = await createInvite(user.id, req.auth!.user?.id ?? null, hours);
     await audit(req.auth!.actor, 'user.invited', { type: 'user', id: user.id, label: user.email }, { rollen: body.roles });
-    return { user, link: inviteLink(req, token), expiresHours: 72 };
+    return { user, link: await inviteLink(req, token), expiresHours: hours };
   });
 
   app.post('/users/:id/link', { preHandler: requireAuth('user.manage') }, async (req) => {
@@ -64,7 +65,17 @@ export async function userRoutes(app: FastifyInstance) {
     if (user.status === 'disabled') throw badRequest('Das Konto ist deaktiviert.');
     const token = await createInvite(id, req.auth!.user?.id ?? null, user.status === 'invited' ? 72 : 24);
     await audit(req.auth!.actor, user.status === 'invited' ? 'user.invite_renewed' : 'user.password_reset_link', { type: 'user', id, label: user.email });
-    return { link: inviteLink(req, token), expiresHours: user.status === 'invited' ? 72 : 24 };
+    return { link: await inviteLink(req, token), expiresHours: user.status === 'invited' ? 72 : 24 };
+  });
+
+  /** Offene Einladung bzw. offenen Passwort-Link widerrufen. Der Link funktioniert danach nicht mehr. */
+  app.post('/users/:id/revoke-link', { preHandler: requireAuth('user.manage') }, async (req) => {
+    const { id } = z.object({ id: z.uuid() }).parse(req.params);
+    const user = await one<any>('SELECT id, email FROM users WHERE id = $1', [id]);
+    if (!user) throw notFound();
+    const r = await pool.query('UPDATE invitations SET revoked_at = now(), revoked_by = $2 WHERE user_id = $1 AND used_at IS NULL AND revoked_at IS NULL AND expires_at > now()', [id, req.auth!.user?.id ?? null]);
+    await audit(req.auth!.actor, 'user.invite_revoked', { type: 'user', id, label: user.email }, { anzahl: r.rowCount });
+    return { revoked: r.rowCount };
   });
 
   app.patch('/users/:id', { preHandler: requireAuth('user.manage') }, async (req) => {
