@@ -6,6 +6,9 @@ import { config } from './config.js';
  *   gen-master-key                 neuen LIFELINK_MASTER_KEY ausgeben
  *   migrate                        Datenbankschema aktualisieren (mit Startprüfung)
  *   preflight [--json]             Update-Vorabprüfung (Exit 0 = bereit)
+ *   import-inventory <ordner>      Probelauf eines Medienimports (schreibt nichts)
+ *   import-commit <ordner>         Import übernehmen (nur nach fehlerfreiem Probelauf)
+ *   import-verify <ordner>         Mengen- und Prüfsummenabgleich nach der Übernahme
  *   maintenance on|off [grund]     Wartungsmodus vor/nach einem Update
  *   self-check                     Programmdateien laden und Datenbankverbindung prüfen
  *   backup-decrypt <datei> <ziel>  verschlüsselte Sicherung in eine pg_restore-Datei umwandeln
@@ -52,6 +55,16 @@ async function main() {
       await setMaintenance(on, 'Kommandozeile', args.slice(1).join(' ') || 'Update wird vorbereitet', null);
       await audit({ ...SYSTEM_ACTOR, name: 'Kommandozeile' }, on ? 'system.maintenance_on' : 'system.maintenance_off', { type: 'system', label: 'Wartungsmodus' });
       console.log(on ? 'Wartungsmodus aktiv: keine neuen schreibenden Vorgänge, keine neuen Aufträge.' : 'Wartungsmodus beendet.');
+      break;
+    }
+    case 'import-inventory':
+    case 'import-commit':
+    case 'import-verify': {
+      if (!args[0]) throw new Error(`Aufruf: ${cmd} <importordner mit manifest.json>`);
+      const imp = await import('./ops/import.js');
+      const r = cmd === 'import-inventory' ? (await imp.inventory(args[0])).report : cmd === 'import-commit' ? await imp.commitImport(args[0]) : await imp.verifyImport(args[0]);
+      console.log(JSON.stringify(r, null, 2));
+      if ((r as any).problems?.length || (r as any).ok === false) process.exitCode = 2;
       break;
     }
     case 'backup-decrypt': {

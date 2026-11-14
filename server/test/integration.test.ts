@@ -1532,3 +1532,61 @@ describe('Sicherheitsprüfung (M4)', () => {
     for (const t of tokens.slice(0, 2)) expect(sec!.c).not.toContain(t);
   });
 });
+
+describe('Einmaliger Medienimport (M4, Austauschformat)', () => {
+  it('Probelauf ohne Schreiben, Prüfsummen, Übernahme, Mengenabgleich, Altlink-Weiterleitung, keine Duplikate', async () => {
+    const imp = await import('../src/ops/import.js');
+    const dir = fs.mkdtempSync(path.join(process.env.LIFELINK_DATA_DIR!, 'import-'));
+    fs.mkdirSync(path.join(dir, 'files'));
+    const files: any[] = [];
+    for (let i = 0; i < 3; i++) {
+      const buf = await sharp({ create: { width: 400 + i, height: 300, channels: 3, background: { r: 40 * i, g: 90, b: 160 } } }).jpeg().toBuffer();
+      fs.writeFileSync(path.join(dir, 'files', `bild-${i}.jpg`), buf);
+      files.push({ ref: `m${i}`, file: `files/bild-${i}.jpg`, original_name: `bild-${i}.jpg`, size: buf.length, sha256: crypto.createHash('sha256').update(buf).digest('hex'), selection: i === 0 ? 'selected' : 'pending' });
+    }
+    const manifest = {
+      format: 'lifelink-import/1',
+      source: 'testquelle',
+      collections: [
+        { ref: 'c1', title: 'Übernommene Sammlung (fiktiv)', media: files.slice(0, 2), links: [{ ref: 'l1', token: 'alter-link-token-0001', expires_at: new Date(Date.now() + 5 * 86400_000).toISOString() }, { ref: 'l2', token: 'alter-link-token-0002', expires_at: new Date(Date.now() - 86400_000).toISOString() }] },
+        { ref: 'c2', title: 'Zweite Sammlung (fiktiv)', media: files.slice(2), links: [] },
+      ],
+    };
+    // Fehlerhafte Prüfsumme → Probelauf meldet Problem, Übernahme verweigert
+    const bad = structuredClone(manifest);
+    bad.collections[0].media[1].sha256 = '0'.repeat(64);
+    fs.writeFileSync(path.join(dir, 'manifest.json'), JSON.stringify(bad));
+    const colsBefore = (await one<any>(`SELECT count(*)::int AS n FROM collections`))!.n;
+    const inv0 = await imp.inventory(dir);
+    expect(inv0.report.problems[0]).toContain('Prüfsumme weicht ab');
+    await expect(imp.commitImport(dir)).rejects.toThrow(/Probelauf/);
+    expect((await one<any>(`SELECT count(*)::int AS n FROM collections`))!.n).toBe(colsBefore);
+    // Korrektes Manifest
+    fs.writeFileSync(path.join(dir, 'manifest.json'), JSON.stringify(manifest));
+    const inv = await imp.inventory(dir);
+    expect(inv.report).toMatchObject({ collections: 2, media: 3, links: { total: 2, stillValid: 1, expiredOrRevoked: 1 }, problems: [] });
+    expect((await one<any>(`SELECT count(*)::int AS n FROM collections`))!.n).toBe(colsBefore);
+    const r = await imp.commitImport(dir);
+    expect(r.created).toEqual({ collections: 2, media: 3, links: 1, skippedExisting: 0 });
+    await processAllQuarantine();
+    const v = await imp.verifyImport(dir);
+    expect(v.ok).toBe(true);
+    expect(v.collections.map((c) => c.ready)).toEqual([2, 1]);
+    expect((await one<any>(`SELECT selection FROM media WHERE client_key = 'import:testquelle:m0'`))!.selection).toBe('selected');
+    // Wiederholung legt nichts doppelt an
+    const again = await imp.commitImport(dir);
+    expect(again.created).toEqual({ collections: 0, media: 0, links: 0, skippedExisting: 3 });
+    // Altlink → befristete Weiterleitung auf den neuen Link
+    const legacy = (t: string) => app.inject({ method: 'GET', url: `/l/${t}` }).then((r) => ({ status: r.statusCode, headers: r.headers }));
+    const fwd = await legacy('alter-link-token-0001');
+    expect(fwd.status).toBe(302);
+    expect(fwd.headers.location).toMatch(/^https:\/\/lifelink\.example\.org\/u\/[A-Za-z0-9_-]+$/);
+    const newToken = (fwd.headers.location as string).split('/u/')[1];
+    expect((await anonymous.get(`/public/upload/${newToken}`)).status).toBe(200);
+    expect((await legacy('alter-link-token-0002')).status).toBe(410);
+    await pool.query(`UPDATE legacy_links SET expires_at = now() - interval '1 second'`);
+    expect((await legacy('alter-link-token-0001')).status).toBe(410);
+    const runs = await one<any>(`SELECT count(*)::int AS n FROM import_runs WHERE source = 'testquelle'`);
+    expect(runs!.n).toBeGreaterThanOrEqual(5);
+  });
+});

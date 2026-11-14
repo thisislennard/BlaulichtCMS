@@ -1,4 +1,7 @@
 import { getSettings } from './lib/settings.js';
+import { one } from './db/pool.js';
+import { sha256Hex } from './lib/crypto.js';
+import { uploadLinkUrl } from './routes/media.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import Fastify, { type FastifyInstance } from 'fastify';
@@ -122,6 +125,20 @@ export async function buildApp(): Promise<FastifyInstance> {
     },
     { prefix: '/api/v1' },
   );
+
+  // Befristete Weiterleitung übernommener Alt-Links (Import) auf den neuen Upload-Link
+  app.get('/l/:token', { config: { rateLimit: { max: 60, timeWindow: '1 minute' } } }, async (req, reply) => {
+    const { token } = req.params as { token: string };
+    if (!/^[A-Za-z0-9_-]{8,200}$/.test(token)) return reply.status(404).send('Nicht gefunden.');
+    const row = await one<any>(
+      `SELECT l.id, l.token_enc FROM legacy_links g JOIN upload_links l ON l.id = g.link_id
+        WHERE g.old_token_hash = $1 AND g.expires_at > now() AND l.revoked_at IS NULL AND l.expires_at > now()`,
+      [sha256Hex(token)],
+    );
+    if (!row) return reply.status(410).type('text/html; charset=utf-8').send('<!doctype html><meta charset="utf-8"><title>Link ungültig</title><p style="font-family:system-ui;margin:48px auto;max-width:600px">Dieser Upload-Link ist nicht mehr gültig. Bitte bei der Redaktion einen neuen Link erfragen.</p>');
+    reply.header('cache-control', 'no-store').header('referrer-policy', 'no-referrer');
+    return reply.redirect(await uploadLinkUrl(req, row.token_enc, row.id), 302);
+  });
 
   // Gesundheit: 200 nur, wenn LifeLink Aufträge annehmen kann (Datenbank, Schema, Worker, Speicher)
   app.get('/healthz', async (_req, reply) => {
