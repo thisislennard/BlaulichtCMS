@@ -255,7 +255,7 @@ try {
     await up.goto(uploadLink);
     await up.getByRole('heading', { name: 'Übung am Wochenende' }).waitFor();
     await up.setInputFiles('input[aria-label="Fotos oder Videos auswählen"]', path.join(OUT, 'testfoto.jpg'));
-    await up.getByRole('button', { name: /Datei\(en\) senden/ }).click();
+    await up.getByRole('button', { name: /Datei(en)? senden/ }).click();
     await up.getByText('Vielen Dank!').waitFor({ timeout: 30000 });
     if (SHOTS) await shot(up, 'doc-upload-handy');
     await anon.close();
@@ -519,9 +519,12 @@ try {
 
   if (SHOTS) {
     await page.goto(`${LL}/hilfe`);
+    await page.getByRole('heading', { name: /wie können wir helfen/ }).waitFor();
     await shot(page, 'doc-hilfe');
     const collectionId = psql(`SELECT collection_id FROM media WHERE id = '${mediaId}'`);
     await page.goto(`${LL}/medien/${collectionId}`);
+    await page.getByRole('heading', { name: 'Übung am Wochenende' }).first().waitFor();
+    await page.locator('img[src*="/preview"]').first().waitFor();
     await shot(page, 'doc-sammlung');
   }
 

@@ -305,7 +305,7 @@ export default function PostEditor() {
           </Card>
         </div>
 
-        <div className="flex flex-col gap-5">
+        <div className="flex flex-col gap-5 order-first lg:order-none">
           <Card title="Freigabe und Veröffentlichung">
             <div className="flex flex-col gap-3 text-sm">
               <div className="flex items-center gap-2">

@@ -11,14 +11,17 @@ gelten die Entscheidungen in dieser Roadmap.**
 Jeder Punkt hat ein GitHub-Issue. Epics fassen die Teilaufgaben eines Meilensteins
 als Sub-Issues zusammen.
 
-| Meilenstein | Epic | Sub-Issues |
-|---|---|---|
-| M0 – Bestandsaufnahme und Architektur | #1 | – |
-| M1 – Vom Foto-Link bis zur WordPress-Testseite | #2 | #7 – #15 |
-| M2 – Medien, QR-Druck, Redaktion und Dashboard | #3 | #16 – #25 |
-| M3 – MoWaS-Warnentwurf per Handy, PDF und Mail | #4 | #26 – #30 |
-| M4 – Optionale Verbindungen, Import und Betrieb | #5 | #31 – #40 |
-| Abschluss | #6 | – |
+| Meilenstein | Epic | Sub-Issues | Stand (14.11.2026) |
+|---|---|---|---|
+| M0 – Bestandsaufnahme und Architektur | #1 | – | ✅ bis auf LiFeOS (Quellcode liegt nicht vor) |
+| M1 – Vom Foto-Link bis zur WordPress-Testseite | #2 | #7 – #15 | ✅ abgenommen (lokal, 34/34) – produktionsnaher WordPress-Test offen |
+| M2 – Medien, QR-Druck, Redaktion und Dashboard | #3 | #16 – #25 | ⏳ teilweise vorbereitet (QR/Aushang, Sichtung, PWA-Grundgerüst) |
+| M3 – MoWaS-Warnentwurf per Handy, PDF und Mail | #4 | #26 – #30 | ⏳ Rechte vorbereitet |
+| M4 – Optionale Verbindungen, Import und Betrieb | #5 | #31 – #40 | ⏳ Sicherung/Wiederherstellung und Doku begonnen |
+| Abschluss | #6 | – | – |
+
+Stand im Detail: [docs/testprotokoll.md](docs/testprotokoll.md) · Entscheidungen: [docs/architektur.md](docs/architektur.md) ·
+Integrationen: [docs/integrationen.md](docs/integrationen.md)
 
 ---
 

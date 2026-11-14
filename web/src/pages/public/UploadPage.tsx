@@ -182,9 +182,11 @@ export function UploadPage() {
                 <div aria-live="polite" className="text-sm text-fg-muted">
                   {done} von {items.length} übertragen{failed ? ` · ${failed} fehlgeschlagen` : ''}
                 </div>
-                <Button variant="primary" icon="Upload" className="!h-12 !text-base" disabled={busy || (!waiting && !failed)} loading={busy} onClick={() => run()}>
-                  {failed && !waiting ? 'Fehlgeschlagene erneut senden' : `${waiting} Datei(en) senden`}
-                </Button>
+                {(busy || waiting > 0 || failed > 0) && (
+                  <Button variant="primary" icon="Upload" className="!h-12 !text-base" disabled={busy} loading={busy} onClick={() => run()}>
+                    {failed && !waiting ? 'Fehlgeschlagene erneut senden' : `${waiting} ${waiting === 1 ? 'Datei' : 'Dateien'} senden`}
+                  </Button>
+                )}
                 {done > 0 && !busy && !waiting && !failed && (
                   <Notice tone="success" title="Vielen Dank!">
                     Die Dateien sind angekommen und werden geprüft, bevor sie verwendet werden.
