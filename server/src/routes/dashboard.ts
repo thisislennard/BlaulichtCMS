@@ -27,7 +27,7 @@ export async function dashboardRoutes(app: FastifyInstance) {
       );
       out.readyToPublish = readyToPublish;
       out.publications = await many<any>(
-        `SELECT pb.id, pb.post_id, pb.status, pb.remote_url, pb.error, pb.created_at, pb.fetched_at, pb.result_at, r.title, r.number AS revision_number, s.name AS site_name
+        `SELECT pb.id, pb.post_id, pb.status, pb.action, pb.run_at, pb.remote_url, pb.error, pb.created_at, pb.fetched_at, pb.result_at, r.title, r.number AS revision_number, s.name AS site_name
            FROM publications pb JOIN post_revisions r ON r.id = pb.revision_id JOIN wp_sites s ON s.id = pb.site_id
           ORDER BY pb.created_at DESC LIMIT 15`,
       );

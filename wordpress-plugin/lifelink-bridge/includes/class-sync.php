@@ -78,18 +78,21 @@ final class LifeLink_Bridge_Sync {
 				if ( '' === $id ) {
 					continue;
 				}
-				$out = LifeLink_Bridge_Publisher::upsert( $job );
+				$out = 'post.unpublish' === ( $job['type'] ?? '' ) ? LifeLink_Bridge_Publisher::unpublish( $job ) : LifeLink_Bridge_Publisher::upsert( $job );
 				if ( is_wp_error( $out ) ) {
 					$report = array(
 						'status' => 'failed',
 						'error'  => $out->get_error_message(),
 					);
 				} else {
-					$report = array(
-						'status'        => 'published',
-						'remote_id'     => $out['remote_id'],
-						'url'           => $out['url'],
-						'remote_status' => $out['remote_status'],
+					$report = array_filter(
+						array(
+							'status'        => 'published',
+							'remote_id'     => $out['remote_id'],
+							'url'           => $out['url'],
+							'remote_status' => $out['remote_status'],
+						),
+						static fn( $v ) => '' !== $v && 0 !== $v
 					);
 				}
 				// Schlägt die Rückmeldung fehl, liefert LifeLink den Auftrag erneut aus – derselbe Beitrag wird dann aktualisiert.

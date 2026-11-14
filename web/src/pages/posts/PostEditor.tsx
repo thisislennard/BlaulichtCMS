@@ -9,13 +9,13 @@ import { Badge, Button, Card, cx, ErrorBox, FieldWrap, Input, Notice, PageHeader
 import { Icon } from '../../components/ui/Icon';
 import { Dialog, useErrorToast, useToast } from '../../components/ui/overlays';
 import { useAuth } from '../../lib/auth';
-import { fmtDateTime, fmtRelative } from '../../lib/format';
+import { fmtDateTime, fmtRelative, fromLocalInput, toLocalInput } from '../../lib/format';
 import { KIND_LABEL } from './Posts';
 
 interface PostDetail {
   post: { id: string; kind: string; created_at: string; created_by_name: string | null; archived: boolean; current_revision: number };
   state: string;
-  revision: { id: string; number: number; title: string; body: string; excerpt: string; media_ids: string[]; cover_id: string | null; site_id: string | null; content_hash: string; submitted_at: string | null; created_at: string };
+  revision: { id: string; number: number; title: string; body: string; excerpt: string; media_ids: string[]; cover_id: string | null; site_id: string | null; variants: any; publish_at: string | null; content_hash: string; submitted_at: string | null; created_at: string };
   media: MediaItem[];
   approval: { decided_by_name: string; decided_at: string; note: string } | null;
   lastDecision: { decision: string; note: string; decided_by_name: string; decided_at: string } | null;
@@ -31,6 +31,26 @@ interface Draft {
   mediaIds: string[];
   coverId: string | null;
   siteId: string | null;
+  wp: { title: string; body: string; excerpt: string };
+  publishAt: string; // datetime-local, leer = sofort
+}
+
+const emptyWp = { title: '', body: '', excerpt: '' };
+const wpOf = (v: any) => ({ title: v?.wordpress?.title ?? '', body: v?.wordpress?.body ?? '', excerpt: v?.wordpress?.excerpt ?? '' });
+
+/** Einfache Absätze wie auf der Website (Leerzeile = neuer Absatz). */
+function Paragraphs({ text }: { text: string }) {
+  const parts = text.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
+  if (!parts.length) return <p className="m-0 text-fg-muted">Noch kein Text.</p>;
+  return (
+    <>
+      {parts.map((p, i) => (
+        <p key={i} className="m-0 whitespace-pre-line">
+          {p}
+        </p>
+      ))}
+    </>
+  );
 }
 
 function MediaPicker({ collections, chosen, onClose, onAdd }: { collections: PostDetail['collections']; chosen: string[]; onClose: () => void; onAdd: (m: MediaItem[]) => void }) {
@@ -121,19 +141,29 @@ export default function PostEditor() {
   const [decision, setDecision] = useState<'approved' | 'rejected' | null>(null);
   const [collectLink, setCollectLink] = useState<{ url: string; expires_at: string } | null>(null);
   const [dragIdx, setDragIdx] = useState<number | null>(null);
+  const [unpublishing, setUnpublishing] = useState(false);
   usePageMeta({ title: q.data?.revision.title, crumb: q.data?.revision.title });
 
   const d = q.data;
   useEffect(() => {
     if (!d) return;
-    setDraft({ title: d.revision.title, body: d.revision.body, excerpt: d.revision.excerpt, mediaIds: d.revision.media_ids, coverId: d.revision.cover_id, siteId: d.revision.site_id });
+    setDraft({ title: d.revision.title, body: d.revision.body, excerpt: d.revision.excerpt, mediaIds: d.revision.media_ids, coverId: d.revision.cover_id, siteId: d.revision.site_id, wp: wpOf(d.revision.variants), publishAt: toLocalInput(d.revision.publish_at) });
     setMediaCache((c) => ({ ...c, ...Object.fromEntries(d.media.map((m) => [m.id, m])) }));
   }, [d?.revision.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const dirty = useMemo(() => {
     if (!d || !draft) return false;
     const r = d.revision;
-    return draft.title !== r.title || draft.body !== r.body || draft.excerpt !== r.excerpt || JSON.stringify(draft.mediaIds) !== JSON.stringify(r.media_ids) || draft.coverId !== r.cover_id || draft.siteId !== r.site_id;
+    return (
+      draft.title !== r.title ||
+      draft.body !== r.body ||
+      draft.excerpt !== r.excerpt ||
+      JSON.stringify(draft.mediaIds) !== JSON.stringify(r.media_ids) ||
+      draft.coverId !== r.cover_id ||
+      draft.siteId !== r.site_id ||
+      JSON.stringify(draft.wp) !== JSON.stringify(wpOf(r.variants)) ||
+      draft.publishAt !== toLocalInput(r.publish_at)
+    );
   }, [d, draft]);
 
   useEffect(() => {
@@ -153,7 +183,8 @@ export default function PostEditor() {
   const save = async () => {
     setSaving(true);
     try {
-      const res = await put<any>(`/posts/${id}/revision`, { baseRevision: r.number, ...draft });
+      const { wp, publishAt, ...rest } = draft;
+      const res = await put<any>(`/posts/${id}/revision`, { baseRevision: r.number, ...rest, variants: { wordpress: wp }, publishAt: publishAt ? fromLocalInput(publishAt) : null });
       if (res.changed) toast({ tone: 'success', title: `Fassung ${res.number} gespeichert`, text: res.approvalInvalidated ? 'Die bisherige Freigabe gilt nicht für die neue Fassung.' : undefined });
       await refresh();
     } catch (e) {
@@ -319,6 +350,38 @@ export default function PostEditor() {
               </Select>
             </FieldWrap>
             {activeSites.length === 0 && <p className="m-0 mt-2 text-sm text-fg-muted">Noch keine Website gekoppelt. {can('channel.manage') && <Link to="/kanaele">Website koppeln</Link>}</p>}
+            {draft.siteId && (
+              <div className="flex flex-col gap-4 mt-4">
+                <FieldWrap label="Termin (optional)" help="Leer = sofort nach dem Veröffentlichen. Der Termin ist Teil der freigegebenen Fassung." htmlFor="e-at">
+                  <Input id="e-at" type="datetime-local" value={draft.publishAt} disabled={!editable} onChange={(e) => setDraft({ ...draft, publishAt: e.target.value })} className="max-w-[260px]" />
+                </FieldWrap>
+                <details className="border border-line rounded-card p-3" open={!!(draft.wp.title || draft.wp.body || draft.wp.excerpt)}>
+                  <summary className="cursor-pointer font-medium text-sm">Eigener Text für die Website (optional)</summary>
+                  <div className="flex flex-col gap-3 mt-3">
+                    <p className="m-0 text-meta text-fg-muted">Leere Felder übernehmen den Grundtext.</p>
+                    <FieldWrap label="Titel auf der Website" htmlFor="wp-title">
+                      <Input id="wp-title" value={draft.wp.title} disabled={!editable} placeholder={draft.title} onChange={(e) => setDraft({ ...draft, wp: { ...draft.wp, title: e.target.value } })} maxLength={200} />
+                    </FieldWrap>
+                    <FieldWrap label="Text auf der Website" htmlFor="wp-body">
+                      <Textarea id="wp-body" rows={6} value={draft.wp.body} disabled={!editable} onChange={(e) => setDraft({ ...draft, wp: { ...draft.wp, body: e.target.value } })} maxLength={50000} />
+                    </FieldWrap>
+                    <FieldWrap label="Kurzfassung auf der Website" htmlFor="wp-excerpt">
+                      <Textarea id="wp-excerpt" rows={2} value={draft.wp.excerpt} disabled={!editable} onChange={(e) => setDraft({ ...draft, wp: { ...draft.wp, excerpt: e.target.value } })} maxLength={1000} />
+                    </FieldWrap>
+                  </div>
+                </details>
+              </div>
+            )}
+          </Card>
+
+          <Card title="Vorschau" subtitle={draft.siteId ? 'So erscheint der Beitrag auf der Website (Darstellung abhängig vom Theme).' : 'Interne Ansicht'}>
+            <article className="flex flex-col gap-3 max-w-[680px]">
+              <h2 className="m-0 text-title font-semibold">{(draft.siteId && draft.wp.title) || draft.title}</h2>
+              {draft.coverId && mediaCache[draft.coverId]?.has_preview && <img src={`/api/v1/media/${draft.coverId}/preview`} alt="" className="w-full rounded-control" />}
+              <div className="flex flex-col gap-3 text-base leading-relaxed">
+                <Paragraphs text={(draft.siteId && draft.wp.body) || draft.body} />
+              </div>
+            </article>
           </Card>
         </div>
 
@@ -377,7 +440,14 @@ export default function PostEditor() {
                   Auf {site?.name ?? 'Website'} veröffentlichen
                 </Button>
               )}
-              {d!.approval && can('post.approve') && !['publishing', 'published'].includes(d!.state) && (
+              {d!.state === 'scheduled' && d!.publications[0] && <Notice tone="primary">Geplant für {fmtDateTime(d!.publications[0].run_at)}. Vorher holt die Website den Auftrag nicht ab.</Notice>}
+              {d!.state === 'deactivated' && <Notice tone="warning">Von der Website zurückgezogen. Für eine erneute Veröffentlichung eine neue Fassung freigeben lassen.</Notice>}
+              {['published', 'failed', 'unknown'].includes(d!.state) && can('post.publish') && d!.publications.some((p) => p.action === 'publish' && p.status === 'published') && (
+                <Button size="sm" icon="Ban" onClick={() => setUnpublishing(true)}>
+                  Von der Website zurückziehen
+                </Button>
+              )}
+              {d!.approval && can('post.approve') && !['publishing', 'published', 'scheduled'].includes(d!.state) && (
                 <Button size="sm" variant="ghost" onClick={() => act(() => post(`/posts/${id}/approval/revoke`), 'Freigabe zurückgezogen')}>
                   Freigabe zurückziehen
                 </Button>
@@ -393,7 +463,7 @@ export default function PostEditor() {
                 {d!.publications.map((p) => (
                   <li key={p.id} className="flex flex-col gap-1">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <StatusBadge status={p.status} />
+                      <StatusBadge status={p.status} labels={p.action === 'unpublish' ? { published: 'Zurückgezogen', queued: 'Rückzug wartet', sent: 'Rückzug gesendet' } : p.status === 'queued' && new Date(p.run_at) > new Date() ? { queued: 'Geplant' } : undefined} />
                       <span>{p.site_name}</span>
                       <span className="text-fg-muted">Fassung {p.revision_number}</span>
                     </div>
@@ -478,6 +548,7 @@ export default function PostEditor() {
           }}
         />
       )}
+      {unpublishing && <UnpublishDialog postId={id} onClose={() => (setUnpublishing(false), refresh())} />}
       {decision && <DecisionDialog decision={decision} revision={r.number} hash={r.content_hash} postId={id} onClose={() => (setDecision(null), refresh())} />}
       {collectLink && (
         <Dialog open onClose={() => setCollectLink(null)} title="Fotos und Videos sammeln" width={560}>
@@ -489,6 +560,33 @@ export default function PostEditor() {
         </Dialog>
       )}
     </div>
+  );
+}
+
+function UnpublishDialog({ postId, onClose }: { postId: string; onClose: () => void }) {
+  const toastError = useErrorToast();
+  const [reason, setReason] = useState('');
+  return (
+    <Dialog
+      open
+      onClose={onClose}
+      title="Von der Website zurückziehen"
+      footer={
+        <>
+          <Button onClick={onClose}>Abbrechen</Button>
+          <Button variant="danger" disabled={reason.trim().length < 3} onClick={async () => (await post(`/posts/${postId}/unpublish`, { reason: reason.trim() }).catch(toastError), onClose())}>
+            Zurückziehen
+          </Button>
+        </>
+      }
+    >
+      <div className="flex flex-col gap-3 text-sm">
+        <p className="m-0">Die Website setzt den Beitrag beim nächsten Abruf auf „Entwurf“. Der Beitrag bleibt in LifeLink erhalten.</p>
+        <FieldWrap label="Grund" required htmlFor="un-reason">
+          <Textarea id="un-reason" rows={2} value={reason} onChange={(e) => setReason(e.target.value)} maxLength={300} />
+        </FieldWrap>
+      </div>
+    </Dialog>
   );
 }
 

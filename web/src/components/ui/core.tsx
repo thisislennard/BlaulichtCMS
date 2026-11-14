@@ -94,6 +94,8 @@ export const STATUS: Record<string, { tone: Tone; label: string; pulse?: boolean
   draft: { tone: 'neutral', label: 'Entwurf' },
   in_review: { tone: 'warning', label: 'Zur Freigabe' },
   approved: { tone: 'success', label: 'Freigegeben' },
+  scheduled: { tone: 'primary', label: 'Geplant' },
+  deactivated: { tone: 'neutral', label: 'Zurückgezogen' },
   rejected: { tone: 'error', label: 'Zurückgewiesen' },
   publishing: { tone: 'primary', label: 'Wird veröffentlicht', pulse: true },
   published: { tone: 'success', label: 'Veröffentlicht' },

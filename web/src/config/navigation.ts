@@ -32,6 +32,7 @@ export const navigation: NavGroup[] = [
       { id: 'posts', path: '/beitraege', label: 'nav.posts', icon: 'FileText', perm: ['post.read'] },
       { id: 'approvals', path: '/freigaben', label: 'nav.approvals', icon: 'ListChecks', perm: ['post.approve', 'post.publish'], badge: 'approvals' },
       { id: 'media', path: '/medien', label: 'nav.media', icon: 'Images', perm: ['media.read'] },
+      { id: 'templates', path: '/vorlagen', label: 'nav.templates', icon: 'LayoutTemplate', perm: ['post.edit'] },
     ],
   },
   {

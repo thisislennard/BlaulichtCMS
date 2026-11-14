@@ -16,11 +16,13 @@ export function NewPostDialog({ onClose }: { onClose: () => void }) {
   const toastError = useErrorToast();
   const [title, setTitle] = useState('');
   const [kind, setKind] = useState('news');
+  const [templateId, setTemplateId] = useState('');
   const [busy, setBusy] = useState(false);
+  const tpls = useQuery({ queryKey: ['templates'], queryFn: () => get<any[]>('/templates') });
   const create = async () => {
     setBusy(true);
     try {
-      const p = await post<any>('/posts', { title: title.trim(), kind });
+      const p = await post<any>('/posts', { title: title.trim(), kind, templateId: templateId || null });
       nav(`/beitraege/${p.id}`);
     } catch (e) {
       toastError(e);
@@ -45,8 +47,20 @@ export function NewPostDialog({ onClose }: { onClose: () => void }) {
         <FieldWrap label="Arbeitstitel" required htmlFor="p-title">
           <Input id="p-title" value={title} onChange={(e) => setTitle(e.target.value)} maxLength={200} placeholder="z. B. Übung am Wochenende" />
         </FieldWrap>
+        {(tpls.data?.length ?? 0) > 0 && (
+          <FieldWrap label="Vorlage (optional)" htmlFor="p-tpl">
+            <Select id="p-tpl" value={templateId} onChange={(e) => setTemplateId(e.target.value)}>
+              <option value="">– ohne Vorlage –</option>
+              {tpls.data!.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                </option>
+              ))}
+            </Select>
+          </FieldWrap>
+        )}
         <FieldWrap label="Art" htmlFor="p-kind">
-          <Select id="p-kind" value={kind} onChange={(e) => setKind(e.target.value)}>
+          <Select id="p-kind" value={kind} disabled={!!templateId} onChange={(e) => setKind(e.target.value)}>
             {Object.entries(KIND_LABEL).map(([k, v]) => (
               <option key={k} value={k}>
                 {v}
@@ -67,7 +81,7 @@ export default function Posts({ mode }: { mode?: 'approvals' }) {
   const [create, setCreate] = useState(false);
   const q = useQuery({ queryKey: ['posts'], queryFn: () => get<PostListItem[]>('/posts'), refetchInterval: 20_000 });
   const rows = (q.data ?? []).filter((p) =>
-    filter === 'all' ? true : filter === 'open' ? ['draft', 'rejected'].includes(p.state) : filter === 'review' ? ['in_review', 'approved', 'failed', 'unknown'].includes(p.state) : ['published', 'publishing'].includes(p.state),
+    filter === 'all' ? true : filter === 'open' ? ['draft', 'rejected'].includes(p.state) : filter === 'review' ? ['in_review', 'approved', 'scheduled', 'failed', 'unknown'].includes(p.state) : ['published', 'publishing', 'deactivated'].includes(p.state),
   );
   return (
     <div className="flex flex-col gap-5">

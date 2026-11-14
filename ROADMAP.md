@@ -16,7 +16,7 @@ als Sub-Issues zusammen.
 | M0 – Bestandsaufnahme und Architektur | #1 | – | ✅ bis auf LiFeOS (Quellcode liegt nicht vor) |
 | M1 – Vom Foto-Link bis zur WordPress-Testseite | #2 | #7 – #15 | ✅ abgenommen (lokal, 34/34) – produktionsnaher WordPress-Test offen |
 | M2 – Medien, QR-Druck, Redaktion und Dashboard | #3 | #16 – #25 | ⏳ teilweise vorbereitet (QR/Aushang, Sichtung, PWA-Grundgerüst) |
-| M3 – MoWaS-Warnentwurf per Handy, PDF und Mail | #4 | #26 – #30 | ⏳ Rechte vorbereitet |
+| M3 – MoWaS-Warnentwurf per Handy, PDF und Mail | #4 | #26 – #30, #41 | ⏳ Rechte vorbereitet |
 | M4 – Optionale Verbindungen, Import und Betrieb | #5 | #31 – #40 | ⏳ Sicherung/Wiederherstellung und Doku begonnen |
 | Abschluss | #6 | – | – |
 
@@ -132,6 +132,7 @@ und getrennter Verbindung, RSS-Import, Dashboard-Aktualisierung nach Wiederverbi
 | #28 | Getrennte Rechte für Entwurf, Freigabe und Versand; Empfänger aus Zuständigkeiten; SMTP mit Nachweis |
 | #29 | Testmodus mit festem Empfänger, Versandfehler, unbekannter Zustellstatus |
 | #30 | Abnahme M3 und Abstimmung mit der zuständigen Stelle |
+| #41 | Stichwort-Umrechner und Warnstufen-Assistent: lokale, versionierte und freigegebene Regeln, Lagefragen, begründeter Vorschlag, ausdrückliche Bestätigung |
 
 LifeLink bereitet den Warnentwurf vor und übergibt ihn an die zuständige Stelle. Die
 amtliche Auslösung erfolgt über deren vorgesehenen Warnweg.

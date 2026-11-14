@@ -83,6 +83,41 @@ final class LifeLink_Bridge_Publisher {
 	}
 
 	/**
+	 * Veröffentlichten Beitrag zurückziehen (Status „Entwurf“). Idempotent: bereits zurückgezogen oder
+	 * nicht vorhanden gilt als erledigt.
+	 *
+	 * @return array|WP_Error
+	 */
+	public static function unpublish( array $job ) {
+		$llid    = (string) ( $job['lifelink_post_id'] ?? '' );
+		$post_id = '' !== $llid ? self::find_post( $llid ) : 0;
+		if ( ! $post_id ) {
+			return array(
+				'remote_id'     => 0,
+				'url'           => '',
+				'remote_status' => 'missing',
+			);
+		}
+		if ( 'draft' !== get_post_status( $post_id ) ) {
+			$r = wp_update_post(
+				array(
+					'ID'          => $post_id,
+					'post_status' => 'draft',
+				),
+				true
+			);
+			if ( is_wp_error( $r ) ) {
+				return $r;
+			}
+		}
+		return array(
+			'remote_id'     => $post_id,
+			'url'           => '',
+			'remote_status' => 'draft',
+		);
+	}
+
+	/**
 	 * Auftrag verarbeiten.
 	 *
 	 * @return array{remote_id:int,url:string,remote_status:string}|WP_Error

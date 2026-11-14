@@ -12,6 +12,7 @@ const Notifications = lazy(() => import('./pages/Notifications'));
 const Profile = lazy(() => import('./pages/Profile'));
 const Posts = lazy(() => import('./pages/posts/Posts'));
 const PostEditor = lazy(() => import('./pages/posts/PostEditor'));
+const Templates = lazy(() => import('./pages/posts/Templates'));
 const Collections = lazy(() => import('./pages/media/Collections'));
 const CollectionDetail = lazy(() => import('./pages/media/CollectionDetail'));
 const Sites = lazy(() => import('./pages/channels/Sites'));
@@ -75,6 +76,7 @@ const router = createBrowserRouter([
       { path: 'benachrichtigungen', element: <Page><Notifications /></Page> },
       { path: 'beitraege', element: <Page perm={['post.read']}><Posts /></Page> },
       { path: 'beitraege/:id', element: <Page perm={['post.read']}><PostEditor /></Page> },
+      { path: 'vorlagen', element: <Page perm={['post.read']}><Templates /></Page> },
       { path: 'freigaben', element: <Page perm={['post.read']}><Posts mode="approvals" /></Page> },
       { path: 'medien', element: <Page perm={['media.read']}><Collections /></Page> },
       { path: 'medien/:id', element: <Page perm={['media.read']}><CollectionDetail /></Page> },

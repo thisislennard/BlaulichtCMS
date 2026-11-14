@@ -11,13 +11,44 @@ import { createCollection, createUploadLink, uploadLinkUrl } from './media.js';
 
 export const POST_KINDS = ['news', 'incident', 'event', 'situation'] as const;
 
-/** Prüfsumme einer Fassung: Text, Medien (in Reihenfolge), Titelbild und Zielkanal. */
-export function revisionHash(r: { title: string; body: string; excerpt: string; media_ids: string[]; cover_id: string | null; site_id: string | null }): string {
-  const canonical = JSON.stringify([r.title, r.body, r.excerpt, r.media_ids, r.cover_id ?? null, r.site_id ?? null]);
-  return crypto.createHash('sha256').update(canonical).digest('hex');
+export interface ChannelText {
+  title?: string;
+  body?: string;
+  excerpt?: string;
+}
+export type Variants = Partial<Record<'wordpress', ChannelText>>;
+
+function cleanVariants(v: Variants | null | undefined): Variants {
+  const out: Variants = {};
+  for (const [k, t] of Object.entries(v ?? {})) {
+    const c: ChannelText = {};
+    if (t?.title?.trim()) c.title = t.title;
+    if (t?.body?.trim()) c.body = t.body;
+    if (t?.excerpt?.trim()) c.excerpt = t.excerpt;
+    if (Object.keys(c).length) (out as any)[k] = c;
+  }
+  return out;
 }
 
-export type PostState = 'draft' | 'in_review' | 'approved' | 'rejected' | 'publishing' | 'published' | 'failed' | 'unknown';
+/**
+ * Prüfsumme einer Fassung: Text, Medien (in Reihenfolge), Titelbild, Zielkanal, Texte je Kanal und Termin.
+ * Ohne Kanaltexte und Termin bleibt das Format der ersten Version erhalten (bestehende Freigaben bleiben gültig).
+ */
+export function revisionHash(r: { title: string; body: string; excerpt: string; media_ids: string[]; cover_id: string | null; site_id: string | null; variants?: Variants | null; publish_at?: string | Date | null }): string {
+  const base: unknown[] = [r.title, r.body, r.excerpt, r.media_ids, r.cover_id ?? null, r.site_id ?? null];
+  const v = cleanVariants(r.variants);
+  const at = r.publish_at ? new Date(r.publish_at).toISOString() : null;
+  if (Object.keys(v).length || at) base.push(v, at);
+  return crypto.createHash('sha256').update(JSON.stringify(base)).digest('hex');
+}
+
+/** Text, der an einen Kanal geht: Kanaltext, sonst Grundtext. */
+export function textFor(rev: { title: string; body: string; excerpt: string; variants?: Variants | null }, channel: 'wordpress'): Required<ChannelText> {
+  const v = (rev.variants ?? {})[channel] ?? {};
+  return { title: v.title?.trim() ? v.title : rev.title, body: v.body?.trim() ? v.body : rev.body, excerpt: v.excerpt?.trim() ? v.excerpt : rev.excerpt };
+}
+
+export type PostState = 'draft' | 'in_review' | 'approved' | 'rejected' | 'scheduled' | 'publishing' | 'published' | 'failed' | 'unknown' | 'deactivated';
 
 /** Status eines Beitrags – immer bezogen auf die aktuelle Fassung. */
 export async function postState(postId: string, db: Queryable = pool) {
@@ -34,15 +65,23 @@ export async function postState(postId: string, db: Queryable = pool) {
     db,
   );
   const validApproval = approval && approval.decision === 'approved' && approval.content_hash === cur.content_hash ? approval : null;
-  const pub = await one<any>(`SELECT * FROM publications WHERE revision_id = $1 ORDER BY created_at DESC LIMIT 1`, [cur.id], db);
+  const pub = await one<any>(`SELECT * FROM publications WHERE revision_id = $1 AND action = 'publish' ORDER BY created_at DESC LIMIT 1`, [cur.id], db);
+  const latest = await one<any>(`SELECT * FROM publications WHERE post_id = $1 ORDER BY created_at DESC LIMIT 1`, [postId], db);
   let state: PostState = 'draft';
   if (cur.submitted_at) state = 'in_review';
   if (approval?.decision === 'rejected' && (!cur.submitted_at || new Date(approval.decided_at) >= new Date(cur.submitted_at))) state = 'rejected';
   if (validApproval) state = 'approved';
   if (validApproval && pub) {
-    state = pub.status === 'published' ? 'published' : pub.status === 'failed' ? 'failed' : pub.status === 'unknown' ? 'unknown' : pub.status === 'canceled' ? 'approved' : 'publishing';
+    state =
+      pub.status === 'published' ? 'published'
+      : pub.status === 'failed' ? 'failed'
+      : pub.status === 'unknown' ? 'unknown'
+      : pub.status === 'canceled' ? 'approved'
+      : pub.status === 'queued' && new Date(pub.run_at) > new Date() ? 'scheduled'
+      : 'publishing';
   }
-  return { current: cur, approval, validApproval, publication: pub, state };
+  if (latest?.action === 'unpublish' && latest.status === 'published') state = 'deactivated';
+  return { current: cur, approval, validApproval, publication: pub, latest, state };
 }
 
 /**
@@ -57,6 +96,8 @@ export const POST_STATE_SQL = `
          a.decision AS a_decision, a.decided_at AS a_decided_at, (a.content_hash = r.content_hash) AS a_valid,
          pb.status AS pb_status, pb.remote_url AS pb_url,
          CASE
+           WHEN lp.action = 'unpublish' AND lp.status = 'published' THEN 'deactivated'
+           WHEN a.decision = 'approved' AND a.content_hash = r.content_hash AND pb.status = 'queued' AND pb.run_at > now() THEN 'scheduled'
            WHEN a.decision = 'approved' AND a.content_hash = r.content_hash AND pb.status = 'published' THEN 'published'
            WHEN a.decision = 'approved' AND a.content_hash = r.content_hash AND pb.status = 'failed' THEN 'failed'
            WHEN a.decision = 'approved' AND a.content_hash = r.content_hash AND pb.status = 'unknown' THEN 'unknown'
@@ -71,7 +112,8 @@ export const POST_STATE_SQL = `
     LEFT JOIN users u ON u.id = p.updated_by
     LEFT JOIN wp_sites s ON s.id = r.site_id
     LEFT JOIN LATERAL (SELECT decision, decided_at, content_hash FROM approvals WHERE revision_id = r.id AND revoked_at IS NULL ORDER BY decided_at DESC LIMIT 1) a ON true
-    LEFT JOIN LATERAL (SELECT status, remote_url FROM publications WHERE revision_id = r.id ORDER BY created_at DESC LIMIT 1) pb ON true`;
+    LEFT JOIN LATERAL (SELECT status, remote_url, run_at FROM publications WHERE revision_id = r.id AND action = 'publish' ORDER BY created_at DESC LIMIT 1) pb ON true
+    LEFT JOIN LATERAL (SELECT status, action FROM publications WHERE post_id = p.id ORDER BY created_at DESC LIMIT 1) lp ON true`;
 
 async function loadMedia(ids: string[]) {
   if (!ids.length) return [];
@@ -88,6 +130,8 @@ const revisionInput = z.object({
   mediaIds: z.array(z.uuid()).max(100).default([]),
   coverId: z.uuid().nullable().default(null),
   siteId: z.uuid().nullable().default(null),
+  variants: z.object({ wordpress: z.object({ title: z.string().max(200).optional(), body: z.string().max(50_000).optional(), excerpt: z.string().max(1_000).optional() }).optional() }).default({}),
+  publishAt: z.iso.datetime({ offset: true }).nullable().default(null),
   changeNote: z.string().trim().max(300).default(''),
 });
 
@@ -112,16 +156,19 @@ export async function postRoutes(app: FastifyInstance) {
   });
 
   app.post('/posts', { preHandler: requireAuth('post.edit') }, async (req) => {
-    const body = z.object({ title: z.string().trim().min(2).max(200), kind: z.enum(POST_KINDS).default('news') }).parse(req.body);
+    const body = z.object({ title: z.string().trim().min(2).max(200), kind: z.enum(POST_KINDS).default('news'), templateId: z.uuid().nullable().optional() }).parse(req.body);
     const userId = req.auth!.user?.id ?? null;
+    const tpl = body.templateId ? await one<any>('SELECT * FROM post_templates WHERE id = $1 AND archived_at IS NULL', [body.templateId]) : null;
+    if (body.templateId && !tpl) throw notFound('Vorlage nicht gefunden.');
     const post = await tx(async (db) => {
-      const p = await one<any>(`INSERT INTO posts (kind, title, created_by, updated_by) VALUES ($1,$2,$3,$3) RETURNING *`, [body.kind, body.title, userId], db);
-      const rev = { title: body.title, body: '', excerpt: '', media_ids: [] as string[], cover_id: null, site_id: null };
+      const kind = tpl?.kind ?? body.kind;
+      const p = await one<any>(`INSERT INTO posts (kind, title, created_by, updated_by) VALUES ($1,$2,$3,$3) RETURNING *`, [kind, body.title, userId], db);
+      const rev = { title: body.title, body: tpl?.body ?? '', excerpt: tpl?.excerpt ?? '', media_ids: [] as string[], cover_id: null, site_id: null };
       await db.query(
-        `INSERT INTO post_revisions (post_id, number, title, body, excerpt, media_ids, cover_id, site_id, content_hash, created_by) VALUES ($1,1,$2,'','','{}',NULL,NULL,$3,$4)`,
-        [p.id, body.title, revisionHash(rev), userId],
+        `INSERT INTO post_revisions (post_id, number, title, body, excerpt, media_ids, cover_id, site_id, content_hash, created_by) VALUES ($1,1,$2,$3,$4,'{}',NULL,NULL,$5,$6)`,
+        [p.id, body.title, rev.body, rev.excerpt, revisionHash(rev), userId],
       );
-      await audit(req.auth!.actor, 'post.created', { type: 'post', id: p.id, label: body.title }, { art: body.kind }, 'ok', db);
+      await audit(req.auth!.actor, 'post.created', { type: 'post', id: p.id, label: body.title }, { art: kind, vorlage: tpl?.name ?? null }, 'ok', db);
       return p;
     });
     return post;
@@ -168,6 +215,8 @@ export async function postRoutes(app: FastifyInstance) {
         media_ids: cur.media_ids,
         cover_id: cur.cover_id,
         site_id: cur.site_id,
+        variants: cur.variants ?? {},
+        publish_at: cur.publish_at,
         content_hash: cur.content_hash,
         submitted_at: cur.submitted_at,
         created_at: cur.created_at,
@@ -180,6 +229,8 @@ export async function postRoutes(app: FastifyInstance) {
       approvals,
       publications: publications.map((p) => ({
         id: p.id,
+        action: p.action,
+        run_at: p.run_at,
         site_name: p.site_name,
         revision_number: p.revision_number,
         status: p.status,
@@ -214,13 +265,14 @@ export async function postRoutes(app: FastifyInstance) {
         throw conflict(`Der Beitrag wurde inzwischen geändert (aktuell Fassung ${post.current_revision}). Bitte neu laden.`, { current: post.current_revision });
       }
       const cur = await one<any>('SELECT * FROM post_revisions WHERE post_id = $1 AND number = $2', [id, post.current_revision], db);
-      const next = { title: body.title, body: body.body, excerpt: body.excerpt, media_ids: body.mediaIds, cover_id: body.coverId, site_id: body.siteId };
+      const variants = cleanVariants(body.variants as Variants);
+      const next = { title: body.title, body: body.body, excerpt: body.excerpt, media_ids: body.mediaIds, cover_id: body.coverId, site_id: body.siteId, variants, publish_at: body.publishAt };
       const hash = revisionHash(next);
       if (hash === cur.content_hash) return { changed: false, number: cur.number };
       const number = cur.number + 1;
       await db.query(
-        `INSERT INTO post_revisions (post_id, number, title, body, excerpt, media_ids, cover_id, site_id, content_hash, change_note, created_by) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
-        [id, number, body.title, body.body, body.excerpt, body.mediaIds, body.coverId, body.siteId, hash, body.changeNote, userId],
+        `INSERT INTO post_revisions (post_id, number, title, body, excerpt, media_ids, cover_id, site_id, content_hash, change_note, created_by, variants, publish_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
+        [id, number, body.title, body.body, body.excerpt, body.mediaIds, body.coverId, body.siteId, hash, body.changeNote, userId, JSON.stringify(variants), body.publishAt],
       );
       await db.query('UPDATE posts SET current_revision = $2, title = $3, updated_at = now(), updated_by = $4 WHERE id = $1', [id, number, body.title, userId]);
       const hadApproval = await one(`SELECT 1 FROM approvals WHERE revision_id = $1 AND decision = 'approved' AND revoked_at IS NULL`, [cur.id], db);
@@ -310,17 +362,74 @@ export async function postRoutes(app: FastifyInstance) {
       if (!st.current.site_id) throw badRequest('Für diese Fassung ist kein Zielkanal gewählt. Ohne Zielkanal bleibt der Beitrag intern freigegeben.');
       const site = await one<any>('SELECT * FROM wp_sites WHERE id = $1', [st.current.site_id], db);
       if (!site || site.status !== 'active') throw badRequest('Die Website ist nicht (mehr) gekoppelt.');
-      const existing = await one<any>(`SELECT * FROM publications WHERE revision_id = $1 AND site_id = $2 AND status IN ('queued','sent','published','unknown')`, [st.current.id, site.id], db);
+      const existing = await one<any>(`SELECT * FROM publications WHERE revision_id = $1 AND site_id = $2 AND action = 'publish' AND status IN ('queued','sent','published','unknown')`, [st.current.id, site.id], db);
       if (existing) return { publication: existing, duplicate: true, title: st.current.title };
+      // Geplanter Termin ist Teil der freigegebenen Fassung; vorher holt die Bridge den Auftrag nicht ab
+      const runAt = st.current.publish_at && new Date(st.current.publish_at) > new Date() ? st.current.publish_at : new Date();
       const p = await one<any>(
-        `INSERT INTO publications (post_id, revision_id, approval_id, site_id, created_by) VALUES ($1,$2,$3,$4,$5) RETURNING *`,
-        [id, st.current.id, st.validApproval.id, site.id, req.auth!.user?.id ?? null],
+        `INSERT INTO publications (post_id, revision_id, approval_id, site_id, created_by, run_at) VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
+        [id, st.current.id, st.validApproval.id, site.id, req.auth!.user?.id ?? null, runAt],
         db,
       );
-      await audit(req.auth!.actor, 'publication.requested', { type: 'post', id, label: st.current.title }, { fassung: body.revision, website: site.name, auftrag: p.id }, 'ok', db);
+      await audit(req.auth!.actor, 'publication.requested', { type: 'post', id, label: st.current.title }, { fassung: body.revision, website: site.name, auftrag: p.id, geplant: runAt }, 'ok', db);
       return { publication: p, duplicate: false, title: st.current.title };
     });
-    return { id: pub.publication.id, status: pub.publication.status, duplicate: pub.duplicate };
+    return { id: pub.publication.id, status: pub.publication.status, run_at: pub.publication.run_at, duplicate: pub.duplicate };
+  });
+
+  /** Veröffentlichten Beitrag auf der Website zurückziehen (WordPress: Entwurf). Braucht keine neue Freigabe. */
+  app.post('/posts/:id/unpublish', { preHandler: requireAuth('post.publish') }, async (req) => {
+    const { id } = z.object({ id: z.uuid() }).parse(req.params);
+    const { reason } = z.object({ reason: z.string().trim().min(3).max(300) }).parse(req.body);
+    const res = await tx(async (db) => {
+      await db.query('SELECT 1 FROM posts WHERE id = $1 FOR UPDATE', [id]);
+      const last = await one<any>(
+        `SELECT pb.*, rv.title FROM publications pb JOIN post_revisions rv ON rv.id = pb.revision_id
+          WHERE pb.post_id = $1 AND pb.action = 'publish' AND pb.status = 'published' ORDER BY pb.result_at DESC LIMIT 1`,
+        [id],
+        db,
+      );
+      if (!last) throw badRequest('Der Beitrag ist auf keiner Website veröffentlicht.');
+      const open = await one<any>(`SELECT * FROM publications WHERE post_id = $1 AND action = 'unpublish' AND status IN ('queued','sent','unknown')`, [id], db);
+      if (open) return { publication: open, duplicate: true };
+      const p = await one<any>(
+        `INSERT INTO publications (post_id, revision_id, approval_id, site_id, created_by, action, error) VALUES ($1,$2,$3,$4,$5,'unpublish',NULL) RETURNING *`,
+        [id, last.revision_id, last.approval_id, last.site_id, req.auth!.user?.id ?? null],
+        db,
+      );
+      await audit(req.auth!.actor, 'publication.unpublish_requested', { type: 'post', id, label: last.title }, { grund: reason, auftrag: p.id }, 'ok', db);
+      return { publication: p, duplicate: false };
+    });
+    return { id: res.publication.id, duplicate: res.duplicate };
+  });
+
+  /* ------------------------------ Redaktionelle Vorlagen ------------------------------ */
+
+  const tplBody = z.object({ name: z.string().trim().min(2).max(100), kind: z.enum(POST_KINDS).default('news'), title: z.string().max(200).default(''), body: z.string().max(50_000).default(''), excerpt: z.string().max(1_000).default('') });
+
+  app.get('/templates', { preHandler: requireAuth('post.read') }, async () =>
+    many<any>(`SELECT t.*, u.name AS created_by_name FROM post_templates t LEFT JOIN users u ON u.id = t.created_by WHERE t.archived_at IS NULL ORDER BY t.name`),
+  );
+  app.post('/templates', { preHandler: requireAuth('post.edit') }, async (req) => {
+    const b = tplBody.parse(req.body);
+    const t = await one<any>(`INSERT INTO post_templates (name, kind, title, body, excerpt, created_by) VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`, [b.name, b.kind, b.title, b.body, b.excerpt, req.auth!.user?.id ?? null]);
+    await audit(req.auth!.actor, 'template.created', { type: 'template', id: t.id, label: t.name });
+    return t;
+  });
+  app.put('/templates/:id', { preHandler: requireAuth('post.edit') }, async (req) => {
+    const { id } = z.object({ id: z.uuid() }).parse(req.params);
+    const b = tplBody.parse(req.body);
+    const t = await one<any>(`UPDATE post_templates SET name = $2, kind = $3, title = $4, body = $5, excerpt = $6, updated_at = now() WHERE id = $1 RETURNING *`, [id, b.name, b.kind, b.title, b.body, b.excerpt]);
+    if (!t) throw notFound();
+    await audit(req.auth!.actor, 'template.updated', { type: 'template', id, label: t.name });
+    return t;
+  });
+  app.delete('/templates/:id', { preHandler: requireAuth('post.edit') }, async (req) => {
+    const { id } = z.object({ id: z.uuid() }).parse(req.params);
+    const t = await one<any>(`UPDATE post_templates SET archived_at = now() WHERE id = $1 RETURNING name`, [id]);
+    if (!t) throw notFound();
+    await audit(req.auth!.actor, 'template.archived', { type: 'template', id, label: t.name });
+    return { ok: true };
   });
 
   app.post('/publications/:id/cancel', { preHandler: requireAuth('post.publish') }, async (req) => {
@@ -334,7 +443,7 @@ export async function postRoutes(app: FastifyInstance) {
   /** Nach bestätigtem Fehler erneut beauftragen (nur dieser Kanal). */
   app.post('/publications/:id/retry', { preHandler: requireAuth('post.publish') }, async (req) => {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
-    const p = await one<any>(`UPDATE publications SET status = 'queued', error = NULL, fetched_at = NULL WHERE id = $1 AND status = 'failed' RETURNING *`, [id]);
+    const p = await one<any>(`UPDATE publications SET status = 'queued', error = NULL, fetched_at = NULL, run_at = GREATEST(run_at, now()) WHERE id = $1 AND status = 'failed' RETURNING *`, [id]);
     if (!p) throw badRequest('Nur fehlgeschlagene Aufträge können erneut gestartet werden. Bei „Ergebnis unbekannt“ prüft die Bridge zuerst die Website.');
     await audit(req.auth!.actor, 'publication.retried', { type: 'post', id: p.post_id }, { auftrag: id });
     return { ok: true };

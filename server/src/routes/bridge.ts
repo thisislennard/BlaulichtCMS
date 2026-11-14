@@ -12,6 +12,7 @@ import { AppError, badRequest, notFound } from '../lib/errors.js';
 import { notify } from '../lib/notify.js';
 import { publicBase } from '../lib/urls.js';
 import { publicFileFor } from './media.js';
+import { textFor } from './posts.js';
 import { sendFileResponse } from './files.js';
 
 export const BRIDGE_API_VERSION = 1;
@@ -69,6 +70,7 @@ const bridgeActor = (site: BridgeSite, req: FastifyRequest): Actor => ({ id: nul
 
 /** Text → einfache Absätze. Die Bridge escaped zusätzlich und erzeugt daraus HTML. */
 function jobPayload(p: any, media: any[], base: string) {
+  const text = textFor(p, 'wordpress');
   return {
     id: p.id,
     type: 'post.upsert',
@@ -76,9 +78,9 @@ function jobPayload(p: any, media: any[], base: string) {
     revision: p.number,
     content_hash: p.content_hash,
     post: {
-      title: p.title,
-      body: p.body,
-      excerpt: p.excerpt,
+      title: text.title,
+      body: text.body,
+      excerpt: text.excerpt,
       status: 'publish',
       cover_media_id: p.cover_id,
     },
@@ -209,7 +211,7 @@ export async function bridgeRoutes(app: FastifyInstance) {
               fetched_at = now(), attempts = pb.attempts + 1
         WHERE pb.id IN (
           SELECT id FROM publications
-           WHERE site_id = $1 AND (status IN ('queued','unknown') OR (status = 'sent' AND (fetched_at IS NULL OR fetched_at < now() - make_interval(secs => $2))))
+           WHERE site_id = $1 AND run_at <= now() AND (status IN ('queued','unknown') OR (status = 'sent' AND (fetched_at IS NULL OR fetched_at < now() - make_interval(secs => $2))))
            ORDER BY created_at LIMIT 10 FOR UPDATE SKIP LOCKED)
         RETURNING pb.id`,
       [site.id, REDELIVER_AFTER_SEC],
@@ -219,10 +221,14 @@ export async function bridgeRoutes(app: FastifyInstance) {
     const jobs = [];
     for (const r of rows) {
       const p = await one<any>(
-        `SELECT pb.id, pb.post_id, rv.number, rv.title, rv.body, rv.excerpt, rv.media_ids, rv.cover_id, rv.content_hash
+        `SELECT pb.id, pb.post_id, pb.action, rv.number, rv.title, rv.body, rv.excerpt, rv.variants, rv.media_ids, rv.cover_id, rv.content_hash
            FROM publications pb JOIN post_revisions rv ON rv.id = pb.revision_id WHERE pb.id = $1`,
         [r.id],
       );
+      if (p.action === 'unpublish') {
+        jobs.push({ id: p.id, type: 'post.unpublish', lifelink_post_id: p.post_id, revision: p.number });
+        continue;
+      }
       const media = p.media_ids.length ? await many<any>(`SELECT * FROM media WHERE id = ANY($1) AND status = 'ready' AND deleted_at IS NULL`, [p.media_ids]) : [];
       const ordered = p.media_ids.map((id: string) => media.find((m: any) => m.id === id)).filter((m: any) => m && publicFileFor(m));
       jobs.push(jobPayload(p, ordered, base));
@@ -250,7 +256,11 @@ export async function bridgeRoutes(app: FastifyInstance) {
       return { ok: true, status: 'published', duplicate: true };
     }
     if (pub.status === 'canceled') throw new AppError(409, 'job_canceled', 'Der Auftrag wurde in LifeLink abgebrochen.');
-    if (body.status === 'published') {
+    if (body.status === 'published' && pub.action === 'unpublish') {
+      await pool.query(`UPDATE publications SET status = 'published', remote_id = $2, remote_status = $3, error = NULL, result_at = now() WHERE id = $1`, [id, body.remote_id ?? null, body.remote_status ?? 'draft']);
+      await audit(bridgeActor(site, req), 'publication.unpublished', { type: 'post', id: pub.post_id, label: pub.title }, { auftrag: id });
+      await notify({ kind: 'info', title: `Zurückgezogen: ${pub.title}`.slice(0, 200), body: site.name, link: `/beitraege/${pub.post_id}`, permission: 'post.publish' });
+    } else if (body.status === 'published') {
       if (!body.remote_id || !body.url) throw badRequest('Für eine erfolgreiche Veröffentlichung sind WordPress-ID und URL nötig.');
       await pool.query(
         `UPDATE publications SET status = 'published', remote_id = $2, remote_url = $3, remote_status = $4, error = NULL, result_at = now() WHERE id = $1`,

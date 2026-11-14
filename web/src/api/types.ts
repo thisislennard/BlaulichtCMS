@@ -20,7 +20,7 @@ export interface Preferences {
   language?: 'de' | 'en';
 }
 
-export type PostState = 'draft' | 'in_review' | 'approved' | 'rejected' | 'publishing' | 'published' | 'failed' | 'unknown';
+export type PostState = 'draft' | 'in_review' | 'approved' | 'rejected' | 'scheduled' | 'publishing' | 'published' | 'failed' | 'unknown' | 'deactivated';
 export type PostKind = 'news' | 'incident' | 'event' | 'situation';
 
 export interface PostListItem {
@@ -91,6 +91,8 @@ export interface Site {
 
 export interface Publication {
   id: string;
+  action: 'publish' | 'unpublish';
+  run_at: string;
   site_name: string;
   revision_number: number;
   status: 'queued' | 'sent' | 'published' | 'failed' | 'unknown' | 'canceled';

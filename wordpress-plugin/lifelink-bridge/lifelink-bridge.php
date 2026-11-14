@@ -2,7 +2,7 @@
 /**
  * Plugin Name:       LifeLink Bridge
  * Description:       Verbindet diese Website mit LifeLink. Die Bridge holt freigegebene Beiträge per HTTPS ab, veröffentlicht sie und meldet WordPress-ID und Adresse zurück.
- * Version:           0.1.0
+ * Version:           0.2.0
  * Requires at least: 6.4
  * Requires PHP:      8.1
  * Author:            LifeLink
@@ -17,7 +17,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'LIFELINK_BRIDGE_VERSION', '0.1.0' );
+define( 'LIFELINK_BRIDGE_VERSION', '0.2.0' );
 define( 'LIFELINK_BRIDGE_FILE', __FILE__ );
 define( 'LIFELINK_BRIDGE_DIR', plugin_dir_path( __FILE__ ) );
 

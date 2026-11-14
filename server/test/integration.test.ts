@@ -489,3 +489,65 @@ describe('Sammeldownload (M2)', () => {
     expect((await editor.get(`/exports/${r.json.id}/download`)).status).toBe(404);
   });
 });
+
+describe('Redaktion: Vorlagen, Kanaltexte, Termin, Zurückziehen (M2)', () => {
+  let site2 = '';
+  let key2 = '';
+  let pid = '';
+  const auth = () => ({ authorization: `Bearer ${key2}` });
+  const cur = async () => (await editor.get(`/posts/${pid}`)).json;
+
+  it('legt einen Beitrag aus einer Vorlage an', async () => {
+    const t = await editor.post('/templates', { name: 'Einsatzbericht kurz', kind: 'incident', body: 'Am [Datum] wurden wir zu [Ort] alarmiert.' });
+    expect(t.status).toBe(200);
+    expect((await publisher.post('/templates', { name: 'X1' })).status).toBe(403);
+    const p = await editor.post('/posts', { title: 'Einsatz Musterstraße', templateId: t.json.id });
+    pid = p.json.id;
+    const d = await cur();
+    expect(d.post.kind).toBe('incident');
+    expect(d.revision.body).toContain('[Ort]');
+  });
+
+  it('Kanaltext und Termin sind Teil der Fassung; Termin verzögert die Abholung', async () => {
+    const s = await admin.post('/sites', { name: 'Zweite Testwebsite' });
+    site2 = s.json.site.id;
+    key2 = (await anonymous.post('/bridge/pair', { code: s.json.pairingCode, site_url: 'https://zwei.example.org' })).json.key;
+    let d = await cur();
+    const future = new Date(Date.now() + 3600_000).toISOString();
+    await editor.put(`/posts/${pid}/revision`, { baseRevision: d.revision.number, title: 'Einsatz Musterstraße', body: 'Interner Langtext.', siteId: site2, variants: { wordpress: { body: 'Kurzer Text für die Website.' } }, publishAt: future });
+    d = await cur();
+    expect(d.revision.variants.wordpress.body).toBe('Kurzer Text für die Website.');
+    await editor.post(`/posts/${pid}/submit`, { revision: d.revision.number });
+    await approver.post(`/posts/${pid}/decision`, { revision: d.revision.number, contentHash: d.revision.content_hash, decision: 'approved' });
+    // Nur Kanaltext ändern → neue Fassung, Freigabe entfällt
+    const ch = await editor.put(`/posts/${pid}/revision`, { baseRevision: d.revision.number, title: 'Einsatz Musterstraße', body: 'Interner Langtext.', siteId: site2, variants: { wordpress: { body: 'Geänderter Website-Text.' } }, publishAt: future });
+    expect(ch.json.approvalInvalidated).toBe(true);
+    d = await cur();
+    await editor.post(`/posts/${pid}/submit`, { revision: d.revision.number });
+    await approver.post(`/posts/${pid}/decision`, { revision: d.revision.number, contentHash: d.revision.content_hash, decision: 'approved' });
+    const pub = await publisher.post(`/posts/${pid}/publish`, { revision: d.revision.number, contentHash: d.revision.content_hash });
+    expect(new Date(pub.json.run_at).getTime()).toBeGreaterThan(Date.now() + 3000_000);
+    expect((await cur()).state).toBe('scheduled');
+    expect((await anonymous.get('/bridge/jobs', auth())).json.jobs).toHaveLength(0);
+    // Termin erreicht
+    await pool.query(`UPDATE publications SET run_at = now() - interval '1 second' WHERE post_id = $1`, [pid]);
+    const jobs = (await anonymous.get('/bridge/jobs', auth())).json.jobs;
+    expect(jobs).toHaveLength(1);
+    expect(jobs[0].post.body).toBe('Geänderter Website-Text.');
+    await anonymous.post(`/bridge/jobs/${jobs[0].id}/result`, { status: 'published', remote_id: 7, url: 'https://zwei.example.org/einsatz/' }, auth());
+    expect((await cur()).state).toBe('published');
+  });
+
+  it('zieht einen veröffentlichten Beitrag zurück (ohne neue Freigabe)', async () => {
+    expect((await editor.post(`/posts/${pid}/unpublish`, { reason: 'Fehler im Text' })).status).toBe(403);
+    const u = await publisher.post(`/posts/${pid}/unpublish`, { reason: 'Fehler im Text' });
+    expect(u.status).toBe(200);
+    expect((await publisher.post(`/posts/${pid}/unpublish`, { reason: 'Fehler im Text' })).json.duplicate).toBe(true);
+    const jobs = (await anonymous.get('/bridge/jobs', auth())).json.jobs;
+    expect(jobs[0].type).toBe('post.unpublish');
+    await anonymous.post(`/bridge/jobs/${jobs[0].id}/result`, { status: 'published', remote_id: 7, remote_status: 'draft' }, auth());
+    expect((await cur()).state).toBe('deactivated');
+    const list = (await editor.get('/posts')).json.find((p: any) => p.id === pid);
+    expect(list.state).toBe('deactivated');
+  });
+});
