@@ -48,7 +48,7 @@ function Sidebar({ collapsed, onToggle, mobile, onNavigate }: { collapsed: boole
   return (
     <nav aria-label="Hauptnavigation" className={cx('h-full flex flex-col gap-[22px] px-3 pt-4 pb-5 overflow-y-auto', expanded ? 'w-sidebar' : 'w-sidebar-collapsed')}>
       <Link to="/" onClick={onNavigate} className={cx('flex items-center gap-2.5 px-1.5 py-0.5 !text-fg', !expanded && 'justify-center')}>
-        <span className="w-[30px] h-[30px] rounded-control bg-primary-solid flex items-center justify-center shrink-0">
+        <span className="w-[30px] h-[30px] rounded-control ll-signal-bg flex items-center justify-center shrink-0">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
             <circle cx="7.5" cy="12" r="3.5" />
             <circle cx="16.5" cy="12" r="3.5" />
@@ -261,13 +261,13 @@ export function AppShell() {
       </a>
       <div className="min-h-screen flex bg-bg text-fg">
         {!isMobile && (
-          <aside className="sticky top-0 h-screen shrink-0 bg-sidebar border-r border-line">
+          <aside className="ll-sidebar sticky top-0 h-screen shrink-0 bg-sidebar border-r border-line">
             <Sidebar collapsed={collapsed} onToggle={() => setPreferences({ sidebarCollapsed: !me?.user.preferences.sidebarCollapsed })} />
           </aside>
         )}
         {isMobile && mobileOpen && (
           <div className="fixed inset-0 z-[70] flex" role="dialog" aria-modal="true" aria-label="Navigation">
-            <div className="bg-sidebar border-r border-line h-full shadow-float">
+            <div className="ll-sidebar bg-sidebar border-r border-line h-full shadow-float">
               <Sidebar collapsed={false} mobile onNavigate={() => setMobileOpen(false)} />
             </div>
             <button type="button" aria-label="Menü schließen" className="flex-1 bg-[rgba(2,6,23,.55)]" onClick={() => setMobileOpen(false)} />

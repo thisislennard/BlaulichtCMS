@@ -319,12 +319,12 @@ export async function mediaRoutes(app: FastifyInstance) {
     if (!m) throw notFound('Datei nicht gefunden oder noch nicht geprüft.');
     if (variant === 'preview') {
       if (!m.has_preview) throw notFound('Keine Vorschau vorhanden.');
-      return sendFileResponse(reply, mediaPaths.preview(id), 'image/webp');
+      return sendFileResponse(reply, mediaPaths.preview(id), 'image/webp', undefined, { immutable: true });
     }
     if (variant === 'public') {
       const pf = publicFileFor(m);
       if (!pf) throw notFound('Keine öffentliche Fassung vorhanden.');
-      return sendFileResponse(reply, pf.path, pf.type, `${m.original_name.replace(/\.[^.]+$/, '')}.${pf.ext}`);
+      return sendFileResponse(reply, pf.path, pf.type, `${m.original_name.replace(/\.[^.]+$/, '')}.${pf.ext}`, { immutable: true });
     }
     await audit(req.auth!.actor, 'media.downloaded', { type: 'media', id, label: m.original_name });
     return sendFileResponse(reply, mediaPaths.original(id), m.mime ?? 'application/octet-stream', m.original_name);

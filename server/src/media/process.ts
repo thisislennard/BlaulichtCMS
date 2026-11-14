@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import os from 'node:os';
 import { spawn } from 'node:child_process';
 import { fileTypeFromFile } from 'file-type';
 import sharp, { type Metadata } from 'sharp';
@@ -22,7 +23,8 @@ export const ACCEPT_ATTR = 'image/jpeg,image/png,image/webp,image/heic,image/hei
 
 // Höchstens 40 Megapixel dekodieren (Schutz vor „Dekompressionsbomben“)
 const MAX_PIXELS = 40_000_000;
-sharp.concurrency(1);
+// Threads je Bild begrenzen: parallel laufen ohnehin mehrere Aufträge (Einstellung „Parallele Hintergrundaufträge“)
+sharp.concurrency(Math.max(1, Math.min(4, Math.floor(os.availableParallelism() / 2))));
 sharp.cache(false);
 
 class Rejected extends Error {}
@@ -64,11 +66,13 @@ async function processImage(id: string, file: string, mime: string) {
     throw new Rejected(`Bild ist beschädigt oder zu groß (${(e as Error).message.slice(0, 120)}).`);
   }
   if (!meta.width || !meta.height) throw new Rejected('Bildgröße konnte nicht gelesen werden.');
-  const base = () => sharp(file, { limitInputPixels: MAX_PIXELS, failOn: 'error' }).rotate();
   try {
-    await base().resize({ width: 1200, height: 1200, fit: 'inside', withoutEnlargement: true }).webp({ quality: 78 }).toFile(mediaPaths.preview(id));
-    // Öffentliche Fassung: ohne EXIF/XMP/IPTC (sharp übernimmt Metadaten nur auf ausdrücklichen Wunsch)
-    await base().resize({ width: 2560, height: 2560, fit: 'inside', withoutEnlargement: true }).jpeg({ quality: 85, mozjpeg: true }).toFile(mediaPaths.publicFile(id, 'jpg'));
+    // Einmal dekodieren, zwei Ausgaben: Vorschau (WebP) und öffentliche Fassung (JPEG ohne EXIF/XMP/IPTC)
+    const base = sharp(file, { limitInputPixels: MAX_PIXELS, failOn: 'error', sequentialRead: true }).rotate();
+    await Promise.all([
+      base.clone().resize({ width: 1200, height: 1200, fit: 'inside', withoutEnlargement: true }).webp({ quality: 78, effort: 3 }).toFile(mediaPaths.preview(id)),
+      base.clone().resize({ width: 2560, height: 2560, fit: 'inside', withoutEnlargement: true }).jpeg({ quality: 85, mozjpeg: true }).toFile(mediaPaths.publicFile(id, 'jpg')),
+    ]);
   } catch (e) {
     throw new Rejected(`Bild konnte nicht verarbeitet werden (${(e as Error).message.slice(0, 120)}).`);
   }

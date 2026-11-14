@@ -12,7 +12,7 @@ function AuthLayout({ title, subtitle, children }: { title: string; subtitle?: R
     <div className="min-h-screen bg-bg text-fg flex items-center justify-center p-4">
       <main className="w-full max-w-[420px] flex flex-col gap-6">
         <div className="flex items-center gap-3">
-          <span className="w-10 h-10 rounded-node bg-primary-solid flex items-center justify-center">
+          <span className="w-10 h-10 rounded-node ll-signal-bg flex items-center justify-center">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
               <circle cx="7.5" cy="12" r="3.5" />
               <circle cx="16.5" cy="12" r="3.5" />

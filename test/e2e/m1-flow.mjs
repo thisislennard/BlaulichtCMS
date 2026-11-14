@@ -523,7 +523,7 @@ try {
     await shot(page, 'doc-hilfe');
     const collectionId = psql(`SELECT collection_id FROM media WHERE id = '${mediaId}'`);
     await page.goto(`${LL}/medien/${collectionId}`);
-    await page.getByRole('heading', { name: 'Übung am Wochenende' }).first().waitFor();
+    await page.getByRole('tab', { name: /Ausgewählt/ }).click();
     await page.locator('img[src*="/preview"]').first().waitFor();
     await shot(page, 'doc-sammlung');
   }
@@ -569,13 +569,14 @@ try {
     expect(/Auftrag/.test(out), out);
     return `Login ok, Beitrag veröffentlicht, Vorschau 200, ${approvals} Freigaben, Bridge-Abruf ok`;
   });
-} catch {
+} catch (e) {
   exitCode = 1;
+  console.log(`Abbruch: ${e?.message ?? e}`);
 } finally {
   await browser.close();
   report.finished = new Date().toISOString();
   report.ok = exitCode === 0;
   fs.writeFileSync(path.join(OUT, 'report.json'), JSON.stringify(report, null, 2));
-  console.log(`\n${report.steps.filter((s) => s.ok).length}/${report.steps.length} Schritte erfolgreich – Bericht: test/e2e/out/report.json`);
+  console.log(`\n${exitCode ? 'FEHLGESCHLAGEN' : 'ERFOLGREICH'}: ${report.steps.filter((s) => s.ok).length}/${report.steps.length} Schritte – Bericht: test/e2e/out/report.json`);
   process.exit(exitCode);
 }

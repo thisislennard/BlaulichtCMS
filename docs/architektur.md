@@ -94,6 +94,20 @@ Vier-Augen-Prinzip optional (Einstellung `editorial.four_eyes`).
 
 Maßgeblich ist die Einstellung `general.public_url` (Erstsetup). `PUBLIC_URL` dient nur als Vorschlag/Fallback.
 
+### E12 – Leistung
+
+Beitragsstatus wird für Listen in einer SQL-Abfrage berechnet (`POST_STATE_SQL`, gleiche Logik wie `postState()`),
+Indizes in `003_performance.sql`. Statische Dateien kommen vorkomprimiert (`web/scripts/compress.mjs`,
+`@fastify/static preCompressed`), API-Antworten über `@fastify/compress` (nur JSON/SVG/Text, ab 1 KB).
+Medien-Varianten sind je ID unveränderlich und daher langfristig privat cachebar. Optimistische Anzeige nur bei der
+Sichtung – Freigaben und Veröffentlichungen bleiben serverbestätigt.
+
+### E13 – Gestaltung (Übergang bis zum endgültigen Design)
+
+Sachlicher Behörden-/Einsatz-Look: hell als Standard (Lesbarkeit draußen), Marineblau für Bedienung und Seitenleiste,
+Signalrot nur als Akzent (Marke, aktive Navigation, Dringliches), Status immer mit Farbe und Text, kleine Radien.
+Alles über Tokens in `web/src/theme/tokens.css` – das endgültige Design lässt sich dort zentral austauschen.
+
 ## Offene Architekturpunkte
 
 - LiFeOS-Quellcode liegt nicht vor: Abgleich von Sicherheitslogik und Update-Bedienung (#1) sowie das Importformat (#35) sind offen.

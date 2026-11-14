@@ -32,7 +32,7 @@ function MediaThumb({ m, className }: { m: MediaItem; className?: string }) {
   }
   return (
     <div className={cx('relative bg-raised overflow-hidden', className)}>
-      <img src={`/api/v1/media/${m.id}/preview`} alt={m.original_name} loading="lazy" className="w-full h-full object-cover" />
+      <img src={`/api/v1/media/${m.id}/preview`} alt={m.original_name} loading="lazy" decoding="async" className="w-full h-full object-cover" />
       {m.kind === 'video' && (
         <span className="absolute bottom-1.5 left-1.5 bg-black/70 text-white rounded-chip px-1.5 py-0.5 text-meta flex items-center gap-1">
           <Icon name="Film" size={12} /> Video
@@ -78,21 +78,19 @@ function MediaInfo({ m }: { m: MediaItem }) {
 
 /** Sichtung Datei für Datei: große Vorschau, Infos darunter, gleichwertige Buttons, Tastatur (→ auswählen, ← überspringen). */
 function ReviewDialog({ items, onClose, onDecide }: { items: MediaItem[]; onClose: () => void; onDecide: (m: MediaItem, s: 'selected' | 'skipped') => Promise<void> }) {
+  // Liste beim Öffnen festhalten, damit optimistische Änderungen die Reihenfolge nicht verschieben
+  const [list] = useState(items);
   const [idx, setIdx] = useState(0);
-  const [busy, setBusy] = useState(false);
-  const m = items[idx];
+  const busy = false;
+  const m = list[idx];
   const decide = useCallback(
-    async (s: 'selected' | 'skipped') => {
-      if (!m || busy) return;
-      setBusy(true);
-      try {
-        await onDecide(m, s);
-        setIdx((i) => i + 1);
-      } finally {
-        setBusy(false);
-      }
+    (s: 'selected' | 'skipped') => {
+      if (!m) return;
+      // sofort weiter zur nächsten Datei; Speichern läuft im Hintergrund
+      void onDecide(m, s);
+      setIdx((i) => i + 1);
     },
-    [m, busy, onDecide],
+    [m, onDecide],
   );
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -103,10 +101,15 @@ function ReviewDialog({ items, onClose, onDecide }: { items: MediaItem[]; onClos
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
   }, [decide]);
+  // Nächste Vorschau vorladen, damit das Weiterschalten ohne Wartezeit klappt
+  useEffect(() => {
+    const next = list[idx + 1];
+    if (next?.has_preview) new Image().src = `/api/v1/media/${next.id}/preview`;
+  }, [idx, list]);
   // Wischgeste auf der Vorschau
   const start = useRef<number | null>(null);
   return (
-    <Dialog open onClose={onClose} title={m ? `Sichten · ${idx + 1} von ${items.length}` : 'Sichtung abgeschlossen'} width={760}>
+    <Dialog open onClose={onClose} title={m ? `Sichten · ${idx + 1} von ${list.length}` : 'Sichtung abgeschlossen'} width={760}>
       {!m ? (
         <div className="flex flex-col items-center gap-3 py-6 text-center">
           <Icon name="CheckCircle2" size={36} className="text-ok" />
@@ -197,9 +200,15 @@ export default function CollectionDetail() {
     [media],
   );
 
+  // Sichtung reagiert sofort (Auswahl ist keine Freigabe); der Server bestätigt im Hintergrund, bei Fehler wird neu geladen
   const setSelection = async (ids: string[], selection: 'pending' | 'selected' | 'skipped') => {
-    await post('/media/selection', { ids, selection });
-    await refresh();
+    qc.setQueryData<any>(['collection', id], (old: any) => (old ? { ...old, media: old.media.map((m: MediaItem) => (ids.includes(m.id) ? { ...m, selection } : m)) } : old));
+    try {
+      await post('/media/selection', { ids, selection });
+    } catch (e) {
+      await refresh();
+      throw e;
+    }
   };
 
   if (q.isLoading) return <SkeletonRows rows={6} />;

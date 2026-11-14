@@ -89,15 +89,20 @@ export function UploadPage() {
     async (only?: string) => {
       setBusy(true);
       const queue = items.filter((i) => (only ? i.key === only : i.state === 'waiting' || i.state === 'error') && i.file.size <= (info?.max_file_bytes ?? Infinity));
-      for (const it of queue) {
-        update(it.key, { state: 'uploading', progress: 0, error: undefined });
-        try {
-          const r = await sendFile(token, it, note.trim(), (p) => update(it.key, { progress: p }));
-          update(it.key, { state: 'done', progress: 100, duplicate: r.duplicate });
-        } catch (e) {
-          update(it.key, { state: 'error', error: (e as Error).message });
+      // Zwei Übertragungen parallel: schneller bei vielen Fotos, schont aber schwache Mobilverbindungen
+      const worker = async () => {
+        for (let it = queue.shift(); it; it = queue.shift()) {
+          const cur = it;
+          update(cur.key, { state: 'uploading', progress: 0, error: undefined });
+          try {
+            const r = await sendFile(token, cur, note.trim(), (p) => update(cur.key, { progress: p }));
+            update(cur.key, { state: 'done', progress: 100, duplicate: r.duplicate });
+          } catch (e) {
+            update(cur.key, { state: 'error', error: (e as Error).message });
+          }
         }
-      }
+      };
+      await Promise.all([worker(), worker()]);
       setBusy(false);
     },
     [items, token, note, info],

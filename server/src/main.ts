@@ -132,7 +132,9 @@ function startPostgres(): Promise<void> {
     }
     if (!alive) fs.rmSync(pid, { force: true });
   }
-  postgres = spawn(path.join(PG_BIN, 'postgres'), ['-D', PG_DATA, '-k', PG_SOCKET_DIR], { stdio: ['ignore', 'inherit', 'inherit'] });
+  // Laufzeit-Tuning für typische SSD-Hosts; gilt auch für bestehende Datenbestände
+  const tuning = ['-c', 'random_page_cost=1.1', '-c', 'effective_io_concurrency=100', '-c', 'effective_cache_size=512MB', '-c', 'work_mem=8MB', '-c', 'maintenance_work_mem=64MB', '-c', 'jit=off'];
+  postgres = spawn(path.join(PG_BIN, 'postgres'), ['-D', PG_DATA, '-k', PG_SOCKET_DIR, ...tuning], { stdio: ['ignore', 'inherit', 'inherit'] });
   const child = postgres;
   child.on('exit', (code, signal) => {
     if (postgres !== child) return;

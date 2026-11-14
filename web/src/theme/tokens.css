@@ -1,104 +1,130 @@
-/* LifeLink Design-Tokens
-   Dark Mode ist Standard. Light Mode über <html data-theme="light">.
-   "system" im ThemeProvider: data-theme je nach prefers-color-scheme setzen. */
+/* LifeLink Design-Tokens – sachlicher Behörden-/Einsatz-Look.
+   Hell ist Standard (gut lesbar, auch draußen am Handy), Dunkel über <html data-theme="dark">.
+   Marineblau trägt die Bedienung, Signalrot ist Akzent für Marke, aktive Navigation und Dringliches.
+   Status wird immer mit Farbe UND Text dargestellt. */
 
 
 :root {
   /* Marke */
-  --ll-primary: #6366F1;        /* Hover, Fokus, Auswahl, Akzentlinien */
-  --ll-primary-solid: #4F46E5;  /* Flächen mit weißer Schrift */
-  --ll-accent: #06B6D4;
-  --ll-success: #10B981;
-  --ll-warning: #F59E0B;
-  --ll-error: #EF4444;
+  --ll-primary: #134A86;        /* Fokus, Auswahl, Akzentlinien */
+  --ll-primary-solid: #0F3A6B;  /* Flächen mit weißer Schrift (Hauptaktionen) */
+  --ll-signal: #C8102E;         /* Signalrot: Marke, aktive Navigation, Dringliches */
+  --ll-accent: #C8102E;
+  --ll-success: #1E7B3A;
+  --ll-warning: #B25E00;
+  --ll-error: #B3141F;
 
-  /* Flächen – Dark */
-  --ll-bg: #0B1020;
-  --ll-sidebar: #101827;
-  --ll-card: #151E30;
-  --ll-raised: #1D2940;
-  --ll-border: #293449;
-  --ll-text: #F1F5F9;
-  --ll-text-2: #94A3B8;
-  --ll-canvas-dot: #1F2A40;
+  /* Flächen – Hell */
+  --ll-bg: #EEF1F5;
+  --ll-sidebar: #0E2440;
+  --ll-card: #FFFFFF;
+  --ll-raised: #E6EBF1;
+  --ll-border: #C7D0DB;
+  --ll-text: #0B1726;
+  --ll-text-2: #44546A;
+  --ll-canvas-dot: #D2D9E2;
 
-  /* Status als Text + Soft-Hintergründe */
-  --ll-link: #A5B4FC;
-  --ll-primary-soft: rgba(99, 102, 241, .16);
-  --ll-cyan: #22D3EE;
-  --ll-ok: #34D399;
-  --ll-ok-soft: rgba(16, 185, 129, .14);
-  --ll-warn: #FBBF24;
-  --ll-warn-soft: rgba(245, 158, 11, .14);
-  --ll-err: #F87171;
-  --ll-err-soft: rgba(239, 68, 68, .14);
+  /* Status als Text + Soft-Hintergründe (Kontrast ≥ 4,5:1 auf Weiß) */
+  --ll-link: #0F4C93;
+  --ll-primary-soft: rgba(19, 74, 134, .10);
+  --ll-cyan: #0B6A80;
+  --ll-ok: #17692F;
+  --ll-ok-soft: rgba(30, 123, 58, .12);
+  --ll-warn: #8F4A00;
+  --ll-warn-soft: rgba(230, 140, 0, .16);
+  --ll-err: #A3121C;
+  --ll-err-soft: rgba(200, 16, 46, .10);
 
-  /* Node-Kategorien */
-  --ll-node-trigger: #818CF8;
-  --ll-node-condition: #FBBF24;
-  --ll-node-data: #22D3EE;
-  --ll-node-action: #34D399;
-  --ll-node-control: #94A3B8;
+  --ll-node-trigger: #134A86;
+  --ll-node-condition: #8F4A00;
+  --ll-node-data: #0B6A80;
+  --ll-node-action: #17692F;
+  --ll-node-control: #44546A;
 
   /* Typo */
   --ll-font: 'Geist Variable', 'Geist', system-ui, sans-serif;
   --ll-font-mono: 'Geist Mono Variable', 'Geist Mono', ui-monospace, monospace;
 
-  /* Radien */
-  --ll-r-chip: 6px;
-  --ll-r-control: 8px;
-  --ll-r-node: 10px;
-  --ll-r-card: 12px;
+  /* Radien – zurückhaltend */
+  --ll-r-chip: 4px;
+  --ll-r-control: 6px;
+  --ll-r-node: 6px;
+  --ll-r-card: 8px;
 
   /* Schatten */
-  --ll-shadow-float: 0 16px 40px rgba(2, 6, 23, .45);
-  --ll-ring: 0 0 0 3px rgba(99, 102, 241, .22);
-  --ll-ring-selected: 0 0 0 3px rgba(99, 102, 241, .35);
+  --ll-shadow-float: 0 12px 32px rgba(11, 23, 38, .18);
+  --ll-ring: 0 0 0 3px rgba(19, 74, 134, .25);
+  --ll-ring-selected: 0 0 0 3px rgba(19, 74, 134, .35);
 
   /* Bewegung */
-  --ll-dur-fast: 120ms;
-  --ll-dur-panel: 180ms;
+  --ll-dur-fast: 100ms;
+  --ll-dur-panel: 150ms;
   --ll-ease: cubic-bezier(.2, .7, .2, 1);
+
+  color-scheme: light;
+}
+
+[data-theme="dark"] {
+  --ll-primary: #5B9BE0;
+  --ll-primary-solid: #1E5DA6;
+  --ll-signal: #E5293F;
+  --ll-accent: #E5293F;
+
+  --ll-bg: #0A1626;
+  --ll-sidebar: #071222;
+  --ll-card: #112136;
+  --ll-raised: #182C45;
+  --ll-border: #29405E;
+  --ll-text: #EEF3F8;
+  --ll-text-2: #A3B3C7;
+  --ll-canvas-dot: #1A2D47;
+
+  --ll-link: #8DBDF2;
+  --ll-primary-soft: rgba(91, 155, 224, .16);
+  --ll-cyan: #5CC8DF;
+  --ll-ok: #5FD38A;
+  --ll-ok-soft: rgba(46, 160, 90, .16);
+  --ll-warn: #F5B74A;
+  --ll-warn-soft: rgba(230, 140, 0, .16);
+  --ll-err: #FF7A85;
+  --ll-err-soft: rgba(229, 41, 63, .16);
+
+  --ll-node-trigger: #8DBDF2;
+  --ll-node-condition: #F5B74A;
+  --ll-node-data: #5CC8DF;
+  --ll-node-action: #5FD38A;
+  --ll-node-control: #A3B3C7;
+
+  --ll-shadow-float: 0 16px 40px rgba(0, 0, 0, .45);
+  --ll-ring: 0 0 0 3px rgba(91, 155, 224, .3);
+  --ll-ring-selected: 0 0 0 3px rgba(91, 155, 224, .4);
 
   color-scheme: dark;
 }
 
-[data-theme="light"] {
-  --ll-bg: #F8FAFC;
-  --ll-sidebar: #FFFFFF;
-  --ll-card: #FFFFFF;
-  --ll-raised: #F1F5F9;
-  --ll-border: #E2E8F0;
-  --ll-text: #0F172A;
-  --ll-text-2: #64748B;
-  --ll-canvas-dot: #D8DEE8;
-
-  --ll-link: #4338CA;
-  --ll-primary-soft: rgba(99, 102, 241, .10);
-  --ll-cyan: #0E7490;
-  --ll-ok: #047857;
-  --ll-ok-soft: rgba(16, 185, 129, .12);
-  --ll-warn: #B45309;
-  --ll-warn-soft: rgba(245, 158, 11, .14);
-  --ll-err: #B91C1C;
-  --ll-err-soft: rgba(239, 68, 68, .10);
-
-  --ll-node-trigger: #4F46E5;
-  --ll-node-condition: #B45309;
-  --ll-node-data: #0E7490;
-  --ll-node-action: #047857;
-  --ll-node-control: #64748B;
-
-  --ll-shadow-float: 0 16px 40px rgba(15, 23, 42, .12);
-
-  color-scheme: light;
+/* Seitenleiste immer dunkel (Marineblau) – Farben werden nur in diesem Bereich überschrieben */
+.ll-sidebar {
+  --ll-text: #FFFFFF;
+  --ll-text-2: #B9C7D8;
+  --ll-link: #FFFFFF;
+  --ll-raised: rgba(255, 255, 255, .08);
+  --ll-border: rgba(255, 255, 255, .14);
+  --ll-primary-soft: rgba(255, 255, 255, .12);
+  --ll-ok: #6FDC97;
+  --ll-warn: #F5B74A;
+  color-scheme: dark;
 }
+/* Aktiver Menüpunkt: Signalrote Markierung links */
+.ll-sidebar a[aria-current="page"] { box-shadow: inset 3px 0 0 var(--ll-signal); }
+.ll-signal-bg { background: var(--ll-signal); }
 
 html, body {
   background: var(--ll-bg);
   color: var(--ll-text);
   font-family: var(--ll-font);
   font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
 :focus-visible {

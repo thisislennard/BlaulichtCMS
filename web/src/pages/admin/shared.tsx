@@ -169,7 +169,7 @@ export function AppearanceFields() {
   const { me, setPreferences } = useAuth();
   const onError = useErrorToast();
   const prefs = me?.user.preferences ?? {};
-  const theme = prefs.theme ?? "dark";
+  const theme = prefs.theme ?? "light";
   const set = (p: Partial<Preferences>) =>
     setPreferences(p).catch((e) => onError(e));
   const ids = ["dark", "light", "system"] as const;

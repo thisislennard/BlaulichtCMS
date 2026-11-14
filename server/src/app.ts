@@ -6,6 +6,7 @@ import helmet from '@fastify/helmet';
 import multipart from '@fastify/multipart';
 import rateLimit from '@fastify/rate-limit';
 import fastifyStatic from '@fastify/static';
+import compress from '@fastify/compress';
 import { ZodError } from 'zod';
 import { config } from './config.js';
 import { CSRF_HEADER, resolveAuth } from './auth/context.js';
@@ -50,6 +51,8 @@ export async function buildApp(): Promise<FastifyInstance> {
     crossOriginEmbedderPolicy: false,
     referrerPolicy: { policy: 'no-referrer' },
   });
+  // Komprimierung für API-Antworten (JSON, SVG); Medien sind bereits komprimiert und bleiben unangetastet
+  await app.register(compress, { global: true, threshold: 1024, encodings: ['br', 'gzip'], customTypes: /^(application\/json|image\/svg\+xml|text\/)/, brotliOptions: { params: { 1: 4 } } as any });
   await app.register(rateLimit, { global: false });
   await app.register(multipart, { limits: { fileSize: 4 * 1024 * 1024 * 1024, files: 1, fields: 10 } });
 
@@ -104,7 +107,20 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   // Weboberfläche (gebautes React-Frontend) mit SPA-Fallback
   if (fs.existsSync(path.join(config.webDist, 'index.html'))) {
-    await app.register(fastifyStatic, { root: config.webDist, prefix: '/', wildcard: false, maxAge: '1h', immutable: false });
+    // Vorkomprimierte Dateien (.br/.gz aus dem Build); Assets mit Hash im Namen ein Jahr cachebar
+    await app.register(fastifyStatic, {
+      root: config.webDist,
+      prefix: '/',
+      wildcard: false,
+      preCompressed: true,
+      cacheControl: false,
+      setHeaders: (res, filePath) => {
+        const rel = path.relative(config.webDist, filePath);
+        if (rel.startsWith('assets' + path.sep)) res.header('cache-control', 'public, max-age=31536000, immutable');
+        else if (rel === 'sw.js' || rel === 'index.html' || rel.endsWith('.webmanifest')) res.header('cache-control', 'no-cache');
+        else res.header('cache-control', 'public, max-age=86400');
+      },
+    });
     const indexHtml = fs.readFileSync(path.join(config.webDist, 'index.html'), 'utf8');
     app.setNotFoundHandler((req, reply) => {
       if (req.method === 'GET' && !req.url.startsWith('/api/')) {

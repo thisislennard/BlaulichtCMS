@@ -90,7 +90,7 @@ function MediaPicker({ collections, chosen, onClose, onAdd }: { collections: Pos
             return (
               <li key={m.id}>
                 <button type="button" aria-pressed={on} onClick={() => toggle(m)} className={cx('block w-full rounded-control overflow-hidden border-2 relative', on ? 'border-primary' : 'border-transparent')}>
-                  {m.has_preview ? <img src={`/api/v1/media/${m.id}/preview`} alt={m.original_name} className="w-full aspect-square object-cover" /> : <div className="aspect-square bg-raised flex items-center justify-center"><Icon name="Film" /></div>}
+                  {m.has_preview ? <img decoding="async" src={`/api/v1/media/${m.id}/preview`} alt={m.original_name} className="w-full aspect-square object-cover" /> : <div className="aspect-square bg-raised flex items-center justify-center"><Icon name="Film" /></div>}
                   {on && <span className="absolute top-1 right-1 bg-primary-solid text-white rounded-full p-0.5"><Icon name="Check" size={14} /></span>}
                 </button>
               </li>
@@ -264,7 +264,7 @@ export default function PostEditor() {
                   const m = mediaCache[mid];
                   return (
                     <li key={mid} className={cx('border rounded-card overflow-hidden', draft.coverId === mid ? 'border-primary' : 'border-line')}>
-                      {m?.has_preview ? <img src={`/api/v1/media/${mid}/preview`} alt={m.original_name} className="w-full aspect-[4/3] object-cover" /> : <div className="aspect-[4/3] bg-raised flex items-center justify-center"><Icon name="Film" /></div>}
+                      {m?.has_preview ? <img decoding="async" src={`/api/v1/media/${mid}/preview`} alt={m.original_name} className="w-full aspect-[4/3] object-cover" /> : <div className="aspect-[4/3] bg-raised flex items-center justify-center"><Icon name="Film" /></div>}
                       <div className="p-2 flex items-center gap-1 flex-wrap text-sm">
                         {draft.coverId === mid ? (
                           <Badge tone="primary">Titelbild</Badge>

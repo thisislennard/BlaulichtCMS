@@ -11,6 +11,7 @@ export default {
       colors: {
         primary: { DEFAULT: v('primary'), solid: v('primary-solid'), soft: v('primary-soft') },
         accent: v('accent'),
+        signal: v('signal'),
         bg: v('bg'),
         sidebar: v('sidebar'),
         card: v('card'),
@@ -45,10 +46,10 @@ export default {
         kpi: ['28px', '34px'],
       },
       borderRadius: {
-        chip: '6px',
-        control: '8px',
-        node: '10px',
-        card: '12px',
+        chip: '4px',
+        control: '6px',
+        node: '6px',
+        card: '8px',
       },
       height: { 'ctl-sm': '32px', ctl: '36px', field: '38px' },
       width: { sidebar: '248px', 'sidebar-collapsed': '64px', panel: '400px', palette: '256px' },

@@ -45,6 +45,34 @@ export async function postState(postId: string, db: Queryable = pool) {
   return { current: cur, approval, validApproval, publication: pub, state };
 }
 
+/**
+ * Status aller Beiträge in EINER Abfrage (statt mehrerer Abfragen je Beitrag).
+ * Logik identisch zu postState(): bezogen auf die aktuelle Fassung.
+ */
+export const POST_STATE_SQL = `
+  SELECT p.id, p.kind, p.current_revision, p.updated_at, p.archived_at,
+         r.id AS revision_id, r.title AS rev_title, r.site_id, r.submitted_at, r.created_by AS rev_created_by,
+         u.name AS updated_by_name, s.name AS site_name,
+         (SELECT count(*)::int FROM collections c WHERE c.post_id = p.id) AS collection_count,
+         a.decision AS a_decision, a.decided_at AS a_decided_at, (a.content_hash = r.content_hash) AS a_valid,
+         pb.status AS pb_status, pb.remote_url AS pb_url,
+         CASE
+           WHEN a.decision = 'approved' AND a.content_hash = r.content_hash AND pb.status = 'published' THEN 'published'
+           WHEN a.decision = 'approved' AND a.content_hash = r.content_hash AND pb.status = 'failed' THEN 'failed'
+           WHEN a.decision = 'approved' AND a.content_hash = r.content_hash AND pb.status = 'unknown' THEN 'unknown'
+           WHEN a.decision = 'approved' AND a.content_hash = r.content_hash AND pb.status IN ('queued','sent') THEN 'publishing'
+           WHEN a.decision = 'approved' AND a.content_hash = r.content_hash THEN 'approved'
+           WHEN a.decision = 'rejected' AND (r.submitted_at IS NULL OR a.decided_at >= r.submitted_at) THEN 'rejected'
+           WHEN r.submitted_at IS NOT NULL THEN 'in_review'
+           ELSE 'draft'
+         END AS state
+    FROM posts p
+    JOIN post_revisions r ON r.post_id = p.id AND r.number = p.current_revision
+    LEFT JOIN users u ON u.id = p.updated_by
+    LEFT JOIN wp_sites s ON s.id = r.site_id
+    LEFT JOIN LATERAL (SELECT decision, decided_at, content_hash FROM approvals WHERE revision_id = r.id AND revoked_at IS NULL ORDER BY decided_at DESC LIMIT 1) a ON true
+    LEFT JOIN LATERAL (SELECT status, remote_url FROM publications WHERE revision_id = r.id ORDER BY created_at DESC LIMIT 1) pb ON true`;
+
 async function loadMedia(ids: string[]) {
   if (!ids.length) return [];
   const rows = await many<any>(`SELECT id, original_name, kind, mime, width, height, has_preview, has_public, status, deleted_at FROM media WHERE id = ANY($1)`, [ids]);
@@ -66,34 +94,20 @@ const revisionInput = z.object({
 export async function postRoutes(app: FastifyInstance) {
   app.get('/posts', { preHandler: requireAuth('post.read') }, async (req) => {
     const q = z.object({ state: z.string().max(20).optional(), archived: z.coerce.boolean().default(false) }).parse(req.query);
-    const posts = await many<any>(
-      `SELECT p.*, r.title AS rev_title, r.submitted_at, r.site_id, r.content_hash, r.id AS revision_id, u.name AS updated_by_name, s.name AS site_name,
-              (SELECT count(*)::int FROM collections c WHERE c.post_id = p.id) AS collection_count
-         FROM posts p
-         JOIN post_revisions r ON r.post_id = p.id AND r.number = p.current_revision
-         LEFT JOIN users u ON u.id = p.updated_by
-         LEFT JOIN wp_sites s ON s.id = r.site_id
-        WHERE ($1::boolean OR p.archived_at IS NULL)
-        ORDER BY p.updated_at DESC LIMIT 300`,
-      [q.archived],
-    );
-    const out = [];
-    for (const p of posts) {
-      const st = await postState(p.id);
-      out.push({
-        id: p.id,
-        kind: p.kind,
-        title: p.rev_title,
-        current_revision: p.current_revision,
-        updated_at: p.updated_at,
-        updated_by_name: p.updated_by_name,
-        site_name: p.site_name,
-        collection_count: p.collection_count,
-        state: st!.state,
-        published_url: st!.publication?.status === 'published' ? st!.publication.remote_url : null,
-        archived: !!p.archived_at,
-      });
-    }
+    const rows = await many<any>(`${POST_STATE_SQL} WHERE ($1::boolean OR p.archived_at IS NULL) ORDER BY p.updated_at DESC LIMIT 300`, [q.archived]);
+    const out = rows.map((p) => ({
+      id: p.id,
+      kind: p.kind,
+      title: p.rev_title,
+      current_revision: p.current_revision,
+      updated_at: p.updated_at,
+      updated_by_name: p.updated_by_name,
+      site_name: p.site_name,
+      collection_count: p.collection_count,
+      state: p.state as PostState,
+      published_url: p.state === 'published' ? p.pb_url : null,
+      archived: !!p.archived_at,
+    }));
     return q.state ? out.filter((p) => p.state === q.state) : out;
   });
 

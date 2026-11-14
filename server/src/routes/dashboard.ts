@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { many, one } from '../db/pool.js';
 import { requireAuth } from '../auth/context.js';
 import { badRequest } from '../lib/errors.js';
-import { postState } from './posts.js';
+import { POST_STATE_SQL } from './posts.js';
 
 export async function dashboardRoutes(app: FastifyInstance) {
   /** Erstes Dashboard: offene Freigaben, bestätigter Veröffentlichungsstand, Medieneingang, Kanäle. */
@@ -21,16 +21,10 @@ export async function dashboardRoutes(app: FastifyInstance) {
           ORDER BY r.submitted_at LIMIT 20`,
       );
       out.pendingApprovals = submitted;
-      const approved = await many<any>(
-        `SELECT p.id FROM posts p JOIN post_revisions r ON r.post_id = p.id AND r.number = p.current_revision
-          WHERE p.archived_at IS NULL AND EXISTS (SELECT 1 FROM approvals a WHERE a.revision_id = r.id AND a.decision = 'approved' AND a.revoked_at IS NULL AND a.content_hash = r.content_hash)
-          ORDER BY p.updated_at DESC LIMIT 20`,
+      const readyToPublish = await many<any>(
+        `SELECT x.id, x.rev_title AS title, x.current_revision AS number, x.site_id FROM (${POST_STATE_SQL} WHERE p.archived_at IS NULL) x
+          WHERE x.state = 'approved' ORDER BY x.updated_at DESC LIMIT 20`,
       );
-      const readyToPublish = [];
-      for (const a of approved) {
-        const st = await postState(a.id);
-        if (st && st.state === 'approved') readyToPublish.push({ id: a.id, title: st.current.title, number: st.current.number, site_id: st.current.site_id });
-      }
       out.readyToPublish = readyToPublish;
       out.publications = await many<any>(
         `SELECT pb.id, pb.post_id, pb.status, pb.remote_url, pb.error, pb.created_at, pb.fetched_at, pb.result_at, r.title, r.number AS revision_number, s.name AS site_name

@@ -91,7 +91,7 @@ export function ThemeSync() {
     return () => mq.removeEventListener('change', fn);
   }, []);
   useEffect(() => {
-    const theme = prefs.theme ?? 'dark';
+    const theme = prefs.theme ?? 'light';
     const resolved = theme === 'system' ? (systemDark ? 'dark' : 'light') : theme;
     document.documentElement.dataset.theme = resolved;
     document.documentElement.dataset.reducedMotion = prefs.reducedMotion ? 'true' : 'false';

@@ -190,7 +190,7 @@
     "languages": { "de": "Deutsch", "en": "English (eingeschränkt)" },
     "lookDesc": "Persönliche Einstellung – gilt nur für dein Konto und wirkt sofort.",
     "scheme": "Farbschema",
-    "themes": { "dark": "Dunkel (Standard)", "light": "Hell", "system": "Wie System" },
+    "themes": { "light": "Hell (Standard)", "dark": "Dunkel", "system": "Wie System" },
     "reducedMotion": "Animationen reduzieren",
     "reducedMotionDesc": "Folgt sonst der Systemeinstellung",
     "compact": "Kompakte Tabellen",

@@ -31,6 +31,7 @@ Fotos per Link vom Handy sammeln · sichten · Beiträge schreiben · Fassung fr
 - [Demo-Ablauf mit fiktiven Daten](#demo-ablauf-mit-fiktiven-daten)
 - [WordPress verbinden](#wordpress-verbinden)
 - [Betrieb](#betrieb)
+- [Leistung](#leistung)
 - [Sicherheit](#sicherheit)
 - [Entwicklung und Tests](#entwicklung-und-tests)
 - [Dokumentation](#dokumentation)
@@ -58,6 +59,7 @@ flowchart LR
 - **Veröffentlichen ohne offenen Eingang:** Die **LifeLink Bridge** (WordPress-Plugin, als ZIP direkt aus LifeLink) holt Aufträge per HTTPS ab und meldet WordPress-ID und URL zurück. Doppelte Abholung erzeugt nie einen zweiten Beitrag.
 - **Auch ganz ohne Website:** Der interne Redaktionsablauf funktioniert vollständig ohne externe Dienste.
 - **Ein Container:** Webanwendung, Bediener-PWA, Worker und PostgreSQL in einem Image, Daten in einem Volume.
+- **Schnell und schlank:** rund 180 KB beim ersten Aufruf (vorkomprimiert mit Brotli), danach fast alles aus dem Browser-Cache; Sichtung ohne Wartezeit, zwei parallele Uploads, Bilder werden nur einmal dekodiert.
 
 ---
 
@@ -151,6 +153,22 @@ Details: [docs/bridge-api.md](docs/bridge-api.md).
 | Wiederherstellung | `scripts/restore-volume.sh <archiv>` in ein leeres Volume | [docs/betrieb.md#wiederherstellung](docs/betrieb.md#wiederherstellung) |
 | Updates | `git pull && docker compose up -d --build` – Migrationen laufen beim Start | [docs/betrieb.md#updates](docs/betrieb.md#updates) |
 | Notfall | `docker compose exec lifelink node server/dist/cli.js password-link <email>` | [docs/betrieb.md#notfall-befehle](docs/betrieb.md#notfall-befehle) |
+
+---
+
+## Leistung
+
+| Ebene | Maßnahme |
+|---|---|
+| Laden am Handy | Seiten werden einzeln nachgeladen; Bibliotheken in stabilen Chunks (`react`, `query`, `icons`, `markdown`); Build vorkomprimiert mit Brotli und Gzip (879 KB → 243 KB); erster Aufruf ca. 180 KB |
+| Caching | Assets mit Hash ein Jahr `immutable`; Vorschaubilder und öffentliche Fassungen je Medien-ID dauerhaft privat cachebar; `index.html` und Service Worker immer frisch |
+| Bedienung | Sichtung reagiert sofort und lädt das nächste Bild vor; Freigaben und Veröffentlichungen bestätigt weiterhin der Server |
+| Uploads | gestreamt mit hartem Größenlimit, zwei Dateien parallel, Wiederholen ohne Doppelanlage |
+| Server | Beitragsliste und Dashboard in je einer Abfrage statt N+1; passende Indizes; API-Antworten ab 1 KB komprimiert |
+| Medien | Bild einmal dekodieren, Vorschau und öffentliche Fassung parallel erzeugen; Threads je Bild begrenzt |
+| Datenbank | PostgreSQL mit SSD-Einstellungen (`random_page_cost`, `effective_io_concurrency`, `work_mem`), JIT aus |
+
+Messwert Testinstanz: `/healthz` antwortet in ca. 3 ms; frischer Container ist nach ca. 4 s bereit.
 
 ---
 
