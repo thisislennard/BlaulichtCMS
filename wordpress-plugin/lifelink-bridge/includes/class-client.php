@@ -101,6 +101,24 @@ final class LifeLink_Bridge_Client {
 		return true;
 	}
 
+	/** Update-Angebot (WordPress-Update-Hook). */
+	public static function update_info() {
+		return self::decode(
+			wp_remote_get(
+				self::base() . '/api/v1/bridge/update',
+				array(
+					'timeout' => 15,
+					'headers' => self::headers( false ),
+				)
+			)
+		);
+	}
+
+	/** Basisadresse der gekoppelten LifeLink-Instanz (für Paketprüfungen). */
+	public static function base_url(): string {
+		return self::base();
+	}
+
 	public static function jobs() {
 		return self::decode(
 			wp_remote_get(

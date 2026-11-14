@@ -31,5 +31,7 @@
   "sources": "Sources",
   "warnings": "Warnings",
   "warningCases": "Warning drafts",
-  "warningConfig": "Keywords & rules"
+  "warningConfig": "Keywords & rules",
+  "connections": "Connections",
+  "officialWarnings": "Official warnings"
 }

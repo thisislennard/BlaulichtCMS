@@ -11,17 +11,19 @@ import { Dialog, useErrorToast, useToast } from '../../components/ui/overlays';
 import { useAuth } from '../../lib/auth';
 import { fmtDateTime, fmtRelative, fromLocalInput, toLocalInput } from '../../lib/format';
 import { KIND_LABEL } from './Posts';
+import { SocialStatusCard, SocialTargetsCard } from './SocialPanel';
 
 interface PostDetail {
   post: { id: string; kind: string; created_at: string; created_by_name: string | null; archived: boolean; current_revision: number };
   state: string;
-  revision: { id: string; number: number; title: string; body: string; excerpt: string; media_ids: string[]; cover_id: string | null; site_id: string | null; variants: any; publish_at: string | null; content_hash: string; submitted_at: string | null; created_at: string };
+  revision: { id: string; number: number; title: string; body: string; excerpt: string; media_ids: string[]; cover_id: string | null; site_id: string | null; variants: any; social_targets: string[]; publish_at: string | null; content_hash: string; submitted_at: string | null; created_at: string };
   media: MediaItem[];
   approval: { decided_by_name: string; decided_at: string; note: string } | null;
   lastDecision: { decision: string; note: string; decided_by_name: string; decided_at: string } | null;
   revisions: { id: string; number: number; title: string; change_note: string; created_at: string; created_by_name: string | null; decision: string | null }[];
   publications: Publication[];
   collections: { id: string; title: string; media_count: number; selected_count: number }[];
+  social: any[];
 }
 
 interface Draft {
@@ -33,6 +35,9 @@ interface Draft {
   siteId: string | null;
   wp: { title: string; body: string; excerpt: string };
   publishAt: string; // datetime-local, leer = sofort
+  social: string[];
+  fb: string;
+  ig: string;
 }
 
 const emptyWp = { title: '', body: '', excerpt: '' };
@@ -147,7 +152,7 @@ export default function PostEditor() {
   const d = q.data;
   useEffect(() => {
     if (!d) return;
-    setDraft({ title: d.revision.title, body: d.revision.body, excerpt: d.revision.excerpt, mediaIds: d.revision.media_ids, coverId: d.revision.cover_id, siteId: d.revision.site_id, wp: wpOf(d.revision.variants), publishAt: toLocalInput(d.revision.publish_at) });
+    setDraft({ title: d.revision.title, body: d.revision.body, excerpt: d.revision.excerpt, mediaIds: d.revision.media_ids, coverId: d.revision.cover_id, siteId: d.revision.site_id, wp: wpOf(d.revision.variants), publishAt: toLocalInput(d.revision.publish_at), social: d.revision.social_targets ?? [], fb: d.revision.variants?.facebook?.body ?? '', ig: d.revision.variants?.instagram?.body ?? '' });
     setMediaCache((c) => ({ ...c, ...Object.fromEntries(d.media.map((m) => [m.id, m])) }));
   }, [d?.revision.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -162,7 +167,10 @@ export default function PostEditor() {
       draft.coverId !== r.cover_id ||
       draft.siteId !== r.site_id ||
       JSON.stringify(draft.wp) !== JSON.stringify(wpOf(r.variants)) ||
-      draft.publishAt !== toLocalInput(r.publish_at)
+      draft.publishAt !== toLocalInput(r.publish_at) ||
+      JSON.stringify([...draft.social].sort()) !== JSON.stringify([...(r.social_targets ?? [])].sort()) ||
+      draft.fb !== (r.variants?.facebook?.body ?? '') ||
+      draft.ig !== (r.variants?.instagram?.body ?? '')
     );
   }, [d, draft]);
 
@@ -183,8 +191,14 @@ export default function PostEditor() {
   const save = async () => {
     setSaving(true);
     try {
-      const { wp, publishAt, ...rest } = draft;
-      const res = await put<any>(`/posts/${id}/revision`, { baseRevision: r.number, ...rest, variants: { wordpress: wp }, publishAt: publishAt ? fromLocalInput(publishAt) : null });
+      const { wp, publishAt, social, fb, ig, ...rest } = draft;
+      const res = await put<any>(`/posts/${id}/revision`, {
+        baseRevision: r.number,
+        ...rest,
+        variants: { wordpress: wp, ...(fb.trim() ? { facebook: { body: fb } } : {}), ...(ig.trim() ? { instagram: { body: ig } } : {}) },
+        socialTargets: social,
+        publishAt: publishAt ? fromLocalInput(publishAt) : null,
+      });
       if (res.changed) toast({ tone: 'success', title: `Fassung ${res.number} gespeichert`, text: res.approvalInvalidated ? 'Die bisherige Freigabe gilt nicht für die neue Fassung.' : undefined });
       await refresh();
     } catch (e) {
@@ -374,6 +388,8 @@ export default function PostEditor() {
             )}
           </Card>
 
+          <SocialTargetsCard draft={{ social: draft.social, fb: draft.fb, ig: draft.ig }} editable={editable} onChange={(x) => setDraft({ ...draft, ...x })} />
+
           <Card title="Vorschau" subtitle={draft.siteId ? 'So erscheint der Beitrag auf der Website (Darstellung abhängig vom Theme).' : 'Interne Ansicht'}>
             <article className="flex flex-col gap-3 max-w-[680px]">
               <h2 className="m-0 text-title font-semibold">{(draft.siteId && draft.wp.title) || draft.title}</h2>
@@ -434,7 +450,7 @@ export default function PostEditor() {
                   {d!.approval.note && <div>„{d!.approval.note}“</div>}
                 </div>
               )}
-              {d!.state === 'approved' && !r.site_id && <Notice tone="success">Intern freigegeben. Für eine Veröffentlichung einen Zielkanal wählen und erneut freigeben lassen.</Notice>}
+              {d!.state === 'approved' && !r.site_id && !(r.social_targets ?? []).length && <Notice tone="success">Intern freigegeben. Für eine Veröffentlichung einen Zielkanal wählen und erneut freigeben lassen.</Notice>}
               {d!.state === 'approved' && r.site_id && can('post.publish') && !dirty && (
                 <Button variant="primary" icon="Globe" onClick={() => act(() => post(`/posts/${id}/publish`, { revision: r.number, contentHash: r.content_hash }), 'Veröffentlichung beauftragt')}>
                   Auf {site?.name ?? 'Website'} veröffentlichen
@@ -454,6 +470,8 @@ export default function PostEditor() {
               )}
             </div>
           </Card>
+
+          <SocialStatusCard postId={id} revision={r.number} hash={r.content_hash} approved={!!d!.approval} targets={r.social_targets ?? []} items={d!.social ?? []} dirty={dirty} onChanged={refresh} />
 
           <Card title="Veröffentlichungen">
             {d!.publications.length === 0 ? (

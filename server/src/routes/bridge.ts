@@ -7,7 +7,7 @@ import { config } from '../config.js';
 import { many, one, pool, tx } from '../db/pool.js';
 import { requireAuth } from '../auth/context.js';
 import { audit, type Actor } from '../lib/audit.js';
-import { randomToken, safeEqual, sha256Hex } from '../lib/crypto.js';
+import { deriveKey, hmacHex, randomToken, safeEqual, sha256Hex } from '../lib/crypto.js';
 import { AppError, badRequest, notFound } from '../lib/errors.js';
 import { notify } from '../lib/notify.js';
 import { publicBase } from '../lib/urls.js';
@@ -16,6 +16,33 @@ import { textFor } from './posts.js';
 import { sendFileResponse } from './files.js';
 
 export const BRIDGE_API_VERSION = 1;
+
+let pkgCache: { mtime: number; zip: Buffer; version: string; sha256: string; requires: string; requiresPhp: string; tested: string } | null = null;
+/** Bridge-Paket aus dem Image (zwischengespeichert, Prüfsumme über die ZIP-Datei). */
+export function bridgePackage() {
+  const dir = config.pluginDir;
+  const main = path.join(dir, 'lifelink-bridge.php');
+  if (!fs.existsSync(main)) throw notFound('Das Plugin ist in diesem Image nicht enthalten.');
+  const mtime = fs.statSync(main).mtimeMs;
+  if (pkgCache && pkgCache.mtime === mtime) return pkgCache;
+  const zip = new AdmZip();
+  zip.addLocalFolder(dir, 'lifelink-bridge', (name) => !/(^|\/)(tests|node_modules|\.git)(\/|$)/.test(name));
+  // Feste Zeitstempel: gleiche Dateien ergeben dieselbe Prüfsumme, auch nach einem neuen Image-Build
+  for (const e of zip.getEntries()) e.header.time = new Date(Date.UTC(2026, 0, 1));
+  const header = fs.readFileSync(main, 'utf8');
+  const readme = fs.existsSync(path.join(dir, 'readme.txt')) ? fs.readFileSync(path.join(dir, 'readme.txt'), 'utf8') : '';
+  const buf = zip.toBuffer();
+  pkgCache = {
+    mtime,
+    zip: buf,
+    version: /Version:\s*([0-9.]+)/.exec(header)?.[1] ?? '0',
+    sha256: sha256Hex(buf),
+    requires: /Requires at least:\s*([0-9.]+)/.exec(header)?.[1] ?? '',
+    requiresPhp: /Requires PHP:\s*([0-9.]+)/.exec(header)?.[1] ?? '',
+    tested: /Tested up to:\s*([0-9.]+)/i.exec(readme)?.[1] ?? '',
+  };
+  return pkgCache;
+}
 /** Abholintervall, das die Bridge verwenden soll (Sekunden). */
 const POLL_SECONDS = 60;
 /** Ein abgeholter Auftrag ohne Rückmeldung wird nach dieser Zeit erneut ausgeliefert. */
@@ -153,15 +180,46 @@ export async function bridgeRoutes(app: FastifyInstance) {
 
   /** LifeLink Bridge als installierbare ZIP-Datei (WordPress → Plugins → Installieren → Plugin hochladen). */
   app.get('/sites/plugin.zip', { preHandler: requireAuth('channel.manage') }, async (req, reply) => {
-    const dir = config.pluginDir;
-    if (!fs.existsSync(path.join(dir, 'lifelink-bridge.php'))) throw notFound('Das Plugin ist in diesem Image nicht enthalten.');
-    const zip = new AdmZip();
-    zip.addLocalFolder(dir, 'lifelink-bridge', (name) => !/(^|\/)(tests|node_modules|\.git)(\/|$)/.test(name));
-    const header = fs.readFileSync(path.join(dir, 'lifelink-bridge.php'), 'utf8');
-    const version = /Version:\s*([0-9.]+)/.exec(header)?.[1] ?? '0';
-    await audit(req.auth!.actor, 'site.plugin_downloaded', { type: 'plugin', label: `LifeLink Bridge ${version}` });
-    reply.header('content-type', 'application/zip').header('content-disposition', `attachment; filename="lifelink-bridge-${version}.zip"`);
-    return reply.send(zip.toBuffer());
+    const pkg = bridgePackage();
+    await audit(req.auth!.actor, 'site.plugin_downloaded', { type: 'plugin', label: `LifeLink Bridge ${pkg.version}` });
+    reply.header('content-type', 'application/zip').header('content-disposition', `attachment; filename="lifelink-bridge-${pkg.version}.zip"`);
+    return reply.send(pkg.zip);
+  });
+
+  /* ------------------------------ Bridge-Updates ------------------------------ */
+
+  /** Stand: Version im Image, Freigaben, Testwebsites. */
+  app.get('/sites/bridge-release', { preHandler: requireAuth('channel.manage') }, async () => {
+    const pkg = bridgePackage();
+    return {
+      bundled: { version: pkg.version, sha256: pkg.sha256 },
+      releases: await many<any>(`SELECT r.*, u.name AS approved_by_name, s.name AS tested_on_name FROM bridge_releases r LEFT JOIN users u ON u.id = r.approved_by LEFT JOIN wp_sites s ON s.id = r.tested_on ORDER BY r.approved_at DESC`),
+      sites: await many<any>(`SELECT id, name, status, update_channel, plugin_version, last_seen_at FROM wp_sites WHERE status = 'active' ORDER BY name`),
+    };
+  });
+
+  app.put('/sites/:id/update-channel', { preHandler: requireAuth('channel.manage') }, async (req) => {
+    const { id } = z.object({ id: z.uuid() }).parse(req.params);
+    const { channel } = z.object({ channel: z.enum(['test', 'stable']) }).parse(req.body);
+    const s = await one<any>(`UPDATE wp_sites SET update_channel = $2 WHERE id = $1 RETURNING name`, [id, channel]);
+    if (!s) throw notFound();
+    await audit(req.auth!.actor, 'site.update_channel', { type: 'site', id, label: s.name }, { kanal: channel });
+    return { ok: true };
+  });
+
+  /**
+   * Version für alle Websites freigeben. Voraussetzung: eine Testwebsite meldet diese Version bereits
+   * (Paket und Kompatibilität zuerst auf einer Testwebsite geprüft).
+   */
+  app.post('/sites/bridge-release', { preHandler: requireAuth('channel.manage') }, async (req) => {
+    const b = z.object({ version: z.string().max(20), note: z.string().trim().min(5).max(500) }).parse(req.body);
+    const pkg = bridgePackage();
+    if (b.version !== pkg.version) throw badRequest(`Freigegeben werden kann nur die Version im Image (${pkg.version}).`);
+    const tested = await one<any>(`SELECT id, name FROM wp_sites WHERE status = 'active' AND update_channel = 'test' AND plugin_version = $1 AND last_seen_at > now() - interval '1 day' ORDER BY last_seen_at DESC LIMIT 1`, [pkg.version]);
+    if (!tested) throw new AppError(409, 'not_tested', `Noch keine Testwebsite meldet Version ${pkg.version}. Bitte zuerst auf einer Testwebsite aktualisieren und prüfen.`);
+    await pool.query(`INSERT INTO bridge_releases (version, sha256, tested_on, approved_by, note) VALUES ($1,$2,$3,$4,$5) ON CONFLICT (version) DO NOTHING`, [pkg.version, pkg.sha256, tested.id, req.auth!.user?.id ?? null, b.note]);
+    await audit(req.auth!.actor, 'bridge.released', { type: 'plugin', label: `LifeLink Bridge ${pkg.version}` }, { getestet_auf: tested.name, sha256: pkg.sha256.slice(0, 16) });
+    return { ok: true };
   });
 
   /* ------------------------------ Bridge-Schnittstelle ------------------------------ */
@@ -202,6 +260,39 @@ export async function bridgeRoutes(app: FastifyInstance) {
   app.get('/bridge/status', bridgeLimit, async (req) => {
     const site = await bridgeAuth(req);
     return { ok: true, site_id: site.id, site_name: site.name, api_version: BRIDGE_API_VERSION, poll_interval: POLL_SECONDS };
+  });
+
+  /** Update-Angebot für die Bridge (WordPress-Update-Hook). Testwebsites sofort, andere nach Freigabe. */
+  app.get('/bridge/update', bridgeLimit, async (req) => {
+    const site = await bridgeAuth(req);
+    const pkg = bridgePackage();
+    const row = await one<any>(`SELECT update_channel FROM wp_sites WHERE id = $1`, [site.id]);
+    const released = await one<any>(`SELECT 1 FROM bridge_releases WHERE version = $1 AND sha256 = $2`, [pkg.version, pkg.sha256]);
+    if (row?.update_channel !== 'test' && !released) return { available: false, channel: row?.update_channel ?? 'stable' };
+    const exp = Math.floor(Date.now() / 1000) + 3600;
+    const sig = hmacHex(deriveKey('bridge-package'), `${site.id}.${pkg.version}.${exp}`);
+    const base = await publicBase(req);
+    return {
+      available: true,
+      channel: row?.update_channel,
+      version: pkg.version,
+      sha256: pkg.sha256,
+      package: `${base}/api/v1/bridge/update/package?s=${site.id}&v=${pkg.version}&e=${exp}&sig=${sig}`,
+      requires: pkg.requires,
+      requires_php: pkg.requiresPhp,
+      tested: pkg.tested,
+    };
+  });
+
+  /** Paket-Download mit kurzlebiger Signatur (WordPress lädt Pakete ohne eigene Header). */
+  app.get('/bridge/update/package', { config: { rateLimit: { max: 20, timeWindow: '1 minute' } } }, async (req, reply) => {
+    const q = z.object({ s: z.uuid(), v: z.string().max(20), e: z.coerce.number().int(), sig: z.string().length(64) }).parse(req.query);
+    const pkg = bridgePackage();
+    if (q.e < Date.now() / 1000 || q.v !== pkg.version || !safeEqual(q.sig, hmacHex(deriveKey('bridge-package'), `${q.s}.${q.v}.${q.e}`))) throw new AppError(403, 'forbidden', 'Download-Link ungültig oder abgelaufen.');
+    const site = await one<any>(`SELECT status FROM wp_sites WHERE id = $1`, [q.s]);
+    if (site?.status !== 'active') throw new AppError(403, 'forbidden', 'Die Kopplung ist nicht aktiv.');
+    reply.header('content-type', 'application/zip').header('content-disposition', `attachment; filename="lifelink-bridge-${pkg.version}.zip"`);
+    return reply.send(pkg.zip);
   });
 
   /** Offene Aufträge abholen. Mehrfaches Abholen ist erlaubt – die Bridge arbeitet idempotent. */

@@ -24,6 +24,10 @@ const MAP: Record<string, string[][]> = {
   warning_revisions: [['warnings'], ['warning']],
   warning_approvals: [['warnings'], ['warning']],
   warning_sends: [['warnings'], ['warning'], ['dashboard']],
+  social_publications: [['post'], ['posts']],
+  connections: [['connections'], ['connection'], ['social-targets']],
+  official_warnings: [['official-warnings'], ['dashboard']],
+  fe2_events: [['fe2-events'], ['posts']],
 };
 
 export function LiveProvider({ children, enabled }: { children: ReactNode; enabled: boolean }) {

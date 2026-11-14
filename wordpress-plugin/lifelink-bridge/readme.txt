@@ -4,7 +4,7 @@ Tags: lifelink, redaktion, veröffentlichung
 Requires at least: 6.4
 Tested up to: 6.9
 Requires PHP: 8.1
-Stable tag: 0.1.0
+Stable tag: 0.4.0
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -40,7 +40,20 @@ Die Bridge holt Aufträge regelmäßig ab (Standard: jede Minute). Unter **Einst
 
 Nur im Testbetrieb: `define( 'LIFELINK_BRIDGE_ALLOW_HTTP', true );` in der wp-config.php.
 
+== Updates ==
+
+Neue Versionen bietet die gekoppelte LifeLink-Instanz über den normalen WordPress-Updateweg an (Dashboard → Aktualisierungen bzw. `wp plugin update lifelink-bridge`). Websites im Update-Kanal „Test“ erhalten eine neue Version zuerst; alle anderen erst, nachdem sie in LifeLink freigegeben wurde. Vor der Installation prüft die Bridge das Paket gegen die SHA-256-Prüfsumme aus LifeLink. Die Kopplung bleibt beim Update erhalten.
+
 == Changelog ==
+
+= 0.4.0 =
+* Updates über den WordPress-Updateweg mit Prüfsummenkontrolle; Test-Kanal und Freigabe in LifeLink.
+
+= 0.3.0 =
+* Banner (Shortcode, Block, automatische Anzeige), Einsatzübersicht, Ablauf auch ohne Verbindung.
+
+= 0.2.0 =
+* Kanaltexte, Termine, Zurückziehen von Beiträgen.
 
 = 0.1.0 =
 * Erste Version mit Abholprinzip: Kopplung per Einmalcode, Beiträge mit Medien, Rückmeldung von WordPress-ID und Adresse.

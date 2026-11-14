@@ -31,5 +31,7 @@
   "sources": "Quellen",
   "warnings": "Warnung",
   "warningCases": "Warnentwürfe",
-  "warningConfig": "Stichwörter & Regeln"
+  "warningConfig": "Stichwörter & Regeln",
+  "connections": "Verbindungen",
+  "officialWarnings": "Amtliche Warnungen"
 }

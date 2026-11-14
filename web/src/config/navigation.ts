@@ -41,12 +41,14 @@ export const navigation: NavGroup[] = [
     items: [
       { id: 'banners', path: '/banner', label: 'nav.banners', icon: 'Megaphone', perm: ['post.read'] },
       { id: 'sites', path: '/kanaele', label: 'nav.sites', icon: 'Globe', perm: ['post.read', 'channel.manage'] },
+      { id: 'connections', path: '/verbindungen', label: 'nav.connections', icon: 'Plug', perm: ['connection.manage'] },
     ],
   },
   {
     group: 'nav.warnings',
     items: [
       { id: 'warnings', path: '/warnungen', label: 'nav.warningCases', icon: 'Siren', perm: ['warning.draft', 'warning.level', 'warning.approve', 'warning.send', 'warning.rules'] },
+      { id: 'officialWarnings', path: '/amtliche-warnungen', label: 'nav.officialWarnings', icon: 'AlertTriangle', perm: ['post.read'] },
       { id: 'warningConfig', path: '/warnungen/pflege', label: 'nav.warningConfig', icon: 'ListChecks', perm: ['warning.rules', 'warning.approve', 'system.manage'] },
     ],
   },

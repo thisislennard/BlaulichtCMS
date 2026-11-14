@@ -1359,3 +1359,41 @@ describe('Verbindungen (M4): FE2, Facebook, Instagram, amtliche Warnfeeds', () =
     expect((await one<any>(`SELECT count(*)::int AS n FROM secrets WHERE owner_id = $1 AND revoked_at IS NULL`, [igId]))!.n).toBe(0);
   });
 });
+
+describe('Bridge-Updates über den WordPress-Updateweg (M4)', () => {
+  it('Testwebsite zuerst, Freigabe erst nach Test, signierter Download mit Prüfsumme', async () => {
+    const pair = async (name: string, url: string) => {
+      const s = await admin.post('/sites', { name });
+      const key = (await anonymous.post('/bridge/pair', { code: s.json.pairingCode, site_url: url })).json.key;
+      return { id: s.json.site.id, key };
+    };
+    const test = await pair('Update-Testseite', 'https://test.example.org');
+    const live = await pair('Update-Echtseite', 'https://www.example.org');
+    const offer = (k: string, v = '0.3.0') => anonymous.get('/bridge/update', { authorization: `Bearer ${k}`, 'x-lifelink-bridge-version': v });
+    expect((await offer(live.key)).json.available).toBe(false);
+    expect((await offer(test.key)).json.available).toBe(false);
+    expect((await editor.put(`/sites/${test.id}/update-channel`, { channel: 'test' })).status).toBe(403);
+    await admin.put(`/sites/${test.id}/update-channel`, { channel: 'test' });
+    const o = (await offer(test.key)).json;
+    expect(o.available).toBe(true);
+    expect(o.version).toBe('0.4.0');
+    expect(o.package).toMatch(/^https:\/\/lifelink\.example\.org\/api\/v1\/bridge\/update\/package\?/);
+    const path = new URL(o.package).pathname + new URL(o.package).search;
+    const dl = await anonymous.raw('GET', path);
+    expect(dl.status).toBe(200);
+    expect(crypto.createHash('sha256').update(dl.rawPayload).digest('hex')).toBe(o.sha256);
+    expect((await anonymous.raw('GET', path.replace(/sig=[0-9a-f]{4}/, 'sig=0000'))).status).toBe(403);
+    // Freigabe ohne Rückmeldung der Testwebsite mit der neuen Version → abgelehnt
+    const rel = await admin.post('/sites/bridge-release', { version: '0.4.0', note: 'Auf Testseite geprüft.' });
+    expect(rel.status).toBe(409);
+    // Testwebsite meldet nach dem Update die neue Version (Kopplung blieb erhalten)
+    expect((await offer(test.key, '0.4.0')).status).toBe(200);
+    expect((await admin.post('/sites/bridge-release', { version: '0.4.0', note: 'Auf Testseite geprüft, Theme unverändert.' })).status).toBe(200);
+    expect((await offer(live.key)).json.available).toBe(true);
+    const st = (await admin.get('/sites/bridge-release')).json;
+    expect(st.releases[0].tested_on_name).toBe('Update-Testseite');
+    // Gleiche Dateien → gleiche Prüfsumme (feste Zeitstempel im ZIP)
+    const { bridgePackage } = await import('../src/routes/bridge.js');
+    expect(bridgePackage().sha256).toBe(o.sha256);
+  });
+});

@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { download, get, post } from '../../api/client';
 import type { Site } from '../../api/types';
-import { Button, Card, EmptyState, ErrorBox, FieldWrap, Input, Notice, PageHeader, SkeletonRows, StatusBadge } from '../../components/ui/core';
+import { Badge, Button, Card, EmptyState, ErrorBox, FieldWrap, Input, Notice, PageHeader, Select, SkeletonRows, StatusBadge } from '../../components/ui/core';
+import { put } from '../../api/client';
 import { Icon } from '../../components/ui/Icon';
 import { CopyButton, Dialog, useErrorToast } from '../../components/ui/overlays';
 import { useAuth } from '../../lib/auth';
@@ -166,6 +167,69 @@ export default function Sites() {
         </Dialog>
       )}
       {pairing && <PairingDialog pairing={pairing} onClose={() => (setPairing(null), refresh())} />}
+      {manage && <BridgeUpdates />}
     </div>
+  );
+}
+
+/** Bridge-Updates: zuerst auf einer Testwebsite, dann für alle freigeben. */
+function BridgeUpdates() {
+  const qc = useQueryClient();
+  const toastError = useErrorToast();
+  const q = useQuery({ queryKey: ['bridge-release'], queryFn: () => get<any>('/sites/bridge-release') });
+  const [note, setNote] = useState('');
+  if (!q.data) return null;
+  const { bundled, releases, sites } = q.data;
+  const released = releases.some((r: any) => r.version === bundled.version);
+  const act = async (fn: () => Promise<unknown>) => {
+    try {
+      await fn();
+    } catch (e) {
+      toastError(e);
+    }
+    qc.invalidateQueries({ queryKey: ['bridge-release'] });
+  };
+  return (
+    <Card title="Bridge-Updates" subtitle="Updates kommen über den normalen WordPress-Updateweg. Websites im Kanal „Test“ erhalten neue Versionen zuerst.">
+      <div className="flex flex-col gap-4 text-sm">
+        <div className="flex flex-wrap items-center gap-2">
+          Version in LifeLink: <strong>{bundled.version}</strong>
+          <code className="text-meta">{bundled.sha256.slice(0, 16)}…</code>
+          {released ? <Badge tone="success">für alle freigegeben</Badge> : <Badge tone="warning">nur Test-Kanal</Badge>}
+        </div>
+        <ul className="m-0 p-0 list-none flex flex-col gap-2">
+          {sites.map((s: any) => (
+            <li key={s.id} className="flex flex-wrap items-center gap-2">
+              <span className="min-w-[160px] font-medium">{s.name}</span>
+              <span className="text-fg-muted">Bridge {s.plugin_version ?? '–'}</span>
+              {s.plugin_version === bundled.version && <Badge tone="success">aktuell</Badge>}
+              <Select aria-label={`Update-Kanal ${s.name}`} value={s.update_channel} onChange={(e) => act(() => put(`/sites/${s.id}/update-channel`, { channel: e.target.value }))} className="max-w-[160px]">
+                <option value="stable">Kanal: Stabil</option>
+                <option value="test">Kanal: Test</option>
+              </Select>
+            </li>
+          ))}
+        </ul>
+        {!released && (
+          <div className="flex flex-wrap items-end gap-2 border-t border-line pt-3">
+            <FieldWrap label="Prüfnotiz (Testwebsite, Theme, Ergebnis)" htmlFor="br-note" className="flex-1 min-w-[240px]">
+              <Input id="br-note" value={note} onChange={(e) => setNote(e.target.value)} />
+            </FieldWrap>
+            <Button variant="primary" icon="CheckCircle2" disabled={note.trim().length < 5} onClick={() => act(() => post('/sites/bridge-release', { version: bundled.version, note }))}>
+              Version {bundled.version} für alle freigeben
+            </Button>
+          </div>
+        )}
+        {releases.length > 0 && (
+          <ul className="m-0 pl-4 text-meta text-fg-muted">
+            {releases.map((r: any) => (
+              <li key={r.version}>
+                {r.version} freigegeben von {r.approved_by_name ?? '–'} am {fmtDateTime(r.approved_at)} (getestet auf {r.tested_on_name ?? '–'}): {r.note}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </Card>
   );
 }
