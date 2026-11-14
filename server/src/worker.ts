@@ -14,6 +14,7 @@ import { toStepError } from './lib/errors.js';
 import { processMedia } from './media/process.js';
 import { ensureMediaDirs, mediaPaths } from './media/storage.js';
 import { cleanupUploadSessions } from './routes/uploads.js';
+import { buildExport, cleanupExports } from './media/exports.js';
 
 process.env.LIFELINK_ROLE ??= 'worker';
 
@@ -28,6 +29,9 @@ const handlers: Record<string, (job: Job) => Promise<void>> = {
   'media.process': async (job) => {
     await processMedia(String(job.payload.mediaId));
   },
+  'export.zip': async (job) => {
+    await buildExport(String(job.payload.exportId));
+  },
 };
 
 async function processJob(job: Job) {
@@ -40,6 +44,9 @@ async function processJob(job: Job) {
     const err = toStepError(e);
     const res = await failJob(job, err.message, err.retryAfterMs);
     log(res === 'dead' ? 'error' : 'warn', 'worker', `Auftrag ${job.kind} #${job.id} fehlgeschlagen (${res === 'dead' ? 'endgültig' : 'wird wiederholt'}): ${err.message}`);
+    if (job.kind === 'export.zip' && res === 'dead') {
+      await pool.query(`UPDATE exports SET status = 'failed', error = $2 WHERE id = $1`, [job.payload.exportId, err.message.slice(0, 300)]);
+    }
     if (job.kind === 'media.process' && res === 'dead') {
       await pool.query(`UPDATE media SET status = 'rejected', reject_reason = 'Prüfung wiederholt fehlgeschlagen.', processed_at = now() WHERE id = $1 AND status = 'quarantine'`, [job.payload.mediaId]);
     }
@@ -74,6 +81,7 @@ async function cleanup() {
   await q(`DELETE FROM worker_heartbeats WHERE last_seen_at < now() - interval '1 day'`);
   await q(`UPDATE backups SET status = 'failed', finished_at = now(), error = 'Abgebrochen (Prozess beendet)' WHERE status = 'running' AND started_at < now() - interval '1 hour'`);
   await cleanupUploadSessions().catch((e) => log('warn', 'cleanup', e.message));
+  await cleanupExports().catch((e) => log('warn', 'cleanup', e.message));
   // Liegengebliebene temporäre Upload-Dateien (abgebrochene Übertragungen) entfernen
   try {
     const dir = mediaPaths.tmp();

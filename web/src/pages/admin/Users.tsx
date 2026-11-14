@@ -37,6 +37,7 @@ import {
 import { Icon } from "../../components/ui/Icon";
 import { t } from "../../i18n";
 import { useAuth } from "../../lib/auth";
+import { QrDialog, ShareActions } from "../../components/share";
 import { fmtDateTime, fmtRelative } from "../../lib/format";
 import { AuditTable } from "./AuditTable";
 import { LoadError, type AuditEvent } from "./shared";
@@ -145,16 +146,19 @@ export default function Users() {
           )
         }
         actions={
-          manage && (
-            <Button
-              variant="primary"
-              icon="Users"
-              aria-expanded={inviteOpen}
-              onClick={() => setInviteOpen((o) => !o)}
-            >
-              {t("admin.users.invite")}
-            </Button>
-          )
+          <>
+            <AppLinkButton />
+            {manage && (
+              <Button
+                variant="primary"
+                icon="Users"
+                aria-expanded={inviteOpen}
+                onClick={() => setInviteOpen((o) => !o)}
+              >
+                {t("admin.users.invite")}
+              </Button>
+            )}
+          </>
         }
       />
       {inviteOpen && roles.data && (
@@ -444,6 +448,25 @@ function InviteForm({
   );
 }
 
+/** PWA-Installationslink – bewusst getrennt von persönlichen Einladungen; darf ausgehängt werden. */
+function AppLinkButton() {
+  const { me } = useAuth();
+  const [open, setOpen] = useState(false);
+  const url = `${me?.instance.publicUrl || window.location.origin}/app`;
+  return (
+    <>
+      <Button icon="Smartphone" onClick={() => setOpen(true)}>
+        App-Link
+      </Button>
+      <QrDialog
+        open={open}
+        onClose={() => setOpen(false)}
+        target={{ url, title: "LifeLink als App installieren", purpose: "App installieren", note: "Zum Anmelden ist ein eigenes Konto nötig." }}
+      />
+    </>
+  );
+}
+
 function LinkResult({
   title,
   help,
@@ -493,6 +516,14 @@ function LinkResult({
         />
         <CopyButton value={link} />
       </div>
+      <ShareActions
+        target={{
+          url: link,
+          title: title,
+          purpose: "Persönliche Einladung",
+          sensitive: "Persönlicher Link: Wer ihn hat, kann das Konto einrichten. Nur an die eingeladene Person geben, nicht aushängen.",
+        }}
+      />
       {extra && <div>{extra}</div>}
     </div>
   );

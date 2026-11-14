@@ -11,6 +11,7 @@ import { publicBase } from '../lib/urls.js';
 import { enqueue } from '../jobs/queue.js';
 import { ACCEPT_ATTR } from '../media/process.js';
 import { sendFileResponse } from './files.js';
+import { exportPath } from '../media/exports.js';
 import { freeBytes, mediaPaths, moveFile, removeMediaFiles, SizeLimitError, streamToTemp } from '../media/storage.js';
 
 const linkAad = (id: string) => `upload-link:${id}`;
@@ -314,6 +315,39 @@ export async function mediaRoutes(app: FastifyInstance) {
       for (let i = 0; i < ids.length; i++) await db.query('UPDATE media SET sort_order = $3 WHERE id = $1 AND collection_id = $2', [ids[i], id, i + 1]);
     });
     return { ok: true };
+  });
+
+  /* Sammeldownload als ZIP (im Hintergrund, läuft nach 24 h ab) */
+  app.post('/collections/:id/exports', { preHandler: requireAuth('media.read') }, async (req) => {
+    const { id } = z.object({ id: z.uuid() }).parse(req.params);
+    const body = z.object({ selection: z.enum(['selected', 'all']).default('selected'), variant: z.enum(['public', 'original']).default('public'), ids: z.array(z.uuid()).max(2000).optional() }).parse(req.body ?? {});
+    const c = await one<any>('SELECT id, title FROM collections WHERE id = $1', [id]);
+    if (!c) throw notFound('Sammlung nicht gefunden.');
+    const rows = await many<any>(
+      `SELECT id FROM media WHERE collection_id = $1 AND status = 'ready' AND deleted_at IS NULL AND ($2::boolean OR selection = 'selected') AND ($3::uuid[] IS NULL OR id = ANY($3))`,
+      [id, body.selection === 'all', body.ids ?? null],
+    );
+    if (!rows.length) throw badRequest(body.selection === 'selected' ? 'Es sind noch keine Dateien ausgewählt.' : 'Die Sammlung enthält keine geprüften Dateien.');
+    const ex = await one<any>(`INSERT INTO exports (collection_id, media_ids, variant, created_by) VALUES ($1,$2,$3,$4) RETURNING *`, [id, rows.map((r) => r.id), body.variant, req.auth!.user?.id ?? null]);
+    await enqueue('export.zip', { exportId: ex.id }, { dedupKey: `export:${ex.id}` });
+    await audit(req.auth!.actor, 'media.export_requested', { type: 'collection', id, label: c.title }, { dateien: rows.length, fassung: body.variant });
+    return { id: ex.id, status: ex.status, files: rows.length };
+  });
+
+  app.get('/exports/:id', { preHandler: requireAuth('media.read') }, async (req) => {
+    const { id } = z.object({ id: z.uuid() }).parse(req.params);
+    const ex = await one<any>('SELECT id, status, file_count, size_bytes, error, created_at, finished_at, expires_at, variant FROM exports WHERE id = $1', [id]);
+    if (!ex) throw notFound();
+    return { ...ex, size_bytes: ex.size_bytes ? Number(ex.size_bytes) : null };
+  });
+
+  app.get('/exports/:id/download', { preHandler: requireAuth('media.read') }, async (req, reply) => {
+    const { id } = z.object({ id: z.uuid() }).parse(req.params);
+    const ex = await one<any>(`SELECT e.*, c.title FROM exports e JOIN collections c ON c.id = e.collection_id WHERE e.id = $1`, [id]);
+    if (!ex || ex.status !== 'ready' || new Date(ex.expires_at) < new Date()) throw notFound('Der Download ist nicht (mehr) verfügbar.');
+    await audit(req.auth!.actor, 'media.export_downloaded', { type: 'collection', id: ex.collection_id, label: ex.title }, { dateien: ex.file_count, fassung: ex.variant });
+    const name = `${ex.title.replace(/[^\p{L}\p{N} _-]/gu, '').trim() || 'medien'}-${ex.variant === 'public' ? 'oeffentlich' : 'originale'}.zip`;
+    return sendFileResponse(reply, exportPath(id), 'application/zip', name);
   });
 
   app.delete('/media/:id', { preHandler: requireAuth('media.manage') }, async (req) => {

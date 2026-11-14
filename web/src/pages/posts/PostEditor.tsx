@@ -120,6 +120,7 @@ export default function PostEditor() {
   const [saving, setSaving] = useState(false);
   const [decision, setDecision] = useState<'approved' | 'rejected' | null>(null);
   const [collectLink, setCollectLink] = useState<{ url: string; expires_at: string } | null>(null);
+  const [dragIdx, setDragIdx] = useState<number | null>(null);
   usePageMeta({ title: q.data?.revision.title, crumb: q.data?.revision.title });
 
   const d = q.data;
@@ -263,7 +264,23 @@ export default function PostEditor() {
                 {draft.mediaIds.map((mid, i) => {
                   const m = mediaCache[mid];
                   return (
-                    <li key={mid} className={cx('border rounded-card overflow-hidden', draft.coverId === mid ? 'border-primary' : 'border-line')}>
+                    <li
+                      key={mid}
+                      draggable={editable}
+                      onDragStart={() => setDragIdx(i)}
+                      onDragOver={(e) => dragIdx !== null && dragIdx !== i && e.preventDefault()}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        if (dragIdx === null || dragIdx === i) return;
+                        const ids = [...draft.mediaIds];
+                        const [moved] = ids.splice(dragIdx, 1);
+                        ids.splice(i, 0, moved);
+                        setDraft({ ...draft, mediaIds: ids });
+                        setDragIdx(null);
+                      }}
+                      onDragEnd={() => setDragIdx(null)}
+                      className={cx('border rounded-card overflow-hidden', draft.coverId === mid ? 'border-primary' : 'border-line', dragIdx === i && 'opacity-50', editable && 'cursor-grab')}
+                    >
                       {m?.has_preview ? <img decoding="async" src={`/api/v1/media/${mid}/preview`} alt={m.original_name} className="w-full aspect-[4/3] object-cover" /> : <div className="aspect-[4/3] bg-raised flex items-center justify-center"><Icon name="Film" /></div>}
                       <div className="p-2 flex items-center gap-1 flex-wrap text-sm">
                         {draft.coverId === mid ? (

@@ -168,6 +168,8 @@ export default function CollectionDetail() {
   const [review, setReview] = useState(false);
   const [linkDialog, setLinkDialog] = useState(false);
   const [assign, setAssign] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [dragId, setDragId] = useState<string | null>(null);
   const [upload, setUpload] = useState<{ name: string; progress: number }[] | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const q = useQuery({
@@ -198,6 +200,25 @@ export default function CollectionDetail() {
     } catch (e) {
       await refresh();
       throw e;
+    }
+  };
+
+  /** Neue Reihenfolge speichern (Drag-and-drop oder Menü „nach vorne/hinten“) – sofort sichtbar, Server bestätigt. */
+  const reorder = async (movedId: string, targetId: string | null, dir?: -1 | 1) => {
+    const all = (q.data?.media ?? []).map((m) => m.id);
+    const from = all.indexOf(movedId);
+    if (from < 0) return;
+    all.splice(from, 1);
+    let to = targetId ? all.indexOf(targetId) : from + (dir ?? 0);
+    if (targetId && dir === undefined && from <= to) to++;
+    to = Math.max(0, Math.min(all.length, to));
+    all.splice(to, 0, movedId);
+    qc.setQueryData<any>(['collection', id], (old: any) => (old ? { ...old, media: all.map((mid, i) => ({ ...old.media.find((m: MediaItem) => m.id === mid), sort_order: i + 1 })) } : old));
+    try {
+      await post(`/collections/${id}/order`, { ids: all });
+    } catch (e) {
+      toastError(e);
+      refresh();
     }
   };
 
@@ -236,6 +257,7 @@ export default function CollectionDetail() {
               )}
               <Menu
                 items={[
+                  { label: 'Sammeldownload (ZIP)', icon: 'Download', onClick: () => setExporting(true) },
                   { label: 'Beitrag zuordnen', icon: 'FileText', onClick: () => setAssign(true) },
                   {
                     label: c.archived_at ? 'Wiederherstellen' : 'Archivieren',
@@ -356,7 +378,15 @@ export default function CollectionDetail() {
       ) : (
         <ul className="m-0 p-0 list-none grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
           {lists[filter].map((m) => (
-            <li key={m.id} className={cx('border rounded-card overflow-hidden bg-card flex flex-col', m.selection === 'selected' ? 'border-ok' : 'border-line')}>
+            <li
+              key={m.id}
+              draggable={manage && filter !== 'problems'}
+              onDragStart={(e) => (setDragId(m.id), (e.dataTransfer.effectAllowed = 'move'))}
+              onDragOver={(e) => dragId && dragId !== m.id && e.preventDefault()}
+              onDrop={(e) => (e.preventDefault(), dragId && dragId !== m.id && reorder(dragId, m.id), setDragId(null))}
+              onDragEnd={() => setDragId(null)}
+              className={cx('border rounded-card overflow-hidden bg-card flex flex-col', m.selection === 'selected' ? 'border-ok' : 'border-line', dragId === m.id && 'opacity-50', manage && filter !== 'problems' && 'cursor-grab')}
+            >
               <MediaThumb m={m} className="aspect-square" />
               <div className="p-2 flex flex-col gap-1.5 text-sm">
                 <div className="truncate" title={m.original_name}>
@@ -384,6 +414,8 @@ export default function CollectionDetail() {
                         { label: 'Original herunterladen', icon: 'Download', onClick: () => window.open(`/api/v1/media/${m.id}/original`, '_blank') },
                         m.has_public ? { label: 'Öffentliche Fassung herunterladen', icon: 'Download', onClick: () => window.open(`/api/v1/media/${m.id}/public`, '_blank') } : null,
                         manage && m.selection !== 'pending' ? { label: 'Auswahl zurücksetzen', icon: 'Undo2', onClick: () => setSelection([m.id], 'pending').catch(toastError) } : null,
+                        manage ? { label: 'Nach vorne', icon: 'ArrowUp', onClick: () => reorder(m.id, null, -1) } : null,
+                        manage ? { label: 'Nach hinten', icon: 'ArrowDown', onClick: () => reorder(m.id, null, 1) } : null,
                         manage
                           ? {
                               label: 'Löschen',
@@ -407,8 +439,69 @@ export default function CollectionDetail() {
       )}
       {review && <ReviewDialog items={lists.pending} onClose={() => setReview(false)} onDecide={(m, s) => setSelection([m.id], s).catch(toastError)} />}
       {linkDialog && <NewLinkDialog collectionId={id} onClose={() => (setLinkDialog(false), refresh())} />}
+      {exporting && <ExportDialog collectionId={id} selectedCount={lists.selected.length} onClose={() => setExporting(false)} />}
       {assign && <AssignPostDialog collectionId={id} current={c.post_id} onClose={() => (setAssign(false), refresh())} />}
     </div>
+  );
+}
+
+/** ZIP-Sammeldownload: wird im Hintergrund erzeugt, Fortschritt per Abfrage, Download läuft nach 24 h ab. */
+function ExportDialog({ collectionId, selectedCount, onClose }: { collectionId: string; selectedCount: number; onClose: () => void }) {
+  const toastError = useErrorToast();
+  const [selection, setSelection] = useState<'selected' | 'all'>(selectedCount ? 'selected' : 'all');
+  const [variant, setVariant] = useState<'public' | 'original'>('public');
+  const [job, setJob] = useState<{ id: string; files: number } | null>(null);
+  const st = useQuery({ queryKey: ['export', job?.id], queryFn: () => get<any>(`/exports/${job!.id}`), enabled: !!job, refetchInterval: (q) => (q.state.data?.status === 'ready' || q.state.data?.status === 'failed' ? false : 1500) });
+  return (
+    <Dialog
+      open
+      onClose={onClose}
+      title="Sammeldownload (ZIP)"
+      footer={
+        !job ? (
+          <>
+            <Button onClick={onClose}>Abbrechen</Button>
+            <Button variant="primary" icon="Download" onClick={async () => setJob(await post<any>(`/collections/${collectionId}/exports`, { selection, variant }).catch((e) => (toastError(e), null)))}>
+              ZIP erstellen
+            </Button>
+          </>
+        ) : (
+          <Button onClick={onClose}>Schließen</Button>
+        )
+      }
+    >
+      {!job ? (
+        <div className="flex flex-col gap-4 text-sm">
+          <FieldWrap label="Dateien" htmlFor="ex-sel">
+            <Select id="ex-sel" value={selection} onChange={(e) => setSelection(e.target.value as any)}>
+              <option value="selected" disabled={!selectedCount}>Nur ausgewählte ({selectedCount})</option>
+              <option value="all">Alle geprüften Dateien</option>
+            </Select>
+          </FieldWrap>
+          <FieldWrap label="Fassung" htmlFor="ex-var" help="Öffentliche Fassungen enthalten keine Standort- und Kameradaten. Originale sind nur für den internen Gebrauch.">
+            <Select id="ex-var" value={variant} onChange={(e) => setVariant(e.target.value as any)}>
+              <option value="public">Öffentliche Fassung (empfohlen)</option>
+              <option value="original">Originale</option>
+            </Select>
+          </FieldWrap>
+        </div>
+      ) : st.data?.status === 'ready' ? (
+        <div className="flex flex-col gap-3 items-start text-sm">
+          <Notice tone="success" title="ZIP ist fertig">
+            {st.data.file_count} Dateien · {fmtBytes(st.data.size_bytes)} · verfügbar bis {fmtDateTime(st.data.expires_at)}
+          </Notice>
+          <Button variant="primary" icon="Download" onClick={() => window.open(`/api/v1/exports/${job.id}/download`, '_blank')}>
+            Herunterladen
+          </Button>
+        </div>
+      ) : st.data?.status === 'failed' ? (
+        <Notice tone="error">ZIP konnte nicht erstellt werden: {st.data.error}</Notice>
+      ) : (
+        <div className="flex items-center gap-2 text-sm">
+          <Icon name="Hourglass" size={16} /> ZIP mit {job.files} Dateien wird erstellt … Du kannst den Dialog schließen; die Datei bleibt 24 Stunden verfügbar.
+        </div>
+      )}
+    </Dialog>
   );
 }
 

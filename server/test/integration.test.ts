@@ -469,3 +469,23 @@ describe('Fortsetzbarer Upload (M2)', () => {
     expect((await anonymous.post(`/collections/${collectionId}/upload-sessions`, { clientKey: 'x-key-00001', name: 'x', size: 1 })).status).toBe(401);
   });
 });
+
+describe('Sammeldownload (M2)', () => {
+  it('erzeugt das ZIP im Hintergrund mit öffentlichen Fassungen und lässt es ablaufen', async () => {
+    const r = await editor.post(`/collections/${collectionId}/exports`, { selection: 'all', variant: 'public' });
+    expect(r.status).toBe(200);
+    const { buildExport, cleanupExports, exportPath } = await import('../src/media/exports.js');
+    await buildExport(r.json.id);
+    const st = await editor.get(`/exports/${r.json.id}`);
+    expect(st.json.status).toBe('ready');
+    expect(st.json.file_count).toBeGreaterThanOrEqual(2);
+    const dl = await editor.get(`/exports/${r.json.id}/download`);
+    expect(dl.status).toBe(200);
+    expect(dl.rawPayload.subarray(0, 2).toString()).toBe('PK');
+    expect((await anonymous.get(`/exports/${r.json.id}/download`)).status).toBe(401);
+    await pool.query(`UPDATE exports SET expires_at = now() - interval '1 minute' WHERE id = $1`, [r.json.id]);
+    await cleanupExports();
+    expect(fs.existsSync(exportPath(r.json.id))).toBe(false);
+    expect((await editor.get(`/exports/${r.json.id}/download`)).status).toBe(404);
+  });
+});
