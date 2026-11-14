@@ -38,6 +38,16 @@ export const DEFAULT_SETTINGS = {
 
   'notify.on_connection_error': true,
 
+  /** Warnentwürfe: Testmodus sendet ausschließlich an den Testempfänger. Standard: an. */
+  'warnings.test_mode': true,
+  'warnings.test_recipient': '',
+  'smtp.host': '',
+  'smtp.port': 587,
+  'smtp.security': 'starttls',
+  'smtp.user': '',
+  'smtp.from': '',
+  'smtp.password_secret_id': '',
+
   'backup.enabled': true,
   'backup.hour': 3,
   'backup.keep': 14,

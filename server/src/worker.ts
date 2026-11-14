@@ -16,6 +16,7 @@ import { ensureMediaDirs, mediaPaths } from './media/storage.js';
 import { cleanupUploadSessions } from './routes/uploads.js';
 import { buildExport, cleanupExports } from './media/exports.js';
 import { refreshDueFeeds } from './routes/rss.js';
+import { deliverWarningSend } from './warnings/mail.js';
 
 process.env.LIFELINK_ROLE ??= 'worker';
 
@@ -32,6 +33,10 @@ const handlers: Record<string, (job: Job) => Promise<void>> = {
   },
   'export.zip': async (job) => {
     await buildExport(String(job.payload.exportId));
+  },
+  // Genau ein Versuch: ein automatischer Wiederholungsversand könnte eine Warnung doppelt zustellen
+  'warning.send': async (job) => {
+    await deliverWarningSend(String(job.payload.sendId));
   },
 };
 

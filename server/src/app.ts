@@ -23,6 +23,7 @@ import { uploadRoutes } from './routes/uploads.js';
 import { bannerRoutes } from './routes/banners.js';
 import { eventRoutes, stopEvents } from './routes/events.js';
 import { rssRoutes } from './routes/rss.js';
+import { warningRoutes } from './routes/warnings.js';
 import { healthStatus } from './routes/health.js';
 
 export async function buildApp(): Promise<FastifyInstance> {
@@ -103,6 +104,7 @@ export async function buildApp(): Promise<FastifyInstance> {
       await api.register(bannerRoutes);
       await api.register(eventRoutes);
       await api.register(rssRoutes);
+      await api.register(warningRoutes);
     },
     { prefix: '/api/v1' },
   );

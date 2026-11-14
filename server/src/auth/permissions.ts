@@ -35,7 +35,9 @@ export const PERMISSIONS: PermissionDef[] = [
   { id: 'post.publish', module: 'publishing', label: 'Veröffentlichen', level: 'critical', description: 'Freigegebene Fassungen an einen Zielkanal (z. B. WordPress) übergeben.' },
   { id: 'channel.manage', module: 'publishing', label: 'Kanäle verwalten', level: 'critical', description: 'Websites mit der LifeLink Bridge koppeln, Schlüssel widerrufen.' },
   { id: 'warning.draft', module: 'warnings', label: 'Warnentwurf erstellen', level: 'write', description: 'Warnentwürfe erfassen, speichern und zur Freigabe einreichen.' },
+  { id: 'warning.level', module: 'warnings', label: 'Warnstufe bestätigen', level: 'critical', description: 'Den Warnstufen-Vorschlag ausdrücklich bestätigen oder mit Begründung ändern.' },
   { id: 'warning.approve', module: 'warnings', label: 'Warnentwurf freigeben', level: 'critical', description: 'Eine erzeugte PDF-Fassung eines Warnentwurfs freigeben.' },
+  { id: 'warning.rules', module: 'warnings', label: 'Stichwörter und Regeln pflegen', level: 'critical', description: 'Stichwörter, Prüffragen, Warnstufen-Regeln, Vorlagen und Zuständigkeiten pflegen.' },
   { id: 'warning.send', module: 'warnings', label: 'Warnentwurf versenden', level: 'critical', description: 'Freigegebene Warnentwürfe per E-Mail an die zuständige Stelle senden.' },
   { id: 'user.read', module: 'users', label: 'Benutzer ansehen', level: 'read', description: 'Benutzerliste und Rollen ansehen.' },
   { id: 'user.manage', module: 'users', label: 'Benutzer verwalten', level: 'critical', description: 'Einladen, Rollen ändern, deaktivieren, Zwei-Faktor zurücksetzen.' },
@@ -93,8 +95,8 @@ export const ROLES: RoleDef[] = [
   {
     id: 'warning_approver',
     label: 'Warnfreigabe',
-    description: 'Gibt Warnentwürfe frei.',
-    permissions: ['warning.draft', 'warning.approve'],
+    description: 'Bestätigt Warnstufen, gibt Warnentwürfe und Regeln fachlich frei.',
+    permissions: ['warning.draft', 'warning.level', 'warning.approve'],
   },
   {
     id: 'warning_sender',

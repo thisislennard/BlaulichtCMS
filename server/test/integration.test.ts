@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import { execFileSync } from 'node:child_process';
 import sharp from 'sharp';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { FastifyInstance } from 'fastify';
@@ -698,5 +699,336 @@ describe('RSS, Live-Status und Dashboard (M2)', () => {
     const d = await editor.get('/dashboard');
     expect(Array.isArray(d.json.rss)).toBe(true);
     expect(d.json.confirmedAt).toBeTruthy();
+  });
+});
+
+/* ======================================================================================= M3 */
+
+describe('Warnentwürfe (M3) und Warnstufen-Assistent (#41)', () => {
+  // Fiktive Testdaten. Versand ausschließlich an einen lokalen Test-Mailserver.
+  let smtp: any;
+  let smtpMode: 'accept' | 'reject' | 'hang' = 'accept';
+  const inbox: { to: string[]; subject: string; raw: string }[] = [];
+  let author: Client;
+  let warnApprover: Client;
+  let sender: Client;
+  let keywordId = '';
+  let respId = '';
+  const q: Record<string, string> = {};
+  const ruleIds: Record<string, string> = {};
+  let lineageA = '';
+  let caseId = '';
+  let updateId = '';
+  let allClearId = '';
+  const TEST_BOX = 'test-postfach@example.org';
+  const pdfText = (buf: Buffer) => {
+    const f = path.join(process.env.LIFELINK_DATA_DIR!, `pdf-${crypto.randomUUID()}.pdf`);
+    fs.writeFileSync(f, buf);
+    return execFileSync('pdftotext', ['-layout', f, '-'], { encoding: 'utf8' }) as string;
+  };
+  const data = {
+    area: 'Musterstadt, Ortsteil Nord (fiktiv)',
+    starts_at: '2026-11-14T10:00',
+    valid_until: '2026-11-14T18:00',
+    headline: 'Starke Rauchentwicklung (Übung)',
+    situation: 'Fiktive Lage für den Test.',
+    advice: 'Fenster und Türen geschlossen halten.',
+    sender: 'Musterorganisation',
+    callback: 'Testperson, 0000 000000',
+  };
+  const detail = async (id: string) => (await author.get(`/warnings/${id}`)).json;
+  const saveRev = async (id: string, patch: any = {}) => {
+    const d = await detail(id);
+    return author.put(`/warnings/${id}/revision`, { baseRevision: d.revision.number, data: { ...d.revision.data, ...(patch.data ?? {}) }, responsibilityIds: patch.responsibilityIds ?? d.revision.responsibility_ids, keywordId: 'keywordId' in patch ? patch.keywordId : (d.revision.keyword?.id ?? null), answers: patch.answers ?? d.revision.answers });
+  };
+  const deliverLast = async (id: string) => {
+    const { deliverWarningSend } = await import('../src/warnings/mail.js');
+    const s = await one<any>(`SELECT id FROM warning_sends WHERE warning_id = $1 ORDER BY created_at DESC LIMIT 1`, [id]);
+    await deliverWarningSend(s.id);
+    return one<any>(`SELECT * FROM warning_sends WHERE id = $1`, [s.id]);
+  };
+  const approve = async (id: string) => {
+    const sub = await author.post(`/warnings/${id}/submit`, { revision: (await detail(id)).revision.number });
+    expect(sub.status, JSON.stringify(sub.json)).toBe(200);
+    const d = await detail(id);
+    const r = await warnApprover.post(`/warnings/${id}/decision`, { revision: d.revision.number, contentHash: d.revision.content_hash, decision: 'approved' });
+    expect(r.status, JSON.stringify(r.json)).toBe(200);
+    return r.json;
+  };
+
+  beforeAll(async () => {
+    const { SMTPServer } = await import('smtp-server');
+    smtp = new SMTPServer({
+      authOptional: true,
+      disabledCommands: ['STARTTLS'],
+      logger: false,
+      onData(stream: any, session: any, cb: any) {
+        const chunks: Buffer[] = [];
+        stream.on('data', (c: Buffer) => chunks.push(c));
+        stream.on('end', () => {
+          if (smtpMode === 'reject') return cb(Object.assign(new Error('Empfänger abgelehnt (Test)'), { responseCode: 550 }));
+          if (smtpMode === 'hang') return; // Daten angenommen, Antwort bleibt aus → Ergebnis unbekannt
+          inbox.push({ to: session.envelope.rcptTo.map((r: any) => r.address), subject: /^Subject: (.*)$/m.exec(Buffer.concat(chunks).toString())?.[1] ?? '', raw: Buffer.concat(chunks).toString() });
+          cb();
+        });
+      },
+    });
+    await new Promise<void>((r) => smtp.listen(0, '127.0.0.1', r));
+    process.env.LIFELINK_SMTP_TIMEOUT_MS = '1500';
+  });
+  afterAll(() => smtp?.close());
+
+  it('richtet Rollen, Zuständigkeit und Testmodus ein', async () => {
+    author = (await acceptInvite('warnentwurf@example.org', ['warning_author'], 'Jo')).client;
+    warnApprover = (await acceptInvite('warnfreigabe@example.org', ['warning_approver'], 'Uli')).client;
+    sender = (await acceptInvite('warnversand@example.org', ['warning_sender'], 'Mika')).client;
+    const r = await admin.post('/responsibilities', { name: 'Leitstelle (fiktiv)', area: 'Musterkreis', recipients: ['leitstelle@example.invalid'] });
+    expect(r.status).toBe(200);
+    respId = r.json.id;
+    expect((await author.post('/responsibilities', { name: 'X', recipients: ['x@example.org'] })).status).toBe(403);
+    const port = smtp.server.address().port;
+    const s = await admin.put('/warning-settings', { host: '127.0.0.1', port, security: 'none', user: '', from: 'lifelink@example.org', testMode: true, testRecipient: TEST_BOX });
+    expect(s.status).toBe(200);
+  });
+
+  it('wird ohne aktive Regeln ausgeliefert; Stichwort ohne Regel ergibt keine Empfehlung', async () => {
+    expect((await one<any>(`SELECT count(*)::int AS n FROM warning_rules`))!.n).toBe(0);
+    const k = await admin.post('/warning-keywords', { code: 'F-WALD-2', label: 'Waldbrand mittel (Test)', aliases: ['waldbrand', 'wald 2'] });
+    expect(k.status).toBe(200);
+    keywordId = k.json.id;
+    const found = await author.get('/warning-keywords?q=waldbr');
+    expect(found.json.map((x: any) => x.code)).toContain('F-WALD-2');
+    const s = await author.post('/warnings/suggest', { keywordId, answers: {} });
+    expect(s.json.level).toBeNull();
+    expect(s.json.status).toBe('no_rules');
+    expect(s.json.reason).toContain('Keine eindeutige Empfehlung – fachlich prüfen');
+  });
+
+  it('zeigt nur fachlich freigegebene Lagefragen; Freigabe nur durch eine andere Person', async () => {
+    for (const [key, text] of [['rauch_wohngebiet', 'Zieht Rauch in ein Wohngebiet?'], ['evakuierung', 'Ist eine Evakuierung erforderlich?'], ['ungeprueft', 'Diese Frage ist nicht freigegeben?']]) {
+      const r = await admin.post(`/warning-keywords/${keywordId}/questions`, { key, text });
+      expect(r.status).toBe(200);
+      q[key] = r.json.id;
+    }
+    expect((await admin.post(`/keyword-questions/${q.rauch_wohngebiet}/approve`)).status).toBe(403);
+    expect((await warnApprover.post(`/keyword-questions/${q.rauch_wohngebiet}/approve`)).status).toBe(200);
+    expect((await warnApprover.post(`/keyword-questions/${q.evakuierung}/approve`)).status).toBe(200);
+    const qs = await author.get(`/warning-keywords/${keywordId}/questions`);
+    expect(qs.json.map((x: any) => x.key).sort()).toEqual(['evakuierung', 'rauch_wohngebiet']);
+  });
+
+  it('Regeln: mehrere je Stichwort mit Begründung, Version und fachlicher Freigabe', async () => {
+    const mk = async (name: string, conditions: any, level: number, lineage: string | null = null) => {
+      const r = await admin.post('/warning-rules', { lineage, keywordId, name, conditions, level, reason: `Testregel: ${name} (fiktiv)` });
+      expect(r.status, JSON.stringify(r.json)).toBe(200);
+      return r.json;
+    };
+    const a = await mk('Rauch ohne Evakuierung', { rauch_wohngebiet: ['ja'], evakuierung: ['nein'] }, 3);
+    lineageA = a.lineage;
+    ruleIds.a = a.id;
+    ruleIds.b = (await mk('Evakuierung', { evakuierung: ['ja'] }, 2)).id;
+    ruleIds.c = (await mk('Rauch und Evakuierung', { rauch_wohngebiet: ['ja'], evakuierung: ['ja'] }, 1)).id;
+    ruleIds.d = (await mk('Ungeprüfte Frage', { ungeprueft: ['ja'] }, 1)).id;
+    // Entwurf wirkt nicht
+    expect((await author.post('/warnings/suggest', { keywordId, answers: { rauch_wohngebiet: 'ja', evakuierung: 'nein' } })).json.status).toBe('no_rules');
+    expect((await admin.post(`/warning-rules/${ruleIds.a}/approve`)).status).toBe(403); // nicht selbst freigeben
+    expect((await author.post(`/warning-rules/${ruleIds.a}/approve`)).status).toBe(403);
+    for (const id of Object.values(ruleIds)) expect((await warnApprover.post(`/warning-rules/${id}/approve`)).status).toBe(200);
+    // Neue Version: alte tritt außer Kraft, der Vorschlag nennt die neue Version
+    const v2 = await mk('Rauch ohne Evakuierung', { rauch_wohngebiet: ['ja'], evakuierung: ['nein'] }, 3, lineageA);
+    expect(v2.version).toBe(2);
+    expect((await warnApprover.post(`/warning-rules/${v2.id}/approve`)).status).toBe(200);
+    expect((await one<any>(`SELECT status FROM warning_rules WHERE id = $1`, [ruleIds.a]))!.status).toBe('retired');
+    ruleIds.a = v2.id;
+  });
+
+  it('dasselbe Stichwort mit zwei Lagebildern, unbekanntes Stichwort, fehlende Angaben, Widerspruch', async () => {
+    const sug = async (answers: any, kw: string | null = keywordId) => (await author.post('/warnings/suggest', { keywordId: kw, answers })).json;
+    const lageA = await sug({ rauch_wohngebiet: 'ja', evakuierung: 'nein' });
+    expect(lageA.level).toBe(3);
+    expect(lageA.status).toBe('suggested');
+    expect(lageA.reason).toContain('Version 2');
+    expect(lageA.rules[0].version).toBe(2);
+    const lageB = await sug({ rauch_wohngebiet: 'nein', evakuierung: 'ja' });
+    expect(lageB.level).toBe(2);
+    expect(lageB.reason).toContain('Regel „Evakuierung“, Version 1');
+    const unknown = await sug({ rauch_wohngebiet: 'ja' }, crypto.randomUUID());
+    expect(unknown.level).toBeNull();
+    expect(unknown.status).toBe('unknown_keyword');
+    const missing = await sug({ rauch_wohngebiet: 'ja', evakuierung: 'unbekannt' });
+    expect(missing.level).toBeNull();
+    expect(missing.status).toBe('incomplete');
+    expect(missing.missing.map((m: any) => m.key)).toContain('evakuierung');
+    const conflictS = await sug({ rauch_wohngebiet: 'ja', evakuierung: 'ja' });
+    expect(conflictS.level).toBeNull();
+    expect(conflictS.status).toBe('conflict');
+    expect(conflictS.reason).toContain('Keine eindeutige Empfehlung – fachlich prüfen');
+    // Regel auf nicht freigegebene Frage trifft nie zu
+    const none = await sug({ rauch_wohngebiet: 'nein', evakuierung: 'nein', ungeprueft: 'ja' });
+    expect(none.level).toBeNull();
+    expect(none.status).toBe('no_match');
+    expect(none.level).not.toBe(0);
+  });
+
+  it('Erstmeldung: Vorschlag allein löst weder Mail noch Veröffentlichung aus; Stufe braucht Bestätigung', async () => {
+    const c = await author.post('/warnings', { kind: 'initial' });
+    expect(c.status).toBe(200);
+    expect(c.json.case_no).toMatch(/^W-\d{4}-\d{4}$/);
+    caseId = c.json.id;
+    const s = await saveRev(caseId, { data, responsibilityIds: [respId], keywordId, answers: { rauch_wohngebiet: 'ja', evakuierung: 'nein' } });
+    expect(s.json.changed).toBe(true);
+    expect(s.json.suggestion.level).toBe(3);
+    // Nichts versendet, nichts veröffentlicht, nichts eingeplant
+    expect((await one<any>(`SELECT count(*)::int AS n FROM warning_sends`))!.n).toBe(0);
+    expect((await one<any>(`SELECT count(*)::int AS n FROM jobs WHERE kind = 'warning.send'`))!.n).toBe(0);
+    expect(inbox.length).toBe(0);
+    const pubsBefore = (await one<any>(`SELECT count(*)::int AS n FROM publications`))!.n;
+    // Einreichen ohne bestätigte Stufe geht nicht; Entwurfsrecht reicht nicht zum Bestätigen
+    expect((await author.post(`/warnings/${caseId}/submit`, { revision: s.json.number })).status).toBe(400);
+    expect((await author.post(`/warnings/${caseId}/level`, { revision: s.json.number, level: 3 })).status).toBe(403);
+    // Bestätigung des Vorschlags ohne Begründung
+    const ok = await warnApprover.post(`/warnings/${caseId}/level`, { revision: s.json.number, level: 3 });
+    expect(ok.status).toBe(200);
+    expect(ok.json.changed).toBe(false);
+    expect((await one<any>(`SELECT count(*)::int AS n FROM publications`))!.n).toBe(pubsBefore);
+    expect(inbox.length).toBe(0);
+  });
+
+  it('manuelle Änderung braucht Begründung; geänderte Lage verlangt erneute Bestätigung', async () => {
+    let d = await detail(caseId);
+    expect((await warnApprover.post(`/warnings/${caseId}/level`, { revision: d.revision.number, level: 2 })).status).toBe(400);
+    const ch = await warnApprover.post(`/warnings/${caseId}/level`, { revision: d.revision.number, level: 2, reason: 'Wind dreht Richtung Innenstadt (fiktiv).' });
+    expect(ch.status).toBe(200);
+    expect(ch.json.changed).toBe(true);
+    d = await detail(caseId);
+    expect(d.revision.level_decision.level).toBe(2);
+    expect(d.revision.level_decision.suggested).toBe(3);
+    expect(d.revision.level_decision.rules[0].version).toBe(2);
+    // Textänderung behält die Bestätigung
+    const t = await saveRev(caseId, { data: { situation: 'Fiktive Lage, ergänzt.' } });
+    expect(t.json.levelReset).toBe(false);
+    // Andere Antworten → Bestätigung verfällt
+    const r = await saveRev(caseId, { answers: { rauch_wohngebiet: 'nein', evakuierung: 'ja' } });
+    expect(r.json.levelReset).toBe(true);
+    expect((await detail(caseId)).revision.level_decision).toBeNull();
+    d = await detail(caseId);
+    expect((await warnApprover.post(`/warnings/${caseId}/level`, { revision: d.revision.number, level: 2 })).json.changed).toBe(false);
+    const hist = await one<any>(`SELECT count(*)::int AS n FROM audit_events WHERE action IN ('warning.level_changed','warning.level_confirmed')`);
+    expect(hist!.n).toBeGreaterThanOrEqual(3);
+  });
+
+  it('Freigabe erzeugt die PDF mit der bestätigten Stufe; Entwurfs-PDF ist gekennzeichnet', async () => {
+    const draft = await author.raw('GET', `/warnings/${caseId}/pdf`);
+    expect(draft.headers['content-type']).toContain('application/pdf');
+    const draftText = pdfText(draft.rawPayload);
+    expect(draftText).toContain('ENTWURF');
+    const a = await approve(caseId);
+    expect(a.pdfSha256).toMatch(/^[0-9a-f]{64}$/);
+    const d = await detail(caseId);
+    expect(d.state).toBe('approved');
+    const pdf = await author.raw('GET', `/warnings/${caseId}/approvals/${d.approval.id}/pdf`);
+    expect(crypto.createHash('sha256').update(pdf.rawPayload).digest('hex')).toBe(a.pdfSha256);
+    const text = pdfText(pdf.rawPayload);
+    expect(text).toContain('Warnstufe 2');
+    expect(text).toContain(d.warning.case_no);
+    expect(text).not.toContain('ENTWURF');
+    expect(text).toContain('Starke Rauchentwicklung');
+    // Freigabe gilt nur für diese Fassung
+    expect((await saveRev(caseId, { data: { advice: 'Geänderter Hinweis.' } })).json.changed).toBe(true);
+    expect((await detail(caseId)).state).toBe('draft');
+  });
+
+  it('Versand nur an das Testpostfach, mit PDF; kein Doppelversand; Eingangsbestätigung', async () => {
+    // Die Bestätigung blieb beim Textwechsel erhalten – erneut einreichen und freigeben
+    await approve(caseId);
+    const d = await detail(caseId);
+    expect(d.recipients.intended).toEqual(['leitstelle@example.invalid']);
+    expect((await author.post(`/warnings/${caseId}/send`, { approvalId: d.approval.id, confirmRecipients: [TEST_BOX] })).status).toBe(403);
+    expect((await sender.post(`/warnings/${caseId}/send`, { approvalId: d.approval.id, confirmRecipients: ['leitstelle@example.invalid'] })).status).toBe(409);
+    const s = await sender.post(`/warnings/${caseId}/send`, { approvalId: d.approval.id, confirmRecipients: [TEST_BOX] });
+    expect(s.status, JSON.stringify(s.json)).toBe(200);
+    expect(s.json.testMode).toBe(true);
+    const row = await deliverLast(caseId);
+    expect(row.status).toBe('accepted');
+    expect(inbox.length).toBe(1);
+    expect(inbox[0].to).toEqual([TEST_BOX]);
+    expect(inbox[0].subject).toMatch(/\[TEST\]|=5BTEST=5D/);
+    expect(inbox[0].raw).toContain('application/pdf');
+    expect(inbox[0].raw.replace(/\r?\n /g, ' ')).toMatch(new RegExp(`X-Lifelink-Pdf-Sha256:\\s+${d.approval.pdf_sha256}`, 'i'));
+    expect(inbox.some((m) => m.to.includes('leitstelle@example.invalid'))).toBe(false);
+    expect((await sender.post(`/warnings/${caseId}/send`, { approvalId: d.approval.id, confirmRecipients: [TEST_BOX] })).status).toBe(409);
+    expect((await detail(caseId)).state).toBe('sent');
+    expect((await sender.post(`/warning-sends/${row.id}/acknowledge`, { note: 'Telefonisch bestätigt (Test).' })).status).toBe(200);
+    expect((await detail(caseId)).state).toBe('acknowledged');
+  });
+
+  it('Aktualisierung zeigt die bisherige Stufe und verlangt erneute Bestätigung; Fehlversand ist wiederholbar', async () => {
+    const u = await author.post('/warnings', { kind: 'update', parentId: caseId });
+    updateId = u.json.id;
+    let d = await detail(updateId);
+    expect(d.previousLevel.level).toBe(2);
+    expect(d.revision.level_decision).toBeNull();
+    expect(d.revision.data.area).toBe(data.area);
+    expect((await author.post(`/warnings/${updateId}/submit`, { revision: d.revision.number })).status).toBe(400);
+    await saveRev(updateId, { data: { situation: 'Lage entspannt sich (fiktiv).' } });
+    d = await detail(updateId);
+    expect((await warnApprover.post(`/warnings/${updateId}/level`, { revision: d.revision.number, level: 2 })).status).toBe(200);
+    await approve(updateId);
+    d = await detail(updateId);
+    smtpMode = 'reject';
+    await sender.post(`/warnings/${updateId}/send`, { approvalId: d.approval.id, confirmRecipients: [TEST_BOX] });
+    const failed = await deliverLast(updateId);
+    expect(failed.status).toBe('failed');
+    expect(failed.needs_review).toBe(false);
+    expect((await detail(updateId)).state).toBe('send_failed');
+    smtpMode = 'accept';
+    const again = await sender.post(`/warnings/${updateId}/send`, { approvalId: d.approval.id, confirmRecipients: [TEST_BOX] });
+    expect(again.status).toBe(200);
+    expect((await deliverLast(updateId)).status).toBe('accepted');
+  });
+
+  it('Entwarnung ist ein eigener Vorgang ohne Stufe; unbekanntes Versandergebnis sperrt den Neuversand', async () => {
+    const e = await author.post('/warnings', { kind: 'all_clear', parentId: updateId });
+    allClearId = e.json.id;
+    let d = await detail(allClearId);
+    expect(d.warning.kind).toBe('all_clear');
+    expect(d.revision.keyword).toBeNull();
+    expect((await warnApprover.post(`/warnings/${allClearId}/level`, { revision: d.revision.number, level: 3 })).status).toBe(400);
+    await approve(allClearId);
+    d = await detail(allClearId);
+    expect(d.revision.level_decision).toBeNull();
+    const text = pdfText((await author.raw('GET', `/warnings/${allClearId}/approvals/${d.approval.id}/pdf`)).rawPayload);
+    expect(text).toContain('ENTWARNUNG');
+    expect(text).not.toContain('(bestätigt)');
+    expect(text).not.toContain('Warnstufe 3');
+    smtpMode = 'hang';
+    await sender.post(`/warnings/${allClearId}/send`, { approvalId: d.approval.id, confirmRecipients: [TEST_BOX] });
+    const unk = await deliverLast(allClearId);
+    expect(unk.status).toBe('unknown');
+    expect(unk.needs_review).toBe(true);
+    smtpMode = 'accept';
+    const blocked = await sender.post(`/warnings/${allClearId}/send`, { approvalId: d.approval.id, confirmRecipients: [TEST_BOX] });
+    expect(blocked.status).toBe(409);
+    expect(blocked.json.error).toBe('send_unknown');
+    expect((await sender.post(`/warning-sends/${unk.id}/resolve`, { outcome: 'not_delivered', note: 'Leitstelle hat nichts erhalten (Test).' })).status).toBe(200);
+    expect((await sender.post(`/warnings/${allClearId}/send`, { approvalId: d.approval.id, confirmRecipients: [TEST_BOX] })).status).toBe(200);
+    expect((await deliverLast(allClearId)).status).toBe('accepted');
+  });
+
+  it('neue Vorlagenversion lässt bestehende Entwürfe unverändert reproduzierbar', async () => {
+    const draftCase = (await author.post('/warnings', { kind: 'initial' })).json.id;
+    await saveRev(draftCase, { data, responsibilityIds: [respId] });
+    const before = await author.raw('GET', `/warnings/${draftCase}/pdf`);
+    const cfg = (await admin.get('/warning-config')).json;
+    const t1 = cfg.templates.find((t: any) => t.family === 'mowas-uebergabe');
+    const nt = await admin.post('/warning-templates', { family: t1.family, name: t1.name, fields: t1.fields, levelLabels: t1.level_labels, pdfTitle: 'Neuer Titel Version 2', pdfFooter: t1.pdf_footer, mailSubject: t1.mail_subject, mailBody: t1.mail_body });
+    expect(nt.status, JSON.stringify(nt.json)).toBe(200);
+    expect(nt.json.version).toBe(2);
+    const after = await author.raw('GET', `/warnings/${draftCase}/pdf`);
+    expect(Buffer.compare(before.rawPayload, after.rawPayload)).toBe(0);
+    expect(pdfText(after.rawPayload)).not.toContain('Neuer Titel');
+    expect((await detail(draftCase)).template.newer_version).toBe(2);
+    const fresh = (await author.post('/warnings', { kind: 'initial' })).json.id;
+    expect((await detail(fresh)).template.version).toBe(2);
   });
 });

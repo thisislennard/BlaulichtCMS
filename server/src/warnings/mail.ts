@@ -1,0 +1,85 @@
+import fs from 'node:fs';
+import nodemailer from 'nodemailer';
+import { one, pool } from '../db/pool.js';
+import { log } from '../lib/log.js';
+import { notify } from '../lib/notify.js';
+import { readSecret } from '../lib/secrets.js';
+import { getSettings } from '../lib/settings.js';
+
+/**
+ * SMTP-Versand eines freigegebenen Warnentwurfs (PDF als Anhang).
+ *  accepted  – der Mailserver hat die Nachricht angenommen (technische Annahme, KEINE fachliche Eingangsbestätigung)
+ *  failed    – sicher nicht versendet (Verbindung/Anmeldung/Ablehnung vor bzw. bei der Annahme)
+ *  unknown   – Abbruch nach dem Senden der Daten: möglicherweise angekommen → erst prüfen, nie automatisch erneut senden
+ */
+export async function smtpTransport() {
+  const s = await getSettings();
+  if (!s['smtp.host'] || !s['smtp.from']) throw new Error('SMTP ist nicht eingerichtet (Einstellungen → E-Mail-Versand).');
+  const pass = await readSecret(s['smtp.password_secret_id']);
+  const timeout = Number(process.env.LIFELINK_SMTP_TIMEOUT_MS ?? 60_000);
+  return {
+    from: s['smtp.from'],
+    transport: nodemailer.createTransport({
+      host: s['smtp.host'],
+      port: Number(s['smtp.port']),
+      secure: s['smtp.security'] === 'tls',
+      requireTLS: s['smtp.security'] === 'starttls',
+      ignoreTLS: s['smtp.security'] === 'none',
+      auth: s['smtp.user'] ? { user: s['smtp.user'], pass: pass ?? '' } : undefined,
+      connectionTimeout: Math.min(timeout, 15_000),
+      greetingTimeout: Math.min(timeout, 15_000),
+      socketTimeout: timeout,
+      tls: { minVersion: 'TLSv1.2' },
+    }),
+  };
+}
+
+/**
+ * Konservativ: Nur wenn sicher ist, dass nichts angenommen wurde, gilt „failed“ (erneuter Versand erlaubt).
+ * Nodemailer meldet Socket-Timeouts auch nach DATA mit command „CONN“ – deshalb zählt jeder Abbruch einer
+ * bestehenden Verbindung als „unknown“, außer Verbindungsaufbau, Begrüßung oder Anmeldung sind gescheitert.
+ */
+export function classifySmtpError(e: any): 'failed' | 'unknown' {
+  if (typeof e?.responseCode === 'number') return 'failed'; // Server hat eindeutig geantwortet (4xx/5xx)
+  const msg = String(e?.message ?? '');
+  if (['ECONNREFUSED', 'EDNS', 'EAUTH', 'ETLS', 'EENVELOPE', 'EMESSAGE', 'ENOAUTH', 'EPROTOCOL'].includes(e?.code)) return 'failed';
+  if (/Connection timeout|Greeting never received|connect ECONN|getaddrinfo/i.test(msg)) return 'failed';
+  if (['ETIMEDOUT', 'ESOCKET', 'ECONNRESET', 'ECONNECTION', 'ESTREAM'].includes(e?.code)) return 'unknown';
+  return e?.code ? 'failed' : 'unknown';
+}
+
+export async function deliverWarningSend(sendId: string) {
+  const send = await one<any>(
+    `SELECT s.*, w.case_no, a.pdf_file, a.pdf_sha256 FROM warning_sends s JOIN warnings w ON w.id = s.warning_id JOIN warning_approvals a ON a.id = s.approval_id WHERE s.id = $1`,
+    [sendId],
+  );
+  if (!send) return;
+  if (send.status === 'sending') {
+    // Vorheriger Versuch wurde unterbrochen (z. B. Neustart): Ergebnis unklar → zur Prüfung, kein automatischer Neuversand
+    await pool.query(`UPDATE warning_sends SET status = 'unknown', needs_review = true, error = 'Versand wurde unterbrochen – Ergebnis unbekannt.' WHERE id = $1`, [sendId]);
+    await notify({ kind: 'warning', title: `Versand ${send.case_no}: Ergebnis unbekannt – bitte prüfen`, link: `/warnungen/${send.warning_id}`, permission: 'warning.send' });
+    return;
+  }
+  if (send.status !== 'queued') return;
+  await pool.query(`UPDATE warning_sends SET status = 'sending', attempts = attempts + 1 WHERE id = $1`, [sendId]);
+  const body = (await one<any>(`SELECT body FROM warning_sends_body WHERE send_id = $1`, [sendId]))?.body ?? '';
+  try {
+    const pdf = fs.readFileSync(send.pdf_file);
+    const { transport, from } = await smtpTransport();
+    const info = await transport.sendMail({
+      from,
+      to: send.recipients,
+      subject: send.subject,
+      text: body,
+      messageId: `<${send.id}@lifelink.invalid>`,
+      headers: { 'X-LifeLink-Vorgang': send.case_no, 'X-LifeLink-PDF-SHA256': send.pdf_sha256 },
+      attachments: [{ filename: `${send.case_no}.pdf`, content: pdf, contentType: 'application/pdf' }],
+    });
+    await pool.query(`UPDATE warning_sends SET status = 'accepted', message_id = $2, smtp_response = $3, sent_at = now(), error = NULL WHERE id = $1`, [sendId, info.messageId, String(info.response ?? '').slice(0, 300)]);
+  } catch (e: any) {
+    const outcome = classifySmtpError(e);
+    await pool.query(`UPDATE warning_sends SET status = $2, needs_review = $3, error = $4, smtp_response = $5 WHERE id = $1`, [sendId, outcome, outcome === 'unknown', String(e?.message ?? e).slice(0, 500), e?.response ? String(e.response).slice(0, 300) : null]);
+    log('warn', 'warnings', `Versand ${send.case_no}: ${outcome} – ${e?.message ?? e}`);
+    await notify({ kind: outcome === 'unknown' ? 'warning' : 'error', title: `Versand ${send.case_no}: ${outcome === 'unknown' ? 'Ergebnis unbekannt – bitte prüfen' : 'fehlgeschlagen'}`, body: String(e?.message ?? '').slice(0, 200), link: `/warnungen/${send.warning_id}`, permission: 'warning.send' });
+  }
+}
