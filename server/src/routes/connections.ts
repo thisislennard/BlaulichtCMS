@@ -238,7 +238,7 @@ export async function connectionRoutes(app: FastifyInstance) {
       r = {
         steps: [
           { name: 'Zugangsschlüssel', ok: !!sec.inboundTokenHash, message: sec.inboundTokenHash ? 'Hinterlegt.' : 'Fehlt – bitte neu erzeugen.', kind: 'login' },
-          { name: 'Testmeldung empfangen', ok: got, message: got ? `Zuletzt ${new Date(c.preview.receivedAt).toLocaleString('de-DE')}: ${Object.keys(c.preview.fields ?? {}).length} Feld(er) übernommen, ${c.preview.ignoredKeys ?? 0} verworfen.` : 'Noch keine Meldung eingegangen. In FE2 eine anonymisierte Testmeldung an die Adresse senden.', kind: 'receive' },
+          { name: 'Testmeldung empfangen', ok: got, message: got ? `Letzte Meldung: ${Object.keys(c.preview.fields ?? {}).length} Feld(er) übernommen, ${c.preview.ignoredKeys ?? 0} verworfen.` : 'Noch keine Meldung eingegangen. In FE2 eine anonymisierte Testmeldung an die Adresse senden.', kind: 'receive' },
           { name: 'Einsatz-ID erkannt', ok: got, message: got ? 'Die Zuordnung liefert eine Einsatz-ID (Wiederholungen werden erkannt).' : '–', kind: 'receive' },
         ],
         capabilities: { drafts: true },

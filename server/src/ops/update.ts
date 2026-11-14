@@ -15,7 +15,7 @@ export async function updatePreflight() {
   const add = (id: string, label: string, ok: boolean, detail: string, blocking = true) => checks.push({ id, label, ok, detail, blocking });
 
   const m = s['system.maintenance'];
-  add('maintenance', 'Wartungsmodus aktiv (schreibende Vorgänge angehalten)', !!m, m ? `seit ${new Date(m.since).toLocaleString('de-DE')} (${m.byName}): ${m.reason}` : 'nicht aktiv');
+  add('maintenance', 'Wartungsmodus aktiv (schreibende Vorgänge angehalten)', !!m, m ? `seit ${new Date(m.since).toLocaleString('de-DE', { timeZone: s['general.timezone'] })} (${m.byName}): ${m.reason}` : 'nicht aktiv');
 
   const running = (await one<any>(`SELECT count(*)::int AS n FROM jobs WHERE status = 'running'`))!.n;
   add('jobs', 'Keine laufenden Hintergrundaufträge', running === 0, running ? `${running} laufen noch` : 'keine');
