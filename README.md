@@ -221,6 +221,7 @@ Lokaler Start mit Hot Reload, Testumgebung und Hinweise: [docs/entwicklung.md](d
 | [docs/bridge-api.md](docs/bridge-api.md) | Schnittstelle zwischen LifeLink und der LifeLink Bridge |
 | [docs/integrationen.md](docs/integrationen.md) | Stand je optionaler Verbindung: lokal geprüft / offen |
 | [docs/testprotokoll.md](docs/testprotokoll.md) | Testbefehle, Ergebnisse, offene Prüfungen |
+| [docs/offene-punkte.md](docs/offene-punkte.md) | Merkliste: was noch fehlt und wer zuarbeiten muss |
 | [docs/entwicklung.md](docs/entwicklung.md) | Entwicklungsumgebung |
 | Hilfe-Center in der App (`/hilfe`) | Anleitungen für Redaktion und Administration |
 
