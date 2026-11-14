@@ -80,7 +80,7 @@ flowchart LR
   </tr>
   <tr>
     <td colspan="2"><b>Auf der WordPress-Testseite</b><br/>veröffentlicht von der LifeLink Bridge<br/><br/><img src="docs/bilder/wordpress-beitrag.webp" alt="Beitrag auf WordPress"/></td>
-    <td><b>Hilfe-Center</b><br/>23 Kapitel mit Volltextsuche<br/><br/><img src="docs/bilder/hilfe.webp" alt="Hilfe-Center"/></td>
+    <td><b>Hilfe-Center</b><br/>24 Kapitel mit Volltextsuche<br/><br/><img src="docs/bilder/hilfe.webp" alt="Hilfe-Center"/></td>
   </tr>
   <tr>
     <td><b>Warnentwurf am Handy</b><br/>Stichwort, Lagefragen, Vorschlag<br/><br/><img src="docs/bilder/warnentwurf-handy.webp" alt="Warnentwurf-Assistent am Handy"/></td>

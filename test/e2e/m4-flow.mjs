@@ -144,6 +144,7 @@ try {
 
   let archiveBeforeGood;
   await step('Update auf Image mit fehlerhafter Migration: Start gesperrt, automatischer Rückweg mit Sicherung', async () => {
+    before = counts(); // Stand nach FE2- und Bridge-Schritt
     const dir = path.join(OUT, 'img-kaputt');
     fs.mkdirSync(dir, { recursive: true });
     fs.writeFileSync(path.join(dir, '999_kaputt.sql'), 'CREATE TABLE halb (id int);\nALTER TABLE gibt_es_nicht ADD COLUMN x int;\n');

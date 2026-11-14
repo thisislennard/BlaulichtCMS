@@ -18,7 +18,8 @@ if docker compose ps -q lifelink 2>/dev/null | grep -q .; then
   echo "LifeLink läuft noch. Bitte zuerst 'docker compose down' ausführen." >&2
   exit 1
 fi
-docker volume create "$VOLUME" >/dev/null
+# Mit Compose-Labels anlegen, damit „docker compose“ das Volume als eigenes erkennt
+docker volume create --label com.docker.compose.project="${VOLUME%%_*}" --label com.docker.compose.volume="${VOLUME#*_}" "$VOLUME" >/dev/null
 if [ -n "$(docker run --rm -v "$VOLUME":/data --entrypoint ls "$IMAGE" -A /data)" ]; then
   echo "Das Volume $VOLUME ist nicht leer. Zum Überschreiben zuerst entfernen: docker volume rm $VOLUME" >&2
   exit 1

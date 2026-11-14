@@ -150,3 +150,35 @@ Metadatenkasten und Warnstufen-Balken; das Layout arbeitet jetzt mit gemessenen 
 
 **Offen (#30):** Abstimmung von Feldsatz, PDF-Aufbau, Empfängern und Rückmeldeweg mit der zuständigen Stelle; Versand über
 den echten Mailserver an ein abgestimmtes Testpostfach.
+
+## Meilenstein 4 (14.11.2026)
+
+| Prüfung | Ergebnis |
+|---|---|
+| Server-Tests | ✅ 72/72 (davon 18 für M4: Verbindungsrahmen, FE2, Facebook, Instagram, OAuth, Export, Warnfeeds, Bridge-Updates, Wartungsmodus, Migrationen, Import, Sicherheit) |
+| **Abnahmetest M4** (`node test/e2e/m4-flow.mjs`) | ✅ **7/7** |
+
+Alle Verbindungen gegen lokale Ersatzdienste (Graph-API-Ersatz, CAP-Testquelle, FE2-Testmeldungen per HTTP) bzw. die
+lokale WordPress-Testseite. Keine echten Veröffentlichungen, keine Daten an Anbieter.
+
+| Abnahmekriterium | Nachweis |
+|---|---|
+| Restore auf frischem Volume mit realistischen Mengen | 90 Fotos (2400 × 1600) + 3 Full-HD-Videos, 197 MB Upload; Sicherungsarchiv 403 MB; `docker compose down -v` → Wiederherstellung → gesund |
+| Benutzer, Rechte, Medien, Freigaben, geplante Aufträge nach Restore | Mengen identisch, Anmeldung inkl. Zwei-Faktor, Redaktion weiterhin ohne Freigaberecht (403), Originale byte-gleich (SHA-256-Stichprobe), geplanter Auftrag weiterhin in der Warteschlange |
+| Wiederherstellung nach fehlgeschlagener Migration | Image mit fehlerhafter Migration → Start gesperrt (Sperrseite und `/healthz` nennen die Migration) → `scripts/update.sh --rollback` stellt altes Image und Sicherung wieder her, Datenstand identisch, keine halbe Migration |
+| Rückkehr nach inkompatibler Migration | Nach erfolgreichem Update startet das alte Image nicht („Datenstand neuer als dieses Programm“); Rückweg über die Sicherung von vor dem Update |
+| PostgreSQL-Hauptversionswechsel | Datenbestand in PostgreSQL 16 → dokumentierter Export/Import → Image mit PostgreSQL 18: Mengen identisch, gesund |
+| Bridge-Updates über WordPress | 0.3.9 → 0.4.0 per `wp plugin update` erst im Test-Kanal angeboten, Prüfsumme geprüft, Kopplung erhalten; Freigabe für alle erst nach Rückmeldung der Testwebsite |
+| FE2 | Testmeldung nur als Vorschau, nach Aktivierung genau ein Entwurf je Einsatz, Wiederholung erkannt, Alarmtext verworfen, Container-Protokolle ohne Inhalte |
+| Testmatrix je Verbindung | siehe [integrationen.md](integrationen.md) |
+
+**Befunde während der Abnahme und Prüfung (behoben):**
+- Videos: öffentliche Fassung übernahm alle Spuren inkl. möglicher GPS-Datenspuren → nur Bild und Ton; Länge/Auflösung begrenzt.
+- OAuth-Rückweg von Meta kam ohne Sitzungs-Cookie an (`SameSite=Strict`) → einmaliger `state`.
+- Update-Paket der Bridge: Adresse aus Sicht der Website (gekoppelte Adresse) statt öffentlicher Adresse; eigener Download statt `download_url()` (lässt nur Standardports zu).
+- Wartungsbefehle per `docker compose exec … cli.js` fanden die interne Datenbank nicht.
+- Erneutes „Veröffentlichen“ nach Fehlschlag legte einen zweiten Auftrag für denselben Kanal an → nur gezieltes Wiederholen.
+- Leere Banner-Liste im Wartungsmodus hätte Banner auf Websites entfernt → Antwort ohne Banner-Liste.
+
+**Offen (extern):** Tests mit echten Anbieterkonten (Meta, FE2, Warn-App-Schnittstelle, Mailserver), produktionsnahe
+WordPress-Website, LiFeOS-Exportformat, Lizenz, externer Penetrationstest, Lasttest auf Zielhardware.

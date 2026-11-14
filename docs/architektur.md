@@ -126,6 +126,26 @@ Alles über Tokens in `web/src/theme/tokens.css` – das endgültige Design läs
   Verbindung, auch nach Neustart während „sending“). `unknown` sperrt jeden Neuversand bis zur menschlichen Prüfung.
   Testmodus ab Werk: nur an das Testpostfach.
 
+### E15 – Optionale Verbindungen (M4)
+
+- Einheitlicher Zustandsautomat `draft → tested → active ⇄ disabled → revoked`; aktivierbar nur nach bestandenem Test.
+  Ein Test enthält immer einen echten Funktionsschritt (Facebook: unveröffentlichter Beitrag + Löschen; Instagram:
+  Container ohne Veröffentlichung; FE2: empfangene Testmeldung; Warnfeed: Abruf + Gebietsfilter).
+- Geheimnisse je Verbindung als verschlüsseltes JSON in `secrets` (neue Version bei jeder Änderung, alte widerrufen).
+- Soziale Kanäle sind Teil der Fassung (`post_revisions.social_targets`, in der Prüfsumme). Je Kanal und Fassung genau ein
+  Auftrag (`social_publications`, eindeutiger Index); ein Versuch je Anstoß; „unbekannt“ wird vor jedem neuen Versuch
+  über den Text-Marker beim Anbieter geprüft.
+- Meta ruft Medien über befristete, tokenisierte URLs `/api/v1/m/<token>` ab (24 h, nur öffentliche Fassungen).
+- Private Ziele (SSRF-Schutz) nur nach Freigabe durch die Plattform-Administration, gebunden an den Host.
+
+### E16 – Betrieb: Updates und Rückweg (M4)
+
+- Schema-Migration als eigener Supervisor-Schritt vor der API; Startprüfung „Datenstand neuer als Programm“.
+  Bei Fehler bleibt PostgreSQL erreichbar und der Webport zeigt eine Sperrseite (503).
+- Wartungsmodus als Einstellung: API lehnt ändernde Anfragen ab (außer Anmeldung und Wartung), Worker beginnt keine
+  neuen Aufträge, Bridge erhält keine neuen Aufträge und keine Banner-Liste.
+- Image und Datenstand gehören zusammen; der Rückweg führt immer über die Volume-Sicherung von vor dem Update.
+
 ## Offene Architekturpunkte
 
 - LiFeOS-Quellcode liegt nicht vor: Abgleich von Sicherheitslogik und Update-Bedienung (#1) sowie das Importformat (#35) sind offen.
