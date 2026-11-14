@@ -10,3 +10,4 @@ coverage/
 *.sig
 *.log
 data/
+test/e2e/out/

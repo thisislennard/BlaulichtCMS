@@ -1,0 +1,39 @@
+# LifeLink – ein Dienst, ein Webport, ein persistentes Volume.
+#
+#   cp .env.example .env        # optional: Werte anpassen
+#   docker compose up -d --build
+#   docker compose logs lifelink | grep Einrichtungsschlüssel
+#
+# Danach http://<server>:7310/einrichtung öffnen. Für den Echtbetrieb einen HTTPS-Reverse-Proxy
+# davorsetzen (siehe docs/reverse-proxy.md).
+
+name: lifelink
+
+services:
+  lifelink:
+    build: .
+    image: lifelink:local
+    container_name: lifelink
+    restart: unless-stopped
+    # Init-Prozess (tini) räumt verwaiste Prozesse auf und leitet Signale weiter
+    init: true
+    env_file:
+      - path: .env
+        required: false
+    ports:
+      - "${LIFELINK_BIND:-0.0.0.0}:${LIFELINK_PORT:-7310}:7310"
+    volumes:
+      - lifelink-data:/data
+    read_only: true
+    tmpfs:
+      - /tmp:size=1g
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    shm_size: 256m
+    # Geordneter Stopp: Worker → API → PostgreSQL (Fast Shutdown)
+    stop_grace_period: 60s
+
+volumes:
+  lifelink-data:

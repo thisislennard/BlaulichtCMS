@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import { get, post } from '../../api/client';
 import { useAuth } from '../../lib/auth';
-import { Button, FieldWrap, Input, Notice, Spinner } from '../../components/ui/core';
+import { Button, FieldWrap, Input, Notice, Select, Spinner } from '../../components/ui/core';
 import { CopyButton } from '../../components/ui/overlays';
 import { Icon } from '../../components/ui/Icon';
 
@@ -72,7 +72,7 @@ export function LoginPage() {
     }
   };
   return (
-    <AuthLayout title="Anmelden" subtitle={state.data?.instanceName && state.data.instanceName !== 'LifeLink' ? state.data.instanceName : 'Integrations- und Automatisierungsplattform'}>
+    <AuthLayout title="Anmelden" subtitle={state.data?.organization || (state.data?.instanceName && state.data.instanceName !== 'LifeLink' ? state.data.instanceName : 'Öffentlichkeitsarbeit und Krisenkommunikation')}>
       <form onSubmit={submit} className="flex flex-col gap-4">
         <FieldWrap label="E-Mail-Adresse" htmlFor="email">
           <Input id="email" type="email" autoComplete="username" required value={email} onChange={(e) => setEmail(e.target.value)} />
@@ -224,18 +224,31 @@ export function MfaSetupPage({ embedded, onDone }: { embedded?: boolean; onDone?
   );
 }
 
+const TIMEZONES = ['Europe/Berlin', 'Europe/Vienna', 'Europe/Zurich', 'Europe/Luxembourg', 'Europe/Amsterdam', 'Europe/Brussels', 'Europe/Paris', 'Europe/London', 'UTC'];
+
 export function SetupPage() {
-  const [form, setForm] = useState({ token: '', name: '', email: '', password: '', password2: '' });
+  const state = useQuery({ queryKey: ['auth-state'], queryFn: () => get('/auth/state'), retry: false });
+  const [step, setStep] = useState<1 | 2>(1);
+  const [form, setForm] = useState({ token: '', organization: '', publicUrl: '', timezone: 'Europe/Berlin', name: '', email: '', password: '', password2: '' });
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const after = useAfterLogin();
+  useEffect(() => {
+    if (!form.publicUrl) setForm((f) => ({ ...f, publicUrl: state.data?.suggestedPublicUrl || window.location.origin }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.data]);
   const submit = async (e: FormEvent) => {
     e.preventDefault();
+    if (step === 1) {
+      if (!/^https?:\/\//.test(form.publicUrl)) return setError('Die öffentliche Adresse muss mit https:// beginnen.');
+      setError(null);
+      return setStep(2);
+    }
     if (form.password !== form.password2) return setError('Die Passwörter stimmen nicht überein.');
     setBusy(true);
     setError(null);
     try {
-      const r = await post('/auth/setup', { token: form.token, name: form.name, email: form.email, password: form.password });
+      const r = await post('/auth/setup', { token: form.token, organization: form.organization, publicUrl: form.publicUrl, timezone: form.timezone, name: form.name, email: form.email, password: form.password });
       await after(r.next);
     } catch (err) {
       setError((err as Error).message);
@@ -243,33 +256,69 @@ export function SetupPage() {
       setBusy(false);
     }
   };
-  const f = (k: keyof typeof form) => ({ value: form[k], onChange: (e: React.ChangeEvent<HTMLInputElement>) => setForm({ ...form, [k]: e.target.value }) });
+  const f = (k: keyof typeof form) => ({ value: form[k], onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setForm({ ...form, [k]: e.target.value }) });
+  if (state.data && !state.data.setupRequired) {
+    return (
+      <AuthLayout title="LifeLink ist eingerichtet" subtitle="Die Ersteinrichtung wurde bereits abgeschlossen.">
+        <Link to="/login">Zur Anmeldung</Link>
+      </AuthLayout>
+    );
+  }
   return (
-    <AuthLayout title="LifeLink einrichten" subtitle="Lege das erste Konto an. Es erhält die Rolle Plattform-Admin.">
+    <AuthLayout title="LifeLink einrichten" subtitle={step === 1 ? 'Schritt 1 von 2: Organisation und Adresse' : 'Schritt 2 von 2: erstes Konto (Administration)'}>
       <form onSubmit={submit} className="flex flex-col gap-4">
-        <FieldWrap label="Einrichtungsschlüssel" htmlFor="tok" help="Steht im Container-Protokoll und in der Datei data/setup-token.txt.">
-          <Input id="tok" mono required autoComplete="off" {...f('token')} />
-        </FieldWrap>
-        <FieldWrap label="Name" htmlFor="name">
-          <Input id="name" required autoComplete="name" {...f('name')} />
-        </FieldWrap>
-        <FieldWrap label="E-Mail-Adresse" htmlFor="email">
-          <Input id="email" type="email" required autoComplete="username" {...f('email')} />
-        </FieldWrap>
-        <FieldWrap label="Passwort" htmlFor="pw" help="Mindestens 12 Zeichen. Ein langer Satz ist gut merkbar und sicher.">
-          <Input id="pw" type="password" required autoComplete="new-password" {...f('password')} />
-        </FieldWrap>
-        <FieldWrap label="Passwort wiederholen" htmlFor="pw2">
-          <Input id="pw2" type="password" required autoComplete="new-password" {...f('password2')} />
-        </FieldWrap>
+        {step === 1 ? (
+          <>
+            <FieldWrap label="Einrichtungsschlüssel" htmlFor="tok" help="Steht im Container-Protokoll (docker compose logs lifelink) und in /data/setup-token.txt.">
+              <Input id="tok" mono required autoComplete="off" {...f('token')} />
+            </FieldWrap>
+            <FieldWrap label="Name der Organisation" htmlFor="org" help="Erscheint auf Upload-Seiten, Aushängen und als Absender.">
+              <Input id="org" required minLength={2} maxLength={120} placeholder="z. B. Musterorganisation" {...f('organization')} />
+            </FieldWrap>
+            <FieldWrap label="Öffentliche Adresse" htmlFor="url" help="Unter dieser HTTPS-Adresse ist LifeLink erreichbar (Reverse Proxy). Sie steht in Einladungen, Upload-Links und QR-Codes.">
+              <Input id="url" required mono placeholder="https://lifelink.example.org" {...f('publicUrl')} />
+            </FieldWrap>
+            <FieldWrap label="Zeitzone" htmlFor="tz">
+              <Select id="tz" {...f('timezone')}>
+                {TIMEZONES.map((z) => (
+                  <option key={z} value={z}>
+                    {z}
+                  </option>
+                ))}
+              </Select>
+            </FieldWrap>
+          </>
+        ) : (
+          <>
+            <FieldWrap label="Name" htmlFor="name">
+              <Input id="name" required autoComplete="name" {...f('name')} />
+            </FieldWrap>
+            <FieldWrap label="E-Mail-Adresse" htmlFor="email">
+              <Input id="email" type="email" required autoComplete="username" {...f('email')} />
+            </FieldWrap>
+            <FieldWrap label="Passwort" htmlFor="pw" help="Mindestens 12 Zeichen. Ein langer Satz ist gut merkbar und sicher.">
+              <Input id="pw" type="password" required autoComplete="new-password" {...f('password')} />
+            </FieldWrap>
+            <FieldWrap label="Passwort wiederholen" htmlFor="pw2">
+              <Input id="pw2" type="password" required autoComplete="new-password" {...f('password2')} />
+            </FieldWrap>
+          </>
+        )}
         {error && (
           <p role="alert" className="m-0 text-sm text-err">
             {error}
           </p>
         )}
-        <Button type="submit" variant="primary" loading={busy}>
-          Konto anlegen
-        </Button>
+        <div className="flex gap-2">
+          {step === 2 && (
+            <Button type="button" onClick={() => setStep(1)}>
+              Zurück
+            </Button>
+          )}
+          <Button type="submit" variant="primary" loading={busy} className="flex-1">
+            {step === 1 ? 'Weiter' : 'Einrichtung abschließen'}
+          </Button>
+        </div>
       </form>
     </AuthLayout>
   );

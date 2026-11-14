@@ -32,9 +32,9 @@ export function usePageMeta(m: PageMeta) {
 function useCounts() {
   const { me, can } = useAuth();
   const notif = useQuery({ queryKey: ['notifications'], queryFn: () => get('/notifications'), enabled: !!me, refetchInterval: 30_000 });
-  const status = useQuery({ queryKey: ['system-status-mini'], queryFn: () => get('/system/status'), enabled: can('system.read') || can('run.read'), refetchInterval: 30_000 });
-  const wf = useQuery({ queryKey: ['workflows'], queryFn: () => get<any[]>('/workflows'), enabled: can('workflow.read'), staleTime: 30_000 });
-  const approvals = (wf.data ?? []).reduce((a, w) => a + (w.pending_approvals ?? 0), 0);
+  const status = useQuery({ queryKey: ['system-status-mini'], queryFn: () => get('/system/status'), enabled: can('system.read'), refetchInterval: 30_000 });
+  const dash = useQuery({ queryKey: ['dashboard'], queryFn: () => get<any>('/dashboard'), enabled: can('post.approve') || can('post.publish'), refetchInterval: 30_000 });
+  const approvals = (can('post.approve') ? (dash.data?.pendingApprovals?.length ?? 0) : 0) + (can('post.publish') ? (dash.data?.readyToPublish?.length ?? 0) : 0);
   return { notif: notif.data, status: status.data, approvals };
 }
 
@@ -59,8 +59,7 @@ function Sidebar({ collapsed, onToggle, mobile, onNavigate }: { collapsed: boole
           <span className="flex flex-col leading-tight min-w-0">
             <span className="font-semibold text-section tracking-[-0.01em]">LifeLink</span>
             <span className="text-meta text-fg-muted truncate">
-              {me?.instance.name !== 'LifeLink' ? `${me?.instance.name} · ` : ''}
-              {me?.instance.subtitle}
+              {me?.instance.organization || me?.instance.name}
             </span>
           </span>
         )}
@@ -213,9 +212,9 @@ function StatusPill() {
   const { status } = useCounts();
   const { can } = useAuth();
   if (!status) return null;
-  const problems = status.services.filter((s: any) => s.state !== 'ok').length + status.connections.filter((c: any) => c.status === 'error').length;
+  const problems = status.services.filter((s: any) => s.state !== 'ok').length;
   return (
-    <Link to={can('system.read') ? '/system' : '/verbindungen'} className={cx('hidden md:inline-flex items-center gap-2 h-9 px-3 rounded-full border text-sm font-medium !text-fg', problems ? 'border-warn/50 bg-warn-soft' : 'border-line bg-card')}>
+    <Link to={can('system.read') ? '/system' : '/'} className={cx('hidden md:inline-flex items-center gap-2 h-9 px-3 rounded-full border text-sm font-medium !text-fg', problems ? 'border-warn/50 bg-warn-soft' : 'border-line bg-card')}>
       <span aria-hidden="true" className={cx('w-2 h-2 rounded-full', problems ? 'bg-warn' : 'bg-ok')} />
       {problems ? `${problems} ${problems === 1 ? 'Hinweis' : 'Hinweise'}` : 'Alles in Ordnung'}
     </Link>

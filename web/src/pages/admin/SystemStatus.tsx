@@ -42,7 +42,7 @@ export interface SystemStatusData {
     last_seen_at: string;
     version: string;
     jobs_running: number;
-    info: { leader?: boolean; mqtt?: number };
+    info: { leader?: boolean };
   }[];
   queue: {
     ready: number;
@@ -51,17 +51,7 @@ export interface SystemStatusData {
     dead: number;
     oldest_ready_sec: number;
   };
-  bindingErrors: { kind: string; last_error: string; name: string }[];
-  connections: {
-    id: string;
-    name: string;
-    connector: string;
-    status: string;
-    status_message: string | null;
-    last_test_ms: number | null;
-    last_test_at: string | null;
-    last_used_at: string | null;
-  }[];
+  sites: { id: string; name: string; site_url: string | null; status: string; last_seen_at: string | null; plugin_version: string | null }[];
   lastBackup: {
     file_name: string;
     status: "running" | "ok" | "failed";
@@ -80,16 +70,10 @@ export interface SystemStatusData {
 const SERVICE_ICON: Record<string, string> = {
   api: "Server",
   db: "Database",
-  worker: "Workflow",
+  worker: "RefreshCw",
   queue: "ListChecks",
-  triggers: "Zap",
-};
-const CONN_TONE: Record<string, Tone> = {
-  ok: "success",
-  warning: "warning",
-  error: "error",
-  untested: "neutral",
-  disabled: "neutral",
+  media: "Images",
+  disk: "HardDrive",
 };
 
 export function useSystemStatus(refetchInterval: number | false = 15_000) {
@@ -301,32 +285,6 @@ export default function SystemStatus() {
                     })
                   : t("admin.system.oldestNone")}
               </p>
-              <div className="flex flex-col gap-2">
-                <h4 className="m-0 text-sm font-semibold">
-                  {t("admin.system.triggers")}
-                </h4>
-                {d.bindingErrors.length === 0 ? (
-                  <p className="m-0 text-sm text-fg-muted flex items-center gap-2">
-                    <Icon name="CheckCircle2" size={14} className="text-ok" />
-                    {t("admin.system.triggersOk")}
-                  </p>
-                ) : (
-                  <ul className="list-none m-0 p-0 flex flex-col gap-2">
-                    {d.bindingErrors.map((b, i) => (
-                      <li
-                        key={i}
-                        className="rounded-node border border-warn/60 bg-warn-soft p-2.5 text-sm"
-                      >
-                        <strong className="font-semibold">{b.name}</strong>{" "}
-                        <span className="text-fg-muted">· {b.kind}</span>
-                        <p className="m-0 mt-0.5 text-meta text-fg-muted break-words">
-                          {b.last_error}
-                        </p>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
             </div>
           )}
         </Card>
@@ -337,7 +295,7 @@ export default function SystemStatus() {
           <SkeletonRows rows={2} className="px-5" />
         ) : d.workers.length === 0 ? (
           <EmptyState
-            icon="Workflow"
+            icon="RefreshCw"
             title={t("admin.system.noWorkers")}
             text={t("admin.system.noWorkersText")}
           />
@@ -403,17 +361,17 @@ export default function SystemStatus() {
         )}
       </Card>
 
-      <Card title={t("admin.system.connections")} bodyClassName="!px-0 !pb-2">
+      <Card title="Websites (LifeLink Bridge)" bodyClassName="!px-0 !pb-2">
         {!d ? (
           <SkeletonRows rows={3} className="px-5" />
-        ) : d.connections.length === 0 ? (
+        ) : d.sites.length === 0 ? (
           <EmptyState
-            icon="Plug"
-            title={t("admin.system.noConnections")}
-            text={t("admin.system.noConnectionsText")}
+            icon="Globe"
+            title="Keine Website gekoppelt"
+            text="Der interne Redaktionsablauf funktioniert auch ohne Website."
             action={
-              <LinkButton to="/schnittstellen" icon="Plus">
-                {t("admin.system.connect")}
+              <LinkButton to="/kanaele" icon="Plus">
+                Website koppeln
               </LinkButton>
             }
           />
@@ -423,47 +381,24 @@ export default function SystemStatus() {
               <tr>
                 <Th className="pl-5">{t("admin.users.col.name")}</Th>
                 <Th>{t("admin.users.col.status")}</Th>
-                <Th align="right">{t("admin.system.latency")}</Th>
-                <Th>{t("admin.system.lastTest")}</Th>
+                <Th>Letzter Abruf</Th>
+                <Th>Bridge</Th>
               </tr>
             </thead>
             <tbody>
-              {d.connections.map((c) => (
-                <tr
-                  key={c.id}
-                  className="hover:bg-raised transition-colors duration-fast"
-                >
+              {d.sites.map((c) => (
+                <tr key={c.id} className="hover:bg-raised transition-colors duration-fast">
                   <Td className="pl-5">
-                    <Link to={`/verbindungen/${c.id}`} className="font-medium">
+                    <Link to="/kanaele" className="font-medium">
                       {c.name}
                     </Link>
-                    <span className="block text-meta text-fg-muted font-mono">
-                      {c.connector}
-                    </span>
+                    <span className="block text-meta text-fg-muted font-mono">{c.site_url ?? "–"}</span>
                   </Td>
                   <Td>
-                    <Badge
-                      tone={CONN_TONE[c.status] ?? "neutral"}
-                      title={c.status_message ?? undefined}
-                    >
-                      {t(
-                        `admin.system.connStatus.${c.status in CONN_TONE ? c.status : "untested"}`,
-                      )}
-                    </Badge>
-                    {c.status_message && c.status !== "ok" && (
-                      <span className="block text-meta text-fg-muted max-w-[360px] truncate mt-0.5">
-                        {c.status_message}
-                      </span>
-                    )}
+                    <Badge tone={c.status === "active" ? "success" : "neutral"}>{c.status === "active" ? "Aktiv" : "Wartet auf Kopplung"}</Badge>
                   </Td>
-                  <Td align="right" mono>
-                    {c.last_test_ms != null
-                      ? `${fmtNumber(c.last_test_ms)} ms`
-                      : "–"}
-                  </Td>
-                  <Td className="text-meta text-fg-muted whitespace-nowrap">
-                    {c.last_test_at ? fmtRelative(c.last_test_at) : "–"}
-                  </Td>
+                  <Td className="text-meta text-fg-muted whitespace-nowrap">{c.last_seen_at ? fmtRelative(c.last_seen_at) : "–"}</Td>
+                  <Td mono>{c.plugin_version ?? "–"}</Td>
                 </tr>
               ))}
             </tbody>

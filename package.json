@@ -1,7 +1,7 @@
 {
   "name": "lifelink",
   "private": true,
-  "description": "LifeLink – Integrations- und Automatisierungsplattform",
+  "description": "LifeLink – CMS für Öffentlichkeitsarbeit und Krisenkommunikation",
   "workspaces": ["server", "web"],
   "engines": { "node": ">=24" },
   "scripts": {

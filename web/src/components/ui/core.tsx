@@ -88,24 +88,38 @@ export function Badge({ tone = 'neutral', children, dot = true, pulse, className
   );
 }
 
-export const RUN_STATUS: Record<string, { tone: Tone; label: string; pulse?: boolean }> = {
-  queued: { tone: 'neutral', label: 'In Warteschlange', pulse: true },
-  running: { tone: 'primary', label: 'Läuft', pulse: true },
-  waiting: { tone: 'warning', label: 'Wartet', pulse: true },
-  success: { tone: 'success', label: 'Erfolgreich' },
-  error: { tone: 'error', label: 'Fehlgeschlagen' },
-  dead: { tone: 'error', label: 'Abgebrochen (Fehler)' },
-  needs_review: { tone: 'warning', label: 'Prüfen' },
+/** Status-Darstellung für Beiträge, Veröffentlichungen, Medien und Links – immer Farbe + Text. */
+export const STATUS: Record<string, { tone: Tone; label: string; pulse?: boolean }> = {
+  // Beitrag (bezogen auf die aktuelle Fassung)
+  draft: { tone: 'neutral', label: 'Entwurf' },
+  in_review: { tone: 'warning', label: 'Zur Freigabe' },
+  approved: { tone: 'success', label: 'Freigegeben' },
+  rejected: { tone: 'error', label: 'Zurückgewiesen' },
+  publishing: { tone: 'primary', label: 'Wird veröffentlicht', pulse: true },
+  published: { tone: 'success', label: 'Veröffentlicht' },
+  failed: { tone: 'error', label: 'Fehlgeschlagen' },
+  unknown: { tone: 'warning', label: 'Ergebnis unbekannt' },
+  // Veröffentlichungsauftrag
+  queued: { tone: 'neutral', label: 'Wartet auf Abholung', pulse: true },
+  sent: { tone: 'primary', label: 'Gesendet', pulse: true },
   canceled: { tone: 'neutral', label: 'Abgebrochen' },
-  skipped: { tone: 'neutral', label: 'Nicht ausgeführt' },
-  simulated: { tone: 'cyan', label: 'Simuliert' },
+  // Medien
+  quarantine: { tone: 'warning', label: 'Wird geprüft', pulse: true },
+  ready: { tone: 'success', label: 'Geprüft' },
+  selected: { tone: 'success', label: 'Ausgewählt' },
+  skipped: { tone: 'neutral', label: 'Übersprungen' },
+  pending: { tone: 'neutral', label: 'Offen' },
+  // Links und Kanäle
+  active: { tone: 'success', label: 'Aktiv' },
+  expired: { tone: 'neutral', label: 'Abgelaufen' },
+  revoked: { tone: 'error', label: 'Widerrufen' },
 };
 
-export function StatusBadge({ status, className }: { status: string; className?: string }) {
-  const s = RUN_STATUS[status] ?? { tone: 'neutral' as Tone, label: status };
+export function StatusBadge({ status, className, labels }: { status: string; className?: string; labels?: Record<string, string> }) {
+  const s = STATUS[status] ?? { tone: 'neutral' as Tone, label: status };
   return (
     <Badge tone={s.tone} pulse={s.pulse} className={className}>
-      {s.label}
+      {labels?.[status] ?? s.label}
     </Badge>
   );
 }

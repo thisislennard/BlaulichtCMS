@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main, v2]
+    branches: [main]
   pull_request:
 
 permissions:
@@ -41,17 +41,11 @@ jobs:
       - uses: actions/checkout@v5
       - name: Image bauen
         run: docker build -t lifelink:ci .
-      - name: Probelauf mit Compose
+      - name: Probelauf mit Compose (frisches Volume)
         run: |
-          cat > .env <<EOF
-          POSTGRES_PASSWORD=ci-passwort-$(openssl rand -hex 8)
-          LIFELINK_MASTER_KEY=$(openssl rand -base64 32)
-          PUBLIC_URL=http://localhost:7310
-          COOKIE_SECURE=false
-          TRUST_PROXY=false
-          EOF
+          printf 'COOKIE_SECURE=false\nTRUST_PROXY=false\n' > .env
           docker compose up -d
-          for i in $(seq 1 60); do
+          for i in $(seq 1 90); do
             if curl -fsS http://localhost:7310/healthz; then break; fi
             sleep 2
           done

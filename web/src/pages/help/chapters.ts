@@ -1,5 +1,5 @@
-/* Kapitelverzeichnis der Hilfe. Inhalte liegen als Markdown unter ./content/<slug>.md;
-   die Referenzkapitel (Bausteine, Integrationen, Filter) entstehen zur Laufzeit aus dem Katalog. */
+/* Kapitelverzeichnis der Hilfe. Inhalte liegen als Markdown unter ./content/<slug>.md,
+   Titel und Kurzbeschreibungen in i18n/<sprache>/help.json (chapters.<slug>). */
 import { t } from '../../i18n';
 
 const files = import.meta.glob<string>('./content/*.md', { query: '?raw', import: 'default', eager: true });
@@ -9,14 +9,10 @@ export const CONTENT: Record<string, string> = Object.fromEntries(
   Object.entries(files).map(([path, text]) => [path.replace(/^.*\/([\w-]+)\.md$/, '$1'), text]),
 );
 
-export type ReferenceKind = 'bausteine' | 'integrationen' | 'filter';
-
 export interface Chapter {
   slug: string;
   group: string;
   icon: string;
-  /** Dynamisches Referenzkapitel (aus dem Katalog erzeugt). */
-  reference?: ReferenceKind;
 }
 
 export interface ChapterGroup {
@@ -24,47 +20,39 @@ export interface ChapterGroup {
   chapters: Chapter[];
 }
 
-const G = (id: string, list: [string, string, ReferenceKind?][]): ChapterGroup => ({
+const G = (id: string, list: [string, string][]): ChapterGroup => ({
   id,
-  chapters: list.map(([slug, icon, reference]) => ({ slug, group: id, icon, reference })),
+  chapters: list.map(([slug, icon]) => ({ slug, group: id, icon })),
 });
 
 export const GROUPS: ChapterGroup[] = [
   G('basics', [
     ['erste-schritte', 'Sparkles'],
     ['anmeldung', 'Lock'],
+    ['app', 'Smartphone'],
   ]),
-  G('build', [
-    ['workflows', 'Workflow'],
-    ['variablen', 'Braces'],
-    ['bedingungen', 'GitBranch'],
-    ['testen', 'FlaskConical'],
-    ['zeitplaene', 'CalendarClock'],
-    ['ausfuehrungen', 'History'],
+  G('work', [
+    ['foto-link', 'Camera'],
+    ['sichtung', 'CheckSquare'],
+    ['beitraege', 'FileText'],
+    ['freigabe', 'ShieldCheck'],
+    ['qr-codes', 'QrCode'],
   ]),
-  G('connect', [
-    ['webhooks', 'Webhook'],
-    ['alamos-fe2', 'Siren'],
-    ['wordpress', 'Megaphone'],
-    ['e-mail', 'Mail'],
-    ['teams', 'MessagesSquare'],
-    ['mqtt', 'RadioTower'],
-    ['rest-api', 'Globe'],
-    ['api', 'KeyRound'],
+  G('channels', [
+    ['wordpress', 'Globe'],
+    ['ohne-website', 'Unlink'],
   ]),
   G('admin', [
     ['benutzer-rollen', 'Users'],
-    ['sicherheit', 'ShieldCheck'],
+    ['einrichtung', 'Settings'],
+    ['sicherheit', 'Lock'],
     ['sicherung', 'HardDrive'],
     ['updates', 'Download'],
-    ['betrieb', 'Server'],
   ]),
   G('reference', [
     ['fehlerbehebung', 'LifeBuoy'],
     ['tastatur', 'Keyboard'],
-    ['bausteine', 'Box', 'bausteine'],
-    ['integrationen', 'Plug', 'integrationen'],
-    ['filter', 'Filter', 'filter'],
+    ['begriffe', 'BookOpen'],
   ]),
 ];
 

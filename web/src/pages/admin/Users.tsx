@@ -284,7 +284,7 @@ function InviteForm({
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
   const [sel, setSel] = useState<string[]>(
-    ["workflow_editor"].filter((r) => roles.some((x) => x.id === r)),
+    ["editor"].filter((r) => roles.some((x) => x.id === r)),
   );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -580,6 +580,19 @@ function UserTable({
     }
   };
 
+  const revokeLink = async (u: UserRow) => {
+    try {
+      const r = await post<{ revoked: number }>(`/users/${u.id}/revoke-link`);
+      refresh();
+      toast({
+        tone: r.revoked ? "success" : "info",
+        title: r.revoked ? `Link für ${u.name} widerrufen` : "Kein offener Link vorhanden",
+      });
+    } catch (e) {
+      onError(e);
+    }
+  };
+
   const reset2fa = async (u: UserRow) => {
     try {
       await post(`/users/${u.id}/reset-2fa`);
@@ -750,6 +763,11 @@ function UserTable({
                             icon: "Link2",
                             onClick: () => makeLink(u),
                           },
+                          !!u.invite_expires_at && {
+                            label: "Offenen Link widerrufen",
+                            icon: "Ban",
+                            onClick: () => revokeLink(u),
+                          },
                           u.totp_enabled && {
                             label: t("admin.users.reset2fa"),
                             icon: "ShieldCheck",
@@ -818,7 +836,7 @@ function UserTable({
                 </Td>
                 <Td align="right">
                   <Link
-                    to="/api-schluessel"
+                    to="/einstellungen"
                     aria-label={`${t("admin.users.serviceManage")}: ${k.name}`}
                     title={t("admin.users.serviceManage")}
                     className="inline-flex w-8 h-8 items-center justify-center rounded-control border border-line text-fg-muted hover:bg-raised hover:text-fg"

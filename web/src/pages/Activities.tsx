@@ -27,10 +27,9 @@ import {
 
 const AREAS = [
   "all",
-  "workflow",
-  "run",
-  "connection",
-  "wordpress",
+  "editorial",
+  "media",
+  "channels",
   "user",
   "system",
 ] as const;
@@ -39,10 +38,7 @@ type Area = (typeof AREAS)[number];
 const NOISE = new Set(["auth.login", "auth.logout", "auth.mfa"]);
 
 /** Serverseitiger Suchbegriff je Bereich (ILIKE auf action/objekt/person) – Feinfilter danach im Client. */
-const AREA_QUERY: Partial<Record<Area, string>> = {
-  workflow: "workflow.",
-  run: "run.",
-};
+const AREA_QUERY: Partial<Record<Area, string>> = {};
 
 function dayKey(iso: string) {
   return new Intl.DateTimeFormat("en-CA", {

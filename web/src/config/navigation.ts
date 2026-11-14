@@ -21,31 +21,22 @@ export const navigation: NavGroup[] = [
   {
     group: 'nav.overview',
     items: [
-      { id: 'dashboard', path: '/', label: 'nav.dashboard', icon: 'LayoutDashboard', perm: ['run.read'] },
-      { id: 'activity', path: '/aktivitaeten', label: 'nav.activity', icon: 'Activity', perm: ['audit.read'] },
+      { id: 'dashboard', path: '/', label: 'nav.dashboard', icon: 'LayoutDashboard' },
       { id: 'notifications', path: '/benachrichtigungen', label: 'nav.notifications', icon: 'Bell', badge: 'notifications' },
+      { id: 'activity', path: '/aktivitaeten', label: 'nav.activity', icon: 'Activity', perm: ['audit.read'] },
     ],
   },
   {
-    group: 'nav.automation',
+    group: 'nav.editorial',
     items: [
-      { id: 'workflows', path: '/workflows', label: 'nav.workflows', icon: 'Workflow', perm: ['workflow.read'], badge: 'approvals' },
-      { id: 'templates', path: '/vorlagen', label: 'nav.templates', icon: 'LayoutTemplate', perm: ['workflow.read'] },
-      { id: 'history', path: '/ausfuehrungen', label: 'nav.history', icon: 'History', perm: ['run.read'] },
+      { id: 'posts', path: '/beitraege', label: 'nav.posts', icon: 'FileText', perm: ['post.read'] },
+      { id: 'approvals', path: '/freigaben', label: 'nav.approvals', icon: 'ListChecks', perm: ['post.approve', 'post.publish'], badge: 'approvals' },
+      { id: 'media', path: '/medien', label: 'nav.media', icon: 'Images', perm: ['media.read'] },
     ],
   },
   {
-    group: 'nav.integrations',
-    items: [
-      { id: 'interfaces', path: '/schnittstellen', label: 'nav.interfaces', icon: 'Plug', perm: ['connection.read'] },
-      { id: 'connections', path: '/verbindungen', label: 'nav.connections', icon: 'Link2', perm: ['connection.read'] },
-      { id: 'webhooks', path: '/webhooks', label: 'nav.webhooks', icon: 'Zap', perm: ['connection.read'] },
-      { id: 'api', path: '/api-schluessel', label: 'nav.api', icon: 'KeyRound', perm: ['system.manage'] },
-    ],
-  },
-  {
-    group: 'nav.content',
-    items: [{ id: 'wordpress', path: '/wordpress', label: 'nav.wordpress', icon: 'Megaphone', perm: ['wordpress.read'] }],
+    group: 'nav.channels',
+    items: [{ id: 'sites', path: '/kanaele', label: 'nav.sites', icon: 'Globe', perm: ['post.read', 'channel.manage'] }],
   },
   {
     group: 'nav.admin',
@@ -54,7 +45,6 @@ export const navigation: NavGroup[] = [
       { id: 'status', path: '/system', label: 'nav.status', icon: 'Server', perm: ['system.read'] },
       { id: 'logs', path: '/protokolle', label: 'nav.logs', icon: 'ScrollText', perm: ['system.read'] },
       { id: 'settings', path: '/einstellungen', label: 'nav.settings', icon: 'Settings', perm: ['system.read', 'system.manage'] },
-      { id: 'updates', path: '/updates', label: 'nav.updates', icon: 'Download', adminOnly: true },
     ],
   },
 ];
@@ -67,7 +57,6 @@ export function activeNavId(pathname: string): string | null {
       const match = it.path === '/' ? pathname === '/' : pathname === it.path || pathname.startsWith(it.path + '/');
       if (match && (!best || it.path.length > best.len)) best = { id: it.id, len: it.path.length };
     }
-  if (!best && pathname.startsWith('/schnittstellen')) return 'interfaces';
   return best?.id ?? null;
 }
 

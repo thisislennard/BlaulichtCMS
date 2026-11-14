@@ -87,6 +87,8 @@ function jobPayload(p: any, media: any[], base: string) {
       kind: m.kind,
       mime: publicFileFor(m)?.type ?? m.mime,
       filename: `${m.id}.${publicFileFor(m)?.ext ?? 'bin'}`,
+      // Pfad relativ zur LifeLink-Adresse, die die Bridge selbst verwendet (robust hinter Proxys und in Testnetzen)
+      path: `/api/v1/bridge/media/${m.id}`,
       url: `${base}/api/v1/bridge/media/${m.id}`,
       width: m.width,
       height: m.height,

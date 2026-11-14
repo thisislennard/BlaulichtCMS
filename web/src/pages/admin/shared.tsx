@@ -288,12 +288,12 @@ function dictLookup(path: string): string | null {
   return typeof v === "string" ? v : null;
 }
 
-/** „workflow.published“ → „Workflow veröffentlicht“; unbekannte Aktionen roh. */
+/** „post.approved“ → „Fassung freigegeben“; unbekannte Aktionen roh. */
 export function auditLabel(action: string): string {
   return dictLookup(`actions.${action}`) ?? action;
 }
 
-/** Satzteil nach dem Namen: „hat den Workflow „X“ veröffentlicht“. */
+/** Satzteil nach dem Namen: „hat „X“ freigegeben“. */
 export function auditSentence(
   ev: Pick<AuditEvent, "action" | "object_label">,
 ): string {
@@ -315,28 +315,18 @@ export function auditHref(
   const id = ev.object_id;
   const deleted = ev.action.endsWith(".deleted");
   switch (ev.object_type) {
-    case "workflow":
-      return id && !deleted ? `/workflows/${id}` : null;
-    case "connection":
-      return id && !deleted ? `/verbindungen/${id}` : null;
-    case "run":
-      return id ? `/ausfuehrungen/${id}` : null;
-    case "banner":
-      return id && !deleted ? `/wordpress?banner=${id}` : "/wordpress";
     case "post":
-      return "/wordpress";
+      return id ? `/beitraege/${id}` : "/beitraege";
+    case "collection":
+      return id ? `/medien/${id}` : "/medien";
+    case "site":
+      return "/kanaele";
     case "user":
       return "/benutzer";
-    case "webhook":
-      return "/webhooks";
-    case "api_key":
-      return "/api-schluessel";
     case "backup":
       return "/einstellungen#sicherung";
     case "settings":
-      return ev.action.startsWith("updates.") ? "/updates" : "/einstellungen";
-    case "update":
-      return "/updates";
+      return "/einstellungen";
     default:
       return null;
   }
@@ -347,10 +337,9 @@ export function auditArea(
   ev: Pick<AuditEvent, "action" | "object_type">,
 ): string {
   const p = ev.action.split(".")[0];
-  if (p === "workflow") return "workflow";
-  if (p === "run") return "run";
-  if (["connection", "webhook", "api_key"].includes(p)) return "connection";
-  if (["banner", "post", "wordpress"].includes(p)) return "wordpress";
+  if (["post", "publication"].includes(p)) return "editorial";
+  if (["collection", "upload_link", "media"].includes(p)) return "media";
+  if (p === "site") return "channels";
   if (["user", "auth", "setup"].includes(p)) return "user";
   return "system";
 }

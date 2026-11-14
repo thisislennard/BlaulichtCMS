@@ -4,28 +4,24 @@ import { AppShell, RequirePerm } from './components/layout/AppShell';
 import { SkeletonRows } from './components/ui/core';
 import { useAuth } from './lib/auth';
 import { InvitePage, LoginPage, MfaSetupPage, MfaVerifyPage, SetupPage } from './pages/auth/AuthPages';
+import { UploadPage } from './pages/public/UploadPage';
 
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const Activities = lazy(() => import('./pages/Activities'));
 const Notifications = lazy(() => import('./pages/Notifications'));
 const Profile = lazy(() => import('./pages/Profile'));
-const WorkflowList = lazy(() => import('./pages/workflows/WorkflowList'));
-const Templates = lazy(() => import('./pages/workflows/Templates'));
-const Editor = lazy(() => import('./pages/editor/Editor'));
-const Executions = lazy(() => import('./pages/runs/Executions'));
-const Integrations = lazy(() => import('./pages/integrations/Integrations'));
-const Wizard = lazy(() => import('./pages/integrations/Wizard'));
-const Connections = lazy(() => import('./pages/integrations/Connections'));
-const ConnectionDetail = lazy(() => import('./pages/integrations/ConnectionDetail'));
-const Webhooks = lazy(() => import('./pages/integrations/Webhooks'));
-const ApiKeys = lazy(() => import('./pages/integrations/ApiKeys'));
-const WordPress = lazy(() => import('./pages/wordpress/WordPress'));
+const Posts = lazy(() => import('./pages/posts/Posts'));
+const PostEditor = lazy(() => import('./pages/posts/PostEditor'));
+const Collections = lazy(() => import('./pages/media/Collections'));
+const CollectionDetail = lazy(() => import('./pages/media/CollectionDetail'));
+const Sites = lazy(() => import('./pages/channels/Sites'));
 const Users = lazy(() => import('./pages/admin/Users'));
 const SystemStatus = lazy(() => import('./pages/admin/SystemStatus'));
 const Logs = lazy(() => import('./pages/admin/Logs'));
 const Settings = lazy(() => import('./pages/admin/Settings'));
-const Updates = lazy(() => import('./pages/admin/Updates'));
 const Help = lazy(() => import('./pages/help/Help'));
+const PrintSheet = lazy(() => import('./pages/print/PrintSheet'));
+const InstallApp = lazy(() => import('./pages/InstallApp'));
 
 function Loading() {
   return <SkeletonRows rows={6} className="pt-2" />;
@@ -47,24 +43,25 @@ function Page({ perm, children }: { perm?: string[]; children: ReactNode }) {
   return perm ? <RequirePerm perm={perm}>{inner}</RequirePerm> : inner;
 }
 
-function HomeRedirect() {
-  const { can } = useAuth();
-  if (can('run.read')) return <Page><Dashboard /></Page>;
-  if (can('wordpress.read')) return <Navigate to="/wordpress" replace />;
-  return <Navigate to="/hilfe" replace />;
-}
-
-function AdminOnly({ children }: { children: ReactNode }) {
-  const { isPlatformAdmin } = useAuth();
-  return isPlatformAdmin ? <Page>{children}</Page> : <RequirePerm perm={['__platform_admin__']}>{null}</RequirePerm>;
-}
-
 const router = createBrowserRouter([
   { path: '/login', element: <LoginPage /> },
   { path: '/einrichtung', element: <SetupPage /> },
   { path: '/einladung/:token', element: <InvitePage /> },
   { path: '/2fa', element: <MfaVerifyPage /> },
   { path: '/2fa/einrichten', element: <MfaSetupPage /> },
+  // Öffentliche Upload-Seite (ohne Konto)
+  { path: '/u/:token', element: <UploadPage /> },
+  { path: '/app', element: <Suspense fallback={null}><InstallApp /></Suspense> },
+  {
+    path: '/drucken',
+    element: (
+      <Protected>
+        <Suspense fallback={null}>
+          <PrintSheet />
+        </Suspense>
+      </Protected>
+    ),
+  },
   {
     path: '/',
     element: (
@@ -73,26 +70,19 @@ const router = createBrowserRouter([
       </Protected>
     ),
     children: [
-      { index: true, element: <HomeRedirect /> },
+      { index: true, element: <Page><Dashboard /></Page> },
       { path: 'aktivitaeten', element: <Page perm={['audit.read']}><Activities /></Page> },
       { path: 'benachrichtigungen', element: <Page><Notifications /></Page> },
-      { path: 'workflows', element: <Page perm={['workflow.read']}><WorkflowList /></Page> },
-      { path: 'workflows/:id', element: <Page perm={['workflow.read']}><Editor /></Page> },
-      { path: 'vorlagen', element: <Page perm={['workflow.read']}><Templates /></Page> },
-      { path: 'ausfuehrungen', element: <Page perm={['run.read']}><Executions /></Page> },
-      { path: 'ausfuehrungen/:runId', element: <Page perm={['run.read']}><Executions /></Page> },
-      { path: 'schnittstellen', element: <Page perm={['connection.read']}><Integrations /></Page> },
-      { path: 'schnittstellen/:connector/verbinden', element: <Page perm={['connection.edit']}><Wizard /></Page> },
-      { path: 'verbindungen', element: <Page perm={['connection.read']}><Connections /></Page> },
-      { path: 'verbindungen/:id', element: <Page perm={['connection.read']}><ConnectionDetail /></Page> },
-      { path: 'webhooks', element: <Page perm={['connection.read']}><Webhooks /></Page> },
-      { path: 'api-schluessel', element: <Page perm={['system.manage']}><ApiKeys /></Page> },
-      { path: 'wordpress', element: <Page perm={['wordpress.read']}><WordPress /></Page> },
+      { path: 'beitraege', element: <Page perm={['post.read']}><Posts /></Page> },
+      { path: 'beitraege/:id', element: <Page perm={['post.read']}><PostEditor /></Page> },
+      { path: 'freigaben', element: <Page perm={['post.read']}><Posts mode="approvals" /></Page> },
+      { path: 'medien', element: <Page perm={['media.read']}><Collections /></Page> },
+      { path: 'medien/:id', element: <Page perm={['media.read']}><CollectionDetail /></Page> },
+      { path: 'kanaele', element: <Page perm={['post.read', 'channel.manage']}><Sites /></Page> },
       { path: 'benutzer', element: <Page perm={['user.read']}><Users /></Page> },
       { path: 'system', element: <Page perm={['system.read']}><SystemStatus /></Page> },
       { path: 'protokolle', element: <Page perm={['system.read']}><Logs /></Page> },
       { path: 'einstellungen', element: <Page perm={['system.read', 'system.manage']}><Settings /></Page> },
-      { path: 'updates', element: <AdminOnly><Updates /></AdminOnly> },
       { path: 'profil', element: <Page><Profile /></Page> },
       { path: 'hilfe', element: <Page><Help /></Page> },
       { path: 'hilfe/:chapter', element: <Page><Help /></Page> },

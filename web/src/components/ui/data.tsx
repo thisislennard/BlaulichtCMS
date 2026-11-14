@@ -1,36 +1,6 @@
 import type { ReactNode } from 'react';
-import type { Category } from '../../api/types';
 import { cx } from './core';
 import { Icon } from './Icon';
-
-/* Node-Kategorien: Farbe nur für die Icon-Kachel (Design §2.4, §5.3) */
-export const CATEGORY_COLOR: Record<Category, string> = {
-  trigger: 'var(--ll-node-trigger)',
-  condition: 'var(--ll-node-condition)',
-  data: 'var(--ll-node-data)',
-  action: 'var(--ll-node-action)',
-  control: 'var(--ll-node-control)',
-};
-export const CATEGORY_LABEL: Record<Category, string> = {
-  trigger: 'Trigger',
-  condition: 'Bedingung',
-  data: 'Datenverarbeitung',
-  action: 'Aktion',
-  control: 'Steuerung',
-};
-
-export function NodeIcon({ icon, category, size = 28 }: { icon: string; category: Category; size?: number }) {
-  const c = CATEGORY_COLOR[category];
-  return (
-    <span aria-hidden="true" className="inline-flex items-center justify-center rounded-[7px] shrink-0" style={{ width: size, height: size, color: c, background: `color-mix(in srgb, ${c} 16%, transparent)` }}>
-      <Icon name={icon} size={Math.round(size * 0.55)} />
-    </span>
-  );
-}
-
-export function CategoryDot({ category, size = 8 }: { category: Category; size?: number }) {
-  return <span aria-hidden="true" className="inline-block rounded-full shrink-0" style={{ width: size, height: size, background: CATEGORY_COLOR[category] }} />;
-}
 
 export function Sparkline({ values, color = 'var(--ll-primary)', width = 72, height = 20 }: { values: number[]; color?: string; width?: number; height?: number }) {
   if (!values.length) return <svg width={width} height={height} aria-hidden="true" />;

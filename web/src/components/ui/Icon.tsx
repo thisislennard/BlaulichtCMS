@@ -92,6 +92,26 @@ import {
   Pencil,
   Server,
   Gauge,
+  Images,
+  QrCode,
+  Printer,
+  Camera,
+  ImageOff,
+  Video,
+  CheckSquare,
+  SkipForward,
+  Smartphone,
+  Unlink,
+  Link,
+  ArrowUp,
+  ArrowDown,
+  Ban,
+  CircleCheck,
+  CircleDashed,
+  Film,
+  UploadCloud,
+  Share2,
+  Image,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -103,6 +123,8 @@ const MAP: Record<string, LucideIcon> = {
   PanelLeftClose, PanelLeftOpen, Play, Plug, Plus, RadioTower, RefreshCw, RotateCcw, Save, ScrollText, Search, Send, Settings, ShieldCheck,
   Siren, Split, Sparkles, TextCursorInput, Trash2, Undo2, Redo2, Upload, User, Users, Webhook, Workflow, X, XCircle, Zap, Maximize2, Wand2,
   FlaskConical, History, Eye, EyeOff, Power, PowerOff, Archive, Pencil, Server, Gauge,
+  Images, QrCode, Printer, Camera, ImageOff, Video, CheckSquare, SkipForward, Smartphone, Unlink, Link, ArrowUp, ArrowDown, Ban, CircleCheck,
+  CircleDashed, Film, UploadCloud, Share2, Image,
 };
 
 export function Icon({ name, size = 16, className, strokeWidth = 1.9 }: { name: string; size?: number; className?: string; strokeWidth?: number }) {

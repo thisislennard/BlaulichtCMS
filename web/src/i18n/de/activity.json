@@ -4,10 +4,9 @@
   "areaLabel": "Bereich",
   "areas": {
     "all": "Alle",
-    "workflow": "Workflows",
-    "run": "Ausführungen",
-    "connection": "Schnittstellen",
-    "wordpress": "WordPress",
+    "editorial": "Redaktion & Freigaben",
+    "media": "Medien",
+    "channels": "Websites",
     "user": "Benutzer & Anmeldung",
     "system": "System"
   },
@@ -15,7 +14,7 @@
   "yesterday": "Gestern",
   "loadMore": "Ältere laden",
   "empty": "Noch keine Aktivitäten",
-  "emptyText": "Sobald jemand Workflows, Schnittstellen oder Einstellungen ändert, erscheint es hier.",
+  "emptyText": "Sobald jemand Beiträge, Medien, Freigaben oder Einstellungen ändert, erscheint es hier.",
   "emptyFiltered": "Keine Aktivitäten in diesem Bereich",
   "emptyFilteredText": "Wähle einen anderen Bereich oder „Alle“.",
   "showAll": "Alle anzeigen",
@@ -50,7 +49,8 @@
       "enabled": "Benutzer aktiviert",
       "renamed": "Benutzer umbenannt",
       "mfa_reset": "2FA zurückgesetzt",
-      "deleted": "Benutzer gelöscht"
+      "deleted": "Benutzer gelöscht",
+      "invite_revoked": "Einladung widerrufen"
     },
     "api_key": {
       "created": "API-Schlüssel erstellt",
@@ -60,72 +60,48 @@
       "created": "Sicherung erstellt",
       "downloaded": "Sicherung heruntergeladen"
     },
-    "banner": {
-      "created": "Banner angelegt",
-      "updated": "Banner geändert",
-      "deleted": "Banner gelöscht",
-      "duplicated": "Banner dupliziert",
-      "deactivated": "Banner deaktiviert",
-      "published": "Banner veröffentlicht",
-      "reactivated": "Banner reaktiviert"
-    },
     "post": {
       "created": "Beitrag angelegt",
+      "revised": "Neue Fassung gespeichert",
       "updated": "Beitrag geändert",
-      "deleted": "Beitrag gelöscht",
-      "sent": "Beitrag an WordPress gesendet"
-    },
-    "connection": {
-      "created": "Verbindung angelegt",
-      "updated": "Verbindung geändert",
-      "deleted": "Verbindung gelöscht",
-      "tested": "Verbindung getestet",
-      "enabled": "Verbindung aktiviert",
-      "disabled": "Verbindung deaktiviert",
-      "credentials_replaced": "Zugangsdaten ersetzt",
-      "credentials_revoked": "Zugangsdaten widerrufen",
-      "credentials_rollback": "Zugangsdaten zurückgesetzt"
-    },
-    "run": {
-      "canceled": "Lauf abgebrochen",
-      "replayed": "Lauf wiederholt"
+      "submitted": "Zur Freigabe eingereicht",
+      "approved": "Fassung freigegeben",
+      "rejected": "Fassung zurückgewiesen",
+      "approval_revoked": "Freigabe zurückgezogen"
     },
     "settings": {
       "changed": "Einstellungen geändert"
     },
-    "update": {
-      "install": "Update installiert"
+    "publication": {
+      "requested": "Veröffentlichung beauftragt",
+      "fetched": "Auftrag abgeholt",
+      "confirmed": "Veröffentlichung bestätigt",
+      "failed": "Veröffentlichung fehlgeschlagen",
+      "canceled": "Auftrag abgebrochen",
+      "retried": "Erneut beauftragt"
     },
-    "updates": {
-      "settings_changed": "Update-Einstellungen geändert"
+    "collection": {
+      "created": "Sammlung angelegt",
+      "updated": "Sammlung geändert",
+      "assigned": "Sammlung zugeordnet"
     },
-    "webhook": {
-      "created": "Webhook angelegt",
-      "secret_rotated": "Webhook-Schlüssel erneuert",
-      "revoked": "Webhook widerrufen",
-      "reactivated": "Webhook reaktiviert"
+    "upload_link": {
+      "created": "Upload-Link erstellt",
+      "revoked": "Upload-Link widerrufen"
     },
-    "wordpress": {
-      "plugin_downloaded": "WordPress-Plugin heruntergeladen"
+    "media": {
+      "uploaded": "Datei hochgeladen",
+      "selection": "Auswahl geändert",
+      "deleted": "Datei gelöscht",
+      "downloaded": "Original heruntergeladen"
     },
-    "workflow": {
-      "created": "Workflow angelegt",
-      "imported": "Workflow importiert",
-      "updated": "Workflow geändert",
-      "deleted": "Workflow gelöscht",
-      "duplicated": "Workflow dupliziert",
-      "exported": "Workflow exportiert",
-      "manual_run": "Workflow manuell gestartet",
-      "node_test_live": "Node live getestet",
-      "rolled_back": "Workflow zurückgerollt",
-      "test_run": "Testausführung gestartet",
-      "published": "Workflow veröffentlicht",
-      "approval_requested": "Freigabe beantragt",
-      "approved": "Workflow freigegeben",
-      "rejected": "Freigabe abgelehnt",
-      "activated": "Workflow aktiviert",
-      "deactivated": "Workflow deaktiviert",
-      "archived": "Workflow archiviert"
+    "site": {
+      "created": "Website angelegt",
+      "pairing_code": "Kopplungscode erzeugt",
+      "pair": "Kopplung versucht",
+      "paired": "Website gekoppelt",
+      "revoked": "Kopplung widerrufen",
+      "plugin_downloaded": "Bridge heruntergeladen"
     }
   },
   "sentences": {
@@ -152,7 +128,8 @@
       "enabled": "hat das Konto „{o}“ aktiviert",
       "renamed": "hat das Konto „{o}“ umbenannt",
       "mfa_reset": "hat die Zwei-Faktor-Anmeldung von „{o}“ zurückgesetzt",
-      "deleted": "hat das Konto „{o}“ gelöscht"
+      "deleted": "hat das Konto „{o}“ gelöscht",
+      "invite_revoked": "hat die Einladung für „{o}“ widerrufen"
     },
     "api_key": {
       "created": "hat den API-Schlüssel „{o}“ erstellt",
@@ -162,72 +139,48 @@
       "created": "hat eine Sicherung erstellt",
       "downloaded": "hat die Sicherung „{o}“ heruntergeladen"
     },
-    "banner": {
-      "created": "hat das Banner „{o}“ angelegt",
-      "updated": "hat das Banner „{o}“ geändert",
-      "deleted": "hat das Banner „{o}“ gelöscht",
-      "duplicated": "hat das Banner „{o}“ dupliziert",
-      "deactivated": "hat das Banner „{o}“ deaktiviert",
-      "published": "hat das Banner „{o}“ veröffentlicht",
-      "reactivated": "hat das Banner „{o}“ reaktiviert"
-    },
     "post": {
       "created": "hat den Beitrag „{o}“ angelegt",
+      "revised": "hat eine neue Fassung von „{o}“ gespeichert",
       "updated": "hat den Beitrag „{o}“ geändert",
-      "deleted": "hat den Beitrag „{o}“ gelöscht",
-      "sent": "hat den Beitrag „{o}“ an WordPress gesendet"
-    },
-    "connection": {
-      "created": "hat die Verbindung „{o}“ angelegt",
-      "updated": "hat die Verbindung „{o}“ geändert",
-      "deleted": "hat die Verbindung „{o}“ gelöscht",
-      "tested": "hat die Verbindung „{o}“ getestet",
-      "enabled": "hat die Verbindung „{o}“ aktiviert",
-      "disabled": "hat die Verbindung „{o}“ deaktiviert",
-      "credentials_replaced": "hat die Zugangsdaten von „{o}“ ersetzt",
-      "credentials_revoked": "hat die Zugangsdaten von „{o}“ widerrufen",
-      "credentials_rollback": "hat die Zugangsdaten von „{o}“ zurückgesetzt"
-    },
-    "run": {
-      "canceled": "hat den Lauf „{o}“ abgebrochen",
-      "replayed": "hat den Lauf „{o}“ wiederholt"
+      "submitted": "hat „{o}“ zur Freigabe eingereicht",
+      "approved": "hat „{o}“ freigegeben",
+      "rejected": "hat „{o}“ zurückgewiesen",
+      "approval_revoked": "hat die Freigabe von „{o}“ zurückgezogen"
     },
     "settings": {
       "changed": "hat die Systemeinstellungen geändert"
     },
-    "update": {
-      "install": "hat das Update „{o}“ installiert"
+    "publication": {
+      "requested": "hat die Veröffentlichung von „{o}“ beauftragt",
+      "fetched": "hat Aufträge abgeholt",
+      "confirmed": "hat die Veröffentlichung von „{o}“ bestätigt",
+      "failed": "meldet: Veröffentlichung von „{o}“ fehlgeschlagen",
+      "canceled": "hat einen Auftrag abgebrochen",
+      "retried": "hat einen Auftrag erneut gestartet"
     },
-    "updates": {
-      "settings_changed": "hat die Update-Einstellungen geändert"
+    "collection": {
+      "created": "hat die Sammlung „{o}“ angelegt",
+      "updated": "hat die Sammlung „{o}“ geändert",
+      "assigned": "hat die Sammlung „{o}“ einem Beitrag zugeordnet"
     },
-    "webhook": {
-      "created": "hat den Webhook „{o}“ angelegt",
-      "secret_rotated": "hat den Schlüssel des Webhooks „{o}“ erneuert",
-      "revoked": "hat den Webhook „{o}“ widerrufen",
-      "reactivated": "hat den Webhook „{o}“ reaktiviert"
+    "upload_link": {
+      "created": "hat einen Upload-Link erstellt",
+      "revoked": "hat einen Upload-Link widerrufen"
     },
-    "wordpress": {
-      "plugin_downloaded": "hat das WordPress-Plugin heruntergeladen"
+    "media": {
+      "uploaded": "hat „{o}“ hochgeladen",
+      "selection": "hat die Auswahl für {o} geändert",
+      "deleted": "hat „{o}“ gelöscht",
+      "downloaded": "hat das Original „{o}“ heruntergeladen"
     },
-    "workflow": {
-      "created": "hat den Workflow „{o}“ angelegt",
-      "imported": "hat den Workflow „{o}“ importiert",
-      "updated": "hat den Workflow „{o}“ geändert",
-      "deleted": "hat den Workflow „{o}“ gelöscht",
-      "duplicated": "hat den Workflow „{o}“ dupliziert",
-      "exported": "hat den Workflow „{o}“ exportiert",
-      "manual_run": "hat den Workflow „{o}“ manuell gestartet",
-      "node_test_live": "hat einen Node in „{o}“ live getestet",
-      "rolled_back": "hat den Workflow „{o}“ zurückgerollt",
-      "test_run": "hat den Workflow „{o}“ getestet",
-      "published": "hat den Workflow „{o}“ veröffentlicht",
-      "approval_requested": "hat die Freigabe für „{o}“ beantragt",
-      "approved": "hat den Workflow „{o}“ freigegeben",
-      "rejected": "hat die Freigabe für „{o}“ abgelehnt",
-      "activated": "hat den Workflow „{o}“ aktiviert",
-      "deactivated": "hat den Workflow „{o}“ deaktiviert",
-      "archived": "hat den Workflow „{o}“ archiviert"
+    "site": {
+      "created": "hat die Website „{o}“ angelegt",
+      "pairing_code": "hat einen Kopplungscode für „{o}“ erzeugt",
+      "pair": "Kopplungsversuch für „{o}“",
+      "paired": "hat die Website „{o}“ gekoppelt",
+      "revoked": "hat die Kopplung von „{o}“ widerrufen",
+      "plugin_downloaded": "hat die LifeLink Bridge heruntergeladen"
     }
   },
   "notifications": {

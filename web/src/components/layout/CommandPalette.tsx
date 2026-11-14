@@ -17,7 +17,7 @@ interface Entry {
   href: string;
 }
 
-const TYPE_ICON: Record<string, string> = { workflow: 'Workflow', run: 'History', connection: 'Link2', user: 'User', banner: 'Megaphone' };
+const TYPE_ICON: Record<string, string> = { post: 'FileText', collection: 'Images', user: 'User' };
 
 export function CommandPalette({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [q, setQ] = useState('');
@@ -52,8 +52,9 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
     pages.push({ id: 'nav-help', title: t('nav.help'), subtitle: 'Anleitungen und Nachschlagewerk', icon: 'LifeBuoy', href: '/hilfe' });
     pages.push({ id: 'nav-profile', title: t('nav.profile'), subtitle: 'Passwort, Zwei-Faktor, Darstellung', icon: 'User', href: '/profil' });
     const actions: Entry[] = [];
-    if (can('workflow.edit')) actions.push({ id: 'act-new', title: 'Neuen Workflow anlegen', subtitle: 'Aktion', icon: 'Plus', href: '/workflows?neu=1' });
-    if (can('connection.edit')) actions.push({ id: 'act-int', title: 'Schnittstelle verbinden', subtitle: 'Aktion', icon: 'Plug', href: '/schnittstellen' });
+    if (can('post.edit')) actions.push({ id: 'act-new', title: 'Neuer Beitrag', subtitle: 'Aktion', icon: 'Plus', href: '/?aktion=beitrag' });
+    if (can('media.manage')) actions.push({ id: 'act-media', title: 'Medien sammeln', subtitle: 'Aktion', icon: 'Camera', href: '/?aktion=medien' });
+    if (can('channel.manage')) actions.push({ id: 'act-site', title: 'Website koppeln', subtitle: 'Aktion', icon: 'Globe', href: '/kanaele' });
     const local = [...actions, ...pages].filter((e) => !ql || e.title.toLowerCase().includes(ql) || e.subtitle.toLowerCase().includes(ql));
     const remote: Entry[] = (search.data?.results ?? []).map((r: any) => ({ id: `${r.type}-${r.id}`, title: r.title, subtitle: r.subtitle, icon: TYPE_ICON[r.type] ?? 'Box', href: r.href }));
     return [...remote, ...local].slice(0, 30);

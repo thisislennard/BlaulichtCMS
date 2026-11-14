@@ -4,12 +4,10 @@ import { Link, NavLink, useLocation, useNavigate, useParams, useSearchParams } f
 import { Keyboard, Printer } from 'lucide-react';
 import { Button, EmptyState, ErrorBox, Skeleton, SkeletonRows, cx } from '../../components/ui/core';
 import { Icon } from '../../components/ui/Icon';
-import { useCatalog } from '../../components/forms/SchemaForm';
 import { useAuth } from '../../lib/auth';
 import { t } from '../../i18n';
 import { CHAPTERS, CONTENT, GROUPS, chapterBySlug, chapterSummary, chapterTitle, groupTitle, headingsOf, type Chapter, type Heading } from './chapters';
 import { Markdown } from './Markdown';
-import { ReferenceChapter, referenceDocs, referenceHeadings } from './reference';
 import { markdownDocs, search, type SearchHit } from './search';
 
 /* ------------------------------------- Bausteine -------------------------------------- */
@@ -24,8 +22,7 @@ function hitHref(h: SearchHit) {
 }
 
 function useSearchDocs() {
-  const catalog = useCatalog();
-  return useMemo(() => [...markdownDocs(), ...(catalog.data ? referenceDocs(catalog.data) : [])], [catalog.data]);
+  return useMemo(() => markdownDocs(), []);
 }
 
 function HitText({ hit }: { hit: SearchHit }) {
@@ -307,26 +304,10 @@ function PrevNext({ slug }: { slug: string }) {
 }
 
 function ChapterView({ chapter }: { chapter: Chapter }) {
-  const catalog = useCatalog();
   const md = CONTENT[chapter.slug] ?? '';
-  const headings = useMemo<Heading[]>(() => {
-    if (chapter.reference) return catalog.data ? referenceHeadings(chapter.reference, catalog.data) : [];
-    return headingsOf(md);
-  }, [chapter, md, catalog.data]);
-  const ready = !chapter.reference || !!catalog.data;
-  useHashScroll(ready, chapter.slug);
-
-  let body: ReactNode;
-  if (chapter.reference) {
-    if (catalog.isLoading) body = <SkeletonRows rows={8} />;
-    else if (catalog.error || !catalog.data)
-      body = (
-        <ErrorBox title={t('help.catalogError')} actions={<Button size="sm" icon="RefreshCw" onClick={() => catalog.refetch()}>{t('help.retry')}</Button>}>
-          {t('help.catalogErrorText')}
-        </ErrorBox>
-      );
-    else body = <ReferenceChapter kind={chapter.reference} catalog={catalog.data} />;
-  } else body = <Markdown source={md} />;
+  const headings = useMemo<Heading[]>(() => headingsOf(md), [md]);
+  useHashScroll(true, chapter.slug);
+  const body: ReactNode = <Markdown source={md} />;
 
   return (
     <div className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_210px]">
@@ -357,7 +338,7 @@ function ChapterView({ chapter }: { chapter: Chapter }) {
         <PrevNext slug={chapter.slug} />
       </article>
       <aside className="hidden xl:block print:hidden">
-        <div className="sticky top-20 max-h-[calc(100vh-110px)] overflow-auto pb-4">{ready ? <Toc headings={headings} /> : <Skeleton className="h-40" />}</div>
+        <div className="sticky top-20 max-h-[calc(100vh-110px)] overflow-auto pb-4"><Toc headings={headings} /></div>
       </aside>
     </div>
   );
@@ -367,11 +348,11 @@ function ChapterView({ chapter }: { chapter: Chapter }) {
 
 const TILES: [string, string][] = [
   ['erste-schritte', 'Sparkles'],
-  ['workflows', 'Workflow'],
-  ['alamos-fe2', 'Siren'],
-  ['wordpress', 'Megaphone'],
+  ['foto-link', 'Camera'],
+  ['freigabe', 'ShieldCheck'],
+  ['wordpress', 'Globe'],
+  ['qr-codes', 'QrCode'],
   ['fehlerbehebung', 'LifeBuoy'],
-  ['betrieb', 'Server'],
 ];
 
 const FAQ_COUNT = 8;
@@ -390,7 +371,7 @@ function StartPage() {
         <SearchBox large />
         <p className="m-0 text-meta text-fg-muted">
           {t('help.searchExamples')}{' '}
-          {['HMAC', 'Banner', 'Wiederholen', '2FA', 'Sicherung'].map((w, i) => (
+          {['QR-Code', 'Widerruf', 'Freigabe', '2FA', 'Sicherung'].map((w, i) => (
             <span key={w}>
               {i > 0 && ', '}
               <Link to={`/hilfe?suche=${encodeURIComponent(w)}`}>{w}</Link>

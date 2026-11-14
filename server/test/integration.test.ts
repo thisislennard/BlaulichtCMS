@@ -344,6 +344,7 @@ describe('LifeLink Bridge und WordPress-Veröffentlichung', () => {
     const job = jobs.json.jobs[0];
     expect(job.post.title).toBe('Übung am Wochenende');
     expect(job.media).toHaveLength(1);
+    expect(job.media[0].path).toMatch(/^\/api\/v1\/bridge\/media\//);
     // Medien der Bridge: öffentliche Fassung ohne EXIF
     const media = await anonymous.get(job.media[0].url.replace('https://lifelink.example.org', ''), auth);
     expect(media.status).toBe(200);

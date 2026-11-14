@@ -8,7 +8,6 @@ export default defineConfig({
     port: 5173,
     proxy: {
       '^/api/': 'http://127.0.0.1:7310',
-      '/hooks': 'http://127.0.0.1:7310',
       '/healthz': 'http://127.0.0.1:7310',
     },
   },

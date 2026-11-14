@@ -45,10 +45,6 @@ export function markdownDocs(): SearchDoc[] {
   const docs: SearchDoc[] = [];
   for (const ch of CHAPTERS) {
     const md = CONTENT[ch.slug];
-    if (ch.reference) {
-      docs.push({ chapter: ch.slug, anchor: '', heading: chapterTitle(ch.slug), text: chapterSummary(ch.slug) });
-      continue;
-    }
     if (!md) continue;
     let heading = chapterTitle(ch.slug);
     let anchor = '';

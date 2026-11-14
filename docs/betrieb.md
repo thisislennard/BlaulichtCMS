@@ -1,82 +1,147 @@
-# Betrieb von LifeLink 2
+# Betrieb
 
-## Bestandteile
+LifeLink läuft als **ein Container** mit **einem Webport** und **einem persistenten Volume** unter `/data`.
 
-| Container | Aufgabe |
-|---|---|
-| `lifelink` | Supervisor (PID 1 über tini) startet **API** (Port 7310) und **Worker** (Ausführung, Zeitpläne, MQTT, IMAP/iCal-Abfragen, Wartung, Sicherungen, Update-Prüfung). Abgestürzte Prozesse werden neu gestartet. |
-| `lifelink-db` | PostgreSQL 18. Enthält Konfiguration, Workflows, Läufe, Warteschlange und Audit. |
+| Bestandteil | Im Container | Daten |
+|---|---|---|
+| Supervisor | startet und stoppt alle Prozesse in fester Reihenfolge | – |
+| PostgreSQL 18 | nur Unix-Socket, kein TCP-Port | `/data/postgres` |
+| Webdienst (API, Oberfläche, PWA) | Port 7310 | – |
+| Worker (Medienprüfung, Wartung, Sicherung) | Hintergrundprozess | – |
+| Medien | private Ablage | `/data/media` (`quarantine`, `originals`, `previews`, `public`) |
+| Schlüsselmaterial | Master-Schlüssel | `/data/secrets/master.key` |
+| Datenbanksicherungen | verschlüsselt | `/data/backups` |
 
-Volumes: `lifelink-data` (`/data`: installierte Updates, Sicherungen, Einrichtungsschlüssel) und `lifelink-pg`.
-Der Container läuft als Benutzer `node`, mit schreibgeschütztem Dateisystem (außer `/data` und `/tmp`),
-ohne Capabilities und mit `no-new-privileges`.
+## Starten
 
-## Umgebungsvariablen (.env)
-
-| Variable | Bedeutung |
-|---|---|
-| `POSTGRES_PASSWORD` | Datenbankpasswort (Pflicht) |
-| `LIFELINK_MASTER_KEY` | 32 Byte Base64, verschlüsselt Zugangsdaten, 2FA-Geheimnisse und Sicherungen (Pflicht). **Getrennt aufbewahren.** |
-| `PUBLIC_URL` | Öffentliche Adresse (Webhook-URLs, Einladungslinks) |
-| `LIFELINK_PORT` / `LIFELINK_BIND` | Port und Schnittstelle auf dem Host (Standard 7310 / alle) |
-| `TRUST_PROXY` | `true`, wenn ein Reverse-Proxy davor läuft (echte Client-IP) |
-| `COOKIE_SECURE` | Sitzungs-Cookies nur über HTTPS (Standard `true`) |
-| `WORKER_CONCURRENCY` | Gleichzeitige Ausführungen (zusätzlich in den Einstellungen) |
-
-## TLS / Reverse-Proxy
-
-LifeLink selbst spricht HTTP. Für den Betrieb im Internet einen TLS-Proxy (Nginx, Caddy, Traefik, Nginx Proxy
-Manager) davorsetzen, `LIFELINK_BIND=127.0.0.1` (oder nur das Proxy-Netz) und `TRUST_PROXY=true` setzen.
-Beispiel Caddy:
-
-```
-lifelink.example.de {
-  reverse_proxy 127.0.0.1:7310
-}
+```bash
+git clone <repository-url> lifelink && cd lifelink
+cp .env.example .env            # optional
+docker compose up -d --build
+docker compose logs lifelink | grep Einrichtungsschlüssel
 ```
 
-Webhooks (`/hooks/...`) müssen von außen erreichbar sein, die Oberfläche (`/`, `/api/...`) kann zusätzlich per
-Proxy auf interne Netze beschränkt werden.
+Danach `http://<host>:7310/einrichtung` öffnen (im Echtbetrieb über den Reverse Proxy per HTTPS).
+
+Reihenfolge beim Start: PostgreSQL (bei leerem Volume `initdb`) → API (führt Migrationen aus) → Worker.
+Reihenfolge beim Stopp (`docker compose stop`): Worker (laufende Aufträge max. 20 s) → API → PostgreSQL (Fast Shutdown).
+`stop_grace_period` ist auf 60 s gesetzt.
+
+## Gesundheit
+
+`GET /healthz` (ohne Anmeldung) liefert **200** nur, wenn LifeLink Aufträge annehmen kann:
+
+| Prüfung | bereit, wenn |
+|---|---|
+| `database` | PostgreSQL antwortet |
+| `schema` | alle Migrationen angewendet |
+| `worker` | ein Worker hat sich in den letzten 45 s gemeldet |
+| `storage` | mehr freier Speicher als „Mindestens frei halten“ (Einstellungen → Medien) |
+
+Sonst **503** mit den Einzelergebnissen. Der Docker-Healthcheck nutzt diesen Endpunkt.
+
+```bash
+curl -s http://localhost:7310/healthz | jq
+docker compose exec lifelink node server/dist/cli.js self-check
+```
+
+## Umgebungsvariablen
+
+| Variable | Standard | Bedeutung |
+|---|---|---|
+| `LIFELINK_PORT` | `7310` | Port auf dem Docker-Host |
+| `LIFELINK_BIND` | `0.0.0.0` | Schnittstelle; hinter einem Proxy auf demselben Host `127.0.0.1` |
+| `TRUST_PROXY` | `false` | `true` hinter einem Reverse Proxy (echte Client-IP für Sperren und Audit) |
+| `COOKIE_SECURE` | `true` in Produktion | Cookies nur über HTTPS; für einen lokalen Test ohne HTTPS `false` |
+| `PUBLIC_URL` | – | Vorschlag für den Assistenten; maßgeblich ist die im Erstsetup gesetzte Adresse |
+| `LIFELINK_MASTER_KEY` | – | Master-Schlüssel extern vorgeben; sonst wird `/data/secrets/master.key` erzeugt |
+
+## Sicherung
+
+Ein konsistenter Stand umfasst **Datenbank, Medien und Schlüsselmaterial**. Alles liegt im Volume.
+Für den Ernstfall gehört eine Kopie **außerhalb** des aktiven Volumes (anderer Datenträger oder Host).
+
+### Vollständige Sicherung (empfohlen vor Updates)
+
+```bash
+docker compose stop lifelink
+docker run --rm -v lifelink_lifelink-data:/data:ro -v "$PWD/backup":/backup debian:trixie-slim \
+  tar -czf /backup/lifelink-$(date +%F-%H%M).tar.gz -C /data .
+docker compose start lifelink
+```
+
+Der Stopp dauert wenige Sekunden und garantiert, dass Datenbank und Medien zusammenpassen.
+Ein Skript dafür liegt unter `scripts/backup-volume.sh`.
+
+### Laufende Datenbanksicherung
+
+Zusätzlich erstellt LifeLink täglich (Einstellungen → Sicherung) eine mit dem Master-Schlüssel verschlüsselte
+Datenbanksicherung unter `/data/backups`. Sie ist praktisch zum Herunterladen, ersetzt aber nicht die
+Kopie außerhalb des Volumes, weil Medien nicht enthalten sind.
+
+## Wiederherstellung
+
+In einer frischen Instanz (neuer Host oder leeres Volume):
+
+```bash
+docker volume create lifelink_lifelink-data
+docker run --rm -v lifelink_lifelink-data:/data -v "$PWD/backup":/backup debian:trixie-slim \
+  sh -c 'tar -xzf /backup/lifelink-2026-11-14-0300.tar.gz -C /data && chown -R 1000:1000 /data'
+docker compose up -d
+```
+
+Skript: `scripts/restore-volume.sh <archiv>`.
+
+**Prüfliste nach der Wiederherstellung**
+
+- [ ] `/healthz` meldet 200
+- [ ] Anmeldung mit bestehendem Konto funktioniert (inkl. Zwei-Faktor)
+- [ ] Benutzer und Rollen vollständig
+- [ ] Beiträge mit Fassungen, Freigaben und Veröffentlichungen vorhanden
+- [ ] Medien: Vorschauen sichtbar, Original-Download funktioniert
+- [ ] offene Veröffentlichungsaufträge werden von der Bridge abgeholt
+- [ ] Upload-Links: aktive funktionieren, widerrufene bleiben gesperrt
 
 ## Updates
 
-- **In der App** (Plattform-Admin): Updates → „Update installieren“ lädt das neueste GitHub-Release, prüft SHA-256 und
-  Ed25519-Signatur, legt die neue Version in `/data/releases/<version>` ab und schaltet um. Startet die neue Version
-  nicht innerhalb von 2 Minuten, schaltet der Supervisor automatisch zurück.
-- **Image-Update** (Node-Version, Systempakete, Compose-Änderungen): `git pull && docker compose up -d --build`.
-  Ein neueres Image hat Vorrang vor älteren In-App-Updates.
-- Datenbankmigrationen laufen beim Start automatisch (nur additiv, damit ein Rollback möglich bleibt).
+1. Systemstatus prüfen (freier Speicher, letzte Sicherung, keine wartenden Veröffentlichungen).
+2. Vollständige Sicherung außerhalb des Volumes anlegen.
+3. Neues Image am Docker-Host:
 
-## Sicherung und Wiederherstellung
+   ```bash
+   git pull
+   docker compose up -d --build
+   ```
 
-Automatisch täglich (Einstellungen → Sicherung), verschlüsselt in `/data/backups`. Herunterladen in der App.
-Der Master-Schlüssel wird zum Entschlüsseln gebraucht – getrennt aufbewahren.
+4. Die API führt beim Start fehlende Migrationen aus (jede in eigener Transaktion, unter Sperre).
+   Schlägt eine Migration fehl, startet die API nicht, der Healthcheck bleibt rot und das Protokoll nennt die Migration.
+5. Rückweg: vorheriges Image starten **und** die Sicherung von Schritt 2 wiederherstellen.
 
-Wiederherstellen:
+Es gibt kein In-App-Update, das Programmcode austauscht. Updates bleiben eine bewusste Entscheidung am Docker-Host.
+
+### PostgreSQL-Hauptversion
+
+Der Supervisor vergleicht `/data/postgres/PG_VERSION` mit der PostgreSQL-Version im Image und **startet nicht**,
+wenn sie abweichen. Ein Hauptversionswechsel läuft geplant über Export und Import:
 
 ```bash
-docker compose cp ./lifelink-2026-10-29-03-00.llbk lifelink:/data/restore.llbk
-docker compose exec lifelink node server/dist/cli.js backup-decrypt /data/restore.llbk /data/restore.dump
-docker compose cp lifelink:/data/restore.dump ./restore.dump
-docker compose exec lifelink rm /data/restore.llbk /data/restore.dump
+# Mit dem ALTEN Image: logische Sicherung
+docker compose exec lifelink sh -c 'pg_dumpall -h /tmp/lifelink-pg -U lifelink' > lifelink-pgdumpall.sql
+# Vollständige Volume-Sicherung anlegen (siehe oben), dann Datenbankverzeichnis beiseitelegen
 docker compose stop lifelink
-docker compose exec -T lifelink-db pg_restore --clean --if-exists --no-owner -U lifelink -d lifelink < ./restore.dump
-docker compose start lifelink
-rm ./restore.dump   # enthält Klartextdaten
+docker run --rm -v lifelink_lifelink-data:/data debian:trixie-slim mv /data/postgres /data/postgres-alt
+# NEUES Image starten (legt leeren Cluster an), dann einspielen
+docker compose up -d
+docker compose exec -T lifelink sh -c 'psql -h /tmp/lifelink-pg -U lifelink -d postgres' < lifelink-pgdumpall.sql
 ```
 
-Die Wiederherstellung regelmäßig auf einem Testsystem üben.
+Dieser Weg ist dokumentiert, aber noch **nicht mit einem echten Versionswechsel getestet** (siehe `docs/testprotokoll.md`).
 
 ## Notfall-Befehle
 
 ```bash
-docker compose exec lifelink node server/dist/cli.js password-link admin@example.de   # Link zum Passwort-Neusetzen
-docker compose exec lifelink node server/dist/cli.js reset-mfa admin@example.de       # 2FA zurücksetzen
-docker compose exec lifelink node server/dist/cli.js migrate                           # Schema prüfen/aktualisieren
+docker compose exec lifelink node server/dist/cli.js password-link admin@example.org   # Passwort-Link (24 h)
+docker compose exec lifelink node server/dist/cli.js reset-mfa admin@example.org       # Zwei-Faktor zurücksetzen
+docker compose exec lifelink node server/dist/cli.js self-check                        # Bereitschaft prüfen
+docker compose exec lifelink node server/dist/cli.js backup-decrypt <datei> <ziel>     # Datenbanksicherung entschlüsseln
 ```
-
-## Überwachung
-
-- `GET /healthz` (ohne Anmeldung) – Lebenszeichen und Version, wird vom Docker-Healthcheck genutzt.
-- Systemstatus in der App: Worker-Lebenszeichen, Warteschlangenalter, Trigger-Fehler, Verbindungen, letzte Sicherung.
-- Fehlgeschlagene Produktivläufe erzeugen Benachrichtigungen (in der App, optional per E-Mail).

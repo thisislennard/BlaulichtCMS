@@ -59,12 +59,11 @@ interface Backup {
 const SECTIONS = [
   "allgemein",
   "darstellung",
-  "ausfuehrung",
+  "redaktion",
+  "medien",
   "betrieb",
   "sicherheit",
-  "benachrichtigungen",
   "sicherung",
-  "api-schluessel",
   "ueber",
 ] as const;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -254,34 +253,29 @@ export default function Settings() {
                     ro={ro}
                   />
                   <TextField
-                    k="general.instance_subtitle"
-                    label={t("admin.settings.instanceSubtitle")}
-                    help={t("admin.settings.instanceSubtitleHelp")}
+                    k="general.organization"
+                    label="Organisation"
+                    help="Erscheint auf Upload-Seiten, Aushängen und in der Seitenleiste."
                     v={v}
                     set={set}
                     ro={ro}
                   />
-                  <FieldWrap
+                  <TextField
+                    k="general.sender_name"
+                    label="Absendername"
+                    help="Für E-Mails und Veröffentlichungen."
+                    v={v}
+                    set={set}
+                    ro={ro}
+                  />
+                  <TextField
+                    k="general.public_url"
                     label={t("admin.settings.publicUrl")}
-                    htmlFor="s-public-url"
-                    help={t("admin.settings.fromEnv")}
-                  >
-                    <div className="relative">
-                      <Input
-                        id="s-public-url"
-                        readOnly
-                        mono
-                        value={q.data?.env.publicUrl ?? ""}
-                        placeholder={t("admin.settings.notSet")}
-                        className="pr-9 bg-raised"
-                      />
-                      <Icon
-                        name="Lock"
-                        size={14}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-fg-muted"
-                      />
-                    </div>
-                  </FieldWrap>
+                    help={`Steht in Einladungen, Upload-Links und QR-Codes. Bereits gedruckte Codes zeigen weiter auf die alte Adresse.${q.data?.env.publicUrl ? ` Umgebung: ${q.data.env.publicUrl}` : ""}`}
+                    v={v}
+                    set={set}
+                    ro={ro}
+                  />
                   <FieldWrap
                     label={t("admin.settings.timezone")}
                     htmlFor="s-tz"
@@ -329,137 +323,46 @@ export default function Settings() {
                 <AppearanceFields />
               </SectionCard>
 
-              {/* Ausführung */}
+              {/* Redaktion */}
               <SectionCard
-                id="ausfuehrung"
-                title={t("admin.settings.sections.ausfuehrung")}
-                description={t("admin.settings.runDesc")}
+                id="redaktion"
+                title="Redaktion"
+                description="Freigaben, Einladungen und Aufbewahrung."
+                bodyClassName="flex flex-col gap-5"
+              >
+                <Switch
+                  checked={!!v["editorial.four_eyes"]}
+                  disabled={ro}
+                  onChange={(x) => set("editorial.four_eyes", x)}
+                  label="Vier-Augen-Prinzip"
+                  description="Wer eine Fassung geschrieben hat, darf sie nicht selbst freigeben."
+                />
+                <FieldGrid>
+                  <NumField k="invites.valid_hours" label="Einladungen gültig" unit="Std." min={1} max={720} v={v} set={set} ro={ro} />
+                  <NumField k="jobs.concurrency" label="Parallele Hintergrundaufträge" help="1 bis 32 (Medienprüfung, Exporte)." min={1} max={32} v={v} set={set} ro={ro} />
+                  <NumField k="retention.log_days" label={t("admin.settings.retLogs")} unit={t("admin.common.days")} min={1} v={v} set={set} ro={ro} />
+                  <NumField k="retention.audit_days" label={t("admin.settings.retAudit")} unit={t("admin.common.days")} min={30} v={v} set={set} ro={ro} />
+                </FieldGrid>
+              </SectionCard>
+
+              {/* Medien */}
+              <SectionCard
+                id="medien"
+                title="Medien und Upload-Links"
+                description="Grenzen für Uploads. Neue Dateien landen immer zuerst in der Prüfung."
                 bodyClassName="flex flex-col gap-5"
               >
                 <FieldGrid>
-                  <NumField
-                    k="execution.concurrency"
-                    label={t("admin.settings.concurrency")}
-                    help={t("admin.settings.concurrencyHelp")}
-                    min={1}
-                    max={32}
-                    v={v}
-                    set={set}
-                    ro={ro}
-                  />
-                  <NumField
-                    k="execution.default_timeout_sec"
-                    label={t("admin.settings.timeout")}
-                    unit={t("admin.common.seconds")}
-                    min={1}
-                    v={v}
-                    set={set}
-                    ro={ro}
-                  />
-                  <NumField
-                    k="execution.default_retries"
-                    label={t("admin.settings.retries")}
-                    help={t("admin.settings.retriesHelp")}
-                    unit={t("admin.common.times")}
-                    min={0}
-                    max={20}
-                    v={v}
-                    set={set}
-                    ro={ro}
-                  />
-                  <NumField
-                    k="execution.max_run_minutes"
-                    label={t("admin.settings.maxRun")}
-                    unit={t("admin.common.minutes")}
-                    min={1}
-                    v={v}
-                    set={set}
-                    ro={ro}
-                  />
+                  <NumField k="media.max_file_mb" label="Maximale Dateigröße" unit="MB" min={1} max={20000} v={v} set={set} ro={ro} />
+                  <NumField k="media.link_max_files" label="Dateien je Upload-Link" min={1} max={1000} v={v} set={set} ro={ro} />
+                  <NumField k="media.link_default_days" label="Upload-Link gültig (Standard)" unit={t("admin.common.days")} min={1} max={90} v={v} set={set} ro={ro} />
+                  <NumField k="media.collection_max_files" label="Dateien je Sammlung" min={1} max={100000} v={v} set={set} ro={ro} />
+                  <NumField k="media.collection_max_gb" label="Speicher je Sammlung" unit="GB" min={1} max={10000} v={v} set={set} ro={ro} />
+                  <NumField k="media.min_free_gb" label="Mindestens frei halten" help="Darunter werden Uploads gesperrt und der Healthcheck meldet einen Fehler." unit="GB" min={1} max={10000} v={v} set={set} ro={ro} />
                 </FieldGrid>
-                <div className="flex flex-col gap-3">
-                  <h3 className="m-0 text-sm font-semibold">
-                    {t("admin.settings.retention")}
-                  </h3>
-                  <FieldGrid className="grid-cols-[repeat(auto-fit,minmax(min(180px,100%),1fr))]">
-                    <NumField
-                      k="execution.preview_retention_days"
-                      label={t("admin.settings.retPreview")}
-                      unit={t("admin.common.days")}
-                      min={1}
-                      v={v}
-                      set={set}
-                      ro={ro}
-                    />
-                    <NumField
-                      k="execution.replay_window_days"
-                      label={t("admin.settings.retReplay")}
-                      help={t("admin.settings.retReplayHelp")}
-                      unit={t("admin.common.days")}
-                      min={0}
-                      v={v}
-                      set={set}
-                      ro={ro}
-                    />
-                    <NumField
-                      k="execution.run_retention_days"
-                      label={t("admin.settings.retRuns")}
-                      unit={t("admin.common.days")}
-                      min={1}
-                      v={v}
-                      set={set}
-                      ro={ro}
-                    />
-                    <NumField
-                      k="execution.event_retention_days"
-                      label={t("admin.settings.retEvents")}
-                      unit={t("admin.common.days")}
-                      min={1}
-                      v={v}
-                      set={set}
-                      ro={ro}
-                    />
-                    <NumField
-                      k="execution.log_retention_days"
-                      label={t("admin.settings.retLogs")}
-                      unit={t("admin.common.days")}
-                      min={1}
-                      v={v}
-                      set={set}
-                      ro={ro}
-                    />
-                    <NumField
-                      k="execution.audit_retention_days"
-                      label={t("admin.settings.retAudit")}
-                      unit={t("admin.common.days")}
-                      min={30}
-                      v={v}
-                      set={set}
-                      ro={ro}
-                    />
-                  </FieldGrid>
-                </div>
-                <Switch
-                  checked={!!v["execution.four_eyes"]}
-                  disabled={ro}
-                  onChange={(x) => set("execution.four_eyes", x)}
-                  label={t("admin.settings.fourEyes")}
-                  description={t("admin.settings.fourEyesDesc")}
-                />
                 <div className="flex items-start gap-2.5 p-3 rounded-node bg-raised text-sm">
-                  <Icon
-                    name="Lock"
-                    size={16}
-                    className="text-fg-link mt-0.5 shrink-0"
-                  />
-                  <span>
-                    <span className="font-medium">
-                      {t("admin.settings.masking")}
-                    </span>{" "}
-                    <span className="text-fg-muted">
-                      · {t("admin.settings.maskingDesc")}
-                    </span>
-                  </span>
+                  <Icon name="ShieldCheck" size={16} className="mt-0.5 text-fg-muted shrink-0" />
+                  <span>Öffentliche Fassungen enthalten keine Standort- und Kameradaten. Originale bleiben privat und sind nur mit Recht abrufbar.</span>
                 </div>
               </SectionCard>
 
@@ -540,90 +443,6 @@ export default function Settings() {
                 </FieldGrid>
               </SectionCard>
 
-              {/* Benachrichtigungen */}
-              <SectionCard
-                id="benachrichtigungen"
-                title={t("admin.settings.sections.benachrichtigungen")}
-                description={t("admin.settings.notifyDesc")}
-                bodyClassName="flex flex-col gap-4"
-              >
-                <Switch
-                  checked={!!v["notify.on_failure_inapp"]}
-                  disabled={ro}
-                  onChange={(x) => set("notify.on_failure_inapp", x)}
-                  label={t("admin.settings.failInapp")}
-                  description={t("admin.settings.failInappDesc")}
-                />
-                <Switch
-                  checked={!!v["notify.on_failure_email"]}
-                  disabled={ro}
-                  onChange={(x) => set("notify.on_failure_email", x)}
-                  label={t("admin.settings.failEmail")}
-                  description={t("admin.settings.failEmailDesc")}
-                />
-                {v["notify.on_failure_email"] && (
-                  <div className="pl-0 sm:pl-4 sm:border-l-2 sm:border-line">
-                    <FieldGrid>
-                      <SmtpSelect
-                        value={v["notify.email_connection_id"] ?? ""}
-                        onChange={(x) => set("notify.email_connection_id", x)}
-                        ro={ro}
-                      />
-                      <FieldWrap
-                        label={t("admin.settings.recipients")}
-                        htmlFor="s-recipients"
-                        help={t("admin.settings.recipientsHelp")}
-                        error={
-                          badRecipients.length
-                            ? t("admin.settings.recipientsInvalid", {
-                                list: badRecipients.join(", "),
-                              })
-                            : null
-                        }
-                      >
-                        <Textarea
-                          id="s-recipients"
-                          rows={3}
-                          disabled={ro}
-                          invalid={badRecipients.length > 0}
-                          value={
-                            recipientsText ??
-                            (
-                              (v["notify.email_recipients"] as string[]) ?? []
-                            ).join("\n")
-                          }
-                          placeholder="leitung@feuerwehr.example"
-                          onChange={(e) => {
-                            setRecipientsText(e.target.value);
-                            set(
-                              "notify.email_recipients",
-                              e.target.value
-                                .split(/[\s,;]+/)
-                                .map((x) => x.trim())
-                                .filter(Boolean),
-                            );
-                          }}
-                        />
-                      </FieldWrap>
-                    </FieldGrid>
-                  </div>
-                )}
-                <Switch
-                  checked={!!v["notify.on_connection_error"]}
-                  disabled={ro}
-                  onChange={(x) => set("notify.on_connection_error", x)}
-                  label={t("admin.settings.connError")}
-                  description={t("admin.settings.connErrorDesc")}
-                />
-                <Switch
-                  checked={!!v["notify.on_update_available"]}
-                  disabled={ro}
-                  onChange={(x) => set("notify.on_update_available", x)}
-                  label={t("admin.settings.updateAvail")}
-                  description={t("admin.settings.updateAvailDesc")}
-                />
-              </SectionCard>
-
               {/* Sicherung */}
               <SectionCard
                 id="sicherung"
@@ -689,23 +508,6 @@ export default function Settings() {
                   <p className="m-0 text-sm text-fg-muted">
                     {t("admin.settings.noManage")}
                   </p>
-                )}
-              </SectionCard>
-
-              {/* API-Schlüssel */}
-              <SectionCard
-                id="api-schluessel"
-                title={t("admin.settings.sections.api-schluessel")}
-                description={t("admin.settings.apiDesc")}
-                bodyClassName="flex flex-col gap-3 items-start"
-              >
-                <p className="m-0 text-sm text-fg-muted">
-                  {t("admin.settings.apiText")}
-                </p>
-                {manage && (
-                  <LinkButton to="/api-schluessel" icon="KeyRound">
-                    {t("admin.settings.apiOpen")}
-                  </LinkButton>
                 )}
               </SectionCard>
 
@@ -849,59 +651,6 @@ function NumField({
           </span>
         )}
       </div>
-    </FieldWrap>
-  );
-}
-
-function SmtpSelect({
-  value,
-  onChange,
-  ro,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-  ro: boolean;
-}) {
-  const q = useQuery({
-    queryKey: ["connections"],
-    queryFn: () => get<any[]>("/connections"),
-    staleTime: 30_000,
-  });
-  const smtp = (q.data ?? []).filter((c) => c.connector === "smtp");
-  return (
-    <FieldWrap
-      label={t("admin.settings.smtp")}
-      htmlFor="s-smtp"
-      help={
-        q.data && !smtp.length ? (
-          <>
-            {t("admin.settings.smtpEmpty")}{" "}
-            <Link to="/schnittstellen/smtp/verbinden">
-              {t("admin.settings.smtpCreate")}
-            </Link>
-          </>
-        ) : undefined
-      }
-      error={
-        value && q.data && !smtp.some((c) => c.id === value)
-          ? t("admin.settings.smtpNone")
-          : null
-      }
-    >
-      <Select
-        id="s-smtp"
-        disabled={ro || q.isLoading}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-      >
-        <option value="">{t("admin.settings.smtpNone")}</option>
-        {smtp.map((c) => (
-          <option key={c.id} value={c.id}>
-            {c.name}
-            {c.status === "error" ? " · Fehler" : ""}
-          </option>
-        ))}
-      </Select>
     </FieldWrap>
   );
 }
@@ -1189,12 +938,6 @@ function BackupList() {
 function AboutSection({ dataDir }: { dataDir?: string }) {
   const { me, isPlatformAdmin } = useAuth();
   const status = useSystemStatus(false);
-  const upd = useQuery({
-    queryKey: ["updates"],
-    queryFn: () => get<any>("/updates"),
-    enabled: isPlatformAdmin,
-    staleTime: 60_000,
-  });
   return (
     <SectionCard
       id="ueber"
@@ -1205,18 +948,6 @@ function AboutSection({ dataDir }: { dataDir?: string }) {
       <dl className="m-0 grid gap-x-6 gap-y-2 grid-cols-[max-content_1fr] text-sm">
         <dt className="text-fg-muted">{t("admin.settings.version")}</dt>
         <dd className="m-0 font-mono">{me?.version ?? "–"}</dd>
-        {isPlatformAdmin && (
-          <>
-            <dt className="text-fg-muted">
-              {t("admin.settings.imageVersion")}
-            </dt>
-            <dd className="m-0 font-mono">
-              {upd.data?.imageVersion ?? (
-                <Skeleton className="h-4 w-16 inline-block align-middle" />
-              )}
-            </dd>
-          </>
-        )}
         <dt className="text-fg-muted">{t("admin.settings.node")}</dt>
         <dd className="m-0 font-mono">{status.data?.node ?? "–"}</dd>
         {dataDir && (
@@ -1231,7 +962,7 @@ function AboutSection({ dataDir }: { dataDir?: string }) {
           {t("admin.settings.openHelp")}
         </LinkButton>
         {isPlatformAdmin && (
-          <LinkButton to="/updates" icon="Download">
+          <LinkButton to="/hilfe/updates" icon="Download">
             {t("admin.settings.openUpdates")}
           </LinkButton>
         )}
