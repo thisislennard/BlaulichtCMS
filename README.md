@@ -58,6 +58,8 @@ flowchart LR
 - **Fassungen und Freigaben:** Jede Änderung an Text, Medien oder Zielkanal erzeugt eine neue Fassung. Eine Freigabe gilt genau für eine Fassung (Prüfsumme).
 - **Veröffentlichen ohne offenen Eingang:** Die **LifeLink Bridge** (WordPress-Plugin, als ZIP direkt aus LifeLink) holt Aufträge per HTTPS ab und meldet WordPress-ID und URL zurück. Doppelte Abholung erzeugt nie einen zweiten Beitrag.
 - **Warnentwurf per Handy (MoWaS-Übergabe):** Sechs-Schritte-Assistent für Erstmeldung, Aktualisierung und Entwarnung. Der **Warnstufen-Assistent** schlägt anhand lokal gepflegter, versionierter und fachlich freigegebener Regeln eine Stufe vor – oder sagt ehrlich „Keine eindeutige Empfehlung – fachlich prüfen“. Die Stufe bestätigt immer eine berechtigte Person; die Freigabe fixiert die PDF mit Prüfsumme, der Versand per SMTP läuft ab Werk im **Testmodus**. Die amtliche Auslösung bleibt bei der zuständigen Stelle.
+- **Optionale Verbindungen:** Facebook-Seite, Instagram-Konto, FE2 (Einsatzentwürfe) und amtliche Warnungen – jede mit dem gleichen Ablauf **Verbinden → Testen → Vorschau → Aktivieren**. Ein Login gilt nie als Veröffentlichungstest; jeder Kanal hat einen eigenen Status und wird bei Fehlern gezielt wiederholt.
+- **Sicher aktualisieren:** Wartungsmodus und Vorabprüfung, Sicherung außerhalb des Volumes, Schema-Migration mit Startprüfung und getesteter Rückweg (`scripts/update.sh`). Die Bridge aktualisiert sich über den WordPress-Updateweg mit Prüfsumme.
 - **Auch ganz ohne Website:** Der interne Redaktionsablauf funktioniert vollständig ohne externe Dienste.
 - **Ein Container:** Webanwendung, Bediener-PWA, Worker und PostgreSQL in einem Image, Daten in einem Volume.
 - **Schnell und schlank:** rund 180 KB beim ersten Aufruf (vorkomprimiert mit Brotli), danach fast alles aus dem Browser-Cache; Sichtung ohne Wartezeit, zwei parallele Uploads, Bilder werden nur einmal dekodiert.
@@ -221,6 +223,8 @@ Lokaler Start mit Hot Reload, Testumgebung und Hinweise: [docs/entwicklung.md](d
 | [docs/bridge-api.md](docs/bridge-api.md) | Schnittstelle zwischen LifeLink und der LifeLink Bridge |
 | [docs/integrationen.md](docs/integrationen.md) | Stand je optionaler Verbindung: lokal geprüft / offen |
 | [docs/testprotokoll.md](docs/testprotokoll.md) | Testbefehle, Ergebnisse, offene Prüfungen |
+| [docs/import.md](docs/import.md) | Einmaliger Medienimport (Austauschformat, Probelauf, Altlinks) |
+| [docs/sicherheitspruefung.md](docs/sicherheitspruefung.md) | Ergebnis der Sicherheitsprüfung mit Nachweisen |
 | [docs/offene-punkte.md](docs/offene-punkte.md) | Merkliste: was noch fehlt und wer zuarbeiten muss |
 | [docs/entwicklung.md](docs/entwicklung.md) | Entwicklungsumgebung |
 | Hilfe-Center in der App (`/hilfe`) | Anleitungen für Redaktion und Administration |

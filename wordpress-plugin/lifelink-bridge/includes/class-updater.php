@@ -114,9 +114,19 @@ final class LifeLink_Bridge_Updater {
 		if ( ! is_array( $offer ) || empty( $offer['sha256'] ) ) {
 			return new WP_Error( 'lifelink_update', 'Kein gültiges Update-Angebot von LifeLink.' );
 		}
-		$tmp = download_url( $package, 120 );
-		if ( is_wp_error( $tmp ) ) {
-			return $tmp;
+		// Gleicher Weg wie die übrigen Abrufe der Bridge (download_url() lässt nur Standardports und öffentliche Hosts zu)
+		$tmp = wp_tempnam( 'lifelink-bridge.zip' );
+		$res = wp_remote_get(
+			$package,
+			array(
+				'timeout'  => 120,
+				'stream'   => true,
+				'filename' => $tmp,
+			)
+		);
+		if ( is_wp_error( $res ) || 200 !== (int) wp_remote_retrieve_response_code( $res ) ) {
+			wp_delete_file( $tmp );
+			return new WP_Error( 'lifelink_update_download', 'Update-Paket konnte nicht von LifeLink geladen werden: ' . ( is_wp_error( $res ) ? $res->get_error_message() : 'HTTP ' . wp_remote_retrieve_response_code( $res ) ) );
 		}
 		if ( ! hash_equals( $offer['sha256'], (string) hash_file( 'sha256', $tmp ) ) ) {
 			wp_delete_file( $tmp );

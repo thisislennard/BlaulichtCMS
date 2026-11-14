@@ -37,7 +37,13 @@ export const config = {
   isProduction: env.NODE_ENV === 'production',
   port: Number(env.PORT ?? 7310),
   host: env.HOST ?? '0.0.0.0',
-  databaseUrl: env.DATABASE_URL ?? 'postgresql://lifelink:lifelink@127.0.0.1:5432/lifelink',
+  // Im Image (eingebettete Datenbank) ohne DATABASE_URL: Unix-Socket im Container – so funktionieren auch
+  // Wartungsbefehle per `docker compose exec lifelink node server/dist/cli.js …`
+  databaseUrl:
+    env.DATABASE_URL ??
+    (['1', 'true', 'yes'].includes(String(env.LIFELINK_EMBEDDED_DB ?? '').toLowerCase())
+      ? `postgresql://lifelink@localhost/lifelink?host=${encodeURIComponent(env.LIFELINK_PG_SOCKET_DIR ?? '/tmp/lifelink-pg')}`
+      : 'postgresql://lifelink:lifelink@127.0.0.1:5432/lifelink'),
   /** 32 Byte, Base64. Verschlüsselt alle gespeicherten Zugangsdaten. Liegt nie in der Datenbank. */
   masterKey: readMasterKey(),
   publicUrl: (env.PUBLIC_URL ?? '').replace(/\/+$/, ''),

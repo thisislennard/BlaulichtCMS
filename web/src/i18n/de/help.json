@@ -101,7 +101,7 @@
     },
     "updates": {
       "title": "Updates",
-      "summary": "Image-Update am Docker-Host, Prüfungen vorher, Bridge-Updates."
+      "summary": "Sichern, Wechseln, Prüfen, Wiederherstellen; Wartungsmodus und Bridge-Updates über WordPress."
     },
     "fehlerbehebung": {
       "title": "Fehlerbehebung",
@@ -134,6 +134,10 @@
     "stichwoerter-regeln": {
       "title": "Stichwörter, Regeln und Versand pflegen",
       "summary": "Lagefragen, versionierte Regeln mit fachlicher Freigabe, Zuständigkeiten, Vorlagen, SMTP und Testmodus."
+    },
+    "verbindungen": {
+      "title": "Verbindungen: Facebook, Instagram, FE2, Warnungen",
+      "summary": "Verbinden, Testen, Vorschau, Aktivieren; soziale Kanäle im Beitrag, FE2-Entwürfe, amtliche Warnungen."
     }
   },
   "tiles": {

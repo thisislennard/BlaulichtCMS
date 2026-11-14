@@ -15,9 +15,9 @@ als Sub-Issues zusammen.
 |---|---|---|---|
 | M0 – Bestandsaufnahme und Architektur | #1 | – | ✅ bis auf LiFeOS (Quellcode liegt nicht vor) |
 | M1 – Vom Foto-Link bis zur WordPress-Testseite | #2 | #7 – #15 | ✅ abgenommen (lokal, 34/34) – produktionsnaher WordPress-Test offen |
-| M2 – Medien, QR-Druck, Redaktion und Dashboard | #3 | #16 – #25 | ⏳ teilweise vorbereitet (QR/Aushang, Sichtung, PWA-Grundgerüst) |
+| M2 – Medien, QR-Druck, Redaktion und Dashboard | #3 | #16 – #25 | ✅ lokal abgenommen (13/13) – Scan mit echten Geräten offen |
 | M3 – MoWaS-Warnentwurf per Handy, PDF und Mail | #4 | #26 – #30, #41 | ✅ lokal abgenommen (Abstimmung mit zuständiger Stelle offen) |
-| M4 – Optionale Verbindungen, Import und Betrieb | #5 | #31 – #40 | ⏳ Sicherung/Wiederherstellung und Doku begonnen |
+| M4 – Optionale Verbindungen, Import und Betrieb | #5 | #31 – #40 | ✅ lokal abgenommen – Tests mit Anbietern, LiFeOS-Format und Lizenz offen |
 | Abschluss | #6 | – | – |
 
 Stand im Detail: [docs/testprotokoll.md](docs/testprotokoll.md) · Entscheidungen: [docs/architektur.md](docs/architektur.md) ·

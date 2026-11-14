@@ -104,20 +104,59 @@ Skript: `scripts/restore-volume.sh <archiv>`.
 
 ## Updates
 
-1. Systemstatus prüfen (freier Speicher, letzte Sicherung, keine wartenden Veröffentlichungen).
-2. Vollständige Sicherung außerhalb des Volumes anlegen.
-3. Neues Image am Docker-Host:
+Ablauf: **Sichern → Wechseln → Prüfen → Wiederherstellen** (nur im Fehlerfall). Programmcode wird nie aus der
+Anwendung heraus ausgetauscht; ein Update ist immer ein bewusster Imagewechsel am Docker-Host.
 
-   ```bash
-   git pull
-   docker compose up -d --build
-   ```
+### Mit dem Update-Skript (empfohlen)
 
-4. Die API führt beim Start fehlende Migrationen aus (jede in eigener Transaktion, unter Sperre).
-   Schlägt eine Migration fehl, startet die API nicht, der Healthcheck bleibt rot und das Protokoll nennt die Migration.
-5. Rückweg: vorheriges Image starten **und** die Sicherung von Schritt 2 wiederherstellen.
+```bash
+scripts/update.sh <neues-image> /srv/lifelink-sicherungen            # z. B. ghcr.io/<organisation>/lifelink:0.5.0
+scripts/update.sh <neues-image> /srv/lifelink-sicherungen --rollback # bei Fehler automatisch zurück
+```
 
-Es gibt kein In-App-Update, das Programmcode austauscht. Updates bleiben eine bewusste Entscheidung am Docker-Host.
+Das Skript
+
+1. schaltet den **Wartungsmodus** ein: keine neuen schreibenden Vorgänge, keine neuen Hintergrundaufträge, die Bridge
+   erhält keine neuen Aufträge (bestehende Banner auf der Website bleiben unverändert);
+2. wartet, bis die **Vorabprüfung** bereit meldet (keine laufenden Aufträge, kein Versand und keine Veröffentlichung in
+   der Schwebe, genug Speicher);
+3. legt eine **vollständige Sicherung außerhalb des Volumes** an (`scripts/backup-volume.sh`, mit Prüfsumme);
+4. setzt `LIFELINK_IMAGE` in `.env` und startet den Container mit dem neuen Image;
+5. wartet auf den Healthcheck und den Selbsttest und beendet den Wartungsmodus.
+
+Die Vorabprüfung gibt es auch in der Oberfläche (Einstellungen → Sicherung → „Update vorbereiten“) und auf der
+Kommandozeile: `docker compose exec lifelink node server/dist/cli.js preflight`.
+
+### Schema-Migration mit Startprüfung
+
+Der Supervisor führt fehlende Migrationen **vor** dem Start der API als eigenen Schritt aus (jede Migration in einer
+eigenen Transaktion, unter Sperre). Zuvor prüft er, ob der Datenstand **neuer als das Programm** ist (die Datenbank
+kennt Migrationen, die das Image nicht enthält – typisch nach einer Rückkehr zu einem älteren Image ohne passende
+Sicherung).
+
+Schlägt einer der beiden Schritte fehl, **startet LifeLink nicht**: PostgreSQL läuft weiter (für Sicherung und
+Wiederherstellung), der Webport zeigt eine Sperrseite mit dem Grund und `/healthz` antwortet mit 503. Eine
+fehlgeschlagene Migration wird vollständig zurückgerollt; die Daten bleiben unverändert.
+
+### Rückweg nach fehlgeschlagenem Update
+
+```bash
+docker compose down
+docker volume rm lifelink_lifelink-data
+LIFELINK_IMAGE=<altes-image> scripts/restore-volume.sh /srv/lifelink-sicherungen/lifelink-<zeitpunkt>.tar.gz
+sed -i 's|^LIFELINK_IMAGE=.*|LIFELINK_IMAGE=<altes-image>|' .env && docker compose up -d --no-build
+docker compose exec lifelink node server/dist/cli.js maintenance off
+```
+
+Image **und** passender Datenstand gehören zusammen: Nach einer erfolgreichen Migration lässt sich das alte Image
+nicht einfach wieder starten (Startprüfung). Der Rückweg führt immer über die Sicherung von vor dem Update.
+Beide Wege – fehlgeschlagene Migration mit automatischem Rückweg und verweigerte Rückkehr zum alten Image – sind in
+der Abnahme M4 getestet (`test/e2e/m4-flow.mjs`).
+
+### Versionierte Images
+
+`compose.yaml` verwendet `image: ${LIFELINK_IMAGE:-lifelink:local}`. Für den Betrieb feste Versionen verwenden
+(`…/lifelink:0.5.0`), nie `latest`, damit der Rückweg eindeutig ist.
 
 ### PostgreSQL-Hauptversion
 
@@ -125,17 +164,24 @@ Der Supervisor vergleicht `/data/postgres/PG_VERSION` mit der PostgreSQL-Version
 wenn sie abweichen. Ein Hauptversionswechsel läuft geplant über Export und Import:
 
 ```bash
-# Mit dem ALTEN Image: logische Sicherung
-docker compose exec lifelink sh -c 'pg_dumpall -h /tmp/lifelink-pg -U lifelink' > lifelink-pgdumpall.sql
-# Vollständige Volume-Sicherung anlegen (siehe oben), dann Datenbankverzeichnis beiseitelegen
+# 1. Mit dem ALTEN Image: Wartungsmodus, logische Sicherung, vollständige Volume-Sicherung
+docker compose exec lifelink node server/dist/cli.js maintenance on "PostgreSQL-Wechsel"
+docker compose exec -T lifelink sh -c 'pg_dump -h /tmp/lifelink-pg -U lifelink --no-owner --no-privileges lifelink' > lifelink.sql
+scripts/backup-volume.sh /srv/lifelink-sicherungen
+# 2. Alten Cluster beiseitelegen, NEUES Image starten (legt einen leeren Cluster an)
 docker compose stop lifelink
-docker run --rm -v lifelink_lifelink-data:/data debian:trixie-slim mv /data/postgres /data/postgres-alt
-# NEUES Image starten (legt leeren Cluster an), dann einspielen
-docker compose up -d
-docker compose exec -T lifelink sh -c 'psql -h /tmp/lifelink-pg -U lifelink -d postgres' < lifelink-pgdumpall.sql
+docker run --rm -u 0 -v lifelink_lifelink-data:/data --entrypoint sh <neues-image> -c 'mv /data/postgres /data/postgres-alt'
+docker compose up -d --no-build
+# 3. Leere Datenbank ersetzen und den Export einspielen
+docker compose exec -T lifelink sh -c "psql -h /tmp/lifelink-pg -U lifelink -d postgres -c 'DROP DATABASE lifelink WITH (FORCE)' -c 'CREATE DATABASE lifelink OWNER lifelink'"
+docker compose exec -T lifelink sh -c 'psql -q -h /tmp/lifelink-pg -U lifelink -d lifelink' < lifelink.sql
+docker compose restart lifelink
+docker compose exec lifelink node server/dist/cli.js maintenance off
+# 4. Nach erfolgreicher Prüfung: /data/postgres-alt entfernen
 ```
 
-Dieser Weg ist dokumentiert, aber noch **nicht mit einem echten Versionswechsel getestet** (siehe `docs/testprotokoll.md`).
+In der Abnahme M4 getestet mit einem Datenbestand aus **PostgreSQL 16**, eingespielt in das Image mit
+**PostgreSQL 18**: alle Benutzer, Medien, Freigaben und geplanten Aufträge vollständig, Anwendung gesund.
 
 ## Notfall-Befehle
 
@@ -143,5 +189,7 @@ Dieser Weg ist dokumentiert, aber noch **nicht mit einem echten Versionswechsel 
 docker compose exec lifelink node server/dist/cli.js password-link admin@example.org   # Passwort-Link (24 h)
 docker compose exec lifelink node server/dist/cli.js reset-mfa admin@example.org       # Zwei-Faktor zurücksetzen
 docker compose exec lifelink node server/dist/cli.js self-check                        # Bereitschaft prüfen
+docker compose exec lifelink node server/dist/cli.js preflight                         # Update-Vorabprüfung
+docker compose exec lifelink node server/dist/cli.js maintenance on|off                # Wartungsmodus
 docker compose exec lifelink node server/dist/cli.js backup-decrypt <datei> <ziel>     # Datenbanksicherung entschlüsseln
 ```

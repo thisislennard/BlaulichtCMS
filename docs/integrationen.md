@@ -1,17 +1,19 @@
 # Integrationen – Prüfstand
 
-Stand: Meilenstein 3. Einstufung je Verbindung: **lokal** (Testdienst/fiktive Daten), **Anbieter** (echtes Testkonto
-beim Anbieter), **produktionsnah** (reale Zielumgebung, ohne echte Veröffentlichung an die Öffentlichkeit).
+Stand: Meilenstein 4 (Abschluss der Umsetzung). Einstufung je Verbindung: **lokal** (Testdienst/fiktive Daten),
+**Anbieter** (echtes Testkonto beim Anbieter), **produktionsnah** (reale Zielumgebung, ohne echte Veröffentlichung
+an die Öffentlichkeit). Alle Verbindungen sind optional und durchlaufen **Verbinden → Testen → Vorschau → Aktivieren**.
 
-| Verbindung | Umgesetzt | Lokal geprüft | Mit Anbieter | Produktionsnah | Konkret fehlender Live-Test |
+| Verbindung | Umgesetzt | Lokaler Test | Test mit Anbieter | Produktionsnah | Konkret fehlender Live-Test |
 |---|---|---|---|---|---|
-| **WordPress (LifeLink Bridge)** | M1: Beiträge mit Medien, Kopplung, Abruf, Rückmeldung | ✅ WordPress 6.9 (Docker, Theme Twenty Twenty-Five), PHP 8.3, Host-Cron per WP-CLI, Kopplung über WP-Oberfläche, Idempotenz | – | ❌ | Bridge auf der echten Testwebsite installieren, mit der produktiven LifeLink-Adresse über HTTPS koppeln, Abruf per WP-Cron **und** Host-Cron prüfen, Theme-Darstellung und Seitencache prüfen |
-| **SMTP (Warnentwurf)** | ✅ M3: PDF-Anhang, Testmodus, Status angenommen/fehlgeschlagen/unbekannt | ✅ lokaler Test-Mailserver (smtp-server): Annahme, 550-Ablehnung, Abbruch nach DATA | – | ❌ | Versand über den echten Mailserver der Organisation an ein abgestimmtes **Test**postfach der zuständigen Stelle; TLS/Anmeldung, SPF/DKIM, Spam-Einstufung, Rückmeldeweg für die Eingangsbestätigung (#30) |
-| **Facebook / Instagram** | ❌ M4 | – | – | – | OAuth, Formate, Veröffentlichung mit Testkonto (#32) |
-| **FE2** | ❌ M4 | – | – | – | anonymisierte Testmeldung aus der echten FE2-Instanz (#33) |
-| **Amtliche Warnfeeds** | ❌ M4 | – | – | – | Bezugsweg, Gebietsfilter, Entwarnungen (#34) |
-| **RSS / Atom** | ✅ M2 | ✅ WordPress-Feed als Quelle | – | ❌ | echte Feeds der Organisation |
-| **LiFeOS-Import** | ❌ M4 | – | – | – | Quellcode und Datenformat liegen nicht vor (#35) |
+| **WordPress (LifeLink Bridge)** | ✅ Beiträge mit Medien, Banner, Einsatzübersicht, Zurückziehen, Updates über WordPress | ✅ WordPress 6.9 (Docker), PHP 8.3, Host-Cron, Idempotenz, Update 0.3.9 → 0.4.0 mit Prüfsumme und erhaltener Kopplung | – (kein Anbieter) | ❌ | Bridge auf der echten Testwebsite, HTTPS-Kopplung mit der produktiven Adresse, WP-Cron **und** Host-Cron, Theme und Seitencache |
+| **Facebook-Seite** | ✅ OAuth, Seitenwahl, Text/Fotos/Video, Status je Kanal, gezieltes Wiederholen, Prüfung bei unbekanntem Ergebnis, manueller Export | ✅ Graph-API-Ersatz: unveröffentlichter Testbeitrag + Löschen, Ablehnung (400), Serverfehler nach Anlage (500 → „unbekannt“ → gefunden, kein Duplikat), OAuth-Rückweg ohne Cookie | ❌ | ❌ | Meta-App mit Facebook Login, App-Prüfung der Rechte `pages_manage_posts` u. a., Testseite; Veröffentlichung eines nicht öffentlichen Testbeitrags |
+| **Instagram-Konto** | ✅ Instagram Login, Container, Statusprüfung, Karussell, Reels, Kontingent | ✅ Graph-API-Ersatz: Container ohne Veröffentlichung im Test, Veröffentlichung mit Permalink, keine Doppelveröffentlichung | ❌ | ❌ | professionelles Testkonto, App-Prüfung für `instagram_business_content_publish`, öffentlich erreichbare HTTPS-Adresse für den Medienabruf |
+| **FE2** | ✅ Eingang mit Zugangsschlüssel, Allowlist, ein Entwurf je Einsatz, Folgeereignisse | ✅ HTTP-Testmeldungen gegen den Container: Vorschau vor Aktivierung, Wiederholung erkannt, Alarmtext verworfen, keine Inhalte in Protokollen | ❌ | ❌ | anonymisierte Testmeldung aus der echten FE2-Instanz (HTTP-Ausgang, tatsächliches JSON-Format, Feldzuordnung) |
+| **SMTP (Warnentwurf)** | ✅ PDF-Anhang, Testmodus, Status angenommen/fehlgeschlagen/unbekannt | ✅ lokaler Test-Mailserver: Annahme, 550-Ablehnung, Abbruch nach DATA | ❌ | ❌ | Versand über den Mailserver der Organisation an ein abgestimmtes Testpostfach der zuständigen Stelle (TLS, SPF/DKIM) |
+| **RSS / Atom** | ✅ Vorschau, Deduplizierung, ETag, Themenideen | ✅ WordPress-Feed als Quelle | – | ❌ | echte Feeds der Organisation |
+| **Amtliche Warnfeeds** | ✅ Warn-App-Schnittstelle (Regionalschlüssel) und CAP-Adressen, Gebietsfilter, Aktualisierung, Entwarnung, automatische Banner nur nach dokumentierter Prüfung | ✅ CAP-Testquelle: privates Ziel erst nach Freigabe, Gebietsfilter, Update ersetzt, Cancel beendet Banner | ❌ | ❌ | Abruf der echten Warn-App-Schnittstelle für den eigenen Regionalschlüssel; Nutzungsbedingungen der Weiterverwendung prüfen |
+| **LiFeOS-Import** | ✅ Importrahmen (Austauschformat, Probelauf, Prüfsummen, Mengenabgleich, Altlink-Weiterleitung) | ✅ fiktive Testdaten | – | ❌ | **LiFeOS-Exportformat liegt nicht vor** – Umsetzer erstellen, Import gegen eine Kopie (#35) |
 
 ## WordPress – was lokal geprüft wurde
 
