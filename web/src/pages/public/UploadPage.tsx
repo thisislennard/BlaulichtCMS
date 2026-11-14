@@ -4,6 +4,7 @@ import { ApiError, get } from '../../api/client';
 import { Button, cx, Notice, Spinner, Textarea } from '../../components/ui/core';
 import { Icon } from '../../components/ui/Icon';
 import { fmtBytes, fmtDateTime } from '../../lib/format';
+import { uploadResumable } from '../../lib/upload';
 
 interface LinkInfo {
   collection: { title: string; purpose: string; note: string };
@@ -24,31 +25,8 @@ interface Item {
   duplicate?: boolean;
 }
 
-/** Eine Datei per XHR senden (Fortschritt je Datei). Der Client-Schlüssel verhindert Doppelanlagen beim Wiederholen. */
 function sendFile(token: string, item: Item, note: string, onProgress: (p: number) => void): Promise<{ duplicate: boolean }> {
-  return new Promise((resolve, reject) => {
-    const fd = new FormData();
-    fd.append('clientKey', item.key);
-    if (note) fd.append('note', note);
-    fd.append('file', item.file, item.file.name);
-    const xhr = new XMLHttpRequest();
-    xhr.open('POST', `/api/v1/public/upload/${encodeURIComponent(token)}`);
-    xhr.setRequestHeader('x-lifelink-request', '1');
-    xhr.upload.onprogress = (e) => e.lengthComputable && onProgress(Math.round((e.loaded / e.total) * 100));
-    xhr.onload = () => {
-      let data: any = null;
-      try {
-        data = JSON.parse(xhr.responseText);
-      } catch {
-        /* keine JSON-Antwort */
-      }
-      if (xhr.status >= 200 && xhr.status < 300) resolve({ duplicate: !!data?.duplicate });
-      else reject(new Error(data?.message ?? `Fehler ${xhr.status}`));
-    };
-    xhr.onerror = () => reject(new Error('Verbindung unterbrochen. Bitte erneut senden.'));
-    xhr.ontimeout = () => reject(new Error('Zeitüberschreitung. Bitte erneut senden.'));
-    xhr.send(fd);
-  });
+  return uploadResumable(`/api/v1/public/upload/${encodeURIComponent(token)}/sessions`, item.file, { clientKey: item.key, note, onProgress });
 }
 
 export function UploadPage() {
@@ -200,7 +178,7 @@ export function UploadPage() {
               </section>
             )}
             <p className="m-0 text-meta text-fg-muted">
-              Erlaubt sind Fotos und Videos bis {fmtBytes(info.max_file_bytes)} je Datei. Hochgeladene Dateien sehen nur berechtigte Personen der Redaktion. Standortdaten werden aus veröffentlichten Fassungen entfernt.
+              Erlaubt sind Fotos und Videos bis {fmtBytes(info.max_file_bytes)} je Datei. Bricht die Verbindung ab, geht der Upload automatisch an derselben Stelle weiter. Hochgeladene Dateien sehen nur berechtigte Personen der Redaktion. Standortdaten werden aus veröffentlichten Fassungen entfernt.
             </p>
           </>
         )}

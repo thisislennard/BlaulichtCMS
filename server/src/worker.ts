@@ -13,6 +13,7 @@ import { runBackup } from './ops/backup.js';
 import { toStepError } from './lib/errors.js';
 import { processMedia } from './media/process.js';
 import { ensureMediaDirs, mediaPaths } from './media/storage.js';
+import { cleanupUploadSessions } from './routes/uploads.js';
 
 process.env.LIFELINK_ROLE ??= 'worker';
 
@@ -72,12 +73,13 @@ async function cleanup() {
   await q(`DELETE FROM idempotency_records WHERE created_at < now() - interval '30 days'`);
   await q(`DELETE FROM worker_heartbeats WHERE last_seen_at < now() - interval '1 day'`);
   await q(`UPDATE backups SET status = 'failed', finished_at = now(), error = 'Abgebrochen (Prozess beendet)' WHERE status = 'running' AND started_at < now() - interval '1 hour'`);
+  await cleanupUploadSessions().catch((e) => log('warn', 'cleanup', e.message));
   // Liegengebliebene temporäre Upload-Dateien (abgebrochene Übertragungen) entfernen
   try {
     const dir = mediaPaths.tmp();
     for (const f of fs.readdirSync(dir)) {
       const p = path.join(dir, f);
-      if (Date.now() - fs.statSync(p).mtimeMs > 6 * 3600_000) fs.rmSync(p, { force: true });
+      if (!f.startsWith('upload-') && Date.now() - fs.statSync(p).mtimeMs > 6 * 3600_000) fs.rmSync(p, { force: true });
     }
   } catch {
     /* Ordner fehlt */

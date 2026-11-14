@@ -10,6 +10,7 @@ import { Icon } from '../../components/ui/Icon';
 import { Dialog, Menu, useErrorToast, useToast } from '../../components/ui/overlays';
 import { useAuth } from '../../lib/auth';
 import { fmtBytes, fmtDateTime, fmtRelative } from '../../lib/format';
+import { newClientKey, uploadResumable } from '../../lib/upload';
 
 type Filter = 'pending' | 'selected' | 'all' | 'problems';
 
@@ -153,19 +154,8 @@ function ReviewDialog({ items, onClose, onDecide }: { items: MediaItem[]; onClos
   );
 }
 
-function uploadInternal(collectionId: string, file: File, onProgress: (p: number) => void): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const fd = new FormData();
-    fd.append('clientKey', crypto.randomUUID().replace(/-/g, ''));
-    fd.append('file', file, file.name);
-    const xhr = new XMLHttpRequest();
-    xhr.open('POST', `/api/v1/collections/${collectionId}/media`);
-    xhr.setRequestHeader('x-lifelink-request', '1');
-    xhr.upload.onprogress = (e) => e.lengthComputable && onProgress(Math.round((e.loaded / e.total) * 100));
-    xhr.onload = () => (xhr.status < 300 ? resolve() : reject(new Error(JSON.parse(xhr.responseText || '{}').message ?? `Fehler ${xhr.status}`)));
-    xhr.onerror = () => reject(new Error('Verbindung unterbrochen.'));
-    xhr.send(fd);
-  });
+function uploadInternal(collectionId: string, file: File, onProgress: (p: number) => void): Promise<unknown> {
+  return uploadResumable(`/api/v1/collections/${collectionId}/upload-sessions`, file, { clientKey: newClientKey(), onProgress });
 }
 
 export default function CollectionDetail() {

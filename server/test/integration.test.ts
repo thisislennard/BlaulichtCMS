@@ -395,3 +395,77 @@ describe('Betrieb', () => {
     expect((await anonymous.get('/healthz')).status).toBe(200);
   });
 });
+
+describe('Fortsetzbarer Upload (M2)', () => {
+  const video = () => fs.readFileSync(process.env.TEST_VIDEO ?? '/tmp/claude-0/test.mp4');
+  const put = (c: Client, url: string, data: Buffer) => c.raw('PUT', url, { payload: data, headers: { 'content-type': 'application/octet-stream' } });
+
+  it('setzt einen unterbrochenen Video-Upload fort und legt nichts doppelt an', async () => {
+    const data = video();
+    const link = await editor.post(`/collections/${collectionId}/links`, { days: 1 });
+    const token = link.json.url.split('/u/')[1];
+    const base = `/public/upload/${token}/sessions`;
+    const s = await anonymous.post(base, { clientKey: 'video-key-0001', name: 'einsatz.mp4', size: data.length, type: 'video/mp4' });
+    expect(s.status).toBe(200);
+    expect(s.json.received).toBe(0);
+    const chunk = 30_000;
+    // Erster Teil kommt an
+    expect((await put(anonymous, `${base}/${s.json.id}?offset=0`, data.subarray(0, chunk))).json.received).toBe(chunk);
+    // Verbindungsabbruch mitten im zweiten Teil: nur ein Stück wurde geschrieben
+    fs.appendFileSync(path.join(process.env.LIFELINK_DATA_DIR!, 'media', 'tmp', `upload-${s.json.id}.part`), data.subarray(chunk, chunk + 5_000));
+    // Client wiederholt mit altem Stand → 409 mit tatsächlichem Stand
+    const wrong = await put(anonymous, `${base}/${s.json.id}?offset=${chunk}`, data.subarray(chunk, chunk * 2));
+    expect(wrong.status).toBe(409);
+    expect(wrong.json.details.received).toBe(chunk + 5_000);
+    // Neu verbinden: Stand abfragen und ab dort weitersenden
+    const st = await anonymous.get(`${base}/${s.json.id}`);
+    let offset = st.json.received;
+    expect(offset).toBe(chunk + 5_000);
+    // Gleiche Datei erneut anmelden (z. B. Seite neu geladen) → dieselbe Sitzung
+    const again = await anonymous.post(base, { clientKey: 'video-key-0001', name: 'einsatz.mp4', size: data.length, type: 'video/mp4' });
+    expect(again.json.id).toBe(s.json.id);
+    expect(again.json.received).toBe(offset);
+    let last: any;
+    while (offset < data.length) {
+      last = await put(anonymous, `${base}/${s.json.id}?offset=${offset}`, data.subarray(offset, offset + chunk));
+      expect(last.status).toBe(200);
+      offset = last.json.received;
+    }
+    expect(last.json.complete).toBe(true);
+    // Nach Abschluss: erneutes Anmelden meldet Duplikat
+    const dup = await anonymous.post(base, { clientKey: 'video-key-0001', name: 'einsatz.mp4', size: data.length, type: 'video/mp4' });
+    expect(dup.json.duplicate).toBe(true);
+    const rows = await pool.query(`SELECT * FROM media WHERE client_key = 'video-key-0001'`);
+    expect(rows.rowCount).toBe(1);
+    const m = rows.rows[0];
+    expect(m.sha256).toBe(crypto.createHash('sha256').update(data).digest('hex'));
+    await processMedia(m.id);
+    const ready = await one<any>(`SELECT * FROM media WHERE id = $1`, [m.id]);
+    expect(ready.status).toBe('ready');
+    expect(ready.kind).toBe('video');
+    expect(ready.had_location).toBe(true);
+    expect(ready.has_preview).toBe(true);
+    expect(ready.has_public).toBe(true);
+    // Öffentliche Fassung ohne Standort-Metadaten
+    const { execFileSync } = await import('node:child_process');
+    const tags = execFileSync('ffprobe', ['-v', 'error', '-show_entries', 'format_tags', '-of', 'json', path.join(process.env.LIFELINK_DATA_DIR!, 'media', 'public', `${m.id}.mp4`)]).toString();
+    expect(tags).not.toContain('location');
+  });
+
+  it('weist zu große Dateien und falsche Teile ab', async () => {
+    await pool.query(`UPDATE upload_links SET max_file_bytes = 1000 WHERE collection_id = $1 AND revoked_at IS NULL`, [collectionId]);
+    const link = await one<any>(`SELECT token_enc, id FROM upload_links WHERE collection_id = $1 AND revoked_at IS NULL AND expires_at > now() ORDER BY created_at DESC LIMIT 1`, [collectionId]);
+    const { decrypt } = await import('../src/lib/crypto.js');
+    const token = decrypt(link.token_enc, `upload-link:${link.id}`);
+    const r = await anonymous.post(`/public/upload/${token}/sessions`, { clientKey: 'gross-key-0001', name: 'gross.mp4', size: 5_000_000 });
+    expect(r.status).toBe(413);
+  });
+
+  it('interner Upload in Teilen über die Sammlung', async () => {
+    const data = video();
+    const s = await editor.post(`/collections/${collectionId}/upload-sessions`, { clientKey: 'intern-key-0001', name: 'intern.mp4', size: data.length });
+    const done = await put(editor, `/collections/${collectionId}/upload-sessions/${s.json.id}?offset=0`, data);
+    expect(done.json.complete).toBe(true);
+    expect((await anonymous.post(`/collections/${collectionId}/upload-sessions`, { clientKey: 'x-key-00001', name: 'x', size: 1 })).status).toBe(401);
+  });
+});

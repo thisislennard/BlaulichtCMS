@@ -42,7 +42,7 @@ async function linkPayload(req: FastifyRequest, l: any) {
   };
 }
 
-function mediaPayload(m: any) {
+export function mediaPayload(m: any) {
   return {
     id: m.id,
     collection_id: m.collection_id,
@@ -94,18 +94,8 @@ export async function createUploadLink(actor: Actor, userId: string | null, coll
 }
 
 /** Nimmt genau eine Datei entgegen (Multipart), legt sie in Quarantäne und plant die Prüfung ein. */
-async function receiveFile(
-  req: FastifyRequest,
-  opts: { collection: any; linkId: string | null; userId: string | null; maxFileBytes: number; actor: Actor },
-) {
-  const s = await getSettings();
-  const free = freeBytes();
-  if (free !== null && free < s['media.min_free_gb'] * 1024 ** 3) throw new AppError(507, 'storage_full', 'Der Speicher von LifeLink ist fast voll. Uploads sind vorübergehend gesperrt.');
-  const usage = await one<{ n: number; bytes: number }>(`SELECT count(*)::int AS n, COALESCE(sum(size_bytes),0)::bigint AS bytes FROM media WHERE collection_id = $1 AND deleted_at IS NULL AND status <> 'rejected'`, [opts.collection.id]);
-  if (usage!.n >= opts.collection.max_files) throw new AppError(409, 'collection_full', 'Die Sammlung hat die maximale Anzahl an Dateien erreicht.');
-  const remaining = Number(opts.collection.max_bytes) - Number(usage!.bytes);
-  if (remaining <= 0) throw new AppError(409, 'collection_full', 'Der Speicherplatz dieser Sammlung ist ausgeschöpft.');
-  const limit = Math.min(opts.maxFileBytes, remaining);
+async function receiveFile(req: FastifyRequest, opts: UploadContext) {
+  const limit = await uploadAllowance(opts);
 
   const part = await req.file({ limits: { fileSize: limit, files: 1, fields: 5, fieldSize: 2000 } });
   if (!part) throw badRequest('Keine Datei empfangen.');
@@ -132,6 +122,34 @@ async function receiveFile(
     throw badRequest('Die Datei ist leer.');
   }
   const name = (part.filename || 'datei').replace(/[\u0000-\u001f\\/]/g, '_').slice(0, 200);
+  return finalizeUpload({ ...opts, stored, name, declaredType: String(part.mimetype ?? ''), note: fields.note ?? '', clientKey });
+}
+
+export interface UploadContext {
+  collection: { id: string; max_files: number; max_bytes: number | string };
+  linkId: string | null;
+  userId: string | null;
+  maxFileBytes: number;
+  actor: Actor;
+}
+
+/** Prüft Speicher, Dateianzahl und Umfang einer Sammlung; liefert die maximal erlaubte Dateigröße. */
+export async function uploadAllowance(opts: UploadContext): Promise<number> {
+  const s = await getSettings();
+  const free = freeBytes();
+  if (free !== null && free < s['media.min_free_gb'] * 1024 ** 3) throw new AppError(507, 'storage_full', 'Der Speicher von LifeLink ist fast voll. Uploads sind vorübergehend gesperrt.');
+  const usage = await one<{ n: number; bytes: number }>(`SELECT count(*)::int AS n, COALESCE(sum(size_bytes),0)::bigint AS bytes FROM media WHERE collection_id = $1 AND deleted_at IS NULL AND status <> 'rejected'`, [opts.collection.id]);
+  if (usage!.n >= opts.collection.max_files) throw new AppError(409, 'collection_full', 'Die Sammlung hat die maximale Anzahl an Dateien erreicht.');
+  const remaining = Number(opts.collection.max_bytes) - Number(usage!.bytes);
+  if (remaining <= 0) throw new AppError(409, 'collection_full', 'Der Speicherplatz dieser Sammlung ist ausgeschöpft.');
+  return Math.min(opts.maxFileBytes, remaining);
+}
+
+/** Übernimmt eine vollständig empfangene Datei: Medienzeile, Quarantäne, Prüfauftrag – idempotent über den Client-Schlüssel. */
+export async function finalizeUpload(
+  opts: UploadContext & { stored: { tmpPath: string; size: number; sha256: string }; name: string; declaredType: string; note: string; clientKey: string | null },
+) {
+  const { stored, name, clientKey } = opts;
   try {
     const row = await tx(async (db) => {
       const m = await one<any>(
@@ -139,7 +157,7 @@ async function receiveFile(
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9, (SELECT COALESCE(max(sort_order),0)+1 FROM media WHERE collection_id = $1))
          ON CONFLICT (collection_id, client_key) WHERE client_key IS NOT NULL AND deleted_at IS NULL DO NOTHING
          RETURNING *`,
-        [opts.collection.id, opts.linkId, opts.userId, (fields.note ?? '').slice(0, 500), clientKey, name, String(part.mimetype ?? '').slice(0, 100), stored.size, stored.sha256],
+        [opts.collection.id, opts.linkId, opts.userId, opts.note.slice(0, 500), clientKey, name, opts.declaredType.slice(0, 100), stored.size, stored.sha256],
         db,
       );
       if (!m) return null;
@@ -168,7 +186,7 @@ export function publicFileFor(m: any): { path: string; type: string; ext: string
   return { path: mediaPaths.publicFile(m.id, ext), type: ext === 'webm' ? 'video/webm' : 'video/mp4', ext };
 }
 
-async function loadPublicLink(token: string) {
+export async function loadPublicLink(token: string) {
   const l = await one<any>(
     `SELECT l.*, c.title AS c_title, c.purpose AS c_purpose, c.note AS c_note, c.archived_at AS c_archived, c.id AS c_id, c.max_files AS c_max_files, c.max_bytes AS c_max_bytes
        FROM upload_links l JOIN collections c ON c.id = l.collection_id WHERE l.token_hash = $1`,
