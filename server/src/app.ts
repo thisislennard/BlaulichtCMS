@@ -24,6 +24,7 @@ import { bannerRoutes } from './routes/banners.js';
 import { eventRoutes, stopEvents } from './routes/events.js';
 import { rssRoutes } from './routes/rss.js';
 import { warningRoutes } from './routes/warnings.js';
+import { connectionRoutes } from './routes/connections.js';
 import { healthStatus } from './routes/health.js';
 
 export async function buildApp(): Promise<FastifyInstance> {
@@ -84,6 +85,8 @@ export async function buildApp(): Promise<FastifyInstance> {
     reply.header('cache-control', 'no-store');
     // Die Bridge authentisiert sich per eigenem Schlüssel und nutzt keine Cookies
     if (req.url.startsWith('/api/v1/bridge/')) return;
+    // FE2-Eingang (eigener Zugangsschlüssel) und zeitlich begrenzte Medien-URLs (Abruf durch Meta) ohne Sitzung
+    if (req.url.startsWith('/api/v1/inbound/') || req.url.startsWith('/api/v1/m/')) return;
     req.auth = await resolveAuth(req);
     const changing = !['GET', 'HEAD', 'OPTIONS'].includes(req.method);
     if (changing && req.auth?.kind !== 'api_key' && req.headers[CSRF_HEADER] !== '1') {
@@ -105,6 +108,7 @@ export async function buildApp(): Promise<FastifyInstance> {
       await api.register(eventRoutes);
       await api.register(rssRoutes);
       await api.register(warningRoutes);
+      await api.register(connectionRoutes);
     },
     { prefix: '/api/v1' },
   );

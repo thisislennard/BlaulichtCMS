@@ -5,7 +5,7 @@ import { execFileSync } from 'node:child_process';
 import sharp from 'sharp';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { FastifyInstance } from 'fastify';
-import { pool, one } from '../src/db/pool.js';
+import { pool, one, many } from '../src/db/pool.js';
 import { migrate } from '../src/db/migrate.js';
 import { buildApp } from '../src/app.js';
 import { setSettings } from '../src/lib/settings.js';
@@ -1030,5 +1030,332 @@ describe('Warnentwürfe (M3) und Warnstufen-Assistent (#41)', () => {
     expect((await detail(draftCase)).template.newer_version).toBe(2);
     const fresh = (await author.post('/warnings', { kind: 'initial' })).json.id;
     expect((await detail(fresh)).template.version).toBe(2);
+  });
+});
+
+/* ======================================================================================= M4 */
+
+describe('Verbindungen (M4): FE2, Facebook, Instagram, amtliche Warnfeeds', () => {
+  // Lokaler Ersatz für Graph API und CAP-Quelle – es wird nichts an echte Dienste gesendet.
+  let mock: import('node:http').Server;
+  let base = '';
+  const graph: { posts: any[]; calls: string[]; failNext: null | 'reject' | 'server_after_create'; containers: Record<string, string> } = { posts: [], calls: [], failNext: null, containers: {} };
+  let capXml = '';
+  const cap = (id: string, msgType: string, headline: string, refs = '', area = 'Musterkreis', code = '099990000000') => `<?xml version="1.0"?>
+<alert xmlns="urn:oasis:names:tc:emergency:cap:1.2"><identifier>${id}</identifier><sender>test@example.invalid</sender><sent>2026-11-14T10:00:00+01:00</sent><status>Actual</status><msgType>${msgType}</msgType>${refs ? `<references>test@example.invalid,${refs},2026-11-14T09:00:00+01:00</references>` : ''}
+<info><language>de-DE</language><event>Unwetter</event><urgency>Immediate</urgency><severity>Severe</severity><headline>${headline}</headline><description>Fiktive Testwarnung.</description><expires>${new Date(Date.now() + 3 * 3600_000).toISOString()}</expires><web>https://example.invalid/warnung/${id}</web>
+<area><areaDesc>${area}</areaDesc><geocode><valueName>ARS</valueName><value>${code}</value></geocode></area></info></alert>`;
+
+  beforeAll(async () => {
+    const http = await import('node:http');
+    mock = http.createServer((req, res) => {
+      let body = '';
+      req.on('data', (c) => (body += c));
+      req.on('end', () => {
+        const u = new URL(req.url!, 'http://x');
+        const p = new URLSearchParams(body);
+        graph.calls.push(`${req.method} ${u.pathname}`);
+        const json = (code: number, v: any) => {
+          res.writeHead(code, { 'content-type': 'application/json' });
+          res.end(JSON.stringify(v));
+        };
+        if (u.pathname === '/cap.xml') {
+          res.writeHead(200, { 'content-type': 'application/xml' });
+          return res.end(capXml);
+        }
+        // Facebook
+        if (u.pathname === '/fb/PAGE1' && req.method === 'GET') return json(200, { id: 'PAGE1', name: 'Testseite (fiktiv)', link: 'https://facebook.example/PAGE1' });
+        if ((u.pathname === '/fb/PAGE1/feed' || (u.pathname === '/fb/PAGE1/photos' && p.get('published') !== 'false')) && req.method === 'POST') {
+          if (graph.failNext === 'reject') {
+            graph.failNext = null;
+            return json(400, { error: { message: '(#200) Fehlende Berechtigung (Test)' } });
+          }
+          const id = `PAGE1_${graph.posts.length + 1}`;
+          graph.posts.push({ id, message: p.get('message') ?? p.get('caption'), published: p.get('published') !== 'false', created_time: new Date().toISOString(), permalink_url: `https://facebook.example/${id}` });
+          if (graph.failNext === 'server_after_create') {
+            graph.failNext = null;
+            return json(500, { error: { message: 'Interner Fehler (Test)' } });
+          }
+          return json(200, { id, post_id: id });
+        }
+        if (u.pathname === '/fb/PAGE1/feed' && req.method === 'GET') return json(200, { data: graph.posts.filter((x) => x.published) });
+        if (u.pathname.startsWith('/fb/PAGE1_') && req.method === 'DELETE') {
+          graph.posts = graph.posts.filter((x) => x.id !== u.pathname.slice(4));
+          return json(200, { success: true });
+        }
+        if (u.pathname.startsWith('/fb/PAGE1_') && req.method === 'GET') return json(200, { id: u.pathname.slice(4), permalink_url: `https://facebook.example/${u.pathname.slice(4)}` });
+        if (u.pathname === '/fb/PAGE1/photos') return json(200, { id: `PH${graph.calls.length}`, post_id: `PAGE1_photo${graph.calls.length}` });
+        // Instagram
+        if (u.pathname === '/ig/me') return json(200, { user_id: 'IG1', username: 'test_konto', account_type: 'BUSINESS' });
+        if (u.pathname === '/ig/IG1/content_publishing_limit') return json(200, { data: [{ quota_usage: 1, config: { quota_total: 100 } }] });
+        if (u.pathname === '/ig/IG1/media' && req.method === 'POST') {
+          const id = `C${Object.keys(graph.containers).length + 1}`;
+          graph.containers[id] = p.get('image_url') ? 'FINISHED' : 'ERROR';
+          return json(200, { id });
+        }
+        if (u.pathname === '/ig/IG1/media' && req.method === 'GET') return json(200, { data: graph.posts.filter((x) => x.ig) });
+        if (u.pathname === '/ig/IG1/media_publish') {
+          const id = `M${graph.posts.length + 1}`;
+          graph.posts.push({ id, ig: true, caption: 'x', timestamp: new Date().toISOString(), permalink: `https://instagram.example/p/${id}` });
+          return json(200, { id });
+        }
+        if (/^\/ig\/C\d+$/.test(u.pathname)) return json(200, { status_code: graph.containers[u.pathname.slice(4)] ?? 'ERROR' });
+        if (/^\/ig\/M\d+$/.test(u.pathname)) return json(200, { permalink: `https://instagram.example/p/${u.pathname.slice(4)}` });
+        json(404, { error: { message: `unbekannt ${u.pathname}` } });
+      });
+    });
+    await new Promise<void>((r) => mock.listen(0, '127.0.0.1', r));
+    base = `http://127.0.0.1:${(mock.address() as any).port}`;
+    process.env.LIFELINK_META_GRAPH_URL = `${base}/fb`;
+    process.env.LIFELINK_IG_GRAPH_URL = `${base}/ig`;
+  });
+  afterAll(() => mock?.close());
+
+  let fe2Id = '';
+  let fe2Token = '';
+  const alarm = (id: string, extra: any = {}) => ({
+    einsatz: { id, stichwort: 'F-WALD-2', stichwort_text: 'Waldbrand mittel', ort: 'Musterstadt', ortsteil: 'Nord', alarmzeit: '2026-11-14T10:00', einheiten: ['HLF 1', 'TLF 2'], status: 'offen', ...extra },
+    meldung: { alarmtext: 'VERTRAULICH Person Max Mustermann Tel 0123', anrufer: 'Erika Musterfrau' },
+  });
+  const inbound = (body: any, token = fe2Token, headers: Record<string, string> = {}) => anonymous.raw('POST', `/inbound/fe2/${fe2Id}`, { body, headers: { authorization: `Bearer ${token}`, ...headers } });
+
+  it('Verbindungsrahmen: nur mit Recht; Verbinden → Testen → Vorschau → Aktivieren', async () => {
+    expect((await editor.post('/connections', { kind: 'fe2', name: 'FE2' })).status).toBe(403);
+    const c = await admin.post('/connections', { kind: 'fe2', name: 'FE2 Leitstelle (Test)' });
+    expect(c.status).toBe(200);
+    fe2Id = c.json.id;
+    fe2Token = c.json.token;
+    expect(fe2Token).toMatch(/^llfe2_/);
+    const d = await admin.get(`/connections/${fe2Id}`);
+    expect(JSON.stringify(d.json)).not.toContain(fe2Token);
+    expect(d.json.inbound_url).toBe(`https://lifelink.example.org/api/v1/inbound/fe2/${fe2Id}`);
+    // Aktivieren ohne Test geht nicht
+    expect((await admin.post(`/connections/${fe2Id}/activate`)).status).toBe(409);
+    const t1 = await admin.post(`/connections/${fe2Id}/test`);
+    expect(t1.json.ok).toBe(false);
+  });
+
+  it('FE2: Authentisierung, Vorschau vor Aktivierung, Allowlist ohne vertrauliche Inhalte', async () => {
+    expect((await inbound(alarm('E-1'), 'llfe2_falsch')).status).toBe(401);
+    expect((await anonymous.raw('POST', `/inbound/fe2/${fe2Id}`, { body: alarm('E-1') })).status).toBe(401);
+    const before = (await one<any>(`SELECT count(*)::int AS n FROM posts`))!.n;
+    const r = await inbound(alarm('E-0'));
+    expect(r.status).toBe(200);
+    expect(r.json.outcome).toBe('test');
+    expect((await one<any>(`SELECT count(*)::int AS n FROM posts`))!.n).toBe(before);
+    const d = await admin.get(`/connections/${fe2Id}`);
+    expect(d.json.preview.fields.keyword).toBe('F-WALD-2');
+    expect(d.json.preview.fields.units).toBe('HLF 1, TLF 2');
+    expect(JSON.stringify(d.json.preview)).not.toContain('Mustermann');
+    expect(d.json.preview.ignoredKeys).toBeGreaterThanOrEqual(2);
+    const t = await admin.post(`/connections/${fe2Id}/test`);
+    expect(t.json.ok).toBe(true);
+    expect((await admin.post(`/connections/${fe2Id}/activate`)).status).toBe(200);
+  });
+
+  it('FE2: ein Entwurf je Einsatz, Wiederholung ohne Duplikat, Folgeereignis, keine Inhalte in Protokollen', async () => {
+    const r1 = await inbound(alarm('E-100'));
+    expect(r1.json.outcome).toBe('created');
+    const ev = await one<any>(`SELECT * FROM fe2_events WHERE event_key = $1`, [`${fe2Id}:E-100`]);
+    expect(ev.post_id).toBeTruthy();
+    const post = await one<any>(`SELECT r.* FROM post_revisions r WHERE r.post_id = $1`, [ev.post_id]);
+    expect(post.title).toBe('Waldbrand mittel in Musterstadt – Nord');
+    expect(post.body).not.toContain('Mustermann');
+    expect(post.body).not.toContain('VERTRAULICH');
+    expect((await inbound(alarm('E-100'))).json.outcome).toBe('duplicate');
+    const r3 = await inbound(alarm('E-100', { einheiten: ['HLF 1', 'TLF 2', 'DLK'] }));
+    expect(r3.json.outcome).toBe('updated');
+    expect(r3.json.sequence).toBe(2);
+    expect((await one<any>(`SELECT count(*)::int AS n FROM posts p JOIN fe2_events e ON e.post_id = p.id WHERE e.event_key = $1`, [`${fe2Id}:E-100`]))!.n).toBe(1);
+    expect((await one<any>(`SELECT body FROM post_revisions WHERE post_id = $1`, [ev.post_id]))!.body).toContain('DLK');
+    // Redaktion bearbeitet → spätere FE2-Meldungen ändern den Entwurf nicht mehr
+    const d = (await editor.get(`/posts/${ev.post_id}`)).json;
+    await editor.put(`/posts/${ev.post_id}/revision`, { baseRevision: d.revision.number, title: d.revision.title, body: 'Redaktioneller Text.', excerpt: '' });
+    expect((await inbound(alarm('E-100', { status: 'beendet' }))).json.outcome).toBe('updated');
+    expect((await one<any>(`SELECT status FROM fe2_events WHERE event_key = $1`, [`${fe2Id}:E-100`]))!.status).toBe('closed');
+    expect((await one<any>(`SELECT current_revision FROM posts WHERE id = $1`, [ev.post_id]))!.current_revision).toBe(2);
+    const logs = await one<any>(`SELECT count(*)::int AS n FROM app_logs WHERE message ILIKE '%Mustermann%' OR message ILIKE '%E-100%' OR details::text ILIKE '%Mustermann%'`);
+    expect(logs!.n).toBe(0);
+    const audits = await one<any>(`SELECT count(*)::int AS n FROM audit_events WHERE details::text ILIKE '%Mustermann%'`);
+    expect(audits!.n).toBe(0);
+    // Angehaltene Verbindung nimmt nichts an
+    await admin.post(`/connections/${fe2Id}/disable`);
+    expect((await inbound(alarm('E-101'))).status).toBe(409);
+    // Neuer Schlüssel macht den alten ungültig
+    const rot = await admin.post(`/connections/${fe2Id}/rotate-token`);
+    await admin.post(`/connections/${fe2Id}/activate`);
+    expect((await inbound(alarm('E-102'))).status).toBe(401);
+    expect((await inbound(alarm('E-102'), rot.json.token)).json.outcome).toBe('created');
+  });
+
+  let fbId = '';
+  let igId = '';
+  let spPostId = '';
+  it('Facebook: Anmeldung ist kein Veröffentlichungstest – Testbeitrag unveröffentlicht anlegen und löschen', async () => {
+    const c = await admin.post('/connections', { kind: 'facebook', name: 'Facebook-Testseite', config: { appId: '123' } });
+    fbId = c.json.id;
+    expect((await admin.put(`/connections/${fbId}/secrets`, { pageToken: 'EAAG-geheimer-Seitentoken' })).status).toBe(200);
+    await admin.put(`/connections/${fbId}`, { name: 'Facebook-Testseite', config: { pageId: 'PAGE1' } });
+    const t = await admin.post(`/connections/${fbId}/test`);
+    expect(t.json.ok, JSON.stringify(t.json)).toBe(true);
+    expect(t.json.steps.find((s: any) => s.kind === 'login').message).toContain('kein Veröffentlichungstest');
+    expect(t.json.steps.find((s: any) => s.kind === 'publish').ok).toBe(true);
+    expect(graph.calls).toContain('DELETE /fb/PAGE1_1');
+    expect(graph.posts.length).toBe(0);
+    const view = await admin.get(`/connections/${fbId}`);
+    expect(JSON.stringify(view.json)).not.toContain('geheimer');
+    expect(view.json.secrets_set).toContain('pageToken');
+    expect(view.json.capabilities.photos).toBe(true);
+    await admin.post(`/connections/${fbId}/activate`);
+  });
+
+  it('Instagram: Konto, Kontingent und Mediencontainer ohne Veröffentlichung', async () => {
+    const c = await admin.post('/connections', { kind: 'instagram', name: 'Instagram-Testkonto', config: { appId: '123' } });
+    igId = c.json.id;
+    await admin.put(`/connections/${igId}/secrets`, { token: 'IGQ-geheimer-token' });
+    const t = await admin.post(`/connections/${igId}/test`);
+    expect(t.json.ok, JSON.stringify(t.json)).toBe(true);
+    expect(graph.calls.filter((x) => x === 'POST /ig/IG1/media_publish').length).toBe(0);
+    expect(t.json.account.username).toBe('test_konto');
+    await admin.post(`/connections/${igId}/activate`);
+  });
+
+  it('Kanäle sind Teil der Fassung; nur betroffener Kanal wird wiederholt; unbekanntes Ergebnis wird zuerst geprüft', async () => {
+    const { runSocialPublication } = await import('../src/connections/social.js');
+    const p = await editor.post('/posts', { title: 'Tag der offenen Tür (fiktiv)', kind: 'event' });
+    spPostId = p.json.id;
+    const img = await one<any>(`SELECT id FROM media WHERE status = 'ready' AND kind = 'image' AND has_public AND deleted_at IS NULL LIMIT 1`);
+    let d = (await editor.get(`/posts/${spPostId}`)).json;
+    const save = await editor.put(`/posts/${spPostId}/revision`, { baseRevision: d.revision.number, title: d.revision.title, body: 'Wir laden herzlich ein.', excerpt: '', mediaIds: [img.id], socialTargets: [fbId, igId] });
+    expect(save.json.changed).toBe(true);
+    d = (await editor.get(`/posts/${spPostId}`)).json;
+    expect(d.revision.social_targets.sort()).toEqual([fbId, igId].sort());
+    // Ohne Freigabe nichts
+    expect((await publisher.post(`/posts/${spPostId}/social`, { revision: d.revision.number, contentHash: d.revision.content_hash })).status).toBe(409);
+    await editor.post(`/posts/${spPostId}/submit`, { revision: d.revision.number });
+    await approver.post(`/posts/${spPostId}/decision`, { revision: d.revision.number, contentHash: d.revision.content_hash, decision: 'approved' });
+    const check = await editor.get(`/posts/${spPostId}/social-check`);
+    expect(check.json.length).toBe(2);
+    // Facebook lehnt ab (Berechtigung), Instagram klappt
+    graph.failNext = 'reject';
+    const r = await publisher.post(`/posts/${spPostId}/social`, { revision: d.revision.number, contentHash: d.revision.content_hash });
+    expect(r.json.items.length).toBe(2);
+    // Facebook zuerst ausführen, damit die gezielte Ablehnung dort ankommt
+    const ordered = [...r.json.items].sort((a: any) => (a.connection_id === fbId ? -1 : 1));
+    for (const it of ordered) await runSocialPublication(it.id);
+    let rows = await many<any>(`SELECT sp.*, c.kind FROM social_publications sp JOIN connections c ON c.id = sp.connection_id WHERE sp.post_id = $1`, [spPostId]);
+    const fb = rows.find((x) => x.kind === 'facebook');
+    const ig = rows.find((x) => x.kind === 'instagram');
+    expect(fb.status).toBe('failed');
+    expect(fb.error).toContain('Fehlende Berechtigung');
+    expect(fb.error).not.toContain('geheimer');
+    expect(ig.status).toBe('published');
+    expect(ig.remote_url).toContain('instagram.example');
+    const igPublishCalls = graph.calls.filter((x) => x === 'POST /ig/IG1/media_publish').length;
+    // Doppelt veröffentlichen geht nicht
+    const again = await publisher.post(`/posts/${spPostId}/social`, { revision: d.revision.number, contentHash: d.revision.content_hash });
+    expect(again.json.items.find((x: any) => x.connection_id === igId).duplicate).toBe(true);
+    // Nur Facebook wiederholen: Server legt Beitrag an, antwortet aber mit 500 → unbekannt
+    graph.failNext = 'server_after_create';
+    await publisher.post(`/social-publications/${fb.id}/retry`);
+    await runSocialPublication(fb.id);
+    expect((await one<any>(`SELECT status FROM social_publications WHERE id = $1`, [fb.id]))!.status).toBe('unknown');
+    const postsBefore = graph.posts.filter((x) => !x.ig && x.published).length;
+    // Erneuter Anstoß prüft zuerst und findet den Beitrag → kein zweiter Beitrag
+    await publisher.post(`/social-publications/${fb.id}/retry`);
+    await runSocialPublication(fb.id);
+    rows = await many<any>(`SELECT * FROM social_publications WHERE id = $1`, [fb.id]);
+    expect(rows[0].status).toBe('published');
+    expect(graph.posts.filter((x) => !x.ig && x.published).length).toBe(postsBefore);
+    expect(graph.calls.filter((x) => x === 'POST /ig/IG1/media_publish').length).toBe(igPublishCalls);
+    // Kanaländerung → neue Fassung → neue Freigabe
+    d = (await editor.get(`/posts/${spPostId}`)).json;
+    const ch = await editor.put(`/posts/${spPostId}/revision`, { baseRevision: d.revision.number, title: d.revision.title, body: d.revision.body, excerpt: '', mediaIds: [img.id], socialTargets: [fbId] });
+    expect(ch.json.approvalInvalidated).toBe(true);
+  });
+
+  it('Manueller Export und zeitlich begrenzte Medien-URL', async () => {
+    const p = await editor.post('/posts', { title: 'Export-Test (fiktiv)' });
+    const img = await one<any>(`SELECT id FROM media WHERE status = 'ready' AND kind = 'image' AND has_public AND deleted_at IS NULL LIMIT 1`);
+    let d = (await editor.get(`/posts/${p.json.id}`)).json;
+    await editor.put(`/posts/${p.json.id}/revision`, { baseRevision: d.revision.number, title: d.revision.title, body: 'Text für den Export.', excerpt: '', mediaIds: [img.id] });
+    d = (await editor.get(`/posts/${p.json.id}`)).json;
+    expect((await publisher.get(`/posts/${p.json.id}/social-export`)).status).toBe(409);
+    await editor.post(`/posts/${p.json.id}/submit`, { revision: d.revision.number });
+    await approver.post(`/posts/${p.json.id}/decision`, { revision: d.revision.number, contentHash: d.revision.content_hash, decision: 'approved' });
+    const ex = await publisher.get(`/posts/${p.json.id}/social-export`);
+    expect(ex.json.facebook).toContain('Text für den Export.');
+    expect(ex.json.files.length).toBe(1);
+    const path = new URL(ex.json.files[0].url).pathname;
+    const f = await anonymous.raw('GET', path);
+    expect(f.status).toBe(200);
+    expect(f.headers['content-type']).toContain('image/jpeg');
+    await pool.query(`UPDATE media_tokens SET expires_at = now() - interval '1 second'`);
+    expect((await anonymous.raw('GET', path)).status).toBe(404);
+  });
+
+  let wfId = '';
+  it('Warnfeed: privates Ziel nur nach Freigabe, Gebietsfilter, Aktualisierung und Entwarnung', async () => {
+    capXml = cap('W-1', 'Alert', 'Unwetterwarnung (Test)');
+    const c = await admin.post('/connections', { kind: 'warnfeed', name: 'CAP-Testquelle', config: { format: 'cap', url: `${base}/cap.xml` } });
+    wfId = c.json.id;
+    await admin.put(`/connections/${wfId}`, { name: 'CAP-Testquelle', config: { format: 'cap', url: `${base}/cap.xml`, areaFilter: { codes: ['09999'], names: [] } } });
+    const t0 = await admin.post(`/connections/${wfId}/test`);
+    expect(t0.json.ok).toBe(false); // 127.0.0.1 ist privat und nicht freigegeben
+    expect((await admin.post(`/connections/${wfId}/approve-private`, { host: '127.0.0.1' })).status).toBe(200);
+    const t = await admin.post(`/connections/${wfId}/test`);
+    expect(t.json.ok, JSON.stringify(t.json)).toBe(true);
+    expect(t.json.steps[1].message).toContain('1 von 1');
+    await admin.post(`/connections/${wfId}/activate`);
+    const { refreshWarnfeed } = await import('../src/connections/warnfeed.js');
+    const conn = async () => one<any>(`SELECT * FROM connections WHERE id = $1`, [wfId]);
+    await refreshWarnfeed(await conn());
+    capXml = cap('W-OTHER', 'Alert', 'Andere Region', '', 'Fernkreis', '011110000000');
+    await refreshWarnfeed(await conn());
+    capXml = cap('W-2', 'Update', 'Unwetterwarnung aktualisiert (Test)', 'W-1');
+    await refreshWarnfeed(await conn());
+    const list = (await editor.get('/official-warnings')).json;
+    expect(list.find((w: any) => w.identifier === 'W-1').superseded).toBe(true);
+    expect(list.find((w: any) => w.identifier === 'W-OTHER').in_area).toBe(false);
+    expect(list.find((w: any) => w.identifier === 'W-2').in_area).toBe(true);
+    // Ohne automatische Banner: Entwurf mit Link zur Originalquelle (normale Freigabe)
+    const site = await one<any>(`SELECT id FROM wp_sites WHERE status = 'active' LIMIT 1`);
+    const bd = await editor.post(`/official-warnings/${list.find((w: any) => w.identifier === 'W-2').id}/banner-draft`, { siteId: site.id });
+    const b = await one<any>(`SELECT * FROM banners WHERE id = $1`, [bd.json.id]);
+    expect(b.approved_hash).toBeNull();
+    expect(b.link_url).toBe('https://example.invalid/warnung/W-2');
+  });
+
+  it('Warnfeed: automatische Banner erst nach dokumentierter fachlicher Prüfung; Entwarnung beendet das Banner', async () => {
+    const site = await one<any>(`SELECT id FROM wp_sites WHERE status = 'active' LIMIT 1`);
+    const cfg = { format: 'cap', url: `${base}/cap.xml`, areaFilter: { codes: ['09999'], names: [] }, autoBanner: true, bannerSiteId: site.id };
+    expect((await admin.put(`/connections/${wfId}`, { name: 'CAP-Testquelle', config: cfg })).status).toBe(400);
+    expect((await admin.post(`/connections/${wfId}/review`, { checks: { origin: true }, note: 'Unvollständig geprüft.' })).status).toBe(400);
+    const all = { origin: true, reuse: true, area: true, validity: true, updates: true, cancel: true };
+    expect((await admin.post(`/connections/${wfId}/review`, { checks: all, note: 'Fiktive Prüfung für den Test dokumentiert.' })).status).toBe(200);
+    expect((await admin.put(`/connections/${wfId}`, { name: 'CAP-Testquelle', config: cfg })).status).toBe(200);
+    const { refreshWarnfeed } = await import('../src/connections/warnfeed.js');
+    const conn = async () => one<any>(`SELECT * FROM connections WHERE id = $1`, [wfId]);
+    capXml = cap('W-3', 'Alert', 'Sturmwarnung (Test)');
+    await refreshWarnfeed(await conn());
+    const w3 = await one<any>(`SELECT * FROM official_warnings WHERE identifier = 'W-3'`);
+    expect(w3.banner_id).toBeTruthy();
+    const job = await one<any>(`SELECT * FROM banner_jobs WHERE banner_id = $1`, [w3.banner_id]);
+    expect(job.action).toBe('upsert');
+    capXml = cap('W-4', 'Cancel', 'Entwarnung (Test)', 'W-3');
+    await refreshWarnfeed(await conn());
+    expect((await one<any>(`SELECT ended_at FROM banners WHERE id = $1`, [w3.banner_id]))!.ended_at).toBeTruthy();
+    expect((await one<any>(`SELECT banner_id FROM official_warnings WHERE identifier = 'W-4'`))!.banner_id).toBeNull();
+  });
+
+  it('Widerruf löscht Zugangsdaten; Redaktion sieht keine Geheimnisse', async () => {
+    const list = await editor.get('/connections');
+    expect(list.json.every((c: any) => ['facebook', 'instagram'].includes(c.kind))).toBe(true);
+    expect(JSON.stringify(list.json)).not.toContain('secret');
+    await admin.post(`/connections/${igId}/revoke`);
+    const c = await one<any>(`SELECT status, secret_id FROM connections WHERE id = $1`, [igId]);
+    expect(c.status).toBe('revoked');
+    expect(c.secret_id).toBeNull();
+    expect((await one<any>(`SELECT count(*)::int AS n FROM secrets WHERE owner_id = $1 AND revoked_at IS NULL`, [igId]))!.n).toBe(0);
   });
 });

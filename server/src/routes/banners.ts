@@ -63,7 +63,7 @@ const input = z
   .refine((b) => new Date(b.endsAt) > new Date(b.startsAt ?? Date.now()), { message: 'Das Ende muss nach dem Start liegen.', path: ['endsAt'] })
   .refine((b) => !b.linkUrl || /^https?:\/\//.test(b.linkUrl), { message: 'Nur http(s)-Links.', path: ['linkUrl'] });
 
-async function enqueueJob(db: any, b: any, action: 'upsert' | 'delete', userId: string | null) {
+export async function enqueueBannerJob(db: any, b: any, action: 'upsert' | 'delete', userId: string | null) {
   // Ältere, noch nicht abgeholte Aufträge desselben Banners sind überholt
   await db.query(`UPDATE banner_jobs SET status = 'canceled' WHERE banner_id = $1 AND status = 'queued'`, [b.id]);
   return one<any>(
@@ -165,7 +165,7 @@ export async function bannerRoutes(app: FastifyInstance) {
       if (new Date(b.ends_at) <= new Date()) throw badRequest('Das Ende liegt in der Vergangenheit.');
       const open = await one<any>(`SELECT * FROM banner_jobs WHERE banner_id = $1 AND revision = $2 AND action = 'upsert' AND status IN ('queued','sent','done')`, [id, b.revision], db);
       if (open) return open;
-      const j = await enqueueJob(db, b, 'upsert', req.auth!.user?.id ?? null);
+      const j = await enqueueBannerJob(db, b, 'upsert', req.auth!.user?.id ?? null);
       await audit(req.auth!.actor, 'banner.published', { type: 'banner', id, label: b.title }, { fassung: b.revision }, 'ok', db);
       return j;
     });
@@ -179,7 +179,7 @@ export async function bannerRoutes(app: FastifyInstance) {
       const b = await one<any>(`UPDATE banners SET ended_at = now() WHERE id = $1 AND ended_at IS NULL RETURNING *`, [id], db);
       if (!b) throw notFound('Banner nicht gefunden oder bereits beendet.');
       const published = await one(`SELECT 1 FROM banner_jobs WHERE banner_id = $1 AND action = 'upsert' AND status IN ('sent','done')`, [id], db);
-      if (published) await enqueueJob(db, b, 'delete', req.auth!.user?.id ?? null);
+      if (published) await enqueueBannerJob(db, b, 'delete', req.auth!.user?.id ?? null);
       else await db.query(`UPDATE banner_jobs SET status = 'canceled' WHERE banner_id = $1 AND status = 'queued'`, [id]);
       await audit(req.auth!.actor, 'banner.ended', { type: 'banner', id, label: b.title }, {}, 'ok', db);
     });

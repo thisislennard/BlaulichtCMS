@@ -16,7 +16,7 @@ export interface ChannelText {
   body?: string;
   excerpt?: string;
 }
-export type Variants = Partial<Record<'wordpress', ChannelText>>;
+export type Variants = Partial<Record<'wordpress' | 'facebook' | 'instagram', ChannelText>>;
 
 function cleanVariants(v: Variants | null | undefined): Variants {
   const out: Variants = {};
@@ -34,11 +34,14 @@ function cleanVariants(v: Variants | null | undefined): Variants {
  * Prüfsumme einer Fassung: Text, Medien (in Reihenfolge), Titelbild, Zielkanal, Texte je Kanal und Termin.
  * Ohne Kanaltexte und Termin bleibt das Format der ersten Version erhalten (bestehende Freigaben bleiben gültig).
  */
-export function revisionHash(r: { title: string; body: string; excerpt: string; media_ids: string[]; cover_id: string | null; site_id: string | null; variants?: Variants | null; publish_at?: string | Date | null }): string {
+export function revisionHash(r: { title: string; body: string; excerpt: string; media_ids: string[]; cover_id: string | null; site_id: string | null; variants?: Variants | null; publish_at?: string | Date | null; social_targets?: string[] | null }): string {
   const base: unknown[] = [r.title, r.body, r.excerpt, r.media_ids, r.cover_id ?? null, r.site_id ?? null];
   const v = cleanVariants(r.variants);
   const at = r.publish_at ? new Date(r.publish_at).toISOString() : null;
-  if (Object.keys(v).length || at) base.push(v, at);
+  const social = [...(r.social_targets ?? [])].sort();
+  if (Object.keys(v).length || at || social.length) base.push(v, at);
+  // Soziale Zielkanäle sind Teil der Fassung (Änderung → neue Freigabe); ohne sie bleibt das alte Format
+  if (social.length) base.push(social);
   return crypto.createHash('sha256').update(JSON.stringify(base)).digest('hex');
 }
 
@@ -130,7 +133,14 @@ const revisionInput = z.object({
   mediaIds: z.array(z.uuid()).max(100).default([]),
   coverId: z.uuid().nullable().default(null),
   siteId: z.uuid().nullable().default(null),
-  variants: z.object({ wordpress: z.object({ title: z.string().max(200).optional(), body: z.string().max(50_000).optional(), excerpt: z.string().max(1_000).optional() }).optional() }).default({}),
+  variants: z
+    .object({
+      wordpress: z.object({ title: z.string().max(200).optional(), body: z.string().max(50_000).optional(), excerpt: z.string().max(1_000).optional() }).optional(),
+      facebook: z.object({ body: z.string().max(60_000).optional() }).optional(),
+      instagram: z.object({ body: z.string().max(2_200).optional() }).optional(),
+    })
+    .default({}),
+  socialTargets: z.array(z.uuid()).max(10).default([]),
   publishAt: z.iso.datetime({ offset: true }).nullable().default(null),
   changeNote: z.string().trim().max(300).default(''),
 });
@@ -216,6 +226,7 @@ export async function postRoutes(app: FastifyInstance) {
         cover_id: cur.cover_id,
         site_id: cur.site_id,
         variants: cur.variants ?? {},
+        social_targets: cur.social_targets ?? [],
         publish_at: cur.publish_at,
         content_hash: cur.content_hash,
         submitted_at: cur.submitted_at,
@@ -243,6 +254,11 @@ export async function postRoutes(app: FastifyInstance) {
         created_by_name: p.created_by_name,
       })),
       collections,
+      social: await many<any>(
+        `SELECT sp.id, sp.status, sp.remote_url, sp.remote_id, sp.error, sp.error_class, sp.attempts, sp.created_at, sp.published_at, c.name AS connection_name, c.kind, r.number AS revision_number
+           FROM social_publications sp JOIN connections c ON c.id = sp.connection_id JOIN post_revisions r ON r.id = sp.revision_id WHERE sp.post_id = $1 ORDER BY sp.created_at DESC`,
+        [id],
+      ),
     };
   });
 
@@ -258,6 +274,10 @@ export async function postRoutes(app: FastifyInstance) {
       const site = await one<any>(`SELECT status FROM wp_sites WHERE id = $1`, [body.siteId]);
       if (!site || site.status === 'revoked') throw badRequest('Der gewählte Zielkanal ist nicht verfügbar.');
     }
+    if (body.socialTargets.length) {
+      const ok = await many<any>(`SELECT id FROM connections WHERE id = ANY($1) AND kind IN ('facebook','instagram') AND status IN ('tested','active')`, [body.socialTargets]);
+      if (ok.length !== new Set(body.socialTargets).size) throw badRequest('Mindestens ein gewählter sozialer Kanal ist nicht verfügbar.');
+    }
     const result = await tx(async (db) => {
       const post = await one<any>('SELECT * FROM posts WHERE id = $1 FOR UPDATE', [id], db);
       if (!post) throw notFound('Beitrag nicht gefunden.');
@@ -266,13 +286,14 @@ export async function postRoutes(app: FastifyInstance) {
       }
       const cur = await one<any>('SELECT * FROM post_revisions WHERE post_id = $1 AND number = $2', [id, post.current_revision], db);
       const variants = cleanVariants(body.variants as Variants);
-      const next = { title: body.title, body: body.body, excerpt: body.excerpt, media_ids: body.mediaIds, cover_id: body.coverId, site_id: body.siteId, variants, publish_at: body.publishAt };
+      const socialTargets = [...new Set(body.socialTargets)];
+      const next = { title: body.title, body: body.body, excerpt: body.excerpt, media_ids: body.mediaIds, cover_id: body.coverId, site_id: body.siteId, variants, publish_at: body.publishAt, social_targets: socialTargets };
       const hash = revisionHash(next);
       if (hash === cur.content_hash) return { changed: false, number: cur.number };
       const number = cur.number + 1;
       await db.query(
-        `INSERT INTO post_revisions (post_id, number, title, body, excerpt, media_ids, cover_id, site_id, content_hash, change_note, created_by, variants, publish_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
-        [id, number, body.title, body.body, body.excerpt, body.mediaIds, body.coverId, body.siteId, hash, body.changeNote, userId, JSON.stringify(variants), body.publishAt],
+        `INSERT INTO post_revisions (post_id, number, title, body, excerpt, media_ids, cover_id, site_id, content_hash, change_note, created_by, variants, publish_at, social_targets) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
+        [id, number, body.title, body.body, body.excerpt, body.mediaIds, body.coverId, body.siteId, hash, body.changeNote, userId, JSON.stringify(variants), body.publishAt, socialTargets],
       );
       await db.query('UPDATE posts SET current_revision = $2, title = $3, updated_at = now(), updated_by = $4 WHERE id = $1', [id, number, body.title, userId]);
       const hadApproval = await one(`SELECT 1 FROM approvals WHERE revision_id = $1 AND decision = 'approved' AND revoked_at IS NULL`, [cur.id], db);

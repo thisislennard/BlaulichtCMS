@@ -17,6 +17,9 @@ import { cleanupUploadSessions } from './routes/uploads.js';
 import { buildExport, cleanupExports } from './media/exports.js';
 import { refreshDueFeeds } from './routes/rss.js';
 import { deliverWarningSend } from './warnings/mail.js';
+import { runSocialPublication } from './connections/social.js';
+import { cleanupMediaTokens } from './connections/meta.js';
+import { refreshDueWarnfeeds } from './connections/warnfeed.js';
 
 process.env.LIFELINK_ROLE ??= 'worker';
 
@@ -37,6 +40,10 @@ const handlers: Record<string, (job: Job) => Promise<void>> = {
   // Genau ein Versuch: ein automatischer Wiederholungsversand könnte eine Warnung doppelt zustellen
   'warning.send': async (job) => {
     await deliverWarningSend(String(job.payload.sendId));
+  },
+  // Ebenfalls genau ein Versuch je Anstoß; Wiederholung nur gezielt für den betroffenen Kanal
+  'social.publish': async (job) => {
+    await runSocialPublication(String(job.payload.id));
   },
 };
 
@@ -88,6 +95,7 @@ async function cleanup() {
   await q(`UPDATE backups SET status = 'failed', finished_at = now(), error = 'Abgebrochen (Prozess beendet)' WHERE status = 'running' AND started_at < now() - interval '1 hour'`);
   await cleanupUploadSessions().catch((e) => log('warn', 'cleanup', e.message));
   await cleanupExports().catch((e) => log('warn', 'cleanup', e.message));
+  await cleanupMediaTokens().catch((e) => log('warn', 'cleanup', e.message));
   // Liegengebliebene temporäre Upload-Dateien (abgebrochene Übertragungen) entfernen
   try {
     const dir = mediaPaths.tmp();
@@ -138,6 +146,7 @@ async function maintenance(isLeader: boolean) {
   if (due('publications', 60_000)) await markUnknownPublications();
   if (due('quarantine', 10 * 60_000)) await requeueQuarantine();
   if (due('rss', 60_000)) await refreshDueFeeds().catch((e) => log('warn', 'rss', e.message));
+  if (due('warnfeed', 60_000)) await refreshDueWarnfeeds().catch((e) => log('warn', 'warnfeed', e.message));
   if (s['backup.enabled'] && due('backup-check', 10 * 60_000)) {
     const now = new Date(new Date().toLocaleString('en-US', { timeZone: s['general.timezone'] }));
     if (now.getHours() === s['backup.hour']) {
