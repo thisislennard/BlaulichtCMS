@@ -23,10 +23,44 @@ export const ALLOWED: Record<string, { kind: 'image' | 'video'; ext: string }> =
   'image/webp': { kind: 'image', ext: 'webp' },
   'image/heic': { kind: 'image', ext: 'heic' },
   'image/heif': { kind: 'image', ext: 'heif' },
+  'image/avif': { kind: 'image', ext: 'avif' },
+  'image/gif': { kind: 'image', ext: 'gif' },
   'video/mp4': { kind: 'video', ext: 'mp4' },
   'video/quicktime': { kind: 'video', ext: 'mov' },
   'video/webm': { kind: 'video', ext: 'webm' },
+  'video/3gpp': { kind: 'video', ext: '3gp' },
+  'video/3gpp2': { kind: 'video', ext: '3gp' },
 };
+
+/** Zugelassene Video- und Audiocodecs (wie LiFeOS); eingebettete Titelbilder zählen nicht. */
+export const VIDEO_CODECS = new Set(['h264', 'hevc', 'mpeg4', 'av1', 'vp8', 'vp9', 'prores', 'h263']);
+export const AUDIO_CODECS = new Set(['aac', 'mp3', 'alac', 'pcm_s16le', 'pcm_s24le', 'opus', 'vorbis', 'flac', 'ac3', 'eac3', 'amr_nb', 'amr_wb']);
+
+/** Bildgrenze aus den Einstellungen (Megapixel → Pixel), Schutz vor „Dekompressionsbomben“. */
+export async function imagePixelLimit(): Promise<number> {
+  return Math.max(1, Number((await getSettings())['media.max_image_mp']) || 40) * 1_000_000;
+}
+
+/**
+ * Dekodierprüfung wie LiFeOS: Videos bis `fullSeconds` Bild für Bild; längere: den Anfang Bild für Bild und über die
+ * ganze Länge alle Schlüsselbilder. Liefert die ffprobe-Zusatzargumente je Durchlauf.
+ */
+export function decodePlan(duration: number, fullSeconds: number): string[][] {
+  if (duration <= fullSeconds) return [[]];
+  return [['-read_intervals', `%+${fullSeconds}`], ['-skip_frame', 'nokey']];
+}
+
+/**
+ * Fehlermeldungen eines Dekodierlaufs: Meldungen der Audio-Parser (z. B. „[opus @ …] Error parsing Opus packet header“
+ * bei WebM vom Handy) sperren nicht – geprüft wird die Videospur.
+ */
+export function decodeErrors(stderr: string, streams: any[]): string[] {
+  const audioTags = streams.filter((s) => s?.codec_type === 'audio').map((s) => `[${s.codec_name} @`);
+  return stderr
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter((l) => l && !audioTags.some((t) => l.startsWith(t)));
+}
 
 export const ACCEPT_ATTR = 'image/jpeg,image/png,image/webp,image/heic,image/heif,video/mp4,video/quicktime,video/webm';
 
@@ -105,16 +139,21 @@ async function processImage(id: string, file: string, mime: string) {
     // Standort unbekannt (null) – iPhone-HEIC enthält meist GPS im Original (#74)
     return { width: null, height: null, hadLocation: null, hasPreview: false, hasPublic: false, takenAt: null };
   }
+  const s = await getSettings();
+  const limit = await imagePixelLimit();
   let meta: Metadata;
   try {
-    meta = await sharp(file, { limitInputPixels: MAX_PIXELS, failOn: 'error' }).metadata();
+    meta = await sharp(file, { limitInputPixels: limit, failOn: 'error' }).metadata();
   } catch (e) {
-    throw new Rejected(`Bild ist beschädigt oder zu groß (${(e as Error).message.slice(0, 120)}).`, 'decode');
+    const big = /pixel limit/i.test((e as Error).message);
+    throw new Rejected(big ? `Bild ist größer als ${s['media.max_image_mp']} Megapixel.` : `Bild ist beschädigt oder zu groß (${(e as Error).message.slice(0, 120)}).`, big ? 'limits' : 'decode');
   }
   if (!meta.width || !meta.height) throw new Rejected('Bildgröße konnte nicht gelesen werden.');
+  // Animierte Bilder (GIF, WebP, PNG, AVIF mit mehreren Bildern) nur mit Einstellung; verarbeitet wird das erste Bild
+  if ((meta.pages ?? 1) > 1 && !s['media.allow_animated']) throw new Rejected('Animierte Bilder sind nicht erlaubt (Einstellungen → Medien).', 'type');
   try {
     // Einmal dekodieren, zwei Ausgaben: Vorschau (WebP) und öffentliche Fassung (JPEG ohne EXIF/XMP/IPTC)
-    const base = sharp(file, { limitInputPixels: MAX_PIXELS, failOn: 'error', sequentialRead: true }).rotate();
+    const base = sharp(file, { limitInputPixels: limit, failOn: 'error', sequentialRead: true }).rotate();
     await Promise.all([
       base.clone().resize({ width: 1200, height: 1200, fit: 'inside', withoutEnlargement: true }).webp({ quality: 78, effort: 3 }).toFile(mediaPaths.preview(id)),
       base.clone().resize({ width: 2560, height: 2560, fit: 'inside', withoutEnlargement: true }).jpeg({ quality: 85, mozjpeg: true }).toFile(mediaPaths.publicFile(id, 'jpg')),
@@ -133,8 +172,27 @@ async function processImage(id: string, file: string, mime: string) {
   };
 }
 
+/** Dekodierprüfung mit ffprobe -count_frames (ohne Muxer – ffmpeg -f null sperrte Handyvideos mit variabler Bildrate). */
+async function decodeCheck(file: string, streams: any[], duration: number) {
+  const s = await getSettings();
+  const timeout = Math.max(60, Number(s['media.check_timeout_s']) || 1800) * 1000;
+  for (const extra of decodePlan(duration, Number(s['media.full_decode_seconds']) || 60)) {
+    const r = await run('ffprobe', ['-v', 'error', ...extra, '-count_frames', '-select_streams', 'v:0', '-show_entries', 'stream=nb_read_frames', '-of', 'json', file], timeout);
+    if (r.code === -1 && r.stderr === 'nicht verfügbar') throw new Rejected('Videos können auf dieser Installation nicht geprüft werden (ffprobe fehlt).');
+    if (r.code === -1) throw new Rejected('Zeitüberschreitung beim Dekodieren.', 'decode');
+    const errors = decodeErrors(r.stderr, streams);
+    if (r.code !== 0 || errors.length) throw new Rejected(`Video nicht fehlerfrei dekodierbar (${(errors[0] ?? `Exit ${r.code}`).replace(file, '<datei>').slice(0, 120)}).`, 'decode');
+    let frames = 0;
+    try {
+      frames = Number(JSON.parse(r.stdout || '{}').streams?.[0]?.nb_read_frames ?? 0);
+    } catch {
+      frames = 0;
+    }
+    if (!(frames > 0)) throw new Rejected('Video enthält keine dekodierbaren Bilder.', 'decode');
+  }
+}
+
 async function processVideo(id: string, file: string, ext: string, opts: { skipDecode?: boolean } = {}) {
-  void opts;
   const probe = await run('ffprobe', ['-v', 'error', '-print_format', 'json', '-show_streams', '-show_format', file], 60_000);
   if (probe.code === -1 && probe.stderr === 'nicht verfügbar') {
     log('warn', 'media', 'ffprobe fehlt – Video wird ohne Inhaltsprüfung abgewiesen.');
@@ -148,10 +206,20 @@ async function processVideo(id: string, file: string, ext: string, opts: { skipD
     throw new Rejected('Videoinformationen konnten nicht gelesen werden.');
   }
   const v = pickVideoStream(info.streams ?? []);
-  // Ressourcenschutz: Länge und Auflösung begrenzen
-  const maxMin = (await getSettings())['media.max_video_minutes'];
+  const s = await getSettings();
+  // Codecs wie LiFeOS: nur bekannte Video- und Audiocodecs (eingebettete Titelbilder ausgenommen)
+  for (const st of info.streams ?? []) {
+    if (st.codec_type === 'video' && !st.disposition?.attached_pic && !VIDEO_CODECS.has(st.codec_name)) throw new Rejected(`Videocodec ${String(st.codec_name).slice(0, 20)} ist nicht erlaubt.`);
+    if (st.codec_type === 'audio' && !AUDIO_CODECS.has(st.codec_name)) throw new Rejected(`Audiocodec ${String(st.codec_name).slice(0, 20)} ist nicht erlaubt.`);
+  }
+  // Ressourcenschutz: Länge und Auflösung (längere Kante) begrenzen
+  const maxMin = s['media.max_video_minutes'];
   const duration = Number(info.format?.duration ?? v.duration ?? 0);
   if (duration > maxMin * 60) throw new Rejected(`Video ist länger als ${maxMin} Minuten.`, 'limits');
+  const edge = Number(s['media.max_video_edge']) || 7680;
+  if (Math.max(Number(v.width) || 0, Number(v.height) || 0) > edge) throw new Rejected(`Videoauflösung ist zu hoch (längere Kante höchstens ${edge} Pixel).`, 'limits');
+  // Dekodierprüfung (abschaltbar; entfällt bei „Trotzdem freigeben“)
+  if (s['media.video_full_decode'] && !opts.skipDecode) await decodeCheck(file, info.streams ?? [], duration);
   // Datenspuren (z. B. GPS-Telemetrie von Action-Kameras) und Untertitel gelten als Metadaten
   const dataStreams = (info.streams ?? []).filter((s: any) => !['video', 'audio'].includes(s.codec_type));
   const tags = JSON.stringify(info.format?.tags ?? {}).toLowerCase();
@@ -167,7 +235,7 @@ async function processVideo(id: string, file: string, ext: string, opts: { skipD
   }
   fs.rmSync(frame, { force: true });
   const outExt = ext === 'webm' ? 'webm' : 'mp4';
-  const pub = await run('ffmpeg', ['-v', 'error', '-y', '-i', file, '-map', `0:${v.index}`, '-map', '0:a:0?', '-map_metadata', '-1', '-map_chapters', '-1', '-c', 'copy', ...(outExt === 'mp4' ? ['-movflags', '+faststart'] : []), mediaPaths.publicFile(id, outExt)], 600_000);
+  const pub = await run('ffmpeg', ['-v', 'error', '-y', '-i', file, '-map', `0:${v.index}`, '-map', '0:a:0?', '-map_metadata', '-1', '-map_chapters', '-1', '-c', 'copy', ...(outExt === 'mp4' ? ['-movflags', '+faststart'] : []), mediaPaths.publicFile(id, outExt)], Math.max(600, Number(s['media.check_timeout_s']) || 1800) * 1000);
   // Abgebrochene/fehlgeschlagene Umverpackung hinterlässt sonst eine Teildatei (#73)
   if (pub.code !== 0) fs.rmSync(mediaPaths.publicFile(id, outExt), { force: true });
   return { width: v.width ?? null, height: v.height ?? null, hadLocation, hasPreview, hasPublic: pub.code === 0, takenAt: null };
@@ -249,7 +317,7 @@ export async function markDuplicate(id: string) {
   );
 }
 
-const VIDEO_FORMAT: Record<string, string> = { 'video/mp4': 'mp4', 'video/quicktime': 'mov', 'video/webm': 'webm' };
+const VIDEO_FORMAT: Record<string, string> = { 'video/mp4': 'mp4', 'video/quicktime': 'mov', 'video/webm': 'webm', 'video/3gpp': '3gp', 'video/3gpp2': '3g2' };
 
 /**
  * Entfernt Standort- und identifizierende Metadaten aus einem Original (#119, Einstellung `media.strip_location`).
@@ -267,7 +335,7 @@ export async function stripLocation(file: string, mime: string, kind: 'image' | 
       if (!r.changed) return { ok: true, gps: r.gps };
       fs.writeFileSync(tmp, r.data, { mode: 0o600 });
       if (mime !== 'image/heic' && mime !== 'image/heif') {
-        const meta = await sharp(tmp, { limitInputPixels: MAX_PIXELS, failOn: 'error' }).metadata();
+        const meta = await sharp(tmp, { limitInputPixels: await imagePixelLimit(), failOn: 'error' }).metadata();
         if (exifHasGpsPointer(meta.exif) || meta.xmp) throw new Error('Standortdaten nach der Bereinigung noch vorhanden.');
       }
       fs.renameSync(tmp, file);

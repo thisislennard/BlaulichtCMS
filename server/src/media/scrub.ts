@@ -269,6 +269,8 @@ export function scrubImage(input: Buffer, mime: string): ScrubResult {
       return scrubWebp(input);
     case 'image/heic':
     case 'image/heif':
+    case 'image/avif':
+      // AVIF nutzt denselben ISOBMFF-/HEIF-Aufbau (Exif- und XMP-Elemente)
       return scrubHeif(input);
     default:
       return { data: input, gps: false, changed: false };

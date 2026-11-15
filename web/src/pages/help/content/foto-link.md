@@ -90,7 +90,7 @@ Jeder Link hat ein Ablaufdatum. „Widerrufen“ beendet ihn sofort – **auch e
 
 ## Quarantäne und Prüfung
 
-Jede Datei landet zuerst **privat in der Quarantäne**. BlaulichtCMS prüft anhand des Inhalts, ob es wirklich ein erlaubtes Foto oder Video ist (Einstellungen → Medien bzw. je Link), und sperrt alles andere. Erst danach gibt es eine Vorschau. Für die Veröffentlichung entsteht eine **öffentliche Fassung ohne Standort- und Kameradaten**; das Original bleibt intern.
+Jede Datei landet zuerst **privat in der Quarantäne**. BlaulichtCMS prüft anhand des Inhalts, ob es wirklich ein erlaubtes Foto oder Video ist (Einstellungen → Medien bzw. je Link: JPEG, PNG, WebP, HEIC, AVIF, GIF, MP4, MOV, WebM, 3GP), und sperrt alles andere. Bilder werden vollständig dekodiert (Grenze in Megapixel einstellbar), animierte Bilder nur mit Einstellung zugelassen. Videos werden wie in LiFeOS dekodiert: bis zu einer einstellbaren Länge (Standard 60 Sekunden) Bild für Bild, längere am Anfang Bild für Bild und danach alle Schlüsselbilder; dazu Codecs, Länge und Auflösung. Erst danach gibt es eine Vorschau. Für die Veröffentlichung entsteht eine **öffentliche Fassung ohne Standort- und Kameradaten**; das Original bleibt intern.
 
 ## Gesperrte Dateien
 

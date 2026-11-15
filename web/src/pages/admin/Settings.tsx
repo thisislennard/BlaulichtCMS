@@ -103,6 +103,10 @@ const RANGES: Record<string, [number, number]> = {
   'media.collection_max_gb': [1, 10000],
   'media.min_free_gb': [1, 10000],
   'media.max_video_minutes': [1, 600],
+  'media.max_image_mp': [1, 500],
+  'media.max_video_edge': [320, 8192],
+  'media.full_decode_seconds': [10, 36000],
+  'media.check_timeout_s': [60, 14400],
   'smtp.port': [1, 65535],
   'backup.hour': [0, 23],
   'backup.keep': [1, 365],
@@ -438,6 +442,30 @@ export default function Settings() {
                   description="Nach der Prüfung werden GPS-Angaben, Seriennummern, Personen- und XMP/IPTC-Angaben verlustfrei aus dem Original entfernt (Bilddaten bleiben unverändert, Videos werden ohne Metadaten und Datenspuren umverpackt). Ältere Originale bereinigt der Hintergrunddienst nach und nach. Entfernte Angaben lassen sich nicht wiederherstellen."
                 />
                 <AllowedTypesField value={v["media.allowed_types"]} ro={ro} onChange={(x) => set("media.allowed_types", x)} />
+                <div className="flex flex-col gap-3">
+                  <span className="text-sm font-medium">Inhaltsprüfung</span>
+                  <FieldGrid>
+                    <NumField k="media.max_image_mp" label="Max. Bildauflösung" help="Größere Bilder werden gesperrt (Schutz vor Dekompressionsbomben)." unit="Megapixel" min={1} max={500} v={v} set={set} ro={ro} />
+                    <NumField k="media.max_video_minutes" label="Max. Videodauer" unit="Minuten" min={1} max={600} v={v} set={set} ro={ro} />
+                    <NumField k="media.max_video_edge" label="Max. Videoauflösung (längere Kante)" unit="Pixel" min={320} max={8192} v={v} set={set} ro={ro} />
+                    <NumField k="media.full_decode_seconds" label="Videos Bild für Bild prüfen bis" help="Längere Videos: dieser Anfang Bild für Bild, danach alle Schlüsselbilder." unit="Sekunden" min={10} max={36000} v={v} set={set} ro={ro} />
+                    <NumField k="media.check_timeout_s" label="Zeitlimit je Prüfung/Umwandlung" unit="Sekunden" min={60} max={14400} v={v} set={set} ro={ro} />
+                  </FieldGrid>
+                  <Switch
+                    checked={!!v["media.video_full_decode"]}
+                    disabled={ro}
+                    onChange={(x) => set("media.video_full_decode", x)}
+                    label="Videos zur Prüfung dekodieren (empfohlen)"
+                    description="Findet beschädigte oder manipulierte Videos, bevor jemand sie öffnet. Fällt ein Video nur hier auf, kann „Medien administrieren“ es nach eigener Prüfung trotzdem freigeben."
+                  />
+                  <Switch
+                    checked={!!v["media.allow_animated"]}
+                    disabled={ro}
+                    onChange={(x) => set("media.allow_animated", x)}
+                    label="Animierte Bilder (GIF, WebP, PNG, AVIF) zulassen"
+                    description="Vorschau und öffentliche Fassung zeigen das erste Bild. Aus: animierte Bilder werden gesperrt."
+                  />
+                </div>
                 <Switch
                   checked={!!v["media.notices"]}
                   disabled={ro}

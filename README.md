@@ -64,7 +64,9 @@ flowchart LR
 - **Upload am Handy:** großer Knopf für die Galerie, „Foto aufnehmen“ und „Video aufnehmen“ für die Kamera, mehrere
   Dateien auf einmal, Fortschritt je Datei, unterbrochene Uploads werden fortgesetzt
   (auch große Videos), Vorgangsnummer für Rückfragen, Hinweis für das Team im Feld.
-- **Sicher eingesammelt:** Quarantäne, Prüfung von Dateityp und Inhalt, optional Virenscan (ClamAV), Größen- und
+- **Formate:** JPEG, PNG, WebP, HEIC, AVIF, GIF (animiert nur auf Wunsch), MP4, MOV, WebM, 3GP – global und je Link
+  einschränkbar.
+- **Sicher eingesammelt:** Quarantäne, Prüfung von Dateityp und Inhalt (Videos werden dekodiert), optional Virenscan (ClamAV), Größen- und
   Mengengrenzen je Link und Sammlung, Schutz vor Überlastung; auffällige Dateien werden gesperrt statt gelöscht
   (erneut prüfen, bei Videos mit reinem Dekodierbefund trotzdem freigeben), Sicherheitsereignisse der Upload-Seiten
   ohne Klar-IP, drittes Recht „Medien administrieren“.

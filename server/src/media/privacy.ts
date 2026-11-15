@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import sharp, { type OverlayOptions } from 'sharp';
 import { z } from 'zod';
 import { one, tx } from '../db/pool.js';
-import { MAX_PIXELS, pickVideoStream, run } from './process.js';
+import { imagePixelLimit, pickVideoStream, run } from './process.js';
 import { mediaPaths, removeMediaFiles } from './storage.js';
 
 /**
@@ -65,7 +65,8 @@ const OUT_MAX = 2560;
 /** Öffentliche Fassung eines Bildes neu erzeugen: drehen, zuschneiden, Bereiche unkenntlich machen, verkleinern. */
 export async function renderPublicImage(id: string, opts: { crop: Region | null; redactions: Redaction[] }): Promise<void> {
   const src = mediaPaths.original(id);
-  const meta = await sharp(src, { limitInputPixels: MAX_PIXELS, failOn: 'error' }).metadata();
+  const limit = await imagePixelLimit();
+  const meta = await sharp(src, { limitInputPixels: limit, failOn: 'error' }).metadata();
   if (!meta.width || !meta.height) throw new Error('Bildgröße konnte nicht gelesen werden.');
   const swap = (meta.orientation ?? 1) >= 5;
   const W = swap ? meta.height : meta.width;
@@ -76,7 +77,7 @@ export async function renderPublicImage(id: string, opts: { crop: Region | null;
   const scale = Math.min(1, OUT_MAX / Math.max(cropPxFull.width, cropPxFull.height));
   const sw = Math.max(1, Math.round(W * scale));
   const sh = Math.max(1, Math.round(H * scale));
-  const full = await sharp(src, { limitInputPixels: MAX_PIXELS, failOn: 'error' }).rotate().resize(sw, sh, { fit: 'fill' }).removeAlpha().toColourspace('srgb').raw().toBuffer({ resolveWithObject: true });
+  const full = await sharp(src, { limitInputPixels: limit, failOn: 'error' }).rotate().resize(sw, sh, { fit: 'fill' }).removeAlpha().toColourspace('srgb').raw().toBuffer({ resolveWithObject: true });
   const fw = full.info.width;
   const fh = full.info.height;
   const raw = { width: fw, height: fh, channels: full.info.channels };

@@ -93,6 +93,7 @@ clamd-Befehl `INSTREAM` über TCP, **bevor** Bild- und Videodecoder (sharp, ffmp
 |---|---|
 | sauber | normale Prüfung (Dateityp, Dekodierung, Vorschau, öffentliche Fassung) |
 | Treffer | Datei wird sofort gelöscht, das Medium mit „Schadsoftware erkannt (Signatur)“ abgewiesen (nie freigebbar), Audit-Eintrag `media.malware_found`, Sicherheitsereignis und Sicherheitsmeldung an die Administration |
+| Inhaltsprüfung | Bilder vollständig dekodiert (`media.max_image_mp`, Standard 40 Megapixel; animierte Bilder nur mit `media.allow_animated`); Videos: Codecs (H.264, HEVC, MPEG-4, AV1, VP8/9, ProRes, H.263; AAC, MP3, Opus, Vorbis, FLAC, AC-3, PCM, AMR), Länge `media.max_video_minutes`, längere Kante `media.max_video_edge` (7680), Dekodierprüfung mit `ffprobe -count_frames` (`media.video_full_decode`, bis `media.full_decode_seconds` = 60 s Bild für Bild, danach Schlüsselbilder), Zeitlimit `media.check_timeout_s` (1800 s) |
 | anderer Prüfbefund (Typ, Aufbau, Grenzen, Dekodierung) | Datei wird **gesperrt**: bleibt in der Quarantäne, „Erneut prüfen“, bei Videos mit reinem Dekodierbefund „Trotzdem freigeben“ (Begründung, Audit, Sicherheitsmeldung), Löschung nach `media.blocked_days` (30 Tage) |
 | clamd nicht erreichbar, Zeitüberschreitung, Fehler (z. B. Größengrenze) | Datei bleibt in der Quarantäne (nicht sichtbar), erneuter Versuch alle 10 Minuten; wartet eine Datei länger als 30 Minuten, gibt es eine Sicherheitsmeldung (höchstens alle 6 Stunden) |
 

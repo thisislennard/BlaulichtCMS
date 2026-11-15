@@ -4792,6 +4792,63 @@ describe('Medien wie LiFeOS 7: gesperrte Dateien, Sicherheitsereignisse, Aufträ
   });
 });
 
+describe('Medien wie LiFeOS 8: Prüftiefe und Formate', () => {
+  const upload = async (token: string, name: string, data: Buffer, type: string) => {
+    const mp = multipart({ name, data, type }, { clientKey: `fmt-${crypto.randomBytes(6).toString('hex')}` });
+    expect((await anonymous.raw('POST', `/public/upload/${token}`, mp)).status).toBe(200);
+    await processAllQuarantine();
+    return one<any>(`SELECT * FROM media WHERE original_name = $1 ORDER BY created_at DESC LIMIT 1`, [name]);
+  };
+
+  it('AVIF und unbewegtes GIF werden geprüft und umgerechnet; animierte Bilder nur mit Einstellung; Pixelgrenze einstellbar', async () => {
+    const f = await mediaFixture(editor, 'Formate-Test');
+    const avif = await sharp({ create: { width: 120, height: 80, channels: 3, background: { r: 0, g: 140, b: 70 } } }).avif().toBuffer();
+    const a = await upload(f.token, 'bild.avif', avif, 'image/avif');
+    expect(a).toMatchObject({ status: 'ready', mime: 'image/avif', width: 120, has_public: true });
+    const gif = await sharp({ create: { width: 60, height: 40, channels: 3, background: { r: 200, g: 0, b: 0 } } }).gif().toBuffer();
+    expect((await upload(f.token, 'still.gif', gif, 'image/gif')).status).toBe('ready');
+    // Animiertes GIF (zwei Bilder)
+    const frame = (r: number) => sharp({ create: { width: 30, height: 20, channels: 3, background: { r, g: 0, b: 0 } } }).raw().toBuffer();
+    const anim = await sharp(Buffer.concat([await frame(10), await frame(250)]), { raw: { width: 30, height: 40, channels: 3, pageHeight: 20 } } as any).gif({ loop: 0 }).toBuffer();
+    const blocked = await upload(f.token, 'anim.gif', anim, 'image/gif');
+    expect(blocked).toMatchObject({ status: 'blocked', reject_step: 'type' });
+    expect(blocked.reject_reason).toMatch(/Animierte Bilder/);
+    await setSettings({ 'media.allow_animated': true });
+    expect((await upload(f.token, 'anim2.gif', anim, 'image/gif')).status).toBe('ready');
+    await setSettings({ 'media.allow_animated': false, 'media.max_image_mp': 1 });
+    const big = await sharp({ create: { width: 1500, height: 1000, channels: 3, background: { r: 1, g: 1, b: 1 } } }).jpeg().toBuffer();
+    const b = await upload(f.token, 'gross.jpg', big, 'image/jpeg');
+    expect(b).toMatchObject({ status: 'blocked', reject_step: 'limits' });
+    expect(b.reject_reason).toMatch(/1 Megapixel/);
+    await setSettings({ 'media.max_image_mp': 40 });
+    expect((await admin.patch('/settings', { 'media.max_image_mp': 0 })).status).toBe(400);
+  });
+
+  it('Video-Dekodierprüfung: beschädigtes Video wird gesperrt, „Trotzdem freigeben“ verarbeitet es ohne Dekodierprüfung; 3GP', async () => {
+    const f = await mediaFixture(editor, 'Video-Prüftiefe');
+    const dir = fs.mkdtempSync(path.join(process.env.BLAULICHTCMS_DATA_DIR!, 'dec-'));
+    const src = path.join(dir, 'ok.mp4');
+    execFileSync('ffmpeg', ['-v', 'error', '-y', '-f', 'lavfi', '-i', 'testsrc2=duration=4:size=320x240:rate=25', '-c:v', 'libx264', '-g', '25', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', src]);
+    const data = fs.readFileSync(src);
+    // Mitte der Bilddaten überschreiben: Aufbau bleibt lesbar, Dekodieren meldet Fehler
+    for (let i = Math.floor(data.length * 0.45); i < Math.floor(data.length * 0.6); i += 7) data[i] = 0xff;
+    const bad = await upload(f.token, 'kaputt.mp4', data, 'video/mp4');
+    expect(bad).toMatchObject({ status: 'blocked', reject_step: 'decode' });
+    expect((await admin.post(`/media/${bad.id}/force-release`, { reason: 'Wiedergabe von Hand geprüft' })).status).toBe(200);
+    expect(await processMedia(bad.id)).toBe('ready');
+    // 3GP mit H.264/AAC
+    const g = path.join(dir, 'clip.3gp');
+    execFileSync('ffmpeg', ['-v', 'error', '-y', '-f', 'lavfi', '-i', 'testsrc2=duration=1:size=176x144:rate=10', '-f', 'lavfi', '-i', 'sine=duration=1', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-f', '3gp', g]);
+    expect((await upload(f.token, 'clip.3gp', fs.readFileSync(g), 'video/3gpp')).status).toBe('ready');
+    // Längere Kante begrenzt
+    await setSettings({ 'media.max_video_edge': 320 });
+    const wide = path.join(dir, 'breit.mp4');
+    execFileSync('ffmpeg', ['-v', 'error', '-y', '-f', 'lavfi', '-i', 'testsrc2=duration=1:size=640x360:rate=5', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', wide]);
+    expect(await upload(f.token, 'breit.mp4', fs.readFileSync(wide), 'video/mp4')).toMatchObject({ status: 'blocked', reject_step: 'limits' });
+    await setSettings({ 'media.max_video_edge': 7680 });
+  });
+});
+
 /* @@MEDIA-TESTS-END@@ */
 
 describe('In-App-Updates aus GitHub-Releases', () => {

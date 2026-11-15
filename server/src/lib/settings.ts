@@ -102,7 +102,7 @@ export const DEFAULT_SETTINGS = {
   /** Sicherheitsereignisse der öffentlichen Seiten so viele Tage aufbewahren (0 = immer) – wie press_security_log_days. */
   'media.security_log_days': 365,
   /** Global erlaubte Dateitypen (Schlüssel aus media/types.ts); je Link weiter einschränkbar. */
-  'media.allowed_types': ['jpeg', 'png', 'webp', 'heic', 'mp4', 'mov', 'webm'] as string[],
+  'media.allowed_types': ['jpeg', 'png', 'webp', 'heic', 'avif', 'gif', 'mp4', 'mov', 'webm', '3gp'] as string[],
   /** Benachrichtigungen der Medien (neue Dateien, Link läuft ab, Kontingent, Speicher) – lib/media-notify.ts. */
   'media.notices': true,
   /** Speicherwarnung an „Medien administrieren“, wenn weniger frei ist (GB, 0 = aus). */
@@ -117,6 +117,18 @@ export const DEFAULT_SETTINGS = {
   'media.strip_location': true,
   /** Höchstlänge von Videos (Ressourcenschutz bei der Verarbeitung). */
   'media.max_video_minutes': 30,
+  /** Prüftiefe wie LiFeOS: höchstens so viele Megapixel je Bild dekodieren. */
+  'media.max_image_mp': 40,
+  /** Längere Kante eines Videos höchstens (Pixel). */
+  'media.max_video_edge': 7680,
+  /** Videos zur Prüfung dekodieren (empfohlen): erste Sekunden Bild für Bild, danach alle Schlüsselbilder. */
+  'media.video_full_decode': true,
+  /** Bis zu dieser Länge (Sekunden) wird ein Video vollständig Bild für Bild dekodiert. */
+  'media.full_decode_seconds': 60,
+  /** Zeitlimit je Prüf- bzw. Umwandlungsschritt (Sekunden). */
+  'media.check_timeout_s': 1800,
+  /** Animierte Bilder (GIF, WebP, PNG, AVIF) zulassen; verarbeitet wird das erste Bild. */
+  'media.allow_animated': false,
 
   'editorial.four_eyes': false,
   'invites.valid_hours': 72,
@@ -256,6 +268,10 @@ export const SETTING_RANGES: Record<string, [number, number]> = {
   'media.collection_max_gb': [1, 10000],
   'media.min_free_gb': [1, 10000],
   'media.max_video_minutes': [1, 600],
+  'media.max_image_mp': [1, 500],
+  'media.max_video_edge': [320, 8192],
+  'media.full_decode_seconds': [10, 36000],
+  'media.check_timeout_s': [60, 14400],
   'smtp.port': [1, 65535],
   'backup.hour': [0, 23],
   'backup.keep': [1, 365],

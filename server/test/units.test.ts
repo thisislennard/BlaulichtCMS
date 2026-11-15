@@ -1071,3 +1071,14 @@ describe('Erweiterte Link-Optionen und Dateitypen', () => {
     expect(typeLabels(['jpeg', 'mov'])).toBe('JPEG, MOV');
   });
 });
+
+describe('Video-Dekodierprüfung (Medien wie LiFeOS)', () => {
+  it('kurze Videos Bild für Bild, lange Anfang plus Schlüsselbilder; Audio-Parser-Meldungen sperren nicht', async () => {
+    const { decodePlan, decodeErrors } = await import('../src/media/process.js');
+    expect(decodePlan(30, 60)).toEqual([[]]);
+    expect(decodePlan(600, 60)).toEqual([['-read_intervals', '%+60'], ['-skip_frame', 'nokey']]);
+    const streams = [{ codec_type: 'video', codec_name: 'h264' }, { codec_type: 'audio', codec_name: 'opus' }];
+    expect(decodeErrors('[opus @ 0x1] Error parsing Opus packet header\n', streams)).toEqual([]);
+    expect(decodeErrors('[h264 @ 0x2] Invalid NAL unit size\n\n', streams)).toEqual(['[h264 @ 0x2] Invalid NAL unit size']);
+  });
+});
