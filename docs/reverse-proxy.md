@@ -166,6 +166,7 @@ personenbezogene Daten der hochladenden Personen (Art. 5 Abs. 1 lit. c und e, Ar
 | `/l/<token>` | alter Link aus dem Import (Weiterleitung) | Personen mit altem Link |
 | `/api/v1/m/<token>` | kurzlebige Medienadresse (höchstens 24 Stunden) | Meta beim Veröffentlichen auf Facebook/Instagram |
 | `/einladung/<token>`, `/api/v1/auth/invite/<token>` | Einladung bzw. Passwort-Link | neue Konten, Passwort zurücksetzen |
+| `/api/v1/inbound/fe2/<id>/<token>` | FE2-Schlüssel – nur mit der Option „Schlüssel in der Adresse“; gilt bis zur Erneuerung | FE2 bei jedem Einsatz |
 
 BlaulichtCMS selbst schreibt diese Tokens nirgends hin: das Systemprotokoll enthält nur die Routenvorlage
 (`/api/v1/public/upload/:token`), das Audit die IP öffentlicher Uploads und entfernt sie nach
@@ -200,7 +201,7 @@ Im `http`-Block ein Format ohne Token und mit gekürzter IP (IPv4 /24, IPv6 /48)
 
 ```nginx
 map $request_uri $bc_uri {
-    "~^(?<bc_p>/u/|/l/|/einladung/|/api/v1/public/upload/|/api/v1/auth/invite/|/api/v1/m/)[^/?]+(?<bc_r>[^?]*)" "${bc_p}***${bc_r}";
+    "~^(?<bc_p>/u/|/l/|/einladung/|/api/v1/public/upload/|/api/v1/auth/invite/|/api/v1/m/|/api/v1/inbound/fe2/[^/?]+/)[^/?]+(?<bc_r>[^?]*)" "${bc_p}***${bc_r}";
     "~^(?<bc_q>[^?]*)"                                                        "$bc_q";
 }
 map $remote_addr $bc_ip {
@@ -231,7 +232,7 @@ blaulichtcms.example.org {
 			roll_keep_for 168h
 		}
 		format filter {
-			request>uri regexp "^(/u/|/l/|/einladung/|/api/v1/public/upload/|/api/v1/auth/invite/|/api/v1/m/)[^/?]+([^?]*).*$" "${1}***${2}"
+			request>uri regexp "^(/u/|/l/|/einladung/|/api/v1/public/upload/|/api/v1/auth/invite/|/api/v1/m/|/api/v1/inbound/fe2/[^/?]+/)[^/?]+([^?]*).*$" "${1}***${2}"
 			request>remote_ip ip_mask 24 48
 			request>client_ip ip_mask 24 48
 			request>headers delete
@@ -250,5 +251,6 @@ blaulichtcms.example.org {
 - **HAProxy:** ohne `option httplog` für das BlaulichtCMS-Frontend bzw. mit eigenem `log-format` ohne `%r`/`%HU`.
 
 Auch Protokolle, die vor dieser Einstellung entstanden sind, enthalten Tokens: löschen oder bis zum Ablauf der
-Upload-Links (höchstens 90 Tage) unter Verschluss halten. Die Fristen gehören in das Verzeichnis der
+Upload-Links (höchstens 90 Tage) unter Verschluss halten. Steht ein FE2-Schlüssel in einem alten Protokoll, in der
+FE2-Verbindung einen neuen Zugangsschlüssel erzeugen – er gilt sonst unbefristet. Die Fristen gehören in das Verzeichnis der
 Verarbeitungstätigkeiten ([datenschutz.md](datenschutz.md)).

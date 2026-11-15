@@ -4442,6 +4442,72 @@ describe('Warnvorgänge löschen, amtliche Warnungen ausblenden', () => {
   });
 });
 
+describe('FE2: Schlüssel in der Adresse (Option)', () => {
+  it('nur eingeschaltet gültig, eigener Schlüssel, Vergleich über Prüfsumme; nie in Protokoll, Audit oder Meldungen', async () => {
+    const c = await admin.post('/connections', { kind: 'fe2', name: 'FE2 Adresse' });
+    const id = c.json.id;
+    const bearer = c.json.token;
+    const sender = new Client(app, '198.51.100.140');
+    const viaPath = (tok: string, headers: Record<string, string> = {}) => sender.raw('POST', `/inbound/fe2/${id}/${tok}`, { body: { einsatz: { id: 'P-1', stichwort: 'F-1', ort: 'Musterstadt' } }, headers: { 'x-blaulichtcms-test': '1', ...headers } });
+    // Standard aus: Adresse mit Schlüssel gilt nicht – auch nicht mit dem richtigen Kopfzeilen-Schlüssel im Pfad
+    expect((await admin.get(`/connections/${id}`)).json).toMatchObject({ config: { keyInPath: false }, inbound_url_with_key: null });
+    expect((await viaPath(bearer)).status).toBe(401);
+    // Einschalten verlangt einen neuen Test und erzeugt einen eigenen Schlüssel
+    const on = await admin.put(`/connections/${id}`, { name: 'FE2 Adresse', config: { keyInPath: true } });
+    expect(on.json.retest).toBe(true);
+    const d = (await admin.get(`/connections/${id}`)).json;
+    expect(d.inbound_url_with_key).toMatch(new RegExp(`/api/v1/inbound/fe2/${id}/bcfe2p_[A-Za-z0-9_-]{20,}$`));
+    expect(d.secrets_set).not.toContain('pathToken');
+    const pathKey = d.inbound_url_with_key.split('/').pop();
+    expect(pathKey).not.toBe(bearer);
+    // Nur die Verwaltung sieht die Adresse mit Schlüssel
+    expect((await editor.get(`/connections/${id}`)).status).toBe(403);
+    expect(JSON.stringify((await editor.get('/connections')).json)).not.toContain(pathKey);
+
+    delete process.env.BLAULICHTCMS_NO_DB_LOG;
+    try {
+      const ok = await viaPath(pathKey);
+      expect(ok.status).toBe(200);
+      expect(ok.json.outcome).toBe('test');
+      expect((await viaPath(`${pathKey}x`)).status).toBe(401);
+      expect((await viaPath('bcfe2p_falsch')).status).toBe(401);
+      // Kopfzeile funktioniert weiter
+      expect((await anonymous.raw('POST', `/inbound/fe2/${id}`, { body: { einsatz: { id: 'P-2' } }, headers: { authorization: `Bearer ${bearer}`, 'x-blaulichtcms-test': '1' } })).json.outcome).toBe('test');
+      await new Promise((r) => setTimeout(r, 300));
+    } finally {
+      process.env.BLAULICHTCMS_NO_DB_LOG = '1';
+    }
+    const like = [`%${pathKey}%`, `%${pathKey.slice(7, 30)}%`];
+    expect((await one<any>(`SELECT count(*)::int AS n FROM app_logs WHERE message ILIKE ANY($1) OR details::text ILIKE ANY($1)`, [like]))!.n).toBe(0);
+    expect((await one<any>(`SELECT count(*)::int AS n FROM audit_events WHERE object_label ILIKE ANY($1) OR details::text ILIKE ANY($1) OR actor_name ILIKE ANY($1)`, [like]))!.n).toBe(0);
+    expect((await one<any>(`SELECT count(*)::int AS n FROM notifications WHERE title ILIKE ANY($1) OR body ILIKE ANY($1) OR link ILIKE ANY($1)`, [like]))!.n).toBe(0);
+    expect((await one<any>(`SELECT count(*)::int AS n FROM app_logs WHERE source = 'fe2' AND message LIKE 'Testmeldung empfangen%'`))!.n).toBeGreaterThan(0);
+    const fail = await one<any>(`SELECT details FROM audit_events WHERE action = 'fe2.auth' AND object_id = $1::text ORDER BY id DESC LIMIT 1`, [id]);
+    expect(fail.details).toMatchObject({ grund: 'Schlüssel falsch', weg: 'Adresse' });
+    const { redactPath } = await import('../src/app.js');
+    expect(redactPath(`/api/v1/inbound/fe2/${id}/${pathKey}?x=1`)).toBe(`/api/v1/inbound/fe2/${id}/***`);
+    expect(redactPath(`/api/v1/inbound/fe2/${id}`)).toBe(`/api/v1/inbound/fe2/${id}`);
+    expect(redactPath('/api/v1/public/upload/geheim/teil')).toBe('/api/v1/public/upload/***/teil');
+
+    // Neuer Zugangsschlüssel erneuert auch die Adresse
+    const rot = await admin.post(`/connections/${id}/rotate-token`);
+    const pathKey2 = (await admin.get(`/connections/${id}`)).json.inbound_url_with_key.split('/').pop();
+    expect(pathKey2).not.toBe(pathKey);
+    expect((await viaPath(pathKey)).status).toBe(401);
+    expect((await viaPath(pathKey2)).status).toBe(200);
+    expect((await anonymous.raw('POST', `/inbound/fe2/${id}`, { body: { einsatz: { id: 'P-3' } }, headers: { authorization: `Bearer ${rot.json.token}`, 'x-blaulichtcms-test': '1' } })).status).toBe(200);
+    // Ausschalten: Adresse mit Schlüssel gilt sofort nicht mehr, der Pfad-Schlüssel ist gelöscht
+    await admin.put(`/connections/${id}`, { name: 'FE2 Adresse', config: { keyInPath: false } });
+    expect((await viaPath(pathKey2)).status).toBe(401);
+    expect((await admin.get(`/connections/${id}`)).json.inbound_url_with_key).toBeNull();
+    // Wieder einschalten: neuer Schlüssel, der alte gilt nicht
+    await admin.put(`/connections/${id}`, { name: 'FE2 Adresse', config: { keyInPath: true } });
+    const pathKey3 = (await admin.get(`/connections/${id}`)).json.inbound_url_with_key.split('/').pop();
+    expect(pathKey3).not.toBe(pathKey2);
+    expect((await viaPath(pathKey2)).status).toBe(401);
+  });
+});
+
 /* ---------------------------- Medien wie LiFeOS (Pakete 1–10) ---------------------------- */
 
 /** Neue Sammlung mit Link über die API; liefert IDs und Token. */

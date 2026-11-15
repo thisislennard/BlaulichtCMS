@@ -182,11 +182,25 @@ export default function ConnectionDetail() {
                     <HelpTip title="Eingangsadresse und Zugangsschlüssel" more="/hilfe/verbindungen#eingangsadresse-und-zugangsschluessel">
                       <p className="m-0">Beide Werte erzeugt BlaulichtCMS – sie stehen nicht in FE2. Die Adresse hier kopieren, den Schlüssel gab es beim Anlegen der Verbindung (nur einmal sichtbar).</p>
                       <p className="m-0">FE2 muss einen <strong>POST mit JSON</strong> und der Kopfzeile <code className="font-mono">Authorization: Bearer &lt;Schlüssel&gt;</code> senden. Welcher Ausgang das in der eigenen FE2-Version kann, mit dem FE2-Betreuer bzw. dem <HelpLink href="https://alamos-support.atlassian.net/wiki/spaces/documentation/overview">Alamos-Handbuch</HelpLink> klären.</p>
+                      <p className="m-0">Kann der Ausgang keine Kopfzeile setzen: unten „Schlüssel in der Adresse“ einschalten.</p>
                     </HelpTip>
                   }>
                     <div className="flex gap-2 items-center"><code className="break-all text-meta">{c.inbound_url}</code><CopyButton value={c.inbound_url} size="sm" /></div>
                   </FieldWrap>
                   <p className="m-0 text-meta text-fg-muted">Authentisierung per Header <code>Authorization: Bearer &lt;Schlüssel&gt;</code>. Vor der Aktivierung legt BlaulichtCMS nichts an, sondern zeigt nur eine Vorschau. Mit Header <code>X-BlaulichtCMS-Test: 1</code> bleibt auch später jede Meldung eine reine Testmeldung.</p>
+                  <div className="flex items-start gap-1">
+                    <Switch checked={!!cfg.keyInPath} onChange={(v) => setCfg({ ...cfg, keyInPath: v })} label="Schlüssel in der Adresse" description="Für FE2-Ausgänge ohne eigene Kopfzeile: eine zweite Eingangsadresse, die einen eigenen Schlüssel enthält. Standard aus." />
+                    <HelpTip title="Schlüssel in der Adresse" more="/hilfe/verbindungen#schluessel-in-der-adresse">
+                      <p className="m-0">Manche FE2-Ausgänge rufen nur eine Adresse auf und können keine Kopfzeile <code className="font-mono">Authorization</code> setzen. Dann steckt der Schlüssel in der Adresse selbst.</p>
+                      <p className="m-0"><strong>Abwägung:</strong> Die Adresse samt Schlüssel steht dann in der FE2-Konfiguration und kann in Protokollen von Proxys auftauchen. Zugriffsprotokolle des Proxys abschalten oder maskieren; ist die Adresse abgeflossen, einen neuen Zugangsschlüssel erzeugen – die Adresse ändert sich dabei mit.</p>
+                    </HelpTip>
+                  </div>
+                  {c.config.keyInPath && c.inbound_url_with_key && (
+                    <FieldWrap label="Eingangsadresse mit Schlüssel (ohne Kopfzeile)" help="Wie ein Passwort behandeln. Gilt nur, solange „Schlüssel in der Adresse“ eingeschaltet ist.">
+                      <div className="flex gap-2 items-center"><code className="break-all text-meta">{c.inbound_url_with_key.replace(/\/[^/]+$/, '/bcfe2p_••••••••')}</code><CopyButton value={c.inbound_url_with_key} size="sm" /></div>
+                    </FieldWrap>
+                  )}
+                  {!!cfg.keyInPath !== !!c.config.keyInPath && <p className="m-0 text-meta text-fg-muted">Nach dem Speichern {cfg.keyInPath ? 'erscheint die Adresse mit Schlüssel hier' : 'gilt die Adresse mit Schlüssel nicht mehr'}; danach eine Testmeldung senden und neu testen.</p>}
                   <div>
                     <Button size="sm" icon="KeyRound" onClick={async () => { if (!(await confirmRetest('Neuen Zugangsschlüssel erzeugen?'))) return; const r: any = await act(() => post(`/connections/${id}/rotate-token`), 'Neuer Schlüssel erzeugt – der alte gilt nicht mehr. In FE2 eintragen, Testmeldung senden, testen und aktivieren.'); if (r) setNewToken(r.token); }}>Neuen Zugangsschlüssel erzeugen</Button>
                   </div>

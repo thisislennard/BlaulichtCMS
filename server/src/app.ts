@@ -87,8 +87,19 @@ export const PERMISSIONS_POLICY = [
  * „Bitte bestätigen“ (reauth_required) ist kein Angriffszeichen und bleibt außen vor.
  */
 const DENIED_AUDIT_CODES = new Set(['forbidden', 'csrf']);
+/** Pfad ohne Schlüssel (Routenvorlage bevorzugt; sonst Tokens in bekannten Pfaden maskiert). */
+export function safePath(req: FastifyRequest): string {
+  return req.routeOptions?.url ?? redactPath(req.url);
+}
+export function redactPath(url: string): string {
+  return url
+    .split('?')[0]
+    .replace(/^(\/api\/v1\/inbound\/fe2\/[^/]+\/)[^/]+/, '$1***')
+    .replace(/^(\/u\/|\/l\/|\/einladung\/|\/api\/v1\/public\/upload\/|\/api\/v1\/auth\/invite\/|\/api\/v1\/m\/)[^/]+/, '$1***');
+}
+
 async function auditDenied(req: FastifyRequest, code: string) {
-  const route = `${req.method} ${req.routeOptions?.url ?? req.url.split('?')[0]}`;
+  const route = `${req.method} ${safePath(req)}`;
   const actor = req.auth?.actor ?? { id: null, name: 'nicht angemeldet', type: 'user' as const, ip: req.ip };
   await auditThrottled(`denied:${actor.id ?? req.ip}:${route}`, 10 * 60_000, actor, 'access.denied', { type: 'route', label: route }, { grund: code === 'csrf' ? 'ohne Sicherheitskennung' : 'fehlendes Recht' }, 'denied').catch(() => {});
 }

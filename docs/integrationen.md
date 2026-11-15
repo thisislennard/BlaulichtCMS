@@ -74,7 +74,10 @@ Formulardaten und JSON als `text/plain`.
 
 **Einrichtung in FE2:** Im FE2-Alarmablauf einen HTTP-Ausgang an
 `https://<blaulichtcms>/api/v1/inbound/fe2/<verbindungs-id>` anlegen und den Schlüssel (`bcfe2_…`) als
-`Authorization: Bearer …` oder `X-BlaulichtCMS-Token` eintragen. Erste Meldung mit Kopfzeile `X-BlaulichtCMS-Test: 1` senden
+`Authorization: Bearer …` oder `X-BlaulichtCMS-Token` eintragen. Kann der FE2-Ausgang keine eigene Kopfzeile setzen,
+in der Verbindung **Schlüssel in der Adresse** einschalten und die zweite Adresse
+`https://<blaulichtcms>/api/v1/inbound/fe2/<verbindungs-id>/<schlüssel>` verwenden (Schlüssel dann in Adressen und
+Proxy-Protokollen – siehe [reverse-proxy.md](reverse-proxy.md#zugriffsprotokolle-des-proxys-datenschutz)). Erste Meldung mit Kopfzeile `X-BlaulichtCMS-Test: 1` senden
 (nur Vorschau) und unter *Verbindungen → FE2* prüfen, welche Felder übernommen wurden; bei Bedarf die Zuordnung anpassen.
 
 ## Feuersoftware Connect – Anbindung

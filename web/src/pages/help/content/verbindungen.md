@@ -141,13 +141,24 @@ Beide Werte **erzeugt BlaulichtCMS** – sie stehen nicht in FE2:
 - **Eingangsadresse:** in der Verbindung unter *Einstellungen*, z. B. `https://<eigene Adresse>/api/v1/inbound/fe2/<ID>` (Kopierknopf daneben).
 - **Zugangsschlüssel** (`bcfe2_…`): wird beim Anlegen der Verbindung **nur einmal** angezeigt. Verloren? **Neuen Zugangsschlüssel erzeugen** – der alte gilt sofort nicht mehr, und die Verbindung muss neu getestet und aktiviert werden.
 
-Erwartet wird ein **HTTP-POST** mit JSON (oder Formulardaten) und dem Schlüssel in der Kopfzeile `Authorization: Bearer <Schlüssel>` (alternativ `X-BlaulichtCMS-Token: <Schlüssel>`).
+Erwartet wird ein **HTTP-POST** mit JSON (oder Formulardaten) und dem Schlüssel in der Kopfzeile `Authorization: Bearer <Schlüssel>` (alternativ `X-BlaulichtCMS-Token: <Schlüssel>`). Kann der Absender keine Kopfzeile setzen, hilft die Option [Schlüssel in der Adresse](#schluessel-in-der-adresse).
+
+### Schlüssel in der Adresse
+
+Die öffentliche FE2-Dokumentation zeigt keinen Ausgang, der eine eigene Kopfzeile wie `Authorization` setzt. Für diesen Fall gibt es je FE2-Verbindung die Option **Schlüssel in der Adresse** (Standard aus):
+
+- Eingeschaltet erzeugt BlaulichtCMS einen **eigenen Schlüssel** (`bcfe2p_…`) und zeigt unter *Einstellungen* eine zweite Eingangsadresse `https://<eigene Adresse>/api/v1/inbound/fe2/<ID>/<Schlüssel>` mit Kopierknopf. Diese Adresse braucht keine Kopfzeile.
+- Die Adresse mit Kopfzeile gilt weiter. Beide Wege nehmen höchstens 60 Meldungen je Minute an.
+- **Abwägung:** Der Schlüssel steht dann in der FE2-Konfiguration und in jeder Adresszeile – also auch in Zugriffsprotokollen eines Proxys. Diese Protokolle abschalten oder Schlüssel maskieren (Anleitung für Nginx Proxy Manager, nginx und Caddy in `docs/reverse-proxy.md`, Abschnitt „Zugriffsprotokolle des Proxys“). BlaulichtCMS selbst schreibt den Schlüssel weder ins Systemprotokoll noch ins Audit.
+- **Abgeflossen?** **Neuen Zugangsschlüssel erzeugen** erneuert beide Schlüssel; die alte Adresse gilt sofort nicht mehr. Ausschalten der Option löscht den Adress-Schlüssel.
+- Ein- und Ausschalten verlangt einen neuen Test (Testmeldung über die neue Adresse senden).
 
 ### In FE2 einrichten
 
-FE2 muss die Meldung als **HTTP-POST mit eigener Kopfzeile** senden können. Die öffentliche FE2-Dokumentation von Alamos ([Handbuch](https://alamos-support.atlassian.net/wiki/spaces/documentation/overview)) beschreibt einen solchen Ausgang nicht ausdrücklich: Das Plugin [„URL öffnen“](https://alamos-support.atlassian.net/wiki/spaces/documentation/pages/219480774) ruft nur eine Adresse auf, ohne eigene Kopfzeilen; „Externe Schnittstelle“ und „HTTP POST/GET“ sind dort Eingänge **in** FE2. Konkrete Menünamen geben wir deshalb nicht an.
+FE2 muss die Meldung als **HTTP-POST** senden können – mit eigener Kopfzeile oder, mit der Option [Schlüssel in der Adresse](#schluessel-in-der-adresse), ohne. Die öffentliche FE2-Dokumentation von Alamos ([Handbuch](https://alamos-support.atlassian.net/wiki/spaces/documentation/overview)) beschreibt einen solchen Ausgang nicht ausdrücklich: Das Plugin [„URL öffnen“](https://alamos-support.atlassian.net/wiki/spaces/documentation/pages/219480774) ruft nur eine Adresse auf, ohne eigene Kopfzeilen; „Externe Schnittstelle“ und „HTTP POST/GET“ sind dort Eingänge **in** FE2. Konkrete Menünamen geben wir deshalb nicht an.
 
 - Mit dem FE2-Betreuer bzw. dem Alamos-Support klären, welcher Ausgang (Plugin, Skript) in der eigenen Version einen POST mit JSON und Kopfzeile senden kann.
+- Kann der Ausgang einen POST mit JSON senden, aber keine Kopfzeile setzen: [Schlüssel in der Adresse](#schluessel-in-der-adresse) einschalten.
 - Alternativ eine kleine Weiterleitung im eigenen Netz betreiben, die FE2-Meldungen entgegennimmt und mit Kopfzeile an die Eingangsadresse schickt.
 - Nur die nötigen Felder senden. Liegt BlaulichtCMS im internen Netz, muss die Plattform-Administration interne Ziele nicht freigeben – das gilt nur für Abrufe *aus* BlaulichtCMS.
 
@@ -179,7 +190,7 @@ Danach **Testen** (prüft: Schlüssel hinterlegt, Meldung empfangen, Einsatz-ID 
 
 | Antwort | Ursache |
 |---|---|
-| 401 „Zugangsschlüssel fehlt oder ist ungültig“ | Kopfzeile fehlt, Tippfehler oder alter Schlüssel. Falsche Schlüssel meldet BlaulichtCMS der Administration. |
+| 401 „Zugangsschlüssel fehlt oder ist ungültig“ | Kopfzeile fehlt, Tippfehler oder alter Schlüssel – bzw. bei der Adresse mit Schlüssel: Option ausgeschaltet oder Schlüssel erneuert. Falsche Schlüssel meldet BlaulichtCMS der Administration. |
 | 400 „Keine Einsatz-ID gefunden“ | Feldzuordnung für die Einsatz-ID passt nicht zur Meldung. |
 | 409 „Die Verbindung ist angehalten“ | Verbindung in BlaulichtCMS angehalten. |
 | Meldung kommt an, aber kein Entwurf | Verbindung nicht aktiv (nur Vorschau), Kopfzeile `X-BlaulichtCMS-Test: 1` gesetzt oder „Beitragsentwürfe anlegen“ aus. |

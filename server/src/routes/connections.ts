@@ -48,7 +48,7 @@ async function view(c: Connection) {
     activated_at: (c as any).activated_at,
     created_at: (c as any).created_at,
     deleted_at: c.deleted_at ?? null,
-    secrets_set: Object.keys(sec).filter((k) => k !== 'pages'),
+    secrets_set: Object.keys(sec).filter((k) => k !== 'pages' && k !== 'pathToken'),
     insecure_source: c.kind === 'warnfeed' ? insecureFeed(c.config) : undefined,
     pages: sec.pages ? (JSON.parse(sec.pages) as any[]).map((p) => ({ id: p.id, name: p.name })) : [],
   };
@@ -58,6 +58,8 @@ const configSchema: Record<ConnectionKind, z.ZodType<any>> = {
   fe2: z.object({
     mapping: z.record(z.string(), z.string().max(120)).default({}),
     createDrafts: z.boolean().default(true),
+    // Schlüssel in der Adresse (für Absender ohne eigene Kopfzeile); Standard aus
+    keyInPath: z.boolean().default(false),
   }),
   facebook: z.object({ appId: z.string().max(40).default(''), pageId: z.string().max(40).optional() }),
   instagram: z.object({ appId: z.string().max(40).default(''), userId: z.string().max(40).optional() }),
@@ -110,17 +112,34 @@ async function invalidateTest(actor: any, c: Connection, grund: string) {
   return before;
 }
 
-async function fe2Auth(req: FastifyRequest, c: Connection) {
-  const h = String(req.headers.authorization ?? '');
-  const token = /^Bearer\s+(\S+)$/.exec(h)?.[1] ?? String(req.headers['x-blaulichtcms-token'] ?? '');
+/**
+ * FE2-Eingang authentisieren: per Kopfzeile (Bearer bzw. X-BlaulichtCMS-Token) oder – nur mit der Option
+ * „Schlüssel in der Adresse“ – über einen eigenen Pfad-Schlüssel. Verglichen wird in konstanter Zeit über Prüfsummen.
+ * Weder Meldungen noch Audit oder Protokoll enthalten den Schlüssel.
+ */
+async function fe2Auth(req: FastifyRequest, c: Connection, pathToken?: string) {
   const sec = await connectionSecrets(c);
-  if (!token || !sec.inboundTokenHash || !safeEqual(sec.inboundTokenHash, sha256Hex(token))) {
+  let token: string;
+  let ok: boolean;
+  if (pathToken !== undefined) {
+    token = pathToken;
+    ok = !!c.config?.keyInPath && !!sec.pathToken && !!token && safeEqual(sha256Hex(sec.pathToken), sha256Hex(token));
+  } else {
+    const h = String(req.headers.authorization ?? '');
+    token = /^Bearer\s+(\S+)$/.exec(h)?.[1] ?? String(req.headers['x-blaulichtcms-token'] ?? '');
+    ok = !!token && !!sec.inboundTokenHash && safeEqual(sec.inboundTokenHash, sha256Hex(token));
+  }
+  if (!ok) {
+    const via = pathToken !== undefined ? ' (Schlüssel in der Adresse)' : '';
     // Auditieren, gedrosselt je IP und Verbindung (#111)
-    if (token) await securityAlert('fe2_auth', { title: `FE2-Eingang „${c.name}“: falscher Zugangsschlüssel`, body: `Von ${req.ip}. Ist der Schlüssel abgeflossen, in der Verbindung einen neuen erzeugen.`, link: `/verbindungen/${c.id}`, throttleKey: `${c.id}:${req.ip}` });
-    await auditThrottled(`fe2:${req.ip}:${c.id}`, 10 * 60_000, { id: null, name: 'FE2-Eingang', type: 'system', ip: req.ip }, 'fe2.auth', { type: 'connection', id: c.id, label: c.name }, { grund: token ? 'Schlüssel falsch' : 'kein Schlüssel' }, 'failed').catch(() => {});
+    if (token) await securityAlert('fe2_auth', { title: `FE2-Eingang „${c.name}“: falscher Zugangsschlüssel${via}`, body: `Von ${req.ip}. Ist der Schlüssel abgeflossen, in der Verbindung einen neuen erzeugen.`, link: `/verbindungen/${c.id}`, throttleKey: `${c.id}:${req.ip}` });
+    await auditThrottled(`fe2:${req.ip}:${c.id}`, 10 * 60_000, { id: null, name: 'FE2-Eingang', type: 'system', ip: req.ip }, 'fe2.auth', { type: 'connection', id: c.id, label: c.name }, { grund: token ? 'Schlüssel falsch' : 'kein Schlüssel', ...(via ? { weg: 'Adresse' } : {}) }, 'failed').catch(() => {});
     throw new AppError(401, 'unauthorized', 'Zugangsschlüssel fehlt oder ist ungültig.');
   }
 }
+
+/** Neuer Pfad-Schlüssel für „Schlüssel in der Adresse“ (verschlüsselt gespeichert, damit die Adresse kopierbar bleibt). */
+const newPathToken = () => `bcfe2p_${randomToken(32)}`;
 
 export async function connectionRoutes(app: FastifyInstance) {
   const manage = requireAuth('connection.manage');
@@ -144,6 +163,7 @@ export async function connectionRoutes(app: FastifyInstance) {
       ...(await view(c)),
       usage: await connectionUsage(c.id),
       inbound_url: c.kind === 'fe2' ? `${base}/api/v1/inbound/fe2/${c.id}` : null,
+      inbound_url_with_key: c.kind === 'fe2' && c.config?.keyInPath && !c.deleted_at ? await connectionSecrets(c).then((s) => (s.pathToken ? `${base}/api/v1/inbound/fe2/${c.id}/${s.pathToken}` : null)) : null,
       oauth_redirect: ['facebook', 'instagram'].includes(c.kind) ? `${base}/api/v1/connections/oauth/callback` : null,
       allowed_fields: c.kind === 'fe2' ? FE2_ALLOWED_FIELDS : null,
       default_mapping: c.kind === 'fe2' ? FE2_DEFAULT_MAPPING : null,
@@ -196,7 +216,11 @@ export async function connectionRoutes(app: FastifyInstance) {
               private_target = $4, private_approved_at = CASE WHEN private_target IS DISTINCT FROM $4 THEN NULL ELSE private_approved_at END, updated_at = now() WHERE id = $1`,
       [id, b.name, JSON.stringify(config), target],
     );
-    await audit(req.auth!.actor, 'connection.updated', { type: 'connection', id, label: b.name }, { automatische_banner: config.autoBanner ?? undefined, pruefung_verworfen: sourceChanged || undefined, neuer_test_noetig: retest || undefined });
+    // „Schlüssel in der Adresse“: beim Einschalten eigenen Pfad-Schlüssel erzeugen, beim Ausschalten löschen
+    if (c.kind === 'fe2' && !!config.keyInPath !== !!c.config.keyInPath) {
+      await updateConnectionSecrets(c, { pathToken: config.keyInPath ? newPathToken() : null }, req.auth!.user?.id ?? null);
+    }
+    await audit(req.auth!.actor, 'connection.updated', { type: 'connection', id, label: b.name }, { automatische_banner: config.autoBanner ?? undefined, pruefung_verworfen: sourceChanged || undefined, neuer_test_noetig: retest || undefined, schluessel_in_adresse: c.kind === 'fe2' && !!config.keyInPath !== !!c.config.keyInPath ? (config.keyInPath ? 'an' : 'aus') : undefined });
     const was = retest ? await invalidateTest(req.auth!.actor, { ...c, name: b.name }, 'Einstellungen geändert') : null;
     return { ok: true, retest, deactivated: was === 'active' };
   });
@@ -220,7 +244,8 @@ export async function connectionRoutes(app: FastifyInstance) {
     const c = await loadConnection(id);
     if (c.kind !== 'fe2') throw badRequest('Nur für FE2.');
     const token = `bcfe2_${randomToken(32)}`;
-    await updateConnectionSecrets(c, { inboundTokenHash: sha256Hex(token) }, req.auth!.user?.id ?? null);
+    // Ein abgeflossener Schlüssel kann auch die Adresse betreffen: der Pfad-Schlüssel wird mit erneuert
+    await updateConnectionSecrets(c, { inboundTokenHash: sha256Hex(token), ...(c.config.keyInPath ? { pathToken: newPathToken() } : {}) }, req.auth!.user?.id ?? null);
     await audit(req.auth!.actor, 'connection.token_rotated', { type: 'connection', id, label: c.name });
     // Neuer Schlüssel = neue Konfiguration in FE2: erst mit einer Testmeldung über den neuen Schlüssel wieder aktivierbar
     const was = await invalidateTest(req.auth!.actor, c, 'Zugangsschlüssel erneuert');
@@ -443,11 +468,11 @@ export async function connectionRoutes(app: FastifyInstance) {
     inbound.addContentTypeParser('application/x-www-form-urlencoded', { parseAs: 'string', bodyLimit: 64 * 1024 }, (_req, body, done) => {
       done(null, Object.fromEntries(new URLSearchParams(String(body))));
     });
-    inbound.post('/inbound/fe2/:id', { bodyLimit: 64 * 1024, config: { rateLimit: { max: 60, timeWindow: '1 minute' } } }, async (req) => {
+    const receive = async (req: FastifyRequest, pathToken?: string) => {
       const { id } = z.object({ id: z.uuid() }).parse(req.params);
-      const c = await one<Connection>(`SELECT * FROM connections WHERE id = $1 AND kind = 'fe2'`, [id]);
+      const c = await one<Connection>(`SELECT * FROM connections WHERE id = $1 AND kind = 'fe2' AND deleted_at IS NULL`, [id]);
       if (!c || c.status === 'revoked') throw new AppError(401, 'unauthorized', 'Zugangsschlüssel fehlt oder ist ungültig.');
-      await fe2Auth(req, c);
+      await fe2Auth(req, c, pathToken);
       if (c.status === 'disabled') throw new AppError(409, 'disabled', 'Die Verbindung ist angehalten.');
       let body: unknown = req.body;
       if (typeof body === 'string') {
@@ -461,7 +486,12 @@ export async function connectionRoutes(app: FastifyInstance) {
       const r = await handleFe2Event(c, body, { test: req.headers['x-blaulichtcms-test'] === '1' });
       if (r.outcome === 'ignored') throw badRequest('Keine Einsatz-ID gefunden – Zuordnung prüfen.');
       return { ok: true, outcome: r.outcome, sequence: r.sequence ?? null };
-    });
+    };
+    inbound.post('/inbound/fe2/:id', { bodyLimit: 64 * 1024, config: { rateLimit: { max: 60, timeWindow: '1 minute' } } }, (req) => receive(req));
+    // „Schlüssel in der Adresse“ (Option je Verbindung): für Absender, die keine eigene Kopfzeile setzen können. Der
+    // Schlüssel steht dann in Adressen und ggf. Proxy-Protokollen (docs/reverse-proxy.md); BlaulichtCMS selbst
+    // protokolliert nur die Routenvorlage.
+    inbound.post('/inbound/fe2/:id/:token', { bodyLimit: 64 * 1024, config: { rateLimit: { max: 60, timeWindow: '1 minute' } } }, (req) => receive(req, String((req.params as any).token ?? '').slice(0, 200)));
   });
 
   /* ------------------------------------------------------------ Zeitlich begrenzte Medien-URL (für Meta) */
