@@ -187,7 +187,7 @@ export async function buildApp(): Promise<FastifyInstance> {
     // FE2-Eingang (eigener Zugangsschlüssel) und zeitlich begrenzte Medien-URLs (Abruf durch Meta) ohne Sitzung
     if (req.url.startsWith('/api/v1/inbound/')) return assertNotMaintenance();
     if (req.url.startsWith('/api/v1/m/')) return;
-    req.auth = await resolveAuth(req);
+    req.auth = await resolveAuth(req, reply);
     const changing = !['GET', 'HEAD', 'OPTIONS'].includes(req.method);
     if (changing && req.auth?.kind !== 'api_key' && req.headers[CSRF_HEADER] !== '1') {
       throw new AppError(403, 'csrf', 'Anfrage ohne Sicherheitskennung abgelehnt.');

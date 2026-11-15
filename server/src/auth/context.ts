@@ -3,11 +3,11 @@ import type { FastifyReply, FastifyRequest } from 'fastify';
 import { config } from '../config.js';
 import { one, pool } from '../db/pool.js';
 import type { Actor } from '../lib/audit.js';
-import { randomToken, sha256Hex } from '../lib/crypto.js';
+import { randomToken, safeEqual, sha256Hex } from '../lib/crypto.js';
 import { AppError, forbidden, unauthorized } from '../lib/errors.js';
 import { getSettings } from '../lib/settings.js';
 import { isAdminRoleSet, permissionsFor } from './permissions.js';
-import { issueDeviceCookie } from './lockout.js';
+import { deviceHash, issueDeviceCookie, knownDevice } from './lockout.js';
 
 export const SESSION_COOKIE = config.cookieSecure ? '__Host-bc_session' : 'bc_session';
 /** Pflicht-Header für alle ändernden Anfragen mit Sitzungs-Cookie (CSRF-Schutz zusätzlich zu SameSite=Strict). */
@@ -28,6 +28,8 @@ export interface AuthContext {
   user: AuthUser | null;
   apiKeyId?: string;
   sessionId?: string;
+  /** Volle Sitzung: gemerkt („Angemeldet bleiben“); Zwischenstufe: Wunsch von der Anmeldeseite. */
+  remember?: boolean;
   stage: 'mfa' | 'mfa_setup' | 'full';
   /** Letzte Bestätigung mit Passwort in dieser Sitzung (Anmeldung oder /auth/reauth), siehe assertRecentAuth. */
   reauthAt?: Date | null;
@@ -42,54 +44,98 @@ declare module 'fastify' {
   }
 }
 
-export async function createSession(
-  reply: FastifyReply,
-  req: FastifyRequest,
-  userId: string,
-  stage: 'mfa' | 'mfa_setup' | 'full',
-): Promise<string> {
-  const s = await getSettings();
-  const token = randomToken(32);
-  const maxHours = stage === 'full' ? s['security.session_max_hours'] : 0.25;
-  const row = await one<{ id: string }>(
-    `INSERT INTO sessions (token_hash, user_id, stage, expires_at, ip, user_agent, reauth_at)
-     VALUES ($1,$2,$3, now() + make_interval(mins => $4), $5, $6, CASE WHEN $3 = 'full' THEN now() END) RETURNING id`,
-    [sha256Hex(token), userId, stage, Math.round(maxHours * 60), req.ip, String(req.headers['user-agent'] ?? '').slice(0, 300)],
-  );
+export interface SessionOptions {
+  /** „Angemeldet bleiben“: bei voller Sitzung gemerkt, bei Zwischenstufen als Wunsch für den Übergang gespeichert. */
+  remember?: boolean;
+}
+
+function setSessionCookie(reply: FastifyReply, token: string, maxAgeSeconds: number) {
   reply.setCookie(SESSION_COOKIE, token, {
     path: '/',
     httpOnly: true,
     secure: config.cookieSecure,
     sameSite: 'strict',
-    maxAge: Math.round(maxHours * 3600),
+    maxAge: Math.max(60, Math.round(maxAgeSeconds)),
   });
+}
+
+/**
+ * Neue Sitzung mit neuem Token (auch beim Übergang mfa → full, kein Weiterverwenden des Zwischentokens).
+ *
+ * Gemerkte Sitzungen („Angemeldet bleiben“, nur mit `security.remember_enabled`): keine Leerlaufabmeldung, Ablauf
+ * `security.remember_days` nach der letzten Nutzung (gleitend, siehe fromSession), gebunden an das Geräte-Cookie.
+ * Zwischenstufen (mfa, mfa_setup) bleiben immer 15 Minuten kurz; dort wird nur der Wunsch gespeichert.
+ */
+export async function createSession(
+  reply: FastifyReply,
+  req: FastifyRequest,
+  userId: string,
+  stage: 'mfa' | 'mfa_setup' | 'full',
+  opts: SessionOptions = {},
+): Promise<{ id: string; device: string | null; remembered: boolean }> {
+  const s = await getSettings();
+  const token = randomToken(32);
+  const full = stage === 'full';
+  const remember = !!opts.remember && s['security.remember_enabled'];
+  const remembered = full && remember;
   // Vollständig angemeldet: dieses Gerät gilt als bekannt (Ausnahme von der Kontosperre, #110)
-  if (stage === 'full') issueDeviceCookie(req, reply, userId);
-  return row!.id;
+  const device = full ? issueDeviceCookie(req, reply, userId) : null;
+  const minutes = remembered ? s['security.remember_days'] * 1440 : full ? Math.round(s['security.session_max_hours'] * 60) : 15;
+  const row = await one<{ id: string }>(
+    `INSERT INTO sessions (token_hash, user_id, stage, expires_at, ip, user_agent, reauth_at, remember, device_hash)
+     VALUES ($1,$2,$3, now() + make_interval(mins => $4), $5, $6, CASE WHEN $3 = 'full' THEN now() END, $7, $8) RETURNING id`,
+    [sha256Hex(token), userId, stage, minutes, req.ip, String(req.headers['user-agent'] ?? '').slice(0, 300), remember, remembered && device ? deviceHash(userId, device) : null],
+  );
+  setSessionCookie(reply, token, minutes * 60);
+  return { id: row!.id, device, remembered };
 }
 
 export function clearSessionCookie(reply: FastifyReply) {
   reply.clearCookie(SESSION_COOKIE, { path: '/', secure: config.cookieSecure, sameSite: 'strict', httpOnly: true });
 }
 
-async function fromSession(req: FastifyRequest): Promise<AuthContext | null> {
+/** Gleitenden Ablauf gemerkter Sitzungen höchstens so oft erneuern (Schreiblast, Cookie-Neuausstellung). */
+const REMEMBER_RENEW_MS = 60 * 60_000;
+
+async function fromSession(req: FastifyRequest, reply?: FastifyReply): Promise<AuthContext | null> {
   const token = req.cookies?.[SESSION_COOKIE];
   if (!token) return null;
   const s = await getSettings();
   const row = await one<any>(
-    `SELECT s.id AS session_id, s.stage, s.last_seen_at, s.reauth_at, u.id, u.email, u.name, u.roles, u.status, u.totp_enabled, u.preferences
+    `SELECT s.id AS session_id, s.stage, s.last_seen_at, s.reauth_at, s.remember, s.device_hash, s.expires_at,
+            u.id, u.email, u.name, u.roles, u.status, u.totp_enabled, u.preferences
        FROM sessions s JOIN users u ON u.id = s.user_id
       WHERE s.token_hash = $1 AND s.revoked_at IS NULL AND s.expires_at > now()`,
     [sha256Hex(token)],
   );
   if (!row || row.status !== 'active') return null;
-  const idleMs = s['security.session_idle_minutes'] * 60_000;
-  if (Date.now() - new Date(row.last_seen_at).getTime() > idleMs) {
+  const revoke = async () => {
     await pool.query('UPDATE sessions SET revoked_at = now() WHERE id = $1', [row.session_id]);
     return null;
+  };
+  const remembered = row.stage === 'full' && row.remember;
+  const sinceSeen = Date.now() - new Date(row.last_seen_at).getTime();
+  if (remembered) {
+    // Funktion abgeschaltet: gemerkte Sitzungen gelten sofort nicht mehr (auch vor dem Aufräumen beim Speichern)
+    if (!s['security.remember_enabled']) return revoke();
+    // Gerätebindung: das Sitzungs-Cookie allein (z. B. kopiert) genügt nicht – das signierte Geräte-Cookie desselben
+    // Browsers muss mitkommen
+    const device = knownDevice(req, row.id);
+    if (!device || !row.device_hash || !safeEqual(deviceHash(row.id, device), row.device_hash)) return revoke();
+    // Gleitender Ablauf: höchstens einmal pro Stunde erneuern; eine verkürzte Frist greift beim nächsten Aufruf
+    const target = Date.now() + s['security.remember_days'] * 86_400_000;
+    if (Math.abs(target - new Date(row.expires_at).getTime()) > REMEMBER_RENEW_MS) {
+      const r = await pool.query('UPDATE sessions SET expires_at = now() + make_interval(days => $2) WHERE id = $1 AND revoked_at IS NULL', [row.session_id, s['security.remember_days']]);
+      if (r.rowCount && reply) {
+        setSessionCookie(reply, token, s['security.remember_days'] * 86400);
+        issueDeviceCookie(req, reply, row.id);
+      }
+    }
+  } else if (sinceSeen > s['security.session_idle_minutes'] * 60_000) {
+    return revoke();
   }
   // last_seen höchstens einmal pro Minute schreiben
-  if (Date.now() - new Date(row.last_seen_at).getTime() > 60_000) {
+  if (sinceSeen > 60_000) {
     pool.query('UPDATE sessions SET last_seen_at = now() WHERE id = $1', [row.session_id]).catch(() => {});
     pool.query('UPDATE users SET last_active_at = now() WHERE id = $1', [row.id]).catch(() => {});
   }
@@ -108,6 +154,7 @@ async function fromSession(req: FastifyRequest): Promise<AuthContext | null> {
     user,
     sessionId: row.session_id,
     stage: row.stage,
+    remember: !!row.remember,
     reauthAt: row.reauth_at ? new Date(row.reauth_at) : null,
     permissions: full ? permissionsFor(user.roles) : new Set(),
     roles: full ? user.roles : [],
@@ -146,8 +193,8 @@ async function fromApiKey(req: FastifyRequest): Promise<AuthContext | null> {
   };
 }
 
-export async function resolveAuth(req: FastifyRequest): Promise<AuthContext | null> {
-  return (await fromApiKey(req)) ?? (await fromSession(req));
+export async function resolveAuth(req: FastifyRequest, reply?: FastifyReply): Promise<AuthContext | null> {
+  return (await fromApiKey(req)) ?? (await fromSession(req, reply));
 }
 
 /** Prüft angemeldet + volle Sitzung (+ optional Rechte). */

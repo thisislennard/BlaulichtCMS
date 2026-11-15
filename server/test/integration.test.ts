@@ -2466,6 +2466,379 @@ describe('2FA-Einrichtung in voller Sitzung nur mit Bestätigung (#144)', () => 
   });
 });
 
+describe('Angemeldet bleiben und gemerkte Geräte der Zwei-Faktor-Anmeldung', () => {
+  /** Browser mit vollständigem Cookie-Speicher (der einfache Client ersetzt alle Cookies je Antwort). Jede Anfrage
+   *  kommt von einer neuen IP – so greift die Anmelde-Drosselung je IP nicht, Sitzungen hängen ohnehin nicht an der IP. */
+  let ipN = 0;
+  class Browser {
+    jar = new Map<string, string>();
+    constructor(public ua = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36') {}
+    async req(method: string, url: string, body?: unknown) {
+      ipN++;
+      const res = await app.inject({
+        method: method as any,
+        remoteAddress: `10.21.${Math.floor(ipN / 200)}.${ipN % 200}`,
+        url: `/api/v1${url}`,
+        payload: body !== undefined ? JSON.stringify(body) : undefined,
+        headers: {
+          ...(body !== undefined ? { 'content-type': 'application/json' } : {}),
+          ...(method !== 'GET' ? { 'x-blaulichtcms-request': '1' } : {}),
+          'user-agent': this.ua,
+          cookie: [...this.jar].map(([k, v]) => `${k}=${v}`).join('; '),
+        },
+      });
+      const cookies = res.cookies as { name: string; value: string; maxAge?: number; expires?: Date }[];
+      for (const c of cookies) {
+        if (!c.value || c.maxAge === 0 || (c.expires && c.expires.getTime() < Date.now())) this.jar.delete(c.name);
+        else this.jar.set(c.name, c.value);
+      }
+      let json: any = null;
+      try {
+        json = res.json();
+      } catch {
+        json = res.body;
+      }
+      return { status: res.statusCode, json, cookies };
+    }
+    get = (u: string) => this.req('GET', u);
+    post = (u: string, b: unknown = {}) => this.req('POST', u, b);
+    del = (u: string) => this.req('DELETE', u);
+    patch = (u: string, b: unknown = {}) => this.req('PATCH', u, b);
+  }
+  /** Eigene Admin-Sitzung (wechselnde IPs) – die gemeinsame Admin-Sitzung würde die Drosselung von /auth/reauth erreichen. */
+  const adm = new Browser();
+  const sessionRow = async (b: Browser) => {
+    const { sha256Hex } = await import('../src/lib/crypto.js');
+    return one<any>(`SELECT * FROM sessions WHERE token_hash = $1`, [sha256Hex(b.jar.get('bc_session') ?? '')]);
+  };
+  const activeTrusted = async (userId: string) => Number((await one<any>(`SELECT count(*)::int AS n FROM trusted_devices WHERE user_id = $1 AND revoked_at IS NULL`, [userId]))!.n);
+  let secret = '';
+  let mfaUser = '';
+  let plainUser = '';
+  let mfaPassword = PASSWORD;
+  /** Aktueller Code; der Replay-Schutz wird zurückgesetzt, weil der Test viele Anmeldungen in kurzer Zeit braucht. */
+  const code = async () => {
+    const { totpAt } = await import('../src/auth/totp.js');
+    await pool.query(`UPDATE users SET totp_last_counter = NULL WHERE id = $1`, [mfaUser]);
+    return totpAt(secret, Math.floor(Date.now() / 30_000));
+  };
+  const login = (b: Browser, remember?: boolean, email = 'vertraut@example.org', password = mfaPassword) => b.post('/auth/login', { email, password, ...(remember !== undefined ? { remember } : {}) });
+  /** Anmelden mit Code und dieses Gerät für die Zwei-Faktor-Anmeldung merken. */
+  const trust = async (b: Browser) => {
+    expect((await login(b)).json.next).toBe('mfa');
+    expect((await b.post('/auth/mfa', { code: await code(), trustDevice: true })).status).toBe(200);
+  };
+  const enableTotp = async () => {
+    const { encrypt } = await import('../src/lib/crypto.js');
+    await pool.query(`UPDATE users SET totp_enabled = true, totp_secret_enc = $2 WHERE id = $1`, [mfaUser, encrypt(secret, `totp:${mfaUser}`)]);
+  };
+  const adminReauth = async () => expect((await adm.post('/auth/reauth', { password: PASSWORD })).status).toBe(200);
+
+  beforeAll(async () => {
+    const { hashPassword } = await import('../src/auth/passwords.js');
+    const { generateTotpSecret } = await import('../src/auth/totp.js');
+    const { sha256Hex } = await import('../src/lib/crypto.js');
+    secret = generateTotpSecret();
+    const hash = await hashPassword(PASSWORD);
+    mfaUser = (await one<any>(`INSERT INTO users (email, name, password_hash, roles, recovery_codes, password_changed_at) VALUES ('vertraut@example.org','Vertraut-Test',$1,'{viewer}',$2, now() - interval '1 day') RETURNING id`, [hash, [sha256Hex('RECOVERY-0002')]]))!.id;
+    plainUser = (await one<any>(`INSERT INTO users (email, name, password_hash, roles) VALUES ('bleiben@example.org','Bleiben-Test',$1,'{viewer}') RETURNING id`, [hash]))!.id;
+    await enableTotp();
+    expect((await adm.post('/auth/login', { email: 'admin@example.org', password: PASSWORD })).json.next).toBe('done');
+  });
+
+  it('Anmeldeseite erfährt, ob die Funktionen an sind', async () => {
+    const st = await new Browser().get('/auth/state');
+    expect(st.json.remember).toEqual({ enabled: true, days: 30 });
+    expect(st.json.mfaRemember).toEqual({ enabled: true, days: 30 });
+  });
+
+  it('gemerkte Sitzung übersteht Leerlauf, läuft gleitend 30 Tage, normale Sitzung endet nach Leerlauf', async () => {
+    const kept = new Browser();
+    const r = await login(kept, true, 'bleiben@example.org', PASSWORD);
+    expect(r.json.next).toBe('done');
+    const cookie = r.cookies.find((c) => c.name === 'bc_session')!;
+    expect(cookie.maxAge).toBe(30 * 86400);
+    let row = await sessionRow(kept);
+    expect(row.remember).toBe(true);
+    expect(row.device_hash).toMatch(/^[0-9a-f]{64}$/);
+    expect(new Date(row.expires_at).getTime() - Date.now()).toBeGreaterThan(29.9 * 86_400_000);
+    const plain = new Browser();
+    expect((await login(plain, false, 'bleiben@example.org', PASSWORD)).cookies.find((c) => c.name === 'bc_session')!.maxAge).toBe(12 * 3600);
+    // Zwei Stunden Leerlauf (Grenze: 60 Minuten)
+    await pool.query(`UPDATE sessions SET last_seen_at = now() - interval '2 hours' WHERE user_id = $1 AND revoked_at IS NULL`, [plainUser]);
+    expect((await kept.get('/auth/me')).status).toBe(200);
+    expect((await plain.get('/auth/me')).status).toBe(401);
+    // Gleitender Ablauf: nach 20 Tagen ohne Nutzung noch gültig, beim nächsten Aufruf wieder 30 Tage (Cookie ebenso)
+    await pool.query(`UPDATE sessions SET last_seen_at = now() - interval '20 days', expires_at = now() + interval '10 days' WHERE id = $1`, [row.id]);
+    const me = await kept.get('/auth/me');
+    expect(me.status).toBe(200);
+    expect(me.cookies.find((c) => c.name === 'bc_session')!.maxAge).toBe(30 * 86400);
+    expect(me.cookies.find((c) => c.name === 'bc_device')).toBeTruthy();
+    row = await sessionRow(kept);
+    expect(new Date(row.expires_at).getTime() - Date.now()).toBeGreaterThan(29.9 * 86_400_000);
+    // Kurz darauf: keine erneute Schreib-/Cookie-Runde (höchstens einmal pro Stunde)
+    expect((await kept.get('/auth/me')).cookies.find((c) => c.name === 'bc_session')).toBeUndefined();
+    // Abgelaufen (30 Tage ohne Nutzung) ist abgelaufen
+    await pool.query(`UPDATE sessions SET expires_at = now() - interval '1 minute' WHERE id = $1`, [row.id]);
+    expect((await kept.get('/auth/me')).status).toBe(401);
+    // Ohne Haken bzw. ohne Angabe: normale Sitzung
+    const none = new Browser();
+    await login(none, undefined, 'bleiben@example.org', PASSWORD);
+    expect((await sessionRow(none)).remember).toBe(false);
+  });
+
+  it('gemerkte Sitzung gilt nur zusammen mit dem Geräte-Cookie desselben Browsers', async () => {
+    const a = new Browser();
+    await login(a, true, 'bleiben@example.org', PASSWORD);
+    const b = new Browser();
+    await login(b, false, 'bleiben@example.org', PASSWORD);
+    // Sitzungs-Cookie von A ohne Geräte-Cookie
+    const stolen = new Browser();
+    stolen.jar.set('bc_session', a.jar.get('bc_session')!);
+    expect((await stolen.get('/auth/me')).status).toBe(401);
+    // … und mit dem (gültigen) Geräte-Cookie eines anderen Browsers
+    const a2 = new Browser();
+    await login(a2, true, 'bleiben@example.org', PASSWORD);
+    const mixed = new Browser();
+    mixed.jar.set('bc_session', a2.jar.get('bc_session')!);
+    mixed.jar.set('bc_device', b.jar.get('bc_device')!);
+    expect((await mixed.get('/auth/me')).status).toBe(401);
+    // Ein solcher Versuch beendet die Sitzung (das Token ist verbrannt)
+    expect((await a2.get('/auth/me')).status).toBe(401);
+    expect((await sessionRow(a2)).revoked_at).not.toBeNull();
+    // Normale Sitzungen sind wie bisher nicht an das Geräte-Cookie gebunden
+    const plainCopy = new Browser();
+    plainCopy.jar.set('bc_session', b.jar.get('bc_session')!);
+    expect((await plainCopy.get('/auth/me')).status).toBe(200);
+  });
+
+  it('der Wunsch „Angemeldet bleiben“ übersteht den Zwei-Faktor-Schritt; die Zwischenstufe bleibt kurz', async () => {
+    const b = new Browser();
+    expect((await login(b, true)).json.next).toBe('mfa');
+    const stage = await sessionRow(b);
+    expect(stage).toMatchObject({ stage: 'mfa', remember: true, device_hash: null });
+    expect(new Date(stage.expires_at).getTime() - Date.now()).toBeLessThanOrEqual(15 * 60_000 + 5_000);
+    // Leerlauf gilt in der Zwischenstufe weiter
+    await pool.query(`UPDATE sessions SET last_seen_at = now() - interval '2 hours' WHERE id = $1`, [stage.id]);
+    expect((await b.post('/auth/mfa', { code: await code() })).status).toBe(401);
+    expect((await login(b, true)).json.next).toBe('mfa');
+    const before = b.jar.get('bc_session');
+    expect((await b.post('/auth/mfa', { code: await code() })).status).toBe(200);
+    expect(b.jar.get('bc_session')).not.toBe(before);
+    const full = await sessionRow(b);
+    expect(full).toMatchObject({ stage: 'full', remember: true });
+    expect(full.device_hash).toBeTruthy();
+    expect(await activeTrusted(mfaUser)).toBe(0);
+    await b.post('/auth/logout');
+  });
+
+  it('gemerktes Gerät: nur dort ohne Code, nur nach App-Code, Step-up verlangt weiter den Code', async () => {
+    const a = new Browser();
+    await trust(a);
+    expect(await activeTrusted(mfaUser)).toBe(1);
+    expect(await one(`SELECT 1 FROM audit_events WHERE action = 'auth.trusted_device_added' AND object_id = $1`, [mfaUser])).not.toBeNull();
+    expect(await one(`SELECT 1 FROM notifications WHERE user_id = $1 AND title LIKE 'Gerät für die Zwei-Faktor-Anmeldung gemerkt%'`, [mfaUser])).not.toBeNull();
+    // Abmelden behält das gemerkte Gerät; die nächste Anmeldung braucht nur das Passwort
+    await a.post('/auth/logout');
+    expect((await login(a)).json.next).toBe('done');
+    expect((await one<any>(`SELECT details FROM audit_events WHERE action = 'auth.login' AND object_id = $1 ORDER BY id DESC LIMIT 1`, [mfaUser]))!.details.mfa).toBe('vertrauenswürdiges Gerät');
+    expect((await one<any>(`SELECT last_used_at FROM trusted_devices WHERE user_id = $1 AND revoked_at IS NULL`, [mfaUser]))!.last_used_at).not.toBeNull();
+    // Falsches Passwort bleibt falsch
+    expect((await login(new Browser(), undefined, 'vertraut@example.org', 'falsch-falsch')).status).toBe(401);
+    expect((await login(a, undefined, 'vertraut@example.org', 'falsch-falsch')).status).toBe(401);
+    // Anderes Gerät: Code nötig; ein Wiederherstellungscode merkt kein Gerät, auch mit Haken
+    const other = new Browser('Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1');
+    expect((await login(other)).json.next).toBe('mfa');
+    expect((await other.post('/auth/mfa', { code: 'recovery-0002', trustDevice: true })).status).toBe(200);
+    expect(await activeTrusted(mfaUser)).toBe(1);
+    await other.post('/auth/logout');
+    expect((await login(other)).json.next).toBe('mfa');
+    // Ein gefälschtes Geräte-Cookie hilft nicht
+    const forged = new Browser();
+    forged.jar.set('bc_device', `${mfaUser}.AAAAAAAAAAAA.${Math.floor(Date.now() / 1000)}.${'x'.repeat(32)}`);
+    expect((await login(forged)).json.next).toBe('mfa');
+    // Step-up auf dem gemerkten Gerät: Passwort allein genügt nicht
+    expect((await login(a)).json.next).toBe('done');
+    const stepUp = await a.post('/auth/reauth', { password: mfaPassword });
+    expect(stepUp.status).toBe(400);
+    expect(stepUp.json.error).toBe('code_required');
+    expect((await a.post('/auth/reauth', { password: mfaPassword, code: await code() })).status).toBe(200);
+    // Liste im Profil: dieses Gerät erkennbar, Entfernen von einem anderen Gerät aus
+    const list = await a.get('/auth/trusted-devices');
+    expect(list.json).toMatchObject({ enabled: true, days: 30 });
+    expect(list.json.devices).toHaveLength(1);
+    expect(list.json.devices[0].current).toBe(true);
+    expect(list.json.devices[0].user_agent).toContain('Chrome');
+    expect(JSON.stringify(list.json)).not.toMatch(/device_hash/);
+    const fromOther = new Browser();
+    expect((await login(fromOther)).json.next).toBe('mfa');
+    expect((await fromOther.post('/auth/mfa', { code: await code() })).status).toBe(200);
+    expect((await fromOther.get('/auth/trusted-devices')).json.devices[0].current).toBe(false);
+    // Fremde Konten können das Gerät nicht entfernen
+    await editor.raw('DELETE', `/auth/trusted-devices/${list.json.devices[0].id}`);
+    expect(await activeTrusted(mfaUser)).toBe(1);
+    expect((await fromOther.del(`/auth/trusted-devices/${list.json.devices[0].id}`)).status).toBe(200);
+    expect(await activeTrusted(mfaUser)).toBe(0);
+    expect(await one(`SELECT 1 FROM audit_events WHERE action = 'auth.trusted_device_removed' AND object_id = $1`, [mfaUser])).not.toBeNull();
+    await a.post('/auth/logout');
+    expect((await login(a)).json.next).toBe('mfa');
+  });
+
+  it('Sitzungsliste zeigt gemerkte Sitzungen; einzelne Sitzungen abmelden, fremde nicht', async () => {
+    const a = new Browser();
+    expect((await login(a, true, 'bleiben@example.org', PASSWORD)).json.next).toBe('done');
+    const b = new Browser();
+    expect((await login(b, false, 'bleiben@example.org', PASSWORD)).json.next).toBe('done');
+    const list = (await a.get('/auth/sessions')).json as any[];
+    const mine = list.find((s) => s.current);
+    const theirs = list.find((s) => !s.current && !s.remember);
+    expect(mine.remember).toBe(true);
+    expect(mine.expires_at).toBeTruthy();
+    expect(theirs).toBeTruthy();
+    // Andere Person kann die Sitzung nicht beenden
+    await editor.raw('DELETE', `/auth/sessions/${mine.id}`);
+    expect((await a.get('/auth/me')).status).toBe(200);
+    expect((await b.del(`/auth/sessions/${mine.id}`)).status).toBe(200);
+    expect((await a.get('/auth/me')).status).toBe(401);
+    expect((await one<any>(`SELECT details FROM audit_events WHERE action = 'auth.session_revoked' ORDER BY id DESC LIMIT 1`))!.details).toMatchObject({ sitzung: mine.id, gemerkt: true });
+  });
+
+  it('Widerruf: Passwortänderung, Zwei-Faktor neu einrichten/abschalten, Überall abmelden', async () => {
+    // Passwortänderung
+    const a = new Browser();
+    await trust(a);
+    const remembered = new Browser();
+    expect((await login(remembered, true)).json.next).toBe('mfa');
+    expect((await remembered.post('/auth/mfa', { code: await code() })).status).toBe(200);
+    expect((await a.post('/auth/password', { current: mfaPassword, next: 'Neues-Passwort-vertraut-2026' })).status).toBe(200);
+    mfaPassword = 'Neues-Passwort-vertraut-2026';
+    expect(await activeTrusted(mfaUser)).toBe(0);
+    expect((await remembered.get('/auth/me')).status).toBe(401);
+    expect((await a.get('/auth/me')).status).toBe(200);
+    await a.post('/auth/logout');
+    expect((await login(a)).json.next).toBe('mfa');
+    // Zwei-Faktor abschalten
+    expect((await a.post('/auth/mfa', { code: await code(), trustDevice: true })).status).toBe(200);
+    expect(await activeTrusted(mfaUser)).toBe(1);
+    expect((await a.post('/auth/mfa/disable', { password: mfaPassword, code: await code() })).status).toBe(200);
+    expect(await activeTrusted(mfaUser)).toBe(0);
+    await enableTotp();
+    // Zwei-Faktor neu einrichten (über die Datenbank vorbereitet: aus, dann über die Oberfläche ein)
+    await a.post('/auth/logout');
+    await trust(a);
+    expect(await activeTrusted(mfaUser)).toBe(1);
+    await pool.query(`UPDATE users SET totp_enabled = false WHERE id = $1`, [mfaUser]);
+    expect((await a.post('/auth/reauth', { password: mfaPassword })).status).toBe(200);
+    const setup = await a.get('/auth/mfa/setup');
+    expect(setup.status).toBe(200);
+    secret = setup.json.secret;
+    expect((await a.post('/auth/mfa/setup', { code: await code() })).status).toBe(200);
+    expect(await activeTrusted(mfaUser)).toBe(0);
+    // Überall abmelden
+    await a.post('/auth/logout');
+    await trust(a);
+    expect((await a.post('/auth/logout-all')).status).toBe(200);
+    expect(await activeTrusted(mfaUser)).toBe(0);
+    expect((await one<any>(`SELECT details FROM audit_events WHERE action = 'auth.logout_all' ORDER BY id DESC LIMIT 1`))!.details.vertrauenswuerdige_geraete).toBe(1);
+    expect((await login(a)).json.next).toBe('mfa');
+  });
+
+  it('Widerruf durch die Administration: 2FA zurücksetzen, abmelden, deaktivieren, Passwort-Link; nur mit Recht', async () => {
+    const a = new Browser();
+    await trust(a);
+    // Ohne „Benutzer verwalten“ kein Abmelden fremder Konten
+    expect((await editor.post(`/users/${mfaUser}/end-sessions`)).status).toBe(403);
+    const list = (await adm.get('/users')).json.users.find((u: any) => u.id === mfaUser);
+    expect(list).toMatchObject({ active_sessions: 1, trusted_devices: 1 });
+    const ended = await adm.post(`/users/${mfaUser}/end-sessions`);
+    expect(ended.json.trustedDevices).toBe(1);
+    expect(ended.json.sessions).toBeGreaterThanOrEqual(1);
+    expect((await a.get('/auth/me')).status).toBe(401);
+    expect(await activeTrusted(mfaUser)).toBe(0);
+    expect(await one(`SELECT 1 FROM notifications WHERE user_id = $1 AND title = 'Du wurdest auf allen Geräten abgemeldet'`, [mfaUser])).not.toBeNull();
+    // 2FA zurücksetzen
+    await trust(a);
+    await adminReauth();
+    expect((await adm.post(`/users/${mfaUser}/reset-2fa`)).status).toBe(200);
+    expect(await activeTrusted(mfaUser)).toBe(0);
+    await enableTotp();
+    // Deaktivieren
+    await trust(a);
+    expect((await adm.patch(`/users/${mfaUser}`, { status: 'disabled' })).status).toBe(200);
+    expect(await activeTrusted(mfaUser)).toBe(0);
+    expect((await adm.patch(`/users/${mfaUser}`, { status: 'active' })).status).toBe(200);
+    // Passwort-Link
+    await trust(a);
+    expect((await adm.post(`/users/${mfaUser}/link`)).status).toBe(200);
+    expect(await activeTrusted(mfaUser)).toBe(0);
+    await a.post('/auth/logout');
+    expect((await login(a)).json.next).toBe('mfa');
+    await pool.query(`UPDATE invitations SET revoked_at = now() WHERE user_id = $1 AND used_at IS NULL`, [mfaUser]);
+  });
+
+  it('Abschalten in den Einstellungen beendet gemerkte Sitzungen und Geräte sofort; verkürzte Fristen greifen', async () => {
+    const a = new Browser();
+    await trust(a);
+    const kept = new Browser();
+    expect((await login(kept, true, 'bleiben@example.org', PASSWORD)).json.next).toBe('done');
+    // Kürzere Frist für gemerkte Geräte gilt sofort (Gerät vor 10 Tagen gemerkt, Frist jetzt 5 Tage)
+    await adminReauth();
+    await pool.query(`UPDATE users SET password_changed_at = now() - interval '20 days' WHERE id = $1`, [mfaUser]);
+    await pool.query(`UPDATE trusted_devices SET created_at = now() - interval '10 days' WHERE user_id = $1 AND revoked_at IS NULL`, [mfaUser]);
+    await a.post('/auth/logout');
+    expect((await login(a)).json.next).toBe('done');
+    expect((await adm.patch('/settings', { 'security.mfa_remember_days': 5, 'security.remember_days': 7 })).status).toBe(200);
+    await a.post('/auth/logout');
+    expect((await login(a)).json.next).toBe('mfa');
+    expect((await adm.patch('/settings', { 'security.mfa_remember_days': 30 })).status).toBe(200);
+    expect((await login(a)).json.next).toBe('done');
+    // Kürzere Frist für gemerkte Sitzungen: beim nächsten Aufruf auf 7 Tage gekürzt
+    const short = await kept.get('/auth/me');
+    expect(short.cookies.find((c) => c.name === 'bc_session')!.maxAge).toBe(7 * 86400);
+    expect(new Date((await sessionRow(kept)).expires_at).getTime() - Date.now()).toBeLessThan(7.01 * 86_400_000);
+    // Bereichsgrenzen
+    expect((await adm.patch('/settings', { 'security.remember_days': 181 })).status).toBe(400);
+    expect((await adm.patch('/settings', { 'security.mfa_remember_days': 91 })).status).toBe(400);
+    // Abschalten (nur mit frischer Bestätigung)
+    await pool.query(`UPDATE sessions SET reauth_at = now() - interval '1 hour' WHERE id = $1`, [(await sessionRow(adm)).id]);
+    expect((await adm.patch('/settings', { 'security.remember_enabled': false })).json.error).toBe('reauth_required');
+    await adminReauth();
+    expect((await adm.patch('/settings', { 'security.remember_enabled': false, 'security.mfa_remember_enabled': false, 'security.remember_days': 30 })).status).toBe(200);
+    expect((await kept.get('/auth/me')).status).toBe(401);
+    expect(await activeTrusted(mfaUser)).toBe(0);
+    expect((await one<any>(`SELECT details FROM audit_events WHERE action = 'settings.remember_revoked' ORDER BY id DESC LIMIT 1`))!.details).toMatchObject({ vertrauenswuerdige_geraete: 1 });
+    expect((await one<any>(`SELECT details FROM audit_events WHERE action = 'settings.remember_revoked' ORDER BY id DESC LIMIT 1`))!.details.gemerkte_sitzungen).toBeGreaterThanOrEqual(1);
+    // Solange aus: kein Merken, Haken werden ignoriert
+    expect((await adm.get('/auth/me')).status).toBe(200);
+    const st = await new Browser().get('/auth/state');
+    expect(st.json.remember.enabled).toBe(false);
+    const again = new Browser();
+    await login(again, true, 'bleiben@example.org', PASSWORD);
+    expect((await sessionRow(again)).remember).toBe(false);
+    await a.post('/auth/logout');
+    expect((await login(a)).json.next).toBe('mfa');
+    expect((await a.post('/auth/mfa', { code: await code(), trustDevice: true })).status).toBe(200);
+    expect(await activeTrusted(mfaUser)).toBe(0);
+    await adminReauth();
+    expect((await adm.patch('/settings', { 'security.remember_enabled': true, 'security.mfa_remember_enabled': true })).status).toBe(200);
+  });
+
+  it('eine gemerkte Sitzung der Administration bleibt beim Abschalten erhalten, gilt danach aber normal', async () => {
+    const b = new Browser();
+    expect((await login(b, true, 'admin@example.org', PASSWORD)).json.next).toBe('done');
+    expect((await b.post('/auth/reauth', { password: PASSWORD })).status).toBe(200);
+    expect((await b.req('PATCH', '/settings', { 'security.remember_enabled': false })).status).toBe(200);
+    const row = await sessionRow(b);
+    expect(row).toMatchObject({ remember: false, revoked_at: null });
+    expect(new Date(row.expires_at).getTime() - Date.now()).toBeLessThanOrEqual(12 * 3_600_000 + 5_000);
+    expect((await b.get('/auth/me')).status).toBe(200);
+    expect((await b.req('PATCH', '/settings', { 'security.remember_enabled': true })).status).toBe(200);
+    await b.post('/auth/logout');
+    await pool.query(`UPDATE users SET failed_logins = 0, locked_until = NULL WHERE id IN ($1, $2)`, [mfaUser, plainUser]);
+    await pool.query(`DELETE FROM auth_throttle WHERE user_id IN ($1, $2)`, [mfaUser, plainUser]);
+  });
+});
+
 describe('Argon2id: alte Hashes werden bei der Anmeldung erneuert (#129)', () => {
   it('rechnet nach erfolgreicher Anmeldung mit den aktuellen Parametern neu', async () => {
     const { hash, Algorithm } = await import('@node-rs/argon2');

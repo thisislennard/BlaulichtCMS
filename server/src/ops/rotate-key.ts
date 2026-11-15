@@ -87,6 +87,11 @@ export async function reencryptDatabase(db: pg.PoolClient, oldKey: Buffer, newKe
       WHERE EXISTS (SELECT 1 FROM unnest(recovery_codes) AS c WHERE c LIKE 'h1:%') RETURNING id, email`,
   )).rows;
 
+  // Geräte-Cookies sind mit einem aus dem Master-Schlüssel abgeleiteten Schlüssel signiert und werden ungültig:
+  // vertrauenswürdige Geräte und gemerkte Sitzungen ausdrücklich beenden statt sie still ins Leere laufen zu lassen
+  await db.query('UPDATE trusted_devices SET revoked_at = now() WHERE revoked_at IS NULL');
+  await db.query(`UPDATE sessions SET revoked_at = now() WHERE remember AND stage = 'full' AND revoked_at IS NULL`);
+
   // Gegenprobe vor dem Commit: alles mit dem neuen Schlüssel lesbar
   for (const s of (await db.query('SELECT owner_type, owner_id, version, ciphertext FROM secrets')).rows) decrypt(s.ciphertext, aad.secret(s.owner_type, s.owner_id, s.version), newKey);
   for (const u of (await db.query('SELECT id, totp_secret_enc FROM users WHERE totp_secret_enc IS NOT NULL')).rows) decrypt(u.totp_secret_enc, aad.totp(u.id), newKey);

@@ -113,6 +113,7 @@ async function cleanup() {
   await q(`DELETE FROM jobs WHERE status = 'dead' AND updated_at < now() - interval '30 days'`);
   await q(`DELETE FROM notifications WHERE created_at < now() - interval '60 days'`);
   await q(`DELETE FROM sessions WHERE expires_at < now() - interval '7 days' OR revoked_at < now() - interval '7 days'`);
+  await q(`DELETE FROM trusted_devices WHERE expires_at < now() - interval '7 days' OR revoked_at < now() - interval '7 days'`);
   await q(`DELETE FROM invitations WHERE expires_at < now() - interval '30 days'`);
   await q(`DELETE FROM auth_throttle WHERE updated_at < now() - interval '1 day' AND (locked_until IS NULL OR locked_until < now())`);
   // Abgelaufene Sammeldownloads (Datei schon entfernt) und alte Importberichte (#116)

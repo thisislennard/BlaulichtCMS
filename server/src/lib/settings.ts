@@ -50,6 +50,18 @@ export const DEFAULT_SETTINGS = {
   'security.require_2fa_media': true,
   'security.session_idle_minutes': 60,
   'security.session_max_hours': 12,
+  /**
+   * „Angemeldet bleiben“ (auth/context.ts): gemerkte Sitzungen ohne Leerlaufabmeldung, gültig `remember_days` seit der
+   * letzten Nutzung, an das Gerät gebunden. Abschalten beendet bestehende gemerkte Sitzungen.
+   */
+  'security.remember_enabled': true,
+  'security.remember_days': 30,
+  /**
+   * „Zwei-Faktor auf diesem Gerät merken“ (auth/devices.ts): nach einem Code aus der App fragt die Anmeldung auf
+   * diesem Gerät `mfa_remember_days` lang nur das Passwort ab. Abschalten widerruft alle vertrauenswürdigen Geräte.
+   */
+  'security.mfa_remember_enabled': true,
+  'security.mfa_remember_days': 30,
   'security.lockout_attempts': 5,
   'security.lockout_minutes': 15,
   'security.password_min_length': 12,
@@ -194,6 +206,8 @@ export function privacyIncomplete(s: Settings) {
 export const SETTING_RANGES: Record<string, [number, number]> = {
   'security.session_idle_minutes': [5, 1440],
   'security.session_max_hours': [1, 720],
+  'security.remember_days': [1, 180],
+  'security.mfa_remember_days': [1, 90],
   'security.lockout_attempts': [3, 20],
   'security.lockout_minutes': [1, 1440],
   'security.password_min_length': [10, 128],

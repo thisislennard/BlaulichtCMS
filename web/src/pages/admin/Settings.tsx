@@ -73,6 +73,8 @@ const SECTIONS = [
 const RANGES: Record<string, [number, number]> = {
   'security.session_idle_minutes': [5, 1440],
   'security.session_max_hours': [1, 720],
+  'security.remember_days': [1, 180],
+  'security.mfa_remember_days': [1, 90],
   'security.lockout_attempts': [3, 20],
   'security.lockout_minutes': [1, 1440],
   'security.password_min_length': [10, 128],
@@ -530,6 +532,48 @@ export default function Settings() {
                     v={v}
                     set={set}
                     ro={ro}
+                  />
+                </FieldGrid>
+                <div className="flex flex-col gap-2">
+                  <h3 className="m-0 text-sm font-semibold">Angemeldet bleiben und gemerkte Geräte</h3>
+                  <p className="m-0 text-sm text-fg-muted">
+                    Gilt für alle Rollen. Gemerkte Sitzungen und Geräte sind an das Geräte-Cookie des Browsers gebunden;
+                    kritische Aktionen verlangen weiterhin Passwort und Code. Abschalten beendet bestehende gemerkte
+                    Sitzungen bzw. entfernt alle gemerkten Geräte sofort.
+                  </p>
+                  <Switch
+                    checked={!!v["security.remember_enabled"]}
+                    disabled={ro}
+                    onChange={(x) => set("security.remember_enabled", x)}
+                    label="„Angemeldet bleiben“ erlauben"
+                    description="Ankreuzfeld auf der Anmeldeseite (in der installierten App vorbelegt). Keine Abmeldung bei Leerlauf; die Sitzung endet erst nach der unten eingestellten Zeit ohne Nutzung."
+                  />
+                  <Switch
+                    checked={!!v["security.mfa_remember_enabled"]}
+                    disabled={ro}
+                    onChange={(x) => set("security.mfa_remember_enabled", x)}
+                    label="Zwei-Faktor auf einem Gerät merken erlauben"
+                    description="Nach einem Code aus der Authenticator-App fragt die Anmeldung auf diesem Gerät eine Zeit lang nur das Passwort ab. Wiederherstellungscodes merken kein Gerät."
+                  />
+                </div>
+                <FieldGrid className="grid-cols-[repeat(auto-fit,minmax(min(200px,100%),1fr))]">
+                  <NumField
+                    k="security.remember_days"
+                    label="Angemeldet bleiben: Ablauf ohne Nutzung"
+                    help="1 bis 180 Tage seit der letzten Nutzung."
+                    unit={t("admin.common.days")}
+                    v={v}
+                    set={set}
+                    ro={ro || !v["security.remember_enabled"]}
+                  />
+                  <NumField
+                    k="security.mfa_remember_days"
+                    label="Gerät für Zwei-Faktor merken"
+                    help="1 bis 90 Tage ab der Code-Eingabe."
+                    unit={t("admin.common.days")}
+                    v={v}
+                    set={set}
+                    ro={ro || !v["security.mfa_remember_enabled"]}
                   />
                 </FieldGrid>
                 <div className="flex flex-col gap-2">

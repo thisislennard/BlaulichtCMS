@@ -7,7 +7,7 @@ OWASP File Upload Cheat Sheet. Jeder Punkt ist mit einem Test oder einer Code-St
 
 | Bereich | Ergebnis | Nachweis |
 |---|---|---|
-| Sitzungen | ✅ Cookie `HttpOnly`, `SameSite=Strict`, `Secure` (hinter HTTPS), `__Host-`-Präfix; Leerlauf- und Höchstdauer | `server/src/auth/context.ts` |
+| Sitzungen | ✅ Cookie `HttpOnly`, `SameSite=Strict`, `Secure` (hinter HTTPS), `__Host-`-Präfix; Leerlauf- und Höchstdauer; Token nur als SHA-256 gespeichert und beim Übergang Zwischenstufe → volle Sitzung neu ausgestellt. „Angemeldet bleiben“ und gemerkte Geräte siehe Abwägung unten | `server/src/auth/context.ts`, `server/src/auth/devices.ts`, Test „Angemeldet bleiben und gemerkte Geräte …“ |
 | CSRF | ✅ Jede ändernde Anfrage braucht den Header `x-blaulichtcms-request` (Sitzungen); Bridge, FE2 und Meta-Rückweg authentisieren eigenständig | Test „Erstsetup“ (Anfrage ohne Kennung → 403) |
 | Rechte je Aktion | ✅ Standard „verweigern“, jedes Recht serverseitig je Route; getrennte Rechte für Entwurf/Stufe/Freigabe/Versand und Verbindungen | Tests M1–M4 (403-Fälle) |
 | Vier-Augen | ✅ Regeln und Lagefragen nur durch eine andere Person freigebbar; optional (`editorial.four_eyes`) für Beiträge, Banner und Warnentwürfe – jeweils weder durch Schreibende noch durch die einreichende Person (#153, #169) | Tests M3 |
@@ -27,6 +27,43 @@ OWASP File Upload Cheat Sheet. Jeder Punkt ist mit einem Test oder einer Code-St
 | Audit | ✅ Hash-Kette mit HMAC (Schlüssel durch den Master-Schlüssel geschützt), Trigger gegen Ändern/Löschen, tägliche Prüfung mit Benachrichtigung, optionale Weiterleitung an stdout/Syslog; verweigerte Zugriffe und falsche Schlüssel gedrosselt auditiert | Tests „Audit: Hash-Kette …“, „Audit-Lücken …“ |
 | Repository | ✅ Keine Zugangsdaten, keine produktiven Daten; Beispieldaten fiktiv; `.env` und `data/` ignoriert | Secret-Scan (Trivy) bei jedem Push, Workflow „Sicherheitsprüfung“ |
 | Lieferkette | ✅ Basis-Images per Digest, GitHub Actions per Commit-SHA fixiert; Dependabot für npm, Docker und Actions; `npm audit` (Laufzeit ab „hoch“, alles ab „kritisch“) und Trivy-Imagescan (kritische behebbare Lücken brechen ab) bei jedem Push und wöchentlich; Updates nur über Release-Tags (optional signiert) | `.github/workflows/security.yml`, `.github/dependabot.yml`, `docs/betrieb.md` |
+
+### Angemeldet bleiben und gemerkte Geräte: Abwägung
+
+Die installierte App soll im Einsatz ohne tägliche Neuanmeldung bereitstehen. Dafür gibt es zwei abschaltbare
+Erleichterungen (Einstellungen → Sicherheit, Standard an, für alle Rollen):
+
+- **Angemeldet bleiben:** keine Leerlaufabmeldung, Ablauf nach `security.remember_days` (Standard 30, höchstens 180)
+  Tagen ohne Nutzung, gleitend erneuert; Cookie-Laufzeit gleich der Restlaufzeit.
+- **Zwei-Faktor auf diesem Gerät merken:** nach einem Code aus der App fragt die Anmeldung auf diesem Gerät
+  `security.mfa_remember_days` (Standard 30, höchstens 90) Tage lang nur das Passwort.
+
+**Risiko:** Ein langlebiges Sitzungs-Cookie oder ein gemerktes Gerät verlängert das Zeitfenster, in dem ein
+entwendetes Gerät oder Cookie nutzbar ist; ein gemerktes Gerät reduziert die Anmeldung dort auf einen Faktor.
+
+**Gegenmaßnahmen:**
+
+- *Gerätebindung:* Beides gilt nur zusammen mit dem signierten, `HttpOnly`-Geräte-Cookie desselben Browsers
+  (HMAC mit einem aus dem Master-Schlüssel abgeleiteten Schlüssel, Vergleich in konstanter Zeit). Ein kopiertes
+  Sitzungs-Cookie allein wird abgewiesen und beendet die Sitzung. Gespeichert werden nur Hashes von Token und
+  Gerätekennung; ein Merker im Browser allein genügt nie.
+- *Step-up:* Kritische Aktionen (Admin-Rechte, Zwei-Faktor-Reset, Passwort-Links für Admins, Sicherheitseinstellungen,
+  Updates, Zwei-Faktor einrichten) verlangen unverändert Passwort und Code, höchstens 10 Minuten alt – eine lange
+  Sitzung oder ein gemerktes Gerät genügt dafür nie.
+- *Nur App-Codes:* Ein Wiederherstellungscode (Hinweis auf verlorenes Telefon) merkt kein Gerät.
+- *Widerruf:* Passwortänderung, Zwei-Faktor einrichten/abschalten/zurücksetzen, „Auf allen Geräten abmelden“ (selbst
+  oder durch die Benutzerverwaltung), Deaktivieren, Passwort-Link, Master-Schlüsselwechsel, Ablauf. Jede Sitzung und
+  jedes gemerkte Gerät ist im Profil sichtbar und einzeln beendbar.
+- *Schalter der Administration:* Abschalten wirkt sofort (bestehende gemerkte Sitzungen bzw. Geräte werden beendet,
+  zusätzlich prüft jede Anfrage die Einstellung); verkürzte Fristen greifen beim nächsten Aufruf.
+- *Nachvollziehbarkeit:* Audit-Einträge für Merken, Entfernen und Beenden, Anmeldungen ohne Code gekennzeichnet;
+  die Person wird beim Merken eines Geräts benachrichtigt.
+- *Keine Kontoaufzählung:* Die Anmeldeantwort bleibt für unbekannte Konten, falsche Passwörter und Sperren gleich;
+  ein gemerktes Gerät ändert daran nichts, die Kontosperre je Gerät gilt weiter.
+
+**Restrisiko:** Wer ein entsperrtes Gerät mit gemerkter Sitzung in die Hand bekommt, kann bis zur Abmeldung
+nicht-kritische Aktionen ausführen. Für Geräte, die mehrere Personen nutzen, die Haken nicht setzen bzw. die
+Funktionen abschalten oder die Fristen verkürzen; bei Verlust sofort „Auf allen Geräten abmelden“.
 
 ### Content-Security-Policy: Abwägung bei Styles
 

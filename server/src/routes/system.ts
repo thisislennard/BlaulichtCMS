@@ -208,6 +208,21 @@ export async function systemRoutes(app: FastifyInstance) {
       patch['general.public_url'] = normalizePublicUrl(String(patch['general.public_url']));
     }
     await setSettings(patch as any, req.auth!.user?.id ?? null);
+    // „Angemeldet bleiben“ abgeschaltet: gemerkte Sitzungen sofort beenden. Die eigene Sitzung bleibt, gilt aber ab
+    // jetzt wie eine normale (Leerlauf und Höchstdauer).
+    const revoked: Record<string, number> = {};
+    if (patch['security.remember_enabled'] === false && current['security.remember_enabled']) {
+      const own = req.auth!.sessionId ?? null;
+      if (own) await pool.query(`UPDATE sessions SET remember = false, device_hash = NULL, expires_at = LEAST(expires_at, now() + make_interval(hours => $2)) WHERE id = $1`, [own, current['security.session_max_hours']]);
+      const r = await pool.query(`UPDATE sessions SET revoked_at = now() WHERE remember AND stage = 'full' AND revoked_at IS NULL AND expires_at > now() AND ($1::uuid IS NULL OR id <> $1)`, [own]);
+      revoked.gemerkte_sitzungen = r.rowCount ?? 0;
+    }
+    // „Zwei-Faktor merken“ abgeschaltet: alle vertrauenswürdigen Geräte widerrufen
+    if (patch['security.mfa_remember_enabled'] === false && current['security.mfa_remember_enabled']) {
+      const r = await pool.query(`UPDATE trusted_devices SET revoked_at = now() WHERE revoked_at IS NULL`);
+      revoked.vertrauenswuerdige_geraete = r.rowCount ?? 0;
+    }
+    if (Object.keys(revoked).length) await audit(req.auth!.actor, 'settings.remember_revoked', { type: 'settings', label: 'Angemeldet bleiben / Zwei-Faktor merken' }, revoked);
     // Vorher/nachher je geändertem Schlüssel (#111) – z. B. abgeschaltete 2FA-Pflicht, erweiterte interne Ziele,
     // verkürzte Aufbewahrung. Geheimnisse stehen nicht in diesen Einstellungen (SMTP-Passwort separat).
     const changes = settingsDiff(current as any, patch);

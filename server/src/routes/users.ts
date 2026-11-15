@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { many, one, pool, tx } from '../db/pool.js';
 import { assertRecentAuth, requireAuth } from '../auth/context.js';
 import { isAdminRoleSet, matrix, MODULES, PERMISSIONS, ROLE_IDS, ROLES } from '../auth/permissions.js';
+import { revokeTrustedDevices } from '../auth/devices.js';
 import { audit } from '../lib/audit.js';
 import { notifyAffectedUser, securityAlert } from '../lib/security-alerts.js';
 import { randomToken, sha256Hex } from '../lib/crypto.js';
@@ -42,7 +43,9 @@ export async function userRoutes(app: FastifyInstance) {
     const users = await many<any>(
       `SELECT u.id, u.email, u.name, u.roles, u.status, u.totp_enabled, u.last_active_at, u.last_login_at, u.created_at,
               CASE WHEN u.locked_until > now() THEN u.locked_until END AS locked_until, u.failed_logins, u.mfa_failed,
-              (SELECT max(expires_at) FROM invitations i WHERE i.user_id = u.id AND i.used_at IS NULL AND i.revoked_at IS NULL) AS invite_expires_at
+              (SELECT max(expires_at) FROM invitations i WHERE i.user_id = u.id AND i.used_at IS NULL AND i.revoked_at IS NULL) AS invite_expires_at,
+              (SELECT count(*)::int FROM sessions s WHERE s.user_id = u.id AND s.stage = 'full' AND s.revoked_at IS NULL AND s.expires_at > now()) AS active_sessions,
+              (SELECT count(*)::int FROM trusted_devices t WHERE t.user_id = u.id AND t.revoked_at IS NULL AND t.expires_at > now()) AS trusted_devices
          FROM users u ORDER BY u.status = 'disabled', lower(u.name)`,
     );
     const keys = await many<any>(`SELECT id, name, roles, last_used_at, created_at FROM api_keys WHERE revoked_at IS NULL ORDER BY name`);
@@ -82,7 +85,9 @@ export async function userRoutes(app: FastifyInstance) {
     if (isAdminRoleSet(user.roles)) assertRecentAuth(req);
     const hours = user.status === 'invited' ? (await getSettings())['invites.valid_hours'] : Math.min(24, (await getSettings())['invites.valid_hours']);
     const token = await createInvite(id, req.auth!.user?.id ?? null, hours);
-    await audit(req.auth!.actor, user.status === 'invited' ? 'user.invite_renewed' : 'user.password_reset_link', { type: 'user', id, label: user.email });
+    // Passwort-Link = Verdacht auf vergessenes oder bekanntes Passwort: gemerkte Geräte der Zwei-Faktor-Anmeldung entfernen
+    const devices = user.status === 'active' ? await revokeTrustedDevices(id) : 0;
+    await audit(req.auth!.actor, user.status === 'invited' ? 'user.invite_renewed' : 'user.password_reset_link', { type: 'user', id, label: user.email }, devices ? { vertrauenswuerdige_geraete: devices } : {});
     return { link: await inviteLink(req, token), expiresHours: hours };
   });
 
@@ -125,6 +130,7 @@ export async function userRoutes(app: FastifyInstance) {
       // Rechte geändert/deaktiviert: Sitzungen beenden – bei Änderungen am eigenen Konto die aktuelle Sitzung behalten
       const keep = id === req.auth!.user?.id ? (req.auth!.sessionId ?? null) : null;
       if (body.status === 'disabled' || body.roles) await db.query('UPDATE sessions SET revoked_at = now() WHERE user_id = $1 AND revoked_at IS NULL AND ($2::uuid IS NULL OR id <> $2)', [id, keep]);
+      if (body.status === 'disabled') await revokeTrustedDevices(id, db);
       // Deaktivieren macht offene Einladungen und Passwort-Links unbrauchbar
       if (body.status === 'disabled') await db.query('UPDATE invitations SET revoked_at = now(), revoked_by = $2 WHERE user_id = $1 AND used_at IS NULL AND revoked_at IS NULL', [id, req.auth!.user?.id ?? null]);
       return { before: user, updated };
@@ -147,10 +153,29 @@ export async function userRoutes(app: FastifyInstance) {
     const user = await one<any>(`UPDATE users SET totp_enabled = false, totp_secret_enc = NULL, recovery_codes = '{}' WHERE id = $1 RETURNING email`, [id]);
     if (!user) throw notFound();
     await pool.query('UPDATE sessions SET revoked_at = now() WHERE user_id = $1 AND revoked_at IS NULL', [id]);
+    await revokeTrustedDevices(id);
     await audit(req.auth!.actor, 'user.mfa_reset', { type: 'user', id, label: user.email });
     await notifyAffectedUser(id, 'Deine Zwei-Faktor-Anmeldung wurde zurückgesetzt', `Zurückgesetzt von ${req.auth!.actor.name}. Warst du das nicht, bitte sofort die Administration informieren.`);
     await securityAlert('mfa_reset', { title: `Zwei-Faktor zurückgesetzt: ${user.email}`, body: `Durch ${req.auth!.actor.name}.`, link: '/benutzer', permission: 'user.manage', kind: 'info' });
     return { ok: true };
+  });
+
+  /**
+   * Alle Sitzungen eines Kontos beenden (auch gemerkte) und alle vertrauenswürdigen Geräte entfernen – z. B. bei
+   * verlorenem Telefon oder Verdacht auf eine übernommene Sitzung. Beim eigenen Konto bleibt diese Sitzung bestehen.
+   */
+  app.post('/users/:id/end-sessions', { preHandler: requireAuth('user.manage') }, async (req) => {
+    const { id } = z.object({ id: z.uuid() }).parse(req.params);
+    const user = await one<any>('SELECT id, email FROM users WHERE id = $1', [id]);
+    if (!user) throw notFound();
+    const keep = id === req.auth!.user?.id ? (req.auth!.sessionId ?? null) : null;
+    const r = await pool.query(`UPDATE sessions SET revoked_at = now() WHERE user_id = $1 AND revoked_at IS NULL AND ($2::uuid IS NULL OR id <> $2)`, [id, keep]);
+    const devices = await revokeTrustedDevices(id);
+    await audit(req.auth!.actor, 'user.sessions_ended', { type: 'user', id, label: user.email }, { sitzungen: r.rowCount ?? 0, vertrauenswuerdige_geraete: devices });
+    if (id !== req.auth!.user?.id) {
+      await notifyAffectedUser(id, 'Du wurdest auf allen Geräten abgemeldet', `Abgemeldet von ${req.auth!.actor.name}; gemerkte Geräte der Zwei-Faktor-Anmeldung wurden entfernt. Bitte neu anmelden.`);
+    }
+    return { sessions: r.rowCount ?? 0, trustedDevices: devices };
   });
 
   /** Sperre nach Fehlversuchen vorzeitig aufheben (Passwort und 2FA). */

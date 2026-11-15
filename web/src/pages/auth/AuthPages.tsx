@@ -43,6 +43,31 @@ function AuthLayout({ title, subtitle, children }: { title: string; subtitle?: R
   );
 }
 
+/** Läuft als installierte App (PWA auf dem Startbildschirm bzw. im Dock)? Dort ist „Angemeldet bleiben“ vorbelegt. */
+export function isInstalledApp(): boolean {
+  try {
+    if (typeof window.matchMedia === 'function' && window.matchMedia('(display-mode: standalone)').matches) return true;
+  } catch {
+    /* ältere Browser */
+  }
+  return (navigator as Navigator & { standalone?: boolean }).standalone === true;
+}
+
+const dayCount = (n: number) => `${n} ${n === 1 ? 'Tag' : 'Tage'}`;
+
+/** Ankreuzfeld im Stil der Anmeldeseiten (Beschriftung und Erläuterung klickbar). */
+function CheckField({ id, checked, onChange, label, help }: { id: string; checked: boolean; onChange: (v: boolean) => void; label: ReactNode; help?: ReactNode }) {
+  return (
+    <label htmlFor={id} className="flex items-start gap-2.5 cursor-pointer text-sm">
+      <input id={id} type="checkbox" className="mt-0.5 accent-[var(--bc-primary-solid)] w-4 h-4 shrink-0" checked={checked} onChange={(e) => onChange(e.target.checked)} />
+      <span className="flex flex-col gap-0.5 min-w-0">
+        <span>{label}</span>
+        {help && <span className="text-meta text-fg-muted">{help}</span>}
+      </span>
+    </label>
+  );
+}
+
 function useAfterLogin() {
   const { refresh } = useAuth();
   const navigate = useNavigate();
@@ -60,11 +85,14 @@ function useAfterLogin() {
 export function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  // In der installierten App vorbelegt, im normalen Browser-Tab nicht (gemeinsam genutzte Rechner)
+  const [remember, setRemember] = useState(isInstalledApp);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const after = useAfterLogin();
   const navigate = useNavigate();
   const state = useQuery({ queryKey: ['auth-state'], queryFn: () => get('/auth/state') });
+  const rememberOn = state.data?.remember?.enabled === true;
   useEffect(() => {
     if (state.data?.setupRequired) navigate('/einrichtung', { replace: true });
   }, [state.data, navigate]);
@@ -73,7 +101,7 @@ export function LoginPage() {
     setBusy(true);
     setError(null);
     try {
-      const r = await post('/auth/login', { email, password });
+      const r = await post('/auth/login', { email, password, remember: rememberOn && remember });
       await after(r.next);
     } catch (err) {
       setError((err as Error).message);
@@ -90,6 +118,15 @@ export function LoginPage() {
         <FieldWrap label="Passwort" htmlFor="pw">
           <Input id="pw" type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} />
         </FieldWrap>
+        {rememberOn && (
+          <CheckField
+            id="remember"
+            checked={remember}
+            onChange={setRemember}
+            label="Angemeldet bleiben"
+            help={`Auf diesem Gerät bis zu ${dayCount(state.data.remember.days)} nach der letzten Nutzung angemeldet. Nicht auf gemeinsam genutzten Geräten.`}
+          />
+        )}
         {error && (
           <p role="alert" className="m-0 text-sm text-err">
             {error}
@@ -108,15 +145,18 @@ export function MfaVerifyPage() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [recovery, setRecovery] = useState(false);
+  const [trust, setTrust] = useState(false);
   const after = useAfterLogin();
   const { logout } = useAuth();
   const navigate = useNavigate();
+  const state = useQuery({ queryKey: ['auth-state'], queryFn: () => get('/auth/state') });
+  const trustOn = state.data?.mfaRemember?.enabled === true && !recovery;
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     setBusy(true);
     setError(null);
     try {
-      const r = await post('/auth/mfa', { code });
+      const r = await post('/auth/mfa', { code, trustDevice: trustOn && trust });
       await after(r.next);
     } catch (err) {
       setError((err as Error).message);
@@ -130,6 +170,15 @@ export function MfaVerifyPage() {
         <FieldWrap label={recovery ? 'Wiederherstellungscode' : 'Code'} htmlFor="code">
           <Input id="code" autoFocus inputMode={recovery ? 'text' : 'numeric'} autoComplete="one-time-code" mono required value={code} onChange={(e) => setCode(e.target.value)} placeholder={recovery ? 'XXXX-XXXX-XXXX-XXXX' : '123456'} />
         </FieldWrap>
+        {trustOn && (
+          <CheckField
+            id="trust-device"
+            checked={trust}
+            onChange={setTrust}
+            label={`Auf diesem Gerät ${dayCount(state.data.mfaRemember.days)} nicht nach dem Code fragen`}
+            help="Danach genügt hier das Passwort. Auf anderen Geräten und für kritische Aktionen bleibt der Code nötig."
+          />
+        )}
         {error && (
           <p role="alert" className="m-0 text-sm text-err">
             {error}

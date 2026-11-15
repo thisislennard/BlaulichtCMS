@@ -57,6 +57,9 @@ interface UserRow {
   locked_until: string | null;
   failed_logins: number;
   mfa_failed: number;
+  /** Laufende volle Sitzungen und gemerkte Geräte der Zwei-Faktor-Anmeldung */
+  active_sessions: number;
+  trusted_devices: number;
 }
 interface ServiceAccount {
   id: string;
@@ -635,6 +638,20 @@ function UserTable({
     }
   };
 
+  const endSessions = async (u: UserRow) => {
+    try {
+      const r = await post<{ sessions: number; trustedDevices: number }>(`/users/${u.id}/end-sessions`);
+      refresh();
+      toast({
+        tone: "success",
+        title: `${u.name} auf allen Geräten abgemeldet`,
+        text: `${r.sessions} Sitzung(en) beendet, ${r.trustedDevices} gemerkte(s) Gerät(e) entfernt.`,
+      });
+    } catch (e) {
+      onError(e);
+    }
+  };
+
   const reset2fa = async (u: UserRow) => {
     try {
       await post(`/users/${u.id}/reset-2fa`);
@@ -831,6 +848,12 @@ function UserTable({
                             label: "Umbenennen",
                             icon: "Pencil",
                             onClick: () => (setRenaming(u), setNewName(u.name)),
+                          },
+                          // Eigene Sitzungen beendet man unter „Mein Konto“
+                          !isMe && (u.active_sessions > 0 || u.trusted_devices > 0) && {
+                            label: "Auf allen Geräten abmelden",
+                            icon: "LogOut",
+                            onClick: () => endSessions(u),
                           },
                           // Eigene 2FA nicht hier zurücksetzen (würde abmelden) – dafür gibt es „Mein Konto“
                           u.totp_enabled && !isMe && {

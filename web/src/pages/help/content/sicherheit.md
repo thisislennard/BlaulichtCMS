@@ -2,9 +2,10 @@
 |---|---|
 | Rechte | Serverseitig bei jeder Aktion, jedem Objekt und jeder Datei; Standard ist „verweigert“ |
 | Anmeldung | Passwörter mit Argon2id (Parameter nach RFC 9106 / BSI TR-02102-1), Zwei-Faktor (TOTP) mit Wiederherstellungscodes (80 Bit, nur als Schlüssel-Prüfsumme gespeichert; Codes aus älteren Versionen am besten im Profil erneuern), Sperre nach Fehlversuchen für unbekannte Geräte (bekannte Geräte zählen getrennt, damit niemand ein Konto gezielt aussperren kann), Benachrichtigung bei Sperre |
-| Cookies | Nur technisch nötige: Sitzung und ein Geräte-Cookie (180 Tage, signiert), das ein bekanntes Gerät von der Kontosperre ausnimmt; kein Tracking |
+| Cookies | Nur technisch nötige: Sitzung und ein Geräte-Cookie (180 Tage, signiert), das ein bekanntes Gerät von der Kontosperre ausnimmt und an das gemerkte Sitzungen und gemerkte Geräte gebunden sind; kein Tracking |
 | Kritische Änderungen | Admin-Rechte, Zwei-Faktor-Reset, Passwort-Links für Admins und Sicherheitseinstellungen nur nach erneuter Bestätigung mit Passwort (und Code), höchstens 10 Minuten alt |
-| Sitzungen | Serverseitig, Cookies `HttpOnly` und `SameSite=Strict`, CSRF-Schutz, Leerlauf- und Höchstdauer |
+| Sitzungen | Serverseitig, Cookies `HttpOnly` und `SameSite=Strict`, CSRF-Schutz, Leerlauf- und Höchstdauer. „Angemeldet bleiben“ (abschaltbar): keine Leerlaufabmeldung, Ablauf nach 30 Tagen ohne Nutzung, nur zusammen mit dem Geräte-Cookie desselben Browsers gültig, einzeln oder auf allen Geräten abmeldbar |
+| Gemerkte Geräte | „Zwei-Faktor auf diesem Gerät merken“ (abschaltbar): nur nach einem Code aus der App, serverseitig gespeichert und an das Geräte-Cookie gebunden, höchstens 30 Tage (einstellbar bis 90). Entfernt bei Passwortänderung, Zwei-Faktor-Änderungen, „Auf allen Geräten abmelden“, Maßnahmen der Administration und Abschalten der Funktion. Kritische Aktionen verlangen immer Passwort und Code |
 | Uploads | Nur über befristete, widerrufbare Links in genau eine Sammlung; Größen- und Mengengrenzen; Quarantäne; Prüfung des Inhalts statt des Dateinamens; optional Schadsoftwareprüfung mit ClamAV vor jeder Verarbeitung (Treffer werden gelöscht und gemeldet; ohne ClamAV bleibt ein dokumentiertes Restrisiko, siehe Betriebshandbuch) |
 | Medien | Privat außerhalb des Webservers; Auslieferung nur mit Recht; öffentliche Fassung ohne Standort- und Kameradaten; Originale standardmäßig ohne Standort, Seriennummern und Personenangaben |
 | Websites | Eigener Schlüssel je Website, nur als Prüfsumme gespeichert, sofort widerrufbar; die Bridge ruft nur aus |
@@ -31,8 +32,9 @@ Löschfristen für alle Datenarten stehen unter **Einstellungen → Datenschutz*
 
 1. **Sofort die Administration informieren** – bei verlorenem Telefon, verdächtigen Meldungen, einem Upload-Link in
    falschen Händen oder einer verlorenen Sicherung.
-2. Die Administration sperrt betroffene Zugänge: Konto deaktivieren (beendet alle Sitzungen), Zwei-Faktor
-   zurücksetzen, Website-Kopplung, Upload-Link, API- oder FE2-Schlüssel widerrufen bzw. erneuern.
+2. Die Administration sperrt betroffene Zugänge: Konto deaktivieren oder „Auf allen Geräten abmelden“ (beendet alle
+   Sitzungen und entfernt gemerkte Geräte), Zwei-Faktor zurücksetzen, Website-Kopplung, Upload-Link, API- oder
+   FE2-Schlüssel widerrufen bzw. erneuern.
 3. Belege sichern: Audit-Protokoll (Filter „Fehlgeschlagen“/„Verweigert“), Systemstatus → Audit-Integrität.
 4. Informationssicherheit und Datenschutz einbeziehen: Sind personenbezogene Daten betroffen, muss eine meldepflichtige
    Verletzung **innerhalb von 72 Stunden** an die Aufsichtsbehörde gemeldet werden.

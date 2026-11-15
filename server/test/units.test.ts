@@ -899,3 +899,27 @@ describe('Upload-Links: Gültigkeit und Zustand (Medien wie LiFeOS)', () => {
     expect(linkState({ expires_at: '2026-11-16T00:00:00Z', revoked_at: 'x' }, now)).toBe('revoked');
   });
 });
+
+describe('Geräte-Cookie als Grundlage für gemerkte Sitzungen und Geräte', () => {
+  it('liefert die Gerätekennung, behält sie beim Erneuern und bindet den Hash an das Konto', async () => {
+    const { deviceHash, issueDeviceCookie, knownDevice } = await import('../src/auth/lockout.js');
+    const set: Record<string, { value: string; opts: any }> = {};
+    const reply = { setCookie: (name: string, value: string, opts: any) => (set[name] = { value, opts }) } as any;
+    const userA = '11111111-1111-4111-8111-111111111111';
+    const userB = '22222222-2222-4222-8222-222222222222';
+    const nonce = issueDeviceCookie({ cookies: {} } as any, reply, userA);
+    const [name] = Object.keys(set);
+    expect(set[name].opts).toMatchObject({ httpOnly: true, sameSite: 'strict', path: '/' });
+    const req = { cookies: { [name]: set[name].value } } as any;
+    expect(knownDevice(req, userA)).toBe(nonce);
+    expect(knownDevice(req, userB)).toBeNull();
+    // Erneuern behält die Kennung (gemerkte Sitzungen bleiben gültig)
+    expect(issueDeviceCookie(req, reply, userA)).toBe(nonce);
+    // Veränderte Signatur zählt nicht
+    expect(knownDevice({ cookies: { [name]: set[name].value.slice(0, -1) + (set[name].value.endsWith('A') ? 'B' : 'A') } } as any, userA)).toBeNull();
+    // Gespeichert wird nur ein Hash, je Konto verschieden
+    expect(deviceHash(userA, nonce)).toMatch(/^[0-9a-f]{64}$/);
+    expect(deviceHash(userA, nonce)).not.toBe(deviceHash(userB, nonce));
+    expect(deviceHash(userA, nonce)).not.toContain(nonce);
+  });
+});

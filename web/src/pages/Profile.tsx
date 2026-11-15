@@ -27,6 +27,17 @@ interface Session {
   last_seen_at: string;
   ip: string | null;
   user_agent: string | null;
+  remember: boolean;
+  expires_at: string;
+  current: boolean;
+}
+
+interface TrustedDevice {
+  id: string;
+  user_agent: string | null;
+  created_at: string;
+  last_used_at: string | null;
+  expires_at: string;
   current: boolean;
 }
 
@@ -72,6 +83,7 @@ export default function Profile() {
         <div className="flex flex-col gap-5 min-w-0">
           <MfaCard />
           <SessionsCard />
+          {me.user.totp_enabled && <TrustedDevicesCard />}
         </div>
       </div>
     </div>
@@ -481,6 +493,11 @@ function SessionsCard() {
                     {s.current && (
                       <Badge>{t("profile.thisDevice")}</Badge>
                     )}
+                    {s.remember && (
+                      <Badge tone="primary" dot={false} title={t("profile.rememberedHint", { when: fmtRelative(s.expires_at) })}>
+                        {t("profile.remembered")}
+                      </Badge>
+                    )}
                   </span>
                   <span className="text-meta text-fg-muted truncate">
                     <span className="font-mono">{s.ip ?? "–"}</span> ·{" "}
@@ -556,6 +573,74 @@ function SessionsCard() {
       >
         <p className="m-0 text-sm">{t("profile.logoutAllText")}</p>
       </Dialog>
+    </SectionCard>
+  );
+}
+
+/** Vertrauenswürdige Geräte der Zwei-Faktor-Anmeldung: dort fragt die Anmeldung nur das Passwort ab. */
+function TrustedDevicesCard() {
+  const qc = useQueryClient();
+  const toast = useToast();
+  const onError = useErrorToast();
+  const q = useQuery({
+    queryKey: ["auth-trusted-devices"],
+    queryFn: () => get<{ enabled: boolean; days: number; devices: TrustedDevice[] }>("/auth/trusted-devices"),
+  });
+  const remove = async (d: TrustedDevice) => {
+    try {
+      await del(`/auth/trusted-devices/${d.id}`);
+      qc.invalidateQueries({ queryKey: ["auth-trusted-devices"] });
+      toast({ tone: "success", title: t("profile.trustedRemoved") });
+    } catch (e) {
+      onError(e);
+    }
+  };
+  if (q.data && !q.data.enabled && !q.data.devices.length) return null;
+  return (
+    <SectionCard
+      title={t("profile.trusted")}
+      description={t("profile.trustedDesc", { days: q.data?.days ?? 30 })}
+      bodyClassName="!px-0 !py-0"
+    >
+      {q.isError ? (
+        <div className="p-5">
+          <LoadError error={q.error} onRetry={() => q.refetch()} />
+        </div>
+      ) : !q.data ? (
+        <SkeletonRows rows={2} className="p-5" />
+      ) : (
+        <ul className="list-none m-0 p-0">
+          {q.data.devices.map((d) => {
+            const dev = deviceName(d.user_agent);
+            return (
+              <li key={d.id} className="flex items-center gap-3 px-5 py-3 border-b border-line last:border-b-0">
+                <span aria-hidden="true" className="w-8 h-8 rounded-control bg-raised inline-flex items-center justify-center text-fg-muted shrink-0">
+                  <Icon name="ShieldCheck" size={15} />
+                </span>
+                <span className="flex-1 min-w-0 flex flex-col">
+                  <span className="text-sm font-medium flex items-center gap-2 flex-wrap">
+                    <span className="truncate" title={d.user_agent ?? undefined}>
+                      {dev.name}
+                    </span>
+                    {d.current && <Badge>{t("profile.thisDevice")}</Badge>}
+                  </span>
+                  <span className="text-meta text-fg-muted truncate">
+                    {t("profile.trustedSince", { when: fmtRelative(d.created_at) })}
+                    {d.last_used_at ? ` · ${t("profile.trustedUsed", { when: fmtRelative(d.last_used_at) })}` : ""} ·{" "}
+                    {t("profile.trustedUntil", { when: fmtRelative(d.expires_at) })}
+                  </span>
+                </span>
+                <Button size="sm" variant="ghost" aria-label={t("profile.trustedRemoveOf", { name: dev.name })} onClick={() => remove(d)}>
+                  {t("profile.trustedRemove")}
+                </Button>
+              </li>
+            );
+          })}
+          {!q.data.devices.length && (
+            <li className="px-5 py-3 text-sm text-fg-muted">{t("profile.trustedNone")}</li>
+          )}
+        </ul>
+      )}
     </SectionCard>
   );
 }

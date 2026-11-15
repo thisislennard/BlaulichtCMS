@@ -31,8 +31,11 @@ function deviceMac(payload: string): string {
   return crypto.createHmac('sha256', deriveKey('device-cookie')).update(payload).digest('base64url').slice(0, 32);
 }
 
-/** Geräte-Cookie nach vollständiger Anmeldung setzen bzw. erneuern (Kennung des Geräts bleibt erhalten). */
-export function issueDeviceCookie(req: FastifyRequest, reply: FastifyReply, userId: string) {
+/**
+ * Geräte-Cookie nach vollständiger Anmeldung setzen bzw. erneuern (Kennung des Geräts bleibt erhalten). Gibt die
+ * Gerätekennung zurück – gemerkte Sitzungen und vertrauenswürdige Geräte werden daran gebunden.
+ */
+export function issueDeviceCookie(req: FastifyRequest, reply: FastifyReply, userId: string): string {
   const nonce = knownDevice(req, userId) ?? randomToken(12);
   const issued = Math.floor(Date.now() / 1000);
   const payload = `${userId}.${nonce}.${issued}`;
@@ -43,6 +46,15 @@ export function issueDeviceCookie(req: FastifyRequest, reply: FastifyReply, user
     sameSite: 'strict',
     maxAge: DEVICE_DAYS * 86400,
   });
+  return nonce;
+}
+
+/**
+ * Gespeicherte Form der Gerätekennung für gemerkte Sitzungen und vertrauenswürdige Geräte: nur ein Hash aus Konto und
+ * Kennung (die Kennung selbst steht nur im signierten, httpOnly-Cookie des Geräts).
+ */
+export function deviceHash(userId: string, device: string): string {
+  return sha256Hex(`trusted-device:${userId}:${device}`);
 }
 
 /** Kennung des Geräts, wenn das Anfrage-Cookie gültig zu diesem Konto gehört – sonst null. */

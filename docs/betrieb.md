@@ -172,7 +172,9 @@ Standardwerte und der Lasttest unten. Abweichungen hier eintragen, damit Betrieb
 | FE2-Einsatzmeldungen | **90 Tage** nach Eingang bzw. letzter Aktualisierung | `privacy.fe2_event_days` | Einsatzort und -zeit; Beiträge und Warnvorgänge daraus bleiben |
 | Amtliche Warnungen | **90 Tage** nach Ablauf und nachdem die Quelle sie nicht mehr liefert (sonst würde eine noch gelieferte Warnung erneut gemeldet) | `privacy.official_warning_days` | keine personenbezogenen Daten, Bestand klein halten |
 | Upload-Links | **90 Tage** nach Ablauf bzw. Widerruf, ebenso Weiterleitungen aus dem Import | `privacy.upload_link_days` | Token (verschlüsselt) und Bezeichnung haben danach keinen Zweck mehr |
-| Sonstiges (fest) | Sammeldownloads 24 Stunden (Datensatz 30 Tage), Upload-Sitzungen bis Ablauf, Sitzungen 7 Tage nach Ende, Einladungen 30 Tage nach Ablauf, Benachrichtigungen 60 Tage, Importberichte wie das Audit | Worker | Beiträge (redaktionelles Archiv, veröffentlichte Inhalte) und Konten werden nicht automatisch gelöscht; Personendaten in Beiträgen von Hand bearbeiten bzw. Beitrag zurückziehen |
+| Sonstiges (fest) | Sammeldownloads 24 Stunden (Datensatz 30 Tage), Upload-Sitzungen bis Ablauf, Sitzungen und gemerkte Geräte 7 Tage nach Ende, Einladungen 30 Tage nach Ablauf, Benachrichtigungen 60 Tage, Importberichte wie das Audit | Worker | Beiträge (redaktionelles Archiv, veröffentlichte Inhalte) und Konten werden nicht automatisch gelöscht; Personendaten in Beiträgen von Hand bearbeiten bzw. Beitrag zurückziehen |
+| Angemeldet bleiben | an, **30 Tage** ohne Nutzung (1–180) | `security.remember_enabled`, `security.remember_days` (*Einstellungen → Sicherheit*) | Installierte App auf Dienstgeräten ohne tägliche Neuanmeldung; gebunden an das Geräte-Cookie, kritische Aktionen weiter mit Passwort und Code. Bei Geräten, die mehrere Personen nutzen, abschalten oder kürzer stellen |
+| Zwei-Faktor auf einem Gerät merken | an, **30 Tage** (1–90) | `security.mfa_remember_enabled`, `security.mfa_remember_days` | Code nur auf neuen Geräten bzw. einmal im Monat; nur nach einem Code aus der App, serverseitig widerrufbar |
 | Systemprotokoll / Audit | **30 Tage / 365 Tage** (Standard) | `retention.log_days`, `retention.audit_days` | Fehlersuche bzw. Nachvollziehbarkeit von Freigaben |
 | IP-Adressen ohne Benutzerkonto im Audit | **30 Tage** (1–365) | `privacy.upload_ip_retention_days` (Einstellungen → Redaktion) | Missbrauchsabwehr bei öffentlichen Uploads, Anmeldeversuchen mit unbekanntem Konto und Bridge-/FE2-Fehlversuchen; danach ersetzt der Worker die Adresse durch „entfernt“, der Eintrag selbst bleibt. Kein „0 = nie“: die Adresse wird immer gekürzt |
 | Datenbanksicherung im Volume | täglich 03:00, **14** behalten (Standard) | *Einstellungen → Sicherung* | schneller Rückweg nach Bedienfehlern |
@@ -297,7 +299,7 @@ setzen den eingerichteten E-Mail-Versand voraus.
 
 | Lage | Maßnahme in BlaulichtCMS |
 |---|---|
-| Konto übernommen oder Gerät verloren | Benutzer → Konto deaktivieren (beendet alle Sitzungen und offenen Links), Zwei-Faktor zurücksetzen, Passwort-Link neu erzeugen; die Person meldet sich unter *Profil → Auf allen Geräten abmelden* selbst überall ab |
+| Konto übernommen oder Gerät verloren | Benutzer → *Auf allen Geräten abmelden* (beendet alle Sitzungen, auch „Angemeldet bleiben“, und entfernt gemerkte Geräte der Zwei-Faktor-Anmeldung) oder Konto deaktivieren (zusätzlich offene Links), Zwei-Faktor zurücksetzen, Passwort-Link neu erzeugen; die Person kann sich unter *Profil → Auf allen Geräten abmelden* auch selbst überall abmelden |
 | Admin-Konto betroffen | wie oben, zusätzlich Rollen und Einstellungen im Audit (Details: vorher/nachher) prüfen und ggf. zurücksetzen; im Notfall `cli.js password-link` / `cli.js reset-mfa` |
 | Bridge-Schlüssel einer Website abgeflossen | Kanäle → Website → Kopplung widerrufen (sofort wirksam, offene Aufträge werden abgebrochen), danach neu koppeln |
 | FE2-Zugangsschlüssel abgeflossen | Verbindungen → FE2 → „Neuen Zugangsschlüssel erzeugen“ und in FE2 eintragen |
@@ -306,6 +308,26 @@ setzen den eingerichteten E-Mail-Versand voraus.
 | Upload-Link in falschen Händen | Sammlung → Link → „Neu erzeugen“ (alter Link und QR-Code sofort ungültig, Einstellungen bleiben) oder widerrufen; eingegangene Dateien in der Sichtung prüfen |
 | Master-Schlüssel oder Volume-Sicherung abgeflossen | Master-Schlüssel wechseln (`cli.js rotate-master-key --ja`, Abschnitt „Master-Schlüssel wechseln“), alle Zugangsdaten bei den Gegenstellen erneuern (soziale Kanäle, SMTP, Bridge neu koppeln, FE2-Schlüssel erneuern), Upload-Links widerrufen und neu ausgeben; Sicherungen getrennt vom Master-Schlüssel aufbewahren |
 | Audit-Kette meldet Auffälligkeiten | Belege sichern (Datenbanksicherung, zentrales Protokoll), Zugänge zum Docker-Host prüfen, ISB informieren |
+
+### Angemeldet bleiben und gemerkte Geräte
+
+- **Angemeldet bleiben** (Ankreuzfeld auf der Anmeldeseite, in der installierten App vorbelegt): keine Abmeldung bei
+  Leerlauf, Ablauf `security.remember_days` nach der letzten Nutzung (gleitend, höchstens einmal pro Stunde erneuert;
+  Cookie-Laufzeit gleich). Die Sitzung ist an das signierte Geräte-Cookie gebunden; wird das Sitzungs-Cookie ohne das
+  passende Geräte-Cookie vorgelegt, wird die Sitzung abgewiesen und beendet. Gilt für alle Rollen.
+- **Zwei-Faktor auf diesem Gerät merken** (Ankreuzfeld bei der Code-Abfrage): Eintrag in `trusted_devices` (nur Hash der
+  Gerätekennung, Browser-Kennung, Zeiten), danach fragt die Anmeldung auf diesem Gerät `security.mfa_remember_days`
+  lang nur das Passwort. Entsteht nur nach einem Code aus der App, nie nach einem Wiederherstellungscode.
+- **Unverändert:** Step-up für kritische Aktionen (Passwort und Code, höchstens 10 Minuten alt), Kontosperre je Gerät.
+- **Widerruf:** Passwortänderung, Zwei-Faktor einrichten/abschalten/zurücksetzen, *Auf allen Geräten abmelden* (selbst
+  oder durch die Benutzerverwaltung), Konto deaktivieren, Passwort-Link für ein aktives Konto, Master-Schlüsselwechsel.
+  Abschalten einer der beiden Einstellungen beendet bestehende gemerkte Sitzungen bzw. entfernt alle gemerkten Geräte
+  sofort (die eigene Sitzung der ändernden Person bleibt als normale Sitzung bestehen). Eine verkürzte Frist greift
+  beim nächsten Aufruf bzw. bei der nächsten Anmeldung.
+- **Audit/Meldungen:** `auth.trusted_device_added`, `auth.trusted_device_removed`, `auth.session_revoked` (mit
+  „gemerkt“), `user.sessions_ended`, `settings.remember_revoked`; Anmeldungen ohne Code stehen mit
+  `mfa: vertrauenswürdiges Gerät` im Audit. Die betroffene Person bekommt eine Meldung, wenn ein Gerät gemerkt oder sie
+  durch die Verwaltung überall abgemeldet wurde.
 
 ## Master-Schlüssel wechseln
 
@@ -334,6 +356,7 @@ bleibt gültig, weil ihr Schlüssel ein eigenes, nur neu verschlüsseltes Geheim
 |---|---|
 | Wiederherstellungscodes, die seit der Umstellung auf gesalzene Codes erzeugt wurden | **ungültig** (sie sind mit einem aus dem Master-Schlüssel abgeleiteten Schlüssel gebildet und lassen sich nicht umschlüsseln). Sie werden entfernt, die Personen bekommen eine Meldung, und die Profilseite fordert zu neuen Codes auf. Ältere Codes bleiben gültig |
 | Geräte-Merkmal der Kontosperre, Download-Links für das Plugin | werden ungültig (Geräte gelten bis zur nächsten vollständigen Anmeldung als unbekannt; Links neu erzeugen) |
+| „Angemeldet bleiben“ und gemerkte Geräte der Zwei-Faktor-Anmeldung | werden beendet bzw. entfernt (sie hängen am Geräte-Merkmal); alle melden sich einmal neu mit Code an |
 | Volume-Sicherungen | nicht betroffen (eigener Sicherungsschlüssel am Host). Ältere Volume-Sicherungen enthalten den alten Master-Schlüssel und bleiben damit vollständig wiederherstellbar |
 | Datenbanksicherungen aus der Zeit vor dem Wechsel außerhalb des Volumes (heruntergeladen) | brauchen den alten Schlüssel: `BLAULICHTCMS_MASTER_KEY=$(cat master.key.alt-…) node server/dist/cli.js backup-decrypt …` |
 | Eine Datenbanksicherung von vor dem Wechsel einspielen | Zugangsdaten und Zwei-Faktor sind darin mit dem alten Schlüssel verschlüsselt – mit dem alten Schlüssel starten oder den Wechsel danach wiederholen |

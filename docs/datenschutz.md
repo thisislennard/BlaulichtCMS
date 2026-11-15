@@ -43,7 +43,7 @@ Warnfeeds (amtliche Warnungen) ◀──Abruf───────────�
 | Zuständigkeiten (`responsibilities`) | Ansprechstellen | Funktionsadressen | solange gepflegt | – |
 | FE2 (`fe2_events`) | ggf. Betroffene eines Einsatzes (indirekt über Ort/Zeit) | Stichwort, Ort, Zeit, Einheiten (Allowlist, keine Alarmtexte) | **90 Tage** | `privacy.fe2_event_days` |
 | Amtliche Warnungen (`official_warnings`) | – | keine personenbezogenen Daten | **90 Tage** nach Ablauf und nachdem die Quelle sie nicht mehr liefert | `privacy.official_warning_days` |
-| Konten (`users`, `sessions`, `invitations`) | Redaktion, Administration | Name, E-Mail, Rollen, Passwort-Hash, TOTP (verschlüsselt), letzte Anmeldung, Sitzungen mit IP und Browser | Konto bis zur Löschung; Sitzungen 7 Tage nach Ende; Einladungen 30 Tage nach Ablauf | – |
+| Konten (`users`, `sessions`, `invitations`, `trusted_devices`) | Redaktion, Administration | Name, E-Mail, Rollen, Passwort-Hash, TOTP (verschlüsselt), letzte Anmeldung, Sitzungen mit IP und Browser, gemerkte Geräte der Zwei-Faktor-Anmeldung (Browser-Kennung, Zeitpunkte, Hash der Gerätekennung, keine IP) | Konto bis zur Löschung; Sitzungen und gemerkte Geräte 7 Tage nach Ende bzw. Ablauf; Einladungen 30 Tage nach Ablauf | `security.remember_days`, `security.mfa_remember_days` |
 | Audit (`audit_events`) | alle Handelnden, Hochladende (IP) | Name, E-Mail, Aktion, Objekt, IP | **365 Tage**; IP ohne Konto **30 Tage** | `retention.audit_days`, `privacy.upload_ip_retention_days` |
 | Systemprotokoll (`app_logs`) | Handelnde (selten) | technische Meldungen | **30 Tage** | `retention.log_days` |
 | Benachrichtigungen | Empfänger | Text, Link | 60 Tage | – |
@@ -51,8 +51,10 @@ Warnfeeds (amtliche Warnungen) ◀──Abruf───────────�
 | Zugriffsprotokoll des Proxys | alle Aufrufenden | IP, Adresse (ggf. Token), Browser | abschalten bzw. **7 Tage** | am Proxy |
 
 **Cookies** (nur technisch notwendig, keine Einwilligung nötig, aber in der Datenschutzerklärung zu nennen):
-Sitzungs-Cookie (`__Host-bc_session` bzw. `bc_session`, bis zum Abmelden bzw. Sitzungsende) und Geräte-Cookie
-`__Host-bc_device` bzw. `bc_device` (180 Tage, signiert; nimmt ein bekanntes Gerät von der Kontosperre nach Fehlversuchen aus). Die
+Sitzungs-Cookie (`__Host-bc_session` bzw. `bc_session`, bis zum Abmelden bzw. Sitzungsende – höchstens 12 Stunden,
+mit „Angemeldet bleiben“ 30 Tage nach der letzten Nutzung, einstellbar) und Geräte-Cookie `__Host-bc_device` bzw.
+`bc_device` (180 Tage, signiert; nimmt ein bekanntes Gerät von der Kontosperre nach Fehlversuchen aus und bindet
+gemerkte Sitzungen und gemerkte Geräte der Zwei-Faktor-Anmeldung an diesen Browser). Die
 öffentliche Upload-Seite setzt kein Cookie für Hochladende. Kein Tracking, keine externen Schriften oder Skripte.
 
 Das Audit enthält keine Empfängeradressen von Warnversänden und Zuständigkeiten, sondern nur Anzahl, Namen der

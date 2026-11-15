@@ -11,6 +11,7 @@ import { generateRecoveryCodes, generateTotpSecret, otpauthUrl, recoveryCodeCand
 import { permissionsFor, ROLES } from '../auth/permissions.js';
 import { clearFailures, isLocked, knownDevice, registerFailure } from '../auth/lockout.js';
 import { confirmIdentity } from '../auth/stepup.js';
+import { revokeTrustedDevices, trustDevice, trustedDeviceId } from '../auth/devices.js';
 import { audit } from '../lib/audit.js';
 import { checkFailedLoginRate, notifyAffectedUser, securityAlert } from '../lib/security-alerts.js';
 import { aad, decrypt, encrypt, fingerprint, randomToken, safeEqual, sha256Hex } from '../lib/crypto.js';
@@ -71,7 +72,15 @@ export async function authRoutes(app: FastifyInstance) {
   app.get('/auth/state', async () => {
     const s = await getSettings();
     const count = await one<{ n: number }>('SELECT count(*)::int AS n FROM users');
-    return { setupRequired: count!.n === 0, instanceName: s['general.instance_name'], organization: s['general.organization'], suggestedPublicUrl: count!.n === 0 ? config.publicUrl || null : null };
+    return {
+      setupRequired: count!.n === 0,
+      instanceName: s['general.instance_name'],
+      organization: s['general.organization'],
+      suggestedPublicUrl: count!.n === 0 ? config.publicUrl || null : null,
+      // Für die Ankreuzfelder „Angemeldet bleiben“ und „Auf diesem Gerät … nicht nach dem Code fragen“
+      remember: { enabled: s['security.remember_enabled'], days: s['security.remember_days'] },
+      mfaRemember: { enabled: s['security.mfa_remember_enabled'], days: s['security.mfa_remember_days'] },
+    };
   });
 
   app.post('/auth/setup', { ...loginLimit }, async (req, reply) => {
@@ -119,7 +128,7 @@ export async function authRoutes(app: FastifyInstance) {
   });
 
   app.post('/auth/login', { ...loginLimit }, async (req, reply) => {
-    const body = z.object({ email: z.string().trim().min(1).max(200), password: z.string().min(1).max(300) }).parse(req.body);
+    const body = z.object({ email: z.string().trim().min(1).max(200), password: z.string().min(1).max(300), remember: z.boolean().optional() }).parse(req.body);
     const s = await getSettings();
     const user = await one<any>('SELECT * FROM users WHERE lower(email) = lower($1)', [body.email]);
     const fail = async (reason: string) => {
@@ -152,23 +161,31 @@ export async function authRoutes(app: FastifyInstance) {
     if (needsRehash(user.password_hash)) {
       await pool.query('UPDATE users SET password_hash = $3 WHERE id = $1 AND password_hash = $2', [user.id, user.password_hash, await hashPassword(body.password)]);
     }
-    const stage = user.totp_enabled ? 'mfa' : mustUse2fa(user.roles, s) ? 'mfa_setup' : 'full';
-    await createSession(reply, req, user.id, stage);
+    // Vertrauenswürdiges Gerät (Code auf diesem Gerät zuletzt bestätigt, serverseitig hinterlegt): nur das Passwort
+    const trusted = user.totp_enabled ? await trustedDeviceId(req, user.id, s) : null;
+    const stage = user.totp_enabled && !trusted ? 'mfa' : !user.totp_enabled && mustUse2fa(user.roles, s) ? 'mfa_setup' : 'full';
+    const session = await createSession(reply, req, user.id, stage, { remember: body.remember });
     if (stage === 'full') {
       await pool.query('UPDATE users SET last_login_at = now() WHERE id = $1', [user.id]);
-      await audit({ id: user.id, name: user.name, type: 'user', ip: req.ip }, 'auth.login', { type: 'user', id: user.id, label: user.email });
+      if (trusted) await pool.query('UPDATE trusted_devices SET last_used_at = now() WHERE id = $1', [trusted]);
+      await audit({ id: user.id, name: user.name, type: 'user', ip: req.ip }, 'auth.login', { type: 'user', id: user.id, label: user.email }, {
+        ...(trusted ? { mfa: 'vertrauenswürdiges Gerät' } : {}),
+        ...(session.remembered ? { angemeldet_bleiben: true } : {}),
+      });
     }
     return { next: stage === 'full' ? 'done' : stage };
   });
 
+  /** Zwischenstufe → volle Sitzung mit neuem Token; der Wunsch „Angemeldet bleiben“ aus der Anmeldung gilt weiter. */
   async function upgradeSession(req: any, reply: any, userId: string) {
     await pool.query('UPDATE sessions SET revoked_at = now() WHERE id = $1', [req.auth.sessionId]);
-    await createSession(reply, req, userId, 'full');
+    const session = await createSession(reply, req, userId, 'full', { remember: !!req.auth.remember });
     await pool.query('UPDATE users SET last_login_at = now() WHERE id = $1', [userId]);
+    return session;
   }
 
   app.post('/auth/mfa', { ...loginLimit }, async (req, reply) => {
-    const body = z.object({ code: z.string().trim().min(6).max(20) }).parse(req.body);
+    const body = z.object({ code: z.string().trim().min(6).max(20), trustDevice: z.boolean().optional() }).parse(req.body);
     if (!req.auth || req.auth.stage !== 'mfa' || !req.auth.user) throw unauthorized();
     const s = await getSettings();
     const user = await one<any>('SELECT * FROM users WHERE id = $1', [req.auth.user.id]);
@@ -186,7 +203,10 @@ export async function authRoutes(app: FastifyInstance) {
     };
     const secret = decrypt(user.totp_secret_enc, totpAad(user.id));
     const counter = verifyTotp(secret, body.code);
+    // Nur ein Code aus der App macht ein Gerät vertrauenswürdig – ein Wiederherstellungscode (Telefon verloren) nie
+    let viaTotp = false;
     if (counter !== null) {
+      viaTotp = true;
       // Bedingt aktualisieren: zwei parallele Anfragen mit demselben Code gelingen nicht beide (#64)
       const r = await pool.query('UPDATE users SET totp_last_counter = $2 WHERE id = $1 AND (totp_last_counter IS NULL OR totp_last_counter < $2)', [user.id, counter]);
       if (!r.rowCount) return failMfa('Dieser Code wurde bereits verwendet. Bitte den nächsten abwarten.');
@@ -204,8 +224,17 @@ export async function authRoutes(app: FastifyInstance) {
       await notifyAffectedUser(user.id, 'Anmeldung mit einem Wiederherstellungscode', `Für dein Konto wurde ein Wiederherstellungscode benutzt (noch ${left} übrig). Warst du das nicht, bitte sofort das Passwort ändern und die Administration informieren.`);
     }
     await clearFailures(user, 'mfa_failed', device);
-    await upgradeSession(req, reply, user.id);
-    await audit(actor, 'auth.login', { type: 'user', id: user.id, label: user.email }, { mfa: true });
+    const session = await upgradeSession(req, reply, user.id);
+    await audit(actor, 'auth.login', { type: 'user', id: user.id, label: user.email }, { mfa: true, ...(session.remembered ? { angemeldet_bleiben: true } : {}) });
+    if (body.trustDevice && viaTotp && s['security.mfa_remember_enabled'] && session.device) {
+      await trustDevice(user.id, session.device, String(req.headers['user-agent'] ?? ''), s);
+      await audit(actor, 'auth.trusted_device_added', { type: 'user', id: user.id, label: user.email }, { tage: s['security.mfa_remember_days'] });
+      await notifyAffectedUser(
+        user.id,
+        'Gerät für die Zwei-Faktor-Anmeldung gemerkt',
+        `Auf einem Gerät wird ${s['security.mfa_remember_days']} Tage lang kein Code abgefragt (nur das Passwort). Warst du das nicht, unter „Mein Konto“ das Gerät entfernen, das Passwort ändern und die Administration informieren.`,
+      );
+    }
     return { next: 'done' };
   });
 
@@ -236,6 +265,7 @@ export async function authRoutes(app: FastifyInstance) {
     await pool.query('UPDATE users SET totp_enabled = true, totp_last_counter = $2, recovery_codes = $3 WHERE id = $1', [user.id, counter, codes.map((c) => recoveryCodeHash(user.id, c))]);
     // Alle anderen Sitzungen beenden – sie müssen sich mit dem neuen zweiten Faktor neu anmelden (#144)
     await pool.query('UPDATE sessions SET revoked_at = now() WHERE user_id = $1 AND id <> $2 AND revoked_at IS NULL', [user.id, req.auth.sessionId]);
+    await revokeTrustedDevices(user.id);
     await audit({ id: user.id, name: user.name, type: 'user', ip: req.ip }, 'auth.mfa_enabled', { type: 'user', id: user.id, label: user.email });
     await notifyAffectedUser(user.id, 'Zwei-Faktor-Anmeldung eingerichtet', 'Für dein Konto wurde die Zwei-Faktor-Anmeldung eingerichtet; andere Sitzungen wurden beendet. Warst du das nicht, bitte sofort die Administration informieren.');
     if (req.auth.stage === 'mfa_setup') await upgradeSession(req, reply, user.id);
@@ -267,6 +297,7 @@ export async function authRoutes(app: FastifyInstance) {
     await confirmIdentity(req, user, body, { requireCode: true, purpose: 'Zwei-Faktor abschalten' });
     await pool.query(`UPDATE users SET totp_enabled = false, totp_secret_enc = NULL, recovery_codes = '{}' WHERE id = $1`, [user.id]);
     await pool.query('UPDATE sessions SET revoked_at = now() WHERE user_id = $1 AND id <> $2 AND revoked_at IS NULL', [user.id, req.auth!.sessionId]);
+    await revokeTrustedDevices(user.id);
     await audit(req.auth!.actor, 'auth.mfa_disabled', { type: 'user', id: user.id, label: user.email });
     await notifyAffectedUser(user.id, 'Zwei-Faktor-Anmeldung abgeschaltet', 'Für dein Konto wurde die Zwei-Faktor-Anmeldung abgeschaltet; andere Sitzungen wurden beendet. Warst du das nicht, bitte sofort das Passwort ändern und die Administration informieren.');
     await securityAlert('mfa_disabled', { title: `Zwei-Faktor abgeschaltet: ${user.email}`, body: 'Die Person hat die Zwei-Faktor-Anmeldung für ihr Konto selbst abgeschaltet.', link: '/benutzer', permission: 'user.manage', kind: 'info' });
@@ -296,9 +327,11 @@ export async function authRoutes(app: FastifyInstance) {
     return { ok: true };
   });
 
+  /** Alle Sitzungen dieses Kontos beenden und alle vertrauenswürdigen Geräte entfernen. */
   app.post('/auth/logout-all', { preHandler: requireAuth() }, async (req, reply) => {
     await pool.query('UPDATE sessions SET revoked_at = now() WHERE user_id = $1 AND revoked_at IS NULL', [req.auth!.user!.id]);
-    await audit(req.auth!.actor, 'auth.logout_all', { type: 'user', id: req.auth!.user!.id, label: req.auth!.user!.email });
+    const devices = await revokeTrustedDevices(req.auth!.user!.id);
+    await audit(req.auth!.actor, 'auth.logout_all', { type: 'user', id: req.auth!.user!.id, label: req.auth!.user!.email }, { vertrauenswuerdige_geraete: devices });
     clearSessionCookie(reply);
     return { ok: true };
   });
@@ -346,16 +379,18 @@ export async function authRoutes(app: FastifyInstance) {
     const problem = passwordProblems(body.next, s['security.password_min_length'], [user.email, user.name, s['general.organization'], s['general.instance_name']]);
     if (problem) throw badRequest(problem);
     await pool.query('UPDATE users SET password_hash = $2, password_changed_at = now() WHERE id = $1', [user.id, await hashPassword(body.next)]);
-    // Alle anderen Sitzungen beenden
+    // Alle anderen Sitzungen beenden und vertrauenswürdige Geräte entfernen (das alte Passwort gilt nirgends mehr)
     await pool.query('UPDATE sessions SET revoked_at = now() WHERE user_id = $1 AND id <> $2 AND revoked_at IS NULL', [user.id, req.auth!.sessionId]);
+    await revokeTrustedDevices(user.id);
     await audit(req.auth!.actor, 'auth.password_changed', { type: 'user', id: user.id, label: user.email });
-    await notifyAffectedUser(user.id, 'Passwort geändert', 'Das Passwort deines Kontos wurde geändert; andere Sitzungen wurden beendet. Warst du das nicht, bitte sofort die Administration informieren.');
+    await notifyAffectedUser(user.id, 'Passwort geändert', 'Das Passwort deines Kontos wurde geändert; andere Sitzungen wurden beendet und gemerkte Geräte der Zwei-Faktor-Anmeldung entfernt. Warst du das nicht, bitte sofort die Administration informieren.');
     return { ok: true };
   });
 
   app.get('/auth/sessions', { preHandler: requireAuth() }, async (req) => {
     const rows = await many<any>(
-      `SELECT id, created_at, last_seen_at, ip, user_agent FROM sessions WHERE user_id = $1 AND revoked_at IS NULL AND expires_at > now() AND stage = 'full' ORDER BY last_seen_at DESC`,
+      `SELECT id, created_at, last_seen_at, expires_at, ip, user_agent, remember FROM sessions
+        WHERE user_id = $1 AND revoked_at IS NULL AND expires_at > now() AND stage = 'full' ORDER BY last_seen_at DESC`,
       [req.auth!.user!.id],
     );
     return rows.map((r) => ({ ...r, current: r.id === req.auth!.sessionId }));
@@ -363,8 +398,28 @@ export async function authRoutes(app: FastifyInstance) {
 
   app.delete('/auth/sessions/:id', { preHandler: requireAuth() }, async (req) => {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
-    const r = await pool.query('UPDATE sessions SET revoked_at = now() WHERE id = $1 AND user_id = $2 AND revoked_at IS NULL', [id, req.auth!.user!.id]);
-    if (r.rowCount) await audit(req.auth!.actor, 'auth.session_revoked', { type: 'user', id: req.auth!.user!.id, label: req.auth!.user!.email }, { sitzung: id });
+    const r = await one<{ remember: boolean }>('UPDATE sessions SET revoked_at = now() WHERE id = $1 AND user_id = $2 AND revoked_at IS NULL RETURNING remember', [id, req.auth!.user!.id]);
+    if (r) await audit(req.auth!.actor, 'auth.session_revoked', { type: 'user', id: req.auth!.user!.id, label: req.auth!.user!.email }, { sitzung: id, gemerkt: r.remember });
+    return { ok: true };
+  });
+
+  /** Vertrauenswürdige Geräte der eigenen Zwei-Faktor-Anmeldung (ohne Gerätekennung, nur Browser und Zeiten). */
+  app.get('/auth/trusted-devices', { preHandler: requireAuth() }, async (req) => {
+    const s = await getSettings();
+    const userId = req.auth!.user!.id;
+    const current = await trustedDeviceId(req, userId, s);
+    const rows = await many<any>(
+      `SELECT id, user_agent, created_at, last_used_at, LEAST(expires_at, created_at + make_interval(days => $2)) AS expires_at FROM trusted_devices
+        WHERE user_id = $1 AND revoked_at IS NULL AND expires_at > now() AND created_at > now() - make_interval(days => $2) ORDER BY created_at DESC`,
+      [userId, s['security.mfa_remember_days']],
+    );
+    return { enabled: s['security.mfa_remember_enabled'], days: s['security.mfa_remember_days'], devices: rows.map((r) => ({ ...r, current: r.id === current })) };
+  });
+
+  app.delete('/auth/trusted-devices/:id', { preHandler: requireAuth() }, async (req) => {
+    const { id } = z.object({ id: z.uuid() }).parse(req.params);
+    const r = await pool.query('UPDATE trusted_devices SET revoked_at = now() WHERE id = $1 AND user_id = $2 AND revoked_at IS NULL', [id, req.auth!.user!.id]);
+    if (r.rowCount) await audit(req.auth!.actor, 'auth.trusted_device_removed', { type: 'user', id: req.auth!.user!.id, label: req.auth!.user!.email }, { geraet: id });
     return { ok: true };
   });
 
@@ -400,6 +455,7 @@ export async function authRoutes(app: FastifyInstance) {
         db,
       );
       await db.query('UPDATE sessions SET revoked_at = now() WHERE user_id = $1 AND revoked_at IS NULL', [u.id]);
+      await revokeTrustedDevices(u.id, db);
       return u;
     });
     await audit({ id: user.id, name: user.name, type: 'user', ip: req.ip }, 'auth.invite_accepted', { type: 'user', id: user.id, label: user.email });

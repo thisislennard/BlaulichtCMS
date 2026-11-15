@@ -40,7 +40,9 @@
       "recovery_codes_renewed": "Neue Wiederherstellungscodes erzeugt",
       "confirm": "Identität bestätigt",
       "reauth": "Kritische Aktion bestätigt",
-      "session_revoked": "Sitzung beendet"
+      "session_revoked": "Sitzung beendet",
+      "trusted_device_added": "Gerät für Zwei-Faktor gemerkt",
+      "trusted_device_removed": "Gemerktes Gerät entfernt"
     },
     "setup": {
       "complete": "Ersteinrichtung abgeschlossen"
@@ -56,7 +58,8 @@
       "mfa_reset": "2FA zurückgesetzt",
       "deleted": "Benutzer gelöscht",
       "invite_revoked": "Einladung widerrufen",
-      "unlocked": "Sperre aufgehoben"
+      "unlocked": "Sperre aufgehoben",
+      "sessions_ended": "Auf allen Geräten abgemeldet"
     },
     "api_key": {
       "created": "API-Schlüssel erstellt",
@@ -77,7 +80,8 @@
       "approval_revoked": "Freigabe zurückgezogen"
     },
     "settings": {
-      "changed": "Einstellungen geändert"
+      "changed": "Einstellungen geändert",
+      "remember_revoked": "Gemerkte Sitzungen/Geräte beendet"
     },
     "publication": {
       "requested": "Veröffentlichung beauftragt",
@@ -227,7 +231,9 @@
       "recovery_codes_renewed": "hat neue Wiederherstellungscodes erzeugt",
       "confirm": "hat die eigene Identität bestätigt",
       "reauth": "hat eine kritische Aktion mit dem Passwort bestätigt",
-      "session_revoked": "hat eine eigene Sitzung beendet"
+      "session_revoked": "hat eine eigene Sitzung beendet",
+      "trusted_device_added": "hat ein Gerät für die Zwei-Faktor-Anmeldung gemerkt",
+      "trusted_device_removed": "hat ein gemerktes Gerät der Zwei-Faktor-Anmeldung entfernt"
     },
     "setup": {
       "complete": "hat BlaulichtCMS eingerichtet"
@@ -243,7 +249,8 @@
       "mfa_reset": "hat die Zwei-Faktor-Anmeldung von „{o}“ zurückgesetzt",
       "deleted": "hat das Konto „{o}“ gelöscht",
       "invite_revoked": "hat die Einladung für „{o}“ widerrufen",
-      "unlocked": "hat die Sperre von „{o}“ aufgehoben"
+      "unlocked": "hat die Sperre von „{o}“ aufgehoben",
+      "sessions_ended": "hat „{o}“ auf allen Geräten abgemeldet"
     },
     "api_key": {
       "created": "hat den API-Schlüssel „{o}“ erstellt",
@@ -264,7 +271,8 @@
       "approval_revoked": "hat die Freigabe von „{o}“ zurückgezogen"
     },
     "settings": {
-      "changed": "hat die Systemeinstellungen geändert"
+      "changed": "hat die Systemeinstellungen geändert",
+      "remember_revoked": "hat gemerkte Sitzungen bzw. Geräte durch Abschalten beendet"
     },
     "publication": {
       "requested": "hat die Veröffentlichung von „{o}“ beauftragt",
