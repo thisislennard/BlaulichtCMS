@@ -27,7 +27,7 @@ Beides steht in der Verbindung unter Schritt **Aktivieren** und braucht das Rech
 
 ## Facebook-Seite und Instagram-Konto
 
-Facebook-Seite und Instagram-Konto sind **zwei getrennte Verbindungen** mit eigener Meta-App-Anbindung, eigenem Test und eigenem Status. BlaulichtCMS nutzt die Graph API in Version **v26.0**.
+Facebook-Seite und Instagram-Konto sind **zwei getrennte Verbindungen** mit eigener Meta-App-Anbindung, eigenem Test und eigenem Status. BlaulichtCMS nutzt die Graph API in Version **v27.0**.
 
 **Voraussetzungen**
 

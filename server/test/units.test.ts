@@ -135,6 +135,16 @@ describe('FE2-Eingang: Zuordnung', () => {
   });
 });
 
+describe('Meta Graph API', () => {
+  it('nutzt v27.0 für Graph API, Instagram und OAuth-Dialog', async () => {
+    const { META_API_VERSION, FB_GRAPH, FB_DIALOG, IG_GRAPH } = await import('../src/connections/meta.js');
+    expect(META_API_VERSION).toBe('v27.0');
+    if (!process.env.BLAULICHTCMS_META_GRAPH_URL) expect(FB_GRAPH()).toBe('https://graph.facebook.com/v27.0');
+    if (!process.env.BLAULICHTCMS_META_DIALOG_URL) expect(FB_DIALOG()).toBe('https://www.facebook.com/v27.0/dialog/oauth');
+    if (!process.env.BLAULICHTCMS_IG_GRAPH_URL) expect(IG_GRAPH()).toBe('https://graph.instagram.com/v27.0');
+  });
+});
+
 describe('Feuersoftware Connect: Felder, Filter, Pausen', () => {
   it('Feldnamen in PascalCase und camelCase; nur Ort ohne Straße, keine Personen- oder Sachverhaltsdaten', async () => {
     const { normalizeKeys, operationFields, locationArea } = await import('../src/connections/feuersoftware.js');

@@ -14,10 +14,17 @@ import { scrub } from './common.js';
  * Beide werden getrennt angebunden und haben getrennte Status. Tokens bleiben auf dem Server.
  */
 /**
- * Graph-API-Version (Meta unterstützt jede Version rund zwei Jahre). v26.0 seit 29.07.2026; die dort entfernten
- * Funktionen (u. a. `date_format`, `GET /?ids=`) nutzt BlaulichtCMS nicht. Bei einem Wechsel den Live-Test (#46) wiederholen.
+ * Graph-API-Version (Meta unterstützt jede Version rund zwei Jahre). v27.0 seit 04.11.2026, geprüft am 15.11.2026
+ * anhand des Graph-API-Changelogs (v27.0 und v26.0) und des Instagram-Platform-Changelogs:
+ *  - v27.0 bringt für die genutzten Aufrufe nur Ergänzungen (optional `is_ai_generated` beim Bearbeiten von Beiträgen);
+ *    Seitenbeiträge, Fotos, Videos, Löschen, `permalink_url`, `/me/accounts`, `/me/permissions`, OAuth-Dialog und
+ *    Token-Tausch sowie die Rechte `pages_*` und `instagram_business_*` sind unverändert.
+ *  - Seit v26.0 bzw. für alle Versionen entfernt: `date_format`, `GET /?ids=`, `pretty`/`debug`, `If-None-Match`, einige
+ *    Seitenfelder (`settings`, `parking` …) – nutzt BlaulichtCMS nicht (Seitenfelder nur `id,name,link`).
+ *  - Instagram: `media_url` fehlt teils in Antworten – BlaulichtCMS liest nur `id`, `permalink`, `caption`, `timestamp`.
+ * Bei einem Wechsel den Live-Test (#46) wiederholen.
  */
-export const META_API_VERSION = 'v26.0';
+export const META_API_VERSION = 'v27.0';
 export const FB_GRAPH = () => (process.env.BLAULICHTCMS_META_GRAPH_URL ?? `https://graph.facebook.com/${META_API_VERSION}`).replace(/\/$/, '');
 export const FB_DIALOG = () => (process.env.BLAULICHTCMS_META_DIALOG_URL ?? `https://www.facebook.com/${META_API_VERSION}/dialog/oauth`).replace(/\/$/, '');
 export const IG_GRAPH = () => (process.env.BLAULICHTCMS_IG_GRAPH_URL ?? `https://graph.instagram.com/${META_API_VERSION}`).replace(/\/$/, '');

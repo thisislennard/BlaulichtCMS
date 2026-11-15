@@ -7,7 +7,7 @@ an die Öffentlichkeit). Alle Verbindungen sind optional und durchlaufen **Verbi
 | Verbindung | Umgesetzt | Lokaler Test | Test mit Anbieter | Produktionsnah | Konkret fehlender Live-Test |
 |---|---|---|---|---|---|
 | **WordPress (BlaulichtCMS Bridge)** | ✅ Beiträge mit Medien, Banner, Einsatzübersicht, Zurückziehen, Updates über WordPress | ✅ WordPress 6.9 (Docker), PHP 8.3, Host-Cron, Idempotenz, Update über den WordPress-Updateweg mit Prüfsumme und erhaltener Kopplung | – (kein Anbieter) | ✅ teilweise: WordPress 7.1.4 / PHP 8.5, Bridge 0.5.1, HTTPS mit geprüftem Zertifikat, WP-Cron **und** Host-Cron, Twenty Twenty-Five, WP Super Cache (siehe unten) | nur noch: Bridge auf der **eigenen** Testwebsite mit deren Theme und Cache, produktive Adresse mit echtem Zertifikat |
-| **Facebook-Seite** | ✅ Graph API v26.0, OAuth, Seitenwahl, Text/Fotos/Video, Status je Kanal, gezieltes Wiederholen, Prüfung bei unbekanntem Ergebnis, manueller Export | ✅ Graph-API-Ersatz: unveröffentlichter Testbeitrag + Löschen, Ablehnung (400), Serverfehler nach Anlage (500 → „unbekannt“ → gefunden, kein Duplikat), OAuth-Rückweg ohne Cookie | ❌ | ❌ | Meta-App mit Facebook Login, App-Prüfung der Rechte `pages_manage_posts` u. a., Testseite; Veröffentlichung eines nicht öffentlichen Testbeitrags |
+| **Facebook-Seite** | ✅ Graph API v27.0, OAuth, Seitenwahl, Text/Fotos/Video, Status je Kanal, gezieltes Wiederholen, Prüfung bei unbekanntem Ergebnis, manueller Export | ✅ Graph-API-Ersatz: unveröffentlichter Testbeitrag + Löschen, Ablehnung (400), Serverfehler nach Anlage (500 → „unbekannt“ → gefunden, kein Duplikat), OAuth-Rückweg ohne Cookie | ❌ | ❌ | Meta-App mit Facebook Login, App-Prüfung der Rechte `pages_manage_posts` u. a., Testseite; Veröffentlichung eines nicht öffentlichen Testbeitrags |
 | **Instagram-Konto** | ✅ Instagram Login, Container, Statusprüfung, Karussell, Reels, Kontingent | ✅ Graph-API-Ersatz: Container ohne Veröffentlichung im Test, Veröffentlichung mit Permalink, keine Doppelveröffentlichung | ❌ | ❌ | professionelles Testkonto, App-Prüfung für `instagram_business_content_publish`, öffentlich erreichbare HTTPS-Adresse für den Medienabruf |
 | **FE2** | ✅ Eingang mit Zugangsschlüssel, Allowlist, ein Entwurf je Einsatz, Folgeereignisse | ✅ HTTP-Testmeldungen: Vorschau vor Aktivierung, Wiederholung erkannt, Alarmtext verworfen, keine Inhalte in Protokollen; zusätzlich Formular, `text/plain`, Einheiten als Objekte, deutsche Alarmzeit | ❌ | ❌ | anonymisierte Testmeldung aus der echten FE2-Instanz (HTTP-Ausgang, tatsächliches Format) – Anleitung unten |
 | **Feuersoftware Connect** | ✅ Abruf `GET /operation?onlyLatest=true` mit API-Key, Abstand 60/120/180/300 s, Retry-After, höchstens ein Abruf gleichzeitig, Filter RIC/Stichwort, nur Einsätze der letzten 24 Stunden, ein Entwurf je Einsatz (gemeinsamer Weg mit FE2), Störungsmeldung nach drei Fehlschlägen | ✅ nachgebildete Connect-Schnittstelle: Test mit Filter und Vorschau ohne Adresse, 401/403/404/429/5xx/kein JSON, Pause nach 429, keine Duplikate, gelöschte Einsätze nicht erneut, Abruf nur aktiver Verbindungen, Löschfrist | ❌ | ❌ | API-Key der Öffentlichen Connect Schnittstelle eines Standorts, Probealarm in Connect, Abgleich der tatsächlich gelieferten Felder (RIC, Adresse, Start) |
@@ -79,6 +79,23 @@ in der Verbindung **Schlüssel in der Adresse** einschalten und die zweite Adres
 `https://<blaulichtcms>/api/v1/inbound/fe2/<verbindungs-id>/<schlüssel>` verwenden (Schlüssel dann in Adressen und
 Proxy-Protokollen – siehe [reverse-proxy.md](reverse-proxy.md#zugriffsprotokolle-des-proxys-datenschutz)). Erste Meldung mit Kopfzeile `X-BlaulichtCMS-Test: 1` senden
 (nur Vorschau) und unter *Verbindungen → FE2* prüfen, welche Felder übernommen wurden; bei Bedarf die Zuordnung anpassen.
+
+## Meta Graph API – Versionswechsel auf v27.0 (15.11.2026)
+
+Geprüft wurden der [Graph-API-Changelog](https://developers.facebook.com/docs/graph-api/changelog) mit den Hinweisen zu
+[v27.0](https://developers.facebook.com/documentation/development/graph-api/changelog/version27.0) (veröffentlicht am
+04.11.2026) und [v26.0](https://developers.facebook.com/documentation/development/graph-api/changelog/version26.0) sowie
+der [Instagram-Platform-Changelog](https://developers.facebook.com/docs/instagram-platform/changelog):
+
+| Genutzt | Ergebnis |
+|---|---|
+| Seitenbeiträge (`/{page}/feed`), Fotos, Videos, Löschen, `permalink_url`, `/{page}?fields=id,name,link` | unverändert (v27.0 ergänzt nur optional `is_ai_generated` beim Bearbeiten) |
+| `/me/accounts`, `/me/permissions`, OAuth-Dialog, `/oauth/access_token` (Code und Langzeit-Token) | keine Einträge; der Changelog von Facebook Login hat keine Einträge seit 2018 |
+| Rechte `pages_show_list`, `pages_manage_posts`, `pages_read_engagement`, `instagram_business_basic`, `instagram_business_content_publish` | unverändert |
+| Instagram: Container (`image_url`, `video_url`, `REELS`, `CAROUSEL`), `status_code`, `media_publish`, `content_publishing_limit`, `permalink` | unverändert; `is_ai_generated` nur ergänzt. `media_url` kann seit 30.07.2026 fehlen – nutzt BlaulichtCMS nicht |
+| Für alle Versionen entfernt: `date_format`, `GET /?ids=`, `pretty`/`debug`, `If-None-Match` | nutzt BlaulichtCMS nicht |
+
+Code-Änderung: nur die Versionsnummer. Der Live-Test mit einer echten Meta-App steht weiterhin aus (siehe Tabelle oben).
 
 ## Feuersoftware Connect – Anbindung
 
