@@ -46,15 +46,24 @@ export interface MediaItem {
   size_bytes?: number;
   width: number | null;
   height: number | null;
-  status: 'quarantine' | 'ready' | 'rejected';
+  status: 'quarantine' | 'ready' | 'rejected' | 'blocked';
   reject_reason?: string | null;
   has_preview: boolean;
   has_public: boolean;
   had_location?: boolean | null;
   /** Original wurde von Standort- und Gerätedaten bereinigt (media.strip_location, #119). */
   location_stripped?: boolean;
-  selection?: 'pending' | 'selected' | 'skipped';
+  selection?: 'pending' | 'selected' | 'skipped' | 'on_hold';
+  /** Zähler gegen gleichzeitiges Sichten (409 bei Konflikt) */
+  selection_version?: number;
   sort_order?: number;
+  /** Anzeigename, Beschreibung, interne Notiz (nur intern) */
+  display_name?: string;
+  description?: string;
+  internal_note?: string;
+  /** gleiche Prüfsumme wie diese ältere Datei */
+  duplicate_of?: string | null;
+  upload_ref?: string | null;
   uploader_note?: string;
   uploaded_by_name?: string | null;
   via_link?: boolean;

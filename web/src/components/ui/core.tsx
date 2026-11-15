@@ -111,6 +111,8 @@ export const STATUS: Record<string, { tone: Tone; label: string; pulse?: boolean
   ready: { tone: 'success', label: 'Geprüft' },
   selected: { tone: 'success', label: 'Ausgewählt' },
   skipped: { tone: 'neutral', label: 'Übersprungen' },
+  on_hold: { tone: 'warning', label: 'Zurückgestellt' },
+  blocked: { tone: 'error', label: 'Gesperrt' },
   pending: { tone: 'neutral', label: 'Offen' },
   // Links und Kanäle
   active: { tone: 'success', label: 'Aktiv' },

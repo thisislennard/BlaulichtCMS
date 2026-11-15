@@ -3903,6 +3903,74 @@ describe('Medien wie LiFeOS 1: Upload-Seite und Link-Bedienung', () => {
   });
 });
 
+describe('Medien wie LiFeOS 2: Galerie-Komfort', () => {
+  let col: any;
+  let ids: string[] = [];
+  it('Duplikat-Hinweis über die Prüfsumme, Anzeigename, Beschreibung, interne Notiz und Details', async () => {
+    const f = await mediaFixture(editor, 'Galerie');
+    col = f.col;
+    // Eindeutiger Inhalt: photoWithGps() wird in anderen Tests schon hochgeladen (wäre sonst Duplikat einer älteren Datei)
+    const photo = await sharp({ create: { width: 300, height: 200, channels: 3, background: { r: 1, g: 2, b: 3 } } }).jpeg({ quality: 77 }).toBuffer();
+    await uploadPublic(f.token, 'a.jpg', photo);
+    await uploadPublic(f.token, 'b.jpg', photo);
+    await uploadPublic(f.token, 'c.jpg', await sharp({ create: { width: 320, height: 200, channels: 3, background: { r: 10, g: 90, b: 200 } } }).jpeg().toBuffer());
+    await processAllQuarantine();
+    const media = (await editor.get(`/collections/${col.id}`)).json.media;
+    ids = media.map((m: any) => m.id);
+    const a = media.find((m: any) => m.original_name === 'a.jpg');
+    const b = media.find((m: any) => m.original_name === 'b.jpg');
+    expect(b.duplicate_of).toBe(a.id);
+    expect(a.duplicate_of).toBeNull();
+    expect((await publisher.patch(`/media/${a.id}`, { displayName: 'Nein' })).status).toBe(403);
+    const u = await editor.patch(`/media/${a.id}`, { displayName: 'Drehleiter am Abend', description: 'Übung mit Drehleiter', internalNote: 'Rückfrage bei Max Mustermann' });
+    expect(u.json).toMatchObject({ display_name: 'Drehleiter am Abend', description: 'Übung mit Drehleiter', internal_note: 'Rückfrage bei Max Mustermann' });
+    const d = await publisher.get(`/media/${b.id}/details`);
+    expect(d.status).toBe(200);
+    expect(d.json.sha256).toMatch(/^[0-9a-f]{64}$/);
+    expect(d.json.duplicates.map((x: any) => x.id)).toContain(a.id);
+    expect(d.json.posts).toEqual([]);
+    // Neue Freitexte sind Teil der Datenschutzsuche und werden beim Pseudonymisieren geleert
+    const hits = (await admin.get(`/privacy/search?q=${encodeURIComponent('Max Mustermann')}`)).json.hits;
+    const hit = hits.find((h: any) => h.kind === 'media' && h.id === a.id);
+    expect(hit.fields.interne_notiz).toBe('Rückfrage bei Max Mustermann');
+    expect((await admin.post('/privacy/action', { kind: 'media', id: a.id, action: 'pseudonymize' })).status).toBe(200);
+    expect(await one<any>(`SELECT display_name, description, internal_note FROM media WHERE id = $1`, [a.id])).toEqual({ display_name: '', description: '', internal_note: '' });
+  });
+
+  it('Sammelaktionen: Sichtung, Zurückstellen, ZIP der markierten, Löschen mit Beitragsschutz', async () => {
+    expect((await publisher.post('/media/bulk', { ids, action: 'selection', selection: 'selected' })).status).toBe(403);
+    expect((await editor.post('/media/bulk', { ids, action: 'selection', selection: 'on_hold' })).json.updated).toBe(3);
+    expect((await editor.get(`/collections/${col.id}`)).json.media.every((m: any) => m.selection === 'on_hold')).toBe(true);
+    const ex = await editor.post(`/collections/${col.id}/exports`, { selection: 'ids', ids: ids.slice(0, 2) });
+    expect(ex.json.files).toBe(2);
+    // Datei in einem Beitrag: Sammelaktion „Löschen“ wird ganz abgelehnt
+    const p = await editor.post('/posts', { title: 'Galerie-Beitrag', kind: 'news' });
+    const post = (await editor.get(`/posts/${p.json.id}`)).json;
+    expect((await editor.put(`/posts/${p.json.id}/revision`, { title: "Galerie-Beitrag", body: "Text", mediaIds: [ids[2]], baseRevision: post.revision.number })).status).toBe(200);
+    const blocked = await editor.post('/media/bulk', { ids, action: 'delete' });
+    expect(blocked.status).toBe(400);
+    expect(blocked.json.message).toMatch(/Galerie-Beitrag/);
+    expect((await one<any>(`SELECT count(*)::int AS n FROM media WHERE id = ANY($1) AND deleted_at IS NULL`, [ids])).n).toBe(3);
+    expect((await editor.get(`/media/${ids[2]}/details`)).json.posts[0]).toMatchObject({ title: 'Galerie-Beitrag', current: true });
+    const del = await editor.post('/media/bulk', { ids: ids.slice(0, 2), action: 'delete' });
+    expect(del.json.updated).toBe(2);
+    expect((await many<any>(`SELECT action FROM audit_events WHERE action = 'media.deleted' AND object_id = ANY($1)`, [ids.slice(0, 2)])).length).toBe(2);
+  });
+
+  it('Sichtung mit Versionsprüfung: gleichzeitiges Sichten liefert 409 statt „letzter gewinnt“', async () => {
+    const m = await one<any>(`SELECT id, selection_version FROM media WHERE id = $1`, [ids[2]]);
+    const ok = await editor.post('/media/selection', { ids: [m.id], selection: 'selected', versions: { [m.id]: m.selection_version } });
+    expect(ok.status).toBe(200);
+    expect(ok.json.versions[m.id]).toBe(m.selection_version + 1);
+    const stale = await admin.post('/media/selection', { ids: [m.id], selection: 'skipped', versions: { [m.id]: m.selection_version } });
+    expect(stale.status).toBe(409);
+    expect(stale.json.message).toMatch(/Robin/);
+    expect((await one<any>(`SELECT selection FROM media WHERE id = $1`, [m.id])).selection).toBe('selected');
+    // Ohne Versionsangabe (Kachel-Knöpfe) gilt die Entscheidung wie bisher
+    expect((await admin.post('/media/selection', { ids: [m.id], selection: 'skipped' })).json.updated).toBe(1);
+  });
+});
+
 /* @@MEDIA-TESTS-END@@ */
 
 describe('In-App-Updates aus GitHub-Releases', () => {

@@ -189,6 +189,7 @@ export async function processMedia(id: string): Promise<'ready' | 'rejected' | '
       removeMediaFiles(id);
       return 'skipped';
     }
+    await markDuplicate(id);
     return 'ready';
   } catch (e) {
     if (!(e instanceof Rejected)) throw e;
@@ -198,6 +199,20 @@ export async function processMedia(id: string): Promise<'ready' | 'rejected' | '
     log('info', 'media', `Datei abgewiesen: ${e.message}`, { media: id });
     return 'rejected';
   }
+}
+
+/**
+ * Duplikat-Hinweis wie LiFeOS: gleiche Prüfsumme (SHA-256) wie eine ältere, nicht gelöschte Datei – gleich in welcher
+ * Sammlung. Gespeichert wird beides weiterhin; die Oberfläche zeigt nur einen Hinweis mit Verweis auf das Original.
+ */
+export async function markDuplicate(id: string) {
+  await pool.query(
+    `UPDATE media m SET duplicate_of = (
+        SELECT o.id FROM media o WHERE o.sha256 = m.sha256 AND o.id <> m.id AND o.deleted_at IS NULL AND o.status <> 'rejected' AND o.created_at <= m.created_at
+         ORDER BY o.created_at, o.id LIMIT 1)
+      WHERE m.id = $1`,
+    [id],
+  );
 }
 
 const VIDEO_FORMAT: Record<string, string> = { 'video/mp4': 'mp4', 'video/quicktime': 'mov', 'video/webm': 'webm' };

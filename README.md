@@ -69,8 +69,11 @@ flowchart LR
 
 ### Sichten und aufbereiten
 
-- **Sichtung am Handy oder Laptop:** Datei für Datei auswählen oder überspringen – per Button, Wischgeste oder Tastatur;
-  das nächste Bild ist schon geladen.
+- **Sichtung am Handy oder Laptop:** Datei für Datei auswählen, überspringen oder zurückstellen – per Button,
+  Wischgeste oder Tastatur; offene fortsetzen, alle erneut oder nur ausgewählte durchsehen; das nächste Bild ist schon
+  geladen, gleichzeitiges Sichten wird erkannt.
+- **Galerie:** Kacheln oder Liste mit Seiten, Großansicht zum Blättern, Details je Datei mit Anzeigename,
+  Beschreibung, interner Notiz, Prüfsumme und Duplikat-Hinweis, Mehrfachauswahl mit Sammelaktionen.
 - **Abgebildete Personen:** Markierungen für erkennbare Personen, Verletzte, Kennzeichen und sensible Inhalte;
   markierte Medien verlangen vor der Freigabe eine bewusste Datenschutz-Prüfung.
 - **Unkenntlich machen:** Bereiche verpixeln, weichzeichnen oder abdecken, Bilder zuschneiden, Videos ohne Ton

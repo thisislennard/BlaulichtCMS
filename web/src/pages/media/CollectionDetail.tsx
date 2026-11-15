@@ -1,219 +1,23 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { del, get, patch, post } from '../../api/client';
+import { ApiError, del, get, patch, post } from '../../api/client';
 import type { MediaItem, UploadLink } from '../../api/types';
 import { usePageMeta } from '../../components/layout/AppShell';
 import { UploadLinksCard } from './UploadLinks';
-import { Badge, Button, Card, cx, EmptyState, ErrorBox, FieldWrap, Input, Notice, PageHeader, Select, SkeletonRows, StatusBadge, Tabs } from '../../components/ui/core';
+import { Badge, Button, cx, EmptyState, ErrorBox, FieldWrap, Input, Notice, PageHeader, Select, SkeletonRows, StatusBadge, Tabs } from '../../components/ui/core';
 import { Icon } from '../../components/ui/Icon';
 import { Dialog, Menu, useErrorToast, useToast, useConfirm } from '../../components/ui/overlays';
 import { useAuth } from '../../lib/auth';
-import { fmtBytes, fmtDateTime, fmtRelative } from '../../lib/format';
+import { fmtBytes, fmtDateTime } from '../../lib/format';
 import { newClientKey, uploadResumable } from '../../lib/upload';
-import { PrivacyDialog, SENSITIVE_LABELS, SENSITIVE_ORDER } from './PrivacyDialog';
+import { PrivacyDialog } from './PrivacyDialog';
+import { Lightbox, MarkBox, MediaList, MediaThumb, mediaName, Pager, useGalleryPrefs, ViewControls, type MenuItems } from './gallery';
+import { MediaDetailsDialog } from './MediaDetails';
+import { ReviewDialog, type Decision } from './ReviewDialog';
 
-type Filter = 'pending' | 'selected' | 'all' | 'problems';
-
-function MediaThumb({ m, className }: { m: MediaItem; className?: string }) {
-  if (m.status !== 'ready') {
-    return (
-      <div className={cx('bg-raised flex flex-col items-center justify-center gap-1 text-fg-muted text-sm p-2 text-center', className)}>
-        <Icon name={m.status === 'rejected' ? 'Ban' : 'Hourglass'} size={22} />
-        {m.status === 'rejected' ? 'Abgewiesen' : 'Wird geprüft'}
-      </div>
-    );
-  }
-  if (!m.has_preview) {
-    return (
-      <div className={cx('bg-raised flex flex-col items-center justify-center gap-1 text-fg-muted text-sm', className)}>
-        <Icon name={m.kind === 'video' ? 'Film' : 'ImageOff'} size={22} />
-        Keine Vorschau
-      </div>
-    );
-  }
-  return (
-    <div className={cx('relative bg-raised overflow-hidden', className)}>
-      <img src={`/api/v1/media/${m.id}/preview`} alt={m.original_name} loading="lazy" decoding="async" className="w-full h-full object-cover" />
-      {m.kind === 'video' && (
-        <span className="absolute bottom-1.5 left-1.5 bg-black/70 text-white rounded-chip px-1.5 py-0.5 text-meta flex items-center gap-1">
-          <Icon name="Film" size={12} /> Video
-        </span>
-      )}
-      {!!m.sensitive_flags?.length && (
-        <span className="absolute top-1.5 right-1.5 bg-warn-soft text-warn rounded-chip px-1.5 py-0.5 text-meta flex items-center gap-1" title={m.sensitive_flags.map((f) => SENSITIVE_LABELS[f]).join(', ')}>
-          <Icon name="ShieldAlert" size={12} /> {m.sensitive_flags.length > 1 ? `${m.sensitive_flags.length} Hinweise` : SENSITIVE_LABELS[m.sensitive_flags[0]]}
-        </span>
-      )}
-    </div>
-  );
-}
-
-function MediaInfo({ m }: { m: MediaItem }) {
-  return (
-    <dl className="m-0 grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-sm">
-      <dt className="text-fg-muted">Datei</dt>
-      <dd className="m-0 truncate">{m.original_name}</dd>
-      {m.size_bytes != null && (
-        <>
-          <dt className="text-fg-muted">Größe</dt>
-          <dd className="m-0">
-            {fmtBytes(m.size_bytes)}
-            {m.width ? ` · ${m.width} × ${m.height}` : ''}
-          </dd>
-        </>
-      )}
-      <dt className="text-fg-muted">Eingang</dt>
-      <dd className="m-0">
-        {fmtDateTime(m.created_at)} · {m.via_link ? 'Upload-Link' : (m.uploaded_by_name ?? 'intern')}
-      </dd>
-      {m.uploader_note && (
-        <>
-          <dt className="text-fg-muted">Hinweis</dt>
-          <dd className="m-0">{m.uploader_note}</dd>
-        </>
-      )}
-      {m.had_location && (
-        <>
-          <dt className="text-fg-muted">Standort</dt>
-          <dd className="m-0">{m.location_stripped ? 'beim Upload enthalten, aus Original und öffentlicher Fassung entfernt' : 'im Original enthalten, in der öffentlichen Fassung entfernt'}</dd>
-        </>
-      )}
-      {!!m.sensitive_flags?.length && (
-        <>
-          <dt className="text-fg-muted">Markiert</dt>
-          <dd className="m-0">{m.sensitive_flags.map((f) => SENSITIVE_LABELS[f]).join(', ')}</dd>
-        </>
-      )}
-      {(!!m.redactions?.length || !!m.crop || m.strip_audio) && (
-        <>
-          <dt className="text-fg-muted">Öffentlich</dt>
-          <dd className="m-0">
-            {[m.redactions?.length ? `${m.redactions.length} Bereich(e) unkenntlich` : '', m.crop ? 'zugeschnitten' : '', m.strip_audio ? 'ohne Ton' : ''].filter(Boolean).join(' · ')}
-          </dd>
-        </>
-      )}
-      {m.had_location === null && (
-        <>
-          <dt className="text-fg-muted">Standort</dt>
-          <dd className="m-0">unbekannt – das Format wird nicht ausgewertet; das Original kann Standortdaten enthalten</dd>
-        </>
-      )}
-      {!m.had_location && m.had_location !== null && m.location_stripped && (
-        <>
-          <dt className="text-fg-muted">Original</dt>
-          <dd className="m-0">ohne Standort-, Seriennummer- und Personenangaben gespeichert</dd>
-        </>
-      )}
-    </dl>
-  );
-}
-
-/** Sichtung Datei für Datei: große Vorschau, Infos darunter, gleichwertige Buttons, Tastatur (→ auswählen, ← überspringen). */
-function ReviewDialog({ items, onClose, onDecide, onChanged }: { items: MediaItem[]; onClose: () => void; onDecide: (m: MediaItem, s: 'selected' | 'skipped') => Promise<void>; onChanged: () => void }) {
-  const toastError = useErrorToast();
-  // Liste beim Öffnen festhalten, damit optimistische Änderungen die Reihenfolge nicht verschieben
-  const [list, setList] = useState(items);
-  const [idx, setIdx] = useState(0);
-  const busy = false;
-  const m = list[idx];
-  // Markierungen direkt in der Sichtung setzen (#118)
-  const toggleFlag = async (f: (typeof SENSITIVE_ORDER)[number]) => {
-    if (!m) return;
-    const cur = m.sensitive_flags ?? [];
-    const flags = cur.includes(f) ? cur.filter((x) => x !== f) : SENSITIVE_ORDER.filter((x) => x === f || cur.includes(x));
-    setList((l) => l.map((x) => (x.id === m.id ? { ...x, sensitive_flags: flags } : x)));
-    try {
-      await patch(`/media/${m.id}/privacy`, { flags });
-      onChanged();
-    } catch (e) {
-      toastError(e);
-      setList((l) => l.map((x) => (x.id === m.id ? { ...x, sensitive_flags: cur } : x)));
-    }
-  };
-  const decide = useCallback(
-    (s: 'selected' | 'skipped') => {
-      if (!m) return;
-      // sofort weiter zur nächsten Datei; Speichern läuft im Hintergrund
-      void onDecide(m, s);
-      setIdx((i) => i + 1);
-    },
-    [m, onDecide],
-  );
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if ((e.target as HTMLElement)?.tagName === 'INPUT') return;
-      if (e.key === 'ArrowRight') decide('selected');
-      if (e.key === 'ArrowLeft') decide('skipped');
-    };
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  }, [decide]);
-  // Nächste Vorschau vorladen, damit das Weiterschalten ohne Wartezeit klappt
-  useEffect(() => {
-    const next = list[idx + 1];
-    if (next?.has_preview) new Image().src = `/api/v1/media/${next.id}/preview`;
-  }, [idx, list]);
-  // Wischgeste auf der Vorschau
-  const start = useRef<number | null>(null);
-  return (
-    <Dialog open onClose={onClose} title={m ? `Sichten · ${idx + 1} von ${list.length}` : 'Sichtung abgeschlossen'} width={760}>
-      {!m ? (
-        <div className="flex flex-col items-center gap-3 py-6 text-center">
-          <Icon name="CheckCircle2" size={36} className="text-ok" />
-          <p className="m-0">Alle Dateien gesichtet.</p>
-          <Button variant="primary" onClick={onClose}>
-            Schließen
-          </Button>
-        </div>
-      ) : (
-        <div className="flex flex-col gap-4">
-          <div
-            className="rounded-card overflow-hidden bg-raised touch-pan-y"
-            onTouchStart={(e) => (start.current = e.touches[0].clientX)}
-            onTouchEnd={(e) => {
-              if (start.current === null) return;
-              const dx = e.changedTouches[0].clientX - start.current;
-              start.current = null;
-              if (dx > 70) decide('selected');
-              if (dx < -70) decide('skipped');
-            }}
-          >
-            {m.kind === 'video' && m.has_public ? (
-              <video src={`/api/v1/media/${m.id}/public?v=${m.public_rev ?? 0}`} poster={m.has_preview ? `/api/v1/media/${m.id}/preview` : undefined} controls className="w-full max-h-[55vh] bg-black" />
-            ) : (
-              <MediaThumb m={m} className="w-full max-h-[55vh] aspect-[4/3] [&_img]:object-contain" />
-            )}
-          </div>
-          <MediaInfo m={m} />
-          <div className="flex flex-col gap-2">
-            <span className="text-label uppercase text-fg-muted">Hinweise zur Datei</span>
-            <div className="flex flex-wrap gap-2">
-              {SENSITIVE_ORDER.map((f) => {
-                const on = (m.sensitive_flags ?? []).includes(f);
-                return (
-                  <Button key={f} size="sm" variant={on ? 'primary' : 'secondary'} icon={on ? 'CheckSquare' : 'Square'} aria-pressed={on} onClick={() => void toggleFlag(f)}>
-                    {SENSITIVE_LABELS[f]}
-                  </Button>
-                );
-              })}
-            </div>
-            <p className="m-0 text-meta text-fg-muted">Erkennbare Personen, Verletzte oder Kennzeichen? Markieren – unkenntlich machen lässt sich die Datei danach über ihr Menü („Datenschutz und Unkenntlichmachen“).</p>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <Button size="md" icon="SkipForward" className="!h-12" disabled={busy} onClick={() => decide('skipped')}>
-              Überspringen
-            </Button>
-            <Button size="md" variant="primary" icon="Check" className="!h-12" disabled={busy} onClick={() => decide('selected')}>
-              Auswählen
-            </Button>
-          </div>
-          <p className="m-0 text-meta text-fg-muted text-center">Tastatur: → auswählen · ← überspringen · Esc schließen. Am Handy: nach rechts oder links wischen.</p>
-        </div>
-      )}
-    </Dialog>
-  );
-}
+type Filter = 'pending' | 'selected' | 'on_hold' | 'all' | 'problems';
+type Selection = 'pending' | 'selected' | 'skipped' | 'on_hold';
 
 function uploadInternal(collectionId: string, file: File, onProgress: (p: number) => void): Promise<unknown> {
   return uploadResumable(`/api/v1/collections/${collectionId}/upload-sessions`, file, { clientKey: newClientKey(), onProgress });
@@ -223,17 +27,22 @@ export default function CollectionDetail() {
   const ask = useConfirm();
   const navigate = useNavigate();
   const { id = '' } = useParams();
-  const { can, me } = useAuth();
+  const { can } = useAuth();
   const qc = useQueryClient();
   const toast = useToast();
   const toastError = useErrorToast();
-  const [filter, setFilter] = useState<Filter>('pending');
+  const prefs = useGalleryPrefs();
+  const [filter, setFilterState] = useState<Filter>('pending');
+  const [page, setPage] = useState(1);
   const [review, setReview] = useState(false);
   const [assign, setAssign] = useState(false);
   const [editing, setEditing] = useState(false);
-  const [exporting, setExporting] = useState(false);
+  const [exporting, setExporting] = useState<null | { ids?: string[] }>(null);
   const [dragId, setDragId] = useState<string | null>(null);
   const [upload, setUpload] = useState<{ name: string; progress: number }[] | null>(null);
+  const [lightbox, setLightbox] = useState<number | null>(null);
+  const [details, setDetails] = useState<string | null>(null);
+  const [marked, setMarked] = useState<Set<string>>(new Set());
   const fileRef = useRef<HTMLInputElement>(null);
   const q = useQuery({
     queryKey: ['collection', id],
@@ -244,27 +53,57 @@ export default function CollectionDetail() {
   const refresh = () => qc.invalidateQueries({ queryKey: ['collection', id] });
   const manage = can('media.manage');
   const [privacyItem, setPrivacyItem] = useState<MediaItem | null>(null);
+  const setFilter = (f: Filter) => (setFilterState(f), setPage(1));
 
   const media = q.data?.media ?? [];
   const lists = useMemo(
     () => ({
       pending: media.filter((m) => m.status === 'ready' && m.selection === 'pending'),
       selected: media.filter((m) => m.status === 'ready' && m.selection === 'selected'),
+      on_hold: media.filter((m) => m.status === 'ready' && m.selection === 'on_hold'),
       all: media.filter((m) => m.status === 'ready'),
       problems: media.filter((m) => m.status !== 'ready'),
     }),
     [media],
   );
+  const current = lists[filter];
+  const pages = Math.max(1, Math.ceil(current.length / prefs.perPage));
+  const pageItems = current.slice((Math.min(page, pages) - 1) * prefs.perPage, Math.min(page, pages) * prefs.perPage);
+  // Markierungen auf noch vorhandene Dateien beschränken (z. B. nach Löschen)
+  useEffect(() => {
+    if (!marked.size) return;
+    const ids = new Set(media.map((m) => m.id));
+    if ([...marked].some((x) => !ids.has(x))) setMarked(new Set([...marked].filter((x) => ids.has(x))));
+  }, [media, marked]);
+  const mark = (mid: string, v: boolean) => setMarked((s) => {
+    const n = new Set(s);
+    if (v) n.add(mid);
+    else n.delete(mid);
+    return n;
+  });
+  const allOnPage = pageItems.length > 0 && pageItems.every((m) => marked.has(m.id));
 
   // Sichtung reagiert sofort (Auswahl ist keine Freigabe); der Server bestätigt im Hintergrund, bei Fehler wird neu geladen
-  const setSelection = async (ids: string[], selection: 'pending' | 'selected' | 'skipped') => {
+  const setSelection = async (ids: string[], selection: Selection, versions?: Record<string, number>) => {
     qc.setQueryData<any>(['collection', id], (old: any) => (old ? { ...old, media: old.media.map((m: MediaItem) => (ids.includes(m.id) ? { ...m, selection } : m)) } : old));
     try {
-      await post('/media/selection', { ids, selection });
+      const r = await post<{ versions: Record<string, number> }>('/media/selection', { ids, selection, versions });
+      qc.setQueryData<any>(['collection', id], (old: any) => (old ? { ...old, media: old.media.map((m: MediaItem) => (r.versions[m.id] != null ? { ...m, selection_version: r.versions[m.id] } : m)) } : old));
     } catch (e) {
       await refresh();
       throw e;
     }
+  };
+  const bulk = async (body: { action: 'selection' | 'delete'; selection?: Selection }) => {
+    const ids = [...marked];
+    try {
+      const r = await post<{ updated: number }>('/media/bulk', { ids, ...body });
+      toast({ tone: 'success', title: `${r.updated} Datei(en) ${body.action === 'delete' ? 'gelöscht' : 'geändert'}` });
+      setMarked(new Set());
+    } catch (e) {
+      toastError(e);
+    }
+    refresh();
   };
 
   /** Neue Reihenfolge speichern (Drag-and-drop oder Menü „nach vorne/hinten“) – sofort sichtbar, Server bestätigt. */
@@ -286,9 +125,30 @@ export default function CollectionDetail() {
     }
   };
 
+  const deleteOne = async (m: MediaItem) => {
+    if (!(await ask({ title: 'Datei löschen?', text: `„${mediaName(m)}“ wird mit allen Fassungen gelöscht.`, confirmLabel: 'Löschen' }))) return;
+    await del(`/media/${m.id}`).catch(toastError);
+    refresh();
+  };
+
+  const menuFor = (m: MediaItem): MenuItems => [
+    { label: 'Groß anzeigen', icon: 'Maximize2', onClick: () => setLightbox(pageItems.indexOf(m)) },
+    { label: 'Details', icon: 'Info', onClick: () => setDetails(m.id) },
+    // Originale können Standortdaten enthalten – nur mit „Medien verwalten“
+    manage && m.status === 'ready' ? { label: 'Original herunterladen', icon: 'Download', onClick: () => window.open(`/api/v1/media/${m.id}/original`, '_blank') } : null,
+    m.has_public && m.status === 'ready' ? { label: 'Öffentliche Fassung herunterladen', icon: 'Download', onClick: () => window.open(`/api/v1/media/${m.id}/public?v=${m.public_rev ?? 0}`, '_blank') } : null,
+    manage && m.status === 'ready' ? { label: 'Datenschutz und Unkenntlichmachen', icon: 'EyeOff', onClick: () => setPrivacyItem(m) } : null,
+    manage && m.status === 'ready' && m.selection !== 'on_hold' ? { label: 'Zurückstellen', icon: 'Pause', onClick: () => setSelection([m.id], 'on_hold').catch(toastError) } : null,
+    manage && m.status === 'ready' && m.selection !== 'pending' ? { label: 'Auswahl zurücksetzen', icon: 'Undo2', onClick: () => setSelection([m.id], 'pending').catch(toastError) } : null,
+    manage && m.status === 'ready' ? { label: 'Nach vorne', icon: 'ArrowUp', onClick: () => reorder(m.id, null, -1) } : null,
+    manage && m.status === 'ready' ? { label: 'Nach hinten', icon: 'ArrowDown', onClick: () => reorder(m.id, null, 1) } : null,
+    manage ? { label: 'Löschen', icon: 'Trash2', danger: true, onClick: () => void deleteOne(m) } : null,
+  ];
+
   if (q.isLoading) return <SkeletonRows rows={6} />;
   if (q.error) return <ErrorBox title="Sammlung konnte nicht geladen werden">{(q.error as Error).message}</ErrorBox>;
   const c = q.data!.collection;
+  const canDrag = manage && filter !== 'problems' && prefs.view === 'grid';
 
   return (
     <div className="flex flex-col gap-5">
@@ -313,15 +173,15 @@ export default function CollectionDetail() {
               <Button icon="Upload" onClick={() => fileRef.current?.click()} disabled={!!c.archived_at}>
                 Hochladen
               </Button>
-              {lists.pending.length > 0 && (
-                <Button variant="primary" icon="CheckSquare" onClick={() => setReview(true)}>
-                  {lists.pending.length} sichten
+              {lists.all.length > 0 && (
+                <Button variant={lists.pending.length ? 'primary' : 'secondary'} icon="CheckSquare" onClick={() => setReview(true)}>
+                  {lists.pending.length ? `${lists.pending.length} sichten` : 'Sichten'}
                 </Button>
               )}
               <Menu
                 items={[
                   { label: 'Bearbeiten', icon: 'Pencil', onClick: () => setEditing(true) },
-                  { label: 'Sammeldownload (ZIP)', icon: 'Download', onClick: () => setExporting(true) },
+                  { label: 'Sammeldownload (ZIP)', icon: 'Download', onClick: () => setExporting({}) },
                   { label: 'Beitrag zuordnen', icon: 'FileText', onClick: () => setAssign(true) },
                   {
                     label: c.archived_at ? 'Wiederherstellen' : 'Archivieren',
@@ -405,89 +265,124 @@ export default function CollectionDetail() {
         tabs={[
           { value: 'pending', label: 'Zu sichten', count: lists.pending.length },
           { value: 'selected', label: 'Ausgewählt', count: lists.selected.length },
+          ...(lists.on_hold.length ? [{ value: 'on_hold' as const, label: 'Zurückgestellt', count: lists.on_hold.length }] : []),
           { value: 'all', label: 'Alle', count: lists.all.length },
           { value: 'problems', label: 'In Prüfung / abgewiesen', count: lists.problems.length },
         ]}
       />
-      {lists[filter].length === 0 ? (
+      {current.length > 0 && (
+        <div className="flex flex-wrap items-center gap-3 justify-between">
+          <div className="flex items-center gap-2 text-sm">
+            {manage && (
+              <label className="inline-flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" className="w-4 h-4 accent-[var(--bc-primary-solid)]" checked={allOnPage} onChange={(e) => setMarked((s) => {
+                  const n = new Set(s);
+                  for (const m of pageItems) if (e.target.checked) n.add(m.id);
+                  else n.delete(m.id);
+                  return n;
+                })} />
+                Alle auf dieser Seite markieren
+              </label>
+            )}
+          </div>
+          <ViewControls view={prefs.view} setView={prefs.setView} perPage={prefs.perPage} setPerPage={(n) => (prefs.setPerPage(n), setPage(1))} />
+        </div>
+      )}
+      {manage && marked.size > 0 && (
+        <div role="region" aria-label="Sammelaktionen" className="sticky top-2 z-10 flex flex-wrap items-center gap-2 p-2.5 rounded-card border border-line-strong bg-card shadow-float">
+          <span className="font-mono text-sm px-1">{marked.size} markiert</span>
+          <Button size="sm" icon="Check" onClick={() => void bulk({ action: 'selection', selection: 'selected' })}>Auswählen</Button>
+          <Button size="sm" icon="SkipForward" onClick={() => void bulk({ action: 'selection', selection: 'skipped' })}>Überspringen</Button>
+          <Button size="sm" icon="Pause" onClick={() => void bulk({ action: 'selection', selection: 'on_hold' })}>Zurückstellen</Button>
+          <Button size="sm" icon="Undo2" onClick={() => void bulk({ action: 'selection', selection: 'pending' })}>Zurücksetzen</Button>
+          <Button size="sm" icon="Download" onClick={() => setExporting({ ids: [...marked] })}>ZIP</Button>
+          <Button
+            size="sm"
+            variant="danger"
+            icon="Trash2"
+            onClick={async () => {
+              if (!(await ask({ title: `${marked.size} Datei(en) löschen?`, text: 'Die markierten Dateien werden mit allen Fassungen gelöscht. Dateien in laufenden Beiträgen verhindern die Aktion.', confirmLabel: 'Löschen' }))) return;
+              await bulk({ action: 'delete' });
+            }}
+          >
+            Löschen
+          </Button>
+          <Button size="sm" variant="ghost" icon="X" onClick={() => setMarked(new Set())}>Markierung aufheben</Button>
+        </div>
+      )}
+      {current.length === 0 ? (
         <EmptyState icon="Images" title={filter === 'pending' ? 'Nichts zu sichten' : 'Keine Dateien'} text={filter === 'pending' && media.length === 0 ? 'Teile den Upload-Link oder lade selbst Dateien hoch.' : undefined} />
+      ) : prefs.view === 'list' ? (
+        <MediaList items={pageItems} marked={manage ? marked : undefined} onMark={manage ? mark : undefined} onOpen={setLightbox} menu={menuFor} />
       ) : (
         <ul className="m-0 p-0 list-none grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-          {lists[filter].map((m) => (
+          {pageItems.map((m, i) => (
             <li
               key={m.id}
-              draggable={manage && filter !== 'problems'}
+              draggable={canDrag}
               onDragStart={(e) => (setDragId(m.id), (e.dataTransfer.effectAllowed = 'move'))}
               onDragOver={(e) => dragId && dragId !== m.id && e.preventDefault()}
               onDrop={(e) => (e.preventDefault(), dragId && dragId !== m.id && reorder(dragId, m.id), setDragId(null))}
               onDragEnd={() => setDragId(null)}
-              className={cx('border rounded-card overflow-hidden bg-card flex flex-col', m.selection === 'selected' ? 'border-ok' : 'border-line', dragId === m.id && 'opacity-50', manage && filter !== 'problems' && 'cursor-grab')}
+              className={cx('relative border rounded-card overflow-hidden bg-card flex flex-col', marked.has(m.id) ? 'border-primary-solid shadow-selected' : m.selection === 'selected' ? 'border-ok' : 'border-line', dragId === m.id && 'opacity-50', canDrag && 'cursor-grab')}
             >
-              <MediaThumb m={m} className="aspect-square" />
+              {manage && <MarkBox checked={marked.has(m.id)} onChange={(v) => mark(m.id, v)} label={`${mediaName(m)} markieren`} className="absolute top-1 left-1 z-[1] bg-card/90" />}
+              <button type="button" className="block p-0 border-0 bg-transparent" onClick={() => setLightbox(i)} aria-label={`${mediaName(m)} groß anzeigen`}>
+                <MediaThumb m={m} className="aspect-square" />
+              </button>
               <div className="p-2 flex flex-col gap-1.5 text-sm">
                 <div className="truncate" title={m.original_name}>
-                  {m.original_name}
+                  {mediaName(m)}
                 </div>
-                {m.status === 'rejected' && <div className="text-err text-meta">{m.reject_reason}</div>}
-                {m.status === 'ready' && (
-                  <div className="flex items-center gap-1 flex-wrap">
-                    {m.selection !== 'pending' && <StatusBadge status={m.selection!} />}
-                    {manage && (
-                      <>
-                        {m.selection !== 'selected' && (
-                          <Button size="sm" icon="Check" aria-label={`${m.original_name} auswählen`} onClick={() => setSelection([m.id], 'selected').catch(toastError)}>
-                            Auswählen
-                          </Button>
-                        )}
-                        {m.selection !== 'skipped' && (
-                          <Button size="sm" iconOnly icon="SkipForward" aria-label={`${m.original_name} überspringen`} onClick={() => setSelection([m.id], 'skipped').catch(toastError)} />
-                        )}
-                      </>
-                    )}
-                    <Menu
-                      size="sm"
-                      items={[
-                        // Originale können Standortdaten enthalten – nur mit „Medien verwalten“
-                        manage ? { label: 'Original herunterladen', icon: 'Download', onClick: () => window.open(`/api/v1/media/${m.id}/original`, '_blank') } : null,
-                        m.has_public ? { label: 'Öffentliche Fassung herunterladen', icon: 'Download', onClick: () => window.open(`/api/v1/media/${m.id}/public?v=${m.public_rev ?? 0}`, '_blank') } : null,
-                        manage ? { label: 'Datenschutz und Unkenntlichmachen', icon: 'EyeOff', onClick: () => setPrivacyItem(m) } : null,
-                        manage && m.selection !== 'pending' ? { label: 'Auswahl zurücksetzen', icon: 'Undo2', onClick: () => setSelection([m.id], 'pending').catch(toastError) } : null,
-                        manage ? { label: 'Nach vorne', icon: 'ArrowUp', onClick: () => reorder(m.id, null, -1) } : null,
-                        manage ? { label: 'Nach hinten', icon: 'ArrowDown', onClick: () => reorder(m.id, null, 1) } : null,
-                        manage
-                          ? {
-                              label: 'Löschen',
-                              icon: 'Trash2',
-                              danger: true,
-                              onClick: async () => {
-                                if (!(await ask({ title: 'Datei endgültig löschen?', text: `„${m.original_name}“ wird mit allen Fassungen gelöscht.`, confirmLabel: 'Löschen' }))) return;
-                                await del(`/media/${m.id}`).catch(toastError);
-                                refresh();
-                              },
-                            }
-                          : null,
-                      ]}
-                    />
-                  </div>
-                )}
+                {m.duplicate_of && <Badge tone="warning" className="self-start">Duplikat</Badge>}
+                {(m.status === 'rejected' || m.status === 'blocked') && <div className="text-err text-meta">{m.reject_reason}</div>}
+                <div className="flex items-center gap-1 flex-wrap">
+                  {m.status === 'ready' && m.selection !== 'pending' && <StatusBadge status={m.selection!} />}
+                  {manage && m.status === 'ready' && (
+                    <>
+                      {m.selection !== 'selected' && (
+                        <Button size="sm" icon="Check" aria-label={`${mediaName(m)} auswählen`} onClick={() => setSelection([m.id], 'selected').catch(toastError)}>
+                          Auswählen
+                        </Button>
+                      )}
+                      {m.selection !== 'skipped' && <Button size="sm" iconOnly icon="SkipForward" aria-label={`${mediaName(m)} überspringen`} onClick={() => setSelection([m.id], 'skipped').catch(toastError)} />}
+                    </>
+                  )}
+                  <Menu size="sm" label={`Aktionen für ${mediaName(m)}`} items={menuFor(m)} />
+                </div>
               </div>
             </li>
           ))}
         </ul>
       )}
-      {review && <ReviewDialog items={lists.pending} onClose={() => setReview(false)} onDecide={(m, s) => setSelection([m.id], s).catch(toastError)} onChanged={refresh} />}
+      <Pager page={Math.min(page, pages)} pages={pages} total={current.length} onPage={setPage} />
+      {review && (
+        <ReviewDialog
+          ready={lists.all}
+          onClose={() => setReview(false)}
+          onDecide={(m: MediaItem, s: Decision) =>
+            setSelection([m.id], s, { [m.id]: m.selection_version ?? 0 }).catch((e) => {
+              if (e instanceof ApiError && e.status === 409) toast({ tone: 'warning', title: 'Bereits anders gesichtet', text: e.message });
+              else toastError(e);
+            })
+          }
+          onChanged={refresh}
+        />
+      )}
+      {lightbox !== null && pageItems.length > 0 && <Lightbox items={pageItems} start={lightbox} onClose={() => setLightbox(null)} onDetails={(m) => (setLightbox(null), setDetails(m.id))} />}
+      {details && <MediaDetailsDialog mediaId={details} manage={manage} onClose={() => setDetails(null)} onSaved={refresh} />}
       {privacyItem && <PrivacyDialog m={privacyItem} onClose={() => setPrivacyItem(null)} onSaved={() => refresh()} />}
-      {exporting && <ExportDialog collectionId={id} selectedCount={lists.selected.length} originals={manage} onClose={() => setExporting(false)} />}
+      {exporting && <ExportDialog collectionId={id} selectedCount={lists.selected.length} ids={exporting.ids} originals={manage} onClose={() => setExporting(null)} />}
       {assign && <AssignPostDialog collectionId={id} current={c.post_id} onClose={() => (setAssign(false), refresh())} />}
       {editing && <EditCollectionDialog collection={c} onClose={() => (setEditing(false), refresh())} />}
     </div>
   );
 }
 
-/** ZIP-Sammeldownload: wird im Hintergrund erzeugt, Fortschritt per Abfrage, Download läuft nach 24 h ab. */
-function ExportDialog({ collectionId, selectedCount, originals, onClose }: { collectionId: string; selectedCount: number; originals: boolean; onClose: () => void }) {
+/** ZIP-Sammeldownload: wird im Hintergrund erzeugt, Fortschritt per Abfrage, Download läuft nach Ablauf der Frist ab. */
+function ExportDialog({ collectionId, selectedCount, ids, originals, onClose }: { collectionId: string; selectedCount: number; ids?: string[]; originals: boolean; onClose: () => void }) {
   const toastError = useErrorToast();
-  const [selection, setSelection] = useState<'selected' | 'all'>(selectedCount ? 'selected' : 'all');
+  const [selection, setSelection] = useState<'selected' | 'all' | 'ids'>(ids?.length ? 'ids' : selectedCount ? 'selected' : 'all');
   const [variant, setVariant] = useState<'public' | 'original'>('public');
   const [job, setJob] = useState<{ id: string; files: number } | null>(null);
   const st = useQuery({ queryKey: ['export', job?.id], queryFn: () => get<any>(`/exports/${job!.id}`), enabled: !!job, refetchInterval: (q) => (q.state.data?.status === 'ready' || q.state.data?.status === 'failed' ? false : 1500) });
@@ -500,7 +395,7 @@ function ExportDialog({ collectionId, selectedCount, originals, onClose }: { col
         !job ? (
           <>
             <Button onClick={onClose}>Abbrechen</Button>
-            <Button variant="primary" icon="Download" onClick={async () => setJob(await post<any>(`/collections/${collectionId}/exports`, { selection, variant }).catch((e) => (toastError(e), null)))}>
+            <Button variant="primary" icon="Download" onClick={async () => setJob(await post<any>(`/collections/${collectionId}/exports`, { selection, variant, ...(selection === 'ids' ? { ids } : {}) }).catch((e) => (toastError(e), null)))}>
               ZIP erstellen
             </Button>
           </>
@@ -513,6 +408,7 @@ function ExportDialog({ collectionId, selectedCount, originals, onClose }: { col
         <div className="flex flex-col gap-4 text-sm">
           <FieldWrap label="Dateien" htmlFor="ex-sel">
             <Select id="ex-sel" value={selection} onChange={(e) => setSelection(e.target.value as any)}>
+              {ids?.length ? <option value="ids">Markierte Dateien ({ids.length})</option> : null}
               <option value="selected" disabled={!selectedCount}>Nur ausgewählte ({selectedCount})</option>
               <option value="all">Alle geprüften Dateien</option>
             </Select>
@@ -537,7 +433,7 @@ function ExportDialog({ collectionId, selectedCount, originals, onClose }: { col
         <Notice tone="error">ZIP konnte nicht erstellt werden: {st.data.error}</Notice>
       ) : (
         <div className="flex items-center gap-2 text-sm">
-          <Icon name="Hourglass" size={16} /> ZIP mit {job.files} Dateien wird erstellt … Du kannst den Dialog schließen; die Datei bleibt 24 Stunden verfügbar.
+          <Icon name="Hourglass" size={16} /> ZIP mit {job.files} Dateien wird erstellt … Du kannst den Dialog schließen; die Datei bleibt eine Weile verfügbar.
         </div>
       )}
     </Dialog>

@@ -91,7 +91,12 @@ export function mediaPayload(m: any) {
     strip_audio: !!m.strip_audio,
     public_rev: m.public_rev ?? 0,
     selection: m.selection,
+    selection_version: m.selection_version ?? 0,
     sort_order: m.sort_order,
+    display_name: m.display_name ?? '',
+    description: m.description ?? '',
+    internal_note: m.internal_note ?? '',
+    duplicate_of: m.duplicate_of ?? null,
     uploader_note: m.uploader_note,
     uploaded_by_name: m.uploaded_by_name ?? null,
     // Link kann nach Ablauf der Löschfrist gelöscht sein (#116): ohne Konto hochgeladen = über einen Link
@@ -286,6 +291,28 @@ export function publicFileFor(m: any): { path: string; type: string; ext: string
   if (m.kind === 'image') return { path: mediaPaths.publicFile(m.id, 'jpg'), type: 'image/jpeg', ext: 'jpg' };
   const ext = m.mime === 'video/webm' ? 'webm' : 'mp4';
   return { path: mediaPaths.publicFile(m.id, ext), type: ext === 'webm' ? 'video/webm' : 'video/mp4', ext };
+}
+
+/**
+ * Dateien löschen (einzeln oder als Sammelaktion). Dateien in der aktuellen Fassung eines Beitrags blockieren die
+ * ganze Aktion (400 mit dem Beitragstitel), damit eine Sammelaktion nicht halb ausgeführt wird.
+ */
+export async function deleteMedia(ids: string[], actor: Actor): Promise<{ deleted: number }> {
+  const used = await one<any>(
+    `SELECT p.title, m.original_name FROM post_revisions r JOIN posts p ON p.id = r.post_id JOIN media m ON m.id = ANY($1::uuid[]) AND (r.media_ids @> ARRAY[m.id] OR r.cover_id = m.id)
+      WHERE r.number = p.current_revision LIMIT 1`,
+    [ids],
+  );
+  if (used) throw badRequest(ids.length === 1 ? `Die Datei wird im Beitrag „${used.title}“ verwendet. Bitte zuerst dort entfernen.` : `„${used.original_name}“ wird im Beitrag „${used.title}“ verwendet. Bitte zuerst dort entfernen oder die Datei aus der Auswahl nehmen.`);
+  const rows = await many<any>(`UPDATE media SET deleted_at = now() WHERE id = ANY($1::uuid[]) AND deleted_at IS NULL RETURNING id, original_name`, [ids]);
+  if (!rows.length) return { deleted: 0 };
+  // Upload-Sitzungen entkoppeln (#176): sonst meldet ein erneuter Upload derselben Datei „vollständig“
+  await pool.query('DELETE FROM upload_sessions WHERE media_id = ANY($1::uuid[])', [rows.map((r) => r.id)]);
+  for (const m of rows) {
+    removeMediaFiles(m.id);
+    await audit(actor, 'media.deleted', { type: 'media', id: m.id, label: m.original_name });
+  }
+  return { deleted: rows.length };
 }
 
 export async function loadPublicLink(token: string) {
@@ -495,15 +522,99 @@ export async function mediaRoutes(app: FastifyInstance) {
     return receiveFile(req, { collection: c, linkId: null, userId: req.auth!.user?.id ?? null, maxFileBytes: s['media.max_file_mb'] * 1024 * 1024, actor: req.auth!.actor });
   });
 
-  /* Sichtung: auswählen / überspringen / zurücksetzen – mehrere Dateien auf einmal */
+  /*
+   * Sichtung: auswählen / überspringen / zurückstellen / zurücksetzen – mehrere Dateien auf einmal.
+   * Mit `versions` (Sichtungsdialog) gilt die Entscheidung nur, wenn niemand die Datei inzwischen anders gesichtet
+   * hat (409 statt „letzter gewinnt“, wie die Versionsprüfung in LiFeOS).
+   */
   app.post('/media/selection', { preHandler: requireAuth('media.manage') }, async (req) => {
-    const body = z.object({ ids: z.array(z.uuid()).min(1).max(500), selection: z.enum(['pending', 'selected', 'skipped']) }).parse(req.body);
-    const r = await pool.query(
-      `UPDATE media SET selection = $2, selection_by = $3, selection_at = now() WHERE id = ANY($1) AND status = 'ready' AND deleted_at IS NULL`,
-      [body.ids, body.selection, req.auth!.user?.id ?? null],
+    const body = z
+      .object({ ids: z.array(z.uuid()).min(1).max(500), selection: z.enum(['pending', 'selected', 'skipped', 'on_hold']), versions: z.record(z.string(), z.number().int().min(0)).optional() })
+      .parse(req.body);
+    const versions = body.versions ?? null;
+    const rows = await many<any>(
+      `UPDATE media SET selection = $2, selection_by = $3, selection_at = now(), selection_version = selection_version + 1
+        WHERE id = ANY($1) AND status = 'ready' AND deleted_at IS NULL AND ($4::jsonb IS NULL OR NOT ($4::jsonb ? id::text) OR selection_version = ($4::jsonb ->> id::text)::int)
+        RETURNING id, selection_version`,
+      [body.ids, body.selection, req.auth!.user?.id ?? null, versions ? JSON.stringify(versions) : null],
     );
-    await audit(req.auth!.actor, 'media.selection', { type: 'media', label: `${r.rowCount} Datei(en)` }, { auswahl: body.selection, ids: body.ids.slice(0, 50) });
-    return { updated: r.rowCount };
+    if (versions && rows.length < body.ids.length) {
+      const stale = await many<any>(`SELECT m.id, m.selection, u.name FROM media m LEFT JOIN users u ON u.id = m.selection_by WHERE m.id = ANY($1) AND NOT (m.id = ANY($2::uuid[]))`, [body.ids, rows.map((r) => r.id)]);
+      if (stale.length) {
+        const who = stale[0].name ? ` von ${stale[0].name}` : '';
+        throw conflict(`Diese Datei wurde inzwischen${who} anders gesichtet. Bitte die Ansicht neu laden.`, { media: stale.map((x) => ({ id: x.id, selection: x.selection })) });
+      }
+    }
+    await audit(req.auth!.actor, 'media.selection', { type: 'media', label: `${rows.length} Datei(en)` }, { auswahl: body.selection, ids: body.ids.slice(0, 50) });
+    return { updated: rows.length, versions: Object.fromEntries(rows.map((r) => [r.id, r.selection_version])) };
+  });
+
+  /* Anzeigename, Beschreibung und interne Notiz (nur intern; der öffentliche Dateiname bleibt neutral) */
+  app.patch('/media/:id', { preHandler: requireAuth('media.manage') }, async (req) => {
+    const { id } = z.object({ id: z.uuid() }).parse(req.params);
+    const body = z
+      .object({ displayName: z.string().trim().max(200).optional(), description: z.string().trim().max(2000).optional(), internalNote: z.string().trim().max(2000).optional() })
+      .parse(req.body ?? {});
+    const m = await one<any>(
+      `UPDATE media SET display_name = COALESCE($2, display_name), description = COALESCE($3, description), internal_note = COALESCE($4, internal_note)
+        WHERE id = $1 AND deleted_at IS NULL RETURNING *`,
+      [id, body.displayName ?? null, body.description ?? null, body.internalNote ?? null],
+    );
+    if (!m) throw notFound('Datei nicht gefunden.');
+    await audit(req.auth!.actor, 'media.updated', { type: 'media', id, label: m.original_name }, { felder: Object.keys(body) });
+    return mediaPayload(m);
+  });
+
+  /* Details je Datei: Prüfsumme, Duplikate, Upload-Angaben, Beiträge, die die Datei verwenden */
+  app.get('/media/:id/details', { preHandler: requireAuth('media.read') }, async (req) => {
+    const { id } = z.object({ id: z.uuid() }).parse(req.params);
+    const m = await one<any>(
+      `SELECT m.*, u.name AS uploaded_by_name, c.title AS collection_title, l.label AS link_label, s.name AS selection_by_name
+         FROM media m JOIN collections c ON c.id = m.collection_id LEFT JOIN users u ON u.id = m.uploaded_by
+         LEFT JOIN upload_links l ON l.id = m.upload_link_id LEFT JOIN users s ON s.id = m.selection_by
+        WHERE m.id = $1 AND m.deleted_at IS NULL`,
+      [id],
+    );
+    if (!m) throw notFound('Datei nicht gefunden.');
+    const duplicates = await many<any>(
+      `SELECT m.id, m.collection_id, c.title AS collection_title, m.original_name, m.display_name, m.created_at FROM media m JOIN collections c ON c.id = m.collection_id
+        WHERE m.sha256 = $1 AND m.id <> $2 AND m.deleted_at IS NULL AND m.status <> 'rejected' ORDER BY m.created_at LIMIT 20`,
+      [m.sha256, id],
+    );
+    const posts = await many<any>(
+      `SELECT DISTINCT p.id, p.title, (r.number = p.current_revision) AS current FROM post_revisions r JOIN posts p ON p.id = r.post_id
+        WHERE (r.media_ids @> ARRAY[$1::uuid] OR r.cover_id = $1) ORDER BY current DESC, p.title LIMIT 20`,
+      [id],
+    );
+    return {
+      media: mediaPayload(m),
+      sha256: m.sha256,
+      collection_title: m.collection_title,
+      link_label: m.link_label ?? null,
+      selection_by_name: m.selection_by_name ?? null,
+      selection_at: m.selection_at ?? null,
+      processed_at: m.processed_at ?? null,
+      duplicates,
+      posts,
+    };
+  });
+
+  /* Sammelaktionen für markierte Dateien (Mehrfachauswahl wie in LiFeOS) */
+  app.post('/media/bulk', { preHandler: requireAuth('media.manage'), config: { rateLimit: { max: 60, timeWindow: '1 minute' } } }, async (req) => {
+    const body = z
+      .object({ ids: z.array(z.uuid()).min(1).max(1000), action: z.enum(['selection', 'delete']), selection: z.enum(['pending', 'selected', 'skipped', 'on_hold']).optional() })
+      .parse(req.body);
+    if (body.action === 'selection') {
+      if (!body.selection) throw badRequest('Bitte einen Sichtungsstand wählen.');
+      const r = await pool.query(
+        `UPDATE media SET selection = $2, selection_by = $3, selection_at = now(), selection_version = selection_version + 1 WHERE id = ANY($1) AND status = 'ready' AND deleted_at IS NULL`,
+        [body.ids, body.selection, req.auth!.user?.id ?? null],
+      );
+      await audit(req.auth!.actor, 'media.selection', { type: 'media', label: `${r.rowCount} Datei(en)` }, { auswahl: body.selection, sammelaktion: true, ids: body.ids.slice(0, 50) });
+      return { updated: r.rowCount };
+    }
+    const r = await deleteMedia(body.ids, req.auth!.actor);
+    return { updated: r.deleted };
   });
 
   app.post('/collections/:id/order', { preHandler: requireAuth('media.manage') }, async (req) => {
@@ -518,16 +629,16 @@ export async function mediaRoutes(app: FastifyInstance) {
   /* Sammeldownload als ZIP (im Hintergrund, läuft nach 24 h ab) */
   app.post('/collections/:id/exports', { preHandler: requireAuth('media.read') }, async (req) => {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
-    const body = z.object({ selection: z.enum(['selected', 'all']).default('selected'), variant: z.enum(['public', 'original']).default('public'), ids: z.array(z.uuid()).max(2000).optional() }).parse(req.body ?? {});
+    const body = z.object({ selection: z.enum(['selected', 'all', 'ids']).default('selected'), variant: z.enum(['public', 'original']).default('public'), ids: z.array(z.uuid()).max(2000).optional() }).parse(req.body ?? {});
     // Originale enthalten mögliche Standort- und Gerätedaten: wie beim Einzeldownload nur mit „Medien verwalten“ (#94)
     if (body.variant === 'original' && !req.auth!.permissions.has('media.manage')) throw forbidden(ORIGINALS_FORBIDDEN);
     const c = await one<any>('SELECT id, title FROM collections WHERE id = $1', [id]);
     if (!c) throw notFound('Sammlung nicht gefunden.');
     const rows = await many<any>(
       `SELECT id FROM media WHERE collection_id = $1 AND status = 'ready' AND deleted_at IS NULL AND ($2::boolean OR selection = 'selected') AND ($3::uuid[] IS NULL OR id = ANY($3))`,
-      [id, body.selection === 'all', body.ids ?? null],
+      [id, body.selection !== 'selected', body.ids ?? null],
     );
-    if (!rows.length) throw badRequest(body.selection === 'selected' ? 'Es sind noch keine Dateien ausgewählt.' : 'Die Sammlung enthält keine geprüften Dateien.');
+    if (!rows.length) throw badRequest(body.selection === 'selected' ? 'Es sind noch keine Dateien ausgewählt.' : body.selection === 'ids' ? 'Unter den markierten Dateien ist keine geprüfte.' : 'Die Sammlung enthält keine geprüften Dateien.');
     const ex = await one<any>(`INSERT INTO exports (collection_id, media_ids, variant, created_by) VALUES ($1,$2,$3,$4) RETURNING *`, [id, rows.map((r) => r.id), body.variant, req.auth!.user?.id ?? null]);
     await enqueue('export.zip', { exportId: ex.id }, { dedupKey: `export:${ex.id}` });
     await audit(req.auth!.actor, 'media.export_requested', { type: 'collection', id, label: c.title }, { dateien: rows.length, fassung: body.variant });
@@ -614,17 +725,8 @@ export async function mediaRoutes(app: FastifyInstance) {
 
   app.delete('/media/:id', { preHandler: requireAuth('media.manage') }, async (req) => {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
-    const used = await one<any>(
-      `SELECT p.title FROM post_revisions r JOIN posts p ON p.id = r.post_id WHERE r.media_ids @> ARRAY[$1::uuid] AND r.number = p.current_revision LIMIT 1`,
-      [id],
-    );
-    if (used) throw badRequest(`Die Datei wird im Beitrag „${used.title}“ verwendet. Bitte zuerst dort entfernen.`);
-    const m = await one<any>(`UPDATE media SET deleted_at = now() WHERE id = $1 AND deleted_at IS NULL RETURNING id, original_name`, [id]);
-    if (!m) throw notFound();
-    // Upload-Sitzungen entkoppeln (#176): sonst meldet ein erneuter Upload derselben Datei „vollständig“
-    await pool.query('DELETE FROM upload_sessions WHERE media_id = $1', [id]);
-    removeMediaFiles(id);
-    await audit(req.auth!.actor, 'media.deleted', { type: 'media', id, label: m.original_name });
+    const r = await deleteMedia([id], req.auth!.actor);
+    if (!r.deleted) throw notFound();
     return { ok: true };
   });
 

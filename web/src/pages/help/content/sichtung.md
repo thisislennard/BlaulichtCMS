@@ -2,9 +2,9 @@ In der Sichtung entscheidet die Redaktion, welche Dateien verwendet werden. **Au
 
 ## Datei für Datei sichten
 
-1. Sammlung öffnen und auf **„… sichten“** klicken.
-2. Große Vorschau, darunter Dateiname, Größe, Eingang und Hinweis.
-3. **Auswählen** oder **Überspringen** – beide Buttons sind gleichwertig.
+1. Sammlung öffnen und auf **„… sichten“** klicken. Gibt es schon gesichtete Dateien, fragt BlaulichtCMS, womit es losgehen soll: **Offene fortsetzen**, **Alle erneut durchsehen**, **Nur ausgewählte** oder – falls vorhanden – **Zurückgestellte**.
+2. Große Vorschau, darunter Name, Größe, Eingang und Hinweis. Unter **Infos bearbeiten** lassen sich Anzeigename und Beschreibung direkt ergänzen.
+3. **Auswählen** oder **Überspringen** – beide Buttons sind gleichwertig. **Zurückstellen** merkt eine Datei für später vor.
 
 | Gerät | Auswählen | Überspringen |
 |---|---|---|
@@ -12,9 +12,19 @@ In der Sichtung entscheidet die Redaktion, welche Dateien verwendet werden. **Au
 | Handy | nach rechts wischen | nach links wischen |
 | Maus | Button „Auswählen“ | Button „Überspringen“ |
 
+Zurückstellen: Pfeil nach unten ↓ oder der Button „Zurückstellen“.
+
+Sichten mehrere Personen gleichzeitig, gewinnt nicht einfach die letzte Entscheidung: Hat jemand eine Datei inzwischen anders gesichtet, meldet BlaulichtCMS „Bereits anders gesichtet“ (mit Namen) und lässt die frühere Entscheidung stehen.
+
 ## Übersicht
 
-Die Reiter zeigen **Zu sichten**, **Ausgewählt**, **Alle** und **In Prüfung / abgewiesen**. Bei abgewiesenen Dateien steht der Grund dabei (z. B. „Dateiformat nicht erlaubt“).
+Die Reiter zeigen **Zu sichten**, **Ausgewählt**, **Zurückgestellt** (sobald es solche Dateien gibt), **Alle** und **In Prüfung / abgewiesen**. Bei abgewiesenen Dateien steht der Grund dabei (z. B. „Dateiformat nicht erlaubt“).
+
+- **Kacheln oder Liste:** Umschalter rechts über den Dateien; dazu 48, 96 oder 192 Dateien je Seite. Beides merkt sich das Gerät.
+- **Großansicht:** Klick auf eine Vorschau öffnet sie groß – mit Pfeilen, Wischen oder Tastatur (← →) blättern, Videos laufen im Player.
+- **Details:** Menü der Datei → **Details** zeigt Anzeigename, Beschreibung und interne Notiz (bearbeitbar mit „Medien verwalten“), Originalname, Typ, Prüfsumme (SHA-256), Eingang samt Upload-Link und Vorgangsnummer, wer wann gesichtet hat und in welchen Beiträgen die Datei steckt. Anzeigename und Beschreibung sind nur intern; die öffentliche Fassung behält ihren neutralen Dateinamen.
+- **Duplikate:** Hat eine Datei denselben Inhalt wie eine ältere (gleiche Prüfsumme, auch in einer anderen Sammlung), trägt sie den Hinweis **Duplikat**; die Details verweisen auf die ältere Datei. Gelöscht wird nichts automatisch.
+- **Mehrfachauswahl:** Mit den Kästchen auf den Kacheln (oder „Alle auf dieser Seite markieren“) mehrere Dateien markieren. Die Leiste darüber bietet **Auswählen**, **Überspringen**, **Zurückstellen**, **Zurücksetzen**, **ZIP** und **Löschen** für alle markierten auf einmal. Steckt eine markierte Datei in einem laufenden Beitrag, lehnt BlaulichtCMS das Löschen für die ganze Auswahl ab und nennt den Beitrag.
 
 ## Personen und sensible Inhalte
 
