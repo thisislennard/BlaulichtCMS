@@ -1,12 +1,14 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
-import { useQuery } from '@tanstack/react-query';
-import { get, post } from '../../api/client';
-import { Button, Card, EmptyState, ErrorBox, FieldWrap, Input, PageHeader, SkeletonRows, Switch, Textarea } from '../../components/ui/core';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
+import { get, post, qs } from '../../api/client';
+import { Button, Card, EmptyState, ErrorBox, FieldWrap, Input, PageHeader, SegmentedControl, SkeletonRows, Switch, Textarea } from '../../components/ui/core';
+import { MediaNav } from './MediaNav';
+import { Pager } from './gallery';
 import { Icon } from '../../components/ui/Icon';
 import { Dialog, useErrorToast } from '../../components/ui/overlays';
 import { useAuth } from '../../lib/auth';
-import { fmtRelative } from '../../lib/format';
+import { fmtDate, fmtRelative } from '../../lib/format';
 import { DEFAULT_VALIDITY, ValidityPicker, validityPayload, type Validity } from './UploadLinks';
 
 export function NewCollectionDialog({ open, onClose, postId, defaultTitle }: { open: boolean; onClose: () => void; postId?: string; defaultTitle?: string }) {
@@ -16,6 +18,7 @@ export function NewCollectionDialog({ open, onClose, postId, defaultTitle }: { o
   const [purpose, setPurpose] = useState('');
   const [note, setNote] = useState('');
   const [validity, setValidity] = useState<Validity>(DEFAULT_VALIDITY);
+  const [eventDate, setEventDate] = useState('');
   const [createLink, setCreateLink] = useState(true);
   const [busy, setBusy] = useState(false);
   return (
@@ -35,7 +38,7 @@ export function NewCollectionDialog({ open, onClose, postId, defaultTitle }: { o
               setBusy(true);
               try {
                 const v = validityPayload(validity);
-                const r = await post<any>('/collections', { title: title.trim(), purpose: purpose.trim(), note: note.trim(), postId: postId ?? null, createLink, linkDays: v.days, linkHours: v.hours, linkExpiresAt: v.expiresAt });
+                const r = await post<any>('/collections', { title: title.trim(), purpose: purpose.trim(), note: note.trim(), postId: postId ?? null, eventDate: eventDate || null, createLink, linkDays: v.days, linkHours: v.hours, linkExpiresAt: v.expiresAt });
                 onClose();
                 nav(`/medien/${r.collection.id}`);
               } catch (e) {
@@ -60,6 +63,9 @@ export function NewCollectionDialog({ open, onClose, postId, defaultTitle }: { o
         <FieldWrap label="Hinweis für Hochladende" htmlFor="c-note">
           <Textarea id="c-note" rows={2} value={note} onChange={(e) => setNote(e.target.value)} maxLength={1000} placeholder="Bitte keine erkennbaren Personen ohne deren Einverständnis." />
         </FieldWrap>
+        <FieldWrap label="Veranstaltungsdatum (optional)" htmlFor="c-date">
+          <Input id="c-date" type="date" value={eventDate} onChange={(e) => setEventDate(e.target.value)} className="max-w-[200px]" />
+        </FieldWrap>
         <Switch checked={createLink} onChange={setCreateLink} label="Upload-Link gleich erstellen" description="Personen ohne Konto können damit Fotos und Videos in diese Sammlung hochladen." />
         {createLink && <ValidityPicker value={validity} onChange={setValidity} idPrefix="c" />}
       </div>
@@ -69,9 +75,21 @@ export function NewCollectionDialog({ open, onClose, postId, defaultTitle }: { o
 
 export default function Collections() {
   const { can } = useAuth();
-  const [showArchived, setShowArchived] = useState(false);
+  const [status, setStatus] = useState<'active' | 'archived' | 'all'>('active');
+  const [search, setSearch] = useState('');
+  const [term, setTerm] = useState('');
+  const [page, setPage] = useState(1);
   const [create, setCreate] = useState(false);
-  const q = useQuery({ queryKey: ['collections', showArchived], queryFn: () => get<any[]>(`/collections?archived=${showArchived}`) });
+  useEffect(() => {
+    const t = setTimeout(() => (setTerm(search.trim()), setPage(1)), 300);
+    return () => clearTimeout(t);
+  }, [search]);
+  const q = useQuery({
+    queryKey: ['collections', 'paged', status, term, page],
+    queryFn: () => get<{ items: any[]; total: number; page: number; pages: number }>(`/collections${qs({ paged: 1, status, q: term, page, perPage: 24 })}`),
+    placeholderData: keepPreviousData,
+  });
+  const list = q.data?.items;
   return (
     <div className="flex flex-col gap-5">
       <PageHeader
@@ -85,22 +103,34 @@ export default function Collections() {
           )
         }
       />
-      <div>
-        <Switch checked={showArchived} onChange={setShowArchived} label="Archivierte anzeigen" />
+      <MediaNav />
+      <div className="flex flex-wrap items-center gap-3">
+        <Input type="search" aria-label="Sammlungen durchsuchen" placeholder="Sammlungen durchsuchen" value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-[320px]" />
+        <SegmentedControl
+          label="Status"
+          size="sm"
+          value={status}
+          onChange={(v) => (setStatus(v), setPage(1))}
+          options={[
+            { value: 'active', label: 'Aktiv' },
+            { value: 'archived', label: 'Archiviert' },
+            { value: 'all', label: 'Alle' },
+          ]}
+        />
       </div>
       {q.isLoading && <SkeletonRows rows={4} />}
       {q.error && <ErrorBox title="Sammlungen konnten nicht geladen werden">{(q.error as Error).message}</ErrorBox>}
-      {q.data && q.data.length === 0 && (
+      {list && list.length === 0 && (
         <EmptyState
           icon="Images"
-          title="Noch keine Sammlung"
-          text="Lege eine Sammlung an oder nutze im Beitrag „Fotos und Videos sammeln“."
-          action={can('media.manage') && <Button variant="primary" icon="Plus" onClick={() => setCreate(true)}>Neue Sammlung</Button>}
+          title={term || status !== 'active' ? 'Keine passende Sammlung' : 'Noch keine Sammlung'}
+          text={term || status !== 'active' ? 'Suche oder Filter anpassen.' : 'Lege eine Sammlung an oder nutze im Beitrag „Fotos und Videos sammeln“.'}
+          action={!term && status === 'active' && can('media.manage') && <Button variant="primary" icon="Plus" onClick={() => setCreate(true)}>Neue Sammlung</Button>}
         />
       )}
-      {q.data && q.data.length > 0 && (
+      {list && list.length > 0 && (
         <ul className="m-0 p-0 list-none grid gap-4 grid-cols-1 sm:grid-cols-2 xl:grid-cols-3">
-          {q.data.map((c) => (
+          {list.map((c) => (
             <li key={c.id}>
               <Link to={`/medien/${c.id}`} className="block !text-fg no-underline">
                 <Card className="h-full hover:border-line-strong transition-colors" bodyClassName="!p-0">
@@ -121,7 +151,10 @@ export default function Collections() {
                       {c.quarantine_count > 0 && <span>{c.quarantine_count} in Prüfung</span>}
                       {c.active_links > 0 && <span className="flex items-center gap-1"><Icon name="Link" size={12} /> {c.active_links} aktiver Link</span>}
                     </div>
-                    <div className="text-meta text-fg-muted">angelegt {fmtRelative(c.created_at)}</div>
+                    <div className="text-meta text-fg-muted">
+                      {c.event_date ? `Termin ${fmtDate(c.event_date)} · ` : ''}angelegt {fmtRelative(c.created_at)}
+                      {c.archived_at ? ' · archiviert' : ''}
+                    </div>
                   </div>
                 </Card>
               </Link>
@@ -129,6 +162,7 @@ export default function Collections() {
           ))}
         </ul>
       )}
+      <Pager page={page} pages={q.data?.pages ?? 1} total={q.data?.total ?? 0} onPage={setPage} />
       {create && <NewCollectionDialog open onClose={() => setCreate(false)} />}
     </div>
   );

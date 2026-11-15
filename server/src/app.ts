@@ -58,6 +58,7 @@ import { userRoutes } from './routes/users.js';
 import { systemRoutes } from './routes/system.js';
 import { dashboardRoutes } from './routes/dashboard.js';
 import { mediaRoutes } from './routes/media.js';
+import { mediaOrganizeRoutes } from './routes/media-organize.js';
 import { postRoutes } from './routes/posts.js';
 import { bridgeRoutes } from './routes/bridge.js';
 import { uploadRoutes } from './routes/uploads.js';
@@ -202,6 +203,7 @@ export async function buildApp(): Promise<FastifyInstance> {
       await api.register(systemRoutes);
       await api.register(dashboardRoutes);
       await api.register(mediaRoutes);
+      await api.register(mediaOrganizeRoutes);
       await api.register(postRoutes);
       await api.register(bridgeRoutes);
       await api.register(uploadRoutes);

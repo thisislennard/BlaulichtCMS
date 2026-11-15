@@ -26,6 +26,15 @@ Die Reiter zeigen **Zu sichten**, **Ausgewählt**, **Zurückgestellt** (sobald e
 - **Duplikate:** Hat eine Datei denselben Inhalt wie eine ältere (gleiche Prüfsumme, auch in einer anderen Sammlung), trägt sie den Hinweis **Duplikat**; die Details verweisen auf die ältere Datei. Gelöscht wird nichts automatisch.
 - **Mehrfachauswahl:** Mit den Kästchen auf den Kacheln (oder „Alle auf dieser Seite markieren“) mehrere Dateien markieren. Die Leiste darüber bietet **Auswählen**, **Überspringen**, **Zurückstellen**, **Zurücksetzen**, **ZIP** und **Löschen** für alle markierten auf einmal. Steckt eine markierte Datei in einem laufenden Beitrag, lehnt BlaulichtCMS das Löschen für die ganze Auswahl ab und nennt den Beitrag.
 
+## Ordnen und Ablage
+
+- **Ordner:** In einer Sammlung legt **Neuer Ordner** beliebig tiefe Ordner an. Über dem Raster stehen der Pfad (Brotkrumen) und die Unterordner als Kacheln; ein Klick öffnet den Ordner. **Unterordner einbeziehen** zeigt den Inhalt samt aller Unterordner. Ordner lassen sich umbenennen, verschieben (nie in sich selbst) und archivieren. Ein Upload-Link kann einen **Zielordner** haben; „Hochladen“ legt Dateien in den gerade geöffneten Ordner.
+- **Verschieben und Kopieren:** Menü einer Datei oder Sammelaktion → **Verschieben** bzw. **Kopieren**, dann Sammlung und Ordner wählen. Verschobene Dateien behalten ihre ID – Beiträge und Freigaben, die sie verwenden, bleiben gültig. Kopien übernehmen Anzeigename, Beschreibung, Schlagworte und alle Datenschutz-Entscheidungen (Markierungen, unkenntliche Bereiche, Zuschnitt, ohne Ton); die Sichtung beginnt neu. In beiden Fällen prüft BlaulichtCMS das Kontingent der Zielsammlung; in archivierte Sammlungen geht nichts.
+- **Schlagworte:** Menü → **Schlagworte** bzw. Sammelaktion (hinzufügen und entfernen). Schlagworte werden klein geschrieben und sind unabhängig von den Stichwörtern der Warnentwürfe. Die Sammlung filtert nach Schlagwort.
+- **Titelbild und Termin:** Menü einer Datei → **Als Titelbild** setzt das Bild der Sammlungskarte. Unter „Bearbeiten“ lässt sich ein **Veranstaltungsdatum** eintragen; die Übersicht sortiert danach.
+- **Alle Dateien:** [Medien → Alle Dateien](/medien/dateien) sucht über alle Sammlungen nach Name, Beschreibung, Hinweis, Sammlung oder Vorgangsnummer und filtert nach Art, Sichtung, Schlagwort, Zeitraum, Herkunft (Upload-Link oder intern) und Datenschutz-Markierung. Markierte Treffer lassen sich sichten, verschlagworten, verschieben, kopieren, als ZIP laden oder löschen.
+- **Übersicht der Sammlungen:** Suchfeld, Filter Aktiv/Archiviert/Alle und Seiten.
+
 ## Personen und sensible Inhalte
 
 Einsatzfotos zeigen oft Verletzte, Betroffene, Unbeteiligte oder Kennzeichen. Gesundheitsangaben gehören zu den besonders geschützten Daten (Art. 9 DSGVO); für erkennbare Personen gilt das Recht am eigenen Bild (Kunsturhebergesetz).
@@ -43,7 +52,7 @@ Im Zweifel: nicht veröffentlichen oder unkenntlich machen. Lieber ein Bild mit 
 
 Über das Menü einer Datei: **Original herunterladen** (volle Qualität, nur intern) oder **Öffentliche Fassung herunterladen** (ohne Standortdaten, mit neutralem Dateinamen aus der Medien-ID – der Originalname des Uploads kann Namen oder Orte enthalten und bleibt nur beim Original erhalten). Downloads von Originalen werden protokolliert.
 
-**Sammeldownload (ZIP):** Über **Herunterladen** in der Sammlung entsteht im Hintergrund ein ZIP, das 24 Stunden bereitliegt. Die öffentliche Fassung darf jede Person mit Zugriff auf Medien anfordern. **Originale** gibt es – wie beim Einzeldownload – nur mit dem Recht „Medien verwalten“; das wird beim Anlegen und beim Herunterladen geprüft. Ein ZIP laden kann nur, wer es angelegt hat, oder eine Person mit „Medien verwalten“.
+**Sammeldownload (ZIP):** Über **Sammeldownload (ZIP)** in der Sammlung (ausgewählte, alle, markierte Dateien oder ein Ordner samt Unterordnern) oder über „ZIP“ in der Mediensuche (auch aus mehreren Sammlungen) entsteht im Hintergrund ein ZIP. Es behält auf Wunsch die **Ordnerstruktur** (bei mehreren Sammlungen mit einem Ordner je Sammlung) und enthält optional eine **metadaten.csv** (Dateiname im ZIP, Anzeigename, Beschreibung, Schlagworte, Sammlung, Ordner, Eingang, Größe, Prüfsumme, Sichtung, Markierungen; Originalname, Hinweis und Vorgangsnummer der Hochladenden nur beim Export der Originale). Werte, die ein Tabellenprogramm als Formel ausführen würde, werden entschärft. Die öffentliche Fassung darf jede Person mit Zugriff auf Medien anfordern. **Originale** gibt es – wie beim Einzeldownload – nur mit dem Recht „Medien verwalten“; das wird beim Anlegen und beim Herunterladen geprüft. Ein ZIP laden kann nur, wer es angelegt hat, oder eine Person mit „Medien verwalten“.
 
 ## Standortdaten im Original
 

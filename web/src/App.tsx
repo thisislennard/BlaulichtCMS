@@ -18,6 +18,7 @@ const Banners = lazy(() => import('./pages/banners/Banners'));
 const Sources = lazy(() => import('./pages/sources/Sources'));
 const Collections = lazy(() => import('./pages/media/Collections'));
 const CollectionDetail = lazy(() => import('./pages/media/CollectionDetail'));
+const MediaSearch = lazy(() => import('./pages/media/MediaSearch'));
 const Sites = lazy(() => import('./pages/channels/Sites'));
 const Users = lazy(() => import('./pages/admin/Users'));
 const SystemStatus = lazy(() => import('./pages/admin/SystemStatus'));
@@ -103,6 +104,7 @@ const router = createBrowserRouter([
       { path: 'vorlagen', element: <Page perm={['post.read']}><Templates /></Page> },
       { path: 'freigaben', element: <Page perm={['post.read']}><Posts key="freigaben" mode="approvals" /></Page> },
       { path: 'medien', element: <Page perm={['media.read']}><Collections /></Page> },
+      { path: 'medien/dateien', element: <Page perm={['media.read']}><MediaSearch /></Page> },
       { path: 'medien/:id', element: <Page perm={['media.read']}><CollectionDetail /></Page> },
       { path: 'quellen', element: <Page perm={['post.read']}><Sources /></Page> },
       { path: 'banner', element: <Page perm={['post.read']}><Banners /></Page> },

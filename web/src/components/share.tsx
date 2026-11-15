@@ -129,8 +129,7 @@ export async function downloadQrPng(text: string, name = 'qr-code.png') {
 /** Teilen per WhatsApp, E-Mail oder Systemdialog sowie QR-Code als Datei (wie LiFeOS). */
 export function ShareMenu({ target, size = 'sm' }: { target: ShareTarget; size?: 'sm' | 'md' }) {
   const toastError = useErrorToast();
-  const text = `${target.purpose}: ${target.title}
-${target.url}`;
+  const text = `${target.purpose}: ${target.title}\n${target.url}`;
   const canShare = typeof navigator !== 'undefined' && typeof navigator.share === 'function';
   return (
     <Menu

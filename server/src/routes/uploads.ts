@@ -9,6 +9,7 @@ import { AppError, badRequest, notFound } from '../lib/errors.js';
 import { getSettings } from '../lib/settings.js';
 import { ensureMediaDirs, freeBytes, mediaPaths } from '../media/storage.js';
 import { finalizeUpload, loadPublicLink, mediaPayload, UPLOAD_REF_RE, uploadAllowance, type UploadContext } from './media.js';
+import { assertFolder } from './media-organize.js';
 
 /**
  * Fortsetzbarer Upload in Teilen (Chunks). Ablauf je Datei:
@@ -30,6 +31,8 @@ const createBody = z.object({
   note: z.string().max(500).default(''),
   /** Vorgangsnummer der Upload-Seite (#141), z. B. „K7M2-Q9XD“ */
   ref: z.string().regex(UPLOAD_REF_RE).optional(),
+  /** Zielordner (nur interner Upload; öffentlich gilt der Zielordner des Links) */
+  folderId: z.uuid().optional(),
 });
 
 function sessionPayload(s: any, media?: any) {
@@ -81,9 +84,9 @@ async function createSession(ctx: UploadContext, body: z.infer<typeof createBody
     const limit = await uploadAllowance(ctx, db);
     if (body.size > limit) throw new AppError(413, 'file_too_large', limit < ctx.maxFileBytes ? 'Die Datei passt nicht mehr in den verbleibenden Speicher der Sammlung.' : `Datei ist größer als ${Math.round(limit / 1024 / 1024)} MB.`);
     return one<any>(
-      `INSERT INTO upload_sessions (collection_id, upload_link_id, user_id, client_key, file_name, declared_type, note, size_bytes, upload_ref)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT (collection_id, client_key) DO NOTHING RETURNING *`,
-      [ctx.collection.id, ctx.linkId, ctx.userId, body.clientKey, body.name.replace(/[\u0000-\u001f\\/]/g, '_'), body.type, body.note, body.size, body.ref ?? null],
+      `INSERT INTO upload_sessions (collection_id, upload_link_id, user_id, client_key, file_name, declared_type, note, size_bytes, upload_ref, folder_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) ON CONFLICT (collection_id, client_key) DO NOTHING RETURNING *`,
+      [ctx.collection.id, ctx.linkId, ctx.userId, body.clientKey, body.name.replace(/[\u0000-\u001f\\/]/g, '_'), body.type, body.note, body.size, body.ref ?? null, ctx.folderId ?? null],
       db,
     );
   });
@@ -174,7 +177,7 @@ async function appendChunkLocked(ctx: UploadContext, sessionId: string, offset: 
   await new Promise<void>((resolve, reject) => fs.createReadStream(file).on('data', (c) => hash.update(c)).on('end', () => resolve()).on('error', reject));
   let res;
   try {
-    res = await finalizeUpload({ ...ctx, stored: { tmpPath: file, size: received, sha256: hash.digest('hex') }, name: s.file_name, declaredType: s.declared_type, note: s.note, uploadRef: s.upload_ref, clientKey: s.client_key, sessionId: s.id, keepTmpOnError: true });
+    res = await finalizeUpload({ ...ctx, folderId: s.folder_id ?? ctx.folderId ?? null, stored: { tmpPath: file, size: received, sha256: hash.digest('hex') }, name: s.file_name, declaredType: s.declared_type, note: s.note, uploadRef: s.upload_ref, clientKey: s.client_key, sessionId: s.id, keepTmpOnError: true });
   } catch (e) {
     // Endgültig (Kontingent erschöpft): Sitzung und Teildatei entfernen, sonst reserviert die Sitzung 24 h lang Platz
     // in Sammlung und Link (#152). Vorübergehende Fehler (z. B. Datenbank): Teildatei bleibt, ein leerer Teil am Ende
@@ -217,6 +220,7 @@ export async function uploadRoutes(app: FastifyInstance) {
       userId: null,
       maxFileBytes: Math.min(Number(l.max_file_bytes), s['media.max_file_mb'] * 1024 * 1024),
       actor: { id: null, name: `Upload-Link ${l.label || l.id.slice(0, 8)}`, type: 'system', ip: req.ip } as Actor,
+      folderId: l.folder_id ?? null,
     };
   };
   const internalCtx = async (collectionId: string, req: FastifyRequest): Promise<UploadContext> => {
@@ -259,7 +263,9 @@ export async function uploadRoutes(app: FastifyInstance) {
   const collSessP = z.object({ cid: z.uuid(), id: z.uuid() });
   app.post('/collections/:cid/upload-sessions', { preHandler: requireAuth('media.manage'), ...lim(240) }, async (req) => {
     const { cid } = collP.parse(req.params);
-    const r = await createSession(await internalCtx(cid, req), createBody.parse(req.body));
+    const body = createBody.parse(req.body);
+    const ctx = await internalCtx(cid, req);
+    const r = await createSession({ ...ctx, folderId: await assertFolder(cid, body.folderId) }, body);
     return { ...r, chunkSize: 8 * 1024 * 1024 };
   });
   app.get('/collections/:cid/upload-sessions/:id', { preHandler: requireAuth('media.manage') }, async (req) => {

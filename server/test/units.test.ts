@@ -923,3 +923,44 @@ describe('Geräte-Cookie als Grundlage für gemerkte Sitzungen und Geräte', () 
     expect(deviceHash(userA, nonce)).not.toContain(nonce);
   });
 });
+
+describe('Ordner, Schlagworte und CSV (Medien wie LiFeOS)', () => {
+  it('Ordnerpfad, Unterordner, Kreisschutz, Tiefe und ZIP-Verzeichnis', async () => {
+    const { folderPath, descendants, wouldCycle, depthAfterMove, zipDir, cleanFolderName } = await import('../src/media/folders.js');
+    const f = [
+      { id: 'a', parent_id: null, name: 'Einsatz' },
+      { id: 'b', parent_id: 'a', name: 'Drohne' },
+      { id: 'c', parent_id: 'b', name: 'Nacht:Flug' },
+      { id: 'd', parent_id: null, name: 'Presse' },
+    ];
+    expect(folderPath(f, 'c').map((x) => x.name)).toEqual(['Einsatz', 'Drohne', 'Nacht:Flug']);
+    expect(descendants(f, 'a').sort()).toEqual(['b', 'c']);
+    expect(wouldCycle(f, 'a', 'c')).toBe(true);
+    expect(wouldCycle(f, 'a', 'a')).toBe(true);
+    expect(wouldCycle(f, 'b', 'd')).toBe(false);
+    expect(wouldCycle(f, 'b', null)).toBe(false);
+    expect(depthAfterMove(f, 'a', 'd')).toBe(4);
+    expect(zipDir(f, 'c')).toBe('Einsatz/Drohne/Nacht_Flug/');
+    expect(zipDir(f, null)).toBe('');
+    // Zyklische Altdaten brechen sicher ab
+    expect(folderPath([{ id: 'x', parent_id: 'y', name: 'X' }, { id: 'y', parent_id: 'x', name: 'Y' }], 'x').length).toBe(2);
+    expect(cleanFolderName('  a/b\\c  ')).toBe('a b c');
+    expect(() => cleanFolderName('..')).toThrow();
+    expect(() => cleanFolderName('   ')).toThrow();
+  });
+  it('Schlagworte normalisieren und CSV-Zellen gegen Formel-Injektion absichern', async () => {
+    const { cleanTag } = await import('../src/routes/media-organize.js');
+    const { csvCell } = await import('../src/media/exports.js');
+    expect(cleanTag('  Drehleiter   Nacht ')).toBe('drehleiter nacht');
+    expect(cleanTag(' , ')).toBeNull();
+    expect(cleanTag('x'.repeat(60))).toHaveLength(40);
+    expect(csvCell('=SUMME(A1)')).toBe("'=SUMME(A1)");
+    expect(csvCell('+49 123')).toBe("'+49 123");
+    expect(csvCell('-x')).toBe("'-x");
+    expect(csvCell('@cmd')).toBe("'@cmd");
+    expect(csvCell('a;b')).toBe('"a;b"');
+    expect(csvCell('sagt "hallo"')).toBe('"sagt ""hallo"""');
+    expect(csvCell(['a', 'b'])).toBe('"a, b"');
+    expect(csvCell(null)).toBe('');
+  });
+});

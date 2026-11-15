@@ -63,6 +63,10 @@ export interface MediaItem {
   internal_note?: string;
   /** gleiche Prüfsumme wie diese ältere Datei */
   duplicate_of?: string | null;
+  folder_id?: string | null;
+  tags?: string[];
+  /** nur in der Mediensuche */
+  collection_title?: string;
   upload_ref?: string | null;
   uploader_note?: string;
   uploaded_by_name?: string | null;
@@ -104,6 +108,7 @@ export interface UploadLink {
   revoked_at: string | null;
   paused_at?: string | null;
   welcome_text?: string;
+  folder_id?: string | null;
   regenerated_at?: string | null;
   max_files: number;
   max_file_bytes: number;

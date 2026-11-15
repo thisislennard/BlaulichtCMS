@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ApiError, del, get, patch, post } from '../../api/client';
 import type { MediaItem, UploadLink } from '../../api/types';
@@ -15,12 +15,13 @@ import { PrivacyDialog } from './PrivacyDialog';
 import { Lightbox, MarkBox, MediaList, MediaThumb, mediaName, Pager, useGalleryPrefs, ViewControls, type MenuItems } from './gallery';
 import { MediaDetailsDialog } from './MediaDetails';
 import { ReviewDialog, type Decision } from './ReviewDialog';
+import { descendantIds, FolderBar, FolderOptions, MoveCopyDialog, TagsDialog, type Folder } from './organize';
 
 type Filter = 'pending' | 'selected' | 'on_hold' | 'all' | 'problems';
 type Selection = 'pending' | 'selected' | 'skipped' | 'on_hold';
 
-function uploadInternal(collectionId: string, file: File, onProgress: (p: number) => void): Promise<unknown> {
-  return uploadResumable(`/api/v1/collections/${collectionId}/upload-sessions`, file, { clientKey: newClientKey(), onProgress });
+function uploadInternal(collectionId: string, file: File, onProgress: (p: number) => void, folderId: string | null): Promise<unknown> {
+  return uploadResumable(`/api/v1/collections/${collectionId}/upload-sessions`, file, { clientKey: newClientKey(), onProgress, extra: folderId ? { folderId } : undefined });
 }
 
 export default function CollectionDetail() {
@@ -43,10 +44,24 @@ export default function CollectionDetail() {
   const [lightbox, setLightbox] = useState<number | null>(null);
   const [details, setDetails] = useState<string | null>(null);
   const [marked, setMarked] = useState<Set<string>>(new Set());
+  const [moveCopy, setMoveCopy] = useState<null | { mode: 'move' | 'copy'; ids: string[] }>(null);
+  const [tagging, setTagging] = useState<null | { ids: string[]; current?: string[] }>(null);
+  const [tagFilter, setTagFilter] = useState('');
+  const [deep, setDeep] = useState(false);
+  const [params, setParams] = useSearchParams();
+  const folder = params.get('ordner');
+  const openFolder = (fid: string | null) => {
+    const p = new URLSearchParams(params);
+    if (fid) p.set('ordner', fid);
+    else p.delete('ordner');
+    setParams(p);
+    setPage(1);
+    setMarked(new Set());
+  };
   const fileRef = useRef<HTMLInputElement>(null);
   const q = useQuery({
     queryKey: ['collection', id],
-    queryFn: () => get<{ collection: any; media: MediaItem[]; links: UploadLink[]; accept: string }>(`/collections/${id}`),
+    queryFn: () => get<{ collection: any; media: MediaItem[]; folders: Folder[]; links: UploadLink[]; accept: string }>(`/collections/${id}`),
     refetchInterval: (query) => ((query.state.data?.media ?? []).some((m) => m.status === 'quarantine') ? 3000 : false),
   });
   usePageMeta({ title: q.data?.collection.title });
@@ -55,7 +70,27 @@ export default function CollectionDetail() {
   const [privacyItem, setPrivacyItem] = useState<MediaItem | null>(null);
   const setFilter = (f: Filter) => (setFilterState(f), setPage(1));
 
-  const media = q.data?.media ?? [];
+  const allMedia = q.data?.media ?? [];
+  const folders = q.data?.folders ?? [];
+  // Ohne Ordner: alle Dateien wie bisher. Mit Ordnern: Inhalt des aktuellen Ordners (optional samt Unterordnern)
+  const media = useMemo(() => {
+    let list = allMedia;
+    if (folders.length) {
+      const inScope = new Set<string | null>([folder, ...(deep && folder ? descendantIds(folders, folder) : [])]);
+      list = deep && !folder ? list : list.filter((m) => inScope.has(m.folder_id ?? null));
+    }
+    if (tagFilter) list = list.filter((m) => (m.tags ?? []).includes(tagFilter));
+    return list;
+  }, [allMedia, folders, folder, deep, tagFilter]);
+  const folderCounts = useMemo(() => {
+    const out: Record<string, number> = {};
+    for (const f of folders) {
+      const scope = new Set([f.id, ...descendantIds(folders, f.id)]);
+      out[f.id] = allMedia.filter((m) => m.folder_id && scope.has(m.folder_id)).length;
+    }
+    return out;
+  }, [allMedia, folders]);
+  const tagsInCollection = useMemo(() => [...new Set(allMedia.flatMap((m) => m.tags ?? []))].sort((a, b) => a.localeCompare(b, 'de')), [allMedia]);
   const lists = useMemo(
     () => ({
       pending: media.filter((m) => m.status === 'ready' && m.selection === 'pending'),
@@ -138,6 +173,10 @@ export default function CollectionDetail() {
     manage && m.status === 'ready' ? { label: 'Original herunterladen', icon: 'Download', onClick: () => window.open(`/api/v1/media/${m.id}/original`, '_blank') } : null,
     m.has_public && m.status === 'ready' ? { label: 'Öffentliche Fassung herunterladen', icon: 'Download', onClick: () => window.open(`/api/v1/media/${m.id}/public?v=${m.public_rev ?? 0}`, '_blank') } : null,
     manage && m.status === 'ready' ? { label: 'Datenschutz und Unkenntlichmachen', icon: 'EyeOff', onClick: () => setPrivacyItem(m) } : null,
+    manage ? { label: 'Schlagworte', icon: 'Tags', onClick: () => setTagging({ ids: [m.id], current: m.tags ?? [] }) } : null,
+    manage ? { label: 'Verschieben', icon: 'FolderInput', onClick: () => setMoveCopy({ mode: 'move', ids: [m.id] }) } : null,
+    manage && m.status === 'ready' ? { label: 'Kopieren', icon: 'CopyPlus', onClick: () => setMoveCopy({ mode: 'copy', ids: [m.id] }) } : null,
+    manage && m.status === 'ready' && m.has_preview ? { label: 'Als Titelbild', icon: 'Star', onClick: () => void patch(`/collections/${id}`, { coverMediaId: m.id }).then(() => (toast({ tone: 'success', title: 'Titelbild gesetzt' }), refresh()), toastError) } : null,
     manage && m.status === 'ready' && m.selection !== 'on_hold' ? { label: 'Zurückstellen', icon: 'Pause', onClick: () => setSelection([m.id], 'on_hold').catch(toastError) } : null,
     manage && m.status === 'ready' && m.selection !== 'pending' ? { label: 'Auswahl zurücksetzen', icon: 'Undo2', onClick: () => setSelection([m.id], 'pending').catch(toastError) } : null,
     manage && m.status === 'ready' ? { label: 'Nach vorne', icon: 'ArrowUp', onClick: () => reorder(m.id, null, -1) } : null,
@@ -235,7 +274,7 @@ export default function CollectionDetail() {
           let failed = 0;
           for (let i = 0; i < files.length; i++) {
             try {
-              await uploadInternal(id, files[i], (p) => setUpload((u) => u && u.map((x, j) => (j === i ? { ...x, progress: p } : x))));
+              await uploadInternal(id, files[i], (p) => setUpload((u) => u && u.map((x, j) => (j === i ? { ...x, progress: p } : x))), folder);
             } catch (err) {
               failed++;
               toastError(err);
@@ -256,7 +295,9 @@ export default function CollectionDetail() {
         </Notice>
       )}
 
-      {manage && <UploadLinksCard collection={c} links={q.data!.links} onChanged={refresh} />}
+      {manage && <UploadLinksCard collection={c} links={q.data!.links} folders={folders} onChanged={refresh} />}
+
+      <FolderBar collectionId={id} folders={folders} current={folder} onOpen={openFolder} manage={manage} counts={folderCounts} deep={deep} setDeep={setDeep} onChanged={refresh} />
 
       <Tabs
         label="Medien filtern"
@@ -285,7 +326,19 @@ export default function CollectionDetail() {
               </label>
             )}
           </div>
-          <ViewControls view={prefs.view} setView={prefs.setView} perPage={prefs.perPage} setPerPage={(n) => (prefs.setPerPage(n), setPage(1))} />
+          <div className="flex flex-wrap items-center gap-2">
+            {tagsInCollection.length > 0 && (
+              <Select aria-label="Nach Schlagwort filtern" value={tagFilter} onChange={(e) => (setTagFilter(e.target.value), setPage(1))} className="!h-ctl-sm !w-auto">
+                <option value="">Alle Schlagworte</option>
+                {tagsInCollection.map((t) => (
+                  <option key={t} value={t}>
+                    {t}
+                  </option>
+                ))}
+              </Select>
+            )}
+            <ViewControls view={prefs.view} setView={prefs.setView} perPage={prefs.perPage} setPerPage={(n) => (prefs.setPerPage(n), setPage(1))} />
+          </div>
         </div>
       )}
       {manage && marked.size > 0 && (
@@ -295,6 +348,9 @@ export default function CollectionDetail() {
           <Button size="sm" icon="SkipForward" onClick={() => void bulk({ action: 'selection', selection: 'skipped' })}>Überspringen</Button>
           <Button size="sm" icon="Pause" onClick={() => void bulk({ action: 'selection', selection: 'on_hold' })}>Zurückstellen</Button>
           <Button size="sm" icon="Undo2" onClick={() => void bulk({ action: 'selection', selection: 'pending' })}>Zurücksetzen</Button>
+          <Button size="sm" icon="Tags" onClick={() => setTagging({ ids: [...marked] })}>Schlagworte</Button>
+          <Button size="sm" icon="FolderInput" onClick={() => setMoveCopy({ mode: 'move', ids: [...marked] })}>Verschieben</Button>
+          <Button size="sm" icon="CopyPlus" onClick={() => setMoveCopy({ mode: 'copy', ids: [...marked] })}>Kopieren</Button>
           <Button size="sm" icon="Download" onClick={() => setExporting({ ids: [...marked] })}>ZIP</Button>
           <Button
             size="sm"
@@ -334,7 +390,16 @@ export default function CollectionDetail() {
                 <div className="truncate" title={m.original_name}>
                   {mediaName(m)}
                 </div>
-                {m.duplicate_of && <Badge tone="warning" className="self-start">Duplikat</Badge>}
+                {(m.duplicate_of || !!m.tags?.length) && (
+                  <div className="flex flex-wrap gap-1">
+                    {m.duplicate_of && <Badge tone="warning">Duplikat</Badge>}
+                    {(m.tags ?? []).slice(0, 3).map((t) => (
+                      <span key={t} className="text-meta text-fg-muted bg-raised rounded-chip px-1.5">
+                        {t}
+                      </span>
+                    ))}
+                  </div>
+                )}
                 {(m.status === 'rejected' || m.status === 'blocked') && <div className="text-err text-meta">{m.reject_reason}</div>}
                 <div className="flex items-center gap-1 flex-wrap">
                   {m.status === 'ready' && m.selection !== 'pending' && <StatusBadge status={m.selection!} />}
@@ -372,7 +437,9 @@ export default function CollectionDetail() {
       {lightbox !== null && pageItems.length > 0 && <Lightbox items={pageItems} start={lightbox} onClose={() => setLightbox(null)} onDetails={(m) => (setLightbox(null), setDetails(m.id))} />}
       {details && <MediaDetailsDialog mediaId={details} manage={manage} onClose={() => setDetails(null)} onSaved={refresh} />}
       {privacyItem && <PrivacyDialog m={privacyItem} onClose={() => setPrivacyItem(null)} onSaved={() => refresh()} />}
-      {exporting && <ExportDialog collectionId={id} selectedCount={lists.selected.length} ids={exporting.ids} originals={manage} onClose={() => setExporting(null)} />}
+      {exporting && <ExportDialog collectionId={id} selectedCount={lists.selected.length} ids={exporting.ids} folders={folders} currentFolder={folder} originals={manage} onClose={() => setExporting(null)} />}
+      {moveCopy && <MoveCopyDialog mode={moveCopy.mode} ids={moveCopy.ids} defaultCollection={id} onClose={() => setMoveCopy(null)} onDone={() => (setMoveCopy(null), setMarked(new Set()), refresh())} />}
+      {tagging && <TagsDialog ids={tagging.ids} current={tagging.current} onClose={() => setTagging(null)} onDone={() => (setTagging(null), refresh(), qc.invalidateQueries({ queryKey: ['media-tags'] }))} />}
       {assign && <AssignPostDialog collectionId={id} current={c.post_id} onClose={() => (setAssign(false), refresh())} />}
       {editing && <EditCollectionDialog collection={c} onClose={() => (setEditing(false), refresh())} />}
     </div>
@@ -380,9 +447,12 @@ export default function CollectionDetail() {
 }
 
 /** ZIP-Sammeldownload: wird im Hintergrund erzeugt, Fortschritt per Abfrage, Download läuft nach Ablauf der Frist ab. */
-function ExportDialog({ collectionId, selectedCount, ids, originals, onClose }: { collectionId: string; selectedCount: number; ids?: string[]; originals: boolean; onClose: () => void }) {
+function ExportDialog({ collectionId, selectedCount, ids, folders, currentFolder, originals, onClose }: { collectionId: string; selectedCount: number; ids?: string[]; folders: Folder[]; currentFolder: string | null; originals: boolean; onClose: () => void }) {
   const toastError = useErrorToast();
-  const [selection, setSelection] = useState<'selected' | 'all' | 'ids'>(ids?.length ? 'ids' : selectedCount ? 'selected' : 'all');
+  const [selection, setSelection] = useState<'selected' | 'all' | 'ids' | 'folder'>(ids?.length ? 'ids' : currentFolder ? 'folder' : selectedCount ? 'selected' : 'all');
+  const [folderId, setFolderId] = useState(currentFolder ?? '');
+  const [withFolders, setWithFolders] = useState(true);
+  const [withCsv, setWithCsv] = useState(false);
   const [variant, setVariant] = useState<'public' | 'original'>('public');
   const [job, setJob] = useState<{ id: string; files: number } | null>(null);
   const st = useQuery({ queryKey: ['export', job?.id], queryFn: () => get<any>(`/exports/${job!.id}`), enabled: !!job, refetchInterval: (q) => (q.state.data?.status === 'ready' || q.state.data?.status === 'failed' ? false : 1500) });
@@ -395,7 +465,7 @@ function ExportDialog({ collectionId, selectedCount, ids, originals, onClose }: 
         !job ? (
           <>
             <Button onClick={onClose}>Abbrechen</Button>
-            <Button variant="primary" icon="Download" onClick={async () => setJob(await post<any>(`/collections/${collectionId}/exports`, { selection, variant, ...(selection === 'ids' ? { ids } : {}) }).catch((e) => (toastError(e), null)))}>
+            <Button variant="primary" icon="Download" onClick={async () => setJob(await post<any>(`/collections/${collectionId}/exports`, { selection, variant, withFolders, withCsv, ...(selection === 'ids' ? { ids } : {}), ...(selection === 'folder' ? { folderId: folderId || null } : {}) }).catch((e) => (toastError(e), null)))}>
               ZIP erstellen
             </Button>
           </>
@@ -411,8 +481,30 @@ function ExportDialog({ collectionId, selectedCount, ids, originals, onClose }: 
               {ids?.length ? <option value="ids">Markierte Dateien ({ids.length})</option> : null}
               <option value="selected" disabled={!selectedCount}>Nur ausgewählte ({selectedCount})</option>
               <option value="all">Alle geprüften Dateien</option>
+              {folders.length > 0 && <option value="folder">Ordner (inkl. Unterordner)</option>}
             </Select>
           </FieldWrap>
+          {selection === 'folder' && (
+            <FieldWrap label="Ordner" htmlFor="ex-folder">
+              <Select id="ex-folder" value={folderId} onChange={(e) => setFolderId(e.target.value)}>
+                <option value="">Oberste Ebene (ohne Ordner)</option>
+                <FolderOptions folders={folders} />
+              </Select>
+            </FieldWrap>
+          )}
+          {folders.length > 0 && (
+            <label className="inline-flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" className="w-4 h-4 accent-[var(--bc-primary-solid)]" checked={withFolders} onChange={(e) => setWithFolders(e.target.checked)} />
+              Ordnerstruktur im ZIP beibehalten
+            </label>
+          )}
+          <label className="inline-flex items-start gap-2 cursor-pointer">
+            <input type="checkbox" className="w-4 h-4 mt-0.5 accent-[var(--bc-primary-solid)]" checked={withCsv} onChange={(e) => setWithCsv(e.target.checked)} />
+            <span>
+              Metadaten-CSV beilegen (<code>metadaten.csv</code>)
+              <span className="block text-meta text-fg-muted">Dateiname, Anzeigename, Beschreibung, Schlagworte, Ordner, Eingang, Größe, Prüfsumme, Sichtung, Markierungen. Angaben zu Hochladenden nur bei Originalen.</span>
+            </span>
+          </label>
           <FieldWrap label="Fassung" htmlFor="ex-var" help={originals ? 'Öffentliche Fassungen enthalten keine Standort- und Kameradaten. Originale sind nur für den internen Gebrauch.' : 'Öffentliche Fassungen enthalten keine Standort- und Kameradaten. Originale dürfen nur Personen mit „Medien verwalten“ herunterladen.'}>
             <Select id="ex-var" value={variant} onChange={(e) => setVariant(e.target.value as any)}>
               <option value="public">Öffentliche Fassung (empfohlen)</option>
@@ -479,10 +571,10 @@ function AssignPostDialog({ collectionId, current, onClose }: { collectionId: st
 }
 
 /** Titel, Zweck und interne Notiz einer Sammlung ändern. Der Zweck steht auch auf der Upload-Seite und dem Aushang. */
-function EditCollectionDialog({ collection, onClose }: { collection: { id: string; title: string; purpose: string; note: string }; onClose: () => void }) {
+function EditCollectionDialog({ collection, onClose }: { collection: { id: string; title: string; purpose: string; note: string; event_date?: string | null }; onClose: () => void }) {
   const toastError = useErrorToast();
   const toast = useToast();
-  const [v, setV] = useState({ title: collection.title, purpose: collection.purpose ?? '', note: collection.note ?? '' });
+  const [v, setV] = useState({ title: collection.title, purpose: collection.purpose ?? '', note: collection.note ?? '', eventDate: collection.event_date ? String(collection.event_date).slice(0, 10) : '' });
   const [busy, setBusy] = useState(false);
   const valid = v.title.trim().length >= 2;
   return (
@@ -500,7 +592,7 @@ function EditCollectionDialog({ collection, onClose }: { collection: { id: strin
             onClick={async () => {
               setBusy(true);
               try {
-                await patch(`/collections/${collection.id}`, { title: v.title.trim(), purpose: v.purpose.trim(), note: v.note.trim() });
+                await patch(`/collections/${collection.id}`, { title: v.title.trim(), purpose: v.purpose.trim(), note: v.note.trim(), eventDate: v.eventDate || null });
                 toast({ tone: 'success', title: 'Sammlung gespeichert' });
                 onClose();
               } catch (e) {
@@ -523,6 +615,9 @@ function EditCollectionDialog({ collection, onClose }: { collection: { id: strin
         </FieldWrap>
         <FieldWrap label="Hinweis für Hochladende" help="Erscheint auf der Upload-Seite." htmlFor="ce-note">
           <Input id="ce-note" value={v.note} maxLength={1000} onChange={(e) => setV({ ...v, note: e.target.value })} />
+        </FieldWrap>
+        <FieldWrap label="Veranstaltungsdatum (optional)" help="Sortiert die Übersicht und steht für {datum} in der Gestaltung der Upload-Seite." htmlFor="ce-date">
+          <Input id="ce-date" type="date" value={v.eventDate} onChange={(e) => setV({ ...v, eventDate: e.target.value })} className="max-w-[200px]" />
         </FieldWrap>
       </div>
     </Dialog>

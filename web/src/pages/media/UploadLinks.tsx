@@ -7,6 +7,20 @@ import { Badge, Button, Card, FieldWrap, Input, Notice, Select, StatusBadge, Tex
 import { Dialog, Menu, useConfirm, useErrorToast, useToast } from '../../components/ui/overlays';
 import { useAuth } from '../../lib/auth';
 import { fmtBytes, fmtDateTime, fmtRelative } from '../../lib/format';
+import { FolderOptions, folderPath, type Folder } from './organize';
+
+/** Zielordner eines Links (nur wenn die Sammlung Ordner hat). */
+function FolderField({ folders, value, onChange, id }: { folders: Folder[]; value: string; onChange: (v: string) => void; id: string }) {
+  if (!folders.length) return null;
+  return (
+    <FieldWrap label="Zielordner" htmlFor={id} help="Dateien über diesen Link landen direkt in diesem Ordner.">
+      <Select id={id} value={value} onChange={(e) => onChange(e.target.value)}>
+        <option value="">Oberste Ebene</option>
+        <FolderOptions folders={folders} />
+      </Select>
+    </FieldWrap>
+  );
+}
 
 /* ------------------------------------- Gültigkeit ------------------------------------- */
 
@@ -64,9 +78,10 @@ export function ValidityPicker({ value, onChange, idPrefix }: { value: Validity;
 /* --------------------------------------- Dialoge --------------------------------------- */
 
 /** Neuer Link: Bezeichnung, Gültigkeit, Begrüßungstext. */
-export function NewLinkDialog({ collectionId, onClose, onCreated }: { collectionId: string; onClose: () => void; onCreated: (l: UploadLink) => void }) {
+export function NewLinkDialog({ collectionId, folders = [], onClose, onCreated }: { collectionId: string; folders?: Folder[]; onClose: () => void; onCreated: (l: UploadLink) => void }) {
   const toastError = useErrorToast();
   const [validity, setValidity] = useState<Validity>(DEFAULT_VALIDITY);
+  const [folderId, setFolderId] = useState('');
   const [label, setLabel] = useState('');
   const [welcome, setWelcome] = useState('');
   const [busy, setBusy] = useState(false);
@@ -85,7 +100,7 @@ export function NewLinkDialog({ collectionId, onClose, onCreated }: { collection
             onClick={async () => {
               setBusy(true);
               try {
-                const l = await post<UploadLink>(`/collections/${collectionId}/links`, { label: label.trim(), welcomeText: welcome.trim(), ...validityPayload(validity) });
+                const l = await post<UploadLink>(`/collections/${collectionId}/links`, { label: label.trim(), welcomeText: welcome.trim(), folderId: folderId || null, ...validityPayload(validity) });
                 onCreated(l);
               } catch (e) {
                 toastError(e);
@@ -104,6 +119,7 @@ export function NewLinkDialog({ collectionId, onClose, onCreated }: { collection
           <Input id="l-label" value={label} onChange={(e) => setLabel(e.target.value)} maxLength={80} />
         </FieldWrap>
         <ValidityPicker value={validity} onChange={setValidity} idPrefix="l" />
+        <FolderField folders={folders} value={folderId} onChange={setFolderId} id="l-folder" />
         <FieldWrap label="Begrüßungstext (optional)" help="Erscheint oben auf der Upload-Seite dieses Links – statt des Hinweises der Sammlung." htmlFor="l-welcome">
           <Textarea id="l-welcome" rows={3} maxLength={2000} value={welcome} onChange={(e) => setWelcome(e.target.value)} />
         </FieldWrap>
@@ -113,9 +129,10 @@ export function NewLinkDialog({ collectionId, onClose, onCreated }: { collection
 }
 
 /** Bezeichnung und Begrüßungstext eines bestehenden Links ändern. */
-function EditLinkDialog({ link, onClose, onSaved }: { link: UploadLink; onClose: () => void; onSaved: () => void }) {
+function EditLinkDialog({ link, folders, onClose, onSaved }: { link: UploadLink; folders: Folder[]; onClose: () => void; onSaved: () => void }) {
   const toastError = useErrorToast();
   const [label, setLabel] = useState(link.label);
+  const [folderId, setFolderId] = useState(link.folder_id ?? '');
   const [welcome, setWelcome] = useState(link.welcome_text ?? '');
   const [busy, setBusy] = useState(false);
   return (
@@ -132,7 +149,7 @@ function EditLinkDialog({ link, onClose, onSaved }: { link: UploadLink; onClose:
             onClick={async () => {
               setBusy(true);
               try {
-                await patch(`/upload-links/${link.id}`, { label: label.trim(), welcomeText: welcome.trim() });
+                await patch(`/upload-links/${link.id}`, { label: label.trim(), welcomeText: welcome.trim(), ...(folders.length ? { folderId: folderId || null } : {}) });
                 onSaved();
               } catch (e) {
                 toastError(e);
@@ -152,6 +169,7 @@ function EditLinkDialog({ link, onClose, onSaved }: { link: UploadLink; onClose:
         <FieldWrap label="Begrüßungstext" help="Erscheint oben auf der Upload-Seite dieses Links. Leer = Hinweis der Sammlung." htmlFor="le-welcome">
           <Textarea id="le-welcome" rows={4} maxLength={2000} value={welcome} onChange={(e) => setWelcome(e.target.value)} />
         </FieldWrap>
+        <FolderField folders={folders} value={folderId} onChange={setFolderId} id="le-folder" />
       </div>
     </Dialog>
   );
@@ -215,7 +233,7 @@ export function OnceLinkDialog({ link, title, purpose, onClose }: { link: Upload
 
 /* ------------------------------------ Link-Übersicht ------------------------------------ */
 
-export function UploadLinksCard({ collection, links, onChanged }: { collection: { id: string; title: string; purpose: string; archived_at: string | null }; links: UploadLink[]; onChanged: () => void }) {
+export function UploadLinksCard({ collection, links, folders = [], onChanged }: { collection: { id: string; title: string; purpose: string; archived_at: string | null }; links: UploadLink[]; folders?: Folder[]; onChanged: () => void }) {
   const ask = useConfirm();
   const toast = useToast();
   const toastError = useErrorToast();
@@ -309,6 +327,9 @@ export function UploadLinksCard({ collection, links, onChanged }: { collection: 
                 )}
               </div>
               {l.welcome_text && <p className="m-0 text-sm text-fg-muted line-clamp-2">Begrüßung: {l.welcome_text}</p>}
+              {l.folder_id && folders.some((f) => f.id === l.folder_id) && (
+                <p className="m-0 text-sm text-fg-muted">Zielordner: {folderPath(folders, l.folder_id).map((f) => f.name).join(' › ')}</p>
+              )}
               <div className="text-meta text-fg-muted">
                 angelegt {fmtRelative(l.created_at)}
                 {l.created_by_name ? ` von ${l.created_by_name}` : ''}
@@ -336,6 +357,7 @@ export function UploadLinksCard({ collection, links, onChanged }: { collection: 
       {creating && (
         <NewLinkDialog
           collectionId={c.id}
+          folders={folders}
           onClose={() => setCreating(false)}
           onCreated={(l) => {
             setCreating(false);
@@ -344,7 +366,7 @@ export function UploadLinksCard({ collection, links, onChanged }: { collection: 
           }}
         />
       )}
-      {editing && <EditLinkDialog link={editing} onClose={() => setEditing(null)} onSaved={() => (setEditing(null), onChanged())} />}
+      {editing && <EditLinkDialog link={editing} folders={folders} onClose={() => setEditing(null)} onSaved={() => (setEditing(null), onChanged())} />}
       {deadline && <DeadlineDialog link={deadline} onClose={() => setDeadline(null)} onSaved={() => (setDeadline(null), onChanged())} />}
       {once && <OnceLinkDialog link={once} title={c.title} purpose={purpose} onClose={() => setOnce(null)} />}
     </Card>

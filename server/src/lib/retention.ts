@@ -3,7 +3,7 @@ import path from 'node:path';
 import type pg from 'pg';
 import { config } from '../config.js';
 import { many, one, pool, tx, type Queryable } from '../db/pool.js';
-import { exportPath } from '../media/exports.js';
+import { exportPath, invalidateExportsFor } from '../media/exports.js';
 import { mediaPaths, removeMediaFiles } from '../media/storage.js';
 import { audit, SYSTEM_ACTOR, type Actor } from './audit.js';
 import { conflict, notFound } from './errors.js';
@@ -138,6 +138,8 @@ export async function purgeCollection(id: string, actor: Actor, mode: 'manual' |
     files.media = media.map((m) => m.id);
     files.exports = exports.map((e) => e.id);
     files.parts = sessions.map((s) => s.id);
+    // Sammlungsübergreifende Exporte mit Dateien dieser Sammlung ebenfalls verwerfen
+    files.exports.push(...(await invalidateExportsFor(files.media, db)).filter((e) => !files.exports.includes(e)));
     // Offene Aufträge zu diesen Dateien/Downloads verwerfen (laufende enden ohne Datensatz von selbst)
     await db.query(`DELETE FROM jobs WHERE status = 'queued' AND (payload->>'mediaId' = ANY($1::text[]) OR payload->>'exportId' = ANY($2::text[]))`, [files.media, files.exports]);
     const collectionDeleted = keep.length === 0;

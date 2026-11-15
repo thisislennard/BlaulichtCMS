@@ -17,6 +17,8 @@ import { publicFileName } from '../media/names.js';
 import { privacyInput, renderPublic } from '../media/privacy.js';
 import { purgeCollection } from '../lib/retention.js';
 import { computeExpiry, extendExpiry, LINK_UNAVAILABLE, linkState } from '../media/links.js';
+import { descendants } from '../media/folders.js';
+import { assertFolder, loadFolders } from './media-organize.js';
 import { freeBytes, mediaPaths, moveFile, removeMediaFiles, SizeLimitError, streamToTemp } from '../media/storage.js';
 
 const linkAad = aad.uploadLink;
@@ -50,6 +52,7 @@ export async function linkPayload(req: FastifyRequest, l: any) {
     revoked_at: l.revoked_at,
     paused_at: l.paused_at ?? null,
     welcome_text: l.welcome_text ?? '',
+    folder_id: l.folder_id ?? null,
     regenerated_at: l.regenerated_at ?? null,
     max_files: l.max_files,
     max_file_bytes: Number(l.max_file_bytes),
@@ -97,6 +100,8 @@ export function mediaPayload(m: any) {
     description: m.description ?? '',
     internal_note: m.internal_note ?? '',
     duplicate_of: m.duplicate_of ?? null,
+    folder_id: m.folder_id ?? null,
+    tags: m.tags ?? [],
     uploader_note: m.uploader_note,
     uploaded_by_name: m.uploaded_by_name ?? null,
     // Link kann nach Ablauf der Löschfrist gelöscht sein (#116): ohne Konto hochgeladen = über einen Link
@@ -107,11 +112,11 @@ export function mediaPayload(m: any) {
 }
 
 /** Legt eine Sammlung an (optional mit Beitrag verknüpft) – gemeinsam für API und „Fotos und Videos sammeln“. */
-export async function createCollection(actor: Actor, userId: string | null, input: { title: string; purpose?: string; note?: string; postId?: string | null }, db: any = pool) {
+export async function createCollection(actor: Actor, userId: string | null, input: { title: string; purpose?: string; note?: string; postId?: string | null; eventDate?: string | null }, db: any = pool) {
   const s = await getSettings();
   const c = await one<any>(
-    `INSERT INTO collections (title, purpose, note, post_id, max_files, max_bytes, created_by) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
-    [input.title, input.purpose ?? '', input.note ?? '', input.postId ?? null, s['media.collection_max_files'], Math.round(s['media.collection_max_gb'] * 1024 ** 3), userId],
+    `INSERT INTO collections (title, purpose, note, post_id, max_files, max_bytes, created_by, event_date) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
+    [input.title, input.purpose ?? '', input.note ?? '', input.postId ?? null, s['media.collection_max_files'], Math.round(s['media.collection_max_gb'] * 1024 ** 3), userId, input.eventDate ?? null],
     db,
   );
   await audit(actor, 'collection.created', { type: 'collection', id: c.id, label: c.title }, input.postId ? { beitrag: input.postId } : {}, 'ok', db);
@@ -125,6 +130,7 @@ export interface LinkInput {
   label?: string;
   maxFiles?: number;
   welcomeText?: string;
+  folderId?: string | null;
 }
 
 export async function createUploadLink(actor: Actor, userId: string | null, collectionId: string, input: LinkInput, db: any = pool) {
@@ -135,9 +141,9 @@ export async function createUploadLink(actor: Actor, userId: string | null, coll
   // „Link nur einmal anzeigen“: nur die Prüfsumme speichern, Link/QR-Code gibt es genau in dieser Antwort
   const tokenEnc = s['media.link_show_once'] ? null : encrypt(token, linkAad(id));
   const l = await one<any>(
-    `INSERT INTO upload_links (id, collection_id, token_hash, token_enc, label, expires_at, max_file_bytes, max_files, welcome_text, created_by)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
-    [id, collectionId, sha256Hex(token), tokenEnc, input.label ?? '', expires, s['media.max_file_mb'] * 1024 * 1024, Math.min(1000, input.maxFiles ?? s['media.link_max_files']), (input.welcomeText ?? '').trim().slice(0, 2000), userId],
+    `INSERT INTO upload_links (id, collection_id, token_hash, token_enc, label, expires_at, max_file_bytes, max_files, welcome_text, folder_id, created_by)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
+    [id, collectionId, sha256Hex(token), tokenEnc, input.label ?? '', expires, s['media.max_file_mb'] * 1024 * 1024, Math.min(1000, input.maxFiles ?? s['media.link_max_files']), (input.welcomeText ?? '').trim().slice(0, 2000), await assertFolder(collectionId, input.folderId, db), userId],
     db,
   );
   await audit(actor, 'upload_link.created', { type: 'upload_link', id: l.id, label: input.label || collectionId }, { sammlung: collectionId, gueltig_bis: expires.toISOString(), nur_einmal: !tokenEnc }, 'ok', db);
@@ -152,6 +158,7 @@ const linkInputSchema = z.object({
   label: z.string().trim().max(80).default(''),
   maxFiles: z.number().int().min(1).max(1000).optional(),
   welcomeText: z.string().max(2000).default(''),
+  folderId: z.uuid().nullable().optional(),
 });
 
 /** Nimmt genau eine Datei entgegen (Multipart), legt sie in Quarantäne und plant die Prüfung ein. */
@@ -183,7 +190,7 @@ async function receiveFile(req: FastifyRequest, opts: UploadContext) {
     throw badRequest('Die Datei ist leer.');
   }
   const name = (part.filename || 'datei').replace(/[\u0000-\u001f\\/]/g, '_').slice(0, 200);
-  return finalizeUpload({ ...opts, stored, name, declaredType: String(part.mimetype ?? ''), note: fields.note ?? '', uploadRef: UPLOAD_REF_RE.test(fields.ref ?? '') ? fields.ref : null, clientKey });
+  return finalizeUpload({ ...opts, stored, name, declaredType: String(part.mimetype ?? ''), note: fields.note ?? '', uploadRef: UPLOAD_REF_RE.test(fields.ref ?? '') ? fields.ref : null, clientKey, folderId: opts.folderId ?? null });
 }
 
 export interface UploadContext {
@@ -192,6 +199,8 @@ export interface UploadContext {
   userId: string | null;
   maxFileBytes: number;
   actor: Actor;
+  /** Zielordner (Upload-Link mit Zielordner bzw. interner Upload in einen Ordner) */
+  folderId?: string | null;
 }
 
 /**
@@ -246,11 +255,13 @@ export async function finalizeUpload(
       if (!col) throw new AppError(410, 'collection_gone', 'Diese Sammlung wurde inzwischen gelöscht. Die Datei wurde nicht übernommen.');
       if (col.archived_at) throw new AppError(410, 'link_closed', 'Diese Sammlung ist inzwischen geschlossen. Die Datei wurde nicht übernommen.');
       const m = await one<any>(
-        `INSERT INTO media (collection_id, upload_link_id, uploaded_by, uploader_note, client_key, original_name, declared_type, size_bytes, sha256, upload_ref, sort_order)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10, (SELECT COALESCE(max(sort_order),0)+1 FROM media WHERE collection_id = $1))
+        `INSERT INTO media (collection_id, upload_link_id, uploaded_by, uploader_note, client_key, original_name, declared_type, size_bytes, sha256, upload_ref, folder_id, sort_order)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,
+                 (SELECT id FROM collection_folders WHERE id = $11::uuid AND collection_id = $1 AND deleted_at IS NULL),
+                 (SELECT COALESCE(max(sort_order),0)+1 FROM media WHERE collection_id = $1))
          ON CONFLICT (collection_id, client_key) WHERE client_key IS NOT NULL AND deleted_at IS NULL DO NOTHING
          RETURNING *`,
-        [opts.collection.id, opts.linkId, opts.userId, opts.note.slice(0, 500), clientKey, name, opts.declaredType.slice(0, 100), stored.size, stored.sha256, opts.uploadRef ?? null],
+        [opts.collection.id, opts.linkId, opts.userId, opts.note.slice(0, 500), clientKey, name, opts.declaredType.slice(0, 100), stored.size, stored.sha256, opts.uploadRef ?? null, opts.folderId ?? null],
         db,
       );
       if (!m) return null;
@@ -331,20 +342,41 @@ export async function mediaRoutes(app: FastifyInstance) {
   /* ------------------------------ Sammlungen (angemeldet) ------------------------------ */
 
   app.get('/collections', { preHandler: requireAuth('media.read') }, async (req) => {
-    const q = z.object({ archived: z.enum(['true', 'false', '1', '0']).transform((v) => v === 'true' || v === '1').default(false), postId: z.uuid().optional() }).parse(req.query);
-    return many<any>(
+    const q = z
+      .object({
+        archived: z.enum(['true', 'false', '1', '0']).transform((v) => v === 'true' || v === '1').default(false),
+        postId: z.uuid().optional(),
+        // Übersicht mit Suche, Statusfilter und Seiten (wie die Themenliste in LiFeOS)
+        paged: z.enum(['1', 'true']).optional(),
+        q: z.string().trim().max(100).optional(),
+        status: z.enum(['active', 'archived', 'all']).optional(),
+        page: z.coerce.number().int().min(1).max(10000).default(1),
+        perPage: z.coerce.number().int().min(6).max(96).default(24),
+      })
+      .parse(req.query);
+    const status = q.status ?? (q.archived ? 'all' : 'active');
+    const like = q.q ? `%${q.q.replace(/[\\%_]/g, (ch) => `\\${ch}`)}%` : null;
+    const where = `c.deleted_at IS NULL AND ($1 = 'all' OR ($1 = 'active') = (c.archived_at IS NULL)) AND ($2::uuid IS NULL OR c.post_id = $2)
+                   AND ($3::text IS NULL OR c.title ILIKE $3 OR c.purpose ILIKE $3 OR c.note ILIKE $3)`;
+    const params = [status, q.postId ?? null, like];
+    const rows = await many<any>(
       `SELECT c.*, p.title AS post_title,
               (SELECT count(*)::int FROM media m WHERE m.collection_id = c.id AND m.deleted_at IS NULL AND m.status = 'ready') AS media_count,
               (SELECT count(*)::int FROM media m WHERE m.collection_id = c.id AND m.deleted_at IS NULL AND m.status = 'quarantine') AS quarantine_count,
               (SELECT count(*)::int FROM media m WHERE m.collection_id = c.id AND m.deleted_at IS NULL AND m.selection = 'selected' AND m.status = 'ready') AS selected_count,
               (SELECT count(*)::int FROM media m WHERE m.collection_id = c.id AND m.deleted_at IS NULL AND m.selection = 'pending' AND m.status = 'ready') AS pending_count,
               (SELECT count(*)::int FROM upload_links l WHERE l.collection_id = c.id AND l.revoked_at IS NULL AND l.expires_at > now()) AS active_links,
-              (SELECT m.id FROM media m WHERE m.collection_id = c.id AND m.deleted_at IS NULL AND m.status = 'ready' AND m.has_preview ORDER BY (m.selection = 'selected') DESC, m.sort_order LIMIT 1) AS cover_id
+              COALESCE(
+                (SELECT m.id FROM media m WHERE m.id = c.cover_media_id AND m.deleted_at IS NULL AND m.status = 'ready' AND m.has_preview),
+                (SELECT m.id FROM media m WHERE m.collection_id = c.id AND m.deleted_at IS NULL AND m.status = 'ready' AND m.has_preview ORDER BY (m.selection = 'selected') DESC, m.sort_order LIMIT 1)) AS cover_id
          FROM collections c LEFT JOIN posts p ON p.id = c.post_id
-        WHERE ($1::boolean OR c.archived_at IS NULL) AND ($2::uuid IS NULL OR c.post_id = $2)
-        ORDER BY c.created_at DESC LIMIT 200`,
-      [q.archived, q.postId ?? null],
+        WHERE ${where}
+        ORDER BY COALESCE(c.event_date::timestamptz, c.created_at) DESC, c.created_at DESC LIMIT $4 OFFSET $5`,
+      [...params, q.paged ? q.perPage : 200, q.paged ? (q.page - 1) * q.perPage : 0],
     );
+    if (!q.paged) return rows;
+    const total = (await one<any>(`SELECT count(*)::int AS n FROM collections c WHERE ${where}`, params))!.n;
+    return { items: rows, total, page: q.page, pages: Math.max(1, Math.ceil(total / q.perPage)) };
   });
 
   app.post('/collections', { preHandler: requireAuth('media.manage') }, async (req) => {
@@ -354,6 +386,7 @@ export async function mediaRoutes(app: FastifyInstance) {
         purpose: z.string().trim().max(300).default(''),
         note: z.string().trim().max(1000).default(''),
         postId: z.uuid().nullable().optional(),
+        eventDate: z.iso.date().nullable().optional(),
         createLink: z.boolean().default(true),
         linkDays: z.number().int().min(1).max(3650).optional(),
         linkHours: z.number().int().min(1).max(87600).optional(),
@@ -363,7 +396,7 @@ export async function mediaRoutes(app: FastifyInstance) {
     if (body.postId && !(await one('SELECT 1 FROM posts WHERE id = $1', [body.postId]))) throw notFound('Beitrag nicht gefunden.');
     const userId = req.auth!.user?.id ?? null;
     const { c, l } = await tx(async (db) => {
-      const c = await createCollection(req.auth!.actor, userId, { title: body.title, purpose: body.purpose, note: body.note, postId: body.postId }, db);
+      const c = await createCollection(req.auth!.actor, userId, { title: body.title, purpose: body.purpose, note: body.note, postId: body.postId, eventDate: body.eventDate }, db);
       const l = body.createLink ? await createUploadLink(req.auth!.actor, userId, c.id, { days: body.linkDays, hours: body.linkHours, expiresAt: body.linkExpiresAt }, db) : null;
       return { c, l };
     });
@@ -375,7 +408,13 @@ export async function mediaRoutes(app: FastifyInstance) {
     const c = await one<any>(`SELECT c.*, p.title AS post_title, u.name AS created_by_name FROM collections c LEFT JOIN posts p ON p.id = c.post_id LEFT JOIN users u ON u.id = c.created_by WHERE c.id = $1`, [id]);
     if (!c) throw notFound('Sammlung nicht gefunden.');
     const media = await many<any>(
-      `SELECT m.*, u.name AS uploaded_by_name FROM media m LEFT JOIN users u ON u.id = m.uploaded_by WHERE m.collection_id = $1 AND m.deleted_at IS NULL ORDER BY m.sort_order, m.created_at`,
+      `SELECT m.*, u.name AS uploaded_by_name,
+              (SELECT array_agg(t.name ORDER BY lower(t.name)) FROM media_tag_links l JOIN media_tags t ON t.id = l.tag_id WHERE l.media_id = m.id) AS tags
+         FROM media m LEFT JOIN users u ON u.id = m.uploaded_by WHERE m.collection_id = $1 AND m.deleted_at IS NULL ORDER BY m.sort_order, m.created_at`,
+      [id],
+    );
+    const folders = await many<any>(
+      `SELECT f.id, f.parent_id, f.name, f.sort_order, f.archived_at FROM collection_folders f WHERE f.collection_id = $1 AND f.deleted_at IS NULL ORDER BY f.sort_order, lower(f.name)`,
       [id],
     );
     const links = req.auth!.permissions.has('media.manage')
@@ -389,6 +428,7 @@ export async function mediaRoutes(app: FastifyInstance) {
     return {
       collection: { ...c, max_bytes: Number(c.max_bytes) },
       media: media.map(mediaPayload),
+      folders,
       links: await Promise.all(links.map((l) => linkPayload(req, l))),
       accept: ACCEPT_ATTR,
     };
@@ -397,15 +437,26 @@ export async function mediaRoutes(app: FastifyInstance) {
   app.patch('/collections/:id', { preHandler: requireAuth('media.manage') }, async (req) => {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
     const body = z
-      .object({ title: z.string().trim().min(2).max(120).optional(), purpose: z.string().trim().max(300).optional(), note: z.string().trim().max(1000).optional(), postId: z.uuid().nullable().optional(), archived: z.boolean().optional() })
+      .object({
+        title: z.string().trim().min(2).max(120).optional(),
+        purpose: z.string().trim().max(300).optional(),
+        note: z.string().trim().max(1000).optional(),
+        postId: z.uuid().nullable().optional(),
+        archived: z.boolean().optional(),
+        eventDate: z.iso.date().nullable().optional(),
+        coverMediaId: z.uuid().nullable().optional(),
+      })
       .parse(req.body);
     if (body.postId && !(await one('SELECT 1 FROM posts WHERE id = $1', [body.postId]))) throw notFound('Beitrag nicht gefunden.');
+    if (body.coverMediaId && !(await one(`SELECT 1 FROM media WHERE id = $1 AND collection_id = $2 AND status = 'ready' AND deleted_at IS NULL`, [body.coverMediaId, id]))) throw badRequest('Als Titelbild eignet sich nur eine geprüfte Datei dieser Sammlung.');
     const c = await one<any>(
       `UPDATE collections SET title = COALESCE($2, title), purpose = COALESCE($3, purpose), note = COALESCE($4, note),
               post_id = CASE WHEN $5 THEN $6::uuid ELSE post_id END,
-              archived_at = CASE WHEN $7::boolean IS NULL THEN archived_at WHEN $7 THEN COALESCE(archived_at, now()) ELSE NULL END
+              archived_at = CASE WHEN $7::boolean IS NULL THEN archived_at WHEN $7 THEN COALESCE(archived_at, now()) ELSE NULL END,
+              event_date = CASE WHEN $8 THEN $9::date ELSE event_date END,
+              cover_media_id = CASE WHEN $10 THEN $11::uuid ELSE cover_media_id END
         WHERE id = $1 RETURNING *`,
-      [id, body.title ?? null, body.purpose ?? null, body.note ?? null, body.postId !== undefined, body.postId ?? null, body.archived ?? null],
+      [id, body.title ?? null, body.purpose ?? null, body.note ?? null, body.postId !== undefined, body.postId ?? null, body.archived ?? null, body.eventDate !== undefined, body.eventDate ?? null, body.coverMediaId !== undefined, body.coverMediaId ?? null],
     );
     if (!c) throw notFound('Sammlung nicht gefunden.');
     await audit(req.auth!.actor, body.postId !== undefined ? 'collection.assigned' : 'collection.updated', { type: 'collection', id, label: c.title }, { felder: Object.keys(body) });
@@ -482,14 +533,17 @@ export async function mediaRoutes(app: FastifyInstance) {
   app.patch('/upload-links/:id', { preHandler: requireAuth('media.manage') }, async (req) => {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
     const body = z
-      .object({ label: z.string().trim().max(80).optional(), welcomeText: z.string().max(2000).optional(), expiresAt: z.iso.datetime({ offset: true }).optional() })
+      .object({ label: z.string().trim().max(80).optional(), welcomeText: z.string().max(2000).optional(), expiresAt: z.iso.datetime({ offset: true }).optional(), folderId: z.uuid().nullable().optional() })
       .parse(req.body ?? {});
-    await changeableLink(id);
+    const cur = await changeableLink(id);
     const s = await getSettings();
     const expires = body.expiresAt ? computeExpiry({ expiresAt: body.expiresAt }, { defaultDays: s['media.link_default_days'], maxDays: s['media.link_max_days'] }) : null;
+    const folder = body.folderId !== undefined ? await assertFolder(cur.collection_id, body.folderId) : null;
     const l = await one<any>(
-      `UPDATE upload_links SET label = COALESCE($2, label), welcome_text = COALESCE($3, welcome_text), expires_at = COALESCE($4, expires_at) WHERE id = $1 RETURNING *`,
-      [id, body.label ?? null, body.welcomeText !== undefined ? body.welcomeText.trim() : null, expires],
+      `UPDATE upload_links SET label = COALESCE($2, label), welcome_text = COALESCE($3, welcome_text), expires_at = COALESCE($4, expires_at),
+              folder_id = CASE WHEN $5 THEN $6::uuid ELSE folder_id END
+        WHERE id = $1 RETURNING *`,
+      [id, body.label ?? null, body.welcomeText !== undefined ? body.welcomeText.trim() : null, expires, body.folderId !== undefined, folder],
     );
     await audit(req.auth!.actor, 'upload_link.updated', { type: 'upload_link', id, label: l.label || l.collection_id }, { felder: Object.keys(body), ...(expires ? { gueltig_bis: expires.toISOString() } : {}) });
     return linkPayload(req, l);
@@ -519,7 +573,8 @@ export async function mediaRoutes(app: FastifyInstance) {
     if (!c) throw notFound('Sammlung nicht gefunden.');
     if (c.archived_at) throw badRequest('Die Sammlung ist archiviert.');
     const s = await getSettings();
-    return receiveFile(req, { collection: c, linkId: null, userId: req.auth!.user?.id ?? null, maxFileBytes: s['media.max_file_mb'] * 1024 * 1024, actor: req.auth!.actor });
+    const { folderId } = z.object({ folderId: z.uuid().optional() }).parse(req.query ?? {});
+    return receiveFile(req, { collection: c, linkId: null, userId: req.auth!.user?.id ?? null, maxFileBytes: s['media.max_file_mb'] * 1024 * 1024, actor: req.auth!.actor, folderId: await assertFolder(id, folderId) });
   });
 
   /*
@@ -626,24 +681,58 @@ export async function mediaRoutes(app: FastifyInstance) {
     return { ok: true };
   });
 
-  /* Sammeldownload als ZIP (im Hintergrund, läuft nach 24 h ab) */
+  /** ZIP-Auftrag anlegen (gemeinsam für Sammlung, Ordner und sammlungsübergreifende Auswahl). */
+  async function requestExport(req: FastifyRequest, opts: { collectionId: string | null; label: string; ids: string[]; variant: 'public' | 'original'; withFolders: boolean; withCsv: boolean; audit: Record<string, unknown> }) {
+    const ex = await one<any>(
+      `INSERT INTO exports (collection_id, media_ids, variant, created_by, with_folders, with_csv, label) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
+      [opts.collectionId, opts.ids, opts.variant, req.auth!.user?.id ?? null, opts.withFolders, opts.withCsv, opts.label.slice(0, 120)],
+    );
+    await enqueue('export.zip', { exportId: ex.id }, { dedupKey: `export:${ex.id}` });
+    await audit(req.auth!.actor, 'media.export_requested', { type: opts.collectionId ? 'collection' : 'media', id: opts.collectionId, label: opts.label }, { dateien: opts.ids.length, fassung: opts.variant, ordner: opts.withFolders, metadaten: opts.withCsv, ...opts.audit });
+    await checkDownloadRate(req.auth!.actor);
+    return { id: ex.id, status: ex.status, files: opts.ids.length };
+  }
+  const exportOptions = { variant: z.enum(['public', 'original']).default('public'), withFolders: z.boolean().default(true), withCsv: z.boolean().default(false) };
+
+  /* Sammeldownload als ZIP (im Hintergrund, läuft nach Ablauf der Frist ab): ausgewählte, alle, markierte oder ein Ordner */
   app.post('/collections/:id/exports', { preHandler: requireAuth('media.read') }, async (req) => {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
-    const body = z.object({ selection: z.enum(['selected', 'all', 'ids']).default('selected'), variant: z.enum(['public', 'original']).default('public'), ids: z.array(z.uuid()).max(2000).optional() }).parse(req.body ?? {});
+    const body = z
+      .object({ selection: z.enum(['selected', 'all', 'ids', 'folder']).default('selected'), ids: z.array(z.uuid()).max(2000).optional(), folderId: z.uuid().nullable().optional(), ...exportOptions })
+      .parse(req.body ?? {});
     // Originale enthalten mögliche Standort- und Gerätedaten: wie beim Einzeldownload nur mit „Medien verwalten“ (#94)
     if (body.variant === 'original' && !req.auth!.permissions.has('media.manage')) throw forbidden(ORIGINALS_FORBIDDEN);
-    const c = await one<any>('SELECT id, title FROM collections WHERE id = $1', [id]);
+    const c = await one<any>('SELECT id, title FROM collections WHERE id = $1 AND deleted_at IS NULL', [id]);
     if (!c) throw notFound('Sammlung nicht gefunden.');
+    // Ordner samt Unterordnern (NULL = oberste Ebene ohne Ordner)
+    let folderIds: string[] | null = null;
+    if (body.selection === 'folder') {
+      if (body.folderId) {
+        await assertFolder(id, body.folderId);
+        const folders = (await loadFolders(id)).filter((f) => !f.deleted_at);
+        folderIds = [body.folderId, ...descendants(folders, body.folderId)];
+      }
+    }
     const rows = await many<any>(
-      `SELECT id FROM media WHERE collection_id = $1 AND status = 'ready' AND deleted_at IS NULL AND ($2::boolean OR selection = 'selected') AND ($3::uuid[] IS NULL OR id = ANY($3))`,
-      [id, body.selection !== 'selected', body.ids ?? null],
+      `SELECT id FROM media WHERE collection_id = $1 AND status = 'ready' AND deleted_at IS NULL AND ($2::boolean OR selection = 'selected') AND ($3::uuid[] IS NULL OR id = ANY($3))
+          AND (NOT $4::boolean OR ($5::uuid[] IS NULL AND folder_id IS NULL) OR folder_id = ANY($5))`,
+      [id, body.selection !== 'selected', body.selection === 'ids' ? (body.ids ?? []) : null, body.selection === 'folder', folderIds],
     );
-    if (!rows.length) throw badRequest(body.selection === 'selected' ? 'Es sind noch keine Dateien ausgewählt.' : body.selection === 'ids' ? 'Unter den markierten Dateien ist keine geprüfte.' : 'Die Sammlung enthält keine geprüften Dateien.');
-    const ex = await one<any>(`INSERT INTO exports (collection_id, media_ids, variant, created_by) VALUES ($1,$2,$3,$4) RETURNING *`, [id, rows.map((r) => r.id), body.variant, req.auth!.user?.id ?? null]);
-    await enqueue('export.zip', { exportId: ex.id }, { dedupKey: `export:${ex.id}` });
-    await audit(req.auth!.actor, 'media.export_requested', { type: 'collection', id, label: c.title }, { dateien: rows.length, fassung: body.variant });
-    await checkDownloadRate(req.auth!.actor);
-    return { id: ex.id, status: ex.status, files: rows.length };
+    if (!rows.length) throw badRequest(body.selection === 'selected' ? 'Es sind noch keine Dateien ausgewählt.' : body.selection === 'ids' ? 'Unter den markierten Dateien ist keine geprüfte.' : body.selection === 'folder' ? 'Der Ordner enthält keine geprüften Dateien.' : 'Die Sammlung enthält keine geprüften Dateien.');
+    return requestExport(req, { collectionId: id, label: c.title, ids: rows.map((r) => r.id), variant: body.variant, withFolders: body.withFolders, withCsv: body.withCsv, audit: { auswahl: body.selection } });
+  });
+
+  /* Sammlungsübergreifender ZIP-Export: markierte Dateien aus der Mediensuche */
+  app.post('/exports', { preHandler: requireAuth('media.read') }, async (req) => {
+    const body = z.object({ ids: z.array(z.uuid()).min(1).max(2000), ...exportOptions }).parse(req.body ?? {});
+    if (body.variant === 'original' && !req.auth!.permissions.has('media.manage')) throw forbidden(ORIGINALS_FORBIDDEN);
+    const rows = await many<any>(
+      `SELECT m.id, m.collection_id FROM media m JOIN collections c ON c.id = m.collection_id WHERE m.id = ANY($1) AND m.status = 'ready' AND m.deleted_at IS NULL AND c.deleted_at IS NULL`,
+      [body.ids],
+    );
+    if (!rows.length) throw badRequest('Unter den markierten Dateien ist keine geprüfte.');
+    const cols = new Set(rows.map((r) => r.collection_id));
+    return requestExport(req, { collectionId: cols.size === 1 ? [...cols][0] : null, label: 'Auswahl', ids: rows.map((r) => r.id), variant: body.variant, withFolders: body.withFolders, withCsv: body.withCsv, audit: { sammlungen: cols.size } });
   });
 
   app.get('/exports/:id', { preHandler: requireAuth('media.read') }, async (req) => {
@@ -656,7 +745,7 @@ export async function mediaRoutes(app: FastifyInstance) {
 
   app.get('/exports/:id/download', { preHandler: requireAuth('media.read') }, async (req, reply) => {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
-    const ex = await one<any>(`SELECT e.*, c.title FROM exports e JOIN collections c ON c.id = e.collection_id WHERE e.id = $1`, [id]);
+    const ex = await one<any>(`SELECT e.*, COALESCE(c.title, NULLIF(e.label, ''), 'medien') AS title FROM exports e LEFT JOIN collections c ON c.id = e.collection_id WHERE e.id = $1`, [id]);
     if (!ex || !mayAccessExport(req, ex)) throw notFound('Der Download ist nicht (mehr) verfügbar.');
     // Rechte beim Download erneut prüfen – sie können sich seit dem Anlegen geändert haben (#94)
     if (ex.variant === 'original' && !req.auth!.permissions.has('media.manage')) throw forbidden(ORIGINALS_FORBIDDEN);
@@ -783,7 +872,7 @@ export async function mediaRoutes(app: FastifyInstance) {
     const s = await getSettings();
     const collection = { id: l.c_id, max_files: l.c_max_files, max_bytes: l.c_max_bytes };
     const actor: Actor = { id: null, name: `Upload-Link ${l.label || l.id.slice(0, 8)}`, type: 'system', ip: req.ip };
-    const res = await receiveFile(req, { collection, linkId: l.id, userId: null, maxFileBytes: Math.min(Number(l.max_file_bytes), s['media.max_file_mb'] * 1024 * 1024), actor });
+    const res = await receiveFile(req, { collection, linkId: l.id, userId: null, maxFileBytes: Math.min(Number(l.max_file_bytes), s['media.max_file_mb'] * 1024 * 1024), actor, folderId: l.folder_id ?? null });
     // Öffentliche Antwort ohne interne Details
     return { ok: true, duplicate: res.duplicate, name: res.media.original_name, size: res.media.size_bytes };
   });

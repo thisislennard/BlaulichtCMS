@@ -3971,6 +3971,103 @@ describe('Medien wie LiFeOS 2: Galerie-Komfort', () => {
   });
 });
 
+describe('Medien wie LiFeOS 3: Ordner, Verschieben/Kopieren, Schlagworte, Suche, ZIP mit Struktur', () => {
+  let col: any;
+  let other: any;
+  let folderA = '';
+  let folderB = '';
+  let ids: string[] = [];
+  const img = (r: number) => sharp({ create: { width: 200, height: 150, channels: 3, background: { r, g: 120, b: 40 } } }).jpeg().toBuffer();
+
+  it('Ordner anlegen, umbenennen, verschachteln – ohne Kreise; Upload-Link mit Zielordner', async () => {
+    col = (await editor.post('/collections', { title: 'Ordner-Test', createLink: false, eventDate: '2026-07-04' })).json.collection;
+    expect(col.event_date).toBeTruthy();
+    expect((await publisher.post(`/collections/${col.id}/folders`, { name: 'Nein' })).status).toBe(403);
+    folderA = (await editor.post(`/collections/${col.id}/folders`, { name: 'Einsatz' })).json.id;
+    folderB = (await editor.post(`/collections/${col.id}/folders`, { name: 'Drohne', parentId: folderA })).json.id;
+    expect((await editor.post(`/collections/${col.id}/folders`, { name: '  ' })).status).toBe(400);
+    expect((await editor.patch(`/folders/${folderA}`, { parentId: folderB })).status).toBe(400);
+    expect((await editor.patch(`/folders/${folderB}`, { name: 'Drohne/Luft' })).json.name).toBe('Drohne Luft');
+    const l = await editor.post(`/collections/${col.id}/links`, { folderId: folderB });
+    expect(l.json.folder_id).toBe(folderB);
+    const token = l.json.url.split('/u/')[1];
+    await uploadPublic(token, 'luft.jpg', await img(11));
+    await uploadPublic(token, '=HYPERLINK(1).jpg', await img(12));
+    // Fremder Ordner als Ziel wird abgelehnt
+    other = (await editor.post('/collections', { title: 'Ziel-Sammlung', createLink: false })).json.collection;
+    expect((await editor.post(`/collections/${other.id}/links`, { folderId: folderA })).status).toBe(400);
+    await processAllQuarantine();
+    const detail = (await editor.get(`/collections/${col.id}`)).json;
+    expect(detail.folders.map((f: any) => f.name).sort()).toEqual(['Drohne Luft', 'Einsatz']);
+    expect(detail.media.every((m: any) => m.folder_id === folderB)).toBe(true);
+    ids = detail.media.map((m: any) => m.id);
+    const audits = (await many<any>(`SELECT action FROM audit_events WHERE object_type = 'folder' AND object_id = ANY($1)`, [[folderA, folderB]])).map((a) => a.action);
+    expect(audits).toEqual(expect.arrayContaining(['folder.created', 'folder.renamed']));
+  });
+
+  it('Schlagworte je Datei und als Sammelaktion, Filter in der Suche', async () => {
+    expect((await editor.put(`/media/${ids[0]}/tags`, { tags: ['Drehleiter', ' Nacht ', 'drehleiter'] })).json.tags).toEqual(['drehleiter', 'nacht']);
+    expect((await editor.post('/media/tags', { ids, add: ['übung'], remove: ['nacht'] })).json.updated).toBe(2);
+    const tags = (await publisher.get('/media-tags')).json.map((t: any) => t.name);
+    expect(tags).toEqual(expect.arrayContaining(['drehleiter', 'übung']));
+    expect(tags).not.toContain('nacht');
+    const s = await publisher.get(`/media/search?tag=${encodeURIComponent('Übung')}&collection=${col.id}`);
+    expect(s.json.total).toBe(2);
+    expect(s.json.items[0].collection_title).toBe('Ordner-Test');
+    expect((await publisher.get(`/media/search?q=HYPERLINK`)).json.items.map((m: any) => m.id)).toHaveLength(1);
+    expect((await publisher.get(`/media/search?q=luft&kind=video`)).json.total).toBe(0);
+    expect((await publisher.get(`/media/search?perPage=50`)).status).toBe(400);
+    const paged = await publisher.get(`/collections?paged=1&q=${encodeURIComponent('Ordner-T')}`);
+    expect(paged.json.items.map((c: any) => c.title)).toEqual(['Ordner-Test']);
+    expect(paged.json.total).toBe(1);
+  });
+
+  it('ZIP mit Ordnerstruktur und metadaten.csv ohne Formel-Injektion; öffentliche Fassung ohne Hochladenden-Angaben', async () => {
+    const { buildExport } = await import('../src/media/exports.js');
+    const r = await editor.post(`/collections/${col.id}/exports`, { selection: 'folder', folderId: folderA, withCsv: true });
+    expect(r.json.files).toBe(2);
+    await buildExport(r.json.id);
+    const zip = new AdmZip((await editor.get(`/exports/${r.json.id}/download`)).rawPayload);
+    const names = zip.getEntries().map((e) => e.entryName).sort();
+    expect(names.filter((n) => n.startsWith('Einsatz/Drohne Luft/'))).toHaveLength(2);
+    const csv = zip.readAsText('metadaten.csv');
+    expect(csv).toMatch(/^﻿datei;anzeigename/);
+    expect(csv).not.toMatch(/originalname|HYPERLINK/);
+    expect(csv).toMatch(/übung/);
+    // Originale: Originalname mit Formel wird entschärft
+    const r2 = await editor.post(`/collections/${col.id}/exports`, { selection: 'all', variant: 'original', withCsv: true, withFolders: false });
+    await buildExport(r2.json.id);
+    const csv2 = new AdmZip((await editor.get(`/exports/${r2.json.id}/download`)).rawPayload).readAsText('metadaten.csv');
+    expect(csv2).toMatch(/;'=HYPERLINK\(1\)\.jpg;/);
+  });
+
+  it('Verschieben behält die ID (Beitrag bleibt gültig), Kopieren übernimmt Datenschutz-Entscheidungen, Kontingent wird geprüft', async () => {
+    await editor.patch(`/media/${ids[0]}/privacy`, { flags: ['persons'] });
+    const moved = await editor.post('/media/move', { ids: [ids[0]], collectionId: other.id });
+    expect(moved.json.moved).toBe(1);
+    const m = await one<any>(`SELECT collection_id, folder_id FROM media WHERE id = $1`, [ids[0]]);
+    expect(m).toEqual({ collection_id: other.id, folder_id: null });
+    expect((await many<any>(`SELECT action FROM audit_events WHERE action = 'media.moved' AND object_id = $1`, [ids[0]])).length).toBe(1);
+    const copy = await editor.post('/media/copy', { ids: [ids[0]], collectionId: col.id, folderId: folderA });
+    expect(copy.json.copied).toBe(1);
+    const c = await one<any>(`SELECT * FROM media WHERE id = $1`, [copy.json.ids[0]]);
+    expect(c).toMatchObject({ collection_id: col.id, folder_id: folderA, selection: 'pending', duplicate_of: ids[0], status: 'ready' });
+    expect(c.sensitive_flags).toEqual(['persons']);
+    expect(fs.existsSync(mediaPaths.original(c.id))).toBe(true);
+    expect(fs.existsSync(mediaPaths.publicFile(c.id, 'jpg'))).toBe(true);
+    expect((await editor.get(`/collections/${col.id}`)).json.media.find((x: any) => x.id === c.id).tags).toEqual(['drehleiter', 'übung']);
+    // Kontingent der Zielsammlung
+    await pool.query(`UPDATE collections SET max_files = 1 WHERE id = $1`, [other.id]);
+    expect((await editor.post('/media/move', { ids: [ids[1]], collectionId: other.id })).status).toBe(409);
+    await pool.query(`UPDATE collections SET archived_at = now() WHERE id = $1`, [other.id]);
+    expect((await editor.post('/media/copy', { ids: [ids[1]], collectionId: other.id })).status).toBe(400);
+    expect((await publisher.post('/media/move', { ids: [ids[1]], collectionId: col.id })).status).toBe(403);
+    // Titelbild frei wählbar
+    expect((await editor.patch(`/collections/${col.id}`, { coverMediaId: c.id })).json.cover_media_id).toBe(c.id);
+    expect((await editor.patch(`/collections/${col.id}`, { coverMediaId: ids[0] })).status).toBe(400);
+  });
+});
+
 /* @@MEDIA-TESTS-END@@ */
 
 describe('In-App-Updates aus GitHub-Releases', () => {

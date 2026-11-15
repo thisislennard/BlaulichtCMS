@@ -74,11 +74,14 @@ flowchart LR
   geladen, gleichzeitiges Sichten wird erkannt.
 - **Galerie:** Kacheln oder Liste mit Seiten, Großansicht zum Blättern, Details je Datei mit Anzeigename,
   Beschreibung, interner Notiz, Prüfsumme und Duplikat-Hinweis, Mehrfachauswahl mit Sammelaktionen.
+- **Ordnen:** Ordner (beliebig tief) in jeder Sammlung, Zielordner je Upload-Link, Verschieben und Kopieren zwischen
+  Sammlungen (Beiträge bleiben gültig), Schlagworte, Titelbild und Veranstaltungsdatum, Suche über alle Dateien.
 - **Abgebildete Personen:** Markierungen für erkennbare Personen, Verletzte, Kennzeichen und sensible Inhalte;
   markierte Medien verlangen vor der Freigabe eine bewusste Datenschutz-Prüfung.
 - **Unkenntlich machen:** Bereiche verpixeln, weichzeichnen oder abdecken, Bilder zuschneiden, Videos ohne Ton
   veröffentlichen – das Original bleibt unverändert.
-- **Herunterladen:** einzelne Dateien oder alle ausgewählten als ZIP; Originale nur mit dem Recht „Medien verwalten“.
+- **Herunterladen:** einzelne Dateien oder als ZIP (ausgewählte, markierte, ein Ordner oder sammlungsübergreifend) mit
+  Ordnerstruktur und optional `metadaten.csv`; Originale nur mit dem Recht „Medien verwalten“.
 
 ### Beiträge schreiben
 

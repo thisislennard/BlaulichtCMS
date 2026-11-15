@@ -56,7 +56,7 @@ const MAX_ATTEMPTS = 8;
 export async function uploadResumable(
   base: string,
   file: File,
-  opts: { clientKey: string; note?: string; ref?: string; onProgress?: (percent: number) => void; signal?: AbortSignal },
+  opts: { clientKey: string; note?: string; ref?: string; onProgress?: (percent: number) => void; signal?: AbortSignal; extra?: Record<string, unknown> },
 ): Promise<UploadResult> {
   const { signal } = opts;
   const checkAbort = () => {
@@ -69,7 +69,7 @@ export async function uploadResumable(
   for (let attempt = 1; ; attempt++) {
     checkAbort();
     try {
-      session = await xhr('POST', base, JSON.stringify({ clientKey: opts.clientKey, name: file.name, size: file.size, type: file.type, note: opts.note ?? '', ...(opts.ref ? { ref: opts.ref } : {}) }), 'application/json', undefined, signal);
+      session = await xhr('POST', base, JSON.stringify({ ...(opts.extra ?? {}), clientKey: opts.clientKey, name: file.name, size: file.size, type: file.type, note: opts.note ?? '', ...(opts.ref ? { ref: opts.ref } : {}) }), 'application/json', undefined, signal);
       break;
     } catch (e: any) {
       if (e?.status === -1 || !retryable(e) || attempt >= MAX_ATTEMPTS) throw e;
