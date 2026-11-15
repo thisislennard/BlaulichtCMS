@@ -21,7 +21,7 @@ import { connectionSecrets, connectionUsage, KIND_LABEL, loadConnection, require
 import { FE2_ALLOWED_FIELDS, FE2_DEFAULT_MAPPING, handleFe2Event } from '../connections/fe2.js';
 import { checkFormats, connectionTestImage, deleteFacebookPost, facebookAuthorizeUrl, facebookExchange, instagramAuthorizeUrl, instagramExchange, markerFor, mediaForRevision, mediaUrl, socialText, testFacebook, testInstagram } from '../connections/meta.js';
 import { FEUERSOFTWARE_DEFAULT_INTERVAL, FEUERSOFTWARE_INTERVALS, pollFeuersoftware, testFeuersoftware } from '../connections/feuersoftware.js';
-import { insecureFeed, insecureFeedUrl, REVIEW_CHECKS, refreshWarnfeed, testWarnfeed, warningBannerText } from '../connections/warnfeed.js';
+import { endBanner, insecureFeed, insecureFeedUrl, REVIEW_CHECKS, refreshWarnfeed, testWarnfeed, warningBannerText } from '../connections/warnfeed.js';
 
 /** Öffentliche Sicht auf eine Verbindung – nie mit Geheimnissen. */
 async function view(c: Connection) {
@@ -650,9 +650,24 @@ export async function connectionRoutes(app: FastifyInstance) {
   app.get('/official-warnings', { preHandler: requireAuth('post.read') }, async () =>
     many<any>(
       `SELECT w.id, w.identifier, w.msg_type, w.severity, w.event, w.headline, w.areas, w.effective_at, w.expires_at, w.web_url, w.in_area, w.cancelled, w.superseded_by IS NOT NULL AS superseded, w.banner_id, w.received_at, c.name || CASE WHEN c.deleted_at IS NOT NULL THEN ' (Verbindung gelöscht)' ELSE '' END AS source
-         FROM official_warnings w JOIN connections c ON c.id = w.connection_id ORDER BY w.received_at DESC LIMIT 100`,
+         FROM official_warnings w JOIN connections c ON c.id = w.connection_id WHERE w.dismissed_at IS NULL ORDER BY w.received_at DESC LIMIT 100`,
     ),
   );
+
+  /**
+   * Amtliche Warnung ausblenden (statt löschen): verschwindet aus der Liste, wird von späteren Abrufen nie neu angelegt
+   * (die Zeile bleibt als Merker; Abrufe legen je Kennung nur einmal an) und ein daraus entstandenes Banner wird
+   * beendet. Die Löschfrist gilt unverändert. Aktualisierungen und Entwarnungen der Quelle sind eigene Meldungen und
+   * erscheinen wieder.
+   */
+  app.post('/official-warnings/:id/dismiss', { preHandler: requireAuth('post.edit') }, async (req) => {
+    const { id } = z.object({ id: z.uuid() }).parse(req.params);
+    const w = await one<any>(`UPDATE official_warnings SET dismissed_at = now(), dismissed_by = $2 WHERE id = $1 AND dismissed_at IS NULL RETURNING *`, [id, req.auth!.user?.id ?? null]);
+    if (!w) throw notFound('Warnung nicht gefunden oder bereits ausgeblendet.');
+    if (w.banner_id) await endBanner(w.banner_id, 'Amtliche Warnung ausgeblendet');
+    await audit(req.auth!.actor, 'official_warning.dismissed', { type: 'official_warning', id, label: (w.headline || w.event || w.identifier).slice(0, 200) }, { kennung: w.identifier, banner_beendet: !!w.banner_id || undefined });
+    return { ok: true, bannerEnded: !!w.banner_id };
+  });
 
   /** Ohne automatische Banner: Banner-Entwurf mit Link zur Originalquelle vorbereiten (normale Freigabe). */
   app.post('/official-warnings/:id/banner-draft', { preHandler: requireAuth('post.edit') }, async (req) => {

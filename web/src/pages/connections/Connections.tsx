@@ -1,11 +1,11 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router';
 import { get, post } from '../../api/client';
 import { Badge, Button, Card, EmptyState, ErrorBox, FieldWrap, Input, Notice, PageHeader, Select, SkeletonRows, StatusBadge, Switch } from '../../components/ui/core';
 import { useAuth } from '../../lib/auth';
 import { Icon } from '../../components/ui/Icon';
-import { Dialog, OneTimeSecret, useErrorToast } from '../../components/ui/overlays';
+import { Dialog, OneTimeSecret, useConfirm, useErrorToast, useToast } from '../../components/ui/overlays';
 import { fmtRelative } from '../../lib/format';
 import { safeHref } from '../../lib/url';
 
@@ -129,6 +129,10 @@ export function OfficialWarnings() {
   const q = useQuery({ queryKey: ['official-warnings'], queryFn: () => get<any[]>('/official-warnings') });
   const sites = useQuery({ queryKey: ['sites'], queryFn: () => get<any[]>('/sites') });
   const toastError = useErrorToast();
+  const toast = useToast();
+  const ask = useConfirm();
+  const qc = useQueryClient();
+  const { can } = useAuth();
   const nav = useNavigate();
   const [site, setSite] = useState('');
   const active = (sites.data ?? []).filter((s) => s.status === 'active');
@@ -180,6 +184,25 @@ export function OfficialWarnings() {
                     }
                   }}>
                     Banner-Entwurf mit Link
+                  </Button>
+                )}
+                {can('post.edit') && (
+                  <Button size="sm" variant="ghost" icon="EyeOff" onClick={async () => {
+                    const ok = await ask({
+                      title: 'Amtliche Warnung ausblenden?',
+                      text: `„${w.headline || w.event}“ verschwindet aus dieser Liste und wird bei späteren Abrufen nicht wieder angelegt.${w.banner_id ? ' Das daraus entstandene Banner wird beendet.' : ''} Aktualisierungen und Entwarnungen der Quelle erscheinen weiterhin. Maßgeblich bleibt die Originalquelle.`,
+                      confirmLabel: 'Ausblenden',
+                    });
+                    if (!ok) return;
+                    try {
+                      const r = await post<{ bannerEnded: boolean }>(`/official-warnings/${w.id}/dismiss`);
+                      toast({ tone: 'success', title: r.bannerEnded ? 'Ausgeblendet, Banner beendet' : 'Ausgeblendet' });
+                      await qc.invalidateQueries({ queryKey: ['official-warnings'] });
+                    } catch (e) {
+                      toastError(e);
+                    }
+                  }}>
+                    Ausblenden
                   </Button>
                 )}
               </div>

@@ -4305,6 +4305,143 @@ describe('Verbindungen löschen', () => {
   });
 });
 
+describe('Warnvorgänge löschen, amtliche Warnungen ausblenden', () => {
+  let authorA: { client: Client; userId: string };
+  let authorB: { client: Client; userId: string };
+  let approverX: { client: Client; userId: string };
+  const pdf = (id: string) => path.join(process.env.BLAULICHTCMS_DATA_DIR!, 'warnings', id);
+  const create = async (c: Client, body: any) => {
+    const r = await c.post('/warnings', body);
+    expect(r.status).toBe(200);
+    fs.mkdirSync(pdf(r.json.id), { recursive: true });
+    fs.writeFileSync(path.join(pdf(r.json.id), 'x.pdf'), 'pdf');
+    return r.json as { id: string; case_no: string };
+  };
+  const approve = async (id: string) => {
+    const rev = (await one<any>(`SELECT r.id, r.content_hash FROM warnings w JOIN warning_revisions r ON r.warning_id = w.id AND r.number = w.current_revision WHERE w.id = $1`, [id]))!;
+    return (await one<any>(`INSERT INTO warning_approvals (warning_id, revision_id, content_hash, decision, pdf_file) VALUES ($1,$2,$3,'approved','x.pdf') RETURNING id`, [id, rev.id, rev.content_hash]))!.id as string;
+  };
+  const send = async (id: string, status = 'accepted') => {
+    const rev = (await one<any>(`SELECT r.id FROM warnings w JOIN warning_revisions r ON r.warning_id = w.id AND r.number = w.current_revision WHERE w.id = $1`, [id]))!;
+    const aid = await approve(id);
+    return (await one<any>(`INSERT INTO warning_sends (warning_id, revision_id, approval_id, recipients, intended_recipients, test_mode, subject, status) VALUES ($1,$2,$3,'{test@example.invalid}','{stelle@example.invalid}',true,'Betreff',$4) RETURNING id`, [id, rev.id, aid, status]))!.id as string;
+  };
+  const gone = async (ids: string[]) => (await one<any>(`SELECT count(*)::int AS n FROM warnings WHERE id = ANY($1::uuid[])`, [ids]))!.n === 0;
+
+  // Eigene Adresse je Konto: die Einladungsannahme ist je IP begrenzt, andere Abschnitte laden ebenfalls ein
+  const invite = async (email: string, roles: string[], name: string, ip: string) => {
+    const inv = await admin.post('/users/invite', { email, roles });
+    const c = new Client(app, ip);
+    const acc = await c.post(`/auth/invite/${inv.json.link.split('/einladung/')[1]}`, { name, password: `${name}-Zugang-sicher-2026` });
+    expect(acc.json.next).toBe('done');
+    return { client: c, userId: inv.json.user.id as string };
+  };
+  beforeAll(async () => {
+    authorA = await invite('loeschen-a@example.org', ['warning_author'], 'Ari', '198.51.100.91');
+    authorB = await invite('loeschen-b@example.org', ['warning_author'], 'Bo', '198.51.100.92');
+    approverX = await invite('loeschen-x@example.org', ['warning_approver'], 'Xen', '198.51.100.93');
+  });
+
+  it('Entwurf: nur Ersteller oder Freigabe-Recht; Erstmeldung löscht den Baum, Aktualisierung nur sich selbst', async () => {
+    const root = await create(authorA.client, { kind: 'initial' });
+    await authorA.client.put(`/warnings/${root.id}/revision`, { baseRevision: 1, data: { headline: 'Vertrauliche Lage Musterstraße', callback: 'Rückruf Erika 0123 456' } });
+    const upd = await create(authorA.client, { kind: 'update', parentId: root.id });
+    const clear = await create(authorA.client, { kind: 'all_clear', parentId: upd.id });
+    // Aktualisierung löschen: nur sie und die Entwarnung, die auf ihr aufbaut
+    const chk = (await authorA.client.get(`/warnings/${upd.id}/delete-check`)).json;
+    expect(chk).toMatchObject({ level: 'draft', allowed: true, reasonRequired: false });
+    expect(chk.tree.map((t: any) => t.case_no)).toEqual([upd.case_no, clear.case_no]);
+    // Fremder Entwurf: kein Recht
+    expect((await authorB.client.get(`/warnings/${upd.id}/delete-check`)).json.allowed).toBe(false);
+    expect((await authorB.client.raw('DELETE', `/warnings/${upd.id}`, { body: {} })).status).toBe(403);
+    const d1 = await authorA.client.raw('DELETE', `/warnings/${upd.id}`, { body: {} });
+    expect(d1.json).toMatchObject({ ok: true, deleted: 2 });
+    expect(await gone([upd.id, clear.id])).toBe(true);
+    expect(await gone([root.id])).toBe(false);
+    expect(fs.existsSync(pdf(upd.id))).toBe(false);
+    // Erstmeldung: ganzer Baum; Freigabe-Recht darf fremde Entwürfe löschen
+    const upd2 = await create(authorA.client, { kind: 'update', parentId: root.id });
+    expect((await approverX.client.get(`/warnings/${root.id}/delete-check`)).json.tree).toHaveLength(2);
+    const d2 = await approverX.client.raw('DELETE', `/warnings/${root.id}`, { body: { reason: 'Versehentlich angelegt' } });
+    expect(d2.json.deleted).toBe(2);
+    expect(await gone([root.id, upd2.id])).toBe(true);
+    expect(await one(`SELECT 1 FROM warning_revisions WHERE warning_id = ANY($1::uuid[])`, [[root.id, upd2.id]])).toBeNull();
+    expect(fs.existsSync(pdf(root.id))).toBe(false);
+    // Audit: nur Vorgangsnummern, Person und Grund – keine Inhalte
+    const a = await one<any>(`SELECT actor_name, object_label, details FROM audit_events WHERE action = 'warning.deleted' AND object_id = $1::text`, [root.id]);
+    expect(a).toMatchObject({ object_label: root.case_no, details: { vorgaenge: [root.case_no, upd2.case_no], stand: 'Entwurf', grund: 'Versehentlich angelegt' } });
+    expect(JSON.stringify(a)).not.toMatch(/Musterstraße|Erika|0123/);
+  });
+
+  it('freigegeben: nur mit Freigabe-Recht; versandt: nur Administration mit Begründung; laufender Versand sperrt', async () => {
+    const w1 = await create(authorA.client, { kind: 'initial' });
+    await approve(w1.id);
+    expect((await authorA.client.get(`/warnings/${w1.id}/delete-check`)).json).toMatchObject({ level: 'approved', allowed: false });
+    expect((await authorA.client.raw('DELETE', `/warnings/${w1.id}`, { body: {} })).status).toBe(403);
+    expect((await approverX.client.raw('DELETE', `/warnings/${w1.id}`, { body: {} })).status).toBe(200);
+    expect(await gone([w1.id])).toBe(true);
+
+    const w2 = await create(authorA.client, { kind: 'initial' });
+    const sid = await send(w2.id);
+    await pool.query(`INSERT INTO warning_sends_body (send_id, body) VALUES ($1, 'Rückruf Erika')`, [sid]);
+    expect((await approverX.client.get(`/warnings/${w2.id}/delete-check`)).json).toMatchObject({ level: 'sent', allowed: false, reasonRequired: true });
+    expect((await approverX.client.raw('DELETE', `/warnings/${w2.id}`, { body: { reason: 'Test' } })).status).toBe(403);
+    const noReason = await admin.raw('DELETE', `/warnings/${w2.id}`, { body: {} });
+    expect(noReason.status).toBe(400);
+    expect(noReason.json.message).toContain('begründen');
+    expect((await admin.raw('DELETE', `/warnings/${w2.id}`, { body: { reason: 'Übungsvorgang, versehentlich an das Testpostfach' } })).status).toBe(200);
+    expect(await gone([w2.id])).toBe(true);
+    expect(await one(`SELECT 1 FROM warning_sends WHERE id = $1`, [sid])).toBeNull();
+    expect(await one(`SELECT 1 FROM warning_sends_body WHERE send_id = $1`, [sid])).toBeNull();
+    expect((await one<any>(`SELECT details FROM audit_events WHERE action = 'warning.deleted' AND object_id = $1::text`, [w2.id])).details).toMatchObject({ stand: 'versandt', grund: 'Übungsvorgang, versehentlich an das Testpostfach' });
+
+    const w3 = await create(authorA.client, { kind: 'initial' });
+    await send(w3.id, 'sending');
+    const running = await admin.raw('DELETE', `/warnings/${w3.id}`, { body: { reason: 'Versand läuft noch' } });
+    expect(running.status).toBe(409);
+    expect(await gone([w3.id])).toBe(false);
+  });
+
+  it('amtliche Warnung ausblenden: aus der Liste, nie neu angelegt, Banner beendet, auditiert', async () => {
+    let xml = '';
+    const srv = http.createServer((_req, res) => {
+      res.writeHead(200, { 'content-type': 'application/xml' });
+      res.end(xml);
+    });
+    await new Promise<void>((r) => srv.listen(0, '127.0.0.1', r));
+    try {
+      const url = `http://127.0.0.1:${(srv.address() as any).port}/cap.xml`;
+      xml = `<?xml version="1.0"?><alert xmlns="urn:oasis:names:tc:emergency:cap:1.2"><identifier>AUSBLENDEN-1</identifier><sender>test@example.invalid</sender><sent>2026-11-15T10:00:00+01:00</sent><status>Actual</status><msgType>Alert</msgType><info><language>de-DE</language><event>Sturm</event><severity>Moderate</severity><headline>Sturmböen (fiktiv)</headline><expires>${new Date(Date.now() + 3600_000).toISOString()}</expires><area><areaDesc>Musterkreis</areaDesc></area></info></alert>`;
+      const conn = (await one<any>(`INSERT INTO connections (kind, name, status, config, private_target, private_approved_at) VALUES ('warnfeed', 'Ausblenden-Feed', 'active', $1, '127.0.0.1', now()) RETURNING *`, [JSON.stringify({ format: 'cap', url })]))!;
+      const { refreshWarnfeed } = await import('../src/connections/warnfeed.js');
+      expect((await refreshWarnfeed(conn)).added).toBe(1);
+      const w = (await one<any>(`SELECT * FROM official_warnings WHERE connection_id = $1`, [conn.id]))!;
+      const site = await one<any>(`SELECT id FROM wp_sites LIMIT 1`);
+      const banner = site ? (await one<any>(`INSERT INTO banners (site_id, title, ends_at, content_hash, approved_hash, approved_at) VALUES ($1, 'Sturmböen (fiktiv)', now() + interval '1 hour', 'h', 'h', now()) RETURNING id`, [site.id]))! : null;
+      if (banner) await pool.query(`UPDATE official_warnings SET banner_id = $2 WHERE id = $1`, [w.id, banner.id]);
+      expect((await editor.get('/official-warnings')).json.some((x: any) => x.id === w.id)).toBe(true);
+      expect((await anonymous.post(`/official-warnings/${w.id}/dismiss`)).status).toBe(401);
+      const r = await editor.post(`/official-warnings/${w.id}/dismiss`);
+      expect(r.status).toBe(200);
+      expect(r.json.bannerEnded).toBe(!!banner);
+      if (banner) expect((await one<any>(`SELECT ended_at FROM banners WHERE id = $1`, [banner.id]))!.ended_at).not.toBeNull();
+      expect((await editor.get('/official-warnings')).json.some((x: any) => x.id === w.id)).toBe(false);
+      expect((await editor.post(`/official-warnings/${w.id}/dismiss`)).status).toBe(404);
+      expect((await one<any>(`SELECT details FROM audit_events WHERE action = 'official_warning.dismissed' AND object_id = $1::text`, [w.id])).details).toMatchObject({ kennung: 'AUSBLENDEN-1' });
+      // Späterer Abruf: nicht neu angelegt, bleibt ausgeblendet, keine neue Benachrichtigung
+      const notes = async () => (await one<any>(`SELECT count(*)::int AS n FROM notifications WHERE title LIKE '%Sturmböen (fiktiv)%'`))!.n;
+      const n0 = await notes();
+      expect((await refreshWarnfeed(conn)).added).toBe(0);
+      expect((await one<any>(`SELECT count(*)::int AS n FROM official_warnings WHERE connection_id = $1 AND identifier = 'AUSBLENDEN-1'`, [conn.id]))!.n).toBe(1);
+      expect((await one<any>(`SELECT dismissed_at, last_seen_at FROM official_warnings WHERE id = $1`, [w.id]))!.dismissed_at).not.toBeNull();
+      expect(await notes()).toBe(n0);
+      await pool.query(`UPDATE connections SET status = 'revoked' WHERE id = $1`, [conn.id]);
+    } finally {
+      srv.close();
+    }
+  });
+});
+
 /* ---------------------------- Medien wie LiFeOS (Pakete 1–10) ---------------------------- */
 
 /** Neue Sammlung mit Link über die API; liefert IDs und Token. */

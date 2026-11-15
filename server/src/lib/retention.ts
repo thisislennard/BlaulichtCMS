@@ -374,7 +374,28 @@ async function warningCases(dryRun: boolean, d: number): Promise<RetentionCatego
 
 /** Löscht Warnvorgänge samt Aktualisierungen/Entwarnung (Wurzel-IDs), Fassungen, Freigaben, PDF und Versand. */
 export async function deleteWarningTrees(roots: string[], db: Queryable = pool): Promise<string[]> {
-  const ids = await many<{ id: string }>(`DELETE FROM warnings WHERE COALESCE(root_id, id) = ANY($1::uuid[]) RETURNING id`, [roots], db);
-  for (const r of ids) fs.rmSync(path.join(config.dataDir, 'warnings', r.id), { recursive: true, force: true });
-  return ids.map((r) => r.id);
+  const ids = await many<{ id: string }>(`SELECT id FROM warnings WHERE COALESCE(root_id, id) = ANY($1::uuid[])`, [roots], db);
+  const deleted = await deleteWarnings(ids.map((r) => r.id), db);
+  removeWarningFiles(deleted);
+  return deleted;
+}
+
+/**
+ * Löscht die angegebenen Warnvorgänge mit Fassungen (Rückrufkontakt), Freigaben, Versandnachweisen (Empfänger,
+ * SMTP-Antworten, Mailtext), offenen Versandaufträgen und Benachrichtigungen dazu. Die PDF-Dateien entfernt
+ * removeWarningFiles() – bei einer Transaktion erst nach dem Commit aufrufen.
+ */
+export async function deleteWarnings(ids: string[], db: Queryable = pool): Promise<string[]> {
+  if (!ids.length) return [];
+  await db.query(
+    `DELETE FROM jobs WHERE status = 'queued' AND kind = 'warning.send' AND payload->>'sendId' IN (SELECT id::text FROM warning_sends WHERE warning_id = ANY($1::uuid[]))`,
+    [ids],
+  );
+  await db.query(`DELETE FROM notifications WHERE link = ANY($1::text[])`, [ids.map((id) => `/warnungen/${id}`)]);
+  const rows = await many<{ id: string }>(`DELETE FROM warnings WHERE id = ANY($1::uuid[]) RETURNING id`, [ids], db);
+  return rows.map((r) => r.id);
+}
+
+export function removeWarningFiles(ids: string[]) {
+  for (const id of ids) fs.rmSync(path.join(config.dataDir, 'warnings', id), { recursive: true, force: true });
 }

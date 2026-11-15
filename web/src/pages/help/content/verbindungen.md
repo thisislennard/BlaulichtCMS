@@ -240,6 +240,15 @@ Die letzte Störung steht in der Verbindung und in der Übersicht. Nach **drei F
 
 Quelle: Warn-App-Schnittstelle des Bundes (Regionalschlüssel des Kreises) oder eine eigene CAP-Adresse. Gebietsfilter über Geocode-Präfixe oder Ortsnamen. Die Schnittstelle liefert Meldungen auf Kreisebene; sie gelten auch für jede Gemeinde im Kreis. Banner nennen nur Orte, die zum Ortsnamen-Filter passen, und immer die Quelle (z. B. „Quelle: Deutscher Wetterdienst“). Die Meldungen erscheinen unter [Amtliche Warnungen](/amtliche-warnungen) – getrennt vom eigenen Warnentwurf.
 
+### Warnung ausblenden
+
+Amtliche Warnungen lassen sich nicht löschen, aber **ausblenden** (Knopf an der Warnung, Recht „Beiträge bearbeiten“):
+
+- Die Warnung verschwindet aus der Liste und wird bei späteren Abrufen **nicht wieder angelegt**, auch wenn die Quelle sie weiter liefert.
+- Ein automatisches Banner, das aus ihr entstanden ist, wird beendet und von der Website entfernt.
+- Aktualisierungen und Entwarnungen der Quelle sind eigene Meldungen und erscheinen weiterhin.
+- Das Ausblenden steht im Audit-Protokoll. Die Löschfrist für amtliche Warnungen gilt unverändert.
+
 ### Regionalschlüssel und Gebietsfilter
 
 - **Regionalschlüssel (ARS) des Kreises:** Eigene Gemeinde im [Gemeindeverzeichnis-Online](https://www.statistikportal.de/de/gemeindeverzeichnis) suchen und den 8-stelligen Amtlichen Gemeindeschlüssel (AGS) ablesen, z. B. `05315000`. Die ersten 5 Stellen sind der Kreis; mit 7 angehängten Nullen ergibt sich der ARS für BlaulichtCMS: `053150000000`.

@@ -50,6 +50,25 @@ Bei **unklarem Ergebnis** versendet BlaulichtCMS nie automatisch erneut. Erst na
 
 **Testmodus:** Solange er aktiv ist (Standard), gehen alle Warnmails ausschließlich an das hinterlegte **Testpostfach**; Betreff mit `[TEST]`, die vorgesehenen Empfänger stehen nur im Mailtext. Ausschalten lässt er sich erst nach einer erfolgreichen Testmail mit den gespeicherten Einstellungen – Einrichtung und Werte bekannter Anbieter unter [E-Mail-Versand](/hilfe/stichwoerter-regeln#e-mail-versand).
 
+## Vorgang löschen
+
+Oben im Vorgang steht **Löschen**. Der Dialog nennt vorher, welche Vorgänge betroffen sind und wer löschen darf.
+
+- **Was mitgelöscht wird:** alle Aktualisierungen und Entwarnungen, die auf dem Vorgang aufbauen. Wer eine Erstmeldung löscht, löscht also den ganzen Vorgang; wer eine Aktualisierung löscht, nur sie und ihre Folgevorgänge – die Erstmeldung bleibt.
+
+**Wer darf löschen:**
+
+| Stand (weitester im betroffenen Baum) | Löschen darf |
+|---|---|
+| nie freigegeben | wer alle betroffenen Vorgänge angelegt hat, oder wer Warnentwürfe freigeben darf |
+| freigegeben, aber nicht versandt | wer Warnentwürfe freigeben darf |
+| versandt (auch ein fehlgeschlagener Versuch) | nur die Administration („System verwalten“), mit **Pflicht-Begründung** |
+
+- Gelöscht werden Fassungen, Freigaben, PDF-Dateien, Versandnachweise und der Rückrufkontakt. Das Audit-Protokoll hält nur fest: „Vorgang W-… gelöscht“ mit Person, Stand und Begründung – keine Inhalte.
+- Läuft gerade ein Versand, ist Löschen gesperrt, bis das Ergebnis feststeht.
+- Bereits zugestellte Mails bei der zuständigen Stelle erreicht das Löschen nicht.
+- Die Löschfrist (siehe unten) gilt unverändert weiter.
+
 ## Datenschutz
 
 Warnvorgänge enthalten personenbezogene Daten: den **Rückrufkontakt** (Name, Telefonnummer), die Namen der bestätigenden und freigebenden Personen und die Empfängeradressen. Abgeschlossene Vorgänge samt PDF und Versandnachweisen löscht der Worker nach der Frist unter *Einstellungen → Datenschutz* (Standard 365 Tage nach dem Abschluss).

@@ -324,7 +324,7 @@ async function createBanner(c: Connection, w: any) {
   log('info', 'warnfeed', `Automatisches Banner für ${w.identifier}`);
 }
 
-async function endBanner(bannerId: string, why: string) {
+export async function endBanner(bannerId: string, why: string) {
   await tx(async (db) => {
     const b = await one<any>(`UPDATE banners SET ended_at = now() WHERE id = $1 AND ended_at IS NULL RETURNING *`, [bannerId], db);
     if (!b) return;

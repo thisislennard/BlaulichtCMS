@@ -16,6 +16,7 @@ import { evaluate, activeQuestions, type Suggestion } from '../warnings/levels.j
 import { KIND_LABEL, renderWarningPdf } from '../warnings/pdf.js';
 import { SMTP_VERIFY_MAX_AGE_MS, smtpConfigProblem, smtpFingerprint, smtpTransport, storedSmtpSettings, type SmtpSettings } from '../warnings/mail.js';
 import { sendFileResponse } from './files.js';
+import { deleteWarnings, removeWarningFiles } from '../lib/retention.js';
 
 /**
  * Warnentwürfe (MoWaS-Übergabe). BlaulichtCMS bereitet vor und übergibt per E-Mail an die zuständige Stelle;
@@ -245,6 +246,71 @@ export async function warningRoutes(app: FastifyInstance) {
       testMode: { active: s['warnings.test_mode'], recipient: s['warnings.test_recipient'] },
       missing: missingRequired(template, rev.data),
     };
+  });
+
+  /**
+   * Löschen eines eigenen Warnvorgangs. Betroffen ist der Vorgang samt allen Aktualisierungen und Entwarnungen, die
+   * auf ihm aufbauen (bei einer Erstmeldung also der ganze Vorgangsbaum). Wer löschen darf, richtet sich nach dem
+   * weitesten Stand im Baum:
+   *  - nie freigegeben: wer alle Vorgänge angelegt hat, oder „Warnentwurf freigeben“
+   *  - freigegeben, aber nie versandt: „Warnentwurf freigeben“
+   *  - versandt (auch versucht): nur „System verwalten“, mit Begründung
+   * Gelöscht werden Fassungen, Freigaben, PDF, Versandnachweise und Rückrufkontakt; das Audit hält nur Vorgangsnummern,
+   * Person und Begründung fest. Läuft gerade ein Versand, ist Löschen gesperrt.
+   */
+  async function deletePlan(id: string, auth: { user?: { id: string } | null; permissions: Set<string> }, db: Queryable = pool) {
+    const w = await one<any>(`SELECT id, case_no, root_id FROM warnings WHERE id = $1`, [id], db);
+    if (!w) throw notFound('Vorgang nicht gefunden.');
+    const tree = await many<any>(
+      `WITH RECURSIVE t AS (SELECT id, case_no, kind, created_by, created_at FROM warnings WHERE id = $1
+         UNION SELECT c.id, c.case_no, c.kind, c.created_by, c.created_at FROM warnings c JOIN t ON c.parent_id = t.id)
+       SELECT * FROM t ORDER BY created_at`,
+      [id],
+      db,
+    );
+    const ids = tree.map((t) => t.id);
+    const st = await one<{ sends: number; running: number; approved: number }>(
+      `SELECT (SELECT count(*)::int FROM warning_sends WHERE warning_id = ANY($1::uuid[])) AS sends,
+              (SELECT count(*)::int FROM warning_sends WHERE warning_id = ANY($1::uuid[]) AND status IN ('queued','sending')) AS running,
+              (SELECT count(*)::int FROM warning_approvals WHERE warning_id = ANY($1::uuid[]) AND decision = 'approved') AS approved`,
+      [ids],
+      db,
+    );
+    const level: 'draft' | 'approved' | 'sent' = st!.sends ? 'sent' : st!.approved ? 'approved' : 'draft';
+    const me = auth.user?.id ?? null;
+    const own = !!me && tree.every((t) => t.created_by === me);
+    const allowed = level === 'sent' ? auth.permissions.has('system.manage') : level === 'approved' ? auth.permissions.has('warning.approve') : own || auth.permissions.has('warning.approve');
+    const hint =
+      level === 'sent'
+        ? 'Bereits versandt – löschen kann nur die Administration („System verwalten“), mit Begründung.'
+        : level === 'approved'
+          ? 'Bereits freigegeben – löschen kann, wer Warnentwürfe freigeben darf.'
+          : 'Noch nicht freigegeben – löschen kann, wer den Entwurf angelegt hat, oder wer Warnentwürfe freigeben darf.';
+    return { w, tree: tree.map((t) => ({ id: t.id, case_no: t.case_no, kind: t.kind })), ids, level, allowed, reasonRequired: level === 'sent', running: st!.running > 0, hint };
+  }
+
+  app.get('/warnings/:id/delete-check', { preHandler: anyWarn }, async (req) => {
+    const { id } = z.object({ id: z.uuid() }).parse(req.params);
+    const { w, ids, ...plan } = await deletePlan(id, req.auth!);
+    return plan;
+  });
+
+  app.delete('/warnings/:id', { preHandler: requireAnyAuth('warning.draft', 'warning.approve', 'system.manage') }, async (req) => {
+    const { id } = z.object({ id: z.uuid() }).parse(req.params);
+    const { reason } = z.object({ reason: z.string().trim().max(500).optional() }).parse(req.body ?? {});
+    const deleted = await tx(async (db) => {
+      await db.query(`SELECT 1 FROM warnings WHERE id = $1 FOR UPDATE`, [id]);
+      const p = await deletePlan(id, req.auth!, db);
+      if (!p.allowed) throw forbidden(p.hint);
+      if (p.running) throw conflict('Ein Versand läuft gerade. Bitte das Ergebnis abwarten und dann löschen.');
+      if (p.reasonRequired && (reason ?? '').length < 5) throw badRequest('Bitte begründen, warum ein versandter Vorgang gelöscht wird (mindestens 5 Zeichen).');
+      const ids = await deleteWarnings(p.ids, db);
+      // Nur Vorgangsnummern, Person (Akteur) und Begründung – keine Inhalte
+      await audit(req.auth!.actor, 'warning.deleted', { type: 'warning', id, label: p.w.case_no }, { vorgaenge: p.tree.map((t) => t.case_no), stand: { draft: 'Entwurf', approved: 'freigegeben', sent: 'versandt' }[p.level], ...(reason ? { grund: reason } : {}) }, 'ok', db);
+      return ids;
+    });
+    removeWarningFiles(deleted);
+    return { ok: true, deleted: deleted.length };
   });
 
   /** Lagebewertung ohne Speichern (Vorschau im Wizard). */

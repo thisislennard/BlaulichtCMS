@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate, useParams } from 'react-router';
-import { get, post, put } from '../../api/client';
+import { del, get, post, put } from '../../api/client';
 import { Badge, Button, Card, Chip, cx, ErrorBox, FieldWrap, Input, KeyValue, Notice, PageHeader, Rev, Select, SkeletonRows, StatusBadge, Textarea } from '../../components/ui/core';
 import { usePageMeta } from '../../components/layout/AppShell';
 import { Icon } from '../../components/ui/Icon';
-import { UnsavedChangesGuard, useErrorToast, useToast } from '../../components/ui/overlays';
+import { Dialog, UnsavedChangesGuard, useErrorToast, useToast } from '../../components/ui/overlays';
 import { useAuth } from '../../lib/auth';
 import { fmtDateTime, fromLocalInput, toLocalInput } from '../../lib/format';
 import { KIND, LevelBadge, WARN_STATE } from './Warnings';
@@ -116,6 +116,82 @@ function SuggestionBox({ s, labels }: { s: Suggestion | null; labels: Record<str
 }
 
 /** Bei Wechsel auf einen anderen Vorgang (Bezug, Folgevorgang) frisch beginnen – keine Daten des vorherigen (#70). */
+/** Löschen mit Vorschau: welche Vorgänge betroffen sind, wer löschen darf und ob eine Begründung nötig ist. */
+function DeleteWarningDialog({ id, caseNo, onClose, onDeleted }: { id: string; caseNo: string; onClose: () => void; onDeleted: () => void }) {
+  const toast = useToast();
+  const check = useQuery({ queryKey: ['warning-delete-check', id], queryFn: () => get<{ tree: { id: string; case_no: string; kind: string }[]; level: 'draft' | 'approved' | 'sent'; allowed: boolean; reasonRequired: boolean; running: boolean; hint: string }>(`/warnings/${id}/delete-check`) });
+  const [reason, setReason] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const c = check.data;
+  const ready = !!c && c.allowed && !c.running && (!c.reasonRequired || reason.trim().length >= 5);
+  return (
+    <Dialog
+      open
+      onClose={onClose}
+      title={`Vorgang ${caseNo} löschen?`}
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose}>
+            Abbrechen
+          </Button>
+          <Button
+            variant="danger"
+            icon="Trash2"
+            loading={busy}
+            disabled={!ready}
+            onClick={async () => {
+              setBusy(true);
+              setError(null);
+              try {
+                const r = await del<{ deleted: number }>(`/warnings/${id}`, reason.trim() ? { reason: reason.trim() } : {});
+                toast({ tone: 'success', title: r.deleted > 1 ? `${r.deleted} Vorgänge gelöscht` : 'Vorgang gelöscht' });
+                onDeleted();
+              } catch (e) {
+                setError((e as Error).message);
+              } finally {
+                setBusy(false);
+              }
+            }}
+          >
+            {c && c.tree.length > 1 ? `${c.tree.length} Vorgänge löschen` : 'Vorgang löschen'}
+          </Button>
+        </>
+      }
+    >
+      <div className="flex flex-col gap-3 text-sm">
+        {check.isLoading && <SkeletonRows rows={2} />}
+        {check.error && <p className="m-0 text-err">{(check.error as Error).message}</p>}
+        {c && (
+          <>
+            <p className="m-0">Gelöscht werden Fassungen, Freigaben, PDF-Dateien, Versandnachweise und der Rückrufkontakt. Das Audit-Protokoll behält nur Vorgangsnummer, Person und Begründung. Das lässt sich nicht rückgängig machen.</p>
+            {c.tree.length > 1 && (
+              <div>
+                <p className="m-0 font-medium">Mitgelöscht werden alle Aktualisierungen und Entwarnungen, die darauf aufbauen:</p>
+                <ul className="m-0 mt-1 pl-5">
+                  {c.tree.map((t) => (
+                    <li key={t.id}>
+                      <span className="font-mono">{t.case_no}</span> – {KIND[t.kind as 'initial']}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            <Notice tone={c.allowed ? (c.level === 'draft' ? 'info' : 'warning') : 'error'}>{c.hint}</Notice>
+            {c.running && <Notice tone="warning">Ein Versand läuft gerade. Bitte das Ergebnis abwarten und dann löschen.</Notice>}
+            {c.allowed && (
+              <FieldWrap label={c.reasonRequired ? 'Begründung (Pflicht)' : 'Begründung (optional)'} htmlFor="wdel-reason" help="Steht im Audit-Protokoll – ohne Inhalte des Vorgangs.">
+                <Textarea id="wdel-reason" rows={2} maxLength={500} value={reason} onChange={(e) => setReason(e.target.value)} />
+              </FieldWrap>
+            )}
+            {error && <p className="m-0 text-err text-meta">{error}</p>}
+          </>
+        )}
+      </div>
+    </Dialog>
+  );
+}
+
 export default function WarningCase() {
   const { id = '' } = useParams();
   return <WarningCaseInner key={id} id={id} />;
@@ -141,6 +217,7 @@ function WarningCaseInner({ id }: { id: string }) {
   const [rejectNote, setRejectNote] = useState('');
   const [confirmSend, setConfirmSend] = useState(false);
   const [note, setNote] = useState('');
+  const [deleting, setDeleting] = useState(false);
 
   // Server-Stand übernehmen, solange nichts ungespeichert ist
   useEffect(() => {
@@ -251,8 +328,18 @@ function WarningCaseInner({ id }: { id: string }) {
             {d.warning.parent_case_no && <> zu <span className="font-mono">{d.warning.parent_case_no}</span></>} · <Rev n={d.revision.number} /> · Vorlage „{d.template.name}“ <span className="font-mono">v{d.template.version}</span>
           </>
         }
-        actions={<StatusBadge status={d.state} labels={WARN_STATE} />}
+        actions={
+          <div className="flex items-center gap-2 flex-wrap">
+            <StatusBadge status={d.state} labels={WARN_STATE} />
+            {(can('warning.draft') || can('warning.approve') || can('system.manage')) && (
+              <Button size="sm" variant="ghost" icon="Trash2" onClick={() => setDeleting(true)}>
+                Löschen
+              </Button>
+            )}
+          </div>
+        }
       />
+      {deleting && <DeleteWarningDialog id={id} caseNo={d.warning.case_no} onClose={() => setDeleting(false)} onDeleted={() => { setDirty(false); qc.invalidateQueries({ queryKey: ['warnings'] }); nav('/warnungen'); }} />}
 
       {/* Schrittleiste: auf dem Handy horizontal scrollbar */}
       <nav aria-label="Schritte" className="-mx-4 px-4 md:mx-0 md:px-0 overflow-x-auto">

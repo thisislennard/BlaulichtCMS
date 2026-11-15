@@ -31,6 +31,10 @@ Warnfeeds (amtliche Warnungen) ◀──Abruf───────────�
 - **Veröffentlichung:** Nur freigegebene Fassungen und öffentliche Fassungen der Dateien (neutral benannt) verlassen
   BlaulichtCMS. Keine Originale, keine Uploader-Hinweise.
 - **Warnentwurf:** Rückrufkontakt (Name, Telefon), bestätigende/freigebende Personen, Empfängeradressen, PDF.
+- **Warnvorgang löschen:** von Hand vor Ablauf der Frist möglich (Rechte nach Stand, versandte Vorgänge nur durch
+  die Administration mit Begründung); gelöscht werden Fassungen mit Rückrufkontakt, Freigaben, PDF und
+  Versandnachweise, das Audit behält nur Vorgangsnummer, Person und Begründung. Amtliche Warnungen werden nur
+  ausgeblendet (keine personenbezogenen Daten) und nach der Frist gelöscht.
 - **Verbindung löschen:** Zugangsdaten (alle Versionen) werden sofort gelöscht. Eine nie verwendete Verbindung
   verschwindet ganz; eine verwendete bleibt als „gelöscht“ markiert (ohne Zugangsdaten), damit der
   Veröffentlichungsverlauf nachvollziehbar bleibt.
