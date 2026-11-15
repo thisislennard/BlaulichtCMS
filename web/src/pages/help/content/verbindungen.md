@@ -65,6 +65,13 @@ BlaulichtCMS erzeugt eine Eingangsadresse und einen Zugangsschlüssel (nur einma
 
 Quelle: Warn-App-Schnittstelle des Bundes (Regionalschlüssel des Kreises) oder eine eigene CAP-Adresse. Gebietsfilter über Geocode-Präfixe oder Ortsnamen. Die Schnittstelle liefert Meldungen auf Kreisebene; sie gelten auch für jede Gemeinde im Kreis. Banner nennen nur Orte, die zum Ortsnamen-Filter passen, und immer die Quelle (z. B. „Quelle: Deutscher Wetterdienst“ – beim DWD vorgeschrieben). Die Meldungen erscheinen unter [Amtliche Warnungen](/amtliche-warnungen) – getrennt vom eigenen Warnentwurf.
 
+### Regionalschlüssel und Gebietsfilter
+
+- **Regionalschlüssel (ARS) des Kreises:** Eigene Gemeinde im [Gemeindeverzeichnis-Online](https://www.statistikportal.de/de/gemeindeverzeichnis) suchen und den 8-stelligen Amtlichen Gemeindeschlüssel (AGS) ablesen, z. B. `05315000`. Die ersten 5 Stellen sind der Kreis; mit 7 angehängten Nullen ergibt sich der ARS für BlaulichtCMS: `053150000000`.
+- **Geocode-Präfix (optional):** der vollständige 12-stellige ARS der eigenen Gemeinde aus dem [Anschriftenverzeichnis](https://www.statistikportal.de/de/veroeffentlichungen/anschriftenverzeichnis) des Statistikportals. Kreis- und Landeswarnungen gelten trotzdem mit.
+- **Ortsnamen:** Gemeinde und Ortsteile, wie sie in Warnungen genannt werden, durch Komma getrennt. Sie filtern und bestimmen die Orte im Bannertext – für den Anfang reicht dieser Filter.
+- Mit **Testen** prüfen: Unter „Meldungen im eigenen Gebiet“ erscheinen die aktuellen Warnungen. Neben den Feldern erklärt ein **?**-Knopf dasselbe.
+
 - Standard: anzeigen und auf die **Originalquelle** verlinken; ein Banner-Entwurf mit Link durchläuft die normale Freigabe.
 - **Automatische Banner** lassen sich erst einschalten, nachdem die fachliche Prüfung dokumentiert wurde (Herkunft, Weiterverwendung, Gebietsfilter, Gültigkeit, Aktualisierungen, Entwarnungen). Aktualisierungen ersetzen, Entwarnungen beenden das Banner.
 - **Nur für eine gekoppelte Website:** Die Ziel-Website muss gekoppelt sein. Wird ihre Kopplung widerrufen (oder löst die Website sie selbst), schaltet BlaulichtCMS die automatischen Banner der betroffenen Warnfeeds ab, protokolliert das und benachrichtigt die Verwaltung. Nach einer Neu-Kopplung die neue Website in der Verbindung wählen und automatische Banner wieder einschalten.

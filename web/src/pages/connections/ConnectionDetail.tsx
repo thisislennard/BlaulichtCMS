@@ -4,6 +4,7 @@ import { useParams, useSearchParams } from 'react-router';
 import { get, post, put } from '../../api/client';
 import { Badge, Button, Card, cx, ErrorBox, FieldWrap, Input, KeyValue, Notice, PageHeader, Select, SkeletonRows, StatusBadge, Switch, Textarea } from '../../components/ui/core';
 import { Icon } from '../../components/ui/Icon';
+import { HelpLink, HelpTip } from '../../components/ui/HelpTip';
 import { CopyButton, OneTimeSecret, useErrorToast, useToast, useConfirm } from '../../components/ui/overlays';
 import { useAuth } from '../../lib/auth';
 import { fmtDateTime } from '../../lib/format';
@@ -180,13 +181,33 @@ export default function ConnectionDetail() {
                     </Select>
                   </FieldWrap>
                   {cfg.format === 'nina' ? (
-                    <FieldWrap label="Amtlicher Regionalschlüssel (ARS) des Kreises" help="12 Stellen; die Schnittstelle liefert Meldungen auf Kreisebene (erste 5 Stellen). Meldungen von dort gelten auch für jede Gemeinde im Kreis." htmlFor="wf-ars"><Input id="wf-ars" mono value={cfg.ars ?? ''} onChange={(e) => setCfg({ ...cfg, ars: e.target.value })} /></FieldWrap>
+                    <FieldWrap label="Amtlicher Regionalschlüssel (ARS) des Kreises" labelAction={
+                      <HelpTip title="Regionalschlüssel des Kreises finden">
+                        <p className="m-0">Der ARS hat 12 Stellen. Für den Kreis zählen nur die ersten 5, der Rest sind Nullen.</p>
+                        <ol className="m-0 pl-4 flex flex-col gap-1">
+                          <li>Eigene Gemeinde im <HelpLink href="https://www.statistikportal.de/de/gemeindeverzeichnis">Gemeindeverzeichnis-Online</HelpLink> suchen (ab drei Buchstaben).</li>
+                          <li>Den 8-stelligen <strong>Amtlichen Gemeindeschlüssel (AGS)</strong> ablesen, z. B. <code className="font-mono">05315000</code>.</li>
+                          <li>Die ersten 5 Stellen nehmen und 7 Nullen anhängen: <code className="font-mono">053150000000</code>.</li>
+                        </ol>
+                        <p className="m-0 text-fg-muted">Danach „Testen“: Unter „Meldungen im eigenen Gebiet“ erscheinen die aktuellen Warnungen.</p>
+                      </HelpTip>
+                    } help="12 Stellen; die Schnittstelle liefert Meldungen auf Kreisebene (erste 5 Stellen). Meldungen von dort gelten auch für jede Gemeinde im Kreis." htmlFor="wf-ars"><Input id="wf-ars" mono value={cfg.ars ?? ''} onChange={(e) => setCfg({ ...cfg, ars: e.target.value })} /></FieldWrap>
                   ) : (
                     <FieldWrap label="Adresse" htmlFor="wf-url"><Input id="wf-url" type="url" value={cfg.url ?? ''} onChange={(e) => setCfg({ ...cfg, url: e.target.value })} /></FieldWrap>
                   )}
                   <div className="grid sm:grid-cols-2 gap-3">
-                    <FieldWrap label="Gebietsfilter: Geocode-Präfixe (Komma)" help="z. B. ARS der eigenen Gemeinde. Kreis- und Landeswarnungen gelten mit." htmlFor="wf-codes"><ListInput id="wf-codes" mono value={cfg.areaFilter?.codes ?? []} onChange={(codes) => setCfg({ ...cfg, areaFilter: { ...(cfg.areaFilter ?? {}), codes } })} /></FieldWrap>
-                    <FieldWrap label="Gebietsfilter: Ortsnamen (Komma)" help="Bestimmt auch, welche Orte im Bannertext stehen." htmlFor="wf-names"><ListInput id="wf-names" value={cfg.areaFilter?.names ?? []} onChange={(names) => setCfg({ ...cfg, areaFilter: { ...(cfg.areaFilter ?? {}), names } })} /></FieldWrap>
+                    <FieldWrap label="Gebietsfilter: Geocode-Präfixe (Komma)" labelAction={
+                      <HelpTip title="Geocode-Präfix (optional)">
+                        <p className="m-0">Der vollständige 12-stellige ARS der eigenen Gemeinde. Er steht im kostenlosen <HelpLink href="https://www.statistikportal.de/de/veroeffentlichungen/anschriftenverzeichnis">Anschriftenverzeichnis</HelpLink> des Statistikportals.</p>
+                        <p className="m-0">Warnungen für den ganzen Kreis oder das Land gelten trotzdem mit. Das Feld darf leer bleiben – dann reichen die Ortsnamen als Filter.</p>
+                      </HelpTip>
+                    } help="z. B. ARS der eigenen Gemeinde. Kreis- und Landeswarnungen gelten mit." htmlFor="wf-codes"><ListInput id="wf-codes" mono value={cfg.areaFilter?.codes ?? []} onChange={(codes) => setCfg({ ...cfg, areaFilter: { ...(cfg.areaFilter ?? {}), codes } })} /></FieldWrap>
+                    <FieldWrap label="Gebietsfilter: Ortsnamen (Komma)" labelAction={
+                      <HelpTip title="Ortsnamen">
+                        <p className="m-0">Gemeinde und Ortsteile so, wie sie in Warnungen genannt werden, durch Komma getrennt – z. B. <code className="font-mono">Musterstadt, Nordheim, Südfeld</code>.</p>
+                        <p className="m-0">Sie filtern die Meldungen und bestimmen, welche Orte im Bannertext stehen. Für den Anfang reicht dieser Filter.</p>
+                      </HelpTip>
+                    } help="Bestimmt auch, welche Orte im Bannertext stehen." htmlFor="wf-names"><ListInput id="wf-names" value={cfg.areaFilter?.names ?? []} onChange={(names) => setCfg({ ...cfg, areaFilter: { ...(cfg.areaFilter ?? {}), names } })} /></FieldWrap>
                   </div>
                   <FieldWrap label="Abrufintervall (Minuten)" htmlFor="wf-int"><Input id="wf-int" type="number" min={2} max={120} value={cfg.intervalMinutes ?? 5} onChange={(e) => setCfg({ ...cfg, intervalMinutes: Number(e.target.value) })} className="max-w-[120px]" /></FieldWrap>
                 </>
