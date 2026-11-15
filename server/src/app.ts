@@ -61,6 +61,7 @@ import { mediaRoutes } from './routes/media.js';
 import { mediaOrganizeRoutes } from './routes/media-organize.js';
 import { mediaTrashRoutes } from './routes/media-trash.js';
 import { mediaAdminRoutes } from './routes/media-admin.js';
+import { mediaDesignRoutes } from './routes/media-design.js';
 import { postRoutes } from './routes/posts.js';
 import { bridgeRoutes } from './routes/bridge.js';
 import { uploadRoutes } from './routes/uploads.js';
@@ -208,6 +209,7 @@ export async function buildApp(): Promise<FastifyInstance> {
       await api.register(mediaOrganizeRoutes);
       await api.register(mediaTrashRoutes);
       await api.register(mediaAdminRoutes);
+      await api.register(mediaDesignRoutes);
       await api.register(postRoutes);
       await api.register(bridgeRoutes);
       await api.register(uploadRoutes);

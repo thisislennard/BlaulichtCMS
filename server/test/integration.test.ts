@@ -5084,7 +5084,67 @@ describe('Medien wie LiFeOS 9: Speicherübersicht, Frist und Höchstgröße der 
   });
 });
 
-/* @@MEDIA-TESTS-END@@ */
+describe('Medien wie LiFeOS 10: Gestaltung der Upload-Seite', () => {
+  let imageId = '';
+  it('Bilder werden neu kodiert (ohne Standort) und öffentlich nur über ihre ID ausgeliefert', async () => {
+    const up = multipart({ name: 'logo.jpg', data: await photoWithGps(), type: 'image/jpeg' });
+    expect((await publisher.raw('POST', '/media/design-images', up)).status).toBe(403);
+    const r = await editor.raw('POST', '/media/design-images', up);
+    expect(r.status).toBe(200);
+    imageId = r.json.id;
+    const img = await anonymous.get(`/public/design-images/${imageId}`);
+    expect(img.status).toBe(200);
+    expect(img.headers['content-type']).toBe('image/jpeg');
+    expect((await sharp(img.rawPayload).metadata()).exif).toBeUndefined();
+    const bad = multipart({ name: 'x.jpg', data: Buffer.from('kein Bild'), type: 'image/jpeg' });
+    expect((await editor.raw('POST', '/media/design-images', bad)).status).toBe(400);
+  });
+
+  it('Standard nur mit „Medien administrieren“, Prüfung der Bausteine, Platzhalter, je Link überschreibbar', async () => {
+    const def = await editor.get('/media/design');
+    expect(def.json.design).toEqual({ accent: 'rot', header: true, blocks: [{ type: 'welcome' }, { type: 'upload' }] });
+    const design = {
+      accent: 'blau',
+      header: false,
+      blocks: [
+        { type: 'banner', image: imageId, alt: 'Fahrzeughalle', height: 'l' },
+        { type: 'heading', text: 'Fotos vom {thema} am {datum}', size: 'l' },
+        { type: 'text', text: '<script>alert(1)</script>\nZweite Zeile' },
+        { type: 'upload' },
+      ],
+    };
+    expect((await editor.put('/media/design', { design })).status).toBe(403);
+    expect((await admin.put('/media/design', { design: { ...design, blocks: [...design.blocks, { type: 'upload' }] } })).status).toBe(400);
+    expect((await admin.put('/media/design', { design: { ...design, accent: '#ff00ff' } })).status).toBe(400);
+    expect((await admin.put('/media/design', { design: { ...design, blocks: [{ type: 'banner', image: crypto.randomUUID() }, { type: 'upload' }] } })).status).toBe(400);
+    expect((await admin.put('/media/design', { design: { ...design, blocks: [{ type: 'iframe', src: 'x' }, { type: 'upload' }] } })).status).toBe(400);
+    expect((await admin.put('/media/design', { design })).status).toBe(200);
+    expect((await admin.patch('/settings', { 'media.upload_design': null })).status).toBe(400);
+    const col = (await editor.post('/collections', { title: 'Sommerfest', createLink: true, eventDate: '2026-07-04' })).json;
+    const token = col.link.url.split('/u/')[1];
+    const info = (await anonymous.get(`/public/upload/${token}`)).json;
+    expect(info.design.accent).toBe('blau');
+    expect(info.design.blocks[1].text).toBe('Fotos vom Sommerfest am 04.07.2026');
+    // Texte bleiben Text (die Oberfläche stellt sie nie als HTML dar)
+    expect(info.design.blocks[2].text).toBe('<script>alert(1)</script>\nZweite Zeile');
+    // Eigene Gestaltung je Link durch „Medien verwalten“
+    const own = { accent: 'gruen', header: true, blocks: [{ type: 'upload' }, { type: 'note', text: 'Danke!', style: 'info' }] };
+    expect((await editor.put(`/upload-links/${col.link.id}/design`, { design: own })).status).toBe(200);
+    expect((await anonymous.get(`/public/upload/${token}`)).json.design).toMatchObject({ accent: 'gruen', header: true });
+    expect((await editor.get(`/upload-links/${col.link.id}/design`)).json.own.accent).toBe('gruen');
+    expect((await editor.put(`/upload-links/${col.link.id}/design`, { design: null })).status).toBe(200);
+    expect((await anonymous.get(`/public/upload/${token}`)).json.design.accent).toBe('blau');
+    expect(await one(`SELECT 1 FROM audit_events WHERE action = 'design.updated'`)).not.toBeNull();
+    // Nicht verwendete Bilder (älter als ein Tag) räumt der Hintergrunddienst auf; verwendete bleiben
+    const { cleanupDesignImages } = await import('../src/routes/media-design.js');
+    const unused = (await editor.raw('POST', '/media/design-images', multipart({ name: 'u.png', data: await sharp({ create: { width: 20, height: 20, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } } }).png().toBuffer(), type: 'image/png' }))).json.id;
+    await pool.query(`UPDATE design_images SET created_at = now() - interval '2 days'`);
+    await cleanupDesignImages();
+    expect(await one(`SELECT 1 FROM design_images WHERE id = $1`, [unused])).toBeNull();
+    expect(await one(`SELECT 1 FROM design_images WHERE id = $1`, [imageId])).not.toBeNull();
+    await admin.put('/media/design', { design: null });
+  });
+});
 
 describe('In-App-Updates aus GitHub-Releases', () => {
   const work = fs.mkdtempSync(path.join(os.tmpdir(), 'bc-upd-it-'));

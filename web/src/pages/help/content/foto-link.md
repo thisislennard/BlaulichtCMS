@@ -61,6 +61,16 @@ Das Menü eines Links bietet außerdem **Angaben der Hochladenden löschen**: Na
 - **Was würde gelöscht?** unter Einstellungen → Datenschutz zeigt vorab, welche Sammlungen und wie viele Einträge fällig sind. Jeder Löschlauf steht im Audit (`retention.run`, je Sammlung `collection.deleted`).
 - In **Sicherungen** bleiben gelöschte Daten bis zu deren Ablauf (rund 4 Monate, siehe Hilfe → Sicherung).
 
+## Gestaltung der Upload-Seite
+
+Unter [Medien → Gestaltung](/medien/gestaltung) lässt sich die Upload-Seite wie in LiFeOS aus **Bausteinen** zusammenstellen: Titelbild, Logo, Überschrift, Text, Bild mit Bildunterschrift, Hinweisbox, Trennlinie, Begrüßungstext des Links und der Upload-Bereich (Pflicht, genau einmal; höchstens 30 Bausteine). Dazu eine **Akzentfarbe** aus einer festen Auswahl mit gutem Kontrast und der Schalter für den Kopfbereich (Organisation, Titel, Zweck, Gültigkeit). Die **Vorschau** zeigt die Seite wahlweise als Handy oder Rechner.
+
+- In Texten stehen **{thema}** für den Titel der Sammlung und **{datum}** für ihr Veranstaltungsdatum.
+- Texte bleiben reiner Text – HTML, Formatierungen oder Skripte werden nicht ausgeführt, sondern als Text gezeigt.
+- Bilder (JPEG, PNG, WebP bis 15 MB) werden beim Hochladen neu kodiert, höchstens 2400 Pixel groß und ohne Standort- und Kameradaten gespeichert. Nicht mehr verwendete Bilder entfernt der Hintergrunddienst nach einem Tag.
+- Der **Datenschutzabschnitt** steht immer am Ende und lässt sich nicht entfernen.
+- Die Standardgestaltung gilt für alle Links ohne eigene und ändert, wer „Medien administrieren“ hat. Für einzelne Links: Menü des Links → **Gestaltung der Seite** („Medien verwalten“); „Standard verwenden“ verwirft die eigene Gestaltung.
+
 ## Benachrichtigungen
 
 Die Glocke meldet zu Medien:

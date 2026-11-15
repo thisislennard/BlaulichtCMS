@@ -28,6 +28,7 @@ import { refreshDueWarnfeeds } from './connections/warnfeed.js';
 import { pollDueFeuersoftware } from './connections/feuersoftware.js';
 import { runRetention } from './lib/retention.js';
 import { checkExpiringLinks, checkStorage } from './lib/media-notify.js';
+import { cleanupDesignImages } from './routes/media-design.js';
 import { checkForUpdate, updateCheckDue } from './updates/github.js';
 
 process.env.BLAULICHTCMS_ROLE ??= 'worker';
@@ -134,6 +135,7 @@ async function cleanup() {
   await cleanupUploadSessions().catch((e) => log('warn', 'cleanup', e.message));
   await cleanupExports().catch((e) => log('warn', 'cleanup', e.message));
   await cleanupMediaTokens().catch((e) => log('warn', 'cleanup', e.message));
+  await cleanupDesignImages().catch((e) => log('warn', 'cleanup', e.message));
   // Löschfristen für Sammlungen, Medien und weitere personenbezogene Daten (#97)
   await runRetention({ dryRun: false, settings: s }).catch((e) => log('warn', 'retention', e.message));
   // Liegengebliebene temporäre Upload-Dateien (abgebrochene Übertragungen) entfernen

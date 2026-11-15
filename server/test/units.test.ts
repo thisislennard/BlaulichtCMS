@@ -1082,3 +1082,22 @@ describe('Video-Dekodierprüfung (Medien wie LiFeOS)', () => {
     expect(decodeErrors('[h264 @ 0x2] Invalid NAL unit size\n\n', streams)).toEqual(['[h264 @ 0x2] Invalid NAL unit size']);
   });
 });
+
+describe('Gestaltung der Upload-Seite', () => {
+  it('prüft Bausteine streng und ersetzt Platzhalter nur als Text', async () => {
+    const { cleanDesign, renderText, resolveDesign } = await import('../src/media/design.js');
+    const img = '0b6d2c1e-9a7f-4b8e-8f00-0123456789ab';
+    const d = cleanDesign({ accent: 'gruen', blocks: [{ type: 'heading', text: '  Hallo\n{thema}  ' }, { type: 'banner', image: img }, { type: 'upload', extra: 'x' }] });
+    expect(d).toEqual({ accent: 'gruen', header: true, blocks: [{ type: 'heading', text: 'Hallo {thema}', size: 'l' }, { type: 'banner', image: img, alt: '', height: 'm' }, { type: 'upload' }] });
+    expect(() => cleanDesign({ blocks: [] })).toThrow(/Upload-Bereich/);
+    expect(() => cleanDesign({ blocks: [{ type: 'text', text: 'x' }] })).toThrow(/genau einmal/);
+    expect(() => cleanDesign({ blocks: [{ type: 'upload' }, { type: 'logo' }] })).toThrow(/Bild/);
+    expect(() => cleanDesign({ blocks: [{ type: 'upload' }, { type: 'heading', size: 'xl' }] })).toThrow(/Auswahl/);
+    expect(() => cleanDesign({ blocks: [{ type: 'upload' }, { type: 'text', text: 'x'.repeat(2001) }] })).toThrow(/zu lang/);
+    expect(() => cleanDesign({ blocks: Array.from({ length: 31 }, () => ({ type: 'divider' })) })).toThrow(/30/);
+    expect(() => cleanDesign({ accent: 'pink', blocks: [{ type: 'upload' }] })).toThrow(/Akzentfarbe/);
+    expect(renderText('{thema} – {datum}', 'Fest', '2026-07-04')).toBe('Fest – 04.07.2026');
+    expect(renderText('{datum}', 'Fest', null)).toBe('');
+    expect(resolveDesign(d, '<b>Fest</b>', null).blocks[0].text).toBe('Hallo <b>Fest</b>');
+  });
+});

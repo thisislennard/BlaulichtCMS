@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link } from 'react-router';
+import { Link, useNavigate } from 'react-router';
 import { post, patch } from '../../api/client';
 import type { UploadLink } from '../../api/types';
 import { ShareActions } from '../../components/share';
@@ -259,6 +259,7 @@ export function UploadLinksCard({ collection, links, folders = [], onChanged }: 
   const ask = useConfirm();
   const toast = useToast();
   const toastError = useErrorToast();
+  const navigate = useNavigate();
   const { me } = useAuth();
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<UploadLink | null>(null);
@@ -312,6 +313,7 @@ export function UploadLinksCard({ collection, links, folders = [], onChanged }: 
                     label={`Aktionen für ${l.label || 'Upload-Link'}`}
                     items={[
                       { label: 'Bearbeiten', icon: 'Pencil', onClick: () => setEditing(l) },
+                      { label: 'Gestaltung der Seite', icon: 'Palette', onClick: () => navigate(`/medien/gestaltung?link=${l.id}`) },
                       l.state === 'paused'
                         ? { label: 'Fortsetzen', icon: 'Play', onClick: () => act(() => post(`/upload-links/${l.id}/resume`), 'Link fortgesetzt') }
                         : l.state === 'active'

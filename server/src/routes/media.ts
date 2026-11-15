@@ -26,6 +26,8 @@ import { cleanFields, cleanUploader, DEFAULT_FIELDS, linkIsFull, type UploaderIn
 import { assertLinkRoom, assertUnlocked, linkClosedFull, linkUsage, setUnlockCookie } from '../media/public-link.js';
 import { acceptAttr, cleanTypeList, effectiveTypes, typeLabels } from '../media/types.js';
 import { logPublicEvent, type PublicSecurityEvent } from '../lib/public-security.js';
+import { resolveDesign } from '../media/design.js';
+import { effectiveDesign } from './media-design.js';
 import { assertFolder, loadFolders } from './media-organize.js';
 import { freeBytes, mediaPaths, moveFile, SizeLimitError, streamToTemp } from '../media/storage.js';
 
@@ -481,7 +483,7 @@ export function publicRateLimit(max: number) {
 
 export async function loadPublicLink(token: string, ip?: string) {
   const l = await one<any>(
-    `SELECT l.*, c.title AS c_title, c.purpose AS c_purpose, c.note AS c_note, COALESCE(c.archived_at, c.deleted_at) AS c_archived, c.id AS c_id, c.max_files AS c_max_files, c.max_bytes AS c_max_bytes
+    `SELECT l.*, c.title AS c_title, c.purpose AS c_purpose, c.note AS c_note, c.event_date AS c_event_date, COALESCE(c.archived_at, c.deleted_at) AS c_archived, c.id AS c_id, c.max_files AS c_max_files, c.max_bytes AS c_max_bytes
        FROM upload_links l JOIN collections c ON c.id = l.collection_id WHERE l.token_hash = $1`,
     [sha256Hex(token)],
   );
@@ -1045,7 +1047,10 @@ export async function mediaRoutes(app: FastifyInstance) {
     const types = effectiveTypes(s['media.allowed_types'], l.allowed_types);
     const fields = cleanFields(l.fields);
     const usage = await linkUsage(l.id);
+    // Gestaltung (Paket 10): eigene des Links oder Standard, Platzhalter {thema}/{datum} ersetzt; nur Text, nie HTML
+    const design = resolveDesign(await effectiveDesign(l.design), l.c_title, l.c_event_date);
     return {
+      design,
       fields,
       consent_required: !!l.consent_required,
       consent_text: l.consent_required ? l.consent_text : '',

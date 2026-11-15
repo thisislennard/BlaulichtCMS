@@ -5,6 +5,7 @@ import { Button, cx, Input, Notice, Spinner, Textarea } from '../../components/u
 import { Icon } from '../../components/ui/Icon';
 import { fmtBytes, fmtDateTime } from '../../lib/format';
 import { uploadResumable } from '../../lib/upload';
+import { DesignedPage, type UploadDesign } from './DesignedPage';
 
 type FieldMode = 'off' | 'optional' | 'required';
 
@@ -34,6 +35,8 @@ export interface LinkInfo {
   types?: string;
   /** Monate, nach denen Angaben der Hochladenden entfernt werden (0 = keine Frist) */
   uploader_months?: number;
+  /** Gestaltung der Seite (Paket 10; Platzhalter schon ersetzt) */
+  design?: UploadDesign;
 }
 
 interface PrivacyInfo {
@@ -143,7 +146,8 @@ export function UploadArea({ info, token, preview, accent }: { info: LinkInfo; t
   const touch = useTouch();
   const fields = info.fields ?? { name: 'off', email: 'off', note: 'optional', place: 'off', date: 'off' };
   const perUpload = info.max_files_per_upload ?? 0;
-  const accentStyle = accent ? { backgroundColor: accent, borderColor: accent, color: '#ffffff' } : undefined;
+  // Akzentfarbe der Gestaltung: nur Werte aus der festen Palette (Tokens), gesetzt über das style-Attribut (CSP erlaubt)
+  const accentStyle = accent ? { backgroundColor: `var(--bc-upload-accent-${accent})`, borderColor: `var(--bc-upload-accent-${accent})`, color: 'var(--bc-upload-accent-on)' } : undefined;
 
   const update = (key: string, patch: Partial<Item>) => setItems((list) => list.map((i) => (i.key === key ? { ...i, ...patch } : i)));
 
@@ -431,7 +435,8 @@ export function UploadPage() {
             <p className="m-0 text-fg-muted">{error.text}</p>
           </div>
         )}
-        {info && (
+        {info && info.design && <DesignedPage info={info} design={info.design} token={token} />}
+        {info && !info.design && (
           <>
             <DefaultHeader info={info} />
             {info.setup_hint && (

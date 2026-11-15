@@ -21,6 +21,7 @@ const CollectionDetail = lazy(() => import('./pages/media/CollectionDetail'));
 const MediaSearch = lazy(() => import('./pages/media/MediaSearch'));
 const Trash = lazy(() => import('./pages/media/Trash'));
 const MediaAdmin = lazy(() => import('./pages/media/MediaAdmin'));
+const DesignEditor = lazy(() => import('./pages/media/DesignEditor'));
 const Sites = lazy(() => import('./pages/channels/Sites'));
 const Users = lazy(() => import('./pages/admin/Users'));
 const SystemStatus = lazy(() => import('./pages/admin/SystemStatus'));
@@ -109,6 +110,7 @@ const router = createBrowserRouter([
       { path: 'medien/dateien', element: <Page perm={['media.read']}><MediaSearch /></Page> },
       { path: 'medien/papierkorb', element: <Page perm={['media.manage']}><Trash /></Page> },
       { path: 'medien/verwaltung', element: <Page perm={['media.admin']}><MediaAdmin /></Page> },
+      { path: 'medien/gestaltung', element: <Page perm={['media.manage']}><DesignEditor /></Page> },
       { path: 'medien/:id', element: <Page perm={['media.read']}><CollectionDetail /></Page> },
       { path: 'quellen', element: <Page perm={['post.read']}><Sources /></Page> },
       { path: 'banner', element: <Page perm={['post.read']}><Banners /></Page> },

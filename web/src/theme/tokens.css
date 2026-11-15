@@ -38,6 +38,12 @@
   --bc-site-warning-bg: #fff4e0; --bc-site-warning-fg: #4a2a00; --bc-site-warning-line: #b25e00;
   --bc-site-danger-bg: #fde8ea;  --bc-site-danger-fg: #5a0710;  --bc-site-danger-line: #c8102e;
 
+  /* Akzentfarben der Upload-Seiten-Gestaltung (feste Palette, Kontrast zu weißer Schrift mind. 4,5:1,
+     unabhängig vom Farbmodus – wie die Gestaltung in LiFeOS) */
+  --bc-upload-accent-rot: #c62000;      --bc-upload-accent-dunkelrot: #8b1a10; --bc-upload-accent-blau: #1d4ed8;
+  --bc-upload-accent-gruen: #15803d;    --bc-upload-accent-orange: #b93d0a;    --bc-upload-accent-anthrazit: #374151;
+  --bc-upload-accent-on: #ffffff;
+
   /* Typo */
   --bc-font: 'IBM Plex Sans', system-ui, 'Segoe UI', sans-serif;
   --bc-font-mono: 'IBM Plex Mono', ui-monospace, monospace;

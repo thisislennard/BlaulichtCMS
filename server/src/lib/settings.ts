@@ -104,6 +104,8 @@ export const DEFAULT_SETTINGS = {
   'media.blocked_days': 30,
   /** Sicherheitsereignisse der öffentlichen Seiten so viele Tage aufbewahren (0 = immer) – wie press_security_log_days. */
   'media.security_log_days': 365,
+  /** Standard-Gestaltung der Upload-Seite (media/design.ts; null = eingebauter Standard) – eigene Seite, nicht allgemein änderbar. */
+  'media.upload_design': null as null | Record<string, unknown>,
   /** Global erlaubte Dateitypen (Schlüssel aus media/types.ts); je Link weiter einschränkbar. */
   'media.allowed_types': ['jpeg', 'png', 'webp', 'heic', 'avif', 'gif', 'mp4', 'mov', 'webm', '3gp'] as string[],
   /** Benachrichtigungen der Medien (neue Dateien, Link läuft ab, Kontingent, Speicher) – lib/media-notify.ts. */

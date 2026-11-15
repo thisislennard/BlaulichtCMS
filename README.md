@@ -61,6 +61,9 @@ flowchart LR
   erzeugen (alter Link und QR-Code sofort ungültig), eigener Begrüßungstext je Link.
 - **Optionen je Link:** Grenzen (Uploads, Dateien je Upload, Größe), erlaubte Dateitypen, abgefragte Angaben (Name,
   E-Mail, Ort, Datum – je aus, freiwillig oder Pflicht, mit Löschfrist), Bestätigung vor dem Upload, optional Passwort.
+- **Gestaltung der Upload-Seite:** Titelbild, Logo, Überschriften, Texte, Bilder mit Unterschrift, Hinweisboxen,
+  Akzentfarbe mit gutem Kontrast, Platzhalter {thema}/{datum}, Live-Vorschau für Handy und Rechner – als Standard und
+  je Link; der Datenschutzabschnitt bleibt immer dabei.
 - **Upload am Handy:** großer Knopf für die Galerie, „Foto aufnehmen“ und „Video aufnehmen“ für die Kamera, mehrere
   Dateien auf einmal, Fortschritt je Datei, unterbrochene Uploads werden fortgesetzt
   (auch große Videos), Vorgangsnummer für Rückfragen, Hinweis für das Team im Feld.

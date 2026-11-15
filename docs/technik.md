@@ -66,6 +66,7 @@ Details und Einrichtung: [docs/integrationen.md](integrationen.md), Hilfe → *V
 | Websites | Schlüssel je Website (nur Prüfsumme gespeichert), sofort widerrufbar; die Bridge ruft nur aus, nur per HTTPS |
 | Datenbank | nur über Unix-Socket im Container; die Anwendung arbeitet mit einer Rolle ohne Superuser- und DDL-Rechte |
 | Audit | Hash-Kette gegen nachträgliche Änderungen, optional an Syslog weitergeleitet; Alarmierung bei Sicherheitsereignissen; eigenes Protokoll der Sicherheitsereignisse der Upload-Seiten (gekürzter IP-Hash, gedrosselt) |
+| Gestaltung der Upload-Seite | festes Bausteinschema (Server prüft Typen, Längen, genau einen Upload-Bereich), Texte nur als Text dargestellt (kein HTML), Akzentfarben nur aus einer festen Palette (Tokens, per style-Attribut im Rahmen der CSP), Bilder neu kodiert ohne Metadaten und nur über zufällige ID abrufbar; Datenschutzabschnitt nicht abschaltbar |
 | Inhaltsprüfung | Typ am Dateiinhalt, Bilder vollständig dekodiert mit Pixelgrenze, Videos: Codec-Liste, Länge, Auflösung und Dekodierprüfung (Anfang Bild für Bild, danach Schlüsselbilder) – alle Grenzen einstellbar |
 | Prüfbefunde | Dateien mit Befund werden gesperrt (Quarantäne, nie ausgeliefert, erneut prüfbar); „Trotzdem freigeben“ nur für Videos mit reinem Dekodierbefund und nur mit „Medien administrieren“, Begründung, Audit und Sicherheitsmeldung; Schadsoftware wird sofort gelöscht |
 | Sicherungen | verschlüsselt (AES-256-GCM) mit eigenem Schlüssel, regelmäßige Probe-Wiederherstellung |
