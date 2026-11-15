@@ -6,8 +6,8 @@ import { Button, EmptyState, ErrorBox, Skeleton, SkeletonRows, cx } from '../../
 import { Icon } from '../../components/ui/Icon';
 import { useAuth } from '../../lib/auth';
 import { t } from '../../i18n';
-import { CHAPTERS, CONTENT, GROUPS, chapterBySlug, chapterSummary, chapterTitle, groupTitle, headingsOf, type Chapter, type Heading } from './chapters';
-import { Markdown } from './Markdown';
+import { CHAPTERS, GROUPS, chapterBySlug, chapterDoc, chapterSummary, chapterTitle, groupTitle, type Chapter, type Heading } from './chapters';
+import { ChapterContent } from './Markdown';
 import { markdownDocs, search, type SearchHit } from './search';
 import './help.css';
 
@@ -258,29 +258,48 @@ function Toc({ headings }: { headings: Heading[] }) {
   );
 }
 
-/** Springt zum Anker in der Adresse, sobald der Inhalt da ist. */
+/**
+ * Springt zum Anker in der Adresse, sobald der Inhalt da ist – beim Laden (auch nach dem Nachladen der Seite), bei
+ * Navigation im Router und bei reinen Ankerwechseln (Klick auf „#…“, Zurück/Vor). Das Ziel erhält den Fokus, damit
+ * Tastatur und Screenreader dort weitermachen.
+ */
 function useHashScroll(ready: boolean, key: string) {
   const { hash } = useLocation();
   useEffect(() => {
     if (!ready) return;
-    if (!hash) {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const jump = (h: string, smooth: boolean) => {
+      clearTimeout(timer);
+      if (!h || h === '#') return false;
+      let id = h.slice(1);
+      try {
+        id = decodeURIComponent(id);
+      } catch {
+        /* ungültige Kodierung: Anker wie geschrieben */
+      }
+      let tries = 0;
+      const tick = () => {
+        const el = document.getElementById(id);
+        if (el) {
+          const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+          el.scrollIntoView({ block: 'start', behavior: smooth && !reduce ? 'smooth' : 'auto' });
+          if (!el.hasAttribute('tabindex')) el.setAttribute('tabindex', '-1');
+          el.focus({ preventScroll: true });
+        } else if (tries++ < 40) timer = setTimeout(tick, 50);
+      };
+      tick();
+      return true;
+    };
+    if (!jump(hash, false)) {
       window.scrollTo({ top: 0 });
       document.getElementById('main')?.scrollTo?.({ top: 0 });
-      return;
     }
-    const id = decodeURIComponent(hash.slice(1));
-    let tries = 0;
-    const tick = () => {
-      const el = document.getElementById(id);
-      if (el) {
-        el.scrollIntoView({ block: 'start' });
-        if (el instanceof HTMLElement) {
-          el.setAttribute('tabindex', '-1');
-          el.focus({ preventScroll: true });
-        }
-      } else if (tries++ < 20) setTimeout(tick, 50);
+    const onHash = () => jump(window.location.hash, true);
+    window.addEventListener('hashchange', onHash);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('hashchange', onHash);
     };
-    tick();
   }, [ready, hash, key]);
 }
 
@@ -305,10 +324,10 @@ function PrevNext({ slug }: { slug: string }) {
 }
 
 function ChapterView({ chapter }: { chapter: Chapter }) {
-  const md = CONTENT[chapter.slug] ?? '';
-  const headings = useMemo<Heading[]>(() => headingsOf(md), [md]);
+  const doc = useMemo(() => chapterDoc(chapter.slug), [chapter.slug]);
+  const headings: Heading[] = doc.headings;
   useHashScroll(true, chapter.slug);
-  const body: ReactNode = <Markdown source={md} />;
+  const body: ReactNode = <ChapterContent slug={chapter.slug} doc={doc} />;
 
   return (
     <div className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_210px]">

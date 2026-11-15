@@ -116,18 +116,107 @@ export interface Heading {
   id: string;
 }
 
-/** H2/H3 eines Markdown-Textes (ohne Codeblöcke). */
-export function headingsOf(md: string): Heading[] {
-  const out: Heading[] = [];
+export interface SubHeading {
+  level: 3 | 4;
+  text: string;
+  id: string;
+  /** Zeile innerhalb von `Section.body` (1-basiert, wie remark sie zählt) */
+  line: number;
+}
+
+export interface Section {
+  /** laufende Nummer (1, 2, …) */
+  number: number;
+  id: string;
+  /** Überschrift ohne Auszeichnung */
+  text: string;
+  /** Überschrift mit Markdown-Auszeichnung (für die Darstellung) */
+  raw: string;
+  /** Markdown zwischen dieser und der nächsten H2 */
+  body: string;
+  subs: SubHeading[];
+}
+
+/** Suchabschnitt: Text unter einer H2/H3 bis zur nächsten H2/H3 (H4 zählt zum Abschnitt darüber). */
+export interface Chunk {
+  id: string;
+  heading: string;
+  text: string;
+}
+
+export interface ChapterDoc {
+  /** Markdown vor der ersten H2 (Einleitung) */
+  intro: string;
+  sections: Section[];
+  /** H2/H3 in Reihenfolge (Inhaltsverzeichnis) */
+  headings: Heading[];
+  /** Einleitung (id = '') und je H2/H3 ein Abschnitt (Volltextsuche) */
+  chunks: Chunk[];
+}
+
+const isFence = (line: string) => /^\s*(```|~~~)/.test(line);
+const HEADING = /^(#{2,4})\s+(.+?)\s*#*\s*$/;
+
+/**
+ * Zerlegt ein Kapitel in Einleitung und nummerierte Abschnitte (je H2). Anker sind stabil (Umlaute → ae/oe/ue/ss) und
+ * innerhalb des Kapitels eindeutig: Doppelte Überschriften erhalten -2, -3 … Dieselbe Zerlegung nutzen Darstellung,
+ * Inhaltsverzeichnis und Suche, damit Suchtreffer genau auf den Abschnitt springen.
+ */
+export function parseChapter(md: string): ChapterDoc {
+  const lines = md.split(/\r?\n/);
+  const used = new Set<string>();
+  const uniqueId = (text: string) => {
+    const base = slugify(text) || 'abschnitt';
+    let id = base;
+    for (let n = 2; used.has(id); n++) id = `${base}-${n}`;
+    used.add(id);
+    return id;
+  };
+  const marks: { index: number; level: 2 | 3 | 4; text: string; raw: string; id: string }[] = [];
   let fence = false;
-  for (const line of md.split(/\r?\n/)) {
-    if (/^\s*(```|~~~)/.test(line)) fence = !fence;
-    if (fence) continue;
-    const m = /^(##|###)\s+(.+?)\s*#*\s*$/.exec(line);
+  lines.forEach((line, index) => {
+    if (isFence(line)) fence = !fence;
+    if (fence) return;
+    const m = HEADING.exec(line);
     if (m) {
       const text = stripInline(m[2]);
-      out.push({ level: m[1].length as 2 | 3, text, id: slugify(text) });
+      marks.push({ index, level: m[1].length as 2 | 3 | 4, text, raw: m[2], id: uniqueId(text) });
     }
+  });
+  const nl = '\n';
+  const h2 = marks.filter((m) => m.level === 2);
+  const intro = lines.slice(0, h2.length ? h2[0].index : lines.length).join(nl).trim();
+  const sections: Section[] = h2.map((m, i) => {
+    const start = m.index + 1;
+    const end = i + 1 < h2.length ? h2[i + 1].index : lines.length;
+    return {
+      number: i + 1,
+      id: m.id,
+      text: m.text,
+      raw: m.raw,
+      body: lines.slice(start, end).join(nl),
+      subs: marks.filter((s) => s.level > 2 && s.index > m.index && s.index < end).map((s) => ({ level: s.level as 3 | 4, text: s.text, id: s.id, line: s.index - start + 1 })),
+    };
+  });
+  const toc = marks.filter((m) => m.level <= 3);
+  const chunks: Chunk[] = [{ id: '', heading: '', text: lines.slice(0, toc.length ? toc[0].index : lines.length).join(nl) }];
+  toc.forEach((m, i) => chunks.push({ id: m.id, heading: m.text, text: lines.slice(m.index + 1, i + 1 < toc.length ? toc[i + 1].index : lines.length).join(nl) }));
+  return { intro, sections, headings: toc.map((m) => ({ level: m.level as 2 | 3, text: m.text, id: m.id })), chunks };
+}
+
+const parsed = new Map<string, ChapterDoc>();
+
+/** Zerlegtes Kapitel (zwischengespeichert). */
+export function chapterDoc(slug: string): ChapterDoc {
+  let d = parsed.get(slug);
+  if (!d) {
+    d = parseChapter(CONTENT[slug] ?? '');
+    parsed.set(slug, d);
   }
-  return out;
+  return d;
+}
+
+/** H2/H3 eines Markdown-Textes (ohne Codeblöcke). */
+export function headingsOf(md: string): Heading[] {
+  return parseChapter(md).headings;
 }

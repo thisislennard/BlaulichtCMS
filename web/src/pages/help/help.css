@@ -9,10 +9,56 @@
 #help-article [tabindex='-1']:focus { outline: none; box-shadow: none; }
 .help-prose input[type=checkbox] { margin-right: 6px; vertical-align: -1px; }
 .help-prose li:has(> input[type=checkbox]) { list-style: none; margin-left: -18px; }
+
+/* Kapitel im Stil einer Anleitung: Inhaltsleiste (Pillen), nummerierte Abschnittskarten, Schrittlisten. Nur Tokens,
+   neutral – Rot bleibt Aktionen vorbehalten (docs/design-leitstand.md). */
+.help-intro { margin-bottom: 4px; font-size: 15px; }
+.help-toc { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 20px; padding: 0; list-style: none; }
+.help-toc a { display: inline-flex; align-items: center; gap: 8px; min-height: 36px; padding: 5px 13px 5px 5px;
+  border: 1px solid var(--bc-border); border-radius: 999px; background: var(--bc-card); color: var(--bc-text);
+  font-size: 13px; line-height: 1.3; text-decoration: none; }
+.help-toc a:hover { background: var(--bc-raised); color: var(--bc-text); }
+.help-toc a:focus-visible { outline: none; box-shadow: var(--bc-ring); }
+.help-toc .help-num { width: 26px; height: 26px; flex-basis: 26px; font-size: 11.5px; background: var(--bc-raised); }
+.help-num { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 30px; width: 30px; height: 30px;
+  border-radius: 999px; border: 1px solid var(--bc-border); background: var(--bc-bg); color: var(--bc-text);
+  font-family: var(--bc-font-mono); font-size: 12.5px; font-weight: 500; letter-spacing: 0; }
+.help-section { border: 1px solid var(--bc-border); border-radius: var(--bc-r-card); background: var(--bc-card);
+  padding: 18px 20px 6px; margin: 0 0 16px; scroll-margin-top: 72px; }
+.help-section:target, .help-section:focus { border-color: var(--bc-text-2); }
+.help-section > h2 { display: flex; align-items: center; gap: 10px; margin: 0 0 14px; font-size: 17px; font-weight: 600;
+  letter-spacing: -0.01em; line-height: 1.35; }
+.help-section > .help-prose > :first-child { margin-top: 0; }
+.help-prose h3, .help-prose h4 { scroll-margin-top: 72px; }
+#help-article .help-prose h3 { margin-top: 22px; padding-top: 14px; border-top: 1px solid var(--bc-border); }
+#help-article .help-prose > h3:first-child { border-top: 0; padding-top: 0; }
+@media (min-width: 768px) {
+  .help-section, .help-prose h3, .help-prose h4 { scroll-margin-top: 124px; }
+}
+@media (max-width: 575px) { .help-section { padding: 14px 14px 4px; } }
+.help-heading { display: flex; align-items: center; gap: 8px; }
+.help-heading > span:first-child:not(.help-num) { min-width: 0; }
+.help-anchor-btn { display: inline-flex; align-items: center; gap: 5px; flex: 0 0 auto; min-width: 28px; height: 28px;
+  padding: 0 6px; justify-content: center; border-radius: var(--bc-r-chip); color: var(--bc-text-2); background: none;
+  border: 0; font-weight: 400; font-size: 13px; opacity: 0; cursor: pointer; }
+.help-heading:hover .help-anchor-btn, .help-anchor-btn:focus-visible, .help-anchor-btn[data-copied] { opacity: 1; }
+.help-anchor-btn:hover { background: var(--bc-raised); color: var(--bc-text); }
+.help-anchor-btn:focus-visible { outline: none; box-shadow: var(--bc-ring); }
+@media (hover: none) { .help-anchor-btn { opacity: 1; } }
+/* Nummerierte Listen auf oberster Ebene als Schritte */
+#help-article .help-prose > ol { list-style: none; padding-left: 0; counter-reset: help-step; }
+#help-article .help-prose > ol > li { counter-increment: help-step; position: relative; padding-left: 36px; margin: 0 0 10px; min-height: 24px; }
+#help-article .help-prose > ol > li::before { content: counter(help-step); position: absolute; left: 0; top: 0; width: 24px; height: 24px;
+  border-radius: 999px; border: 1px solid var(--bc-border); background: var(--bc-raised); color: var(--bc-text);
+  font-family: var(--bc-font-mono); font-size: 11.5px; font-weight: 500; display: flex; align-items: center; justify-content: center; }
+/* Hinweisboxen: neutral; Warnung, Tipp und Gefahr färbt Markdown.tsx über die Status-Tokens */
+#help-article .help-prose blockquote { border-left-color: var(--bc-text-2); background: var(--bc-raised); }
 @media print {
   body:has(#help-article) * { visibility: hidden !important; }
   #help-article, #help-article * { visibility: visible !important; color: black !important; background: transparent !important; box-shadow: none !important; }
   #help-article { position: absolute; left: 0; top: 0; width: 100%; max-width: none; }
-  #help-article pre, #help-article th, #help-article td, #help-article blockquote, #help-article section { border-color: #999 !important; }
+  #help-article .help-section { break-inside: avoid-page; }
+  #help-article .help-anchor-btn { display: none !important; }
+  #help-article pre, #help-article th, #help-article td, #help-article blockquote, #help-article section, #help-article .help-num, #help-article ol > li::before { border-color: #999 !important; }
   #help-article a { text-decoration: none !important; }
 }

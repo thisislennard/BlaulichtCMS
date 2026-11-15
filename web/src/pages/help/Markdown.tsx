@@ -1,6 +1,7 @@
-/* Markdown-Darstellung der Hilfe: Überschriften mit Anker, interne Links über den Router,
-   Codeblöcke mit Kopierknopf, Hinweisboxen und Tastenkürzel (`kbd:Strg+K`). */
-import { isValidElement, type ReactNode } from 'react';
+/* Markdown-Darstellung der Hilfe: Kapitel als nummerierte Abschnittskarten mit Inhaltsleiste, Überschriften mit
+   stabilem Anker und „Link kopieren“, interne Links über den Router, Codeblöcke mit Kopierknopf, Hinweisboxen und
+   Tastenkürzel (`kbd:Strg+K`). */
+import { createContext, isValidElement, useContext, useRef, useState, type ReactNode } from 'react';
 import ReactMarkdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Link } from 'react-router';
@@ -8,7 +9,7 @@ import { Kbd, cx } from '../../components/ui/core';
 import { CopyButton } from '../../components/ui/overlays';
 import { Icon } from '../../components/ui/Icon';
 import { t } from '../../i18n';
-import { slugify } from './chapters';
+import { slugify, type ChapterDoc, type SubHeading } from './chapters';
 
 /** Reiner Text eines React-Baums (für Anker und Kopierknopf). */
 export function textOf(node: ReactNode): string {
@@ -19,16 +20,69 @@ export function textOf(node: ReactNode): string {
   return '';
 }
 
-function Heading({ level, children }: { level: 2 | 3 | 4; children: ReactNode }) {
-  const text = textOf(children);
-  const id = slugify(text);
-  const Tag = (`h${level}` as 'h2' | 'h3' | 'h4');
+/** Kapitel, in dem gerade gerendert wird (für kopierbare Links), und Anker der Unterüberschriften je Zeile. */
+const ChapterCtx = createContext<{ slug: string | null; subs: Map<number, SubHeading> }>({ slug: null, subs: new Map() });
+
+/** Vollständige Adresse eines Abschnitts, z. B. https://…/hilfe/verbindungen#meta-app-anlegen */
+export function sectionUrl(slug: string, id: string) {
+  return `${window.location.origin}/hilfe/${slug}#${id}`;
+}
+
+async function copyText(value: string) {
+  try {
+    await navigator.clipboard.writeText(value);
+  } catch {
+    const ta = document.createElement('textarea');
+    ta.value = value;
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    ta.remove();
+  }
+}
+
+/** Kleiner Knopf an Überschriften: kopiert den Direktlink zum Abschnitt. */
+export function CopyLink({ slug, id, title }: { slug: string; id: string; title: string }) {
+  const [done, setDone] = useState(false);
+  const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
   return (
-    <Tag id={id} className="group scroll-mt-20">
-      {children}
-      <a href={`#${id}`} className="ml-2 !no-underline text-fg-muted opacity-0 group-hover:opacity-100 focus:opacity-100 print:hidden" aria-label={t('help.anchorLink', { title: text })}>
-        #
-      </a>
+    <button
+      type="button"
+      className="help-anchor-btn print:hidden"
+      data-copied={done || undefined}
+      aria-label={t('help.copyLink', { title })}
+      title={t('help.copyLinkShort')}
+      onClick={async () => {
+        await copyText(sectionUrl(slug, id));
+        setDone(true);
+        clearTimeout(timer.current);
+        timer.current = setTimeout(() => setDone(false), 1800);
+      }}
+    >
+      <Icon name={done ? 'Check' : 'Link2'} size={14} />
+      <span aria-live="polite" className={done ? 'text-meta' : 'sr-only'}>
+        {done ? t('help.linkCopied') : ''}
+      </span>
+    </button>
+  );
+}
+
+function Heading({ level, line, children }: { level: 2 | 3 | 4; line?: number; children: ReactNode }) {
+  const { slug, subs } = useContext(ChapterCtx);
+  const text = textOf(children);
+  const sub = line != null ? subs.get(line) : undefined;
+  const id = sub?.id ?? slugify(text);
+  const Tag = `h${level}` as 'h2' | 'h3' | 'h4';
+  return (
+    <Tag id={id} className="help-heading group">
+      <span>{children}</span>
+      {slug && level <= 3 ? (
+        <CopyLink slug={slug} id={id} title={text} />
+      ) : (
+        <a href={`#${id}`} className="help-anchor-btn !no-underline print:hidden" aria-label={t('help.anchorLink', { title: text })}>
+          #
+        </a>
+      )}
     </Tag>
   );
 }
@@ -92,14 +146,16 @@ function InlineCode({ className, children }: { className?: string; children?: Re
 }
 
 const components: Components = {
-  h1: ({ children }) => <Heading level={2}>{children}</Heading>,
-  h2: ({ children }) => <Heading level={2}>{children}</Heading>,
-  h3: ({ children }) => <Heading level={3}>{children}</Heading>,
-  h4: ({ children }) => <Heading level={4}>{children}</Heading>,
+  h1: ({ children, node }) => <Heading level={2} line={node?.position?.start.line}>{children}</Heading>,
+  h2: ({ children, node }) => <Heading level={2} line={node?.position?.start.line}>{children}</Heading>,
+  h3: ({ children, node }) => <Heading level={3} line={node?.position?.start.line}>{children}</Heading>,
+  h4: ({ children, node }) => <Heading level={4} line={node?.position?.start.line}>{children}</Heading>,
   a: ({ href, children }) => <MdLink href={href}>{children}</MdLink>,
   blockquote: ({ children }) => <Callout>{children}</Callout>,
   pre: ({ children }) => <CodeBlock>{children}</CodeBlock>,
   code: ({ className, children }) => <InlineCode className={className}>{children}</InlineCode>,
+  // Schrittlisten zählen per CSS-Zähler; ein abweichender Start („3.“) bleibt erhalten
+  ol: ({ children, start }) => <ol style={start && start > 1 ? { counterReset: `help-step ${start - 1}` } : undefined} start={start}>{children}</ol>,
   table: ({ children }) => (
     <div className="overflow-x-auto mb-3.5">
       <table style={{ display: 'table', marginBottom: 0 }}>
@@ -109,6 +165,9 @@ const components: Components = {
   ),
 };
 
+/** Überschrift eines Abschnitts: nur Inline-Auszeichnung, ohne Absatz. */
+const inlineComponents: Components = { ...components, p: ({ children }) => <>{children}</> };
+
 export function Markdown({ source, className }: { source: string; className?: string }) {
   return (
     <div className={cx('bc-prose help-prose', className)}>
@@ -116,5 +175,58 @@ export function Markdown({ source, className }: { source: string; className?: st
         {source}
       </ReactMarkdown>
     </div>
+  );
+}
+
+/** Leiste mit allen Abschnitten des Kapitels (Pillen mit Nummer). */
+export function SectionToc({ doc }: { doc: ChapterDoc }) {
+  if (doc.sections.length < 2) return null;
+  return (
+    <nav aria-label={t('help.contents')} className="print:hidden">
+      <ol className="help-toc">
+        {doc.sections.map((s) => (
+          <li key={s.id}>
+            <a href={`#${s.id}`}>
+              <span className="help-num" aria-hidden="true">
+                {s.number}
+              </span>
+              <span>{s.text}</span>
+            </a>
+          </li>
+        ))}
+      </ol>
+    </nav>
+  );
+}
+
+/**
+ * Ein ganzes Kapitel: Einleitung, Inhaltsleiste und je H2 eine Karte mit Nummer. H3/H4 sind Unterthemen mit eigenem
+ * Anker. Die Anker stammen aus `parseChapter` – dieselben, auf die Suche und Direktlinks zeigen.
+ */
+export function ChapterContent({ slug, doc }: { slug: string; doc: ChapterDoc }) {
+  return (
+    <ChapterCtx.Provider value={{ slug, subs: new Map() }}>
+      {doc.intro && <Markdown source={doc.intro} className="help-intro" />}
+      <SectionToc doc={doc} />
+      {doc.sections.map((s) => (
+        <section key={s.id} id={s.id} className="help-section" aria-labelledby={`${s.id}-titel`}>
+          <h2 id={`${s.id}-titel`} className="help-heading group">
+            <span className="help-num" aria-hidden="true">
+              {s.number}
+            </span>
+            <span className="min-w-0">
+              <span className="sr-only">{s.number}. </span>
+              <ReactMarkdown remarkPlugins={[remarkGfm]} components={inlineComponents}>
+                {s.raw}
+              </ReactMarkdown>
+            </span>
+            <CopyLink slug={slug} id={s.id} title={s.text} />
+          </h2>
+          <ChapterCtx.Provider value={{ slug, subs: new Map(s.subs.map((h) => [h.line, h])) }}>
+            <Markdown source={s.body} />
+          </ChapterCtx.Provider>
+        </section>
+      ))}
+    </ChapterCtx.Provider>
   );
 }

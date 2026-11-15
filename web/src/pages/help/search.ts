@@ -1,5 +1,5 @@
 /* Volltextsuche über alle Hilfekapitel (Abschnitte je Überschrift) und die Katalog-Referenz. */
-import { CHAPTERS, CONTENT, chapterSummary, chapterTitle, slugify, stripInline } from './chapters';
+import { CHAPTERS, CONTENT, chapterDoc, chapterSummary, chapterTitle, stripInline } from './chapters';
 
 export interface SearchDoc {
   chapter: string;
@@ -39,32 +39,19 @@ function plain(md: string): string {
 
 let cached: SearchDoc[] | null = null;
 
-/** Dokumente aus den Markdown-Kapiteln: Kapitelanfang + je H2/H3 ein Abschnitt. */
+/**
+ * Dokumente aus den Markdown-Kapiteln: Kapitelanfang + je H2/H3 ein Abschnitt. Die Anker stammen aus derselben
+ * Zerlegung wie die Darstellung (`chapterDoc`), Treffer springen also genau auf den Abschnitt.
+ */
 export function markdownDocs(): SearchDoc[] {
   if (cached) return cached;
   const docs: SearchDoc[] = [];
   for (const ch of CHAPTERS) {
-    const md = CONTENT[ch.slug];
-    if (!md) continue;
-    let heading = chapterTitle(ch.slug);
-    let anchor = '';
-    let buf: string[] = [chapterSummary(ch.slug)];
-    let fence = false;
-    const flush = () => {
-      const text = plain(buf.join('\n'));
-      if (text || !anchor) docs.push({ chapter: ch.slug, anchor, heading, text });
-      buf = [];
-    };
-    for (const line of md.split(/\r?\n/)) {
-      if (/^\s*(```|~~~)/.test(line)) fence = !fence;
-      const m = !fence && /^(##|###)\s+(.+?)\s*$/.exec(line);
-      if (m) {
-        flush();
-        heading = stripInline(m[2]);
-        anchor = slugify(heading);
-      } else buf.push(line);
+    if (!CONTENT[ch.slug]) continue;
+    for (const c of chapterDoc(ch.slug).chunks) {
+      const text = plain(c.id ? c.text : `${chapterSummary(ch.slug)}\n${c.text}`);
+      if (text || !c.id) docs.push({ chapter: ch.slug, anchor: c.id, heading: c.id ? c.heading : chapterTitle(ch.slug), text });
     }
-    flush();
   }
   cached = docs;
   return docs;
