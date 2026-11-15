@@ -65,7 +65,9 @@ flowchart LR
   Dateien auf einmal, Fortschritt je Datei, unterbrochene Uploads werden fortgesetzt
   (auch große Videos), Vorgangsnummer für Rückfragen, Hinweis für das Team im Feld.
 - **Sicher eingesammelt:** Quarantäne, Prüfung von Dateityp und Inhalt, optional Virenscan (ClamAV), Größen- und
-  Mengengrenzen je Link und Sammlung, Schutz vor Überlastung.
+  Mengengrenzen je Link und Sammlung, Schutz vor Überlastung; auffällige Dateien werden gesperrt statt gelöscht
+  (erneut prüfen, bei Videos mit reinem Dekodierbefund trotzdem freigeben), Sicherheitsereignisse der Upload-Seiten
+  ohne Klar-IP, drittes Recht „Medien administrieren“.
 - **Datenschutz von Anfang an:** Datenschutzinformation auf der Upload-Seite, Standort- und Kameradaten werden
   entfernt – in der öffentlichen Fassung und auf Wunsch auch im Original.
 

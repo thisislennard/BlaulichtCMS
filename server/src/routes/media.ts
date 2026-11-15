@@ -25,6 +25,7 @@ import { auditThrottled } from '../lib/audit.js';
 import { cleanFields, cleanUploader, DEFAULT_FIELDS, linkIsFull, type UploaderInput } from '../media/link-options.js';
 import { assertLinkRoom, assertUnlocked, linkClosedFull, linkUsage, setUnlockCookie } from '../media/public-link.js';
 import { acceptAttr, cleanTypeList, effectiveTypes, typeLabels } from '../media/types.js';
+import { logPublicEvent, type PublicSecurityEvent } from '../lib/public-security.js';
 import { assertFolder, loadFolders } from './media-organize.js';
 import { freeBytes, mediaPaths, moveFile, SizeLimitError, streamToTemp } from '../media/storage.js';
 
@@ -104,6 +105,7 @@ export function mediaPayload(m: any) {
     height: m.height,
     status: m.status,
     reject_reason: m.reject_reason,
+    reject_step: m.reject_step ?? null,
     has_preview: m.has_preview,
     has_public: m.has_public,
     had_location: m.had_location,
@@ -428,9 +430,12 @@ export function publicFileFor(m: any): { path: string; type: string; ext: string
 
 /** Kontext für Uploads über einen öffentlichen Link: gültig, freigeschaltet (Passwort), nicht voll („schließen bei Grenze“). */
 export async function publicUploadContext(req: FastifyRequest, token: string): Promise<UploadContext & { link: any }> {
-  const l = await loadPublicLink(token);
+  const l = await loadPublicLink(token, req.ip);
   assertUnlocked(req, l);
-  if (await linkClosedFull(l)) throw new AppError(410, 'link_unavailable', LINK_UNAVAILABLE);
+  if (await linkClosedFull(l)) {
+    await logPublicEvent('link_unavailable_hit', { linkId: l.id, ip: req.ip, detail: 'Kontingent erreicht' });
+    throw new AppError(410, 'link_unavailable', LINK_UNAVAILABLE);
+  }
   const s = await getSettings();
   return {
     link: l,
@@ -443,10 +448,38 @@ export async function publicUploadContext(req: FastifyRequest, token: string): P
   };
 }
 
-/** Sicherheitsereignis der öffentlichen Seiten (Paket 7 legt die Tabelle an; bis dahin nur Protokoll). */
-async function publicSecurityEvent(_req: FastifyRequest, _event: string, _opts: { linkId?: string }) {}
+/** Sicherheitsereignis der öffentlichen Seiten (lib/public-security.ts). */
+async function publicSecurityEvent(req: FastifyRequest, event: PublicSecurityEvent, opts: { linkId?: string; detail?: string }) {
+  await logPublicEvent(event, { linkId: opts.linkId, ip: req.ip, detail: opts.detail });
+}
 
-export async function loadPublicLink(token: string) {
+/** Grenzen/Speicher bei öffentlichen Uploads als Sicherheitsereignis festhalten (ohne die Antwort zu ändern). */
+export async function withPublicEvents<T>(req: FastifyRequest, linkId: string, fn: () => Promise<T>): Promise<T> {
+  try {
+    return await fn();
+  } catch (e) {
+    if (e instanceof AppError && ['link_full', 'collection_full', 'upload_full'].includes(e.code)) await publicSecurityEvent(req, 'quota_reached', { linkId, detail: e.code });
+    if (e instanceof AppError && e.code === 'storage_full') await publicSecurityEvent(req, 'storage_low', { linkId });
+    throw e;
+  }
+}
+
+/** Rate-Limit öffentlicher Routen: Überschreitungen mit bekanntem Link als Sicherheitsereignis (je Fenster einmal). */
+export function publicRateLimit(max: number) {
+  return {
+    max,
+    timeWindow: '1 minute',
+    onExceeded: (req: FastifyRequest) => {
+      const token = String((req.params as any)?.token ?? '');
+      if (!/^[A-Za-z0-9_-]{10,100}$/.test(token)) return;
+      void one<any>(`SELECT id FROM upload_links WHERE token_hash = $1`, [sha256Hex(token)])
+        .then((l) => (l ? logPublicEvent('rate_limited', { linkId: l.id, ip: req.ip, detail: `${req.method} ${req.routeOptions?.url ?? ''}` }) : undefined))
+        .catch(() => {});
+    },
+  };
+}
+
+export async function loadPublicLink(token: string, ip?: string) {
   const l = await one<any>(
     `SELECT l.*, c.title AS c_title, c.purpose AS c_purpose, c.note AS c_note, COALESCE(c.archived_at, c.deleted_at) AS c_archived, c.id AS c_id, c.max_files AS c_max_files, c.max_bytes AS c_max_bytes
        FROM upload_links l JOIN collections c ON c.id = l.collection_id WHERE l.token_hash = $1`,
@@ -454,7 +487,12 @@ export async function loadPublicLink(token: string) {
   );
   // Einheitliche Meldung (wie LiFeOS): verrät nicht, ob es den Link gibt und warum er nicht (mehr) geht
   if (!l) throw new AppError(404, 'link_unavailable', LINK_UNAVAILABLE);
-  if (l.revoked_at || new Date(l.expires_at).getTime() <= Date.now() || l.paused_at || l.c_archived) throw new AppError(410, 'link_unavailable', LINK_UNAVAILABLE);
+  if (l.revoked_at || new Date(l.expires_at).getTime() <= Date.now() || l.paused_at || l.c_archived) {
+    // Grund nur intern im Sicherheitsprotokoll; nach außen dieselbe Meldung
+    const why = l.revoked_at ? 'widerrufen' : new Date(l.expires_at).getTime() <= Date.now() ? 'abgelaufen' : l.paused_at ? 'pausiert' : 'Sammlung geschlossen';
+    await logPublicEvent('link_unavailable_hit', { linkId: l.id, ip, detail: why });
+    throw new AppError(410, 'link_unavailable', LINK_UNAVAILABLE);
+  }
   return l;
 }
 
@@ -991,11 +1029,11 @@ export async function mediaRoutes(app: FastifyInstance) {
 
   /* ------------------------------ Öffentlicher Upload-Link ------------------------------ */
 
-  const publicLimit = { config: { rateLimit: { max: 60, timeWindow: '1 minute' } } };
+  const publicLimit = { config: { rateLimit: publicRateLimit(60) } };
 
   app.get('/public/upload/:token', publicLimit, async (req) => {
     const { token } = z.object({ token: z.string().min(10).max(100) }).parse(req.params);
-    const l = await loadPublicLink(token);
+    const l = await loadPublicLink(token, req.ip);
     const s = await getSettings();
     const organization = s['general.organization'] || s['general.instance_name'];
     assertUnlocked(req, l, organization);
@@ -1030,10 +1068,10 @@ export async function mediaRoutes(app: FastifyInstance) {
   });
 
   /* Passwortgeschützter Link: Passwort prüfen, kurzlebige Freigabe als Cookie nur für diesen Link */
-  app.post('/public/upload/:token/unlock', { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, async (req, reply) => {
+  app.post('/public/upload/:token/unlock', { config: { rateLimit: publicRateLimit(10) } }, async (req, reply) => {
     const { token } = z.object({ token: z.string().min(10).max(100) }).parse(req.params);
     const { password } = z.object({ password: z.string().min(1).max(200) }).parse(req.body ?? {});
-    const l = await loadPublicLink(token);
+    const l = await loadPublicLink(token, req.ip);
     if (!l.password_hash) return { ok: true };
     if (!(await verifyPassword(l.password_hash, password))) {
       await auditThrottled(`link-pw:${l.id}:${req.ip}`, 10 * 60_000, { id: null, name: 'Upload-Seite', type: 'system', ip: req.ip }, 'upload_link.password_failed', { type: 'upload_link', id: l.id, label: l.label || l.collection_id }, {}, 'denied').catch(() => {});
@@ -1044,11 +1082,13 @@ export async function mediaRoutes(app: FastifyInstance) {
     return { ok: true };
   });
 
-  app.post('/public/upload/:token', { config: { rateLimit: { max: 120, timeWindow: '1 minute' } } }, async (req) => {
+  app.post('/public/upload/:token', { config: { rateLimit: publicRateLimit(120) } }, async (req) => {
     const { token } = z.object({ token: z.string().min(10).max(100) }).parse(req.params);
     const ctx = await publicUploadContext(req, token);
-    if (ctx.link.upload_count >= ctx.link.max_files) throw new AppError(409, 'link_full', 'Über diesen Link wurden bereits alle erlaubten Dateien hochgeladen.');
-    const res = await receiveFile(req, ctx);
+    const res = await withPublicEvents(req, ctx.link.id, async () => {
+      if (ctx.link.upload_count >= ctx.link.max_files) throw new AppError(409, 'link_full', 'Über diesen Link wurden bereits alle erlaubten Dateien hochgeladen.');
+      return receiveFile(req, ctx);
+    });
     // Öffentliche Antwort ohne interne Details
     return { ok: true, duplicate: res.duplicate, name: res.media.original_name, size: res.media.size_bytes };
   });

@@ -35,6 +35,7 @@ export type SecurityEvent =
   | 'audit_integrity'
   | 'malware_found'
   | 'malware_scanner'
+  | 'media_force_released'
   | 'master_key_rotated'
   | 'update_settings'
   | 'update_install'

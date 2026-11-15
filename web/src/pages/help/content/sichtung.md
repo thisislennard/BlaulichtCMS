@@ -18,7 +18,7 @@ Sichten mehrere Personen gleichzeitig, gewinnt nicht einfach die letzte Entschei
 
 ## Übersicht
 
-Die Reiter zeigen **Zu sichten**, **Ausgewählt**, **Zurückgestellt** (sobald es solche Dateien gibt), **Alle** und **In Prüfung / abgewiesen**. Bei abgewiesenen Dateien steht der Grund dabei (z. B. „Dateiformat nicht erlaubt“).
+Die Reiter zeigen **Zu sichten**, **Ausgewählt**, **Zurückgestellt** (sobald es solche Dateien gibt), **Alle** und **In Prüfung / gesperrt**. Bei gesperrten Dateien steht der Grund dabei (z. B. „Dateiformat nicht erlaubt“); erneut prüfen oder trotzdem freigeben kann, wer „Medien administrieren“ hat (siehe Hilfe → Foto-Link, „Gesperrte Dateien“).
 
 - **Kacheln oder Liste:** Umschalter rechts über den Dateien; dazu 48, 96 oder 192 Dateien je Seite. Beides merkt sich das Gerät.
 - **Großansicht:** Klick auf eine Vorschau öffnet sie groß – mit Pfeilen, Wischen oder Tastatur (← →) blättern, Videos laufen im Player.

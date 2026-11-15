@@ -92,6 +92,8 @@ const RANGES: Record<string, [number, number]> = {
   'privacy.official_warning_days': [0, 3650],
   'privacy.upload_link_days': [0, 3650],
   'privacy.uploader_months': [0, 120],
+  'media.blocked_days': [0, 3650],
+  'media.security_log_days': [0, 3650],
   'media.max_file_mb': [1, 20000],
   'media.link_max_files': [1, 1000],
   'media.link_default_days': [1, 90],
@@ -395,6 +397,8 @@ export default function Settings() {
                   <NumField k="privacy.collection_retention_days" label="Abgeschlossene Sammlungen löschen nach" help="Archivierte Sammlungen bzw. Sammlungen ohne aktiven Link, gerechnet ab der letzten Aktivität. Dateien in laufenden Beiträgen bleiben. 0 = nie." unit={t("admin.common.days")} v={v} set={set} ro={ro} />
                   <NumField k="privacy.deleted_media_days" label="Papierkorb leeren nach" help="Gelöschte Dateien, Ordner und Sammlungen bleiben so lange im Papierkorb wiederherstellbar; danach werden Dateien und Datensätze endgültig entfernt. Gilt auch für Datensätze abgewiesener Dateien. 0 = nie automatisch." unit={t("admin.common.days")} v={v} set={set} ro={ro} />
                   <NumField k="privacy.upload_link_days" label="Abgelaufene Upload-Links" help="Abgelaufene oder widerrufene Links (Token, Bezeichnung) und Weiterleitungen aus dem Import. 0 = nie." unit={t("admin.common.days")} v={v} set={set} ro={ro} />
+                  <NumField k="media.blocked_days" label="Gesperrte Dateien löschen nach" help="Dateien mit Prüfbefund liegen so lange in der Quarantäne (erneut prüfen oder trotzdem freigeben möglich), danach werden sie samt Datensatz gelöscht. 0 = nie." unit={t("admin.common.days")} min={0} max={3650} v={v} set={set} ro={ro} />
+                  <NumField k="media.security_log_days" label="Sicherheitsereignisse der Upload-Seiten" help="Gekürzter IP-Hash, Link, Ereignis. 0 = unbegrenzt." unit={t("admin.common.days")} min={0} max={3650} v={v} set={set} ro={ro} />
                   <NumField k="privacy.uploader_months" label="Angaben der Hochladenden" help="Name, E-Mail-Adresse, Aufnahmeort und -datum (je Upload-Link abfragbar) danach entfernen; die Dateien bleiben. 0 = nie." unit="Monate" min={0} max={120} v={v} set={set} ro={ro} />
                   <NumField k="privacy.warning_days" label="Warnvorgänge" help="Nach dem letzten Bearbeitungsschritt des Vorgangs samt Aktualisierungen: Fassungen mit Rückrufkontakt, PDF, Versandnachweise. 0 = nie." unit={t("admin.common.days")} v={v} set={set} ro={ro} />
                   <NumField k="privacy.fe2_event_days" label="FE2-Einsatzmeldungen" help="Stichwort, Ort, Zeit, Einheiten. Beiträge und Warnvorgänge daraus bleiben. 0 = nie." unit={t("admin.common.days")} v={v} set={set} ro={ro} />

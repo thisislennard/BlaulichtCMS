@@ -14,6 +14,7 @@ import { audit } from '../lib/audit.js';
 import { securityAlert } from '../lib/security-alerts.js';
 import { noticeNewMedia } from '../lib/media-notify.js';
 import { effectiveTypes, typeByMime, typeLabels } from './types.js';
+import { logPublicEvent } from '../lib/public-security.js';
 
 /** Zugelassene Formate – geprüft wird der Dateiinhalt, nicht Dateiname oder angegebener Typ. */
 export const ALLOWED: Record<string, { kind: 'image' | 'video'; ext: string }> = {
@@ -36,7 +37,23 @@ const MAX_VIDEO_PIXELS = 7680 * 4320;
 sharp.concurrency(Math.max(1, Math.min(4, Math.floor(os.availableParallelism() / 2))));
 sharp.cache(false);
 
-export class Rejected extends Error {}
+/**
+ * Prüfbefund: Die Datei wird gesperrt (bleibt in der Quarantäne, „Erneut prüfen“ möglich). `step` sagt, welche Prüfung
+ * angeschlagen hat: type (Dateityp), structure (Aufbau), limits (Länge/Auflösung), decode (Dekodierprüfung).
+ */
+export class Rejected extends Error {
+  constructor(
+    message: string,
+    public step: 'type' | 'structure' | 'limits' | 'decode' = 'structure',
+  ) {
+    super(message);
+  }
+}
+
+/** Alles entfernen, was bei der Prüfung entstanden ist – außer der Datei in der Quarantäne (gesperrte Dateien). */
+export function removeDerivedFiles(id: string) {
+  for (const p of [mediaPaths.original(id), mediaPaths.preview(id), mediaPaths.preview(id) + '.png', ...['jpg', 'mp4', 'webm', 'png'].map((e) => mediaPaths.publicFile(id, e))]) fs.rmSync(p, { force: true });
+}
 
 /**
  * Wählt die Videospur für Vorschau und öffentliche Fassung und prüft alle Videospuren gegen die Auflösungsgrenze
@@ -50,7 +67,7 @@ export function pickVideoStream(streams: any[], maxPixels = MAX_VIDEO_PIXELS): a
   for (const s of videos) {
     const w = Number(s.width ?? 0);
     const h = Number(s.height ?? 0);
-    if (!Number.isFinite(w) || !Number.isFinite(h) || w * h > maxPixels) throw new Rejected('Videoauflösung ist zu hoch (höchstens 8K).');
+    if (!Number.isFinite(w) || !Number.isFinite(h) || w * h > maxPixels) throw new Rejected('Videoauflösung ist zu hoch (höchstens 8K).', 'limits');
   }
   const v = videos[0];
   if (!Number.isInteger(v.index)) throw new Rejected('Videoinformationen konnten nicht gelesen werden.');
@@ -92,7 +109,7 @@ async function processImage(id: string, file: string, mime: string) {
   try {
     meta = await sharp(file, { limitInputPixels: MAX_PIXELS, failOn: 'error' }).metadata();
   } catch (e) {
-    throw new Rejected(`Bild ist beschädigt oder zu groß (${(e as Error).message.slice(0, 120)}).`);
+    throw new Rejected(`Bild ist beschädigt oder zu groß (${(e as Error).message.slice(0, 120)}).`, 'decode');
   }
   if (!meta.width || !meta.height) throw new Rejected('Bildgröße konnte nicht gelesen werden.');
   try {
@@ -103,7 +120,7 @@ async function processImage(id: string, file: string, mime: string) {
       base.clone().resize({ width: 2560, height: 2560, fit: 'inside', withoutEnlargement: true }).jpeg({ quality: 85, mozjpeg: true }).toFile(mediaPaths.publicFile(id, 'jpg')),
     ]);
   } catch (e) {
-    throw new Rejected(`Bild konnte nicht verarbeitet werden (${(e as Error).message.slice(0, 120)}).`);
+    throw new Rejected(`Bild konnte nicht verarbeitet werden (${(e as Error).message.slice(0, 120)}).`, 'decode');
   }
   const swap = (meta.orientation ?? 1) >= 5;
   return {
@@ -116,7 +133,8 @@ async function processImage(id: string, file: string, mime: string) {
   };
 }
 
-async function processVideo(id: string, file: string, ext: string) {
+async function processVideo(id: string, file: string, ext: string, opts: { skipDecode?: boolean } = {}) {
+  void opts;
   const probe = await run('ffprobe', ['-v', 'error', '-print_format', 'json', '-show_streams', '-show_format', file], 60_000);
   if (probe.code === -1 && probe.stderr === 'nicht verfügbar') {
     log('warn', 'media', 'ffprobe fehlt – Video wird ohne Inhaltsprüfung abgewiesen.');
@@ -133,7 +151,7 @@ async function processVideo(id: string, file: string, ext: string) {
   // Ressourcenschutz: Länge und Auflösung begrenzen
   const maxMin = (await getSettings())['media.max_video_minutes'];
   const duration = Number(info.format?.duration ?? v.duration ?? 0);
-  if (duration > maxMin * 60) throw new Rejected(`Video ist länger als ${maxMin} Minuten.`);
+  if (duration > maxMin * 60) throw new Rejected(`Video ist länger als ${maxMin} Minuten.`, 'limits');
   // Datenspuren (z. B. GPS-Telemetrie von Action-Kameras) und Untertitel gelten als Metadaten
   const dataStreams = (info.streams ?? []).filter((s: any) => !['video', 'audio'].includes(s.codec_type));
   const tags = JSON.stringify(info.format?.tags ?? {}).toLowerCase();
@@ -159,8 +177,11 @@ async function processVideo(id: string, file: string, ext: string) {
  * Prüft eine Datei aus der Quarantäne: Typ anhand des Inhalts, Dekodierbarkeit, Vorschau,
  * öffentliche Fassung ohne Standortdaten. Erst danach wird sie sichtbar („ready“).
  */
-export async function processMedia(id: string): Promise<'ready' | 'rejected' | 'skipped' | 'deferred'> {
-  const row = await one<any>(`SELECT m.id, m.status, m.original_name, m.created_at, l.allowed_types AS link_types FROM media m LEFT JOIN upload_links l ON l.id = m.upload_link_id WHERE m.id = $1`, [id]);
+export async function processMedia(id: string): Promise<'ready' | 'rejected' | 'blocked' | 'skipped' | 'deferred'> {
+  const row = await one<any>(
+    `SELECT m.id, m.status, m.original_name, m.created_at, m.upload_link_id, m.skip_decode, l.allowed_types AS link_types FROM media m LEFT JOIN upload_links l ON l.id = m.upload_link_id WHERE m.id = $1`,
+    [id],
+  );
   if (!row || row.status !== 'quarantine') return 'skipped';
   const file = mediaPaths.quarantine(id);
   if (!fs.existsSync(file)) {
@@ -178,9 +199,10 @@ export async function processMedia(id: string): Promise<'ready' | 'rejected' | '
     const allowed = ft && def && types.includes(def.key) ? ALLOWED[ft.mime] : undefined;
     if (!ft || !allowed) {
       const what = !ft ? 'Das Dateiformat wurde nicht erkannt und ist deshalb nicht erlaubt.' : def ? `Der Dateityp ${def.label.replace(/ \(.*\)$/, '')} ist für diesen Upload nicht erlaubt.` : `Das Dateiformat ${ft.mime} ist nicht erlaubt.`;
-      throw new Rejected(`${what} Erlaubt sind: ${typeLabels(types)}.`);
+      throw new Rejected(`${what} Erlaubt sind: ${typeLabels(types)}.`, 'type');
     }
-    const r = allowed.kind === 'image' ? await processImage(id, file, ft.mime) : await processVideo(id, file, allowed.ext);
+    // „Trotzdem freigeben“ (nur Videos mit reinem Dekodierbefund): Typ, Aufbau und Grenzen werden weiter geprüft
+    const r = allowed.kind === 'image' ? await processImage(id, file, ft.mime) : await processVideo(id, file, allowed.ext, { skipDecode: !!row.skip_decode });
     // Erst nach der öffentlichen Fassung: Standort- und Gerätedaten auch aus dem Original entfernen (#119)
     const strip = (await getSettings())['media.strip_location'] ? await stripLocation(file, ft.mime, allowed.kind) : null;
     const hadLocation = r.hadLocation === null ? (strip?.ok ? strip.gps : null) : r.hadLocation || !!strip?.gps;
@@ -202,11 +224,14 @@ export async function processMedia(id: string): Promise<'ready' | 'rejected' | '
     return 'ready';
   } catch (e) {
     if (!(e instanceof Rejected)) throw e;
-    // Alles entfernen, was bis hierhin entstanden ist (Quarantäne, Vorschau, ggf. halbe öffentliche Fassung) (#73)
-    removeMediaFiles(id);
-    await pool.query(`UPDATE media SET status = 'rejected', reject_reason = $2, processed_at = now() WHERE id = $1`, [id, e.message.slice(0, 300)]);
-    log('info', 'media', `Datei abgewiesen: ${e.message}`, { media: id });
-    return 'rejected';
+    // Gesperrt statt gelöscht (wie LiFeOS): Die Datei bleibt in der Quarantäne (nie ausgeliefert), Vorschau und halbe
+    // öffentliche Fassung werden entfernt (#73). Erneut prüfen, trotzdem freigeben (Video, nur Dekodierbefund) oder
+    // endgültig löschen darf „Medien administrieren“; nach media.blocked_days löscht die Löschfrist.
+    removeDerivedFiles(id);
+    const r = await pool.query(`UPDATE media SET status = 'blocked', reject_reason = $2, reject_step = $3, processed_at = now() WHERE id = $1 AND status = 'quarantine'`, [id, e.message.slice(0, 300), e.step]);
+    log('info', 'media', `Datei gesperrt (${e.step}): ${e.message}`, { media: id });
+    if (r.rowCount) await logPublicEvent('file_rejected', { linkId: row.upload_link_id, mediaId: id, detail: `${e.step}: ${e.message}`, throttle: false });
+    return 'blocked';
   }
 }
 
@@ -327,7 +352,9 @@ async function malwareScan(row: { id: string; original_name: string; created_at:
   try {
     const r = await scanFile(file, c);
     if (r.status === 'clean') return 'clean';
+    // Schadsoftware: Datei sofort löschen, nie freigebbar (bleibt „rejected“, nicht „blocked“)
     removeMediaFiles(row.id);
+    await logPublicEvent('file_rejected', { mediaId: row.id, detail: `Schadsoftware: ${r.signature}`, throttle: false });
     await pool.query(`UPDATE media SET status = 'rejected', reject_reason = $2, processed_at = now() WHERE id = $1 AND status = 'quarantine'`, [row.id, `Schadsoftware erkannt (${r.signature}). Die Datei wurde gelöscht.`.slice(0, 300)]);
     log('warn', 'media', `Schadsoftware erkannt: ${r.signature}`, { media: row.id });
     await audit({ id: null, name: 'Schadsoftwareprüfung', type: 'system' }, 'media.malware_found', { type: 'media', id: row.id, label: row.original_name }, { signatur: r.signature }, 'denied');

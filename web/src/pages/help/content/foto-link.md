@@ -90,4 +90,18 @@ Jeder Link hat ein Ablaufdatum. „Widerrufen“ beendet ihn sofort – **auch e
 
 ## Quarantäne und Prüfung
 
-Jede Datei landet zuerst **privat in der Quarantäne**. BlaulichtCMS prüft anhand des Inhalts, ob es wirklich ein Foto oder Video ist (JPEG, PNG, WebP, HEIC, MP4, MOV, WebM), und weist alles andere ab. Erst danach gibt es eine Vorschau. Für die Veröffentlichung entsteht eine **öffentliche Fassung ohne Standort- und Kameradaten**; das Original bleibt intern.
+Jede Datei landet zuerst **privat in der Quarantäne**. BlaulichtCMS prüft anhand des Inhalts, ob es wirklich ein erlaubtes Foto oder Video ist (Einstellungen → Medien bzw. je Link), und sperrt alles andere. Erst danach gibt es eine Vorschau. Für die Veröffentlichung entsteht eine **öffentliche Fassung ohne Standort- und Kameradaten**; das Original bleibt intern.
+
+## Gesperrte Dateien
+
+Fällt eine Datei bei der Prüfung auf (falscher Typ, beschädigt, zu lang, zu groß, nicht dekodierbar), wird sie **gesperrt** statt sofort gelöscht: Sie bleibt in der Quarantäne, wird nie ausgeliefert und steht mit Grund im Reiter **In Prüfung / gesperrt** der Sammlung sowie unter [Medien → Verwaltung](/medien/verwaltung). Wer „Medien administrieren“ hat, kann
+
+- **Erneut prüfen** (einzeln oder **Alle erneut prüfen**, z. B. nach einer geänderten Einstellung),
+- bei Videos, die **nur** an der Dekodierprüfung gescheitert sind, **Trotzdem freigeben** – mit Begründung; Dateityp, Aufbau, Länge und Auflösung werden weiter geprüft, die Freigabe steht im Audit und erzeugt eine Sicherheitsmeldung,
+- **Endgültig löschen**.
+
+Nach der Frist „Gesperrte Dateien löschen nach“ (Einstellungen → Datenschutz, Standard 30 Tage) löscht BlaulichtCMS sie automatisch. Findet die Schadsoftwareprüfung (ClamAV) etwas, wird die Datei dagegen **sofort gelöscht** und lässt sich nie freigeben.
+
+## Sicherheitsereignisse
+
+Unter **Medien → Verwaltung** stehen die Sicherheitsereignisse der Upload-Seiten: Aufrufe abgelaufener, pausierter oder widerrufener Links, falsche Passwörter, zu viele Anfragen, erreichte Kontingente, voller Speicher, gesperrte Dateien und Freigaben trotz Befund. Gespeichert werden nur Link, Ereignis, Zeit und ein gekürzter, nicht umkehrbarer Hash der IP-Adresse – keine Klar-IP, kein Token, keine Namen. Gleiche Ereignisse zählen höchstens einmal in 10 Minuten. Aufbewahrung: Einstellungen → Datenschutz (Standard 365 Tage). Dort stehen auch **fehlgeschlagene Medienaufträge** (Prüfung, Bereinigung, öffentliche Fassung, ZIP) mit „Erneut versuchen“.

@@ -50,6 +50,8 @@ export interface MediaItem {
   height: number | null;
   status: 'quarantine' | 'ready' | 'rejected' | 'blocked';
   reject_reason?: string | null;
+  /** welche Prüfung angeschlagen hat: type, structure, limits, decode, error */
+  reject_step?: string | null;
   has_preview: boolean;
   has_public: boolean;
   had_location?: boolean | null;

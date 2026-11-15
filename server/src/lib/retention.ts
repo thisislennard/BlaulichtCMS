@@ -254,6 +254,29 @@ export async function runRetention(opts: { dryRun: boolean; actor?: Actor; setti
   }
   report.categories.push(dead, trash);
 
+  /* Gesperrte Dateien (Prüfbefund, Datei noch in der Quarantäne) und Sicherheitsereignisse der Upload-Seiten (Paket 7) */
+  const bDays = days(s['media.blocked_days']);
+  const blocked: RetentionCategory = { key: 'blocked', label: 'Gesperrte Dateien (Prüfbefund) samt Datei', days: bDays, count: 0 };
+  if (bDays > 0) {
+    const where = `status = 'blocked' AND COALESCE(processed_at, created_at) < now() - make_interval(days => $1)`;
+    if (opts.dryRun) blocked.count = (await one<{ n: number }>(`SELECT count(*)::int AS n FROM media WHERE ${where}`, [bDays]))!.n;
+    else {
+      const rows = await many<{ id: string }>(`DELETE FROM media WHERE id IN (SELECT id FROM media WHERE ${where} LIMIT 5000) RETURNING id`, [bDays]);
+      for (const r of rows) removeMediaFiles(r.id);
+      blocked.count = rows.length;
+    }
+  }
+  report.categories.push(blocked);
+  report.categories.push(
+    await simpleCategory(opts.dryRun, {
+      key: 'security_events',
+      label: 'Sicherheitsereignisse der Upload-Seiten (gekürzter IP-Hash)',
+      days: days(s['media.security_log_days']),
+      table: 'public_security_events',
+      where: `at < now() - make_interval(days => $1)`,
+    }),
+  );
+
   /* Angaben der Hochladenden (Name, E-Mail, Ort, Datum – je Link abfragbar): entfernen, Dateien bleiben (Paket 6) */
   const uMonths = Math.max(0, Math.floor(Number(s['privacy.uploader_months']) || 0));
   const up: RetentionCategory = { key: 'uploader', label: 'Angaben der Hochladenden (Name, E-Mail, Aufnahmeort, Aufnahmedatum)', days: uMonths * 30, count: 0 };

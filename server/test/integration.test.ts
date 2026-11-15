@@ -241,7 +241,8 @@ describe('Foto-Link und Medien', () => {
     expect((await anonymous.raw('POST', `/public/upload/${linkToken}`, mp)).status).toBe(200);
     await processAllQuarantine();
     const bad = await one<any>(`SELECT * FROM media WHERE client_key = 'client-key-0002'`);
-    expect(bad.status).toBe('rejected');
+    // Gesperrt statt gelöscht (Medien wie LiFeOS 7): Datei bleibt in der Quarantäne
+    expect(bad.status).toBe('blocked');
     expect(bad.reject_reason).toMatch(/nicht erlaubt/);
   });
 
@@ -2056,7 +2057,8 @@ describe('Sicherheitsprüfung (M4)', () => {
     const mp = multipart({ name: 'lang.mp4', data: fs.readFileSync(src), type: 'video/mp4' });
     await anonymous.raw('POST', `/public/upload/${c.json.url.split('/u/')[1]}`, { payload: mp.payload, headers: mp.headers });
     const m = await one<any>(`SELECT id FROM media WHERE original_name = 'lang.mp4' ORDER BY created_at DESC LIMIT 1`);
-    expect(await processMedia(m.id)).toBe('rejected');
+    expect(await processMedia(m.id)).toBe('blocked');
+    expect((await one<any>(`SELECT reject_reason, reject_step FROM media WHERE id = $1`, [m.id]))).toMatchObject({ reject_step: 'limits' });
     expect((await one<any>(`SELECT reject_reason FROM media WHERE id = $1`, [m.id]))!.reject_reason).toContain('länger als');
     await setSettings({ 'media.max_video_minutes': 30 } as any);
     await getSettings(true);
@@ -4465,6 +4467,88 @@ describe('Medien wie LiFeOS 6: Erweiterte Link-Optionen', () => {
     expect(bad.reject_reason).toMatch(/JPEG ist für diesen Upload nicht erlaubt.*PNG/);
     expect((await editor.post(`/collections/${h.col.id}/links`, { allowedTypes: ['exe'] })).status).toBe(400);
     expect((await admin.patch('/settings', { 'media.allowed_types': [] })).status).toBe(400);
+  });
+});
+
+describe('Medien wie LiFeOS 7: gesperrte Dateien, Sicherheitsereignisse, Aufträge, „Medien administrieren“', () => {
+  it('gesperrte Datei bleibt in der Quarantäne; erneut prüfen und endgültig löschen nur mit „Medien administrieren“', async () => {
+    const f = await mediaFixture(editor, 'Sperr-Test');
+    const mp = multipart({ name: 'kein-bild.jpg', data: Buffer.from('#!/bin/sh\necho kein Bild\n'), type: 'image/jpeg' }, { clientKey: 'sperr-0001' });
+    expect((await anonymous.raw('POST', `/public/upload/${f.token}`, mp)).status).toBe(200);
+    await processAllQuarantine();
+    const m = await one<any>(`SELECT * FROM media WHERE client_key = 'sperr-0001'`);
+    expect(m).toMatchObject({ status: 'blocked', reject_step: 'type' });
+    expect(fs.existsSync(mediaPaths.quarantine(m.id))).toBe(true);
+    expect((await editor.get(`/media/${m.id}/preview`)).status).toBe(404);
+    const ev = await one<any>(`SELECT * FROM public_security_events WHERE event = 'file_rejected' AND media_id = $1`, [m.id]);
+    expect(ev.link_id).toBe(f.link.id);
+    // Rechte: Redaktion/Medienverwaltung haben „Medien administrieren“ nicht
+    expect((await editor.post(`/media/${m.id}/recheck`)).status).toBe(403);
+    expect((await editor.get('/media-admin/blocked')).status).toBe(403);
+    expect((await admin.get('/media-admin/blocked')).json.find((x: any) => x.id === m.id)).toMatchObject({ reject_step: 'type', file_present: true, collection_title: 'Sperr-Test' });
+    // Trotzdem freigeben nur bei reinem Dekodierbefund
+    expect((await admin.post(`/media/${m.id}/force-release`, { reason: 'Test der Sperre' })).status).toBe(400);
+    expect((await admin.post(`/media/${m.id}/recheck`)).status).toBe(200);
+    expect((await one<any>(`SELECT status FROM media WHERE id = $1`, [m.id])).status).toBe('quarantine');
+    expect(await processMedia(m.id)).toBe('blocked');
+    expect((await admin.post('/media-admin/recheck-all')).json.count).toBeGreaterThanOrEqual(1);
+    await processAllQuarantine();
+    // Fehlgeschlagener Auftrag lässt sich wiederholen
+    const job = await one<any>(`INSERT INTO jobs (kind, payload, status, attempts, last_error) VALUES ('media.process', $1, 'dead', 5, 'Testfehler') RETURNING id`, [JSON.stringify({ mediaId: m.id })]);
+    expect((await admin.get('/media-admin/jobs')).json.some((j: any) => j.id === job.id)).toBe(true);
+    expect((await admin.post(`/media-admin/jobs/${job.id}/retry`)).status).toBe(200);
+    expect((await one<any>(`SELECT status, attempts FROM jobs WHERE id = $1`, [job.id]))).toEqual({ status: 'queued', attempts: 0 });
+    await pool.query(`DELETE FROM jobs WHERE id = $1`, [job.id]);
+    await pool.query(`UPDATE media SET status = 'blocked' WHERE id = $1`, [m.id]);
+    expect((await admin.post(`/media/${m.id}/purge`)).status).toBe(200);
+    expect(await one(`SELECT 1 FROM media WHERE id = $1`, [m.id])).toBeNull();
+    expect(fs.existsSync(mediaPaths.quarantine(m.id))).toBe(false);
+  });
+
+  it('„Trotzdem freigeben“ nur für Videos mit Dekodierbefund – mit Begründung, Audit und Sicherheitsmeldung', async () => {
+    const f = await mediaFixture(editor, 'Freigabe-Test');
+    const m = await one<any>(
+      `INSERT INTO media (collection_id, upload_link_id, original_name, declared_type, size_bytes, sha256, status, reject_step, reject_reason, processed_at)
+       VALUES ($1,$2,'drohne.mp4','video/mp4',32,$3,'blocked','decode','Video nicht fehlerfrei dekodierbar',now()) RETURNING id`,
+      [f.col.id, f.link.id, crypto.randomBytes(32).toString('hex')],
+    );
+    // minimale MP4-Kennung (ftyp-Box)
+    fs.mkdirSync(path.dirname(mediaPaths.quarantine(m.id)), { recursive: true });
+    fs.writeFileSync(mediaPaths.quarantine(m.id), Buffer.concat([Buffer.from([0, 0, 0, 0x18]), Buffer.from('ftypisom'), Buffer.from([0, 0, 2, 0]), Buffer.from('isomiso2mp41'), Buffer.alloc(16)]));
+    expect((await admin.post(`/media/${m.id}/force-release`, { reason: 'x' })).status).toBe(400);
+    expect((await admin.post(`/media/${m.id}/force-release`, { reason: 'Eigene Drohne, Wiedergabe geprüft' })).status).toBe(200);
+    expect(await one<any>(`SELECT status, skip_decode, released_at IS NOT NULL AS released FROM media WHERE id = $1`, [m.id])).toEqual({ status: 'quarantine', skip_decode: true, released: true });
+    expect(await one(`SELECT 1 FROM audit_events WHERE action = 'media.force_released' AND object_id = $1`, [m.id])).not.toBeNull();
+    expect(await one(`SELECT 1 FROM public_security_events WHERE event = 'force_released' AND media_id = $1`, [m.id])).not.toBeNull();
+    expect(await one(`SELECT 1 FROM notifications WHERE title LIKE 'Video trotz Prüfbefund freigegeben%'`)).not.toBeNull();
+    await pool.query(`DELETE FROM jobs WHERE payload->>'mediaId' = $1`, [m.id]);
+    await pool.query(`UPDATE media SET status = 'blocked' WHERE id = $1`, [m.id]);
+  });
+
+  it('Sicherheitsereignisse der Upload-Seiten: ungültige Links, Passwort, Rate-Limit – ohne Klar-IP; Löschfrist', async () => {
+    const { resetSecurityEventThrottle } = await import('../src/lib/public-security.js');
+    resetSecurityEventThrottle();
+    const f = await mediaFixture(editor, 'Ereignis-Test', { password: 'Ereignis-Passwort-1' });
+    await editor.post(`/upload-links/${f.link.id}/pause`);
+    const visitor = new Client(app, '10.77.0.5');
+    expect((await visitor.get(`/public/upload/${f.token}`)).status).toBe(410);
+    expect((await visitor.get(`/public/upload/${f.token}`)).status).toBe(410);
+    const hits = await many<any>(`SELECT * FROM public_security_events WHERE event = 'link_unavailable_hit' AND link_id = $1`, [f.link.id]);
+    expect(hits).toHaveLength(1);
+    expect(hits[0].detail).toBe('pausiert');
+    expect(hits[0].ip_hash).toMatch(/^[0-9a-f]{12}$/);
+    expect(JSON.stringify(hits)).not.toContain('10.77.0.5');
+    await editor.post(`/upload-links/${f.link.id}/resume`);
+    for (let i = 0; i < 11; i++) await visitor.post(`/public/upload/${f.token}/unlock`, { password: `falsch-${i}` });
+    await new Promise((r) => setTimeout(r, 200));
+    const kinds = (await many<any>(`SELECT DISTINCT event FROM public_security_events WHERE link_id = $1`, [f.link.id])).map((r) => r.event);
+    expect(kinds).toEqual(expect.arrayContaining(['link_unavailable_hit', 'password_failed', 'rate_limited']));
+    const list = await admin.get(`/media-admin/security-events?link=${f.link.id}`);
+    expect(list.json.items[0]).toMatchObject({ link_label: '', collection_title: 'Ereignis-Test' });
+    expect((await editor.get('/media-admin/security-events')).status).toBe(403);
+    await pool.query(`UPDATE public_security_events SET at = now() - interval '400 days' WHERE link_id = $1`, [f.link.id]);
+    await admin.post('/system/retention/run', {});
+    expect(await one(`SELECT 1 FROM public_security_events WHERE link_id = $1`, [f.link.id])).toBeNull();
   });
 });
 

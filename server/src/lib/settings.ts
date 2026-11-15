@@ -97,6 +97,10 @@ export const DEFAULT_SETTINGS = {
   'media.camera_buttons': true,
   /** Text nach erfolgreichem Upload (leer = Standardtext). */
   'media.done_text': '',
+  /** Gesperrte Dateien (Prüfbefund) nach so vielen Tagen samt Datei löschen (0 = nie) – wie press_blocked_days. */
+  'media.blocked_days': 30,
+  /** Sicherheitsereignisse der öffentlichen Seiten so viele Tage aufbewahren (0 = immer) – wie press_security_log_days. */
+  'media.security_log_days': 365,
   /** Global erlaubte Dateitypen (Schlüssel aus media/types.ts); je Link weiter einschränkbar. */
   'media.allowed_types': ['jpeg', 'png', 'webp', 'heic', 'mp4', 'mov', 'webm'] as string[],
   /** Benachrichtigungen der Medien (neue Dateien, Link läuft ab, Kontingent, Speicher) – lib/media-notify.ts. */
@@ -246,6 +250,8 @@ export const SETTING_RANGES: Record<string, [number, number]> = {
   'media.link_default_days': [1, 90],
   'media.link_max_days': [1, 365],
   'media.storage_warn_gb': [0, 100000],
+  'media.blocked_days': [0, 3650],
+  'media.security_log_days': [0, 3650],
   'media.collection_max_files': [1, 100000],
   'media.collection_max_gb': [1, 10000],
   'media.min_free_gb': [1, 10000],

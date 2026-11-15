@@ -63,7 +63,8 @@ Details und Einrichtung: [docs/integrationen.md](integrationen.md), Hilfe → *V
 | Medien | privat außerhalb des Webservers; Standort- und Kameradaten werden entfernt; Unkenntlichmachen für die öffentliche Fassung; Verschieben behält die Medien-ID (Freigaben bleiben an genau diese Datei gebunden), Kopien übernehmen die Datenschutz-Entscheidungen; `metadaten.csv` im ZIP gegen Formel-Injektion abgesichert |
 | Websites | Schlüssel je Website (nur Prüfsumme gespeichert), sofort widerrufbar; die Bridge ruft nur aus, nur per HTTPS |
 | Datenbank | nur über Unix-Socket im Container; die Anwendung arbeitet mit einer Rolle ohne Superuser- und DDL-Rechte |
-| Audit | Hash-Kette gegen nachträgliche Änderungen, optional an Syslog weitergeleitet; Alarmierung bei Sicherheitsereignissen |
+| Audit | Hash-Kette gegen nachträgliche Änderungen, optional an Syslog weitergeleitet; Alarmierung bei Sicherheitsereignissen; eigenes Protokoll der Sicherheitsereignisse der Upload-Seiten (gekürzter IP-Hash, gedrosselt) |
+| Prüfbefunde | Dateien mit Befund werden gesperrt (Quarantäne, nie ausgeliefert, erneut prüfbar); „Trotzdem freigeben“ nur für Videos mit reinem Dekodierbefund und nur mit „Medien administrieren“, Begründung, Audit und Sicherheitsmeldung; Schadsoftware wird sofort gelöscht |
 | Sicherungen | verschlüsselt (AES-256-GCM) mit eigenem Schlüssel, regelmäßige Probe-Wiederherstellung |
 | Updates | Releases mit Ed25519 signiert (privater Schlüssel nie auf dem Server), geprüft gegen den Schlüssel der laufenden Version; Sicherung vorab und automatischer Rückweg; Bridge-Updates ebenso signiert |
 | Container | unprivilegierter Benutzer, schreibgeschütztes Dateisystem, keine Capabilities, Grenzen für Speicher, CPU und Prozesse, Port standardmäßig nur lokal |

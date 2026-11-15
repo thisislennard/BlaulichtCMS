@@ -12,8 +12,9 @@ import { getSettings } from './lib/settings.js';
 import { claimJobs, completeJob, failJob, heartbeatJob, HEARTBEAT_MS, requeueExpiredLeases, WORKER_ID, type Job } from './jobs/queue.js';
 import { runBackup } from './ops/backup.js';
 import { toStepError } from './lib/errors.js';
-import { enqueuePendingLocationStrips, processMedia, stripStoredOriginal } from './media/process.js';
-import { ensureMediaDirs, mediaPaths, removeMediaFiles } from './media/storage.js';
+import { enqueuePendingLocationStrips, processMedia, removeDerivedFiles, stripStoredOriginal } from './media/process.js';
+import { logPublicEvent } from './lib/public-security.js';
+import { ensureMediaDirs, mediaPaths } from './media/storage.js';
 import { cleanupUploadSessions } from './routes/uploads.js';
 import { buildExport, cleanupExports } from './media/exports.js';
 import { renderPublic } from './media/privacy.js';
@@ -79,8 +80,10 @@ async function processJob(job: Job) {
       await pool.query(`UPDATE exports SET status = 'failed', error = $2 WHERE id = $1`, [job.payload.exportId, err.message.slice(0, 300)]);
     }
     if (job.kind === 'media.process' && res === 'dead') {
-      await pool.query(`UPDATE media SET status = 'rejected', reject_reason = 'Prüfung wiederholt fehlgeschlagen.', processed_at = now() WHERE id = $1 AND status = 'quarantine'`, [job.payload.mediaId]);
-      removeMediaFiles(String(job.payload.mediaId)); // #73
+      // Gesperrt statt gelöscht: Datei bleibt in der Quarantäne, „Erneut prüfen“ ist möglich (#73: Teildateien weg)
+      const r = await pool.query(`UPDATE media SET status = 'blocked', reject_step = 'error', reject_reason = 'Prüfung wiederholt fehlgeschlagen.', processed_at = now() WHERE id = $1 AND status = 'quarantine' RETURNING upload_link_id`, [job.payload.mediaId]);
+      removeDerivedFiles(String(job.payload.mediaId));
+      if (r.rowCount) await logPublicEvent('check_failed', { linkId: r.rows[0].upload_link_id, mediaId: String(job.payload.mediaId), detail: err.message, throttle: false });
     }
   } finally {
     clearInterval(beat);

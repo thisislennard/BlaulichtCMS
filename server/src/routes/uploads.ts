@@ -8,7 +8,7 @@ import type { Actor } from '../lib/audit.js';
 import { AppError, badRequest, notFound } from '../lib/errors.js';
 import { getSettings } from '../lib/settings.js';
 import { ensureMediaDirs, freeBytes, mediaPaths } from '../media/storage.js';
-import { finalizeUpload, mediaPayload, publicUploadContext, publicUploaderFrom, UPLOAD_REF_RE, uploadAllowance, type UploadContext } from './media.js';
+import { finalizeUpload, mediaPayload, publicRateLimit, publicUploadContext, publicUploaderFrom, UPLOAD_REF_RE, uploadAllowance, withPublicEvents, type UploadContext } from './media.js';
 import { assertLinkRoom } from '../media/public-link.js';
 import { assertFolder } from './media-organize.js';
 
@@ -225,31 +225,32 @@ export async function uploadRoutes(app: FastifyInstance) {
     return { collection: c, linkId: null, userId: req.auth!.user?.id ?? null, maxFileBytes: s['media.max_file_mb'] * 1024 * 1024, actor: req.auth!.actor };
   };
   const lim = (max: number) => ({ config: { rateLimit: { max, timeWindow: '1 minute' } } });
+  const plim = (max: number) => ({ config: { rateLimit: publicRateLimit(max) } });
   const tokenP = z.object({ token: z.string().min(10).max(100) });
   const sessP = z.object({ token: z.string().min(10).max(100), id: z.uuid() });
   const offQ = z.object({ offset: z.coerce.number().int().min(0) });
 
   /* Öffentlich über Upload-Link */
-  app.post('/public/upload/:token/sessions', lim(120), async (req) => {
+  app.post('/public/upload/:token/sessions', plim(120), async (req) => {
     const { token } = tokenP.parse(req.params);
     const ctx = await publicCtx(token, req);
     const body = createBody.parse(req.body);
     // Abgefragte Angaben und Bestätigung prüfen; abgeschaltete Felder werden verworfen
     const extra = publicUploaderFrom(ctx.link, { uploader: body.uploader, consent: body.consent, note: body.note });
     // Link-Kontingent (übernommene Dateien + offene Sitzungen) prüft createSession unter der Sammlungssperre (#151)
-    const r = await createSession(ctx, { ...body, note: extra.note }, extra);
+    const r = await withPublicEvents(req, ctx.link.id, () => createSession(ctx, { ...body, note: extra.note }, extra));
     return { id: r.id, received: r.received, size: r.size, complete: r.complete, duplicate: (r as any).duplicate ?? false, chunkSize: 8 * 1024 * 1024 };
   });
-  app.get('/public/upload/:token/sessions/:id', lim(600), async (req) => {
+  app.get('/public/upload/:token/sessions/:id', plim(600), async (req) => {
     const { token, id } = sessP.parse(req.params);
     const ctx = await publicCtx(token, req);
     return status(ctx.collection.id, id);
   });
-  app.put('/public/upload/:token/sessions/:id', { ...lim(600), bodyLimit: MAX_CHUNK + 1024 }, async (req) => {
+  app.put('/public/upload/:token/sessions/:id', { ...plim(600), bodyLimit: MAX_CHUNK + 1024 }, async (req) => {
     const { token, id } = sessP.parse(req.params);
     const { offset } = offQ.parse(req.query);
     const ctx = await publicCtx(token, req);
-    const r = await appendChunk(ctx, id, offset, req);
+    const r = await withPublicEvents(req, ctx.link.id, () => appendChunk(ctx, id, offset, req));
     // Öffentliche Antwort ohne interne Details
     return { id: r.id, received: r.received, size: r.size, complete: r.complete, duplicate: (r as any).duplicate ?? false };
   });

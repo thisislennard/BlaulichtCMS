@@ -16,6 +16,7 @@ import { Lightbox, MarkBox, MediaList, MediaThumb, mediaName, Pager, useGalleryP
 import { MediaDetailsDialog } from './MediaDetails';
 import { ReviewDialog, type Decision } from './ReviewDialog';
 import { descendantIds, FolderBar, FolderOptions, MoveCopyDialog, TagsDialog, type Folder } from './organize';
+import { useBlockedActions } from './MediaAdmin';
 
 type Filter = 'pending' | 'selected' | 'on_hold' | 'all' | 'problems';
 type Selection = 'pending' | 'selected' | 'skipped' | 'on_hold';
@@ -69,6 +70,8 @@ export default function CollectionDetail() {
   const manage = can('media.manage');
   const [privacyItem, setPrivacyItem] = useState<MediaItem | null>(null);
   const setFilter = (f: Filter) => (setFilterState(f), setPage(1));
+  const mediaAdmin = can('media.admin');
+  const blockedActions = useBlockedActions(() => refresh());
 
   const allMedia = q.data?.media ?? [];
   const folders = q.data?.folders ?? [];
@@ -338,7 +341,7 @@ export default function CollectionDetail() {
           { value: 'selected', label: 'Ausgewählt', count: lists.selected.length },
           ...(lists.on_hold.length ? [{ value: 'on_hold' as const, label: 'Zurückgestellt', count: lists.on_hold.length }] : []),
           { value: 'all', label: 'Alle', count: lists.all.length },
-          { value: 'problems', label: 'In Prüfung / abgewiesen', count: lists.problems.length },
+          { value: 'problems', label: 'In Prüfung / gesperrt', count: lists.problems.length },
         ]}
       />
       {current.length > 0 && (
@@ -431,6 +434,19 @@ export default function CollectionDetail() {
                   </div>
                 )}
                 {(m.status === 'rejected' || m.status === 'blocked') && <div className="text-err text-meta">{m.reject_reason}</div>}
+                {m.status === 'blocked' && mediaAdmin && (
+                  <div className="flex flex-wrap gap-1">
+                    <Button size="sm" icon="RefreshCw" onClick={() => void blockedActions.recheck(m.id)}>
+                      Erneut prüfen
+                    </Button>
+                    {m.reject_step === 'decode' && (
+                      <Button size="sm" icon="ShieldAlert" onClick={() => blockedActions.forceRelease(m.id, mediaName(m))}>
+                        Trotzdem freigeben
+                      </Button>
+                    )}
+                    <Button size="sm" iconOnly variant="danger" icon="Trash2" aria-label={`${mediaName(m)} endgültig löschen`} onClick={() => void blockedActions.purge(m.id, mediaName(m))} />
+                  </div>
+                )}
                 <div className="flex items-center gap-1 flex-wrap">
                   {m.status === 'ready' && m.selection !== 'pending' && <StatusBadge status={m.selection!} />}
                   {manage && m.status === 'ready' && (
@@ -467,6 +483,7 @@ export default function CollectionDetail() {
       {lightbox !== null && pageItems.length > 0 && <Lightbox items={pageItems} start={lightbox} onClose={() => setLightbox(null)} onDetails={(m) => (setLightbox(null), setDetails(m.id))} />}
       {details && <MediaDetailsDialog mediaId={details} manage={manage} onClose={() => setDetails(null)} onSaved={refresh} />}
       {privacyItem && <PrivacyDialog m={privacyItem} onClose={() => setPrivacyItem(null)} onSaved={() => refresh()} />}
+      {blockedActions.dialog}
       {exporting && <ExportDialog collectionId={id} selectedCount={lists.selected.length} ids={exporting.ids} folders={folders} currentFolder={folder} originals={manage} onClose={() => setExporting(null)} />}
       {moveCopy && <MoveCopyDialog mode={moveCopy.mode} ids={moveCopy.ids} defaultCollection={id} onClose={() => setMoveCopy(null)} onDone={() => (setMoveCopy(null), setMarked(new Set()), refresh())} />}
       {tagging && <TagsDialog ids={tagging.ids} current={tagging.current} onClose={() => setTagging(null)} onDone={() => (setTagging(null), refresh(), qc.invalidateQueries({ queryKey: ['media-tags'] }))} />}

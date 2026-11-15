@@ -92,7 +92,8 @@ clamd-Befehl `INSTREAM` über TCP, **bevor** Bild- und Videodecoder (sharp, ffmp
 | Ergebnis | Verhalten |
 |---|---|
 | sauber | normale Prüfung (Dateityp, Dekodierung, Vorschau, öffentliche Fassung) |
-| Treffer | Datei wird gelöscht, das Medium mit „Schadsoftware erkannt (Signatur)“ abgewiesen, Audit-Eintrag `media.malware_found`, Sicherheitsmeldung an die Administration |
+| Treffer | Datei wird sofort gelöscht, das Medium mit „Schadsoftware erkannt (Signatur)“ abgewiesen (nie freigebbar), Audit-Eintrag `media.malware_found`, Sicherheitsereignis und Sicherheitsmeldung an die Administration |
+| anderer Prüfbefund (Typ, Aufbau, Grenzen, Dekodierung) | Datei wird **gesperrt**: bleibt in der Quarantäne, „Erneut prüfen“, bei Videos mit reinem Dekodierbefund „Trotzdem freigeben“ (Begründung, Audit, Sicherheitsmeldung), Löschung nach `media.blocked_days` (30 Tage) |
 | clamd nicht erreichbar, Zeitüberschreitung, Fehler (z. B. Größengrenze) | Datei bleibt in der Quarantäne (nicht sichtbar), erneuter Versuch alle 10 Minuten; wartet eine Datei länger als 30 Minuten, gibt es eine Sicherheitsmeldung (höchstens alle 6 Stunden) |
 
 Einrichtung mit dem mitgelieferten Compose-Profil:
@@ -168,6 +169,8 @@ Standardwerte und der Lasttest unten. Abweichungen hier eintragen, damit Betrieb
 | Größe je Datei / Sammlung | 2 GB / 10 GB (Standard) | `media.max_file_mb`, `media.collection_max_gb` | Video-Einsätze; größere Sammlungen bewusst freigeben |
 | Aufbewahrung Medien | abgeschlossene Sammlungen (archiviert oder ohne aktiven Link) **365 Tage** nach der letzten Aktivität löschen, samt Originalen, Fassungen, Sammeldownloads und Links; Dateien in laufenden Beiträgen bleiben; fehlen einem später wieder aufgenommenen Beitrag dadurch Dateien, ist seine Freigabe nicht mehr auslieferbar (Hinweis „Dateien fehlen“, neue Fassung nötig) | `privacy.collection_retention_days` (Einstellungen → Datenschutz, 0 = nie) | Datenschutz: Zweckbindung der Uploads (Art. 5 Abs. 1 lit. e DSGVO); Probelauf „Was würde gelöscht?“ |
 | Papierkorb und abgewiesene Dateien | Dateien, Ordner und Sammlungen im Papierkorb samt Datensatz **30 Tage** nach dem Löschen endgültig entfernen; Datensätze abgewiesener Dateien ebenso | `privacy.deleted_media_days` | Papierkorb wie in LiFeOS: bis dahin wiederherstellbar; „Medien administrieren“ kann früher endgültig löschen; abgewiesene Dateien sind sofort weg |
+| Gesperrte Dateien | Dateien mit Prüfbefund samt Datensatz **30 Tage** nach der Prüfung löschen | `media.blocked_days` (0 = nie) | bis dahin erneut prüfbar |
+| Sicherheitsereignisse der Upload-Seiten | **365 Tage** | `media.security_log_days` (0 = unbegrenzt) | Ereignis, Link, Zeit, gekürzter IP-Hash (keine Klar-IP) |
 | Angaben der Hochladenden | Name, E-Mail-Adresse, Aufnahmeort und -datum (je Upload-Link abfragbar, Standard: nicht abgefragt) **12 Monate** nach dem Upload entfernen; die Dateien bleiben | `privacy.uploader_months` (0 = nie) | wie LiFeOS; zusätzlich je Link „Angaben der Hochladenden löschen“ |
 | Warnvorgänge | **365 Tage** nach dem letzten Bearbeitungsschritt des Vorgangs (samt Aktualisierungen und Entwarnung): Fassungen mit Rückrufkontakt, Freigaben samt PDF, Versandnachweise mit Empfängern | `privacy.warning_days` | Nachweis der Warnung für Rückfragen und Nachbereitung |
 | FE2-Einsatzmeldungen | **90 Tage** nach Eingang bzw. letzter Aktualisierung | `privacy.fe2_event_days` | Einsatzort und -zeit; Beiträge und Warnvorgänge daraus bleiben |
