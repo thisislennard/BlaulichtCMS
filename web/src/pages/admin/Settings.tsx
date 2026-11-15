@@ -92,6 +92,7 @@ const RANGES: Record<string, [number, number]> = {
   'media.max_file_mb': [1, 20000],
   'media.link_max_files': [1, 1000],
   'media.link_default_days': [1, 90],
+  'media.link_max_days': [1, 365],
   'media.collection_max_files': [1, 100000],
   'media.collection_max_gb': [1, 10000],
   'media.min_free_gb': [1, 10000],
@@ -414,6 +415,7 @@ export default function Settings() {
                   <NumField k="media.max_file_mb" label="Maximale Dateigröße" unit="MB" min={1} max={20000} v={v} set={set} ro={ro} />
                   <NumField k="media.link_max_files" label="Dateien je Upload-Link" min={1} max={1000} v={v} set={set} ro={ro} />
                   <NumField k="media.link_default_days" label="Upload-Link gültig (Standard)" unit={t("admin.common.days")} min={1} max={90} v={v} set={set} ro={ro} />
+                  <NumField k="media.link_max_days" label="Upload-Link höchstens gültig" help="Gilt auch für „Verlängern“ und „Bis Termin“." unit={t("admin.common.days")} min={1} max={365} v={v} set={set} ro={ro} />
                   <NumField k="media.collection_max_files" label="Dateien je Sammlung" min={1} max={100000} v={v} set={set} ro={ro} />
                   <NumField k="media.collection_max_gb" label="Speicher je Sammlung" unit="GB" min={1} max={10000} v={v} set={set} ro={ro} />
                   <NumField k="media.min_free_gb" label="Mindestens frei halten" help="Darunter werden Uploads gesperrt und der Healthcheck meldet einen Fehler." unit="GB" min={1} max={10000} v={v} set={set} ro={ro} />
@@ -425,6 +427,23 @@ export default function Settings() {
                   label="Standortdaten auch aus Originalen entfernen"
                   description="Nach der Prüfung werden GPS-Angaben, Seriennummern, Personen- und XMP/IPTC-Angaben verlustfrei aus dem Original entfernt (Bilddaten bleiben unverändert, Videos werden ohne Metadaten und Datenspuren umverpackt). Ältere Originale bereinigt der Hintergrunddienst nach und nach. Entfernte Angaben lassen sich nicht wiederherstellen."
                 />
+                <Switch
+                  checked={!!v["media.camera_buttons"]}
+                  disabled={ro}
+                  onChange={(x) => set("media.camera_buttons", x)}
+                  label="Knöpfe „Foto aufnehmen“ und „Video aufnehmen“ auf dem Handy anzeigen"
+                  description="Auf Touch-Geräten öffnen sie direkt die Kamera. Der große Knopf „Bilder oder Videos auswählen“ (Galerie) ist immer da."
+                />
+                <Switch
+                  checked={!!v["media.link_show_once"]}
+                  disabled={ro}
+                  onChange={(x) => set("media.link_show_once", x)}
+                  label="Upload-Links nur einmal anzeigen"
+                  description="Neue Links und QR-Codes erscheinen nur direkt nach dem Anlegen bzw. „Neu erzeugen“; gespeichert wird nur eine Prüfsumme. Aus: Link, QR-Code und Aushang lassen sich jederzeit erneut abrufen (verschlüsselt gespeichert). Gilt für neu angelegte und neu erzeugte Links."
+                />
+                <FieldWrap label="Text nach erfolgreichem Upload (optional)" htmlFor="s-media-done_text" help="Leer = „Die Dateien sind angekommen und werden geprüft, bevor sie verwendet werden.“ Die Vorgangsnummer erscheint immer darunter.">
+                  <Textarea id="s-media-done_text" rows={2} maxLength={1000} disabled={ro} value={v["media.done_text"] ?? ""} onChange={(e) => set("media.done_text", e.target.value)} />
+                </FieldWrap>
                 <div className="flex items-start gap-2.5 p-3 rounded-node bg-raised text-sm">
                   <Icon name="ShieldCheck" size={16} className="mt-0.5 text-fg-muted shrink-0" />
                   <span>Öffentliche Fassungen enthalten keine Standort- und Kameradaten. Originale bleiben privat und sind nur mit Recht abrufbar.</span>

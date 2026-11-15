@@ -37,7 +37,7 @@ Warnfeeds (amtliche Warnungen) ◀──Abruf───────────�
 | Bereich (Tabellen) | Betroffene | Daten | Löschfrist (Standard) | Einstellung |
 |---|---|---|---|---|
 | Uploads (`media`, `upload_sessions`) | Hochladende, abgebildete Personen | Fotos/Videos (ggf. Gesundheitsdaten, Kennzeichen, Minderjährige), Dateiname, Hinweis, Vorgangsnummer, Aufnahmezeit, Prüfsumme | abgeschlossene Sammlung **365 Tage** nach letzter Aktivität; gelöschte/abgewiesene Datensätze **30 Tage**; unterbrochene Uploads bis Ablauf der Sitzung | `privacy.collection_retention_days`, `privacy.deleted_media_days` |
-| Upload-Links (`upload_links`, `legacy_links`) | Redaktion (Bezeichnung) | Token (verschlüsselt), Bezeichnung, Frist | **90 Tage** nach Ablauf/Widerruf | `privacy.upload_link_days` |
+| Upload-Links (`upload_links`, `legacy_links`) | Redaktion (Bezeichnung, Begrüßungstext) | Token (verschlüsselt; mit „Link nur einmal anzeigen“ nur als Prüfsumme), Bezeichnung, Begrüßungstext, Frist | **90 Tage** nach Ablauf/Widerruf | `privacy.upload_link_days` |
 | Beiträge (`posts`, `post_revisions`, `approvals`, `publications`, `social_publications`) | Redaktion, im Text genannte Personen, Abgebildete | Texte, Fassungen, Freigaben, Veröffentlichungsstatus | keine automatische Löschung (redaktionelles Archiv); von Hand bearbeiten/zurückziehen | – |
 | Warnvorgänge (`warnings`, `warning_revisions`, `warning_approvals`, `warning_sends`) | Rückrufkontakte, Redaktion, Empfänger | Name, Telefon, E-Mail-Adressen, PDF, SMTP-Antworten | **365 Tage** nach dem letzten Bearbeitungsschritt | `privacy.warning_days` |
 | Zuständigkeiten (`responsibilities`) | Ansprechstellen | Funktionsadressen | solange gepflegt | – |
@@ -107,7 +107,7 @@ Umgesetzt in BlaulichtCMS (Bezug zu BSI IT-Grundschutz in Klammern, Einzelheiten
 | Ziel | Maßnahme |
 |---|---|
 | Zugangskontrolle (ORP.4) | Passwörter mit Argon2id, Zwei-Faktor (Pflicht für Administration und „Medien verwalten“), Sperre nach Fehlversuchen ohne gezieltes Aussperren, erneute Bestätigung bei kritischen Änderungen, Sitzungsdauer begrenzt |
-| Zugriffskontrolle (ORP.4, APP.3.1) | Rollen und Rechte serverseitig je Aktion und Datei; Originale nur mit „Medien verwalten“; Upload-Links befristet, widerrufbar, auf eine Sammlung beschränkt |
+| Zugriffskontrolle (ORP.4, APP.3.1) | Rollen und Rechte serverseitig je Aktion und Datei; Originale nur mit „Medien verwalten“; Upload-Links befristet, pausier- und widerrufbar, neu erzeugbar, auf eine Sammlung beschränkt; einheitliche Meldung für unbekannte, abgelaufene, pausierte und widerrufene Links |
 | Datenminimierung (CON.2) | Standort-/Kameradaten aus öffentlichen Fassungen und Originalen entfernt; neutrale Dateinamen nach außen; FE2-Allowlist; IP ohne Konto nach 30 Tagen entfernt; Hinweisfeld fragt nicht nach Namen; Markierung und Unkenntlichmachen sensibler Inhalte vor der Freigabe |
 | Speicherbegrenzung (CON.6) | Löschfristen je Datenart mit Probelauf und Audit; „Sammlung löschen“; Auskunft/Löschung je Person |
 | Vertraulichkeit (CON.1) | Geheimnisse und TOTP mit AES-256-GCM, Master-Schlüssel außerhalb der Datenbank und wechselbar (`rotate-master-key`); Sicherungen verschlüsselt mit getrenntem Schlüssel; HTTPS am Proxy, HSTS |

@@ -85,15 +85,24 @@ export interface Redaction extends Region {
 export interface UploadLink {
   id: string;
   label: string;
-  state: 'active' | 'expired' | 'revoked';
+  state: 'active' | 'paused' | 'expired' | 'revoked';
   url: string | null;
+  /** Link wurde nur einmal angezeigt (Einstellung „Link nur einmal anzeigen“) und ist nicht mehr abrufbar. */
+  url_hidden?: boolean;
+  /** Diese Antwort enthält den Link zum einzigen Mal. */
+  shown_once?: boolean;
   expires_at: string;
   revoked_at: string | null;
+  paused_at?: string | null;
+  welcome_text?: string;
+  regenerated_at?: string | null;
   max_files: number;
   max_file_bytes: number;
   upload_count: number;
   last_used_at: string | null;
   created_at: string;
+  created_by_name?: string | null;
+  bytes?: number | null;
 }
 
 export interface Site {

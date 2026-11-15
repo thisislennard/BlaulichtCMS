@@ -55,8 +55,12 @@ flowchart LR
 ### Fotos und Videos sammeln
 
 - **Foto-Link:** Mit einem Klick entsteht eine Sammlung mit befristetem, jederzeit widerrufbarem Upload-Link – als Link
-  zum Teilen, als QR-Code oder als A4-Aushang zum Drucken. Wer hochlädt, braucht kein Konto.
-- **Upload am Handy:** mehrere Dateien auf einmal, Fortschritt je Datei, unterbrochene Uploads werden fortgesetzt
+  zum Teilen (auch per WhatsApp oder E-Mail), als QR-Code (PNG/SVG) oder als A4-Aushang zum Drucken. Wer hochlädt,
+  braucht kein Konto.
+- **Links bedienen:** Gültigkeit in Stunden, Tagen oder bis zu einem Termin; pausieren, fortsetzen, verlängern, neu
+  erzeugen (alter Link und QR-Code sofort ungültig), eigener Begrüßungstext je Link.
+- **Upload am Handy:** großer Knopf für die Galerie, „Foto aufnehmen“ und „Video aufnehmen“ für die Kamera, mehrere
+  Dateien auf einmal, Fortschritt je Datei, unterbrochene Uploads werden fortgesetzt
   (auch große Videos), Vorgangsnummer für Rückfragen, Hinweis für das Team im Feld.
 - **Sicher eingesammelt:** Quarantäne, Prüfung von Dateityp und Inhalt, optional Virenscan (ClamAV), Größen- und
   Mengengrenzen je Link und Sammlung, Schutz vor Überlastung.

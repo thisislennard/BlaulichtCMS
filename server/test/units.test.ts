@@ -876,3 +876,26 @@ describe('In-App-Updates: Versionen, Paket, Signatur, Manifest, Zeiger', () => {
     expect(normalizeApiUrl('http://127.0.0.1:1234')).toBe('http://127.0.0.1:1234');
   });
 });
+
+describe('Upload-Links: Gültigkeit und Zustand (Medien wie LiFeOS)', () => {
+  it('berechnet Dauer, Termin und Verlängerung mit Höchstdauer', async () => {
+    const { computeExpiry, extendExpiry, linkState } = await import('../src/media/links.js');
+    const now = Date.parse('2026-11-15T10:00:00Z');
+    const opts = { defaultDays: 7, maxDays: 30 };
+    expect(computeExpiry({ hours: 6 }, opts, now).toISOString()).toBe('2026-11-15T16:00:00.000Z');
+    expect(computeExpiry({}, opts, now).toISOString()).toBe('2026-11-22T10:00:00.000Z');
+    expect(computeExpiry({ days: 90 }, opts, now).toISOString()).toBe('2026-12-15T10:00:00.000Z');
+    expect(computeExpiry({ expiresAt: '2026-11-16T08:30:00Z' }, opts, now).toISOString()).toBe('2026-11-16T08:30:00.000Z');
+    expect(() => computeExpiry({ expiresAt: '2026-11-15T10:03:00Z' }, opts, now)).toThrow(/5 Minuten/);
+    expect(() => computeExpiry({ expiresAt: '2027-01-01T00:00:00Z' }, opts, now)).toThrow(/höchstens 30 Tage/);
+    expect(() => computeExpiry({ expiresAt: 'morgen' }, opts, now)).toThrow(/Datum und Uhrzeit/);
+    // Verlängern ab bisherigem Ablauf, bei abgelaufenem Link ab jetzt, nie über die Höchstdauer
+    expect(extendExpiry('2026-11-16T10:00:00Z', 24, 30, now).toISOString()).toBe('2026-11-17T10:00:00.000Z');
+    expect(extendExpiry('2026-11-01T10:00:00Z', 24, 30, now).toISOString()).toBe('2026-11-16T10:00:00.000Z');
+    expect(extendExpiry('2026-12-14T10:00:00Z', 72, 30, now).toISOString()).toBe('2026-12-15T10:00:00.000Z');
+    expect(linkState({ expires_at: '2026-11-16T00:00:00Z' }, now)).toBe('active');
+    expect(linkState({ expires_at: '2026-11-16T00:00:00Z', paused_at: 'x' }, now)).toBe('paused');
+    expect(linkState({ expires_at: '2026-11-14T00:00:00Z', paused_at: 'x' }, now)).toBe('expired');
+    expect(linkState({ expires_at: '2026-11-16T00:00:00Z', revoked_at: 'x' }, now)).toBe('revoked');
+  });
+});

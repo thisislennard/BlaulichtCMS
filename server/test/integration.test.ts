@@ -282,7 +282,7 @@ describe('Foto-Link und Medien', () => {
     expect((await editor.post(`/upload-links/${l3.json.id}/revoke`)).json.state).toBe('revoked');
     const r = await anonymous.get(`/public/upload/${t3}`);
     expect(r.status).toBe(410);
-    expect(r.json.error).toBe('link_revoked');
+    expect(r.json.error).toBe('link_unavailable');
     expect((await anonymous.get(`/public/upload/unbekannt-unbekannt-1234`)).status).toBe(404);
   });
 });
@@ -3432,6 +3432,105 @@ describe('Löschfrist amtlicher Warnungen: noch gelieferte bleiben (#180)', () =
     await pool.query(`UPDATE connections SET status = 'revoked' WHERE id = $1`, [conn.id]);
   });
 });
+
+/* ---------------------------- Medien wie LiFeOS (Pakete 1–10) ---------------------------- */
+
+/** Neue Sammlung mit Link über die API; liefert IDs und Token. */
+async function mediaFixture(c: Client, title: string, link: Record<string, unknown> = {}) {
+  const col = (await c.post('/collections', { title, createLink: false })).json.collection;
+  const l = await c.post(`/collections/${col.id}/links`, link);
+  expect(l.status).toBe(200);
+  return { col, link: l.json, token: String(l.json.url ?? '').split('/u/')[1] ?? '' };
+}
+
+async function uploadPublic(token: string, name: string, data: Buffer, fields: Record<string, string> = {}) {
+  return anonymous.raw('POST', `/public/upload/${token}`, multipart({ name, data, type: 'image/jpeg' }, { clientKey: `k-${crypto.randomBytes(6).toString('hex')}`, ...fields }));
+}
+
+describe('Medien wie LiFeOS 1: Upload-Seite und Link-Bedienung', () => {
+  it('Gültigkeit in Stunden oder bis Termin, mit Höchstdauer', async () => {
+    const col = (await editor.post('/collections', { title: 'Link-Bedienung', createLink: true, linkHours: 6 })).json;
+    const exp = new Date(col.link.expires_at).getTime();
+    expect(Math.abs(exp - (Date.now() + 6 * 3600_000))).toBeLessThan(60_000);
+    const soon = new Date(Date.now() + 60_000).toISOString();
+    expect((await editor.post(`/collections/${col.collection.id}/links`, { expiresAt: soon })).status).toBe(400);
+    const far = new Date(Date.now() + 400 * 86400_000).toISOString();
+    expect((await editor.post(`/collections/${col.collection.id}/links`, { expiresAt: far })).status).toBe(400);
+    const date = new Date(Date.now() + 2 * 86400_000).toISOString();
+    const l = await editor.post(`/collections/${col.collection.id}/links`, { expiresAt: date, welcomeText: 'Willkommen beim Sommerfest!' });
+    expect(new Date(l.json.expires_at).toISOString()).toBe(date);
+    // Begrüßungstext je Link hat Vorrang, Kameraknöpfe und Erfolgstext kommen aus den Einstellungen
+    const info = await anonymous.get(`/public/upload/${l.json.url.split('/u/')[1]}`);
+    expect(info.json.welcome_text).toBe('Willkommen beim Sommerfest!');
+    expect(info.json.camera_buttons).toBe(true);
+    expect(info.json.done_text).toBeNull();
+    await admin.patch('/settings', { 'media.camera_buttons': false, 'media.done_text': 'Danke fürs Mitmachen!' });
+    const info2 = await anonymous.get(`/public/upload/${l.json.url.split('/u/')[1]}`);
+    expect(info2.json).toMatchObject({ camera_buttons: false, done_text: 'Danke fürs Mitmachen!' });
+    await admin.patch('/settings', { 'media.camera_buttons': true, 'media.done_text': '' });
+  });
+
+  it('Pausieren, Fortsetzen, Verlängern, Termin, Neu erzeugen – mit Audit und einheitlicher Meldung', async () => {
+    const { col, link, token } = await mediaFixture(editor, 'Pausen-Test', { hours: 24, label: 'Aushang' });
+    expect((await publisher.post(`/upload-links/${link.id}/pause`)).status).toBe(403);
+    const paused = await editor.post(`/upload-links/${link.id}/pause`);
+    expect(paused.json.state).toBe('paused');
+    // Link und QR-Code bleiben für den Aushang abrufbar
+    expect(paused.json.url).toContain('/u/');
+    const r = await anonymous.get(`/public/upload/${token}`);
+    expect(r.status).toBe(410);
+    expect(r.json.error).toBe('link_unavailable');
+    const unknown = await anonymous.get(`/public/upload/unbekannt-unbekannt-9999`);
+    expect(unknown.status).toBe(404);
+    expect(unknown.json.message).toBe(r.json.message);
+    expect((await uploadPublic(token, 'p.jpg', await photoWithGps())).status).toBe(410);
+    expect((await editor.post(`/upload-links/${link.id}/resume`)).json.state).toBe('active');
+    expect((await anonymous.get(`/public/upload/${token}`)).status).toBe(200);
+    // Verlängern ab dem bisherigen Ablauf
+    const ext = await editor.post(`/upload-links/${link.id}/extend`, { hours: 24 });
+    expect(new Date(ext.json.expires_at).getTime() - new Date(link.expires_at).getTime()).toBeGreaterThan(23 * 3600_000);
+    // „Bis Termin“ auch früher
+    const earlier = new Date(Date.now() + 3600_000).toISOString();
+    expect(new Date((await editor.patch(`/upload-links/${link.id}`, { expiresAt: earlier })).json.expires_at).toISOString()).toBe(earlier);
+    // Abgelaufen: Fortsetzen nur nach Verlängern
+    await pool.query(`UPDATE upload_links SET expires_at = now() - interval '1 minute', paused_at = now() WHERE id = $1`, [link.id]);
+    expect((await editor.post(`/upload-links/${link.id}/resume`)).status).toBe(400);
+    expect((await editor.post(`/upload-links/${link.id}/extend`, { hours: 6 })).json.state).toBe('paused');
+    await editor.post(`/upload-links/${link.id}/resume`);
+    // Neu erzeugen: alter Token ungültig, neuer gültig, Einstellungen bleiben
+    const re = await editor.post(`/upload-links/${link.id}/regenerate`);
+    const newToken = re.json.url.split('/u/')[1];
+    expect(newToken).not.toBe(token);
+    expect(re.json.label).toBe('Aushang');
+    expect((await anonymous.get(`/public/upload/${token}`)).status).toBe(404);
+    expect((await anonymous.get(`/public/upload/${newToken}`)).status).toBe(200);
+    const acts = (await many<any>(`SELECT action FROM audit_events WHERE object_id = $1 ORDER BY id`, [link.id])).map((a) => a.action);
+    for (const a of ['upload_link.created', 'upload_link.paused', 'upload_link.resumed', 'upload_link.extended', 'upload_link.updated', 'upload_link.regenerated']) expect(acts).toContain(a);
+    // Widerrufene Links lassen sich nicht mehr ändern
+    await editor.post(`/upload-links/${link.id}/revoke`);
+    expect((await editor.post(`/upload-links/${link.id}/resume`)).status).toBe(400);
+    expect((await editor.post(`/upload-links/${link.id}/regenerate`)).status).toBe(400);
+    expect((await editor.get(`/collections/${col.id}`)).json.links[0]).toMatchObject({ state: 'revoked', url: null, created_by_name: 'Robin' });
+  });
+
+  it('„Link nur einmal anzeigen“ speichert nur die Prüfsumme', async () => {
+    await admin.patch('/settings', { 'media.link_show_once': true });
+    const { col, link, token } = await mediaFixture(editor, 'Nur einmal');
+    expect(link.shown_once).toBe(true);
+    expect(token.length).toBeGreaterThan(10);
+    expect((await one<any>(`SELECT token_enc FROM upload_links WHERE id = $1`, [link.id])).token_enc).toBeNull();
+    const again = (await editor.get(`/collections/${col.id}`)).json.links[0];
+    expect(again).toMatchObject({ url: null, url_hidden: true, state: 'active' });
+    expect((await anonymous.get(`/public/upload/${token}`)).status).toBe(200);
+    // Neu erzeugen liefert den neuen Link genau einmal
+    const re = await editor.post(`/upload-links/${link.id}/regenerate`);
+    expect(re.json.shown_once).toBe(true);
+    expect((await anonymous.get(`/public/upload/${re.json.url.split('/u/')[1]}`)).status).toBe(200);
+    await admin.patch('/settings', { 'media.link_show_once': false });
+  });
+});
+
+/* @@MEDIA-TESTS-END@@ */
 
 describe('In-App-Updates aus GitHub-Releases', () => {
   const work = fs.mkdtempSync(path.join(os.tmpdir(), 'bc-upd-it-'));

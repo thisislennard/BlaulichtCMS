@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../api/client';
 import { fmtDateTime } from '../lib/format';
 import { Button, Notice, Spinner } from './ui/core';
-import { CopyButton, Dialog } from './ui/overlays';
+import { CopyButton, Dialog, Menu, useErrorToast } from './ui/overlays';
 
 /** QR-Code wird in BlaulichtCMS erzeugt (keine externen Dienste) und als SVG angezeigt. */
 export function QrImage({ text, size = 220, label }: { text: string; size?: number; label?: string }) {
@@ -84,8 +84,72 @@ export function QrDialog({ open, onClose, target }: { open: boolean; onClose: ()
   );
 }
 
-/** Einheitliche Aktionen für jede teilbare URL: Link kopieren, QR-Code anzeigen, Aushang drucken. */
-export function ShareActions({ target, size = 'sm', compact }: { target: ShareTarget; size?: 'sm' | 'md'; compact?: boolean }) {
+/** QR-Code als SVG vom Server holen (lokal erzeugt, keine externen Dienste). */
+async function fetchQrSvg(text: string): Promise<Blob> {
+  const res = await api<Response>('POST', '/qr', { text }, { raw: true });
+  if (!res.ok) throw new Error('QR-Code konnte nicht erzeugt werden.');
+  return res.blob();
+}
+
+function saveBlob(blob: Blob, name: string) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+
+/** QR-Code als PNG (1024 px) – im Browser aus dem SVG gezeichnet, ohne externe Dienste. */
+export async function downloadQrPng(text: string, name = 'qr-code.png') {
+  const svg = await fetchQrSvg(text);
+  const url = URL.createObjectURL(svg);
+  try {
+    const img = new Image();
+    await new Promise<void>((resolve, reject) => {
+      img.onload = () => resolve();
+      img.onerror = () => reject(new Error('QR-Code konnte nicht gezeichnet werden.'));
+      img.src = url;
+    });
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = 1024;
+    const ctx = canvas.getContext('2d')!;
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(img, 0, 0, 1024, 1024);
+    const png = await new Promise<Blob | null>((r) => canvas.toBlob(r, 'image/png'));
+    if (!png) throw new Error('QR-Code konnte nicht gespeichert werden.');
+    saveBlob(png, name);
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+/** Teilen per WhatsApp, E-Mail oder Systemdialog sowie QR-Code als Datei (wie LiFeOS). */
+export function ShareMenu({ target, size = 'sm' }: { target: ShareTarget; size?: 'sm' | 'md' }) {
+  const toastError = useErrorToast();
+  const text = `${target.purpose}: ${target.title}
+${target.url}`;
+  const canShare = typeof navigator !== 'undefined' && typeof navigator.share === 'function';
+  return (
+    <Menu
+      size={size}
+      icon="Share2"
+      label="Teilen"
+      items={[
+        canShare ? { label: 'Teilen …', icon: 'Share2', onClick: () => void navigator.share({ title: target.title, text: `${target.purpose}: ${target.title}`, url: target.url }).catch(() => {}) } : null,
+        { label: 'Per WhatsApp teilen', icon: 'MessageCircle', onClick: () => window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank', 'noopener') },
+        { label: 'Per E-Mail teilen', icon: 'Mail', onClick: () => (window.location.href = `mailto:?subject=${encodeURIComponent(`${target.purpose}: ${target.title}`)}&body=${encodeURIComponent(text)}`) },
+        { label: 'QR-Code als PNG', icon: 'FileDown', onClick: () => void downloadQrPng(target.url).catch(toastError) },
+        { label: 'QR-Code als SVG', icon: 'FileDown', onClick: () => void fetchQrSvg(target.url).then((b) => saveBlob(b, 'qr-code.svg')).catch(toastError) },
+      ]}
+    />
+  );
+}
+
+/** Einheitliche Aktionen für jede teilbare URL: Link kopieren, QR-Code anzeigen, Aushang drucken (optional Teilen-Menü). */
+export function ShareActions({ target, size = 'sm', compact, share }: { target: ShareTarget; size?: 'sm' | 'md'; compact?: boolean; share?: boolean }) {
   const [qr, setQr] = useState(false);
   return (
     <div className="flex flex-wrap gap-2">
@@ -98,6 +162,7 @@ export function ShareActions({ target, size = 'sm', compact }: { target: ShareTa
           Aushang drucken
         </Button>
       )}
+      {share && <ShareMenu target={target} size={size} />}
       <QrDialog open={qr} onClose={() => setQr(false)} target={target} />
     </div>
   );

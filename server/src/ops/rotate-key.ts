@@ -70,7 +70,7 @@ export async function reencryptDatabase(db: pg.PoolClient, oldKey: Buffer, newKe
     await db.query('UPDATE users SET totp_secret_enc = $2 WHERE id = $1', [u.id, encrypt(plain, aad.totp(u.id), newKey)]);
   }
 
-  const links = (await db.query<{ id: string; token_enc: string }>('SELECT id, token_enc FROM upload_links')).rows;
+  const links = (await db.query<{ id: string; token_enc: string }>('SELECT id, token_enc FROM upload_links WHERE token_enc IS NOT NULL')).rows;
   for (const l of links) {
     let plain = '';
     try {
@@ -90,7 +90,7 @@ export async function reencryptDatabase(db: pg.PoolClient, oldKey: Buffer, newKe
   // Gegenprobe vor dem Commit: alles mit dem neuen Schlüssel lesbar
   for (const s of (await db.query('SELECT owner_type, owner_id, version, ciphertext FROM secrets')).rows) decrypt(s.ciphertext, aad.secret(s.owner_type, s.owner_id, s.version), newKey);
   for (const u of (await db.query('SELECT id, totp_secret_enc FROM users WHERE totp_secret_enc IS NOT NULL')).rows) decrypt(u.totp_secret_enc, aad.totp(u.id), newKey);
-  for (const l of (await db.query('SELECT id, token_enc FROM upload_links')).rows) decrypt(l.token_enc, aad.uploadLink(l.id), newKey);
+  for (const l of (await db.query('SELECT id, token_enc FROM upload_links WHERE token_enc IS NOT NULL')).rows) decrypt(l.token_enc, aad.uploadLink(l.id), newKey);
 
   return { secrets: secrets.length, totp: users.length, links: links.length, recoveryUsers };
 }

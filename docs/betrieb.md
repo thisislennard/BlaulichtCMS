@@ -303,7 +303,7 @@ setzen den eingerichteten E-Mail-Versand voraus.
 | FE2-Zugangsschlüssel abgeflossen | Verbindungen → FE2 → „Neuen Zugangsschlüssel erzeugen“ und in FE2 eintragen |
 | Zugangsdaten sozialer Kanäle oder SMTP | Verbindung widerrufen bzw. Zugangsdaten neu setzen; das Passwort bzw. Token beim Anbieter ändern |
 | API-Schlüssel abgeflossen | API-Schlüssel widerrufen und neu erzeugen |
-| Upload-Link in falschen Händen | Sammlung → Link widerrufen; eingegangene Dateien in der Sichtung prüfen |
+| Upload-Link in falschen Händen | Sammlung → Link → „Neu erzeugen“ (alter Link und QR-Code sofort ungültig, Einstellungen bleiben) oder widerrufen; eingegangene Dateien in der Sichtung prüfen |
 | Master-Schlüssel oder Volume-Sicherung abgeflossen | Master-Schlüssel wechseln (`cli.js rotate-master-key --ja`, Abschnitt „Master-Schlüssel wechseln“), alle Zugangsdaten bei den Gegenstellen erneuern (soziale Kanäle, SMTP, Bridge neu koppeln, FE2-Schlüssel erneuern), Upload-Links widerrufen und neu ausgeben; Sicherungen getrennt vom Master-Schlüssel aufbewahren |
 | Audit-Kette meldet Auffälligkeiten | Belege sichern (Datenbanksicherung, zentrales Protokoll), Zugänge zum Docker-Host prüfen, ISB informieren |
 

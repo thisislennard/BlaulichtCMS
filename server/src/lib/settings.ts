@@ -69,6 +69,17 @@ export const DEFAULT_SETTINGS = {
   'media.max_file_mb': 2048,
   'media.link_max_files': 100,
   'media.link_default_days': 7,
+  /** Höchstdauer eines Upload-Links (auch für „Verlängern“ und „Bis Termin“). */
+  'media.link_max_days': 90,
+  /**
+   * Link und QR-Code nur einmal anzeigen (wie LiFeOS): dann wird nur die Prüfsumme des Tokens gespeichert. Standard aus –
+   * Link, QR-Code und Aushang lassen sich jederzeit erneut abrufen (verschlüsselt gespeichert).
+   */
+  'media.link_show_once': false,
+  /** Upload-Seite: Knöpfe „Foto aufnehmen“ und „Video aufnehmen“ auf Touch-Geräten. */
+  'media.camera_buttons': true,
+  /** Text nach erfolgreichem Upload (leer = Standardtext). */
+  'media.done_text': '',
   'media.collection_max_files': 500,
   'media.collection_max_gb': 10,
   'media.min_free_gb': 2,
@@ -158,6 +169,7 @@ export const SETTING_TEXT_MAX: Record<string, number> = {
   'privacy.dpo_contact': 300,
   'privacy.policy_url': 500,
   'privacy.upload_notice': 2000,
+  'media.done_text': 1000,
 };
 
 /** Datenschutzangaben für öffentliche Seiten (Upload-Seite, Aushang) – #96. */
@@ -201,6 +213,7 @@ export const SETTING_RANGES: Record<string, [number, number]> = {
   'media.max_file_mb': [1, 20000],
   'media.link_max_files': [1, 1000],
   'media.link_default_days': [1, 90],
+  'media.link_max_days': [1, 365],
   'media.collection_max_files': [1, 100000],
   'media.collection_max_gb': [1, 10000],
   'media.min_free_gb': [1, 10000],

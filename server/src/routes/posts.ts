@@ -7,7 +7,7 @@ import { audit } from '../lib/audit.js';
 import { AppError, badRequest, conflict, forbidden, notFound } from '../lib/errors.js';
 import { notify } from '../lib/notify.js';
 import { getSettings } from '../lib/settings.js';
-import { createCollection, createUploadLink, uploadLinkUrl } from './media.js';
+import { createCollection, createUploadLink, freshLinkUrl, uploadLinkUrl } from './media.js';
 import { approvalStillValid, assertMediaPresent, missingMediaCount } from '../lib/approval.js';
 
 export const POST_KINDS = ['news', 'incident', 'event', 'situation'] as const;
@@ -589,14 +589,15 @@ export async function postRoutes(app: FastifyInstance) {
   app.post('/posts/:id/collect', { preHandler: requireAnyAuth('post.edit', 'media.manage') }, async (req) => {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
     if (!req.auth!.permissions.has('media.manage')) throw forbidden('Zum Anlegen einer Sammlung fehlt das Recht „Medien verwalten“.');
-    const body = z.object({ days: z.number().int().min(1).max(90).optional() }).parse(req.body ?? {});
+    const body = z.object({ days: z.number().int().min(1).max(3650).optional() }).parse(req.body ?? {});
     const post = await one<any>('SELECT p.id, r.title FROM posts p JOIN post_revisions r ON r.post_id = p.id AND r.number = p.current_revision WHERE p.id = $1', [id]);
     if (!post) throw notFound();
     const userId = req.auth!.user?.id ?? null;
     // Mehrfaches Klicken legt keine zweite Sammlung an: vorhandene, nicht archivierte Sammlung mit gültigem Link verwenden
     const existing = await one<any>(
       `SELECT c.id AS cid, l.id, l.token_enc, l.expires_at FROM collections c JOIN upload_links l ON l.collection_id = c.id
-        WHERE c.post_id = $1 AND c.archived_at IS NULL AND l.revoked_at IS NULL AND l.expires_at > now() AND l.upload_count < l.max_files
+        WHERE c.post_id = $1 AND c.archived_at IS NULL AND l.revoked_at IS NULL AND l.paused_at IS NULL AND l.expires_at > now() AND l.upload_count < l.max_files
+          AND l.token_enc IS NOT NULL
         ORDER BY l.created_at DESC LIMIT 1`,
       [id],
     );
@@ -606,6 +607,6 @@ export async function postRoutes(app: FastifyInstance) {
       const l = await createUploadLink(req.auth!.actor, userId, c.id, { days: body.days, label: 'Beitrag' }, db);
       return { c, l };
     });
-    return { collectionId: c.id, linkId: l.id, url: await uploadLinkUrl(req, l.token_enc, l.id), expires_at: l.expires_at };
+    return { collectionId: c.id, linkId: l.id, url: await freshLinkUrl(req, l._token), expires_at: l.expires_at };
   });
 }

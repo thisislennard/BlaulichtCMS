@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { del, get, patch, post } from '../../api/client';
 import type { MediaItem, UploadLink } from '../../api/types';
 import { usePageMeta } from '../../components/layout/AppShell';
-import { ShareActions } from '../../components/share';
+import { UploadLinksCard } from './UploadLinks';
 import { Badge, Button, Card, cx, EmptyState, ErrorBox, FieldWrap, Input, Notice, PageHeader, Select, SkeletonRows, StatusBadge, Tabs } from '../../components/ui/core';
 import { Icon } from '../../components/ui/Icon';
 import { Dialog, Menu, useErrorToast, useToast, useConfirm } from '../../components/ui/overlays';
@@ -229,7 +229,6 @@ export default function CollectionDetail() {
   const toastError = useErrorToast();
   const [filter, setFilter] = useState<Filter>('pending');
   const [review, setReview] = useState(false);
-  const [linkDialog, setLinkDialog] = useState(false);
   const [assign, setAssign] = useState(false);
   const [editing, setEditing] = useState(false);
   const [exporting, setExporting] = useState(false);
@@ -290,7 +289,6 @@ export default function CollectionDetail() {
   if (q.isLoading) return <SkeletonRows rows={6} />;
   if (q.error) return <ErrorBox title="Sammlung konnte nicht geladen werden">{(q.error as Error).message}</ErrorBox>;
   const c = q.data!.collection;
-  const activeLinks = q.data!.links.filter((l) => l.state === 'active');
 
   return (
     <div className="flex flex-col gap-5">
@@ -398,67 +396,7 @@ export default function CollectionDetail() {
         </Notice>
       )}
 
-      {manage && (
-        <Card
-          title="Upload-Links"
-          subtitle="Personen ohne Konto laden über den Link oder QR-Code in genau diese Sammlung hoch."
-          action={
-            <Button size="sm" icon="Plus" onClick={() => setLinkDialog(true)} disabled={!!c.archived_at}>
-              Neuer Link
-            </Button>
-          }
-        >
-          {me?.instance.privacy?.incomplete && (
-            <Notice tone="warning" className="mb-2" title="Datenschutzangaben fehlen">
-              Die Upload-Seite nennt noch keine verantwortliche Stelle bzw. keine Datenschutzerklärung (Art. 13 DSGVO). Bitte unter{' '}
-              <Link to="/einstellungen#datenschutz">Einstellungen → Datenschutz</Link> eintragen.
-            </Notice>
-          )}
-          {q.data!.links.length === 0 && <p className="m-0 text-sm text-fg-muted">Noch kein Upload-Link.</p>}
-          {c.archived_at && q.data!.links.some((l) => l.state === 'active') && (
-            <Notice className="mb-2">Die Sammlung ist archiviert – über ihre Links kann niemand hochladen. Nach „Wiederherstellen“ gelten aktive Links wieder.</Notice>
-          )}
-          <ul className="m-0 p-0 list-none flex flex-col divide-y divide-line">
-            {q.data!.links.map((l) => (
-              <li key={l.id} className="py-3 flex flex-col gap-2">
-                <div className="flex flex-wrap items-center gap-2">
-                  {c.archived_at && l.state === 'active' ? <Badge tone="neutral">Pausiert</Badge> : <StatusBadge status={l.state} />}
-                  <span className="font-medium">{l.label || 'Upload-Link'}</span>
-                  <span className="text-sm text-fg-muted">
-                    {l.state === 'active' ? `gültig bis ${fmtDateTime(l.expires_at)}` : l.state === 'revoked' ? `widerrufen ${fmtRelative(l.revoked_at)}` : `abgelaufen ${fmtRelative(l.expires_at)}`} · {l.upload_count} von {l.max_files} Dateien
-                  </span>
-                </div>
-                {l.state === 'active' && l.url && !c.archived_at && (
-                  <div className="flex flex-wrap items-center gap-2">
-                    <ShareActions
-                      target={{
-                        url: l.url,
-                        title: c.title,
-                        purpose: c.purpose || 'Fotos und Videos hochladen',
-                        validUntil: l.expires_at,
-                        sensitive: 'Jede Person mit diesem Link oder QR-Code kann bis zum Ablauf Dateien in diese Sammlung hochladen. Beim Widerruf verliert auch ein gedruckter Code seine Wirkung.',
-                      }}
-                    />
-                    <Button
-                      size="sm"
-                      variant="danger"
-                      icon="Ban"
-                      onClick={async () => {
-                        if (!(await ask({ title: 'Upload-Link widerrufen?', text: 'Auch gedruckte QR-Codes und Aushänge funktionieren danach nicht mehr.', confirmLabel: 'Widerrufen' }))) return;
-                        await post(`/upload-links/${l.id}/revoke`).catch(toastError);
-                        refresh();
-                      }}
-                    >
-                      Widerrufen
-                    </Button>
-                  </div>
-                )}
-              </li>
-            ))}
-          </ul>
-          {activeLinks.length === 0 && q.data!.links.length > 0 && <p className="m-0 mt-2 text-sm text-fg-muted">Kein aktiver Link – Uploads von außen sind gesperrt.</p>}
-        </Card>
-      )}
+      {manage && <UploadLinksCard collection={c} links={q.data!.links} onChanged={refresh} />}
 
       <Tabs
         label="Medien filtern"
@@ -539,7 +477,6 @@ export default function CollectionDetail() {
       )}
       {review && <ReviewDialog items={lists.pending} onClose={() => setReview(false)} onDecide={(m, s) => setSelection([m.id], s).catch(toastError)} onChanged={refresh} />}
       {privacyItem && <PrivacyDialog m={privacyItem} onClose={() => setPrivacyItem(null)} onSaved={() => refresh()} />}
-      {linkDialog && <NewLinkDialog collectionId={id} onClose={() => (setLinkDialog(false), refresh())} />}
       {exporting && <ExportDialog collectionId={id} selectedCount={lists.selected.length} originals={manage} onClose={() => setExporting(false)} />}
       {assign && <AssignPostDialog collectionId={id} current={c.post_id} onClose={() => (setAssign(false), refresh())} />}
       {editing && <EditCollectionDialog collection={c} onClose={() => (setEditing(false), refresh())} />}
@@ -603,51 +540,6 @@ function ExportDialog({ collectionId, selectedCount, originals, onClose }: { col
           <Icon name="Hourglass" size={16} /> ZIP mit {job.files} Dateien wird erstellt … Du kannst den Dialog schließen; die Datei bleibt 24 Stunden verfügbar.
         </div>
       )}
-    </Dialog>
-  );
-}
-
-function NewLinkDialog({ collectionId, onClose }: { collectionId: string; onClose: () => void }) {
-  const toastError = useErrorToast();
-  const [days, setDays] = useState(7);
-  const [label, setLabel] = useState('');
-  const [busy, setBusy] = useState(false);
-  return (
-    <Dialog
-      open
-      onClose={onClose}
-      title="Neuer Upload-Link"
-      footer={
-        <>
-          <Button onClick={onClose}>Abbrechen</Button>
-          <Button
-            variant="primary"
-            loading={busy}
-            onClick={async () => {
-              setBusy(true);
-              try {
-                await post(`/collections/${collectionId}/links`, { days, label: label.trim() });
-                onClose();
-              } catch (e) {
-                toastError(e);
-              } finally {
-                setBusy(false);
-              }
-            }}
-          >
-            Link erstellen
-          </Button>
-        </>
-      }
-    >
-      <div className="flex flex-col gap-4">
-        <FieldWrap label="Bezeichnung" help="Nur intern sichtbar, z. B. „Aushang Gerätehaus“." htmlFor="l-label">
-          <Input id="l-label" value={label} onChange={(e) => setLabel(e.target.value)} maxLength={80} />
-        </FieldWrap>
-        <FieldWrap label="Gültig für (Tage)" htmlFor="l-days">
-          <Input id="l-days" type="number" min={1} max={90} value={days} onChange={(e) => setDays(Number(e.target.value))} className="max-w-[120px]" />
-        </FieldWrap>
-      </div>
     </Dialog>
   );
 }

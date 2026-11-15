@@ -8,6 +8,12 @@ import { uploadResumable } from '../../lib/upload';
 
 interface LinkInfo {
   collection: { title: string; purpose: string; note: string };
+  /** Begrüßungstext des Links (Vorrang vor dem Hinweis der Sammlung) */
+  welcome_text?: string | null;
+  /** Knöpfe „Foto aufnehmen“/„Video aufnehmen“ auf Touch-Geräten */
+  camera_buttons?: boolean;
+  /** eigener Text nach erfolgreichem Upload */
+  done_text?: string | null;
   organization: string;
   expires_at: string;
   max_file_bytes: number;
@@ -94,6 +100,16 @@ export function UploadPage() {
   const [uploadRef] = useState(newUploadRef);
   const inputRef = useRef<HTMLInputElement>(null);
   const cameraRef = useRef<HTMLInputElement>(null);
+  const videoRef = useRef<HTMLInputElement>(null);
+  // Kameraknöpfe nur auf Touch-Geräten (wie LiFeOS); am Rechner öffnet „capture“ ohnehin nur die Dateiauswahl
+  const [touch, setTouch] = useState(() => typeof window !== 'undefined' && !!window.matchMedia?.('(pointer: coarse)').matches);
+  useEffect(() => {
+    const mq = window.matchMedia?.('(pointer: coarse)');
+    if (!mq) return;
+    const on = () => setTouch(mq.matches);
+    mq.addEventListener?.('change', on);
+    return () => mq.removeEventListener?.('change', on);
+  }, []);
 
   useEffect(() => {
     document.title = 'Fotos und Videos hochladen';
@@ -101,9 +117,10 @@ export function UploadPage() {
       .then(setInfo)
       .catch((e: ApiError) =>
         setError({
+          // Einheitlich für unbekannt, abgelaufen, pausiert und widerrufen (verrät nichts über den Link);
           // 400 = Token unvollständig (z. B. abgeschnitten beim Kopieren) – wie ein unbekannter Link behandeln
-          title: e.status === 410 ? 'Link nicht mehr gültig' : e.status === 404 || e.status === 400 ? 'Link ungültig' : 'Fehler',
-          text: e.status === 400 ? 'Dieser Upload-Link ist unvollständig. Bitte den Link oder QR-Code erneut öffnen.' : e.message,
+          title: [400, 404, 410].includes(e.status) ? 'Dieser Link funktioniert nicht (mehr)' : 'Fehler',
+          text: e.status === 400 ? 'Der Link ist unvollständig. Bitte den Link oder QR-Code erneut öffnen oder bei der Redaktion einen aktuellen Link erfragen.' : e.message,
         }),
       );
   }, [token]);
@@ -170,7 +187,7 @@ export function UploadPage() {
               {info.collection.purpose && <p className="m-0 text-fg-muted">{info.collection.purpose}</p>}
               <div className="text-sm text-fg-muted">Uploads möglich bis {fmtDateTime(info.expires_at)}</div>
             </header>
-            {info.collection.note && <Notice>{info.collection.note}</Notice>}
+            {(info.welcome_text || info.collection.note) && <Notice><span className="whitespace-pre-line">{info.welcome_text || info.collection.note}</span></Notice>}
             {info.setup_hint && (
               <Notice tone="warning" title="Hinweis für die Verwaltung">
                 Verantwortliche Stelle bzw. Datenschutzerklärung sind noch nicht eingetragen (Einstellungen → Datenschutz). Diesen Hinweis sehen nur angemeldete Personen mit Verwaltungsrechten.
@@ -181,16 +198,24 @@ export function UploadPage() {
               Ausgewählte Aufnahmen können auf der Website und in sozialen Medien veröffentlicht werden. Erfasst werden Dateien, Ihr freiwilliger Hinweis und Ihre IP-Adresse (Missbrauchsschutz).{' '}
               <a href="#datenschutz">Hinweise zum Datenschutz</a>
             </p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <Button variant="primary" size="md" icon="Camera" className="!h-14 !text-base" onClick={() => cameraRef.current?.click()}>
-                Foto aufnehmen
+            <div className="flex flex-col gap-3">
+              <Button variant="primary" size="md" icon="Images" className="!h-16 !text-base" onClick={() => inputRef.current?.click()}>
+                Bilder oder Videos auswählen
               </Button>
-              <Button size="md" icon="Images" className="!h-14 !text-base" onClick={() => inputRef.current?.click()}>
-                Dateien auswählen
-              </Button>
+              {info.camera_buttons !== false && touch && (
+                <div className="grid grid-cols-2 gap-3">
+                  <Button size="md" icon="Camera" className="!h-12" onClick={() => cameraRef.current?.click()}>
+                    Foto aufnehmen
+                  </Button>
+                  <Button size="md" icon="Video" className="!h-12" onClick={() => videoRef.current?.click()}>
+                    Video aufnehmen
+                  </Button>
+                </div>
+              )}
             </div>
+            <input ref={inputRef} type="file" accept={info.accept} multiple className="sr-only" aria-label="Bilder oder Videos auswählen" onChange={(e) => (addFiles(e.target.files), (e.target.value = ''))} />
             <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="sr-only" tabIndex={-1} aria-hidden="true" onChange={(e) => (addFiles(e.target.files), (e.target.value = ''))} />
-            <input ref={inputRef} type="file" accept={info.accept} multiple className="sr-only" aria-label="Fotos oder Videos auswählen" onChange={(e) => (addFiles(e.target.files), (e.target.value = ''))} />
+            <input ref={videoRef} type="file" accept="video/*" capture="environment" className="sr-only" tabIndex={-1} aria-hidden="true" onChange={(e) => (addFiles(e.target.files), (e.target.value = ''))} />
 
             <label className="flex flex-col gap-1.5 text-sm">
               <span className="font-medium">Hinweis (optional)</span>
@@ -239,7 +264,7 @@ export function UploadPage() {
                 )}
                 {done > 0 && !busy && !waiting && !failed && (
                   <Notice tone="success" title="Vielen Dank!">
-                    Die Dateien sind angekommen und werden geprüft, bevor sie verwendet werden.
+                    {info.done_text ? <span className="whitespace-pre-line">{info.done_text}</span> : 'Die Dateien sind angekommen und werden geprüft, bevor sie verwendet werden.'}
                     <span className="block mt-1">
                       Ihre Vorgangsnummer: <strong className="font-mono">{uploadRef}</strong> – bitte notieren. Mit ihr können Sie später Auskunft oder die Löschung Ihrer Dateien verlangen.
                     </span>

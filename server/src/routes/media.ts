@@ -16,6 +16,7 @@ import { exportPath } from '../media/exports.js';
 import { publicFileName } from '../media/names.js';
 import { privacyInput, renderPublic } from '../media/privacy.js';
 import { purgeCollection } from '../lib/retention.js';
+import { computeExpiry, extendExpiry, LINK_UNAVAILABLE, linkState } from '../media/links.js';
 import { freeBytes, mediaPaths, moveFile, removeMediaFiles, SizeLimitError, streamToTemp } from '../media/storage.js';
 
 const linkAad = aad.uploadLink;
@@ -23,30 +24,40 @@ const linkAad = aad.uploadLink;
 /** Vorgangsnummer eines Upload-Vorgangs (#141): zwei Vierergruppen ohne verwechselbare Zeichen, z. B. „K7M2-Q9XD“. */
 export const UPLOAD_REF_RE = /^[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}$/;
 
-export async function uploadLinkUrl(req: FastifyRequest | undefined, tokenEnc: string, linkId: string) {
+export async function uploadLinkUrl(req: FastifyRequest | undefined, tokenEnc: string | null, linkId: string): Promise<string | null> {
+  if (!tokenEnc) return null;
   return `${await publicBase(req)}/u/${decrypt(tokenEnc, linkAad(linkId))}`;
 }
 
-function linkState(l: any): 'active' | 'expired' | 'revoked' {
-  if (l.revoked_at) return 'revoked';
-  if (new Date(l.expires_at).getTime() <= Date.now()) return 'expired';
-  return 'active';
+/** Adresse aus dem Klartext-Token (nur direkt nach Anlegen bzw. „Neu erzeugen“ bekannt). */
+export async function freshLinkUrl(req: FastifyRequest | undefined, token: string) {
+  return `${await publicBase(req)}/u/${token}`;
 }
 
-async function linkPayload(req: FastifyRequest, l: any) {
+export async function linkPayload(req: FastifyRequest, l: any) {
   const state = linkState(l);
+  // Frisch angelegter oder neu erzeugter Link: Klartext-Token liegt nur in diesem Aufruf vor (auch bei „nur einmal anzeigen“)
+  const url = l._token ? await freshLinkUrl(req, l._token) : state === 'active' || state === 'paused' ? await uploadLinkUrl(req, l.token_enc, l.id) : null;
   return {
     id: l.id,
     label: l.label,
     state,
-    url: state === 'active' ? await uploadLinkUrl(req, l.token_enc, l.id) : null,
+    url,
+    // Link nur einmal angezeigt (media.link_show_once): später nicht mehr abrufbar, „Neu erzeugen“ liefert einen neuen
+    url_hidden: !l.token_enc && !l._token,
+    shown_once: !!l._token && !l.token_enc,
     expires_at: l.expires_at,
     revoked_at: l.revoked_at,
+    paused_at: l.paused_at ?? null,
+    welcome_text: l.welcome_text ?? '',
+    regenerated_at: l.regenerated_at ?? null,
     max_files: l.max_files,
     max_file_bytes: Number(l.max_file_bytes),
     upload_count: l.upload_count,
     last_used_at: l.last_used_at,
     created_at: l.created_at,
+    created_by_name: l.created_by_name ?? null,
+    bytes: l.bytes != null ? Number(l.bytes) : null,
   };
 }
 
@@ -102,20 +113,41 @@ export async function createCollection(actor: Actor, userId: string | null, inpu
   return c;
 }
 
-export async function createUploadLink(actor: Actor, userId: string | null, collectionId: string, input: { days?: number; label?: string; maxFiles?: number }, db: any = pool) {
+export interface LinkInput {
+  days?: number;
+  hours?: number;
+  expiresAt?: string;
+  label?: string;
+  maxFiles?: number;
+  welcomeText?: string;
+}
+
+export async function createUploadLink(actor: Actor, userId: string | null, collectionId: string, input: LinkInput, db: any = pool) {
   const s = await getSettings();
   const token = randomToken(18);
   const id = crypto.randomUUID();
-  const days = Math.min(90, Math.max(1, input.days ?? s['media.link_default_days']));
+  const expires = computeExpiry(input, { defaultDays: s['media.link_default_days'], maxDays: s['media.link_max_days'] });
+  // „Link nur einmal anzeigen“: nur die Prüfsumme speichern, Link/QR-Code gibt es genau in dieser Antwort
+  const tokenEnc = s['media.link_show_once'] ? null : encrypt(token, linkAad(id));
   const l = await one<any>(
-    `INSERT INTO upload_links (id, collection_id, token_hash, token_enc, label, expires_at, max_file_bytes, max_files, created_by)
-     VALUES ($1,$2,$3,$4,$5, now() + make_interval(days => $6), $7, $8, $9) RETURNING *`,
-    [id, collectionId, sha256Hex(token), encrypt(token, linkAad(id)), input.label ?? '', days, s['media.max_file_mb'] * 1024 * 1024, Math.min(1000, input.maxFiles ?? s['media.link_max_files']), userId],
+    `INSERT INTO upload_links (id, collection_id, token_hash, token_enc, label, expires_at, max_file_bytes, max_files, welcome_text, created_by)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
+    [id, collectionId, sha256Hex(token), tokenEnc, input.label ?? '', expires, s['media.max_file_mb'] * 1024 * 1024, Math.min(1000, input.maxFiles ?? s['media.link_max_files']), (input.welcomeText ?? '').trim().slice(0, 2000), userId],
     db,
   );
-  await audit(actor, 'upload_link.created', { type: 'upload_link', id: l.id, label: input.label || collectionId }, { sammlung: collectionId, tage: days }, 'ok', db);
-  return l;
+  await audit(actor, 'upload_link.created', { type: 'upload_link', id: l.id, label: input.label || collectionId }, { sammlung: collectionId, gueltig_bis: expires.toISOString(), nur_einmal: !tokenEnc }, 'ok', db);
+  return { ...l, _token: token };
 }
+
+/** Eingaben für Gültigkeit und Begrüßungstext eines Links (Anlegen). */
+const linkInputSchema = z.object({
+  days: z.number().int().min(1).max(3650).optional(),
+  hours: z.number().int().min(1).max(87600).optional(),
+  expiresAt: z.iso.datetime({ offset: true }).optional(),
+  label: z.string().trim().max(80).default(''),
+  maxFiles: z.number().int().min(1).max(1000).optional(),
+  welcomeText: z.string().max(2000).default(''),
+});
 
 /** Nimmt genau eine Datei entgegen (Multipart), legt sie in Quarantäne und plant die Prüfung ein. */
 async function receiveFile(req: FastifyRequest, opts: UploadContext) {
@@ -262,10 +294,9 @@ export async function loadPublicLink(token: string) {
        FROM upload_links l JOIN collections c ON c.id = l.collection_id WHERE l.token_hash = $1`,
     [sha256Hex(token)],
   );
-  if (!l) throw new AppError(404, 'link_invalid', 'Dieser Upload-Link ist ungültig. Bitte den Link oder QR-Code erneut prüfen.');
-  if (l.revoked_at) throw new AppError(410, 'link_revoked', 'Dieser Upload-Link wurde widerrufen. Uploads sind nicht mehr möglich.');
-  if (new Date(l.expires_at).getTime() <= Date.now()) throw new AppError(410, 'link_expired', 'Dieser Upload-Link ist abgelaufen. Uploads sind nicht mehr möglich.');
-  if (l.c_archived) throw new AppError(410, 'link_closed', 'Diese Sammlung ist geschlossen.');
+  // Einheitliche Meldung (wie LiFeOS): verrät nicht, ob es den Link gibt und warum er nicht (mehr) geht
+  if (!l) throw new AppError(404, 'link_unavailable', LINK_UNAVAILABLE);
+  if (l.revoked_at || new Date(l.expires_at).getTime() <= Date.now() || l.paused_at || l.c_archived) throw new AppError(410, 'link_unavailable', LINK_UNAVAILABLE);
   return l;
 }
 
@@ -291,13 +322,22 @@ export async function mediaRoutes(app: FastifyInstance) {
 
   app.post('/collections', { preHandler: requireAuth('media.manage') }, async (req) => {
     const body = z
-      .object({ title: z.string().trim().min(2).max(120), purpose: z.string().trim().max(300).default(''), note: z.string().trim().max(1000).default(''), postId: z.uuid().nullable().optional(), createLink: z.boolean().default(true), linkDays: z.number().int().min(1).max(90).optional() })
+      .object({
+        title: z.string().trim().min(2).max(120),
+        purpose: z.string().trim().max(300).default(''),
+        note: z.string().trim().max(1000).default(''),
+        postId: z.uuid().nullable().optional(),
+        createLink: z.boolean().default(true),
+        linkDays: z.number().int().min(1).max(3650).optional(),
+        linkHours: z.number().int().min(1).max(87600).optional(),
+        linkExpiresAt: z.iso.datetime({ offset: true }).optional(),
+      })
       .parse(req.body);
     if (body.postId && !(await one('SELECT 1 FROM posts WHERE id = $1', [body.postId]))) throw notFound('Beitrag nicht gefunden.');
     const userId = req.auth!.user?.id ?? null;
     const { c, l } = await tx(async (db) => {
       const c = await createCollection(req.auth!.actor, userId, { title: body.title, purpose: body.purpose, note: body.note, postId: body.postId }, db);
-      const l = body.createLink ? await createUploadLink(req.auth!.actor, userId, c.id, { days: body.linkDays }, db) : null;
+      const l = body.createLink ? await createUploadLink(req.auth!.actor, userId, c.id, { days: body.linkDays, hours: body.linkHours, expiresAt: body.linkExpiresAt }, db) : null;
       return { c, l };
     });
     return { collection: c, link: l ? await linkPayload(req, l) : null };
@@ -311,7 +351,14 @@ export async function mediaRoutes(app: FastifyInstance) {
       `SELECT m.*, u.name AS uploaded_by_name FROM media m LEFT JOIN users u ON u.id = m.uploaded_by WHERE m.collection_id = $1 AND m.deleted_at IS NULL ORDER BY m.sort_order, m.created_at`,
       [id],
     );
-    const links = req.auth!.permissions.has('media.manage') ? await many<any>(`SELECT * FROM upload_links WHERE collection_id = $1 ORDER BY created_at DESC`, [id]) : [];
+    const links = req.auth!.permissions.has('media.manage')
+      ? await many<any>(
+          `SELECT l.*, u.name AS created_by_name,
+                  (SELECT COALESCE(sum(m.size_bytes),0) FROM media m WHERE m.upload_link_id = l.id AND m.deleted_at IS NULL AND m.status <> 'rejected') AS bytes
+             FROM upload_links l LEFT JOIN users u ON u.id = l.created_by WHERE l.collection_id = $1 ORDER BY l.created_at DESC`,
+          [id],
+        )
+      : [];
     return {
       collection: { ...c, max_bytes: Number(c.max_bytes) },
       media: media.map(mediaPayload),
@@ -350,7 +397,7 @@ export async function mediaRoutes(app: FastifyInstance) {
 
   app.post('/collections/:id/links', { preHandler: requireAuth('media.manage') }, async (req) => {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
-    const body = z.object({ days: z.number().int().min(1).max(90).optional(), label: z.string().trim().max(80).default(''), maxFiles: z.number().int().min(1).max(1000).optional() }).parse(req.body ?? {});
+    const body = linkInputSchema.parse(req.body ?? {});
     const c = await one<any>('SELECT id, archived_at FROM collections WHERE id = $1', [id]);
     if (!c) throw notFound('Sammlung nicht gefunden.');
     if (c.archived_at) throw badRequest('Die Sammlung ist archiviert.');
@@ -358,12 +405,84 @@ export async function mediaRoutes(app: FastifyInstance) {
     return linkPayload(req, l);
   });
 
+  /** Link laden, der noch geändert werden darf (nicht widerrufen). */
+  const changeableLink = async (id: string) => {
+    const l = await one<any>(`SELECT * FROM upload_links WHERE id = $1`, [id]);
+    if (!l) throw notFound('Link nicht gefunden.');
+    if (l.revoked_at) throw badRequest('Der Link ist widerrufen und lässt sich nicht mehr ändern.');
+    return l;
+  };
+
   app.post('/upload-links/:id/revoke', { preHandler: requireAuth('media.manage') }, async (req) => {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
     const l = await one<any>(`UPDATE upload_links SET revoked_at = COALESCE(revoked_at, now()), revoked_by = COALESCE(revoked_by, $2) WHERE id = $1 RETURNING *`, [id, req.auth!.user?.id ?? null]);
     if (!l) throw notFound('Link nicht gefunden.');
     await audit(req.auth!.actor, 'upload_link.revoked', { type: 'upload_link', id, label: l.label || l.collection_id });
     return linkPayload(req, l);
+  });
+
+  /* Pausieren: niemand kann hochladen; nach „Fortsetzen“ gilt der Link (auch gedruckt) wieder */
+  app.post('/upload-links/:id/pause', { preHandler: requireAuth('media.manage') }, async (req) => {
+    const { id } = z.object({ id: z.uuid() }).parse(req.params);
+    await changeableLink(id);
+    const l = await one<any>(`UPDATE upload_links SET paused_at = COALESCE(paused_at, now()), paused_by = COALESCE(paused_by, $2) WHERE id = $1 RETURNING *`, [id, req.auth!.user?.id ?? null]);
+    await audit(req.auth!.actor, 'upload_link.paused', { type: 'upload_link', id, label: l.label || l.collection_id });
+    return linkPayload(req, l);
+  });
+
+  app.post('/upload-links/:id/resume', { preHandler: requireAuth('media.manage') }, async (req) => {
+    const { id } = z.object({ id: z.uuid() }).parse(req.params);
+    const cur = await changeableLink(id);
+    if (new Date(cur.expires_at).getTime() <= Date.now()) throw badRequest('Der Link ist abgelaufen – bitte zuerst verlängern.');
+    const l = await one<any>(`UPDATE upload_links SET paused_at = NULL, paused_by = NULL WHERE id = $1 RETURNING *`, [id]);
+    await audit(req.auth!.actor, 'upload_link.resumed', { type: 'upload_link', id, label: l.label || l.collection_id });
+    return linkPayload(req, l);
+  });
+
+  /* Verlängern um eine Dauer (ab dem bisherigen Ablauf, bei abgelaufenem Link ab jetzt) */
+  app.post('/upload-links/:id/extend', { preHandler: requireAuth('media.manage') }, async (req) => {
+    const { id } = z.object({ id: z.uuid() }).parse(req.params);
+    const { hours } = z.object({ hours: z.number().int().min(1).max(87600) }).parse(req.body ?? {});
+    const cur = await changeableLink(id);
+    const s = await getSettings();
+    const expires = extendExpiry(cur.expires_at, hours, s['media.link_max_days']);
+    const l = await one<any>(`UPDATE upload_links SET expires_at = $2 WHERE id = $1 RETURNING *`, [id, expires]);
+    await audit(req.auth!.actor, 'upload_link.extended', { type: 'upload_link', id, label: l.label || l.collection_id }, { stunden: hours, gueltig_bis: expires.toISOString() });
+    return linkPayload(req, l);
+  });
+
+  /* Bezeichnung, Begrüßungstext und Ablauftermin („Bis Termin“, auch früher) ändern */
+  app.patch('/upload-links/:id', { preHandler: requireAuth('media.manage') }, async (req) => {
+    const { id } = z.object({ id: z.uuid() }).parse(req.params);
+    const body = z
+      .object({ label: z.string().trim().max(80).optional(), welcomeText: z.string().max(2000).optional(), expiresAt: z.iso.datetime({ offset: true }).optional() })
+      .parse(req.body ?? {});
+    await changeableLink(id);
+    const s = await getSettings();
+    const expires = body.expiresAt ? computeExpiry({ expiresAt: body.expiresAt }, { defaultDays: s['media.link_default_days'], maxDays: s['media.link_max_days'] }) : null;
+    const l = await one<any>(
+      `UPDATE upload_links SET label = COALESCE($2, label), welcome_text = COALESCE($3, welcome_text), expires_at = COALESCE($4, expires_at) WHERE id = $1 RETURNING *`,
+      [id, body.label ?? null, body.welcomeText !== undefined ? body.welcomeText.trim() : null, expires],
+    );
+    await audit(req.auth!.actor, 'upload_link.updated', { type: 'upload_link', id, label: l.label || l.collection_id }, { felder: Object.keys(body), ...(expires ? { gueltig_bis: expires.toISOString() } : {}) });
+    return linkPayload(req, l);
+  });
+
+  /* Neu erzeugen: neuer Token mit denselben Einstellungen – alter Link, QR-Code und Aushang sind sofort ungültig */
+  app.post('/upload-links/:id/regenerate', { preHandler: requireAuth('media.manage') }, async (req) => {
+    const { id } = z.object({ id: z.uuid() }).parse(req.params);
+    await changeableLink(id);
+    const s = await getSettings();
+    const token = randomToken(18);
+    const l = await one<any>(`UPDATE upload_links SET token_hash = $2, token_enc = $3, regenerated_at = now() WHERE id = $1 RETURNING *`, [
+      id,
+      sha256Hex(token),
+      s['media.link_show_once'] ? null : encrypt(token, linkAad(id)),
+    ]);
+    // Weiterleitungen alter Import-Links würden sonst auf den neuen Token zeigen
+    await pool.query(`DELETE FROM legacy_links WHERE link_id = $1`, [id]);
+    await audit(req.auth!.actor, 'upload_link.regenerated', { type: 'upload_link', id, label: l.label || l.collection_id });
+    return linkPayload(req, { ...l, _token: token });
   });
 
   /* Upload durch angemeldete Personen (Redaktion, Medienverwaltung) */
@@ -539,6 +658,10 @@ export async function mediaRoutes(app: FastifyInstance) {
     const s = await getSettings();
     return {
       collection: { title: l.c_title, purpose: l.c_purpose, note: l.c_note },
+      // Begrüßungstext des Links hat Vorrang vor dem Hinweis der Sammlung
+      welcome_text: (l.welcome_text || '').trim() || null,
+      camera_buttons: !!s['media.camera_buttons'],
+      done_text: String(s['media.done_text'] ?? '').trim() || null,
       organization: s['general.organization'] || s['general.instance_name'],
       expires_at: l.expires_at,
       max_file_bytes: Math.min(Number(l.max_file_bytes), s['media.max_file_mb'] * 1024 * 1024),

@@ -644,7 +644,7 @@ function PostEditorInner({ id }: { id: string }) {
           <div className="flex flex-col gap-3">
             <p className="m-0 text-sm">Eine Sammlung zum Beitrag wurde angelegt. Teile den Link oder hänge den QR-Code aus – Hochladen geht ohne Konto.</p>
             <code className="text-sm break-all bg-raised rounded-control p-2">{collectLink.url}</code>
-            <ShareActions target={{ url: collectLink.url, title: r.title, purpose: 'Fotos und Videos hochladen', validUntil: collectLink.expires_at, sensitive: 'Jede Person mit diesem Link kann bis zum Ablauf Dateien hochladen. Der Link lässt sich in der Sammlung widerrufen.' }} />
+            <ShareActions share target={{ url: collectLink.url, title: r.title, purpose: 'Fotos und Videos hochladen', validUntil: collectLink.expires_at, sensitive: 'Jede Person mit diesem Link kann bis zum Ablauf Dateien hochladen. Der Link lässt sich in der Sammlung widerrufen.' }} />
           </div>
         </Dialog>
       )}

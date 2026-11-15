@@ -6,7 +6,24 @@ Mit einem Foto-Link (Upload-Link) laden Personen **ohne Konto** Fotos und Videos
 - **Eigenständig:** Unter [Medien](/medien) eine neue Sammlung anlegen. Sie lässt sich später einem Beitrag zuordnen.
 - **Weitere Links:** In der Sammlung unter „Upload-Links“ beliebig viele Links erzeugen, z. B. einen für den Aushang und einen für den Messenger.
 
-Zu jedem Link gibt es **Link kopieren**, **QR-Code anzeigen** und **Aushang drucken**. Siehe [QR-Codes und Aushänge](/hilfe/qr-codes).
+Beim Anlegen wählst du die **Gültigkeit**: 6 Stunden, 24 Stunden, 3 Tage, 7 Tage, eine eigene Dauer in Tagen oder **Bis Termin** (Datum und Uhrzeit). Die Höchstdauer steht unter Einstellungen → Medien (Standard 90 Tage). Optional bekommt jeder Link einen eigenen **Begrüßungstext**, der oben auf der Upload-Seite steht – statt des Hinweises der Sammlung.
+
+Zu jedem Link gibt es **Link kopieren**, **QR-Code anzeigen**, **Aushang drucken** und **Teilen** (WhatsApp, E-Mail, Teilen-Dialog des Geräts, QR-Code als PNG oder SVG). Siehe [QR-Codes und Aushänge](/hilfe/qr-codes).
+
+## Link bedienen
+
+Das Menü (⋯) neben jedem Link bietet:
+
+- **Bearbeiten:** Bezeichnung und Begrüßungstext ändern.
+- **Pausieren / Fortsetzen:** Pausiert kann niemand hochladen; gedruckte QR-Codes bleiben gültig und funktionieren nach „Fortsetzen“ wieder. Ein abgelaufener Link muss vor dem Fortsetzen verlängert werden.
+- **Um 24 Stunden / um 7 Tage verlängern:** gerechnet ab dem bisherigen Ablauf (bei abgelaufenem Link ab jetzt), höchstens bis zur Höchstdauer.
+- **Bis Termin …:** Ablauf auf Datum und Uhrzeit setzen – auch früher als bisher.
+- **Neu erzeugen:** neuer Link und QR-Code mit denselben Einstellungen. Der bisherige Link, sein QR-Code und gedruckte Aushänge funktionieren sofort nicht mehr – praktisch, wenn ein Link in falsche Hände geraten ist.
+- **Widerrufen:** beendet den Link endgültig.
+
+Die Liste zeigt je Link Status (Aktiv, Pausiert, Abgelaufen, Widerrufen), Ablauf, Anzahl und Umfang der Dateien, wer ihn angelegt hat und wann er zuletzt genutzt wurde.
+
+**Link nur einmal anzeigen** (Einstellungen → Medien, Standard aus): Dann speichert BlaulichtCMS nur eine Prüfsumme des Links. Link und QR-Code erscheinen genau einmal direkt nach dem Anlegen bzw. „Neu erzeugen“ – bitte sofort kopieren oder den Aushang drucken. Ist die Einstellung aus, liegt der Link verschlüsselt vor und lässt sich jederzeit erneut anzeigen und drucken.
 
 ## Was der Link erlaubt – und was nicht
 
@@ -38,14 +55,15 @@ Das Hinweisfeld fragt bewusst nicht nach Namen: Wer genannt werden möchte, kann
 
 ## Widerrufen und Ablauf
 
-Jeder Link hat ein Ablaufdatum. „Widerrufen“ beendet ihn sofort – **auch ein bereits gedruckter QR-Code funktioniert danach nicht mehr**. Wer den Link danach öffnet, sieht „Link nicht mehr gültig“.
+Jeder Link hat ein Ablaufdatum. „Widerrufen“ beendet ihn sofort – **auch ein bereits gedruckter QR-Code funktioniert danach nicht mehr**. Wer einen abgelaufenen, pausierten, widerrufenen oder unbekannten Link öffnet, sieht einheitlich „Dieser Link funktioniert nicht (mehr)“ – die Seite verrät nicht, ob es den Link gibt oder warum er nicht geht.
 
 ## Am Handy hochladen
 
 1. Link öffnen oder QR-Code scannen.
-2. „Foto aufnehmen“ oder „Dateien auswählen“.
+2. Der große Knopf **„Bilder oder Videos auswählen“** öffnet die Galerie. Auf Handys und Tablets gibt es darunter **„Foto aufnehmen“** und **„Video aufnehmen“** für die Kamera (abschaltbar unter Einstellungen → Medien).
 3. „Senden“. Jede Datei zeigt ihren Fortschritt.
 4. Schlägt eine Datei fehl (z. B. Funkloch), erscheint „Erneut senden“. Bereits übertragene Dateien bleiben erhalten und werden nicht doppelt angelegt.
+5. Danach erscheint ein Dank mit der **Vorgangsnummer**. Den Text kann die Verwaltung unter Einstellungen → Medien anpassen.
 
 ## Quarantäne und Prüfung
 

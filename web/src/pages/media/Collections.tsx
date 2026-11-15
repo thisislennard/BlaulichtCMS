@@ -7,6 +7,7 @@ import { Icon } from '../../components/ui/Icon';
 import { Dialog, useErrorToast } from '../../components/ui/overlays';
 import { useAuth } from '../../lib/auth';
 import { fmtRelative } from '../../lib/format';
+import { DEFAULT_VALIDITY, ValidityPicker, validityPayload, type Validity } from './UploadLinks';
 
 export function NewCollectionDialog({ open, onClose, postId, defaultTitle }: { open: boolean; onClose: () => void; postId?: string; defaultTitle?: string }) {
   const nav = useNavigate();
@@ -14,7 +15,7 @@ export function NewCollectionDialog({ open, onClose, postId, defaultTitle }: { o
   const [title, setTitle] = useState(defaultTitle ?? '');
   const [purpose, setPurpose] = useState('');
   const [note, setNote] = useState('');
-  const [days, setDays] = useState(7);
+  const [validity, setValidity] = useState<Validity>(DEFAULT_VALIDITY);
   const [createLink, setCreateLink] = useState(true);
   const [busy, setBusy] = useState(false);
   return (
@@ -33,7 +34,8 @@ export function NewCollectionDialog({ open, onClose, postId, defaultTitle }: { o
             onClick={async () => {
               setBusy(true);
               try {
-                const r = await post<any>('/collections', { title: title.trim(), purpose: purpose.trim(), note: note.trim(), postId: postId ?? null, createLink, linkDays: days });
+                const v = validityPayload(validity);
+                const r = await post<any>('/collections', { title: title.trim(), purpose: purpose.trim(), note: note.trim(), postId: postId ?? null, createLink, linkDays: v.days, linkHours: v.hours, linkExpiresAt: v.expiresAt });
                 onClose();
                 nav(`/medien/${r.collection.id}`);
               } catch (e) {
@@ -59,11 +61,7 @@ export function NewCollectionDialog({ open, onClose, postId, defaultTitle }: { o
           <Textarea id="c-note" rows={2} value={note} onChange={(e) => setNote(e.target.value)} maxLength={1000} placeholder="Bitte keine erkennbaren Personen ohne deren Einverständnis." />
         </FieldWrap>
         <Switch checked={createLink} onChange={setCreateLink} label="Upload-Link gleich erstellen" description="Personen ohne Konto können damit Fotos und Videos in diese Sammlung hochladen." />
-        {createLink && (
-          <FieldWrap label="Gültig für (Tage)" htmlFor="c-days">
-            <Input id="c-days" type="number" min={1} max={90} value={days} onChange={(e) => setDays(Number(e.target.value))} className="max-w-[120px]" />
-          </FieldWrap>
-        )}
+        {createLink && <ValidityPicker value={validity} onChange={setValidity} idPrefix="c" />}
       </div>
     </Dialog>
   );

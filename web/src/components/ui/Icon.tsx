@@ -119,6 +119,30 @@ import {
   Square,
   Crop,
   ShieldAlert,
+  Pause,
+  MessageCircle,
+  Folder,
+  FolderPlus,
+  FolderInput,
+  Tag,
+  Tags,
+  LayoutGrid,
+  List,
+  Star,
+  ListFilter,
+  ChartPie,
+  ShieldX,
+  Palette,
+  Type,
+  Monitor,
+  GripVertical,
+  FileDown,
+  Files,
+  CheckCheck,
+  CopyPlus,
+  SeparatorHorizontal,
+  ImageUp,
+  PanelTop,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -132,6 +156,7 @@ const MAP: Record<string, LucideIcon> = {
   FlaskConical, History, Eye, EyeOff, Power, PowerOff, Archive, Pencil, Server, Gauge,
   Images, QrCode, Printer, Camera, ImageOff, Video, CheckSquare, SkipForward, Smartphone, Unlink, Link, ArrowUp, ArrowDown, Ban, CircleCheck,
   CircleDashed, Film, UploadCloud, Share2, Image, Sun, Moon, Square, Crop, ShieldAlert, CircleHelp,
+  Pause, MessageCircle, Folder, FolderPlus, FolderInput, Tag, Tags, LayoutGrid, List, Star, ListFilter, ChartPie, ShieldX, Palette, Type, Monitor, GripVertical, FileDown, Files, CheckCheck, CopyPlus, SeparatorHorizontal, ImageUp, PanelTop,
 };
 
 export function Icon({ name, size = 16, className, strokeWidth = 1.9 }: { name: string; size?: number; className?: string; strokeWidth?: number }) {
