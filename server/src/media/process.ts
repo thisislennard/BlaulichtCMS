@@ -12,6 +12,7 @@ import { scanFile, ScannerUnavailable } from './clamav.js';
 import { config } from '../config.js';
 import { audit } from '../lib/audit.js';
 import { securityAlert } from '../lib/security-alerts.js';
+import { noticeNewMedia } from '../lib/media-notify.js';
 
 /** Zugelassene Formate – geprüft wird der Dateiinhalt, nicht Dateiname oder angegebener Typ. */
 export const ALLOWED: Record<string, { kind: 'image' | 'video'; ext: string }> = {
@@ -190,6 +191,7 @@ export async function processMedia(id: string): Promise<'ready' | 'rejected' | '
       return 'skipped';
     }
     await markDuplicate(id);
+    await noticeNewMedia(id);
     return 'ready';
   } catch (e) {
     if (!(e instanceof Rejected)) throw e;

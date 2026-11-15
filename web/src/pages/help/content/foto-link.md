@@ -49,6 +49,16 @@ Das Hinweisfeld fragt bewusst nicht nach Namen: Wer genannt werden möchte, kann
 - **Was würde gelöscht?** unter Einstellungen → Datenschutz zeigt vorab, welche Sammlungen und wie viele Einträge fällig sind. Jeder Löschlauf steht im Audit (`retention.run`, je Sammlung `collection.deleted`).
 - In **Sicherungen** bleiben gelöschte Daten bis zu deren Ablauf (rund 4 Monate, siehe Hilfe → Sicherung).
 
+## Benachrichtigungen
+
+Die Glocke meldet zu Medien:
+
+- **Neue Dateien:** Sind über einen Upload-Link Dateien eingegangen und geprüft, bekommt die Person, die den Link angelegt hat, einen Hinweis (sonst alle mit „Medien verwalten“). Weitere Dateien derselben Sammlung innerhalb einer Stunde zählen im selben Eintrag hoch („3 neue Dateien in …“), statt die Glocke zu fluten.
+- **Upload-Links:** Ein Link läuft bald ab (höchstens 24 Stunden vorher, bei kurzen Links nach drei Vierteln der Gültigkeit; nach dem Verlängern erneut) oder das Kontingent von Link bzw. Sammlung ist erreicht.
+- **Speicherplatz:** Unterschreitet der freie Speicher die Warnschwelle (Einstellungen → Medien, Standard 10 GB), erfahren es alle mit „Medien administrieren“ – höchstens alle 12 Stunden.
+
+Unter **Mein Konto → Benachrichtigungen: Medien** lässt sich jede Art für sich abschalten; die Verwaltung kann sie unter Einstellungen → Medien ganz abschalten.
+
 ## Grenzen
 
 - Dateigröße je Datei, Anzahl Dateien je Link und Umfang je Sammlung sind begrenzt (einstellbar unter Einstellungen → Medien).

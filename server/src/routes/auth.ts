@@ -364,6 +364,8 @@ export async function authRoutes(app: FastifyInstance) {
         compactTables: z.boolean().optional(),
         sidebarCollapsed: z.boolean().optional(),
         language: z.enum(['de', 'en']).optional(),
+        /** Benachrichtigungsarten, die die Person nicht sehen möchte (Medien: neue Dateien, Links, Speicher) */
+        mutedNotifications: z.array(z.enum(['media_new', 'media_link', 'media_storage'])).max(10).optional(),
       })
       .parse(req.body);
     await pool.query(`UPDATE users SET preferences = preferences || $2::jsonb WHERE id = $1`, [req.auth!.user!.id, JSON.stringify(prefs)]);

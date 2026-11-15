@@ -92,6 +92,10 @@ export const DEFAULT_SETTINGS = {
   'media.camera_buttons': true,
   /** Text nach erfolgreichem Upload (leer = Standardtext). */
   'media.done_text': '',
+  /** Benachrichtigungen der Medien (neue Dateien, Link läuft ab, Kontingent, Speicher) – lib/media-notify.ts. */
+  'media.notices': true,
+  /** Speicherwarnung an „Medien administrieren“, wenn weniger frei ist (GB, 0 = aus). */
+  'media.storage_warn_gb': 10,
   'media.collection_max_files': 500,
   'media.collection_max_gb': 10,
   'media.min_free_gb': 2,
@@ -233,6 +237,7 @@ export const SETTING_RANGES: Record<string, [number, number]> = {
   'media.link_max_files': [1, 1000],
   'media.link_default_days': [1, 90],
   'media.link_max_days': [1, 365],
+  'media.storage_warn_gb': [0, 100000],
   'media.collection_max_files': [1, 100000],
   'media.collection_max_gb': [1, 10000],
   'media.min_free_gb': [1, 10000],

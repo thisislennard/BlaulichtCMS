@@ -95,6 +95,7 @@ const RANGES: Record<string, [number, number]> = {
   'media.link_max_files': [1, 1000],
   'media.link_default_days': [1, 90],
   'media.link_max_days': [1, 365],
+  'media.storage_warn_gb': [0, 100000],
   'media.collection_max_files': [1, 100000],
   'media.collection_max_gb': [1, 10000],
   'media.min_free_gb': [1, 10000],
@@ -421,6 +422,7 @@ export default function Settings() {
                   <NumField k="media.collection_max_files" label="Dateien je Sammlung" min={1} max={100000} v={v} set={set} ro={ro} />
                   <NumField k="media.collection_max_gb" label="Speicher je Sammlung" unit="GB" min={1} max={10000} v={v} set={set} ro={ro} />
                   <NumField k="media.min_free_gb" label="Mindestens frei halten" help="Darunter werden Uploads gesperrt und der Healthcheck meldet einen Fehler." unit="GB" min={1} max={10000} v={v} set={set} ro={ro} />
+                  <NumField k="media.storage_warn_gb" label="Speicherwarnung unter" help="Benachrichtigung an „Medien administrieren“ (höchstens alle 12 Stunden). 0 = aus." unit="GB" min={0} max={100000} v={v} set={set} ro={ro} />
                 </FieldGrid>
                 <Switch
                   checked={!!v["media.strip_location"]}
@@ -428,6 +430,13 @@ export default function Settings() {
                   onChange={(x) => set("media.strip_location", x)}
                   label="Standortdaten auch aus Originalen entfernen"
                   description="Nach der Prüfung werden GPS-Angaben, Seriennummern, Personen- und XMP/IPTC-Angaben verlustfrei aus dem Original entfernt (Bilddaten bleiben unverändert, Videos werden ohne Metadaten und Datenspuren umverpackt). Ältere Originale bereinigt der Hintergrunddienst nach und nach. Entfernte Angaben lassen sich nicht wiederherstellen."
+                />
+                <Switch
+                  checked={!!v["media.notices"]}
+                  disabled={ro}
+                  onChange={(x) => set("media.notices", x)}
+                  label="Benachrichtigungen zu Medien"
+                  description="Neue Dateien über Upload-Links (gebündelt je Sammlung), Link läuft bald ab, Kontingent erreicht, Speicher knapp. Jede Person kann einzelne Arten unter „Mein Konto“ abschalten."
                 />
                 <Switch
                   checked={!!v["media.camera_buttons"]}

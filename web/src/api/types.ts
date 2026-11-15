@@ -18,6 +18,8 @@ export interface Preferences {
   compactTables?: boolean;
   sidebarCollapsed?: boolean;
   language?: 'de' | 'en';
+  /** stummgeschaltete Benachrichtigungsarten (Medien) */
+  mutedNotifications?: string[];
 }
 
 export type PostState = 'draft' | 'in_review' | 'approved' | 'rejected' | 'scheduled' | 'publishing' | 'published' | 'failed' | 'unknown' | 'deactivated';

@@ -285,15 +285,22 @@ export async function systemRoutes(app: FastifyInstance) {
   });
 
   /* Benachrichtigungen */
+  const mutedCategories = async (userId: string | null): Promise<string[]> => {
+    if (!userId) return [];
+    const p = await one<any>(`SELECT preferences->'mutedNotifications' AS m FROM users WHERE id = $1`, [userId]);
+    return Array.isArray(p?.m) ? p.m.map(String) : [];
+  };
   app.get('/notifications', { preHandler: requireAuth() }, async (req) => {
     const u = req.auth!;
+    // Stummgeschaltete Arten (Mein Konto → Benachrichtigungen, z. B. Medien) ausblenden
+    const muted = await mutedCategories(u.user?.id ?? null);
     const rows = await many<any>(
       `SELECT n.*, (r.read_at IS NOT NULL) AS read FROM notifications n
          LEFT JOIN notification_reads r ON r.notification_id = n.id AND r.user_id = $1
         WHERE (n.user_id = $1 OR (n.user_id IS NULL AND (n.permission IS NULL OR n.permission = ANY($2))))
-          AND n.created_at > now() - interval '60 days'
-        ORDER BY n.id DESC LIMIT 100`,
-      [u.user?.id ?? null, [...u.permissions]],
+          AND n.created_at > now() - interval '60 days' AND (n.category IS NULL OR NOT (n.category = ANY($3::text[])))
+        ORDER BY COALESCE(n.updated_at, n.created_at) DESC, n.id DESC LIMIT 100`,
+      [u.user?.id ?? null, [...u.permissions], muted],
     );
     return { notifications: rows, unread: rows.filter((r) => !r.read).length };
   });

@@ -19,6 +19,7 @@ import { purgeCollection } from '../lib/retention.js';
 import { computeExpiry, extendExpiry, LINK_UNAVAILABLE, linkState } from '../media/links.js';
 import { descendants } from '../media/folders.js';
 import { trashCollection, trashMedia } from './media-trash.js';
+import { noticeQuota } from '../lib/media-notify.js';
 import { assertFolder, loadFolders } from './media-organize.js';
 import { freeBytes, mediaPaths, moveFile, SizeLimitError, streamToTemp } from '../media/storage.js';
 
@@ -277,13 +278,15 @@ export async function finalizeUpload(
         db,
       );
       if (Number(used!.bytes) > Number(col.max_bytes)) throw new AppError(409, 'collection_full', 'Der Speicherplatz dieser Sammlung ist ausgeschöpft.');
+      let linkFull = false;
       if (opts.linkId) {
-        const ok = await db.query(`UPDATE upload_links SET upload_count = upload_count + 1, last_used_at = now() WHERE id = $1 AND upload_count < max_files`, [opts.linkId]);
+        const ok = await db.query(`UPDATE upload_links SET upload_count = upload_count + 1, last_used_at = now() WHERE id = $1 AND upload_count < max_files RETURNING upload_count >= max_files AS full`, [opts.linkId]);
         if (!ok.rowCount) throw new AppError(409, 'link_full', 'Über diesen Link wurden bereits alle erlaubten Dateien hochgeladen.');
+        linkFull = !!ok.rows[0].full;
       }
       moveFile(stored.tmpPath, mediaPaths.quarantine(m.id));
       await enqueue('media.process', { mediaId: m.id }, { dedupKey: `media.process:${m.id}` }, db);
-      return m;
+      return Object.assign(m, { _linkFull: linkFull, _collectionFull: cnt!.n >= col.max_files || Number(used!.bytes) >= Number(col.max_bytes) });
     });
     if (!row) {
       fs.rmSync(stored.tmpPath, { force: true });
@@ -291,6 +294,9 @@ export async function finalizeUpload(
       return { media: mediaPayload(existing), duplicate: true };
     }
     await audit(opts.actor, 'media.uploaded', { type: 'media', id: row.id, label: name }, { sammlung: opts.collection.id, bytes: stored.size, link: opts.linkId });
+    // Kontingent gerade erreicht: einmal benachrichtigen (Paket 5)
+    if (row._linkFull && opts.linkId) await noticeQuota('link', opts.linkId);
+    if (row._collectionFull) await noticeQuota('collection', opts.collection.id);
     return { media: mediaPayload(row), duplicate: false };
   } catch (e) {
     if (!opts.keepTmpOnError) fs.rmSync(stored.tmpPath, { force: true });
@@ -513,7 +519,7 @@ export async function mediaRoutes(app: FastifyInstance) {
     const cur = await changeableLink(id);
     const s = await getSettings();
     const expires = extendExpiry(cur.expires_at, hours, s['media.link_max_days']);
-    const l = await one<any>(`UPDATE upload_links SET expires_at = $2 WHERE id = $1 RETURNING *`, [id, expires]);
+    const l = await one<any>(`UPDATE upload_links SET expires_at = $2, expiring_notified_at = NULL WHERE id = $1 RETURNING *`, [id, expires]);
     await audit(req.auth!.actor, 'upload_link.extended', { type: 'upload_link', id, label: l.label || l.collection_id }, { stunden: hours, gueltig_bis: expires.toISOString() });
     return linkPayload(req, l);
   });
@@ -530,6 +536,7 @@ export async function mediaRoutes(app: FastifyInstance) {
     const folder = body.folderId !== undefined ? await assertFolder(cur.collection_id, body.folderId) : null;
     const l = await one<any>(
       `UPDATE upload_links SET label = COALESCE($2, label), welcome_text = COALESCE($3, welcome_text), expires_at = COALESCE($4, expires_at),
+              expiring_notified_at = CASE WHEN $4::timestamptz IS NULL THEN expiring_notified_at END,
               folder_id = CASE WHEN $5 THEN $6::uuid ELSE folder_id END
         WHERE id = $1 RETURNING *`,
       [id, body.label ?? null, body.welcomeText !== undefined ? body.welcomeText.trim() : null, expires, body.folderId !== undefined, folder],

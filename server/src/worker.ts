@@ -25,6 +25,7 @@ import { sealAudit, verifyAudit } from './lib/audit-chain.js';
 import { cleanupMediaTokens } from './connections/meta.js';
 import { refreshDueWarnfeeds } from './connections/warnfeed.js';
 import { runRetention } from './lib/retention.js';
+import { checkExpiringLinks, checkStorage } from './lib/media-notify.js';
 import { checkForUpdate, updateCheckDue } from './updates/github.js';
 
 process.env.BLAULICHTCMS_ROLE ??= 'worker';
@@ -192,6 +193,11 @@ async function maintenance(isLeader: boolean) {
   if (due('audit-seal', 60_000)) await sealAudit().catch((e) => log('warn', 'audit', `Versiegeln: ${e.message}`));
   if (due('audit-verify', 24 * 60 * 60_000)) await verifyAuditDaily(s['retention.audit_days']);
   if (due('quarantine', 10 * 60_000)) await requeueQuarantine();
+  // Medien-Benachrichtigungen: Links, die bald ablaufen, und knapper Speicher (Paket 5)
+  if (due('media-notices', 10 * 60_000)) {
+    await checkExpiringLinks().catch((e) => log('warn', 'notify', `Ablaufende Links: ${e.message}`));
+    await checkStorage().catch((e) => log('warn', 'notify', `Speicherwarnung: ${e.message}`));
+  }
   if (s['media.strip_location'] && due('strip-location', 10 * 60_000)) await enqueuePendingLocationStrips().catch((e) => log('warn', 'media', `Standort-Bereinigung: ${e.message}`));
   if (due('rss', 60_000)) await refreshDueFeeds().catch((e) => log('warn', 'rss', e.message));
   // In-App-Updates: neues Release im eingestellten Abstand prüfen (installiert wird nur von Hand)

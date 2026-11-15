@@ -4331,6 +4331,52 @@ describe('Medien wie LiFeOS 4: Papierkorb', () => {
   });
 });
 
+describe('Medien wie LiFeOS 5: Benachrichtigungen', () => {
+  it('neue Dateien gebündelt an die Person, die den Link angelegt hat; stummschaltbar', async () => {
+    const f = await mediaFixture(editor, 'Hinweis-Test');
+    await uploadPublic(f.token, 'n1.jpg', await sharp({ create: { width: 90, height: 60, channels: 3, background: { r: 5, g: 5, b: 200 } } }).jpeg().toBuffer());
+    await processAllQuarantine();
+    let n = (await editor.get('/notifications')).json.notifications.find((x: any) => x.category === 'media_new' && x.link === `/medien/${f.col.id}`);
+    expect(n).toMatchObject({ title: 'Neue Datei in „Hinweis-Test“', count: 1, read: false });
+    // Nur für die anlegende Person, nicht für alle mit „Medien verwalten“
+    expect((await admin.get('/notifications')).json.notifications.some((x: any) => x.id === n.id)).toBe(false);
+    await editor.post('/notifications/read', { ids: [n.id] });
+    await uploadPublic(f.token, 'n2.jpg', await sharp({ create: { width: 91, height: 60, channels: 3, background: { r: 5, g: 6, b: 200 } } }).jpeg().toBuffer());
+    await processAllQuarantine();
+    n = (await editor.get('/notifications')).json.notifications.find((x: any) => x.id === n.id);
+    expect(n).toMatchObject({ title: '2 neue Dateien in „Hinweis-Test“', count: 2, read: false });
+    // Interne Uploads lösen keinen Hinweis aus
+    expect((await one<any>(`SELECT count(*)::int AS n FROM notifications WHERE category = 'media_new' AND link = $1`, [`/medien/${f.col.id}`])).n).toBe(1);
+    expect((await editor.patch('/auth/preferences', { mutedNotifications: ['media_new'] })).status).toBe(200);
+    expect((await editor.get('/notifications')).json.notifications.some((x: any) => x.category === 'media_new')).toBe(false);
+    expect((await editor.patch('/auth/preferences', { mutedNotifications: ['erfunden'] })).status).toBe(400);
+    await editor.patch('/auth/preferences', { mutedNotifications: [] });
+  });
+
+  it('Kontingent erreicht, Link läuft bald ab (einmal), Speicher knapp nur für „Medien administrieren“', async () => {
+    const { checkExpiringLinks, checkStorage } = await import('../src/lib/media-notify.js');
+    const f = await mediaFixture(editor, 'Kontingent-Test', { maxFiles: 1, hours: 48 });
+    expect((await uploadPublic(f.token, 'k1.jpg', await sharp({ create: { width: 92, height: 60, channels: 3, background: { r: 9, g: 9, b: 9 } } }).jpeg().toBuffer())).status).toBe(200);
+    const quota = (await editor.get('/notifications')).json.notifications.find((x: any) => x.title === 'Upload-Link voll: „Kontingent-Test“');
+    expect(quota).toBeTruthy();
+    // 48-h-Link: Hinweis ab 12 h Restlaufzeit (ein Viertel), hier 30 Minuten vor Ablauf
+    await pool.query(`UPDATE upload_links SET expires_at = now() + interval '30 minutes' WHERE id = $1`, [f.link.id]);
+    await checkExpiringLinks();
+    await checkExpiringLinks();
+    expect((await one<any>(`SELECT count(*)::int AS n FROM notifications WHERE group_key = $1`, [`media:expiring:${f.link.id}`])).n).toBe(1);
+    // Verlängern setzt den Hinweis zurück
+    await editor.post(`/upload-links/${f.link.id}/extend`, { hours: 24 });
+    expect((await one<any>(`SELECT expiring_notified_at FROM upload_links WHERE id = $1`, [f.link.id])).expiring_notified_at).toBeNull();
+    await setSettings({ 'media.storage_warn_gb': 100000 });
+    await checkStorage();
+    await checkStorage();
+    expect((await one<any>(`SELECT count(*)::int AS n, max(count) AS c FROM notifications WHERE group_key = 'media:storage'`))).toMatchObject({ n: 1 });
+    expect((await admin.get('/notifications')).json.notifications.some((x: any) => x.category === 'media_storage')).toBe(true);
+    expect((await editor.get('/notifications')).json.notifications.some((x: any) => x.category === 'media_storage')).toBe(false);
+    await setSettings({ 'media.storage_warn_gb': 10 });
+  });
+});
+
 /* @@MEDIA-TESTS-END@@ */
 
 describe('In-App-Updates aus GitHub-Releases', () => {

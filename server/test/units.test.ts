@@ -997,3 +997,13 @@ describe('Ordner, Schlagworte und CSV (Medien wie LiFeOS)', () => {
     expect(csvCell(null)).toBe('');
   });
 });
+
+describe('Benachrichtigungen der Medien', () => {
+  it('„läuft bald ab“: höchstens 24 h vorher, bei kurzen Links ein Viertel der Gültigkeit, mindestens 1 h', async () => {
+    const { expiringThresholdMs } = await import('../src/lib/media-notify.js');
+    const t0 = '2026-11-15T00:00:00Z';
+    expect(expiringThresholdMs(t0, '2026-11-22T00:00:00Z')).toBe(24 * 3600_000);
+    expect(expiringThresholdMs(t0, '2026-11-15T08:00:00Z')).toBe(2 * 3600_000);
+    expect(expiringThresholdMs(t0, '2026-11-15T02:00:00Z')).toBe(3600_000);
+  });
+});

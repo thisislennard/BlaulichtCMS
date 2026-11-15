@@ -20,6 +20,7 @@ import { useAuth } from "../lib/auth";
 import { fmtRelative } from "../lib/format";
 import { MfaSetupPage } from "./auth/AuthPages";
 import { AppearanceFields, LoadError, SectionCard } from "./admin/shared";
+import { MediaNoticePrefs } from "./media/NoticePrefs";
 
 interface Session {
   id: string;
@@ -79,6 +80,7 @@ export default function Profile() {
           >
             <AppearanceFields />
           </SectionCard>
+          <MediaNoticePrefs />
         </div>
         <div className="flex flex-col gap-5 min-w-0">
           <MfaCard />
