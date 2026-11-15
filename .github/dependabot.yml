@@ -1,0 +1,33 @@
+# Abhängigkeiten aktuell halten (#104, #105, #127): Dependabot schlägt Updates als Pull Request vor; die CI baut,
+# testet und scannt jeden Vorschlag, bevor er übernommen wird.
+version: 2
+updates:
+  # GitHub Actions – per Commit-SHA fixiert, Dependabot aktualisiert SHA und Versionskommentar
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
+
+  # Basis-Images im Dockerfile – per Digest fixiert, Dependabot aktualisiert Tag und Digest
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+    ignore:
+      # PostgreSQL-Hauptversion nur geplant wechseln (Export/Import, docs/betrieb.md) – der Container startet sonst nicht
+      - dependency-name: postgres
+        update-types: ["version-update:semver-major"]
+
+  # npm-Pakete (Server, Oberfläche) – Sicherheitsupdates zusätzlich über Dependabot-Warnungen
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+    groups:
+      entwicklung:
+        dependency-type: development
+        update-types: [minor, patch]

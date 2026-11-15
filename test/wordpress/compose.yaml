@@ -1,0 +1,64 @@
+# Separates WordPress-Zielsystem für Integrationstests der BlaulichtCMS Bridge.
+# Nicht Teil der produktiven Auslieferung (die bleibt bei einem BlaulichtCMS-Container).
+#
+#   docker compose -f test/wordpress/compose.yaml up -d
+#   → WordPress unter http://localhost:8080, BlaulichtCMS aus WordPress-Sicht: http://host.docker.internal:7310
+
+name: blaulichtcms-wp-test
+
+services:
+  db:
+    image: mariadb:11
+    environment:
+      MARIADB_DATABASE: wordpress
+      MARIADB_USER: wordpress
+      MARIADB_PASSWORD: wordpress-test
+      MARIADB_RANDOM_ROOT_PASSWORD: "1"
+    volumes:
+      - db:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      retries: 30
+
+  wordpress:
+    image: wordpress:6-php8.3-apache
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8080:80"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      WORDPRESS_DB_HOST: db
+      WORDPRESS_DB_USER: wordpress
+      WORDPRESS_DB_PASSWORD: wordpress-test
+      WORDPRESS_DB_NAME: wordpress
+      # Nur im Test: Kopplung über http:// erlauben
+      WORDPRESS_CONFIG_EXTRA: |
+        define( 'BLAULICHTCMS_BRIDGE_ALLOW_HTTP', true );
+    volumes:
+      - wp:/var/www/html
+
+  cli:
+    image: wordpress:cli-php8.3
+    profiles: ["cli"]
+    user: "33:33"
+    depends_on: [wordpress]
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      WORDPRESS_DB_HOST: db
+      WORDPRESS_DB_USER: wordpress
+      WORDPRESS_DB_PASSWORD: wordpress-test
+      WORDPRESS_DB_NAME: wordpress
+      WORDPRESS_CONFIG_EXTRA: |
+        define( 'BLAULICHTCMS_BRIDGE_ALLOW_HTTP', true );
+    volumes:
+      - wp:/var/www/html
+      - ./tmp:/tmp/blaulichtcms
+
+volumes:
+  db:
+  wp:

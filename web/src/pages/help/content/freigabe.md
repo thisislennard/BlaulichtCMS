@@ -1,0 +1,47 @@
+## Grundsatz: Freigabe gilt für genau eine Fassung
+
+Eine Freigabe bezieht sich auf eine konkrete Fassung mit ihrer **Prüfsumme** über Text, Medien und Zielkanal. Wird danach irgendetwas geändert, entsteht eine neue Fassung – die alte Freigabe gilt für sie nicht. So kann nichts Ungeprüftes veröffentlicht werden.
+
+## Ablauf
+
+| Schritt | Wer (Recht) | Aktion |
+|---|---|---|
+| 1 | Redaktion | **Zur Freigabe einreichen** |
+| 2 | Freigabe | **Freigeben** oder **Zurückweisen** (mit Begründung) |
+| 3 | Veröffentlichung | **Auf … veröffentlichen** (nur mit Zielkanal) |
+| 4 | Website | Holt den Auftrag ab und meldet Adresse und WordPress-ID zurück |
+
+## Datenschutz-Prüfung bei markierten Medien
+
+Sind Medien der Fassung in der Sichtung markiert (**Personen erkennbar**, **Verletzte / Gesundheit**, **Kennzeichen / Adressen**, **Sonstiger sensibler Inhalt**), lässt sich die Fassung nur freigeben, wenn im Freigabe-Dialog alle Prüfpunkte bestätigt sind:
+
+- Erkennbare Personen: Einwilligung liegt vor, eine Ausnahme nach dem Kunsturhebergesetz greift (z. B. Personen nur als Beiwerk, Versammlungen) oder sie sind unkenntlich gemacht.
+- Keine erkennbaren Verletzten, Betroffenen oder Gesundheitsangaben – das sind besondere Kategorien personenbezogener Daten (Art. 9 DSGVO).
+- Kennzeichen, Adressen und Namen sind unkenntlich, soweit sie Personen zuordenbar machen; bei Videos ist der Ton geprüft (Stimmen, Funkverkehr).
+
+Die Bestätigung steht im Audit-Protokoll. Ohne Markierungen zeigt der Dialog dieselben Fragen als Hinweis. Nach der Freigabe lässt sich die öffentliche Fassung einer Datei nicht mehr ändern (erst Freigabe zurückziehen).
+
+Mit eingeschaltetem **Vier-Augen-Prinzip** (Einstellungen → Redaktion) darf niemand die eigene Fassung freigeben: Wer am Beitrag geschrieben hat (Text, Kanaltexte, Bilder und Videos – auch in einer früheren Fassung) oder die Fassung eingereicht hat, kann sie nicht freigeben. Nur den Termin oder den Zielkanal zu ändern zählt nicht als Schreiben. Bei Bannern sind die anlegende, die zuletzt ändernde und die einreichende Person ausgeschlossen, bei Warnentwürfen alle, die am Entwurf geschrieben oder ihn eingereicht haben. Die Bestätigung der Warnstufe darf die freigebende Person selbst vornehmen – sie gehört zu ihrer fachlichen Prüfung.
+
+**Freigabe zurückziehen** bricht noch nicht abgeholte Aufträge ab. Hat die Website den Auftrag schon abgeholt, lehnt BlaulichtCMS den Widerruf ab, bis das Ergebnis vorliegt – danach den Beitrag bei Bedarf zurückziehen. Widerruf und Abholung laufen nie gleichzeitig. Meldet eine Website trotzdem eine Veröffentlichung zu einer widerrufenen Freigabe, beauftragt BlaulichtCMS sofort den Rückzug und meldet das.
+
+## Status
+
+| Status | Bedeutung |
+|---|---|
+| Entwurf | Noch nicht eingereicht |
+| Zur Freigabe | Wartet auf Entscheidung |
+| Zurückgewiesen | Mit Begründung zurück an die Redaktion |
+| Freigegeben | Diese Fassung darf veröffentlicht werden (oder ist intern freigegeben) |
+| Wird veröffentlicht | Auftrag liegt bereit oder ist abgeholt |
+| Veröffentlicht | Die Website hat die Veröffentlichung bestätigt – mit Adresse |
+| Fehlgeschlagen | Die Website hat einen Fehler gemeldet – „Erneut versuchen“ startet nur diesen Kanal neu |
+| Ergebnis unbekannt | Abgeholt, aber noch keine Rückmeldung. Die Bridge prüft beim nächsten Abruf selbst, ob der Beitrag schon existiert |
+
+## Kein doppelter Beitrag
+
+Ein Doppelklick auf „Veröffentlichen“ erzeugt keinen zweiten Auftrag. Holt die Website einen Auftrag mehrfach ab oder bestätigt ihn doppelt, entsteht trotzdem genau **ein** Beitrag.
+
+## Nachvollziehbarkeit
+
+Einreichen, Freigeben, Zurückweisen, Beauftragen und die Bestätigung der Website stehen mit Person und Zeitpunkt unter [Aktivitäten](/aktivitaeten).

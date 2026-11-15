@@ -1,0 +1,148 @@
+@import 'tailwindcss';
+@config './theme/tailwind.blaulichtcms.js';
+@import './theme/tokens.css';
+
+@layer base {
+  html,
+  body,
+  #root {
+    min-height: 100%;
+  }
+  body {
+    margin: 0;
+    -webkit-font-smoothing: antialiased;
+  }
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
+    color: inherit;
+  }
+  button {
+    cursor: pointer;
+  }
+  button:disabled {
+    cursor: not-allowed;
+  }
+  ::selection {
+    background: var(--bc-primary-soft);
+  }
+  input::placeholder,
+  textarea::placeholder {
+    color: var(--bc-text-2);
+    opacity: 0.8;
+  }
+  a {
+    color: var(--bc-link);
+    text-decoration: none;
+  }
+  a:hover {
+    color: var(--bc-primary);
+  }
+  * {
+    scrollbar-color: var(--bc-border) transparent;
+  }
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+.bc-compact table td,
+.bc-compact table th {
+  padding-top: 6px !important;
+  padding-bottom: 6px !important;
+}
+
+/* Markdown in der Hilfe */
+.bc-prose {
+  line-height: 1.65;
+  font-size: 14px;
+}
+.bc-prose h1 {
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  margin: 0 0 12px;
+}
+.bc-prose h2 {
+  font-size: 18px;
+  font-weight: 600;
+  margin: 28px 0 10px;
+  letter-spacing: -0.01em;
+}
+.bc-prose h3 {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 20px 0 8px;
+}
+.bc-prose p,
+.bc-prose ul,
+.bc-prose ol {
+  margin: 0 0 12px;
+}
+.bc-prose ul,
+.bc-prose ol {
+  padding-left: 22px;
+}
+.bc-prose li {
+  margin: 4px 0;
+}
+.bc-prose code {
+  font-family: var(--bc-font-mono);
+  font-size: 12.5px;
+  background: var(--bc-raised);
+  padding: 1px 5px;
+  border-radius: 5px;
+}
+.bc-prose pre {
+  background: var(--bc-bg);
+  border: 1px solid var(--bc-border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  overflow-x: auto;
+  margin: 0 0 14px;
+}
+.bc-prose pre code {
+  background: none;
+  padding: 0;
+}
+.bc-prose table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 0 0 14px;
+  font-size: 13px;
+  display: block;
+  overflow-x: auto;
+}
+.bc-prose th,
+.bc-prose td {
+  border: 1px solid var(--bc-border);
+  padding: 7px 10px;
+  text-align: left;
+  vertical-align: top;
+}
+.bc-prose th {
+  background: var(--bc-raised);
+  font-weight: 600;
+}
+.bc-prose blockquote {
+  margin: 0 0 14px;
+  padding: 10px 14px;
+  border-left: 3px solid var(--bc-primary);
+  background: var(--bc-primary-soft);
+  border-radius: 0 10px 10px 0;
+}
+.bc-prose blockquote p:last-child {
+  margin: 0;
+}
+.bc-prose hr {
+  border: 0;
+  border-top: 1px solid var(--bc-border);
+  margin: 24px 0;
+}
+.bc-prose a {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}

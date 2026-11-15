@@ -1,0 +1,15 @@
+node_modules/
+dist/
+coverage/
+.env
+.env.*
+!.env.example
+/UPDATES/
+*.zip
+*.sha256
+*.sig
+*.log
+data/
+test/e2e/out/
+*.pem
+/release-out/

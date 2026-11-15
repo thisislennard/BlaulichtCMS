@@ -1,0 +1,68 @@
+name: Sicherheitsprüfung
+
+# Schwachstellen in Abhängigkeiten und im Image (#105): bei jedem Push/PR und wöchentlich, damit neue CVEs auch ohne
+# Codeänderung auffallen. Ergebnisse stehen im Protokoll des Laufs; ein Fehlschlag meldet GitHub per Mail.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: '17 5 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  npm-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 26
+      # Laufzeit-Abhängigkeiten: ab „hoch“ schlägt der Lauf fehl
+      - name: npm audit (Laufzeit, ab hoch)
+        run: npm audit --omit=dev --audit-level=high
+      # Entwicklungswerkzeuge (nicht im Image): ab „kritisch“
+      - name: npm audit (alle, ab kritisch)
+        run: npm audit --audit-level=critical
+
+  image-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Image bauen
+        run: docker build --pull -t blaulichtcms:scan .
+      - name: Trivy – Übersicht (hoch und kritisch, nur Bericht)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: image
+          image-ref: blaulichtcms:scan
+          format: table
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: '0'
+      - name: Trivy – kritische, behebbare Schwachstellen brechen ab
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: image
+          image-ref: blaulichtcms:scan
+          format: table
+          severity: CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'
+          skip-setup-trivy: true
+
+  secret-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Trivy – versehentlich eingecheckte Geheimnisse
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: secret
+          format: table
+          exit-code: '1'

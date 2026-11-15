@@ -1,0 +1,3 @@
+# Öffentlicher Schlüssel für In-App-Updates (Ed25519, Base64 der 32 Rohbytes).
+# Updates werden nur installiert, wenn ihre Signatur zu diesem Schlüssel passt. Erzeugt mit scripts/update-signing.mjs keygen.
+J/6KsBPPPrBgEJOF/Er4wRlrKM2qNVrsdF48i0KnjD8=

@@ -1,0 +1,18 @@
+/* Hilfe: Ergänzungen zur Prosa. Als Datei statt <style>-Element, damit die CSP ohne 'unsafe-inline' für
+   Stylesheets auskommt (#132). Druckregeln nur, solange die Hilfe angezeigt wird (body:has). */
+.help-prose ul:not(.list-none) { list-style: disc; }
+.help-prose ol { list-style: decimal; }
+.help-prose li::marker { color: var(--bc-text-2); }
+.help-prose h4 { font-size: 13.5px; font-weight: 600; margin: 18px 0 8px; }
+@media (min-width: 640px) { .help-prose pre { padding-right: 104px; } }
+.help-prose td > p:last-child { margin-bottom: 0; }
+#help-article [tabindex='-1']:focus { outline: none; box-shadow: none; }
+.help-prose input[type=checkbox] { margin-right: 6px; vertical-align: -1px; }
+.help-prose li:has(> input[type=checkbox]) { list-style: none; margin-left: -18px; }
+@media print {
+  body:has(#help-article) * { visibility: hidden !important; }
+  #help-article, #help-article * { visibility: visible !important; color: black !important; background: transparent !important; box-shadow: none !important; }
+  #help-article { position: absolute; left: 0; top: 0; width: 100%; max-width: none; }
+  #help-article pre, #help-article th, #help-article td, #help-article blockquote, #help-article section { border-color: #999 !important; }
+  #help-article a { text-decoration: none !important; }
+}

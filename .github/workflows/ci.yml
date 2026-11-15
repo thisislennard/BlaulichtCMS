@@ -1,0 +1,98 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        # Test-Datenbank, per Digest fixiert (#127); Aktualisierung von Hand zusammen mit dem Dockerfile
+        image: postgres:18-alpine@sha256:b6972e1115a4ff8eba5d7f7d19184926d1e16d7d1136ae1e1a7ebf286da0f015
+        env:
+          POSTGRES_USER: blaulichtcms
+          POSTGRES_PASSWORD: blaulichtcms
+          POSTGRES_DB: blaulichtcms_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U blaulichtcms" --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 26
+          cache: npm
+      - name: pdftotext für die PDF-Tests
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends poppler-utils
+      - name: PostgreSQL-18-Client (pg_dump/pg_restore passend zum Server) für Sicherungs- und Update-Tests
+        run: |
+          sudo apt-get install -y --no-install-recommends postgresql-common
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
+          sudo apt-get install -y --no-install-recommends postgresql-client-18
+          echo /usr/lib/postgresql/18/bin >> "$GITHUB_PATH"
+          /usr/lib/postgresql/18/bin/pg_dump --version
+      - name: ffmpeg/ffprobe aus demselben Image wie im Container
+        run: |
+          # dasselbe per Digest fixierte Image wie im Dockerfile (#104)
+          img=$(sed -n 's/^FROM \(mwader\/static-ffmpeg[^ ]*@sha256:[0-9a-f]*\) AS ffmpeg$/\1/p' Dockerfile)
+          test -n "$img" || { echo "ffmpeg-Image im Dockerfile nicht gefunden" >&2; exit 1; }
+          id=$(docker create "$img")
+          sudo docker cp "$id:/ffmpeg" /usr/local/bin/ffmpeg
+          sudo docker cp "$id:/ffprobe" /usr/local/bin/ffprobe
+          docker rm "$id"
+          ffmpeg -version | head -1
+      - name: PHP-Syntax des WordPress-Plugins
+        run: find wordpress-plugin -name '*.php' -print0 | xargs -0 -n1 php -l
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test -w server
+        env:
+          TEST_DATABASE_URL: postgresql://blaulichtcms:blaulichtcms@127.0.0.1:5432/blaulichtcms_test
+      - run: npm run build
+
+  docker:
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Image bauen
+        run: docker build -t blaulichtcms:ci .
+      - name: Probelauf mit Compose (frisches Volume)
+        run: |
+          printf 'COOKIE_SECURE=false\nTRUST_PROXY=false\n' > .env
+          docker network inspect proxy-net >/dev/null 2>&1 || docker network create proxy-net
+          docker compose up -d
+          for i in $(seq 1 90); do
+            if curl -fsS http://localhost:7310/healthz; then break; fi
+            sleep 2
+          done
+          curl -fsS http://localhost:7310/healthz
+          curl -fsS http://localhost:7310/api/v1/auth/state
+          docker compose exec -T blaulichtcms node server/dist/cli.js self-check
+          # Rauchtest wie bei einem In-App-Update (Module, native Abhängigkeiten, Update-Schlüssel)
+          docker compose exec -T blaulichtcms node server/dist/cli.js self-check --release
+          # Laufzeitrolle ohne Superuser (#102)
+          pre=$(docker compose exec -T blaulichtcms node server/dist/cli.js preflight || true)
+          echo "$pre" | grep -q "Datenbankrolle ohne Superuser-Rechte: blaulichtcms_app" || { echo "$pre"; exit 1; }
+          # Master-Schlüssel wechseln (#134): API/Worker über den Supervisor anhalten, neu verschlüsseln, neu starten
+          docker compose exec -T blaulichtcms node server/dist/cli.js maintenance on CI
+          docker compose exec -T blaulichtcms node server/dist/cli.js rotate-master-key --ja
+          sleep 5
+          for i in $(seq 1 60); do
+            if curl -fsS http://localhost:7310/healthz; then break; fi
+            sleep 2
+          done
+          curl -fsS http://localhost:7310/healthz
+          docker compose exec -T blaulichtcms node server/dist/cli.js audit-verify
+          docker compose exec -T blaulichtcms node server/dist/cli.js maintenance off
+          docker compose exec -T blaulichtcms sh -c 'ls -l /data/secrets'
+          docker compose logs blaulichtcms | tail -50
+      - name: Aufräumen
+        if: always()
+        run: docker compose down -v

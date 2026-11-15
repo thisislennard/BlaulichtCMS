@@ -1,0 +1,211 @@
+{
+  "title": "Hilfe",
+  "welcome": "Wie können wir helfen?",
+  "welcomeName": "Hallo {name}, wie können wir helfen?",
+  "welcomeText": "Anleitungen für Redaktion und Administration: Fotos sammeln, sichten, Beiträge freigeben, auf der Website veröffentlichen und BlaulichtCMS sicher betreiben.",
+  "searchLabel": "Hilfe durchsuchen",
+  "searchPlaceholder": "Hilfe durchsuchen …",
+  "searchExamples": "Zum Beispiel:",
+  "searchKeys": "↑↓ wählen · Enter öffnen · Esc schließen",
+  "results": "Suchergebnisse",
+  "noResults": "Keine Treffer für „{q}“.",
+  "allResults": "Alle {n} Treffer anzeigen",
+  "resultsFor": "Suche: „{q}“",
+  "resultCount": "{n} Treffer in der Hilfe",
+  "noResultsTitle": "Nichts gefunden",
+  "noResultsText": "Versuche ein anderes Wort oder einen kürzeren Begriff – zum Beispiel „QR“ statt „QR-Code ausdrucken“.",
+  "toFaq": "Zur Fehlerbehebung",
+  "popular": "Beliebte Themen",
+  "faqTitle": "Häufige Fragen",
+  "readMore": "Mehr dazu",
+  "allChapters": "Alle Kapitel",
+  "chapterNav": "Kapitel der Hilfe",
+  "chapter": "Kapitel",
+  "startPage": "Startseite der Hilfe",
+  "toc": "Auf dieser Seite",
+  "prev": "Zurück",
+  "next": "Weiter",
+  "pager": "Weitere Kapitel",
+  "print": "Seite drucken",
+  "copy": "Kopieren",
+  "anchorLink": "Link zum Abschnitt „{title}“",
+  "externalLink": "(öffnet in neuem Tab)",
+  "notFound": "Kapitel nicht gefunden",
+  "notFoundText": "Diese Hilfeseite gibt es nicht (mehr). Vielleicht hilft die Suche weiter.",
+  "backToStart": "Zur Startseite der Hilfe",
+  "retry": "Erneut versuchen",
+  "groups": {
+    "basics": "Grundlagen",
+    "work": "Arbeiten mit BlaulichtCMS",
+    "warnings": "Warnentwürfe",
+    "channels": "Kanäle",
+    "admin": "Administration",
+    "reference": "Nachschlagen"
+  },
+  "chapters": {
+    "erste-schritte": {
+      "title": "Erste Schritte",
+      "summary": "Der Ablauf von Foto-Link bis Veröffentlichung und die wichtigsten Begriffe."
+    },
+    "anmeldung": {
+      "title": "Anmeldung und Zwei-Faktor",
+      "summary": "Einladung annehmen, Passwort, Authenticator-App, Wiederherstellungscodes."
+    },
+    "app": {
+      "title": "BlaulichtCMS als App",
+      "summary": "Auf Handy und Laptop installieren, Schnellzugriffe, Verhalten ohne Verbindung."
+    },
+    "foto-link": {
+      "title": "Foto-Link: Fotos und Videos sammeln",
+      "summary": "Upload-Links erzeugen, Grenzen, Ablauf und Widerruf, Quarantäne."
+    },
+    "sichtung": {
+      "title": "Medien sichten",
+      "summary": "Datei für Datei auswählen oder überspringen – mit Maus, Tastatur oder Wischen."
+    },
+    "beitraege": {
+      "title": "Beiträge und Fassungen",
+      "summary": "Arten, Text, Medien, Zielkanal und warum jede Änderung eine Fassung ist."
+    },
+    "freigabe": {
+      "title": "Freigabe und Veröffentlichung",
+      "summary": "Einreichen, freigeben, veröffentlichen – und was die Status bedeuten."
+    },
+    "qr-codes": {
+      "title": "QR-Codes und Aushänge",
+      "summary": "Links teilen, QR-Code anzeigen und als A4-Aushang drucken."
+    },
+    "wordpress": {
+      "title": "WordPress verbinden",
+      "summary": "BlaulichtCMS Bridge installieren, per Code koppeln, Abruf und Fehlerbilder."
+    },
+    "ohne-website": {
+      "title": "Ohne Website arbeiten",
+      "summary": "Beiträge intern schreiben, prüfen und freigeben."
+    },
+    "benutzer-rollen": {
+      "title": "Benutzer und Rollen",
+      "summary": "Rollen und Rechte, Einladungen, Widerruf und Sperren."
+    },
+    "einrichtung": {
+      "title": "Einrichtung und Einstellungen",
+      "summary": "Ersteinrichtung, öffentliche Adresse, Einstellungen im Überblick, HTTPS."
+    },
+    "sicherheit": {
+      "title": "Sicherheit",
+      "summary": "Wie BlaulichtCMS Konten, Uploads, Medien und Websites schützt."
+    },
+    "sicherung": {
+      "title": "Sicherung und Wiederherstellung",
+      "summary": "Was gesichert werden muss und wie die Wiederherstellung funktioniert."
+    },
+    "updates": {
+      "title": "Updates",
+      "summary": "Sichern, Wechseln, Prüfen, Wiederherstellen; Wartungsmodus und Bridge-Updates über WordPress."
+    },
+    "fehlerbehebung": {
+      "title": "Fehlerbehebung",
+      "summary": "Typische Probleme bei Uploads, Veröffentlichung und Anmeldung."
+    },
+    "tastatur": {
+      "title": "Tastaturbedienung",
+      "summary": "Alle Tastenkürzel auf einen Blick."
+    },
+    "begriffe": {
+      "title": "Begriffe",
+      "summary": "Glossar der BlaulichtCMS-Begriffe."
+    },
+    "banner": {
+      "title": "Banner auf der Website",
+      "summary": "Zeitgesteuerte Hinweise mit Priorität, Ablauf auch ohne Verbindung, Platzierung per Shortcode oder Block."
+    },
+    "quellen": {
+      "title": "Quellen (RSS/Atom)",
+      "summary": "Feeds hinzufügen, Einträge merken oder ausblenden, Themenideen mit Original-Link."
+    },
+    "dashboard": {
+      "title": "Dashboard und Live-Status",
+      "summary": "Widgets anordnen, mobile Reihenfolge, Vorlagen für Rollen, bestätigter Stand."
+    },
+    "warnentwurf": {
+      "title": "Warnentwurf und Übergabe",
+      "summary": "Wizard, Stichwort und Warnstufe, Freigabe der PDF, Versand und Eingangsbestätigung."
+    },
+    "stichwoerter-regeln": {
+      "title": "Stichwörter, Regeln und Versand pflegen",
+      "summary": "Lagefragen, versionierte Regeln mit fachlicher Freigabe, Zuständigkeiten, Vorlagen, SMTP und Testmodus."
+    },
+    "verbindungen": {
+      "title": "Verbindungen: Facebook, Instagram, FE2, Warnungen",
+      "summary": "Verbinden, Testen, Vorschau, Aktivieren; soziale Kanäle im Beitrag, FE2-Entwürfe, amtliche Warnungen."
+    }
+  },
+  "tiles": {
+    "erste-schritte": {
+      "title": "Erste Schritte",
+      "text": "Der ganze Ablauf in fünf Schritten."
+    },
+    "foto-link": {
+      "title": "Foto-Link",
+      "text": "Fotos und Videos ohne Konto sammeln."
+    },
+    "freigabe": {
+      "title": "Freigabe",
+      "text": "Was eine Freigabe bedeutet und wer was darf."
+    },
+    "wordpress": {
+      "title": "WordPress verbinden",
+      "text": "Bridge installieren und koppeln."
+    },
+    "qr-codes": {
+      "title": "QR-Codes",
+      "text": "Links teilen und Aushänge drucken."
+    },
+    "fehlerbehebung": {
+      "title": "Fehlerbehebung",
+      "text": "Wenn etwas nicht klappt."
+    }
+  },
+  "faq": {
+    "1": {
+      "q": "Brauchen Hochladende ein Konto?",
+      "a": "Nein. Über einen Upload-Link oder QR-Code kann jede Person ohne Konto in genau diese Sammlung hochladen – bis der Link abläuft oder widerrufen wird.",
+      "link": "/hilfe/foto-link"
+    },
+    "2": {
+      "q": "Warum muss ich nach einer kleinen Änderung neu freigeben?",
+      "a": "Eine Freigabe gilt für genau eine Fassung. Jede Änderung an Text, Medien oder Zielkanal erzeugt eine neue Fassung, damit nichts Ungeprüftes veröffentlicht wird.",
+      "link": "/hilfe/freigabe"
+    },
+    "3": {
+      "q": "Funktioniert ein gedruckter QR-Code nach dem Widerruf noch?",
+      "a": "Nein. Der Code enthält nur die Adresse. Ist der Link widerrufen oder abgelaufen, wird der Upload abgewiesen.",
+      "link": "/hilfe/qr-codes"
+    },
+    "4": {
+      "q": "Werden Standortdaten veröffentlicht?",
+      "a": "Nein. Für Veröffentlichungen nutzt BlaulichtCMS eine öffentliche Fassung ohne Standort- und Kameradaten. Das Original bleibt intern.",
+      "link": "/hilfe/foto-link"
+    },
+    "5": {
+      "q": "Kann ein Beitrag doppelt auf der Website landen?",
+      "a": "Nein. Doppelte Klicks, mehrfaches Abholen oder doppelte Bestätigungen führen zu genau einem WordPress-Beitrag.",
+      "link": "/hilfe/wordpress"
+    },
+    "6": {
+      "q": "Geht das auch ohne Website?",
+      "a": "Ja. Beiträge lassen sich vollständig intern schreiben, prüfen und freigeben.",
+      "link": "/hilfe/ohne-website"
+    },
+    "7": {
+      "q": "Was bedeutet „Ergebnis unbekannt“?",
+      "a": "Die Website hat den Auftrag abgeholt, aber noch kein Ergebnis gemeldet. Beim nächsten Abruf prüft die Bridge selbst, ob der Beitrag existiert.",
+      "link": "/hilfe/freigabe"
+    },
+    "8": {
+      "q": "Wie sichere ich BlaulichtCMS?",
+      "a": "Datenbank, Medien und Schlüsselmaterial liegen im Volume /data. Für den Ernstfall gehört eine Kopie außerhalb des Volumes.",
+      "link": "/hilfe/sicherung"
+    }
+  }
+}

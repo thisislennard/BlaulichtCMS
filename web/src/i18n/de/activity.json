@@ -1,0 +1,427 @@
+{
+  "title": "Aktivitäten",
+  "subtitle": "Wer hat wann was geändert – lesbar aus dem Audit-Protokoll.",
+  "areaLabel": "Bereich",
+  "areas": {
+    "all": "Alle",
+    "editorial": "Redaktion & Freigaben",
+    "media": "Medien",
+    "channels": "Kanäle",
+    "warnings": "Warnentwürfe",
+    "user": "Benutzer & Anmeldung",
+    "system": "System"
+  },
+  "today": "Heute",
+  "yesterday": "Gestern",
+  "loadMore": "Ältere laden",
+  "empty": "Noch keine Aktivitäten",
+  "emptyText": "Sobald jemand Beiträge, Medien, Freigaben oder Einstellungen ändert, erscheint es hier.",
+  "emptyFiltered": "Keine Aktivitäten in diesem Bereich",
+  "emptyFilteredText": "Wähle einen anderen Bereich oder „Alle“.",
+  "showAll": "Alle anzeigen",
+  "loadError": "Aktivitäten konnten nicht geladen werden",
+  "failed": "fehlgeschlagen",
+  "denied": "verweigert",
+  "system": "System",
+  "apiKey": "API-Schlüssel",
+  "open": "Öffnen",
+  "fallback": "hat „{action}“ ausgeführt",
+  "actions": {
+    "auth": {
+      "login": "Angemeldet",
+      "logout": "Abgemeldet",
+      "logout_all": "Auf allen Geräten abgemeldet",
+      "mfa": "Zwei-Faktor-Code eingegeben",
+      "mfa_enabled": "Zwei-Faktor eingerichtet",
+      "mfa_disabled": "Zwei-Faktor deaktiviert",
+      "password_changed": "Passwort geändert",
+      "recovery_code_used": "Wiederherstellungscode benutzt",
+      "invite_accepted": "Einladung angenommen",
+      "recovery_codes_renewed": "Neue Wiederherstellungscodes erzeugt",
+      "confirm": "Identität bestätigt",
+      "reauth": "Kritische Aktion bestätigt",
+      "session_revoked": "Sitzung beendet"
+    },
+    "setup": {
+      "complete": "Ersteinrichtung abgeschlossen"
+    },
+    "user": {
+      "invited": "Benutzer eingeladen",
+      "invite_renewed": "Einladung erneuert",
+      "password_reset_link": "Passwort-Link erzeugt",
+      "roles_changed": "Rollen geändert",
+      "disabled": "Benutzer deaktiviert",
+      "enabled": "Benutzer aktiviert",
+      "renamed": "Benutzer umbenannt",
+      "mfa_reset": "2FA zurückgesetzt",
+      "deleted": "Benutzer gelöscht",
+      "invite_revoked": "Einladung widerrufen",
+      "unlocked": "Sperre aufgehoben"
+    },
+    "api_key": {
+      "created": "API-Schlüssel erstellt",
+      "revoked": "API-Schlüssel widerrufen",
+      "auth": "API-Schlüssel-Anmeldung"
+    },
+    "backup": {
+      "created": "Sicherung erstellt",
+      "downloaded": "Sicherung heruntergeladen"
+    },
+    "post": {
+      "created": "Beitrag angelegt",
+      "revised": "Neue Fassung gespeichert",
+      "updated": "Beitrag geändert",
+      "submitted": "Zur Freigabe eingereicht",
+      "approved": "Fassung freigegeben",
+      "rejected": "Fassung zurückgewiesen",
+      "approval_revoked": "Freigabe zurückgezogen"
+    },
+    "settings": {
+      "changed": "Einstellungen geändert"
+    },
+    "publication": {
+      "requested": "Veröffentlichung beauftragt",
+      "fetched": "Auftrag abgeholt",
+      "confirmed": "Veröffentlichung bestätigt",
+      "failed": "Veröffentlichung fehlgeschlagen",
+      "canceled": "Auftrag abgebrochen",
+      "retried": "Erneut beauftragt",
+      "unpublish_requested": "Rücknahme beauftragt"
+    },
+    "collection": {
+      "created": "Sammlung angelegt",
+      "updated": "Sammlung geändert",
+      "assigned": "Sammlung zugeordnet",
+      "deleted": "Sammlung gelöscht",
+      "purged": "Sammlung bereinigt (Löschfrist)"
+    },
+    "upload_link": {
+      "created": "Upload-Link erstellt",
+      "revoked": "Upload-Link widerrufen"
+    },
+    "media": {
+      "uploaded": "Datei hochgeladen",
+      "selection": "Auswahl geändert",
+      "deleted": "Datei gelöscht",
+      "downloaded": "Original heruntergeladen",
+      "export_requested": "Export angefordert",
+      "export_downloaded": "Export heruntergeladen"
+    },
+    "site": {
+      "created": "Website angelegt",
+      "pairing_code": "Kopplungscode erzeugt",
+      "pair": "Kopplung versucht",
+      "paired": "Website gekoppelt",
+      "revoked": "Kopplung widerrufen",
+      "plugin_downloaded": "Bridge heruntergeladen",
+      "update_channel": "Update-Kanal geändert"
+    },
+    "banner": {
+      "created": "Banner angelegt",
+      "revised": "Banner geändert",
+      "submitted": "Banner zur Freigabe eingereicht",
+      "approved": "Banner freigegeben",
+      "published": "Banner veröffentlicht",
+      "ended": "Banner beendet",
+      "from_official_warning": "Banner aus amtlicher Warnung"
+    },
+    "bridge": {
+      "released": "Bridge-Version freigegeben",
+      "auth": "Bridge-Anmeldung"
+    },
+    "connection": {
+      "created": "Verbindung angelegt",
+      "updated": "Verbindung geändert",
+      "secret_changed": "Zugangsdaten geändert",
+      "token_rotated": "Eingangsschlüssel erneuert",
+      "oauth": "Konto verbunden",
+      "page_selected": "Seite gewählt",
+      "tested": "Verbindung getestet",
+      "activated": "Verbindung aktiviert",
+      "disabled": "Verbindung deaktiviert",
+      "revoked": "Verbindung widerrufen",
+      "private_target_approved": "Internes Ziel freigegeben",
+      "reviewed": "Verbindung geprüft"
+    },
+    "dashboard": {
+      "shared_saved": "Gemeinsames Dashboard gespeichert"
+    },
+    "import": {
+      "committed": "Import übernommen"
+    },
+    "rss": {
+      "feed_added": "Quelle hinzugefügt",
+      "feed_removed": "Quelle entfernt",
+      "idea_created": "Themenidee übernommen"
+    },
+    "social": {
+      "requested": "Soziale Veröffentlichung beauftragt",
+      "retry": "Soziale Veröffentlichung wiederholt",
+      "exported": "Für soziale Kanäle exportiert"
+    },
+    "template": {
+      "created": "Vorlage angelegt",
+      "updated": "Vorlage geändert",
+      "archived": "Vorlage archiviert"
+    },
+    "warning": {
+      "created": "Warnentwurf angelegt",
+      "revised": "Warnentwurf geändert",
+      "submitted": "Warnentwurf eingereicht",
+      "send_requested": "Versand beauftragt",
+      "send_resolved": "Versand geklärt",
+      "acknowledged": "Eingang bestätigt",
+      "keyword_created": "Stichwort angelegt",
+      "keyword_updated": "Stichwort geändert",
+      "question_created": "Lagefrage angelegt",
+      "question_approved": "Lagefrage freigegeben",
+      "rule_created": "Warnstufen-Regel angelegt",
+      "rule_approved": "Warnstufen-Regel freigegeben",
+      "rule_retired": "Warnstufen-Regel außer Kraft",
+      "template_version": "Vorlagenversion angelegt",
+      "responsibility_created": "Zuständigkeit angelegt",
+      "responsibility_updated": "Zuständigkeit geändert",
+      "settings_changed": "Warnversand eingestellt",
+      "test_mail": "Testmail gesendet"
+    },
+    "access": {
+      "denied": "Zugriff verweigert"
+    },
+    "fe2": {
+      "auth": "FE2-Anmeldung"
+    },
+    "audit": {
+      "verified": "Audit-Kette geprüft"
+    },
+    "retention": {
+      "run": "Löschfristen angewendet"
+    },
+    "privacy": {
+      "search": "Datenschutzanfrage: Suche",
+      "export": "Datenschutzauskunft exportiert",
+      "deleted": "Auf Anfrage gelöscht",
+      "pseudonymized": "Auf Anfrage pseudonymisiert"
+    },
+    "update": {
+      "install": "Update-Installation",
+      "activation_requested": "Update-Umschaltung beauftragt",
+      "activated": "Update aktiviert",
+      "rolled_back": "Update zurückgerollt"
+    },
+    "updates": {
+      "settings_changed": "Update-Einstellungen geändert",
+      "checked": "Auf Updates geprüft"
+    }
+  },
+  "sentences": {
+    "auth": {
+      "login": "hat sich angemeldet",
+      "logout": "hat sich abgemeldet",
+      "logout_all": "hat sich auf allen Geräten abgemeldet",
+      "mfa": "hat einen Zwei-Faktor-Code eingegeben",
+      "mfa_enabled": "hat die Zwei-Faktor-Anmeldung eingerichtet",
+      "mfa_disabled": "hat die Zwei-Faktor-Anmeldung deaktiviert",
+      "password_changed": "hat das eigene Passwort geändert",
+      "recovery_code_used": "hat einen Wiederherstellungscode benutzt",
+      "invite_accepted": "hat die Einladung angenommen",
+      "recovery_codes_renewed": "hat neue Wiederherstellungscodes erzeugt",
+      "confirm": "hat die eigene Identität bestätigt",
+      "reauth": "hat eine kritische Aktion mit dem Passwort bestätigt",
+      "session_revoked": "hat eine eigene Sitzung beendet"
+    },
+    "setup": {
+      "complete": "hat BlaulichtCMS eingerichtet"
+    },
+    "user": {
+      "invited": "hat „{o}“ eingeladen",
+      "invite_renewed": "hat die Einladung für „{o}“ erneuert",
+      "password_reset_link": "hat einen Passwort-Link für „{o}“ erzeugt",
+      "roles_changed": "hat die Rollen von „{o}“ geändert",
+      "disabled": "hat das Konto „{o}“ deaktiviert",
+      "enabled": "hat das Konto „{o}“ aktiviert",
+      "renamed": "hat das Konto „{o}“ umbenannt",
+      "mfa_reset": "hat die Zwei-Faktor-Anmeldung von „{o}“ zurückgesetzt",
+      "deleted": "hat das Konto „{o}“ gelöscht",
+      "invite_revoked": "hat die Einladung für „{o}“ widerrufen",
+      "unlocked": "hat die Sperre von „{o}“ aufgehoben"
+    },
+    "api_key": {
+      "created": "hat den API-Schlüssel „{o}“ erstellt",
+      "revoked": "hat den API-Schlüssel „{o}“ widerrufen",
+      "auth": "hat einen ungültigen API-Schlüssel benutzt"
+    },
+    "backup": {
+      "created": "hat eine Sicherung erstellt",
+      "downloaded": "hat die Sicherung „{o}“ heruntergeladen"
+    },
+    "post": {
+      "created": "hat den Beitrag „{o}“ angelegt",
+      "revised": "hat eine neue Fassung von „{o}“ gespeichert",
+      "updated": "hat den Beitrag „{o}“ geändert",
+      "submitted": "hat „{o}“ zur Freigabe eingereicht",
+      "approved": "hat „{o}“ freigegeben",
+      "rejected": "hat „{o}“ zurückgewiesen",
+      "approval_revoked": "hat die Freigabe von „{o}“ zurückgezogen"
+    },
+    "settings": {
+      "changed": "hat die Systemeinstellungen geändert"
+    },
+    "publication": {
+      "requested": "hat die Veröffentlichung von „{o}“ beauftragt",
+      "fetched": "hat Aufträge abgeholt",
+      "confirmed": "hat die Veröffentlichung von „{o}“ bestätigt",
+      "failed": "meldet: Veröffentlichung von „{o}“ fehlgeschlagen",
+      "canceled": "hat einen Auftrag abgebrochen",
+      "retried": "hat einen Auftrag erneut gestartet",
+      "unpublish_requested": "hat die Rücknahme von „{o}“ beauftragt"
+    },
+    "collection": {
+      "created": "hat die Sammlung „{o}“ angelegt",
+      "updated": "hat die Sammlung „{o}“ geändert",
+      "assigned": "hat die Sammlung „{o}“ einem Beitrag zugeordnet",
+      "deleted": "hat die Sammlung „{o}“ endgültig gelöscht",
+      "purged": "hat nicht verwendete Dateien der Sammlung „{o}“ gelöscht"
+    },
+    "upload_link": {
+      "created": "hat einen Upload-Link erstellt",
+      "revoked": "hat einen Upload-Link widerrufen"
+    },
+    "media": {
+      "uploaded": "hat „{o}“ hochgeladen",
+      "selection": "hat die Auswahl für {o} geändert",
+      "deleted": "hat „{o}“ gelöscht",
+      "downloaded": "hat das Original „{o}“ heruntergeladen",
+      "export_requested": "hat einen Export angefordert",
+      "export_downloaded": "hat einen Export heruntergeladen"
+    },
+    "site": {
+      "created": "hat die Website „{o}“ angelegt",
+      "pairing_code": "hat einen Kopplungscode für „{o}“ erzeugt",
+      "pair": "Kopplungsversuch für „{o}“",
+      "paired": "hat die Website „{o}“ gekoppelt",
+      "revoked": "hat die Kopplung von „{o}“ widerrufen",
+      "plugin_downloaded": "hat die BlaulichtCMS Bridge heruntergeladen",
+      "update_channel": "hat den Update-Kanal von „{o}“ geändert"
+    },
+    "banner": {
+      "created": "hat das Banner „{o}“ angelegt",
+      "revised": "hat das Banner „{o}“ geändert",
+      "submitted": "hat das Banner „{o}“ zur Freigabe eingereicht",
+      "approved": "hat das Banner „{o}“ freigegeben",
+      "published": "hat das Banner „{o}“ veröffentlicht",
+      "ended": "hat das Banner „{o}“ beendet",
+      "from_official_warning": "hat aus einer amtlichen Warnung den Banner-Entwurf „{o}“ erstellt"
+    },
+    "bridge": {
+      "released": "hat „{o}“ für alle Websites freigegeben",
+      "auth": "hat sich als Bridge angemeldet (fehlgeschlagen)"
+    },
+    "connection": {
+      "created": "hat die Verbindung „{o}“ angelegt",
+      "updated": "hat die Verbindung „{o}“ geändert",
+      "secret_changed": "hat die Zugangsdaten der Verbindung „{o}“ geändert",
+      "token_rotated": "hat den Eingangsschlüssel der Verbindung „{o}“ erneuert",
+      "oauth": "hat ein Konto für die Verbindung „{o}“ angemeldet",
+      "page_selected": "hat die Seite für die Verbindung „{o}“ gewählt",
+      "tested": "hat die Verbindung „{o}“ getestet",
+      "activated": "hat die Verbindung „{o}“ aktiviert",
+      "disabled": "hat die Verbindung „{o}“ deaktiviert",
+      "revoked": "hat die Verbindung „{o}“ widerrufen",
+      "private_target_approved": "hat ein internes Ziel für die Verbindung „{o}“ freigegeben",
+      "reviewed": "hat die Verbindung „{o}“ als geprüft markiert"
+    },
+    "dashboard": {
+      "shared_saved": "hat das gemeinsame Dashboard gespeichert"
+    },
+    "import": {
+      "committed": "hat den Import aus „{o}“ übernommen"
+    },
+    "rss": {
+      "feed_added": "hat die Quelle „{o}“ hinzugefügt",
+      "feed_removed": "hat die Quelle „{o}“ entfernt",
+      "idea_created": "hat „{o}“ als Themenidee übernommen"
+    },
+    "social": {
+      "requested": "hat „{o}“ für einen sozialen Kanal beauftragt",
+      "retry": "hat eine soziale Veröffentlichung erneut gestartet",
+      "exported": "hat „{o}“ für soziale Kanäle exportiert"
+    },
+    "template": {
+      "created": "hat die Vorlage „{o}“ angelegt",
+      "updated": "hat die Vorlage „{o}“ geändert",
+      "archived": "hat die Vorlage „{o}“ archiviert"
+    },
+    "warning": {
+      "created": "hat den Warnentwurf „{o}“ angelegt",
+      "revised": "hat eine neue Fassung von „{o}“ gespeichert",
+      "submitted": "hat „{o}“ zur Freigabe eingereicht",
+      "send_requested": "hat den Versand von „{o}“ beauftragt",
+      "send_resolved": "hat einen unklaren Versand geklärt",
+      "acknowledged": "hat den Eingang eines Warnentwurfs bestätigt",
+      "keyword_created": "hat das Stichwort „{o}“ angelegt",
+      "keyword_updated": "hat das Stichwort „{o}“ geändert",
+      "question_created": "hat die Lagefrage „{o}“ angelegt",
+      "question_approved": "hat die Lagefrage „{o}“ freigegeben",
+      "rule_created": "hat die Warnstufen-Regel „{o}“ angelegt",
+      "rule_approved": "hat die Warnstufen-Regel „{o}“ freigegeben",
+      "rule_retired": "hat die Warnstufen-Regel „{o}“ außer Kraft gesetzt",
+      "template_version": "hat die Vorlagenversion „{o}“ angelegt",
+      "responsibility_created": "hat die Zuständigkeit „{o}“ angelegt",
+      "responsibility_updated": "hat die Zuständigkeit „{o}“ geändert",
+      "settings_changed": "hat die Einstellungen für den Warnversand geändert",
+      "test_mail": "hat eine Testmail für den Warnversand gesendet"
+    },
+    "access": {
+      "denied": "hatte keine Berechtigung für „{o}“"
+    },
+    "fe2": {
+      "auth": "hat FE2-Daten mit falschem Zugangsschlüssel gesendet"
+    },
+    "audit": {
+      "verified": "hat die Audit-Kette geprüft"
+    },
+    "retention": {
+      "run": "hat abgelaufene Daten nach den Löschfristen gelöscht"
+    },
+    "privacy": {
+      "search": "hat für eine Datenschutzanfrage gesucht",
+      "export": "hat eine Datenschutzauskunft exportiert",
+      "deleted": "hat auf eine Datenschutzanfrage hin gelöscht ({o})",
+      "pseudonymized": "hat auf eine Datenschutzanfrage hin pseudonymisiert ({o})"
+    },
+    "update": {
+      "install": "hat die Installation von Version „{o}“ angestoßen",
+      "activation_requested": "hat die Umschaltung auf Version „{o}“ beauftragt",
+      "activated": "hat Version „{o}“ aktiviert",
+      "rolled_back": "hat das Update auf Version „{o}“ zurückgerollt"
+    },
+    "updates": {
+      "settings_changed": "hat die Update-Einstellungen geändert",
+      "checked": "hat auf Updates geprüft"
+    }
+  },
+  "notifications": {
+    "title": "Benachrichtigungen",
+    "subtitle": "Fehler, Hinweise und Freigaben der letzten 60 Tage.",
+    "filter": "Anzeigen",
+    "unread": "Ungelesen",
+    "all": "Alle",
+    "markAll": "Alle als gelesen markieren",
+    "markAllDone": "Alle als gelesen markiert",
+    "markRead": "Als gelesen markieren",
+    "unreadLabel": "ungelesen",
+    "kinds": {
+      "error": "Fehler",
+      "warning": "Warnung",
+      "info": "Hinweis",
+      "success": "Erfolg"
+    },
+    "empty": "Keine Benachrichtigungen",
+    "emptyText": "Hier erscheinen fehlgeschlagene Läufe, Verbindungsprobleme, Freigaben und Updates.",
+    "emptyUnread": "Alles gelesen",
+    "emptyUnreadText": "Es gibt keine ungelesenen Benachrichtigungen.",
+    "showAll": "Alle anzeigen",
+    "loadError": "Benachrichtigungen konnten nicht geladen werden"
+  },
+  "hideLogins": "Anmeldungen werden unter „Benutzer & Anmeldung“ gezeigt."
+}

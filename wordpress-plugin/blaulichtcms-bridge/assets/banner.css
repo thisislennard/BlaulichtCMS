@@ -1,0 +1,14 @@
+.bcb-banners{display:flex;flex-direction:column;gap:0;margin:0}
+.bcb-banner{display:flex;gap:.75rem;align-items:flex-start;padding:.75rem 1rem;font-size:1rem;line-height:1.4;border-left:6px solid}
+.bcb-banner[hidden]{display:none}
+.bcb-info{background:#e8f0fa;color:#0b2a4f;border-color:#134a86}
+.bcb-warning{background:#fff4e0;color:#4a2a00;border-color:#b25e00}
+.bcb-danger{background:#fde8ea;color:#5a0710;border-color:#c8102e}
+.bcb-label{font-weight:700;text-transform:uppercase;font-size:.75rem;letter-spacing:.06em;padding:.15rem .45rem;border:1.5px solid currentColor;border-radius:3px;white-space:nowrap;margin-top:.1rem}
+.bcb-body{display:flex;flex-wrap:wrap;gap:.25rem .5rem}
+.bcb-title{font-weight:700}
+.bcb-link{color:inherit;font-weight:600;text-decoration:underline}
+.bcb-incidents{list-style:none;padding:0;margin:0}
+.bcb-incidents li{padding:.4rem 0;border-bottom:1px solid #ddd}
+.bcb-incidents time{font-variant-numeric:tabular-nums;margin-right:.5rem;color:#555}
+@media (prefers-reduced-motion:reduce){.bcb-banner{transition:none}}

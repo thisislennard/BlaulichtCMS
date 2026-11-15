@@ -1,0 +1,86 @@
+# BlaulichtCMS – ein Dienst, ein Webport, ein persistentes Volume.
+#
+# Installation und Updates am Docker-Host (empfohlen):  ./install.sh
+#
+# Von Hand:
+#   docker network create proxy-net    # einmalig (gemeinsames Netz mit dem Reverse Proxy)
+#   cp .env.example .env                # Werte anpassen
+#   docker compose up -d --build
+#   docker compose logs blaulichtcms | grep Einrichtungsschlüssel
+#
+# Erreichbarkeit: Der Reverse Proxy (z. B. Nginx Proxy Manager im Netz proxy-net) leitet auf blaulichtcms:7310.
+# Der Port am Host ist standardmäßig nur lokal gebunden (127.0.0.1); läuft der Proxy auf einem anderen Host
+# (z. B. IIS), BLAULICHTCMS_BIND in .env auf die LAN-Adresse setzen und den Port per Firewall nur für ihn freigeben.
+
+name: blaulichtcms
+
+# Docker-Logs begrenzen (5 × 10 MB) – ohne Rotation wächst das Log unbegrenzt auf der Host-Platte
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
+services:
+  blaulichtcms:
+    build: .
+    image: ${BLAULICHTCMS_IMAGE:-blaulichtcms:local}
+    container_name: blaulichtcms
+    restart: unless-stopped
+    logging: *default-logging
+    # Init-Prozess (tini) räumt verwaiste Prozesse auf und leitet Signale weiter
+    init: true
+    env_file:
+      - path: .env
+        required: false
+    ports:
+      - "${BLAULICHTCMS_BIND:-127.0.0.1}:${BLAULICHTCMS_PORT:-7310}:7310"
+    volumes:
+      - data:/data
+    read_only: true
+    tmpfs:
+      - /tmp:size=1g
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    shm_size: 256m
+    mem_limit: ${BLAULICHTCMS_MEM_LIMIT:-4g}
+    pids_limit: ${BLAULICHTCMS_PIDS_LIMIT:-512}
+    # CPU-Grenze (#135): Videoverarbeitung (ffmpeg) lastet sonst alle Kerne des Hosts aus. Höchstens so viele wie der
+    # Host hat – install.sh setzt BLAULICHTCMS_CPUS auf Hosts mit nur einem Kern auf 1.
+    cpus: ${BLAULICHTCMS_CPUS:-2}
+    # Geordneter Stopp: Worker → API → PostgreSQL (Fast Shutdown)
+    # Worker 25 s + API 10 s + PostgreSQL bis 30 s (#75)
+    stop_grace_period: 90s
+    networks:
+      - default
+      - proxy
+
+  # Optional: Schadsoftwareprüfung der Uploads mit ClamAV (#133, docs/betrieb.md „Schadsoftwareprüfung“).
+  # Einschalten in .env: COMPOSE_PROFILES=clamav und CLAMAV_HOST=clamav. Ohne Profil startet der Dienst nicht.
+  clamav:
+    image: clamav/clamav:1.5.4
+    profiles: ["clamav"]
+    container_name: blaulichtcms-clamav
+    restart: unless-stopped
+    logging: *default-logging
+    mem_limit: ${CLAMAV_MEM_LIMIT:-3g}
+    volumes:
+      - clamav-db:/var/lib/clamav
+      # Für Videos StreamMaxLength anheben (Standard 25M), siehe docs/betrieb.md:
+      # - ./clamd.conf:/etc/clamav/clamd.conf:ro
+    networks:
+      - default
+
+volumes:
+  data:
+  clamav-db:
+
+networks:
+  default:
+  # Gemeinsames Netz mit dem Reverse-Proxy-Container (Nginx Proxy Manager); einmalig anlegen:
+  # docker network create proxy-net
+  proxy:
+    name: ${BLAULICHTCMS_PROXY_NETWORK:-proxy-net}
+    external: true

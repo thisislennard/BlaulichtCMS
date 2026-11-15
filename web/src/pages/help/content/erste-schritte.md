@@ -1,0 +1,30 @@
+BlaulichtCMS ist das Redaktionssystem für Öffentlichkeitsarbeit und Krisenkommunikation eurer Organisation. Fotos und Videos kommen über einen Link vom Handy, die Redaktion schreibt den Beitrag, eine berechtigte Person gibt genau diese Fassung frei – und erst dann wird veröffentlicht. Jeder Schritt ist nachvollziehbar.
+
+## Der Ablauf in fünf Schritten
+
+1. **Sammeln:** Im Beitrag „Fotos und Videos sammeln“ wählen. BlaulichtCMS erzeugt eine Sammlung und einen Upload-Link mit QR-Code. Wer den Link hat, kann ohne Konto hochladen.
+2. **Prüfen:** Jede Datei landet zuerst in der Quarantäne. BlaulichtCMS prüft Dateityp und Inhalt und erzeugt eine Vorschau sowie eine öffentliche Fassung ohne Standortdaten.
+3. **Sichten:** In der Sammlung Datei für Datei „Auswählen“ oder „Überspringen“ – am Handy auch per Wischen.
+4. **Redigieren und freigeben:** Text schreiben, ausgewählte Medien übernehmen, zur Freigabe einreichen. Die Freigabe gilt genau für diese Fassung.
+5. **Veröffentlichen:** Mit Zielkanal (z. B. eure WordPress-Website) beauftragt eine berechtigte Person die Veröffentlichung. Die Website meldet die veröffentlichte Adresse zurück – sie steht dann im Beitrag und im Dashboard.
+
+> **Gut zu wissen:** BlaulichtCMS funktioniert auch ganz ohne Website. Beiträge lassen sich intern schreiben, prüfen und freigeben. Siehe [Ohne Website arbeiten](/hilfe/ohne-website).
+
+## Die wichtigsten Begriffe
+
+| Begriff | Bedeutung |
+|---|---|
+| **Sammlung** | Ein Ordner für Fotos und Videos – eigenständig oder zu einem Beitrag. |
+| **Upload-Link** | Befristeter, widerrufbarer Link, über den Personen ohne Konto in genau eine Sammlung hochladen. |
+| **Fassung** | Ein unveränderlicher Stand eines Beitrags (Text, Medien, Zielkanal). Jede Änderung erzeugt eine neue Fassung. |
+| **Freigabe** | Die Entscheidung einer berechtigten Person für genau eine Fassung. |
+| **Zielkanal** | Wohin veröffentlicht wird, z. B. eine gekoppelte WordPress-Website. |
+
+Weitere Begriffe stehen im [Glossar](/hilfe/begriffe).
+
+## Für Administratoren: die ersten zehn Minuten
+
+1. Ersteinrichtung abschließen (Organisation, öffentliche Adresse, Zeitzone) – siehe [Einrichtung](/hilfe/einrichtung).
+2. Unter [Benutzer und Rollen](/benutzer) die Redaktion einladen. Jede Person bekommt einen persönlichen, einmaligen Link.
+3. Optional unter [Websites](/kanaele) die WordPress-Website koppeln – siehe [WordPress verbinden](/hilfe/wordpress).
+4. Einen Testbeitrag anlegen und den ganzen Ablauf einmal durchspielen.

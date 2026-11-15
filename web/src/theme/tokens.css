@@ -1,0 +1,129 @@
+/* BlaulichtCMS Design-Tokens – Richtung „Leitstand“ (siehe docs/design-leitstand.md).
+   Hell ist Standard (gut lesbar, auch draußen am Handy), Dunkel über <html data-theme="dark">.
+   Signalrot ist der einzige Akzent: Hauptaktionen, aktive Navigation, „Du bist dran“.
+   Status wird immer mit Farbe UND Text dargestellt; Gelb/Grün bleiben für Status reserviert. */
+
+
+:root {
+  /* Marke */
+  --bc-primary: #D21F3C;        /* Fokus, Auswahl, Akzentlinien, aktive Navigation */
+  --bc-primary-solid: #D21F3C;  /* Flächen der Hauptaktionen */
+  --bc-primary-hover: #B5172F;
+  --bc-on-primary: #FFFFFF;     /* Schrift auf Akzentflächen */
+  --bc-signal: #D21F3C;
+
+  /* Flächen – Hell (neutral, leicht kühl) */
+  --bc-bg: #F6F7F9;
+  --bc-card: #FFFFFF;
+  --bc-raised: #EEF0F3;
+  --bc-border: #DDE1E6;
+  --bc-text: #111418;
+  --bc-text-2: #4E5560;
+  --bc-knob: #FFFFFF;                   /* Schalterknopf */
+  --bc-scrim: rgba(17, 20, 24, .48);    /* Abdunklung hinter Dialogen und Schublade */
+
+  /* Status als Text + Soft-Hintergründe (Kontrast ≥ 4,5:1) */
+  --bc-link: #111418;
+  --bc-primary-soft: rgba(210, 31, 60, .09);
+  --bc-ok: #1E7443;
+  --bc-ok-soft: rgba(30, 116, 67, .12);
+  --bc-warn: #8F5200;
+  --bc-warn-soft: rgba(230, 150, 0, .16);
+  --bc-err: #B3141F;
+  --bc-err-soft: rgba(200, 16, 46, .10);
+
+  /* Website-Banner-Vorschau: fest wie in wordpress-plugin/blaulichtcms-bridge/assets/banner.css
+     (zeigt das Aussehen auf der Website, unabhängig vom Farbmodus der Oberfläche) */
+  --bc-site-info-bg: #e8f0fa;    --bc-site-info-fg: #0b2a4f;    --bc-site-info-line: #134a86;
+  --bc-site-warning-bg: #fff4e0; --bc-site-warning-fg: #4a2a00; --bc-site-warning-line: #b25e00;
+  --bc-site-danger-bg: #fde8ea;  --bc-site-danger-fg: #5a0710;  --bc-site-danger-line: #c8102e;
+
+  /* Typo */
+  --bc-font: 'IBM Plex Sans', system-ui, 'Segoe UI', sans-serif;
+  --bc-font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+
+  /* Radien – weich */
+  --bc-r-chip: 6px;
+  --bc-r-control: 10px;
+  --bc-r-node: 12px;
+  --bc-r-card: 14px;
+
+  /* Schatten */
+  --bc-shadow-float: 0 16px 40px rgba(17, 20, 24, .16);
+  --bc-ring: 0 0 0 3px rgba(210, 31, 60, .22);
+  --bc-ring-selected: 0 0 0 4px rgba(210, 31, 60, .16);
+
+  /* Bewegung */
+  --bc-dur-fast: 100ms;
+  --bc-dur-panel: 150ms;
+  --bc-ease: cubic-bezier(.2, .7, .2, 1);
+
+  color-scheme: light;
+}
+
+[data-theme="dark"] {
+  --bc-primary: #FF5A6E;
+  --bc-primary-solid: #FF5A6E;
+  --bc-primary-hover: #FF7584;
+  --bc-on-primary: #0E0F12;     /* dunkle Schrift auf hellem Rot: besser lesbar als Weiß */
+  --bc-signal: #FF5A6E;
+
+  --bc-bg: #0E0F12;
+  --bc-card: #16181C;
+  --bc-raised: #1F2227;
+  --bc-border: #2C3037;
+  --bc-text: #EEF0F3;
+  --bc-text-2: #A9AFB8;
+  --bc-knob: #EEF0F3;
+  --bc-scrim: rgba(0, 0, 0, .6);
+
+  --bc-link: #EEF0F3;
+  --bc-primary-soft: rgba(255, 90, 110, .14);
+  --bc-ok: #5BD48A;
+  --bc-ok-soft: rgba(91, 212, 138, .14);
+  --bc-warn: #F2B84B;
+  --bc-warn-soft: rgba(242, 184, 75, .14);
+  --bc-err: #FF7A85;
+  --bc-err-soft: rgba(255, 90, 110, .14);
+
+  --bc-shadow-float: 0 16px 40px rgba(0, 0, 0, .5);
+  --bc-ring: 0 0 0 3px rgba(255, 90, 110, .3);
+  --bc-ring-selected: 0 0 0 4px rgba(255, 90, 110, .2);
+
+  color-scheme: dark;
+}
+
+/* Mobile Navigation (Schublade) folgt dem Farbmodus; aktiver Punkt mit Signalrot-Markierung */
+.bc-sidebar a[aria-current="page"] { box-shadow: inset 3px 0 0 var(--bc-signal); }
+.bc-signal-bg { background: var(--bc-signal); color: var(--bc-on-primary); }
+
+html, body {
+  background: var(--bc-bg);
+  color: var(--bc-text);
+  font-family: var(--bc-font);
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--bc-bg), 0 0 0 4px var(--bc-primary);
+}
+
+.bc-pulse { animation: bc-pulse 1.4s ease-in-out infinite; }
+@keyframes bc-pulse { 50% { opacity: .35; } }
+
+.bc-skeleton {
+  background: linear-gradient(90deg, var(--bc-raised) 0%, var(--bc-border) 50%, var(--bc-raised) 100%);
+  background-size: 200% 100%;
+  animation: bc-skeleton 1.4s ease-in-out infinite;
+}
+@keyframes bc-skeleton { to { background-position: -200% 0; } }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
+[data-reduced-motion="true"] *, [data-reduced-motion="true"] *::before, [data-reduced-motion="true"] *::after {
+  animation: none !important; transition: none !important;
+}
