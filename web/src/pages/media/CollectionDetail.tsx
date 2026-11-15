@@ -133,7 +133,7 @@ export default function CollectionDetail() {
     const ids = [...marked];
     try {
       const r = await post<{ updated: number }>('/media/bulk', { ids, ...body });
-      toast({ tone: 'success', title: `${r.updated} Datei(en) ${body.action === 'delete' ? 'gelöscht' : 'geändert'}` });
+      toast({ tone: 'success', title: `${r.updated} Datei(en) ${body.action === 'delete' ? 'im Papierkorb' : 'geändert'}` });
       setMarked(new Set());
     } catch (e) {
       toastError(e);
@@ -161,7 +161,7 @@ export default function CollectionDetail() {
   };
 
   const deleteOne = async (m: MediaItem) => {
-    if (!(await ask({ title: 'Datei löschen?', text: `„${mediaName(m)}“ wird mit allen Fassungen gelöscht.`, confirmLabel: 'Löschen' }))) return;
+    if (!(await ask({ title: 'Datei in den Papierkorb?', text: `„${mediaName(m)}“ kommt in den Papierkorb und lässt sich dort bis zum Ablauf der Frist wiederherstellen.`, confirmLabel: 'In den Papierkorb' }))) return;
     await del(`/media/${m.id}`).catch(toastError);
     refresh();
   };
@@ -181,13 +181,27 @@ export default function CollectionDetail() {
     manage && m.status === 'ready' && m.selection !== 'pending' ? { label: 'Auswahl zurücksetzen', icon: 'Undo2', onClick: () => setSelection([m.id], 'pending').catch(toastError) } : null,
     manage && m.status === 'ready' ? { label: 'Nach vorne', icon: 'ArrowUp', onClick: () => reorder(m.id, null, -1) } : null,
     manage && m.status === 'ready' ? { label: 'Nach hinten', icon: 'ArrowDown', onClick: () => reorder(m.id, null, 1) } : null,
-    manage ? { label: 'Löschen', icon: 'Trash2', danger: true, onClick: () => void deleteOne(m) } : null,
+    manage ? { label: 'In den Papierkorb', icon: 'Trash2', danger: true, onClick: () => void deleteOne(m) } : null,
   ];
 
   if (q.isLoading) return <SkeletonRows rows={6} />;
   if (q.error) return <ErrorBox title="Sammlung konnte nicht geladen werden">{(q.error as Error).message}</ErrorBox>;
   const c = q.data!.collection;
   const canDrag = manage && filter !== 'problems' && prefs.view === 'grid';
+  if (c.deleted_at)
+    return (
+      <div className="flex flex-col gap-5">
+        <PageHeader title={c.title} subtitle="Diese Sammlung liegt im Papierkorb." />
+        <Notice tone="warning" title="Im Papierkorb">
+          Upload-Links dieser Sammlung funktionieren nicht. Nach Ablauf der Frist wird sie endgültig gelöscht.
+          <div className="mt-2">
+            <Button size="sm" icon="Undo2" onClick={() => void post('/trash/restore', { type: 'collection', id }).then(refresh, toastError)}>
+              Wiederherstellen
+            </Button>
+          </div>
+        </Notice>
+      </div>
+    );
 
   return (
     <div className="flex flex-col gap-5">
@@ -231,21 +245,21 @@ export default function CollectionDetail() {
                     },
                   },
                   {
-                    label: 'Sammlung löschen',
+                    label: 'In den Papierkorb',
                     icon: 'Trash2',
                     danger: true,
                     onClick: async () => {
                       if (
                         !(await ask({
-                          title: 'Sammlung endgültig löschen?',
-                          text: `„${c.title}“ wird mit allen Dateien (Originale, Vorschauen, öffentliche Fassungen), Sammeldownloads und Upload-Links gelöscht. Gedruckte QR-Codes funktionieren danach nicht mehr. Das lässt sich nicht rückgängig machen; in Sicherungen bleiben die Daten bis zu deren Ablauf erhalten. Dateien, die ein laufender Beitrag verwendet, verhindern die Löschung.`,
-                          confirmLabel: 'Endgültig löschen',
+                          title: 'Sammlung in den Papierkorb?',
+                          text: `„${c.title}“ kommt mit allen Dateien in den Papierkorb. Ihre Upload-Links funktionieren dort nicht mehr; nach dem Wiederherstellen gelten sie wieder. Nach Ablauf der Frist wird alles endgültig gelöscht. Dateien, die ein laufender Beitrag verwendet, verhindern das.`,
+                          confirmLabel: 'In den Papierkorb',
                         }))
                       )
                         return;
                       try {
-                        const r = await del<{ media: number }>(`/collections/${id}`);
-                        toast({ tone: 'success', title: 'Sammlung gelöscht', text: `${r.media} Datei(en) entfernt.` });
+                        await del<{ media: number }>(`/collections/${id}`);
+                        toast({ tone: 'success', title: 'Sammlung im Papierkorb', text: 'Unter Medien → Papierkorb lässt sie sich wiederherstellen.' });
                         qc.removeQueries({ queryKey: ['collection', id] });
                         navigate('/medien');
                       } catch (e) {
@@ -297,7 +311,23 @@ export default function CollectionDetail() {
 
       {manage && <UploadLinksCard collection={c} links={q.data!.links} folders={folders} onChanged={refresh} />}
 
-      <FolderBar collectionId={id} folders={folders} current={folder} onOpen={openFolder} manage={manage} counts={folderCounts} deep={deep} setDeep={setDeep} onChanged={refresh} />
+      <FolderBar
+        collectionId={id}
+        folders={folders}
+        current={folder}
+        onOpen={openFolder}
+        manage={manage}
+        counts={folderCounts}
+        deep={deep}
+        setDeep={setDeep}
+        onChanged={refresh}
+        onTrash={(f) =>
+          void del(`/folders/${f.id}`).then(
+            () => (toast({ tone: 'success', title: 'Ordner im Papierkorb' }), folder && (folder === f.id || descendantIds(folders, f.id).includes(folder)) && openFolder(f.parent_id), refresh()),
+            toastError,
+          )
+        }
+      />
 
       <Tabs
         label="Medien filtern"
@@ -357,11 +387,11 @@ export default function CollectionDetail() {
             variant="danger"
             icon="Trash2"
             onClick={async () => {
-              if (!(await ask({ title: `${marked.size} Datei(en) löschen?`, text: 'Die markierten Dateien werden mit allen Fassungen gelöscht. Dateien in laufenden Beiträgen verhindern die Aktion.', confirmLabel: 'Löschen' }))) return;
+              if (!(await ask({ title: `${marked.size} Datei(en) in den Papierkorb?`, text: 'Die markierten Dateien kommen in den Papierkorb und lassen sich dort wiederherstellen. Dateien in laufenden Beiträgen verhindern die Aktion.', confirmLabel: 'In den Papierkorb' }))) return;
               await bulk({ action: 'delete' });
             }}
           >
-            Löschen
+            Papierkorb
           </Button>
           <Button size="sm" variant="ghost" icon="X" onClick={() => setMarked(new Set())}>Markierung aufheben</Button>
         </div>

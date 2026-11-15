@@ -16,6 +16,8 @@ Rechte werden immer **auf dem Server** geprüft – bei jeder Seite, jeder API-A
 
 Das Recht **„Datenschutzanfragen bearbeiten“** (Suche über alle personenbezogenen Daten, Auskunft, Löschung je Treffer) hat standardmäßig nur die Administration – siehe [Sicherheit](/hilfe/sicherheit).
 
+Bei Medien gibt es drei Stufen: **„Medien sichten“** (ansehen, öffentliche Fassungen laden), **„Medien verwalten“** (Sammlungen, Ordner, Upload-Links, Sichtung, Verschieben, Papierkorb, Originale) und **„Medien administrieren“**. Das dritte Recht hat standardmäßig nur die Administration: Papierkorb endgültig leeren, gesperrte Dateien erneut prüfen oder trotzdem freigeben, Sicherheitsereignisse der Upload-Seiten, Speicherübersicht und fehlgeschlagene Medienaufträge.
+
 Entwurf, Bestätigung der Warnstufe, Freigabe und Versand von Warnentwürfen sind bewusst **getrennte** Rechte. Stichwörter, Regeln, Vorlagen und Zuständigkeiten pflegt die Administration (Recht „Stichwörter und Regeln pflegen“); Regeln und Lagefragen gibt immer eine **andere** Person fachlich frei.
 
 ## Einladen

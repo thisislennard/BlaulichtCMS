@@ -76,6 +76,8 @@ flowchart LR
   Beschreibung, interner Notiz, Prüfsumme und Duplikat-Hinweis, Mehrfachauswahl mit Sammelaktionen.
 - **Ordnen:** Ordner (beliebig tief) in jeder Sammlung, Zielordner je Upload-Link, Verschieben und Kopieren zwischen
   Sammlungen (Beiträge bleiben gültig), Schlagworte, Titelbild und Veranstaltungsdatum, Suche über alle Dateien.
+- **Papierkorb:** gelöschte Dateien, Ordner und Sammlungen bleiben bis zur Frist wiederherstellbar; endgültig löscht
+  nur, wer „Medien administrieren“ hat, oder die Löschfrist.
 - **Abgebildete Personen:** Markierungen für erkennbare Personen, Verletzte, Kennzeichen und sensible Inhalte;
   markierte Medien verlangen vor der Freigabe eine bewusste Datenschutz-Prüfung.
 - **Unkenntlich machen:** Bereiche verpixeln, weichzeichnen oder abdecken, Bilder zuschneiden, Videos ohne Ton

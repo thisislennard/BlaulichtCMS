@@ -174,7 +174,7 @@ export async function purgeCollection(id: string, actor: Actor, mode: 'manual' |
   return res;
 }
 
-/** Gelöschte und abgewiesene Dateien, deren Datensatz die Frist überschritten hat. */
+/** Dateien im Papierkorb und abgewiesene Dateien, deren Frist abgelaufen ist (Dateien und Datensatz werden entfernt). */
 const DEAD_MEDIA_WHERE = `((deleted_at IS NOT NULL AND deleted_at < now() - make_interval(days => $1))
    OR (deleted_at IS NULL AND status = 'rejected' AND COALESCE(processed_at, created_at) < now() - make_interval(days => $1)))`;
 
@@ -223,17 +223,36 @@ export async function runRetention(opts: { dryRun: boolean; actor?: Actor; setti
 
   /* Gelöschte und abgewiesene Dateien (Datensätze) */
   const mDays = days(s['privacy.deleted_media_days']);
-  const dead: RetentionCategory = { key: 'media_records', label: 'Gelöschte und abgewiesene Dateien (Dateiname, Hinweis, Prüfsumme)', days: mDays, count: 0 };
+  const dead: RetentionCategory = { key: 'media_records', label: 'Papierkorb (Dateien samt Datensatz) und abgewiesene Dateien', days: mDays, count: 0 };
+  // Ordner und Sammlungen im Papierkorb mit derselben Frist (Paket 4, wie press_trash_days in LiFeOS)
+  const trash: RetentionCategory = { key: 'trash', label: 'Ordner und Sammlungen im Papierkorb', days: mDays, count: 0 };
   if (mDays > 0) {
     if (opts.dryRun) {
       dead.count = (await one<{ n: number }>(`SELECT count(*)::int AS n FROM media WHERE ${DEAD_MEDIA_WHERE}`, [mDays]))!.n;
+      trash.count =
+        (await one<{ n: number }>(`SELECT count(*)::int AS n FROM collection_folders WHERE deleted_at < now() - make_interval(days => $1)`, [mDays]))!.n +
+        (await one<{ n: number }>(`SELECT count(*)::int AS n FROM collections WHERE deleted_at < now() - make_interval(days => $1)`, [mDays]))!.n;
     } else {
       const rows = await many<{ id: string }>(`DELETE FROM media WHERE id IN (SELECT id FROM media WHERE ${DEAD_MEDIA_WHERE} LIMIT 5000) RETURNING id`, [mDays]);
       for (const r of rows) removeMediaFiles(r.id);
+      // Sammeldownloads mit diesen Dateien verwerfen
+      for (const e of await invalidateExportsFor(rows.map((r) => r.id))) {
+        fs.rmSync(exportPath(e), { force: true });
+        fs.rmSync(exportPath(e) + '.part', { force: true });
+      }
       dead.count = rows.length;
+      trash.count += (await pool.query(`DELETE FROM collection_folders WHERE deleted_at < now() - make_interval(days => $1) AND NOT EXISTS (SELECT 1 FROM media m WHERE m.folder_id = collection_folders.id AND m.deleted_at IS NULL)`, [mDays])).rowCount ?? 0;
+      for (const c of await many<{ id: string }>(`SELECT id FROM collections WHERE deleted_at < now() - make_interval(days => $1) LIMIT ${MAX_COLLECTIONS_PER_RUN}`, [mDays])) {
+        try {
+          await purgeCollection(c.id, actor, 'retention');
+          trash.count++;
+        } catch (e) {
+          log('warn', 'retention', `Sammlung ${c.id} im Papierkorb nicht gelöscht: ${(e as Error).message}`);
+        }
+      }
     }
   }
-  report.categories.push(dead);
+  report.categories.push(dead, trash);
 
   /* Weitere personenbezogene Daten (#116) */
   report.categories.push(

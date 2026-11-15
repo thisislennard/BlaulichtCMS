@@ -18,8 +18,9 @@ import { privacyInput, renderPublic } from '../media/privacy.js';
 import { purgeCollection } from '../lib/retention.js';
 import { computeExpiry, extendExpiry, LINK_UNAVAILABLE, linkState } from '../media/links.js';
 import { descendants } from '../media/folders.js';
+import { trashCollection, trashMedia } from './media-trash.js';
 import { assertFolder, loadFolders } from './media-organize.js';
-import { freeBytes, mediaPaths, moveFile, removeMediaFiles, SizeLimitError, streamToTemp } from '../media/storage.js';
+import { freeBytes, mediaPaths, moveFile, SizeLimitError, streamToTemp } from '../media/storage.js';
 
 const linkAad = aad.uploadLink;
 
@@ -250,9 +251,9 @@ export async function finalizeUpload(
     const row = await tx(async (db) => {
       // Zuerst die Sammlung sperren: sonst sperren parallele Abschlüsse sie über den Fremdschlüssel in
       // unterschiedlicher Reihenfolge → Deadlock
-      const col = await one<any>(`SELECT max_files, max_bytes, archived_at FROM collections WHERE id = $1 FOR UPDATE`, [opts.collection.id], db);
+      const col = await one<any>(`SELECT max_files, max_bytes, archived_at, deleted_at FROM collections WHERE id = $1 FOR UPDATE`, [opts.collection.id], db);
       // Während eines langen Uploads gelöscht oder geschlossen (#178): verständliche Meldung statt Fremdschlüssel-Fehler
-      if (!col) throw new AppError(410, 'collection_gone', 'Diese Sammlung wurde inzwischen gelöscht. Die Datei wurde nicht übernommen.');
+      if (!col || col.deleted_at) throw new AppError(410, 'collection_gone', 'Diese Sammlung wurde inzwischen gelöscht. Die Datei wurde nicht übernommen.');
       if (col.archived_at) throw new AppError(410, 'link_closed', 'Diese Sammlung ist inzwischen geschlossen. Die Datei wurde nicht übernommen.');
       const m = await one<any>(
         `INSERT INTO media (collection_id, upload_link_id, uploaded_by, uploader_note, client_key, original_name, declared_type, size_bytes, sha256, upload_ref, folder_id, sort_order)
@@ -304,31 +305,11 @@ export function publicFileFor(m: any): { path: string; type: string; ext: string
   return { path: mediaPaths.publicFile(m.id, ext), type: ext === 'webm' ? 'video/webm' : 'video/mp4', ext };
 }
 
-/**
- * Dateien löschen (einzeln oder als Sammelaktion). Dateien in der aktuellen Fassung eines Beitrags blockieren die
- * ganze Aktion (400 mit dem Beitragstitel), damit eine Sammelaktion nicht halb ausgeführt wird.
- */
-export async function deleteMedia(ids: string[], actor: Actor): Promise<{ deleted: number }> {
-  const used = await one<any>(
-    `SELECT p.title, m.original_name FROM post_revisions r JOIN posts p ON p.id = r.post_id JOIN media m ON m.id = ANY($1::uuid[]) AND (r.media_ids @> ARRAY[m.id] OR r.cover_id = m.id)
-      WHERE r.number = p.current_revision LIMIT 1`,
-    [ids],
-  );
-  if (used) throw badRequest(ids.length === 1 ? `Die Datei wird im Beitrag „${used.title}“ verwendet. Bitte zuerst dort entfernen.` : `„${used.original_name}“ wird im Beitrag „${used.title}“ verwendet. Bitte zuerst dort entfernen oder die Datei aus der Auswahl nehmen.`);
-  const rows = await many<any>(`UPDATE media SET deleted_at = now() WHERE id = ANY($1::uuid[]) AND deleted_at IS NULL RETURNING id, original_name`, [ids]);
-  if (!rows.length) return { deleted: 0 };
-  // Upload-Sitzungen entkoppeln (#176): sonst meldet ein erneuter Upload derselben Datei „vollständig“
-  await pool.query('DELETE FROM upload_sessions WHERE media_id = ANY($1::uuid[])', [rows.map((r) => r.id)]);
-  for (const m of rows) {
-    removeMediaFiles(m.id);
-    await audit(actor, 'media.deleted', { type: 'media', id: m.id, label: m.original_name });
-  }
-  return { deleted: rows.length };
-}
+
 
 export async function loadPublicLink(token: string) {
   const l = await one<any>(
-    `SELECT l.*, c.title AS c_title, c.purpose AS c_purpose, c.note AS c_note, c.archived_at AS c_archived, c.id AS c_id, c.max_files AS c_max_files, c.max_bytes AS c_max_bytes
+    `SELECT l.*, c.title AS c_title, c.purpose AS c_purpose, c.note AS c_note, COALESCE(c.archived_at, c.deleted_at) AS c_archived, c.id AS c_id, c.max_files AS c_max_files, c.max_bytes AS c_max_bytes
        FROM upload_links l JOIN collections c ON c.id = l.collection_id WHERE l.token_hash = $1`,
     [sha256Hex(token)],
   );
@@ -406,7 +387,8 @@ export async function mediaRoutes(app: FastifyInstance) {
   app.get('/collections/:id', { preHandler: requireAuth('media.read') }, async (req) => {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
     const c = await one<any>(`SELECT c.*, p.title AS post_title, u.name AS created_by_name FROM collections c LEFT JOIN posts p ON p.id = c.post_id LEFT JOIN users u ON u.id = c.created_by WHERE c.id = $1`, [id]);
-    if (!c) throw notFound('Sammlung nicht gefunden.');
+    // Sammlung im Papierkorb: nur für „Medien verwalten“ sichtbar (zum Wiederherstellen)
+    if (!c || (c.deleted_at && !req.auth!.permissions.has('media.manage'))) throw notFound('Sammlung nicht gefunden.');
     const media = await many<any>(
       `SELECT m.*, u.name AS uploaded_by_name,
               (SELECT array_agg(t.name ORDER BY lower(t.name)) FROM media_tag_links l JOIN media_tags t ON t.id = l.tag_id WHERE l.media_id = m.id) AS tags
@@ -469,6 +451,13 @@ export async function mediaRoutes(app: FastifyInstance) {
    */
   app.delete('/collections/:id', { preHandler: requireAuth('media.manage') }, async (req) => {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
+    const { permanent } = z.object({ permanent: z.enum(['1', 'true']).optional() }).parse(req.query ?? {});
+    // Standard: Papierkorb. Sofort endgültig (ohne Papierkorb) nur mit „Medien administrieren“
+    if (!permanent) {
+      const r = await trashCollection(id, req.auth!.actor, req.auth!.user?.id ?? null);
+      return { ok: true, media: r.media, trash: true };
+    }
+    if (!req.auth!.permissions.has('media.admin')) throw forbidden('Endgültig löschen darf nur, wer „Medien administrieren“ hat. Die Sammlung lässt sich in den Papierkorb verschieben.');
     const r = await purgeCollection(id, req.auth!.actor, 'manual');
     return { ok: true, media: r.media, exports: r.exports };
   });
@@ -668,7 +657,7 @@ export async function mediaRoutes(app: FastifyInstance) {
       await audit(req.auth!.actor, 'media.selection', { type: 'media', label: `${r.rowCount} Datei(en)` }, { auswahl: body.selection, sammelaktion: true, ids: body.ids.slice(0, 50) });
       return { updated: r.rowCount };
     }
-    const r = await deleteMedia(body.ids, req.auth!.actor);
+    const r = await trashMedia(body.ids, req.auth!.actor, req.auth!.user?.id ?? null);
     return { updated: r.deleted };
   });
 
@@ -814,7 +803,8 @@ export async function mediaRoutes(app: FastifyInstance) {
 
   app.delete('/media/:id', { preHandler: requireAuth('media.manage') }, async (req) => {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
-    const r = await deleteMedia([id], req.auth!.actor);
+    // In den Papierkorb (wiederherstellbar bis zur Frist); endgültig löscht „Medien administrieren“ oder die Löschfrist
+    const r = await trashMedia([id], req.auth!.actor, req.auth!.user?.id ?? null);
     if (!r.deleted) throw notFound();
     return { ok: true };
   });
@@ -822,7 +812,9 @@ export async function mediaRoutes(app: FastifyInstance) {
   /* Dateien ausliefern – nur geprüfte Medien, nur mit Recht */
   app.get('/media/:id/:variant', { preHandler: requireAuth('media.read') }, async (req, reply) => {
     const { id, variant } = z.object({ id: z.uuid(), variant: z.enum(['preview', 'original', 'public']) }).parse(req.params);
-    const m = await one<any>(`SELECT * FROM media WHERE id = $1 AND deleted_at IS NULL AND status = 'ready'`, [id]);
+    // Vorschau einer Datei im Papierkorb nur mit „Medien verwalten“ (Übersicht des Papierkorbs)
+    const trashPreview = variant === 'preview' && req.auth!.permissions.has('media.manage');
+    const m = await one<any>(`SELECT * FROM media WHERE id = $1 AND (deleted_at IS NULL OR $2) AND status = 'ready'`, [id, trashPreview]);
     if (!m) throw notFound('Datei nicht gefunden oder noch nicht geprüft.');
     if (variant === 'original' && !req.auth!.permissions.has('media.manage')) throw forbidden(ORIGINALS_FORBIDDEN);
     if (variant === 'preview') {

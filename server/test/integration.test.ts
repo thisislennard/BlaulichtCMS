@@ -3189,7 +3189,8 @@ describe('Löschfristen und „Sammlung löschen“ (#97)', () => {
     // Ohne „Medien verwalten“ nicht erlaubt
     expect((await approver.raw('DELETE', `/collections/${cid}`)).status).toBe(403);
     await pool.query(`UPDATE posts SET archived_at = now() WHERE id = $1`, [p!.id]);
-    const ok = await admin.raw('DELETE', `/collections/${cid}`);
+    // Standard ist der Papierkorb; sofort endgültig nur mit „Medien administrieren“ (?permanent=1)
+    const ok = await admin.raw('DELETE', `/collections/${cid}?permanent=1`);
     expect(ok.status).toBe(200);
     expect(ok.json.media).toBe(2);
     expect(await one(`SELECT 1 FROM collections WHERE id = $1`, [cid])).toBeNull();
@@ -4065,6 +4066,77 @@ describe('Medien wie LiFeOS 3: Ordner, Verschieben/Kopieren, Schlagworte, Suche,
     // Titelbild frei wählbar
     expect((await editor.patch(`/collections/${col.id}`, { coverMediaId: c.id })).json.cover_media_id).toBe(c.id);
     expect((await editor.patch(`/collections/${col.id}`, { coverMediaId: ids[0] })).status).toBe(400);
+  });
+});
+
+describe('Medien wie LiFeOS 4: Papierkorb', () => {
+  let col: any;
+  let media: string[] = [];
+  let folder = '';
+  let mediaManager: Client;
+  it('Datei in den Papierkorb: Dateien bleiben, Wiederherstellen mit „Medien verwalten“, endgültig nur mit „Medien administrieren“', async () => {
+    mediaManager = (await acceptInvite('medienpflege@example.org', ['media_manager'], 'Pia')).client;
+    const f = await mediaFixture(mediaManager, 'Papierkorb-Test');
+    col = f.col;
+    for (let i = 0; i < 3; i++) await uploadPublic(f.token, `p${i}.jpg`, await sharp({ create: { width: 100, height: 80, channels: 3, background: { r: 30 + i, g: 0, b: 0 } } }).jpeg().toBuffer());
+    await processAllQuarantine();
+    media = (await mediaManager.get(`/collections/${col.id}`)).json.media.map((m: any) => m.id);
+    expect((await mediaManager.raw('DELETE', `/media/${media[0]}`)).status).toBe(200);
+    expect(fs.existsSync(mediaPaths.original(media[0]))).toBe(true);
+    expect((await mediaManager.get(`/collections/${col.id}`)).json.media.map((m: any) => m.id)).not.toContain(media[0]);
+    expect((await publisher.get(`/media/${media[0]}/preview`)).status).toBe(404);
+    expect((await mediaManager.get(`/media/${media[0]}/preview`)).status).toBe(200);
+    const trash = await mediaManager.get('/trash');
+    expect(trash.json.days).toBe(30);
+    expect(trash.json.media.find((m: any) => m.id === media[0])).toMatchObject({ deleted_by_name: 'Pia' });
+    expect((await publisher.get('/trash')).status).toBe(403);
+    expect((await mediaManager.post('/trash/purge', { type: 'media', id: media[0] })).status).toBe(403);
+    expect((await mediaManager.post('/trash/restore', { type: 'media', id: media[0] })).status).toBe(200);
+    expect((await mediaManager.get(`/collections/${col.id}`)).json.media.map((m: any) => m.id)).toContain(media[0]);
+    expect((await many<any>(`SELECT action FROM audit_events WHERE object_id = $1 AND action IN ('media.deleted','media.restored')`, [media[0]])).length).toBe(2);
+    // Endgültig: Datensatz und Dateien weg
+    await mediaManager.raw('DELETE', `/media/${media[0]}`);
+    expect((await admin.post('/trash/purge', { type: 'media', id: media[0] })).status).toBe(200);
+    expect(await one(`SELECT 1 FROM media WHERE id = $1`, [media[0]])).toBeNull();
+    expect(fs.existsSync(mediaPaths.original(media[0]))).toBe(false);
+  });
+
+  it('Ordner kommt samt Inhalt in den Papierkorb und zusammen zurück; Links mit Zielordner laden wieder oben', async () => {
+    folder = (await mediaManager.post(`/collections/${col.id}/folders`, { name: 'Weg damit' })).json.id;
+    const sub = (await mediaManager.post(`/collections/${col.id}/folders`, { name: 'Unter', parentId: folder })).json.id;
+    await mediaManager.post('/media/move', { ids: [media[1]], collectionId: col.id, folderId: sub });
+    const l = await mediaManager.post(`/collections/${col.id}/links`, { folderId: folder });
+    const del = await mediaManager.raw('DELETE', `/folders/${folder}`);
+    expect(del.json).toMatchObject({ folders: 2, media: 1 });
+    expect((await one<any>(`SELECT folder_id FROM upload_links WHERE id = $1`, [l.json.id])).folder_id).toBeNull();
+    const t = (await mediaManager.get('/trash')).json;
+    expect(t.folders.map((x: any) => x.name)).toEqual(['Weg damit']);
+    expect(t.media.map((x: any) => x.id)).not.toContain(media[1]);
+    expect((await mediaManager.post('/trash/restore', { type: 'folder', id: folder })).json.media).toBe(1);
+    expect(await one<any>(`SELECT folder_id, deleted_at FROM media WHERE id = $1`, [media[1]])).toEqual({ folder_id: sub, deleted_at: null });
+  });
+
+  it('Sammlung in den Papierkorb: Links gesperrt, Wiederherstellen, Löschfrist leert den Papierkorb', async () => {
+    const token = (await mediaManager.get(`/collections/${col.id}`)).json.links[0].url.split('/u/')[1];
+    expect((await mediaManager.raw('DELETE', `/collections/${col.id}`)).json.trash).toBe(true);
+    expect((await anonymous.get(`/public/upload/${token}`)).status).toBe(410);
+    expect((await mediaManager.get(`/collections?paged=1&q=Papierkorb-Test`)).json.total).toBe(0);
+    expect((await publisher.get(`/collections/${col.id}`)).status).toBe(404);
+    expect((await mediaManager.get(`/collections/${col.id}`)).json.collection.deleted_at).toBeTruthy();
+    expect((await mediaManager.raw('DELETE', `/collections/${col.id}?permanent=1`)).status).toBe(403);
+    expect((await mediaManager.post('/trash/restore', { type: 'collection', id: col.id })).status).toBe(200);
+    expect((await anonymous.get(`/public/upload/${token}`)).status).toBe(200);
+    // Löschfrist: Datei und Sammlung im Papierkorb, älter als die Frist
+    await mediaManager.raw('DELETE', `/media/${media[2]}`);
+    await mediaManager.raw('DELETE', `/collections/${col.id}`);
+    await pool.query(`UPDATE media SET deleted_at = now() - interval '31 days' WHERE id = $1`, [media[2]]);
+    await pool.query(`UPDATE collections SET deleted_at = now() - interval '31 days' WHERE id = $1`, [col.id]);
+    const preview = await admin.get('/system/retention');
+    expect(preview.json.categories.find((c: any) => c.key === 'trash').count).toBeGreaterThanOrEqual(1);
+    await admin.post('/system/retention/run', {});
+    expect(await one(`SELECT 1 FROM collections WHERE id = $1`, [col.id])).toBeNull();
+    expect(fs.existsSync(mediaPaths.original(media[2]))).toBe(false);
+    expect(fs.existsSync(mediaPaths.original(media[1]))).toBe(false);
   });
 });
 

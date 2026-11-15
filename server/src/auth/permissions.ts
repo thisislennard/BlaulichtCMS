@@ -29,7 +29,8 @@ export const MODULES: ModuleDef[] = [
 
 export const PERMISSIONS: PermissionDef[] = [
   { id: 'media.read', module: 'media', label: 'Medien sichten', level: 'read', description: 'Sammlungen und geprüfte Medien ansehen und herunterladen.' },
-  { id: 'media.manage', module: 'media', label: 'Medien verwalten', level: 'write', description: 'Sammlungen anlegen, Upload-Links erstellen und widerrufen, Medien auswählen, sortieren und löschen.' },
+  { id: 'media.manage', module: 'media', label: 'Medien verwalten', level: 'write', description: 'Sammlungen und Ordner anlegen, Upload-Links erstellen, gestalten und widerrufen, Medien auswählen, ordnen, verschieben und in den Papierkorb legen.' },
+  { id: 'media.admin', module: 'media', label: 'Medien administrieren', level: 'critical', description: 'Papierkorb endgültig leeren, gesperrte Dateien erneut prüfen oder trotzdem freigeben, Sicherheitsereignisse der Upload-Seiten, Speicherübersicht und fehlgeschlagene Medienaufträge.' },
   { id: 'post.read', module: 'editorial', label: 'Beiträge ansehen', level: 'read', description: 'Beiträge, Fassungen und Veröffentlichungsstatus ansehen.' },
   { id: 'post.edit', module: 'editorial', label: 'Beiträge bearbeiten', level: 'write', description: 'Beiträge anlegen, bearbeiten, Medien übernehmen und zur Freigabe einreichen.' },
   { id: 'post.approve', module: 'approval', label: 'Fassungen freigeben', level: 'critical', description: 'Eine konkrete Fassung eines Beitrags freigeben oder zurückweisen.' },

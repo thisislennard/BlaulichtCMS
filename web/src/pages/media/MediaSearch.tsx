@@ -183,7 +183,7 @@ export default function MediaSearch() {
               variant="danger"
               icon="Trash2"
               onClick={async () => {
-                if (!(await ask({ title: `${marked.size} Datei(en) löschen?`, text: 'Dateien in laufenden Beiträgen verhindern die Aktion.', confirmLabel: 'Löschen' }))) return;
+                if (!(await ask({ title: `${marked.size} Datei(en) in den Papierkorb?`, text: 'Die Dateien lassen sich im Papierkorb wiederherstellen. Dateien in laufenden Beiträgen verhindern die Aktion.', confirmLabel: 'In den Papierkorb' }))) return;
                 try {
                   await post('/media/bulk', { ids: [...marked], action: 'delete' });
                   setMarked(new Set());
@@ -193,7 +193,7 @@ export default function MediaSearch() {
                 refresh();
               }}
             >
-              Löschen
+              Papierkorb
             </Button>
           )}
           <Button size="sm" variant="ghost" icon="X" onClick={() => setMarked(new Set())}>Markierung aufheben</Button>
