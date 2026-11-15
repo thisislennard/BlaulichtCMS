@@ -138,6 +138,22 @@ export async function refreshFeed(f: any) {
   }
 }
 
+/**
+ * Quelle nur mit erfolgreichem Probeabruf übernehmen (Hinzufügen und geänderte Adresse): Der Server lädt und liest den
+ * Feed wie bei der Vorschau. Jeder Fehler – nicht erreichbar, intern gesperrt, kein RSS/Atom – ergibt 400 mit Grund,
+ * damit nie eine Quelle eingetragen wird, die nie funktioniert hat.
+ */
+export async function probeFeed(url: string) {
+  try {
+    const r = await fetchFeed(url);
+    if (r.notModified) throw badRequest('Die Quelle hat keine Daten geliefert.');
+    return r;
+  } catch (e) {
+    if (e instanceof AppError) throw new AppError(400, e.code, `Quelle nicht übernommen: ${e.message}`);
+    throw new AppError(400, 'feed_failed', `Quelle nicht übernommen: ${(e as Error).message}`);
+  }
+}
+
 export async function rssRoutes(app: FastifyInstance) {
   app.post('/rss/preview', { preHandler: requireAuth('post.edit'), config: { rateLimit: { max: 20, timeWindow: '1 minute' } } }, async (req) => {
     const { url } = z.object({ url: z.url().max(1000) }).parse(req.body);
@@ -153,8 +169,7 @@ export async function rssRoutes(app: FastifyInstance) {
   app.post('/rss/feeds', { preHandler: requireAuth('post.edit') }, async (req) => {
     const b = z.object({ url: z.url().max(1000), title: z.string().trim().max(200).optional(), intervalMin: z.number().int().min(5).max(1440).default(30) }).parse(req.body);
     if (await one('SELECT 1 FROM rss_feeds WHERE url = $1', [b.url])) throw new AppError(409, 'feed_exists', 'Diese Quelle ist bereits eingetragen.');
-    const r = await fetchFeed(b.url);
-    if (r.notModified) throw badRequest('Keine Daten.');
+    const r = await probeFeed(b.url);
     const f = await one<any>(
       `INSERT INTO rss_feeds (url, title, site_url, interval_min, etag, last_modified, last_fetch_at, last_success_at, created_by) VALUES ($1,$2,$3,$4,$5,$6, now(), now(), $7) RETURNING *`,
       [b.url, b.title || r.feed.title, r.feed.siteUrl, b.intervalMin, r.etag, r.lastModified, req.auth!.user?.id ?? null],
@@ -162,6 +177,28 @@ export async function rssRoutes(app: FastifyInstance) {
     const added = await storeItems(f.id, r.feed.items);
     await audit(req.auth!.actor, 'rss.feed_added', { type: 'rss_feed', id: f.id, label: f.title }, { url: b.url, eintraege: added });
     return { feed: f, added };
+  });
+
+  /** Name, Adresse und Abrufintervall ändern. Eine neue Adresse gilt erst nach erfolgreichem Probeabruf. */
+  app.put('/rss/feeds/:id', { preHandler: requireAuth('post.edit') }, async (req) => {
+    const { id } = z.object({ id: z.uuid() }).parse(req.params);
+    const b = z.object({ url: z.url().max(1000), title: z.string().trim().min(1).max(200), intervalMin: z.number().int().min(5).max(1440) }).parse(req.body);
+    const f = await one<any>('SELECT * FROM rss_feeds WHERE id = $1', [id]);
+    if (!f) throw notFound();
+    const urlChanged = b.url !== f.url;
+    if (urlChanged && (await one('SELECT 1 FROM rss_feeds WHERE url = $1 AND id <> $2', [b.url, id]))) throw new AppError(409, 'feed_exists', 'Diese Quelle ist bereits eingetragen.');
+    let added = 0;
+    if (urlChanged) {
+      const r = await probeFeed(b.url);
+      await pool.query(
+        `UPDATE rss_feeds SET url = $2, site_url = $3, etag = $4, last_modified = $5, last_fetch_at = now(), last_success_at = now(), last_error = NULL WHERE id = $1`,
+        [id, b.url, r.feed.siteUrl, r.etag, r.lastModified],
+      );
+      added = await storeItems(id, r.feed.items);
+    }
+    const row = await one<any>('UPDATE rss_feeds SET title = $2, interval_min = $3 WHERE id = $1 RETURNING *', [id, b.title, b.intervalMin]);
+    await audit(req.auth!.actor, 'rss.feed_updated', { type: 'rss_feed', id, label: b.title }, { url: urlChanged ? { vorher: f.url, nachher: b.url } : undefined, intervall: b.intervalMin !== f.interval_min ? b.intervalMin : undefined, eintraege: urlChanged ? added : undefined });
+    return { feed: row, added };
   });
 
   app.post('/rss/feeds/:id/refresh', { preHandler: requireAuth('post.edit') }, async (req) => {

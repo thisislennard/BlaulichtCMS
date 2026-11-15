@@ -18,7 +18,7 @@ const startedAt = Date.now();
 
 /** Einstellungen, die nicht über die allgemeine Einstellungsseite geändert werden dürfen. */
 const INTERNAL_KEYS = new Set<SettingKey>([
-  'setup.completed', 'dashboard.layouts', 'smtp.password_secret_id', 'system.maintenance',
+  'setup.completed', 'dashboard.layouts', 'smtp.password_secret_id', 'smtp.verified', 'system.maintenance',
   // In-App-Updates: eigene Seite und eigene Prüfung (routes/updates.ts) – Token nie in der allgemeinen Liste
   'updates.enabled', 'updates.repo', 'updates.api_url', 'updates.token_secret_id', 'updates.check_hours',
   'updates.latest', 'updates.last_check_at', 'updates.last_check_error', 'updates.notified_version',

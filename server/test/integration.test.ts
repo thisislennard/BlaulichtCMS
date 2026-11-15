@@ -1607,8 +1607,12 @@ describe('Verbindungen (M4): FE2, Facebook, Instagram, amtliche Warnfeeds', () =
     expect((await inbound(alarm('E-101'))).status).toBe(409);
     // Neuer Schlüssel macht den alten ungültig
     const rot = await admin.post(`/connections/${fe2Id}/rotate-token`);
-    await admin.post(`/connections/${fe2Id}/activate`);
     expect((await inbound(alarm('E-102'))).status).toBe(401);
+    // … und verlangt einen neuen Test mit einer Meldung über den neuen Schlüssel, bevor wieder Entwürfe entstehen
+    expect((await admin.post(`/connections/${fe2Id}/activate`)).status).toBe(409);
+    expect((await inbound(alarm('E-102'), rot.json.token, { 'x-blaulichtcms-test': '1' })).json.outcome).toBe('test');
+    expect((await admin.post(`/connections/${fe2Id}/test`)).json.ok).toBe(true);
+    expect((await admin.post(`/connections/${fe2Id}/activate`)).status).toBe(200);
     expect((await inbound(alarm('E-102'), rot.json.token)).json.outcome).toBe('created');
   });
 
@@ -3499,6 +3503,193 @@ describe('Verbindungs-Geheimnisse atomar rotieren (#182)', () => {
     const valid = await many(`SELECT id FROM secrets WHERE owner_type = 'connection' AND owner_id = $1 AND revoked_at IS NULL`, [c.id]);
     expect(valid).toHaveLength(1);
     await pool.query('DELETE FROM connections WHERE id = $1', [c.id]);
+  });
+});
+
+describe('Schnittstellen nur nach erfolgreichem Test', () => {
+  const okTest = () => JSON.stringify({ at: new Date().toISOString(), ok: true, steps: [{ name: 'Test', ok: true, message: 'ok' }] });
+  const row = (id: string) => one<any>(`SELECT status, last_test, preview FROM connections WHERE id = $1`, [id]);
+
+  it('FE2: Änderungen an Zuordnung oder Schlüssel halten auch aktive Verbindungen an, bis neu getestet ist', async () => {
+    const c = await admin.post('/connections', { kind: 'fe2', name: 'FE2 Neutest' });
+    const id = c.json.id;
+    // Eigene Adresse für die Testläufe (Ratenbegrenzung je IP), gleiche Sitzung
+    const tester = new Client(app, '198.51.100.31');
+    tester.cookie = admin.cookie;
+    let token = c.json.token;
+    const send = (body: any, tok = token, headers: Record<string, string> = {}) => anonymous.raw('POST', `/inbound/fe2/${id}`, { body, headers: { authorization: `Bearer ${tok}`, ...headers } });
+    expect((await send({ einsatz: { id: 'N-1', stichwort: 'F-1', ort: 'Musterstadt' } }, token, { 'x-blaulichtcms-test': '1' })).json.outcome).toBe('test');
+    expect((await tester.post(`/connections/${id}/test`)).json.ok).toBe(true);
+    expect((await admin.post(`/connections/${id}/activate`)).status).toBe(200);
+
+    // Name und Schalter, die der Test nicht prüft, verlangen keinen neuen Test
+    const rename = await admin.put(`/connections/${id}`, { name: 'FE2 Neutest umbenannt', config: { createDrafts: false } });
+    expect(rename.json).toMatchObject({ retest: false, deactivated: false });
+    expect((await row(id))!.status).toBe('active');
+
+    // Geänderte Feldzuordnung: Entwurf, Test und Testmeldung verworfen, auditiert
+    const m = await admin.put(`/connections/${id}`, { name: 'FE2 Neutest umbenannt', config: { mapping: { event_id: 'einsatz.nummer' } } });
+    expect(m.json).toMatchObject({ retest: true, deactivated: true });
+    const r1 = await row(id);
+    expect(r1).toMatchObject({ status: 'draft', last_test: null, preview: null });
+    const a = await one<any>(`SELECT details FROM audit_events WHERE action = 'connection.retest_required' AND object_id = $1::text ORDER BY id DESC LIMIT 1`, [id]);
+    expect(a.details).toMatchObject({ vorher: 'aktiv', grund: 'Einstellungen geändert' });
+    expect((await admin.post(`/connections/${id}/activate`)).status).toBe(409);
+    // Im Entwurf legt der Eingang nichts an, er aktualisiert nur die Vorschau
+    const events = async () => (await one<any>(`SELECT count(*)::int AS n FROM fe2_events WHERE connection_id = $1`, [id]))!.n;
+    const n0 = await events();
+    expect((await send({ einsatz: { nummer: 'N-2', stichwort: 'F-1' } })).json.outcome).toBe('test');
+    expect(await events()).toBe(n0);
+    expect((await tester.post(`/connections/${id}/test`)).json.ok).toBe(true);
+    expect((await admin.post(`/connections/${id}/activate`)).status).toBe(200);
+
+    // Angehalten + geänderte Einstellungen: der alte Test reicht für die erneute Aktivierung nicht
+    expect((await admin.post(`/connections/${id}/disable`)).status).toBe(200);
+    expect((await admin.put(`/connections/${id}`, { name: 'FE2 Neutest umbenannt', config: { mapping: { event_id: 'einsatz.id' } } })).json.retest).toBe(true);
+    const disabledActivate = await admin.post(`/connections/${id}/activate`);
+    expect(disabledActivate.status).toBe(409);
+    expect(disabledActivate.json.message).toContain('aktuellen Einstellungen');
+
+    // Neuer Zugangsschlüssel: erst nach einer Testmeldung über den neuen Schlüssel wieder aktivierbar
+    expect((await send({ einsatz: { id: 'N-3', stichwort: 'F-1' } })).json.outcome).toBe('test');
+    expect((await tester.post(`/connections/${id}/test`)).json.ok).toBe(true);
+    expect((await admin.post(`/connections/${id}/activate`)).status).toBe(200);
+    const rot = await admin.post(`/connections/${id}/rotate-token`);
+    expect(rot.json).toMatchObject({ retest: true, deactivated: true });
+    expect((await row(id))).toMatchObject({ status: 'draft', last_test: null, preview: null });
+    expect((await tester.post(`/connections/${id}/test`)).json.ok).toBe(false);
+    expect((await send({ einsatz: { id: 'N-4' } })).status).toBe(401);
+    token = rot.json.token;
+    expect((await send({ einsatz: { id: 'N-4', stichwort: 'F-1' } })).json.outcome).toBe('test');
+    expect((await tester.post(`/connections/${id}/test`)).json.ok).toBe(true);
+    expect((await admin.post(`/connections/${id}/activate`)).status).toBe(200);
+    await pool.query('DELETE FROM connections WHERE id = $1', [id]);
+  });
+
+  it('Zugangsdaten und Einstellungen sozialer Kanäle: neuer Test vor dem (Wieder-)Aktivieren', async () => {
+    const c = await admin.post('/connections', { kind: 'facebook', name: 'Facebook Neutest', config: { appId: '1111' } });
+    const id = c.json.id;
+    await pool.query(`UPDATE connections SET status = 'active', last_test = $2 WHERE id = $1`, [id, okTest()]);
+    const s = await admin.put(`/connections/${id}/secrets`, { appSecret: 'neues-app-geheimnis' });
+    expect(s.json).toMatchObject({ retest: true, deactivated: true });
+    expect(await row(id)).toMatchObject({ status: 'draft', last_test: null });
+    expect((await admin.post(`/connections/${id}/activate`)).status).toBe(409);
+    // Angehalten mit bestandenem Test: unveränderte Einstellungen erlauben die Wiederaufnahme, geänderte nicht
+    await pool.query(`UPDATE connections SET status = 'disabled', last_test = $2 WHERE id = $1`, [id, okTest()]);
+    expect((await admin.put(`/connections/${id}`, { name: 'Facebook Neutest (Seite)', config: { appId: '1111' } })).json.retest).toBe(false);
+    expect((await admin.post(`/connections/${id}/activate`)).status).toBe(200);
+    expect((await admin.post(`/connections/${id}/disable`)).status).toBe(200);
+    const changed = await admin.put(`/connections/${id}`, { name: 'Facebook Neutest (Seite)', config: { appId: '2222' } });
+    expect(changed.json).toMatchObject({ retest: true, deactivated: false });
+    expect((await admin.post(`/connections/${id}/activate`)).status).toBe(409);
+    const a = await one<any>(`SELECT details FROM audit_events WHERE action = 'connection.retest_required' AND object_id = $1::text ORDER BY id DESC LIMIT 1`, [id]);
+    expect(a.details.vorher).toBe('angehalten');
+    await pool.query('DELETE FROM connections WHERE id = $1', [id]);
+  });
+
+  it('RSS: Quelle nur nach erfolgreichem Abruf hinzufügen oder auf eine neue Adresse umstellen', async () => {
+    const srv = http.createServer((req, res) => {
+      if (req.url === '/kein-feed') {
+        res.setHeader('content-type', 'text/html');
+        return res.end('<html><body>Keine Meldungen</body></html>');
+      }
+      if (req.url === '/fehler') {
+        res.statusCode = 500;
+        return res.end('kaputt');
+      }
+      res.setHeader('content-type', 'application/rss+xml');
+      res.end(`<?xml version="1.0"?><rss version="2.0"><channel><title>Quelle ${req.url}</title><link>https://news.example.org/</link><item><guid>${req.url}-1</guid><title>Eintrag</title></item></channel></rss>`);
+    });
+    await new Promise<void>((r) => srv.listen(0, '127.0.0.1', () => r()));
+    const base = `http://127.0.0.1:${(srv.address() as any).port}`;
+    await setSettings({ 'security.allowed_private_hosts': ['127.0.0.1'] } as any);
+    try {
+      for (const bad of [`${base}/kein-feed`, `${base}/fehler`, 'http://127.0.0.1:1/nichts']) {
+        const r = await editor.post('/rss/feeds', { url: bad });
+        expect(r.status, bad).toBe(400);
+        expect(r.json.message).toContain('Quelle nicht übernommen');
+      }
+      expect((await one<any>(`SELECT count(*)::int AS n FROM rss_feeds WHERE url LIKE $1`, [`${base}%`]))!.n).toBe(0);
+      const add = await editor.post('/rss/feeds', { url: `${base}/eins` });
+      expect(add.status).toBe(200);
+      const id = add.json.feed.id;
+      // Neue Adresse, die keinen Feed liefert: abgewiesen, alte Adresse bleibt
+      const bad = await editor.put(`/rss/feeds/${id}`, { url: `${base}/kein-feed`, title: 'Umbenannt', intervalMin: 60 });
+      expect(bad.status).toBe(400);
+      expect((await one<any>(`SELECT url, title, interval_min FROM rss_feeds WHERE id = $1`, [id]))).toMatchObject({ url: `${base}/eins`, interval_min: 30 });
+      // Nur Name und Intervall: ohne Abruf
+      expect((await editor.put(`/rss/feeds/${id}`, { url: `${base}/eins`, title: 'Umbenannt', intervalMin: 60 })).status).toBe(200);
+      const ok = await editor.put(`/rss/feeds/${id}`, { url: `${base}/zwei`, title: 'Umbenannt', intervalMin: 60 });
+      expect(ok.status).toBe(200);
+      expect(ok.json.added).toBe(1);
+      expect(await one<any>(`SELECT url, title, interval_min FROM rss_feeds WHERE id = $1`, [id])).toMatchObject({ url: `${base}/zwei`, title: 'Umbenannt', interval_min: 60 });
+      expect((await publisher.put(`/rss/feeds/${id}`, { url: `${base}/eins`, title: 'X', intervalMin: 30 })).status).toBe(403);
+      await editor.raw('DELETE', `/rss/feeds/${id}`);
+    } finally {
+      srv.close();
+    }
+  });
+
+  it('E-Mail-Versand: Testmodus aus und Änderungen im Echtbetrieb nur nach erfolgreicher Testmail mit genau diesen Werten', async () => {
+    const { getSettings } = await import('../src/lib/settings.js');
+    const before = await getSettings(true);
+    const keep: any = {};
+    for (const k of ['smtp.host', 'smtp.port', 'smtp.security', 'smtp.user', 'smtp.from', 'smtp.password_secret_id', 'smtp.verified', 'warnings.test_mode', 'warnings.test_recipient']) keep[k] = (before as any)[k];
+    const { SMTPServer } = await import('smtp-server');
+    const received: string[] = [];
+    const smtp = new SMTPServer({
+      authOptional: true,
+      disabledCommands: ['STARTTLS'],
+      disableReverseLookup: true,
+      logger: false,
+      onData(stream: any, session: any, cb: any) {
+        stream.on('data', () => {});
+        stream.on('end', () => (received.push(session.envelope.rcptTo.map((r: any) => r.address).join(',')), cb()));
+      },
+    } as any);
+    await new Promise<void>((r) => smtp.listen(0, '127.0.0.1', r));
+    const port = (smtp.server.address() as any).port;
+    // Eigene Adresse für die Testmails (Ratenbegrenzung je IP), gleiche Sitzung
+    const mailer = new Client(app, '198.51.100.24');
+    mailer.cookie = admin.cookie;
+    try {
+      const base = { host: '127.0.0.1', port, security: 'none', user: '', from: 'blaulichtcms@example.org', testRecipient: 'testpostfach@example.org' };
+      expect((await admin.put('/warning-settings', { ...base, testMode: true })).status).toBe(200);
+      const off = await admin.put('/warning-settings', { ...base, testMode: false });
+      expect(off.status).toBe(409);
+      expect(off.json.message).toContain('Testmail');
+      // Fehlgeschlagene Testmail (falscher Port) zählt nicht
+      expect((await mailer.post('/warning-settings/test-mail', { to: 'pruefung@example.org', ...base, port: 1 })).status).toBe(502);
+      expect((await admin.put('/warning-settings', { ...base, testMode: false })).status).toBe(409);
+      // Testmail mit den (noch nicht gespeicherten) Formularwerten
+      expect((await admin.put('/warning-settings', { ...base, from: 'alt@example.org', testMode: true })).status).toBe(200);
+      const t = await mailer.post('/warning-settings/test-mail', { to: 'pruefung@example.org', ...base });
+      expect(t.status, JSON.stringify(t.json)).toBe(200);
+      expect(t.json.verified_at).toBeTruthy();
+      expect(received).toContain('pruefung@example.org');
+      expect((await admin.put('/warning-settings', { ...base, testMode: false })).status).toBe(200);
+      expect((await getSettings(true))['warnings.test_mode']).toBe(false);
+      // Im Echtbetrieb: geänderte Versandeinstellungen nur nach neuer Testmail; Testmodus einschalten geht immer
+      expect((await admin.put('/warning-settings', { ...base, from: 'neu@example.org', testMode: false })).status).toBe(409);
+      expect((await admin.put('/warning-settings', { ...base, testRecipient: 'anderes-postfach@example.org', testMode: false })).status).toBe(200);
+      expect((await admin.put('/warning-settings', { ...base, from: 'neu@example.org', testMode: true })).status).toBe(200);
+      // Veralteter Nachweis (> 60 Minuten) reicht nicht
+      expect((await mailer.post('/warning-settings/test-mail', { to: 'pruefung@example.org', ...base, from: 'neu@example.org' })).status).toBe(200);
+      const v = (await getSettings(true))['smtp.verified']!;
+      await setSettings({ 'smtp.verified': { ...v, at: new Date(Date.now() - 2 * 3600_000).toISOString() } } as any);
+      expect((await admin.put('/warning-settings', { ...base, from: 'neu@example.org', testMode: false })).status).toBe(409);
+      // #100 bleibt: ohne Verschlüsselung keine Anmeldung, auch nicht für die Testmail
+      expect((await mailer.post('/warning-settings/test-mail', { to: 'pruefung@example.org', ...base, user: 'postfach', password: 'geheim' })).status).toBe(400);
+      // Gespeichertes Passwort geht nicht an einen anderen Server
+      expect((await admin.put('/warning-settings', { ...base, security: 'starttls', user: 'postfach', password: 'geheim', testMode: true })).status).toBe(200);
+      const other = await mailer.post('/warning-settings/test-mail', { to: 'pruefung@example.org', ...base, host: 'localhost', security: 'starttls', user: 'postfach' });
+      expect(other.status).toBe(400);
+      expect(other.json.message).toContain('Passwort');
+      expect((await admin.patch('/settings', { 'smtp.verified': null })).status).toBe(400);
+    } finally {
+      smtp.close();
+      await setSettings(keep);
+    }
   });
 });
 

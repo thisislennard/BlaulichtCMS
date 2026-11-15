@@ -145,7 +145,8 @@
       "disabled": "Verbindung deaktiviert",
       "revoked": "Verbindung widerrufen",
       "private_target_approved": "Internes Ziel freigegeben",
-      "reviewed": "Verbindung geprüft"
+      "reviewed": "Verbindung geprüft",
+      "retest_required": "Neuer Test nötig"
     },
     "dashboard": {
       "shared_saved": "Gemeinsames Dashboard gespeichert"
@@ -156,6 +157,7 @@
     "rss": {
       "feed_added": "Quelle hinzugefügt",
       "feed_removed": "Quelle entfernt",
+      "feed_updated": "Quelle geändert",
       "idea_created": "Themenidee übernommen"
     },
     "social": {
@@ -336,7 +338,8 @@
       "disabled": "hat die Verbindung „{o}“ deaktiviert",
       "revoked": "hat die Verbindung „{o}“ widerrufen",
       "private_target_approved": "hat ein internes Ziel für die Verbindung „{o}“ freigegeben",
-      "reviewed": "hat die Verbindung „{o}“ als geprüft markiert"
+      "reviewed": "hat die Verbindung „{o}“ als geprüft markiert",
+      "retest_required": "hat die Verbindung „{o}“ geändert – sie muss neu getestet werden"
     },
     "dashboard": {
       "shared_saved": "hat das gemeinsame Dashboard gespeichert"
@@ -347,6 +350,7 @@
     "rss": {
       "feed_added": "hat die Quelle „{o}“ hinzugefügt",
       "feed_removed": "hat die Quelle „{o}“ entfernt",
+      "feed_updated": "hat die Quelle „{o}“ geändert",
       "idea_created": "hat „{o}“ als Themenidee übernommen"
     },
     "social": {

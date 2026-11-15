@@ -14,7 +14,7 @@ import { getSettings, setSettings } from '../lib/settings.js';
 import { enqueue } from '../jobs/queue.js';
 import { evaluate, activeQuestions, type Suggestion } from '../warnings/levels.js';
 import { KIND_LABEL, renderWarningPdf } from '../warnings/pdf.js';
-import { smtpConfigProblem, smtpTransport } from '../warnings/mail.js';
+import { SMTP_VERIFY_MAX_AGE_MS, smtpConfigProblem, smtpFingerprint, smtpTransport, storedSmtpSettings, type SmtpSettings } from '../warnings/mail.js';
 import { sendFileResponse } from './files.js';
 
 /**
@@ -516,7 +516,7 @@ export async function warningRoutes(app: FastifyInstance) {
       keywords: await many<any>(`SELECT * FROM fire_keywords ORDER BY code`),
       questions: await many<any>(`SELECT q.*, u.name AS approved_by_name FROM keyword_questions q LEFT JOIN users u ON u.id = q.approved_by ORDER BY q.keyword_id, q.sort`),
       rules: await many<any>(`SELECT r.*, u.name AS approved_by_name, c.name AS created_by_name FROM warning_rules r LEFT JOIN users u ON u.id = r.approved_by LEFT JOIN users c ON c.id = r.created_by ORDER BY r.keyword_id, r.name, r.version DESC`),
-      smtp: { host: s['smtp.host'], port: s['smtp.port'], security: s['smtp.security'], user: s['smtp.user'], from: s['smtp.from'], password_set: !!s['smtp.password_secret_id'] },
+      smtp: { host: s['smtp.host'], port: s['smtp.port'], security: s['smtp.security'], user: s['smtp.user'], from: s['smtp.from'], password_set: !!s['smtp.password_secret_id'], verified_at: s['smtp.verified']?.at ?? null },
       testMode: { active: s['warnings.test_mode'], recipient: s['warnings.test_recipient'] },
     };
   });
@@ -654,6 +654,17 @@ export async function warningRoutes(app: FastifyInstance) {
     return r;
   });
 
+  /**
+   * Kandidat für den Versand aus Formularwerten. Das gespeicherte Passwort wird nur für denselben Server weiterverwendet –
+   * sonst könnte man es durch Ändern des Servers an einen fremden Rechner schicken. Bei anderem Server mit Anmeldung muss
+   * das Passwort neu eingegeben werden.
+   */
+  const candidate = (b: { host: string; port: number; security: string; user: string; from: string; password?: string }, stored: SmtpSettings): SmtpSettings => {
+    const sameHost = b.host.trim().toLowerCase() === stored.host.trim().toLowerCase();
+    if (!b.password && !sameHost && b.user.trim() && b.security !== 'none' && stored.password) throw badRequest('Der Server wurde geändert: Bitte das Passwort für den neuen Server erneut eingeben.');
+    return { host: b.host.trim(), port: b.port, security: b.security, user: b.user, from: b.from.trim(), password: b.password || (sameHost ? stored.password : '') };
+  };
+
   /** Versandeinstellungen und Testmodus (Administration). */
   app.put('/warning-settings', { preHandler: requireAuth('system.manage') }, async (req) => {
     const b = z
@@ -672,6 +683,22 @@ export async function warningRoutes(app: FastifyInstance) {
     const problem = smtpConfigProblem({ security: b.security, user: b.user, password: b.password });
     if (problem) throw badRequest(problem);
     const before = await getSettings(true);
+    const stored = await storedSmtpSettings();
+    const next = candidate(b, stored);
+    // Echtbetrieb nur mit nachweislich funktionierenden Einstellungen: Testmodus ausschalten oder Versandeinstellungen im
+    // Echtbetrieb ändern verlangt eine erfolgreiche Testmail mit genau diesen Werten (höchstens 60 Minuten alt).
+    const smtpChanged = !!b.password || (['host', 'port', 'security', 'user', 'from'] as const).some((k) => String((stored as any)[k] ?? '').trim() !== String((next as any)[k] ?? '').trim());
+    if (!b.testMode && (before['warnings.test_mode'] || smtpChanged)) {
+      const v = before['smtp.verified'];
+      const fresh = !!v && Date.now() - Date.parse(v.at) <= SMTP_VERIFY_MAX_AGE_MS;
+      if (!fresh || v!.fp !== smtpFingerprint(next)) {
+        throw conflict(
+          before['warnings.test_mode']
+            ? 'Der Testmodus lässt sich erst ausschalten, nachdem mit genau diesen Einstellungen eine Testmail erfolgreich versendet wurde (höchstens 60 Minuten alt). Bitte zuerst „Testmail senden“.'
+            : 'Im Echtbetrieb lassen sich die Versandeinstellungen nur nach einer erfolgreichen Testmail mit genau diesen Einstellungen ändern (höchstens 60 Minuten alt). Bitte zuerst „Testmail senden“ – oder vorher den Testmodus einschalten.',
+        );
+      }
+    }
     const patch: any = { 'smtp.host': b.host, 'smtp.port': b.port, 'smtp.security': b.security, 'smtp.user': b.user, 'smtp.from': b.from, 'warnings.test_mode': b.testMode, 'warnings.test_recipient': b.testRecipient };
     await tx(async (db) => {
       if (b.password) {
@@ -689,14 +716,37 @@ export async function warningRoutes(app: FastifyInstance) {
     await audit(req.auth!.actor, 'warning.settings_changed', { type: 'settings', label: 'Warnversand' }, { testmodus: b.testMode, server: b.host, passwort_geaendert: !!b.password, aenderungen: Object.keys(changes).length ? changes : undefined });
     return { ok: true };
   });
+  /**
+   * Testmail – mit den gespeicherten Einstellungen oder (empfohlen) mit den Werten aus dem Formular, noch bevor sie
+   * gespeichert sind (Passwort leer = gespeichertes Passwort, nur für denselben Server). Eine erfolgreiche Testmail
+   * hinterlegt den Prüfwert genau dieser Einstellungen; erst damit lässt sich der Testmodus ausschalten.
+   */
   app.post('/warning-settings/test-mail', { preHandler: requireAuth('system.manage'), config: { rateLimit: { max: 5, timeWindow: '1 minute' } } }, async (req) => {
-    const { to } = z.object({ to: z.email() }).parse(req.body);
+    const b = z
+      .object({
+        to: z.email(),
+        host: z.string().trim().max(200).optional(),
+        port: z.number().int().min(1).max(65535).optional(),
+        security: z.enum(['starttls', 'tls', 'none']).optional(),
+        user: z.string().max(200).optional(),
+        from: z.string().max(200).optional(),
+        password: z.string().max(500).optional(),
+      })
+      .parse(req.body);
+    const stored = await storedSmtpSettings();
+    const cand = b.host === undefined ? stored : candidate({ host: b.host, port: b.port ?? stored.port, security: b.security ?? stored.security, user: b.user ?? '', from: b.from ?? '', password: b.password }, stored);
+    const problem = smtpConfigProblem({ security: cand.security, user: cand.user, password: b.password });
+    if (problem) throw badRequest(problem);
+    if (!cand.host || !cand.from) throw badRequest('Bitte Server und Absender eintragen.');
     try {
-      const { transport, from } = await smtpTransport();
-      const info = await transport.sendMail({ from, to, subject: 'BlaulichtCMS: Testmail', text: 'Diese Testmail bestätigt, dass BlaulichtCMS E-Mails über den eingetragenen Server versenden kann.' });
-      await audit(req.auth!.actor, 'warning.test_mail', { type: 'settings', label: 'Warnversand' }, { an: to });
-      return { ok: true, response: info.response };
+      const { transport, from } = await smtpTransport(cand);
+      const info = await transport.sendMail({ from, to: b.to, subject: 'BlaulichtCMS: Testmail', text: 'Diese Testmail bestätigt, dass BlaulichtCMS E-Mails über den eingetragenen Server versenden kann.' });
+      const at = new Date().toISOString();
+      await setSettings({ 'smtp.verified': { fp: smtpFingerprint(cand), at } }, req.auth!.user?.id ?? null);
+      await audit(req.auth!.actor, 'warning.test_mail', { type: 'settings', label: 'Warnversand' }, { an: b.to, server: cand.host, port: cand.port, formularwerte: b.host !== undefined || undefined });
+      return { ok: true, response: info.response, verified_at: at };
     } catch (e) {
+      await audit(req.auth!.actor, 'warning.test_mail', { type: 'settings', label: 'Warnversand' }, { an: b.to, server: cand.host, fehler: (e as Error).message.slice(0, 200) }, 'failed').catch(() => {});
       throw new AppError(502, 'smtp_failed', `Testmail fehlgeschlagen: ${(e as Error).message}`);
     }
   });

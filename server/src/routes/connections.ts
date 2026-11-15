@@ -17,7 +17,7 @@ import { postState } from './posts.js';
 import { publicFileFor } from './media.js';
 import { sendFileResponse } from './files.js';
 import { publicFileName } from '../media/names.js';
-import { connectionSecrets, KIND_LABEL, loadConnection, saveTest, scrub, updateConnectionSecrets, type Connection, type ConnectionKind } from '../connections/common.js';
+import { connectionSecrets, KIND_LABEL, loadConnection, requireRetest, retestRelevantConfig, saveTest, scrub, updateConnectionSecrets, type Connection, type ConnectionKind } from '../connections/common.js';
 import { FE2_ALLOWED_FIELDS, FE2_DEFAULT_MAPPING, handleFe2Event } from '../connections/fe2.js';
 import { checkFormats, connectionTestImage, deleteFacebookPost, facebookAuthorizeUrl, facebookExchange, instagramAuthorizeUrl, instagramExchange, markerFor, mediaForRevision, mediaUrl, socialText, testFacebook, testInstagram } from '../connections/meta.js';
 import { insecureFeed, insecureFeedUrl, REVIEW_CHECKS, refreshWarnfeed, testWarnfeed, warningBannerText } from '../connections/warnfeed.js';
@@ -84,6 +84,18 @@ function assertSecureFeed(cfg: any, before: any | null) {
   for (const k of ['url', 'baseUrl'] as const) {
     if (cfg[k] && cfg[k] !== before?.[k] && insecureFeedUrl(cfg[k])) throw badRequest('Warnfeeds bitte über eine https-Adresse abrufen – über unverschlüsseltes HTTP ließen sich unterwegs gefälschte Warnungen einschleusen.');
   }
+}
+
+const STATUS_LABEL: Record<Connection['status'], string> = { draft: 'Entwurf', tested: 'getestet', active: 'aktiv', disabled: 'angehalten', revoked: 'widerrufen' };
+
+/**
+ * Geänderte Einstellungen oder Zugangsdaten verwerfen den letzten Test: Status „Entwurf“, auch bei aktiven und
+ * angehaltenen Verbindungen. Auditiert, wenn dadurch ein Test verfällt oder eine Verbindung den Betrieb einstellt.
+ */
+async function invalidateTest(actor: any, c: Connection, grund: string) {
+  const before = await requireRetest(c);
+  if (before) await audit(actor, 'connection.retest_required', { type: 'connection', id: c.id, label: c.name }, { vorher: STATUS_LABEL[before], grund });
+  return before;
 }
 
 async function fe2Auth(req: FastifyRequest, c: Connection) {
@@ -157,15 +169,19 @@ export async function connectionRoutes(app: FastifyInstance) {
     if (c.kind === 'warnfeed' && config.autoBanner && !(await one(`SELECT 1 FROM wp_sites WHERE id = $1 AND status = 'active'`, [config.bannerSiteId]))) {
       throw badRequest('Die gewählte Website ist nicht gekoppelt. Automatische Banner sind nur für eine gekoppelte Website möglich.');
     }
-    // Geänderte Einstellungen müssen erneut getestet werden (aktive Verbindungen bleiben aktiv)
+    // Jede für den Test relevante Änderung verlangt einen neuen Test – auch bei aktiven Verbindungen (die damit
+    // anhalten, bis erneut getestet und aktiviert ist). Name, Intervall und Banner-Schalter zählen nicht dazu.
+    const before = configSchema[c.kind].safeParse(c.config);
+    const retest = retestRelevantConfig(config) !== retestRelevantConfig(before.success ? before.data : c.config);
     const target = c.kind === 'warnfeed' && config.format === 'cap' ? hostOf(config.url) : null;
     await pool.query(
-      `UPDATE connections SET name = $2, config = $3, status = CASE WHEN status = 'tested' OR ($5 AND status = 'active') THEN 'draft' ELSE status END,
+      `UPDATE connections SET name = $2, config = $3,
               private_target = $4, private_approved_at = CASE WHEN private_target IS DISTINCT FROM $4 THEN NULL ELSE private_approved_at END, updated_at = now() WHERE id = $1`,
-      [id, b.name, JSON.stringify(config), target, sourceChanged],
+      [id, b.name, JSON.stringify(config), target],
     );
-    await audit(req.auth!.actor, 'connection.updated', { type: 'connection', id, label: b.name }, { automatische_banner: config.autoBanner ?? undefined, pruefung_verworfen: sourceChanged || undefined });
-    return { ok: true };
+    await audit(req.auth!.actor, 'connection.updated', { type: 'connection', id, label: b.name }, { automatische_banner: config.autoBanner ?? undefined, pruefung_verworfen: sourceChanged || undefined, neuer_test_noetig: retest || undefined });
+    const was = retest ? await invalidateTest(req.auth!.actor, { ...c, name: b.name }, 'Einstellungen geändert') : null;
+    return { ok: true, retest, deactivated: was === 'active' };
   });
 
   /** Zugangsdaten hinterlegen (z. B. App-ID/Geheimnis, manuell erzeugter Token). Werden nie wieder angezeigt. */
@@ -177,9 +193,9 @@ export async function connectionRoutes(app: FastifyInstance) {
     const patch = Object.fromEntries(Object.entries(b).filter(([k]) => allowed[c.kind].includes(k)));
     if (!Object.keys(patch).length) throw badRequest('Keine gültigen Felder.');
     await updateConnectionSecrets(c, patch, req.auth!.user?.id ?? null);
-    await pool.query(`UPDATE connections SET status = CASE WHEN status = 'tested' THEN 'draft' ELSE status END WHERE id = $1`, [id]);
     await audit(req.auth!.actor, 'connection.secret_changed', { type: 'connection', id, label: c.name }, { felder: Object.keys(patch) });
-    return { ok: true };
+    const was = await invalidateTest(req.auth!.actor, c, 'Zugangsdaten geändert');
+    return { ok: true, retest: true, deactivated: was === 'active' };
   });
 
   app.post('/connections/:id/rotate-token', { preHandler: manage }, async (req) => {
@@ -189,7 +205,9 @@ export async function connectionRoutes(app: FastifyInstance) {
     const token = `bcfe2_${randomToken(32)}`;
     await updateConnectionSecrets(c, { inboundTokenHash: sha256Hex(token) }, req.auth!.user?.id ?? null);
     await audit(req.auth!.actor, 'connection.token_rotated', { type: 'connection', id, label: c.name });
-    return { token };
+    // Neuer Schlüssel = neue Konfiguration in FE2: erst mit einer Testmeldung über den neuen Schlüssel wieder aktivierbar
+    const was = await invalidateTest(req.auth!.actor, c, 'Zugangsschlüssel erneuert');
+    return { token, retest: true, deactivated: was === 'active' };
   });
 
   /* ------------------------------------------------------------ OAuth (Meta) */
@@ -235,12 +253,14 @@ export async function connectionRoutes(app: FastifyInstance) {
         const r = await facebookExchange(c.config.appId, sec.appSecret, redirect, q.code);
         await updateConnectionSecrets(c, { userToken: r.userToken, pages: JSON.stringify(r.pages) }, by.id);
         await audit(actor, 'connection.oauth', { type: 'connection', id: c.id, label: c.name }, { seiten: r.pages.length });
+        await invalidateTest(actor, c, 'Neu angemeldet');
         return back(r.pages.length ? `Angemeldet – bitte eine von ${r.pages.length} Seite(n) wählen.` : 'Angemeldet, aber keine verwaltbare Seite gefunden.');
       }
       const r = await instagramExchange(c.config.appId, sec.appSecret, redirect, q.code);
       await updateConnectionSecrets(c, { token: r.token }, by.id);
       await pool.query(`UPDATE connections SET config = config || $2 WHERE id = $1`, [c.id, JSON.stringify({ userId: r.userId, tokenExpiresAt: r.expiresIn ? new Date(Date.now() + r.expiresIn * 1000).toISOString() : null })]);
       await audit(actor, 'connection.oauth', { type: 'connection', id: c.id, label: c.name });
+      await invalidateTest(actor, c, 'Neu angemeldet');
       return back('Mit Instagram verbunden – jetzt testen.');
     } catch (e: any) {
       return back(`Anmeldung fehlgeschlagen: ${scrub(e?.message ?? String(e), sec)}`);
@@ -255,9 +275,10 @@ export async function connectionRoutes(app: FastifyInstance) {
     const page = (JSON.parse(sec.pages ?? '[]') as any[]).find((p) => p.id === pageId);
     if (!page) throw notFound('Seite nicht gefunden.');
     await updateConnectionSecrets(c, { pageToken: page.access_token }, req.auth!.user?.id ?? null);
-    await pool.query(`UPDATE connections SET config = config || $2, account = $3, status = CASE WHEN status = 'tested' THEN 'draft' ELSE status END WHERE id = $1`, [id, JSON.stringify({ pageId }), JSON.stringify({ id: page.id, name: page.name })]);
+    await pool.query(`UPDATE connections SET config = config || $2, account = $3 WHERE id = $1`, [id, JSON.stringify({ pageId }), JSON.stringify({ id: page.id, name: page.name })]);
     await audit(req.auth!.actor, 'connection.page_selected', { type: 'connection', id, label: c.name }, { seite: page.name });
-    return { ok: true };
+    const was = await invalidateTest(req.auth!.actor, c, 'Seite gewählt');
+    return { ok: true, retest: true, deactivated: was === 'active' };
   });
 
   /* ------------------------------------------------------------ Testen, Vorschau, Aktivieren */
@@ -298,8 +319,10 @@ export async function connectionRoutes(app: FastifyInstance) {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
     const c = await loadConnection(id);
     if (c.status === 'active') return { ok: true };
-    if (c.status !== 'tested' && c.status !== 'disabled') throw conflict('Bitte zuerst erfolgreich testen.');
-    if (!c.last_test?.ok) throw conflict('Der letzte Test war nicht erfolgreich.');
+    // Nur mit einem bestandenen Test der aktuellen Einstellungen: Jede relevante Änderung setzt die Verbindung auf
+    // „Entwurf“ und verwirft den Test (invalidateTest) – ein alter Test reicht nach Änderungen also nie.
+    if ((c.status !== 'tested' && c.status !== 'disabled') || !c.last_test) throw conflict('Bitte zuerst mit den aktuellen Einstellungen erfolgreich testen.');
+    if (!c.last_test.ok) throw conflict('Der letzte Test war nicht erfolgreich.');
     if (c.private_target && !c.private_approved_at) throw conflict(`Das Ziel „${c.private_target}“ ist ein internes Ziel und braucht eine ausdrückliche administrative Freigabe.`);
     await pool.query(`UPDATE connections SET status = 'active', activated_at = now(), activated_by = $2 WHERE id = $1`, [id, req.auth!.user?.id ?? null]);
     await audit(req.auth!.actor, 'connection.activated', { type: 'connection', id, label: c.name }, { art: c.kind });

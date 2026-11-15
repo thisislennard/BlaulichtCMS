@@ -1,9 +1,11 @@
 import fs from 'node:fs';
+import crypto from 'node:crypto';
 import nodemailer from 'nodemailer';
 import { one, pool } from '../db/pool.js';
 import { log } from '../lib/log.js';
 import { notify } from '../lib/notify.js';
 import { readSecret } from '../lib/secrets.js';
+import { deriveKey } from '../lib/crypto.js';
 import { getSettings } from '../lib/settings.js';
 
 /**
@@ -24,23 +26,59 @@ export function smtpConfigProblem(c: { security: unknown; user?: unknown; passwo
   return null;
 }
 
-export async function smtpTransport() {
-  const s = await getSettings();
-  if (!s['smtp.host'] || !s['smtp.from']) throw new Error('SMTP ist nicht eingerichtet (Einstellungen → E-Mail-Versand).');
+/** Versandeinstellungen samt Passwort (Klartext nur im Speicher, nie in Antworten oder Protokollen). */
+export interface SmtpSettings {
+  host: string;
+  port: number;
+  security: string;
+  user: string;
+  from: string;
+  password: string;
+}
+
+/** Gespeicherte Versandeinstellungen (Passwort entschlüsselt). */
+export async function storedSmtpSettings(): Promise<SmtpSettings> {
+  const s = await getSettings(true);
+  return {
+    host: String(s['smtp.host'] ?? ''),
+    port: Number(s['smtp.port']),
+    security: String(s['smtp.security'] ?? ''),
+    user: String(s['smtp.user'] ?? ''),
+    from: String(s['smtp.from'] ?? ''),
+    password: (await readSecret(s['smtp.password_secret_id'])) ?? '',
+  };
+}
+
+/**
+ * Prüfwert genau dieser Versandeinstellungen (Server, Port, Verschlüsselung, Benutzer, Absender, Passwort) für die
+ * Regel „Echtbetrieb nur nach erfolgreicher Testmail“. HMAC mit einem eigenen, aus dem Master-Schlüssel abgeleiteten
+ * Schlüssel – der gespeicherte Wert lässt keine Rückschlüsse auf das Passwort zu. Ohne Anmeldung zählt das Passwort nicht.
+ */
+export function smtpFingerprint(c: SmtpSettings): string {
+  const auth = !!c.user.trim() && c.security !== 'none';
+  const canonical = JSON.stringify([c.host.trim().toLowerCase(), Number(c.port), c.security, c.user.trim(), c.from.trim(), auth ? c.password : '']);
+  return crypto.createHmac('sha256', deriveKey('smtp-verification')).update(canonical).digest('hex');
+}
+
+/** So lange gilt eine erfolgreiche Testmail als Nachweis für das Ausschalten des Testmodus bzw. Änderungen im Echtbetrieb. */
+export const SMTP_VERIFY_MAX_AGE_MS = 60 * 60_000;
+
+export async function smtpTransport(override?: SmtpSettings) {
+  const c = override ?? (await storedSmtpSettings());
+  if (!c.host || !c.from) throw new Error('SMTP ist nicht eingerichtet (Einstellungen → E-Mail-Versand).');
   // Auch hier prüfen – z. B. Altbestand aus der Zeit vor der Prüfung (#100)
-  const problem = smtpConfigProblem({ security: s['smtp.security'], user: s['smtp.user'] });
+  const problem = smtpConfigProblem({ security: c.security, user: c.user });
   if (problem) throw new Error(problem);
-  const pass = await readSecret(s['smtp.password_secret_id']);
   const timeout = Number(process.env.BLAULICHTCMS_SMTP_TIMEOUT_MS ?? 60_000);
   return {
-    from: s['smtp.from'],
+    from: c.from,
     transport: nodemailer.createTransport({
-      host: s['smtp.host'],
-      port: Number(s['smtp.port']),
-      secure: s['smtp.security'] === 'tls',
-      requireTLS: s['smtp.security'] === 'starttls',
-      ignoreTLS: s['smtp.security'] === 'none',
-      auth: s['smtp.user'] && s['smtp.security'] !== 'none' ? { user: s['smtp.user'], pass: pass ?? '' } : undefined,
+      host: c.host,
+      port: Number(c.port),
+      secure: c.security === 'tls',
+      requireTLS: c.security === 'starttls',
+      ignoreTLS: c.security === 'none',
+      auth: c.user && c.security !== 'none' ? { user: c.user, pass: c.password ?? '' } : undefined,
       connectionTimeout: Math.min(timeout, 15_000),
       greetingTimeout: Math.min(timeout, 15_000),
       socketTimeout: timeout,

@@ -120,6 +120,11 @@ export const DEFAULT_SETTINGS = {
   'smtp.user': '',
   'smtp.from': '',
   'smtp.password_secret_id': '',
+  /**
+   * Letzte erfolgreiche Testmail (routes/warnings.ts): Prüfwert der dabei benutzten Einstellungen (smtpFingerprint) und
+   * Zeitpunkt. Testmodus ausschalten bzw. Versandeinstellungen im Echtbetrieb ändern geht nur mit passendem, frischem Wert.
+   */
+  'smtp.verified': null as null | { fp: string; at: string },
 
   /**
    * In-App-Updates aus GitHub-Releases (updates/github.ts): Prüfung im Worker alle `check_hours` Stunden, Installation

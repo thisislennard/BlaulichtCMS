@@ -79,6 +79,46 @@ export async function updateConnectionSecrets(c: Connection, patch: Record<strin
   return next;
 }
 
+/**
+ * Einstellungen, die der Verbindungstest nicht prüft und deren Änderung deshalb keinen neuen Test verlangt: der Name
+ * (eigene Spalte), Abrufintervall, „Beitragsentwürfe anlegen“ sowie automatische Banner und deren Website (die haben
+ * eigene Voraussetzungen: dokumentierte fachliche Prüfung, gekoppelte Website, HTTPS-Quelle). Alles andere – Quelle,
+ * Gebiet, Feldzuordnung, App-ID, Seite, Konto – und jede Änderung der Zugangsdaten verlangt einen neuen Test.
+ */
+export const RETEST_EXEMPT_KEYS = ['intervalMinutes', 'createDrafts', 'autoBanner', 'bannerSiteId', 'review', 'oauthState', 'tokenExpiresAt'] as const;
+
+/** Vergleichsform einer Konfiguration für die Frage „neuer Test nötig?“ (leere Zuordnungen = Standard). */
+export function retestRelevantConfig(cfg: Record<string, any> | null | undefined): string {
+  const out: Record<string, unknown> = {};
+  for (const k of Object.keys(cfg ?? {}).sort()) {
+    if ((RETEST_EXEMPT_KEYS as readonly string[]).includes(k)) continue;
+    let v = (cfg as any)[k];
+    if (k === 'mapping' && v && typeof v === 'object') v = Object.fromEntries(Object.entries(v).filter(([, x]) => typeof x === 'string' && x.trim() !== '').sort(([a], [b]) => a.localeCompare(b)));
+    if (k === 'areaFilter' && v && typeof v === 'object') v = { codes: v.codes ?? [], names: v.names ?? [] };
+    if (v === undefined || v === '' || v === null) continue;
+    out[k] = v;
+  }
+  return JSON.stringify(out);
+}
+
+/**
+ * Verlangt einen neuen Test (#Schnittstellen nur nach Test): Status „Entwurf“, letzter Test verworfen – auch bei
+ * aktiven und angehaltenen Verbindungen, damit nie mit ungetesteten Einstellungen oder Zugangsdaten weitergearbeitet
+ * oder mit einem alten Test wieder aktiviert wird. Bei FE2 gilt auch die letzte Testmeldung nicht mehr (sie kam mit
+ * der alten Zuordnung bzw. dem alten Schlüssel). Gibt den vorherigen Status zurück, wenn sich etwas geändert hat.
+ */
+export async function requireRetest(c: Connection, db: Queryable = pool): Promise<Connection['status'] | null> {
+  const r = await one<{ before: Connection['status']; had_test: boolean }>(
+    `UPDATE connections n SET status = 'draft', last_test = NULL, preview = CASE WHEN n.kind = 'fe2' THEN NULL ELSE n.preview END, updated_at = now()
+       FROM connections o WHERE n.id = o.id AND n.id = $1 AND o.status <> 'revoked'
+     RETURNING o.status AS before, (o.last_test IS NOT NULL) AS had_test`,
+    [c.id],
+    db,
+  );
+  if (!r || (r.before === 'draft' && !r.had_test)) return null;
+  return r.before;
+}
+
 /** Private Ziele (LAN, interne Hosts) nur nach ausdrücklicher administrativer Freigabe. */
 export function allowedPrivateHosts(c: Connection): string[] {
   return c.private_target && c.private_approved_at ? [c.private_target] : [];

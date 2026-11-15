@@ -601,6 +601,39 @@ describe('SMTP-Einstellungen (#100)', () => {
   });
 });
 
+describe('Echtbetrieb nur nach erfolgreicher Testmail', () => {
+  it('Prüfwert hängt an genau den Versandeinstellungen, nicht an Groß-/Kleinschreibung des Servers', async () => {
+    const { smtpFingerprint } = await import('../src/warnings/mail.js');
+    const base = { host: 'smtp.example.org', port: 587, security: 'starttls', user: 'postfach', from: 'warnung@example.org', password: 'geheim' };
+    const fp = smtpFingerprint(base);
+    expect(fp).toMatch(/^[0-9a-f]{64}$/);
+    expect(fp).not.toContain('geheim');
+    expect(smtpFingerprint({ ...base, host: ' SMTP.example.org ' })).toBe(fp);
+    for (const change of [{ host: 'smtp.example.net' }, { port: 465 }, { security: 'tls' }, { user: 'anderes' }, { from: 'x@example.org' }, { password: 'anders' }]) {
+      expect(smtpFingerprint({ ...base, ...change })).not.toBe(fp);
+    }
+    // Ohne Anmeldung spielt das Passwort keine Rolle
+    const anon = { ...base, user: '', password: '' };
+    expect(smtpFingerprint({ ...anon, password: 'egal' })).toBe(smtpFingerprint(anon));
+  });
+});
+
+describe('Verbindungen: neuer Test nach Änderungen', () => {
+  it('nur testrelevante Einstellungen zählen', async () => {
+    const { retestRelevantConfig: r } = await import('../src/connections/common.js');
+    const fe2 = { mapping: { event_id: 'einsatz.id' }, createDrafts: true };
+    expect(r({ ...fe2, createDrafts: false })).toBe(r(fe2));
+    expect(r({ mapping: { event_id: 'einsatz.id', keyword: '' } })).toBe(r({ mapping: { event_id: 'einsatz.id' } }));
+    expect(r({ mapping: { event_id: 'einsatz.nummer' } })).not.toBe(r(fe2));
+    const wf = { format: 'nina', ars: '053150000000', url: '', areaFilter: { codes: [], names: ['Musterstadt'] }, intervalMinutes: 5, autoBanner: false, bannerSiteId: null };
+    expect(r({ ...wf, intervalMinutes: 30, autoBanner: true, bannerSiteId: 'x', review: { approvedAt: 'jetzt' } })).toBe(r(wf));
+    expect(r({ ...wf, ars: '053160000000' })).not.toBe(r(wf));
+    expect(r({ ...wf, areaFilter: { codes: [], names: ['Nordheim'] } })).not.toBe(r(wf));
+    expect(r({ appId: '1', pageId: 'P1' })).not.toBe(r({ appId: '1', pageId: 'P2' }));
+    expect(r({ appId: '1', oauthState: { hash: 'a' } })).toBe(r({ appId: '1' }));
+  });
+});
+
 describe('Warnfeeds nur über HTTPS (#108)', () => {
   it('erkennt unverschlüsselte Quellen, localhost ausgenommen', async () => {
     const { insecureFeed, insecureFeedUrl } = await import('../src/connections/warnfeed.js');
