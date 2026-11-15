@@ -325,6 +325,7 @@ async function freshSetup() {
   await admin.post('/rss/feeds', { url: `http://127.0.0.1:${rss.address().port}/feed.xml`, title: 'Testquelle' }).catch((e) => console.log('  (RSS)', e.message));
   const conn = await admin.post('/connections', { kind: 'fe2', name: 'FE2 Test', config: {} }).catch((e) => (console.log('  (Verbindung)', e.message), null));
   const wf = await admin.post('/connections', { kind: 'warnfeed', name: 'Amtliche Warnungen Test', config: {} }).catch((e) => (console.log('  (Warnfeed)', e.message), null));
+  const fsc = await admin.post('/connections', { kind: 'feuersoftware', name: 'Feuersoftware Test', config: {} }).catch((e) => (console.log('  (Feuersoftware)', e.message), null));
   // Website wie die Bridge koppeln (ohne WordPress), damit Banner und Kanäle Inhalt haben
   try {
     const s = await admin.post('/sites', { name: 'Testwebsite' });
@@ -350,6 +351,7 @@ async function freshSetup() {
     collectionId: col.collection.id,
     connectionId: conn ? (conn.connection ?? conn).id : null,
     warnfeedId: wf ? (wf.connection ?? wf).id : null,
+    feuersoftwareId: fsc?.id ?? null,
     warningId: warn?.id ?? null,
   };
   return { admin, editor, st };
@@ -409,8 +411,23 @@ try {
   let n = 0;
   churn = setInterval(() => editor.post('/posts', { title: `Live-Ereignis ${++n}`, kind: 'news' }).catch(() => {}), 2000);
 
-  const routes = ['/', '/beitraege', `/beitraege/${post.id}`, `/beitraege/${sub.id}`, '/vorlagen', '/freigaben', '/medien', `/medien/${col.collection.id}`, '/quellen', '/banner', '/kanaele', '/warnungen', '/warnungen/pflege', ...(warn ? [`/warnungen/${warn.id}`] : []), '/verbindungen', ...(conn ? [`/verbindungen/${conn.id}`] : []), ...(st.warnfeedId ? [`/verbindungen/${st.warnfeedId}`] : []), '/amtliche-warnungen', '/benutzer', '/system', '/protokolle', '/datenschutz-anfragen', '/einstellungen', '/profil', '/hilfe', '/aktivitaeten', '/benachrichtigungen'];
+  const routes = ['/', '/beitraege', `/beitraege/${post.id}`, `/beitraege/${sub.id}`, '/vorlagen', '/freigaben', '/medien', `/medien/${col.collection.id}`, '/quellen', '/banner', '/kanaele', '/warnungen', '/warnungen/pflege', ...(warn ? [`/warnungen/${warn.id}`] : []), '/verbindungen', ...(conn ? [`/verbindungen/${conn.id}`] : []), ...(st.warnfeedId ? [`/verbindungen/${st.warnfeedId}`] : []), ...(st.feuersoftwareId ? [`/verbindungen/${st.feuersoftwareId}`] : []), '/amtliche-warnungen', '/benutzer', '/system', '/protokolle', '/datenschutz-anfragen', '/einstellungen', '/profil', '/hilfe', '/aktivitaeten', '/benachrichtigungen'];
   for (const r of routes) await scanRoute(page, r);
+
+  // Löschdialoge (Löschen-Knöpfe klickt der Rundgang bewusst nicht): Warnvorgang mit Begründung, Verbindung
+  async function openDialog(route, button, where, before) {
+    if (ONLY && !ONLY.test(where)) return;
+    await gotoRoute(page, route);
+    if (before) await page.getByRole('button', { name: before }).first().click({ timeout: 5000 }).catch(() => {});
+    await page.getByRole('button', { name: button, exact: true }).first().click({ timeout: 5000 }).catch(() => {});
+    await page.locator('[role=dialog]').first().waitFor({ timeout: 6000 }).catch(() => {});
+    await sleep(600);
+    if (await dialogOpen(page)) await checkFields(page, where, '[role=dialog]', new Set());
+    else failures.push({ where, field: '(Dialog)', problem: 'Dialog nicht geöffnet' });
+    await closeDialogs(page, route);
+  }
+  if (warn) await openDialog(`/warnungen/${warn.id}`, 'Löschen', 'Dialog „Vorgang löschen“');
+  if (st.feuersoftwareId) await openDialog(`/verbindungen/${st.feuersoftwareId}`, 'Löschen', 'Dialog „Verbindung löschen“', /^\d*\s*Aktivieren$/);
 
   // Dialog zur erneuten Bestätigung (Reauth): API-Antwort „reauth_required“ für eine Anfrage vortäuschen
   if (!ONLY || ONLY.test('reauth')) {

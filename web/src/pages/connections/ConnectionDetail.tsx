@@ -317,9 +317,11 @@ export default function ConnectionDetail() {
                       <p className="m-0 text-fg-muted">Bittet Feuersoftware um eine Pause (429), wartet BlaulichtCMS selbst ab. Der Abstand lässt sich ohne neuen Test ändern.</p>
                     </HelpTip>
                   }>
-                    <Select id="fs-int" value={String(cfg.intervalSeconds ?? 120)} onChange={(e) => setCfg({ ...cfg, intervalSeconds: Number(e.target.value) })} className="max-w-[220px]">
-                      {(c.intervals ?? [60, 120, 180, 300]).map((n: number) => <option key={n} value={n}>{n === 60 ? '1 Minute' : `${n / 60} Minuten`}{n === 120 ? ' (Standard)' : ''}</option>)}
-                    </Select>
+                    <div className="max-w-[220px]">
+                      <Select id="fs-int" value={String(cfg.intervalSeconds ?? 120)} onChange={(e) => setCfg({ ...cfg, intervalSeconds: Number(e.target.value) })}>
+                        {(c.intervals ?? [60, 120, 180, 300]).map((n: number) => <option key={n} value={n}>{n === 60 ? '1 Minute' : `${n / 60} Minuten`}{n === 120 ? ' (Standard)' : ''}</option>)}
+                      </Select>
+                    </div>
                   </FieldWrap>
                   <div className="grid sm:grid-cols-2 gap-3">
                     <FieldWrap label="RICs (Komma)" htmlFor="fs-rics" labelAction={
