@@ -1,13 +1,28 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { del, get, post } from '../../api/client';
+import { del, get, post, put } from '../../api/client';
 import { Button, Card, EmptyState, ErrorBox, FieldWrap, Input, Notice, PageHeader, SegmentedControl, SkeletonRows } from '../../components/ui/core';
 import { Icon } from '../../components/ui/Icon';
 import { Dialog, useErrorToast, useToast, useConfirm } from '../../components/ui/overlays';
+import { HelpLink, HelpTip } from '../../components/ui/HelpTip';
 import { useAuth } from '../../lib/auth';
 import { fmtDateTime, fmtRelative } from '../../lib/format';
 import { safeHref } from '../../lib/url';
+
+/** ?-Knopf: Wo finde ich die Adresse eines Feeds? */
+function FeedUrlHelp() {
+  return (
+    <HelpTip title="Feed-Adresse finden" more="/hilfe/quellen#feed-adresse-finden">
+      <ul className="m-0 pl-4 flex flex-col gap-1 list-disc">
+        <li>Auf der Website nach einem Feed-Symbol oder Link „RSS“/„Feed“ suchen und dessen Adresse kopieren.</li>
+        <li>WordPress-Websites: meist <code className="font-mono">https://…/feed/</code>.</li>
+        <li>Im Seitenquelltext nach <code className="font-mono">rel="alternate"</code> mit <code className="font-mono">application/rss+xml</code> oder <code className="font-mono">atom+xml</code> suchen (<HelpLink href="https://www.rssboard.org/rss-autodiscovery">Erklärung</HelpLink>).</li>
+      </ul>
+      <p className="m-0 text-fg-muted">Übernommen wird eine Quelle nur nach einem erfolgreichen Abruf.</p>
+    </HelpTip>
+  );
+}
 
 function AddFeedDialog({ onClose }: { onClose: () => void }) {
   const toastError = useErrorToast();
@@ -68,7 +83,7 @@ function AddFeedDialog({ onClose }: { onClose: () => void }) {
       }
     >
       <div className="flex flex-col gap-4 text-sm">
-        <FieldWrap label="Adresse des RSS- oder Atom-Feeds" htmlFor="rss-url">
+        <FieldWrap label="Adresse des RSS- oder Atom-Feeds" htmlFor="rss-url" labelAction={<FeedUrlHelp />} help="Übernommen wird eine Quelle nur, wenn BlaulichtCMS sie erfolgreich abrufen und lesen kann.">
           <Input id="rss-url" type="url" value={url} onChange={(e) => (setUrl(e.target.value), setPreview(null))} placeholder="https://example.org/feed.xml" />
         </FieldWrap>
         {err && <Notice tone="error">{err}</Notice>}
@@ -91,6 +106,57 @@ function AddFeedDialog({ onClose }: { onClose: () => void }) {
   );
 }
 
+/** Name, Adresse und Abrufintervall ändern. Eine neue Adresse übernimmt der Server erst nach erfolgreichem Abruf. */
+function EditFeedDialog({ feed, onClose }: { feed: any; onClose: () => void }) {
+  const toast = useToast();
+  const [form, setForm] = useState({ title: feed.title as string, url: feed.url as string, intervalMin: feed.interval_min as number });
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const valid = form.title.trim().length > 0 && /^https?:\/\//.test(form.url.trim()) && form.intervalMin >= 5 && form.intervalMin <= 1440;
+  return (
+    <Dialog
+      open
+      onClose={onClose}
+      width={560}
+      title="Quelle bearbeiten"
+      footer={
+        <>
+          <Button onClick={onClose}>Abbrechen</Button>
+          <Button
+            variant="primary"
+            icon="Save"
+            loading={busy}
+            disabled={!valid}
+            onClick={async () => {
+              setBusy(true);
+              setErr(null);
+              try {
+                const r = await put<any>(`/rss/feeds/${feed.id}`, { title: form.title.trim(), url: form.url.trim(), intervalMin: form.intervalMin });
+                toast({ tone: 'success', title: 'Quelle gespeichert', text: form.url.trim() !== feed.url ? `Neue Adresse geprüft, ${r.added} Einträge übernommen` : undefined });
+                onClose();
+              } catch (e) {
+                setErr((e as Error).message);
+                setBusy(false);
+              }
+            }}
+          >
+            Speichern
+          </Button>
+        </>
+      }
+    >
+      <div className="flex flex-col gap-4 text-sm">
+        <FieldWrap label="Name" htmlFor="rss-e-title"><Input id="rss-e-title" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} maxLength={200} /></FieldWrap>
+        <FieldWrap label="Adresse des RSS- oder Atom-Feeds" htmlFor="rss-e-url" help="Eine neue Adresse wird beim Speichern abgerufen und nur übernommen, wenn sie einen lesbaren Feed liefert." labelAction={<FeedUrlHelp />}>
+          <Input id="rss-e-url" type="url" value={form.url} onChange={(e) => setForm({ ...form, url: e.target.value })} />
+        </FieldWrap>
+        <FieldWrap label="Abrufintervall (Minuten)" htmlFor="rss-e-int"><Input id="rss-e-int" type="number" min={5} max={1440} value={form.intervalMin} onChange={(e) => setForm({ ...form, intervalMin: Number(e.target.value) })} className="max-w-[120px]" /></FieldWrap>
+        {err && <Notice tone="error">{err}</Notice>}
+      </div>
+    </Dialog>
+  );
+}
+
 export default function Sources() {
   const ask = useConfirm();
   const { can } = useAuth();
@@ -99,6 +165,7 @@ export default function Sources() {
   const toastError = useErrorToast();
   const [filter, setFilter] = useState<'new' | 'starred' | 'hidden'>('new');
   const [adding, setAdding] = useState(false);
+  const [editing, setEditing] = useState<any>(null);
   const feeds = useQuery({ queryKey: ['rss', 'feeds'], queryFn: () => get<any[]>('/rss/feeds') });
   const items = useQuery({ queryKey: ['rss', 'items', filter], queryFn: () => get<any[]>(`/rss/items?filter=${filter}`) });
   const refresh = () => qc.invalidateQueries({ queryKey: ['rss'] });
@@ -186,6 +253,7 @@ export default function Sources() {
                     <Button size="sm" icon="RefreshCw" onClick={async () => (await post(`/rss/feeds/${f.id}/refresh`).catch(toastError), refresh())}>
                       Abrufen
                     </Button>
+                    <Button size="sm" iconOnly icon="Pencil" aria-label={`${f.title} bearbeiten`} onClick={() => setEditing(f)} />
                     <Button size="sm" iconOnly icon="Trash2" aria-label={`${f.title} entfernen`} onClick={async () => (await ask({ title: "Quelle entfernen?", text: `„${f.title}“ und ihre gesammelten Einträge werden entfernt. Bereits übernommene Themenideen bleiben.`, confirmLabel: "Entfernen" })) && (await del(`/rss/feeds/${f.id}`).catch(toastError), refresh())} />
                   </span>
                 )}
@@ -195,6 +263,7 @@ export default function Sources() {
         </Card>
       </div>
       {adding && <AddFeedDialog onClose={() => (setAdding(false), refresh())} />}
+      {editing && <EditFeedDialog feed={editing} onClose={() => (setEditing(null), refresh())} />}
     </div>
   );
 }

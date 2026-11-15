@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { HelpLink, HelpTip } from "../../components/ui/HelpTip";
 import { Link } from "react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { get, post, put } from "../../api/client";
@@ -225,7 +226,11 @@ export function UpdatesSection({ manage }: { manage: boolean }) {
         <h3 className="m-0 text-sm font-semibold">Quelle und Prüfung</h3>
         <Switch checked={form.enabled} disabled={!manage} onChange={(x) => setForm({ ...form, enabled: x })} label="Automatisch auf neue Versionen prüfen" description="Fragt im eingestellten Abstand das neueste Release ab und benachrichtigt die Administration einmal je neuer Version. Installiert wird nie automatisch." />
         <FieldGrid>
-          <FieldWrap label="GitHub-Repository" htmlFor="u-repo" help="Format besitzer/name." error={repoInvalid ? "Format: besitzer/name" : null}>
+          <FieldWrap label="GitHub-Repository" htmlFor="u-repo" labelAction={
+            <HelpTip title="GitHub-Repository" more="/hilfe/updates#update-in-der-oberflaeche">
+              <p className="m-0">Besitzer und Name aus der Adresse des Repositorys: <code className="font-mono">github.com/besitzer/name</code> → <code className="font-mono">besitzer/name</code>. Standard ist das offizielle Repository; angenommen werden nur signierte Pakete.</p>
+            </HelpTip>
+          } help="Format besitzer/name." error={repoInvalid ? "Format: besitzer/name" : null}>
             <Input id="u-repo" mono disabled={!manage} value={form.repo} maxLength={201} invalid={repoInvalid} onChange={(e) => setForm({ ...form, repo: e.target.value })} />
           </FieldWrap>
           <FieldWrap label="Prüfabstand" htmlFor="u-hours" help="1 bis 168 Stunden." error={hoursInvalid ? "1 bis 168 Stunden" : null}>
@@ -234,7 +239,11 @@ export function UpdatesSection({ manage }: { manage: boolean }) {
           <FieldWrap label="API-Adresse" htmlFor="u-api" help="Standard: https://api.github.com. Bei einem anderen Server muss ein Token neu eingegeben werden.">
             <Input id="u-api" mono disabled={!manage} value={form.apiUrl} maxLength={300} onChange={(e) => setForm({ ...form, apiUrl: e.target.value })} />
           </FieldWrap>
-          <FieldWrap label="Zugriffstoken (optional)" htmlFor="u-token" help={d.settings.tokenSet ? "Ein Token ist gespeichert. Leer lassen, um ihn zu behalten." : "Nur für private Repositories nötig. Öffentliche Repositories brauchen keine Anmeldung."}>
+          <FieldWrap label="Zugriffstoken (optional)" htmlFor="u-token" labelAction={
+            <HelpTip title="Zugriffstoken" more="/hilfe/updates#zugriffstoken-fuer-private-repositories">
+              <p className="m-0">Nur für private Repositories. Auf GitHub einen <strong>Fine-grained Token</strong> nur für dieses Repository mit <strong>Contents: Read-only</strong> erzeugen (<HelpLink href="https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens">Anleitung von GitHub</HelpLink>).</p>
+            </HelpTip>
+          } help={d.settings.tokenSet ? "Ein Token ist gespeichert. Leer lassen, um ihn zu behalten." : "Nur für private Repositories nötig. Öffentliche Repositories brauchen keine Anmeldung."}>
             <Input id="u-token" type="password" autoComplete="off" disabled={!manage} value={form.token} maxLength={500} placeholder={d.settings.tokenSet ? "gespeichert" : ""} onChange={(e) => setForm({ ...form, token: e.target.value })} />
           </FieldWrap>
         </FieldGrid>

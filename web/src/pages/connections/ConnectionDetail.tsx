@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useParams, useSearchParams } from 'react-router';
+import { Link, useParams, useSearchParams } from 'react-router';
 import { get, post, put } from '../../api/client';
 import { Badge, Button, Card, cx, ErrorBox, FieldWrap, Input, KeyValue, Notice, PageHeader, Select, SkeletonRows, StatusBadge, Switch, Textarea } from '../../components/ui/core';
 import { Icon } from '../../components/ui/Icon';
@@ -18,6 +18,25 @@ const STEPS = [
 ] as const;
 type Step = (typeof STEPS)[number]['id'];
 const STEP_KIND: Record<string, string> = { login: 'Anmeldung', publish: 'Veröffentlichungstest', read: 'Lesen', receive: 'Empfang' };
+
+/**
+ * Wie der Server (connections/common.ts, retestRelevantConfig): Name, Abrufintervall, „Beitragsentwürfe anlegen“ und
+ * die Banner-Schalter verlangen keinen neuen Test, alles andere schon.
+ */
+const RETEST_EXEMPT = ['name', 'intervalMinutes', 'createDrafts', 'autoBanner', 'bannerSiteId', 'review', 'oauthState', 'tokenExpiresAt'];
+function relevantConfig(cfg: Record<string, any>) {
+  const out: Record<string, unknown> = {};
+  for (const k of Object.keys(cfg ?? {}).sort()) {
+    if (RETEST_EXEMPT.includes(k)) continue;
+    let v = cfg[k];
+    if (k === 'mapping' && v && typeof v === 'object') v = Object.fromEntries(Object.entries(v).filter(([, x]) => typeof x === 'string' && x.trim() !== '').sort(([a], [b]) => a.localeCompare(b)));
+    if (k === 'areaFilter' && v && typeof v === 'object') v = { codes: v.codes ?? [], names: v.names ?? [] };
+    if (v === undefined || v === '' || v === null) continue;
+    out[k] = v;
+  }
+  return JSON.stringify(out);
+}
+const RETEST_TEXT = 'Die Verbindung wird dafür deaktiviert und muss neu getestet und aktiviert werden. Bis dahin werden keine Meldungen verarbeitet bzw. Beiträge veröffentlicht.';
 
 export default function ConnectionDetail() {
   const ask = useConfirm();
@@ -69,16 +88,30 @@ export default function ConnectionDetail() {
       setBusy(false);
     }
   };
-  const saveConfig = () => {
+  const retestToast = (r: any, what: string) => {
+    if (!r) return;
+    toast(r.retest ? { tone: r.deactivated ? 'warning' : 'success', title: `${what} – bitte erneut testen${r.deactivated || c.status !== 'draft' ? ' und aktivieren' : ''}`, text: r.deactivated ? 'Die Verbindung ist bis dahin angehalten.' : undefined } : { tone: 'success', title: what });
+  };
+  /** Vor Änderungen an einer aktiven Verbindung nachfragen: Sie hält an, bis neu getestet und aktiviert ist. */
+  const confirmRetest = async (title: string) => c.status !== 'active' || (await ask({ title, text: RETEST_TEXT, confirmLabel: 'Speichern und deaktivieren', danger: false }));
+  const saveConfig = async () => {
     const { name, ...config } = cfg;
-    return act(() => put(`/connections/${id}`, { name, config }), c.status === 'active' ? 'Gespeichert' : 'Gespeichert – bitte erneut testen');
+    if (relevantConfig(cfg) !== relevantConfig(c.config) && !(await confirmRetest('Einstellungen der aktiven Verbindung ändern?'))) return null;
+    const r: any = await act(() => put(`/connections/${id}`, { name, config }));
+    retestToast(r, 'Gespeichert');
+    return r;
   };
   const hasSecret = Object.values(secret).some((v) => typeof v === 'string' && v.trim());
-  const saveSecrets = () =>
-    act(async () => {
-      await put(`/connections/${id}/secrets`, secret);
+  const saveSecrets = async () => {
+    if (!(await confirmRetest('Zugangsdaten der aktiven Verbindung ändern?'))) return null;
+    const r: any = await act(async () => {
+      const res = await put(`/connections/${id}/secrets`, secret);
       setSecret({});
-    }, 'Zugangsdaten verschlüsselt gespeichert');
+      return res;
+    });
+    retestToast(r, 'Zugangsdaten verschlüsselt gespeichert');
+    return r;
+  };
   const revoked = c.status === 'revoked';
   const test = c.last_test;
 
@@ -114,17 +147,28 @@ export default function ConnectionDetail() {
 
               {c.kind === 'fe2' && (
                 <>
-                  <FieldWrap label="Eingangsadresse (in FE2 als HTTP-Ausgang, Methode POST, JSON)">
+                  <FieldWrap label="Eingangsadresse (in FE2 als HTTP-Ausgang, Methode POST, JSON)" labelAction={
+                    <HelpTip title="Eingangsadresse und Zugangsschlüssel" more="/hilfe/verbindungen#eingangsadresse-und-zugangsschluessel">
+                      <p className="m-0">Beide Werte erzeugt BlaulichtCMS – sie stehen nicht in FE2. Die Adresse hier kopieren, den Schlüssel gab es beim Anlegen der Verbindung (nur einmal sichtbar).</p>
+                      <p className="m-0">FE2 muss einen <strong>POST mit JSON</strong> und der Kopfzeile <code className="font-mono">Authorization: Bearer &lt;Schlüssel&gt;</code> senden. Welcher Ausgang das in der eigenen FE2-Version kann, mit dem FE2-Betreuer bzw. dem <HelpLink href="https://alamos-support.atlassian.net/wiki/spaces/documentation/overview">Alamos-Handbuch</HelpLink> klären.</p>
+                    </HelpTip>
+                  }>
                     <div className="flex gap-2 items-center"><code className="break-all text-meta">{c.inbound_url}</code><CopyButton value={c.inbound_url} size="sm" /></div>
                   </FieldWrap>
                   <p className="m-0 text-meta text-fg-muted">Authentisierung per Header <code>Authorization: Bearer &lt;Schlüssel&gt;</code>. Vor der Aktivierung legt BlaulichtCMS nichts an, sondern zeigt nur eine Vorschau. Mit Header <code>X-BlaulichtCMS-Test: 1</code> bleibt auch später jede Meldung eine reine Testmeldung.</p>
                   <div>
-                    <Button size="sm" icon="KeyRound" onClick={async () => { const r: any = await act(() => post(`/connections/${id}/rotate-token`), 'Neuer Schlüssel erzeugt – der alte gilt nicht mehr'); if (r) setNewToken(r.token); }}>Neuen Zugangsschlüssel erzeugen</Button>
+                    <Button size="sm" icon="KeyRound" onClick={async () => { if (!(await confirmRetest('Neuen Zugangsschlüssel erzeugen?'))) return; const r: any = await act(() => post(`/connections/${id}/rotate-token`), 'Neuer Schlüssel erzeugt – der alte gilt nicht mehr. In FE2 eintragen, Testmeldung senden, testen und aktivieren.'); if (r) setNewToken(r.token); }}>Neuen Zugangsschlüssel erzeugen</Button>
                   </div>
                   {newToken && <OneTimeSecret value={newToken} label="Neuer Zugangsschlüssel (nur jetzt sichtbar)" />}
                   <Switch checked={cfg.createDrafts !== false} onChange={(v) => setCfg({ ...cfg, createDrafts: v })} label="Beitragsentwürfe anlegen" description="Je Einsatz genau ein interner Entwurf. Wiederholungen werden erkannt." />
                   <details className="border border-line rounded-card p-3">
                     <summary className="cursor-pointer font-medium text-sm">Feldzuordnung (Allowlist)</summary>
+                    <div className="flex items-center gap-1 mt-2 text-sm font-medium">Pfade der FE2-Meldung
+                      <HelpTip title="Feldzuordnung" more="/hilfe/verbindungen#feldzuordnung">
+                        <p className="m-0">Je Feld der Pfad in der JSON-Meldung von FE2, mit Punkten für verschachtelte Felder – z. B. <code className="font-mono">einsatz.stichwort</code>. Welche Felder die eigene FE2-Instanz sendet, zeigt eine Testmeldung (Vorschau).</p>
+                        <p className="m-0">Die <strong>Einsatz-ID</strong> ist Pflicht und muss je Einsatz gleich bleiben. Eine geänderte Zuordnung verlangt einen neuen Test.</p>
+                      </HelpTip>
+                    </div>
                     <p className="text-meta text-fg-muted">Nur diese Felder gelangen in den Entwurf. Pfad im JSON mit Punkten, z. B. <code>einsatz.stichwort</code>. Leere Felder: BlaulichtCMS sucht gängige Feldnamen (z. B. <code>einsatznummer</code>, <code>stichwort</code>, <code>alarmzeit</code>) selbst. Alles andere – etwa Alarmtext oder Personendaten – wird verworfen. Standard ist eine Annahme und muss mit einer anonymisierten Testmeldung der eigenen FE2-Instanz geprüft werden.</p>
                     <div className="grid sm:grid-cols-2 gap-3 mt-2">
                       {['event_id', ...Object.keys(c.allowed_fields)].map((k) => (
@@ -140,21 +184,52 @@ export default function ConnectionDetail() {
               {(c.kind === 'facebook' || c.kind === 'instagram') && (
                 <>
                   <Notice>
-                    Benötigt eine eigene Meta-App mit {c.kind === 'facebook' ? 'Facebook Login und den Rechten pages_show_list, pages_manage_posts, pages_read_engagement' : 'Instagram Login und den Rechten instagram_business_basic, instagram_business_content_publish'}. Weiterleitungsadresse in der App: <code className="break-all">{c.oauth_redirect}</code>
+                    Benötigt eine eigene Meta-App mit {c.kind === 'facebook' ? 'Facebook Login und den Rechten pages_show_list, pages_manage_posts, pages_read_engagement' : 'Instagram Login und den Rechten instagram_business_basic, instagram_business_content_publish'}. Schritt für Schritt: <Link to="/hilfe/verbindungen#meta-app-anlegen">Meta-App anlegen</Link>.
                   </Notice>
-                  <FieldWrap label="App-ID" htmlFor="appid"><Input id="appid" mono value={cfg.appId ?? ''} onChange={(e) => setCfg({ ...cfg, appId: e.target.value })} /></FieldWrap>
-                  <FieldWrap label={c.secrets_set.includes('appSecret') ? 'App-Geheimnis (gespeichert – nur zum Ersetzen)' : 'App-Geheimnis'} htmlFor="appsec">
+                  <FieldWrap label="Weiterleitungsadresse (in der Meta-App eintragen)" labelAction={
+                    <HelpTip title="Weiterleitungsadresse" more="/hilfe/verbindungen#weiterleitungsadresse-eintragen">
+                      <p className="m-0">Diese Adresse zeigt BlaulichtCMS; sie muss in der Meta-App <strong>exakt</strong> so eingetragen sein:</p>
+                      {c.kind === 'facebook' ? (
+                        <p className="m-0">Facebook Login for Business → Einstellungen → Client-OAuth-Einstellungen → <strong>Gültige OAuth-Weiterleitungs-URIs</strong> (<HelpLink href="https://developers.facebook.com/docs/facebook-login/guides/advanced/manual-flow/">Meta-Doku</HelpLink>).</p>
+                      ) : (
+                        <p className="m-0">Instagram → API setup with Instagram login → Business login settings → <strong>OAuth redirect URIs</strong> (<HelpLink href="https://developers.facebook.com/docs/instagram-platform/instagram-api-with-instagram-login/business-login">Meta-Doku</HelpLink>).</p>
+                      )}
+                      <p className="m-0 text-fg-muted">Voraussetzung: BlaulichtCMS ist unter seiner öffentlichen HTTPS-Adresse erreichbar.</p>
+                    </HelpTip>
+                  }>
+                    <div className="flex gap-2 items-center"><code className="break-all text-meta">{c.oauth_redirect}</code><CopyButton value={c.oauth_redirect} size="sm" /></div>
+                  </FieldWrap>
+                  <FieldWrap label={c.kind === 'facebook' ? 'App-ID' : 'Instagram-App-ID'} htmlFor="appid" labelAction={
+                    <HelpTip title={c.kind === 'facebook' ? 'App-ID finden' : 'Instagram-App-ID finden'} more="/hilfe/verbindungen#app-id-und-app-geheimnis">
+                      {c.kind === 'facebook' ? (
+                        <p className="m-0">Im App-Dashboard auf developers.facebook.com die App öffnen: <strong>App-Einstellungen → Allgemein</strong> zeigt App-ID und App-Geheimnis (<HelpLink href="https://developers.facebook.com/docs/development/create-an-app/app-dashboard/basic-settings/">Meta-Doku</HelpLink>).</p>
+                      ) : (
+                        <p className="m-0">Im App-Dashboard unter <strong>Instagram → API setup with Instagram login → Business login settings</strong> stehen Instagram-App-ID und Instagram-App-Geheimnis – nicht die Facebook-App-ID verwenden (<HelpLink href="https://developers.facebook.com/docs/instagram-platform/instagram-api-with-instagram-login/business-login">Meta-Doku</HelpLink>).</p>
+                      )}
+                      <p className="m-0 text-fg-muted">Noch keine App? Anlegen unter developers.facebook.com – Anleitung in der Hilfe.</p>
+                    </HelpTip>
+                  }><Input id="appid" mono value={cfg.appId ?? ''} onChange={(e) => setCfg({ ...cfg, appId: e.target.value })} /></FieldWrap>
+                  <FieldWrap label={c.secrets_set.includes('appSecret') ? 'App-Geheimnis (gespeichert – nur zum Ersetzen)' : 'App-Geheimnis'} htmlFor="appsec" labelAction={
+                    <HelpTip title="App-Geheimnis" more="/hilfe/verbindungen#app-id-und-app-geheimnis">
+                      <p className="m-0">Steht neben der App-ID ({c.kind === 'facebook' ? 'App-Einstellungen → Allgemein, „Anzeigen“' : 'Business login settings → Instagram app secret'}). BlaulichtCMS speichert es verschlüsselt und zeigt es nie wieder an.</p>
+                      <p className="m-0 text-fg-muted">Ein neues Geheimnis verlangt einen neuen Test; eine aktive Verbindung hält bis dahin an.</p>
+                    </HelpTip>
+                  }>
                     <Input id="appsec" type="password" autoComplete="off" value={secret.appSecret ?? ''} onChange={(e) => setSecret({ ...secret, appSecret: e.target.value })} />
                   </FieldWrap>
                   <div className="flex flex-wrap gap-2">
                     <Button disabled={!secret.appSecret} onClick={saveSecrets}>Geheimnis speichern</Button>
-                    <Button variant="primary" icon="ExternalLink" disabled={!cfg.appId || !c.secrets_set.includes('appSecret')} onClick={async () => { await saveConfig(); const r: any = await act(() => post(`/connections/${id}/oauth/start`)); if (r?.url) window.location.href = r.url; }}>
+                    <Button variant="primary" icon="ExternalLink" disabled={!cfg.appId || !c.secrets_set.includes('appSecret')} onClick={async () => { if (!(await confirmRetest(`Erneut mit ${c.kind === 'facebook' ? 'Facebook' : 'Instagram'} verbinden?`))) return; if ((await saveConfig()) === null) return; const r: any = await act(() => post(`/connections/${id}/oauth/start`)); if (r?.url) window.location.href = r.url; }}>
                       Mit {c.kind === 'facebook' ? 'Facebook' : 'Instagram'} verbinden
                     </Button>
                   </div>
                   {c.kind === 'facebook' && c.pages.length > 0 && (
-                    <FieldWrap label="Seite" htmlFor="page">
-                      <Select id="page" value={c.config.pageId ?? ''} onChange={(e) => act(() => post(`/connections/${id}/page`, { pageId: e.target.value }), 'Seite gewählt – jetzt testen')}>
+                    <FieldWrap label="Seite" htmlFor="page" labelAction={
+                      <HelpTip title="Seite wählen" more="/hilfe/verbindungen#facebook-seite-verbinden">
+                        <p className="m-0">Die Liste zeigt die Seiten, die bei der Anmeldung freigegeben wurden. Fehlt eine Seite, erneut verbinden und sie im Meta-Dialog auswählen – das Konto muss die Seite verwalten dürfen.</p>
+                      </HelpTip>
+                    }>
+                      <Select id="page" value={c.config.pageId ?? ''} onChange={async (e) => { const pageId = e.target.value; if (!(await confirmRetest('Andere Seite wählen?'))) return; retestToast(await act(() => post(`/connections/${id}/page`, { pageId })), 'Seite gewählt'); }}>
                         <option value="">– Seite wählen –</option>
                         {c.pages.map((p: any) => <option key={p.id} value={p.id}>{p.name}</option>)}
                       </Select>
@@ -163,9 +238,17 @@ export default function ConnectionDetail() {
                   <details className="border border-line rounded-card p-3">
                     <summary className="cursor-pointer text-sm">Alternativ: Token manuell hinterlegen</summary>
                     <div className="flex flex-col gap-3 mt-3">
-                      {c.kind === 'facebook' && <FieldWrap label="Seiten-ID" htmlFor="pid"><Input id="pid" mono value={cfg.pageId ?? ''} onChange={(e) => setCfg({ ...cfg, pageId: e.target.value })} /></FieldWrap>}
-                      <FieldWrap label={c.kind === 'facebook' ? 'Seiten-Token' : 'Instagram-Token'} htmlFor="tok"><Input id="tok" type="password" autoComplete="off" value={secret[c.kind === 'facebook' ? 'pageToken' : 'token'] ?? ''} onChange={(e) => setSecret({ ...secret, [c.kind === 'facebook' ? 'pageToken' : 'token']: e.target.value })} /></FieldWrap>
-                      <div><Button onClick={async () => { await saveConfig(); if (hasSecret) await saveSecrets(); }}>Speichern</Button></div>
+                      {c.kind === 'facebook' && <FieldWrap label="Seiten-ID" htmlFor="pid" labelAction={
+                        <HelpTip title="Seiten-ID" more="/hilfe/verbindungen#token-manuell-hinterlegen">
+                          <p className="m-0">Die numerische ID der Facebook-Seite, z. B. aus dem Graph-API-Explorer (<code className="font-mono">me/accounts</code>) oder in der Seite unter „Info“ bzw. „Seitentransparenz“.</p>
+                        </HelpTip>
+                      }><Input id="pid" mono value={cfg.pageId ?? ''} onChange={(e) => setCfg({ ...cfg, pageId: e.target.value })} /></FieldWrap>}
+                      <FieldWrap label={c.kind === 'facebook' ? 'Seiten-Token' : 'Instagram-Token'} htmlFor="tok" labelAction={
+                        <HelpTip title="Token manuell hinterlegen" more="/hilfe/verbindungen#token-manuell-hinterlegen">
+                          <p className="m-0">Nur nötig, wenn die Anmeldung über „Verbinden“ nicht möglich ist. Der Token braucht dieselben Berechtigungen; kurzlebige Token laufen nach Stunden ab. Erzeugen lässt er sich z. B. mit dem <HelpLink href="https://developers.facebook.com/docs/graph-api/guides/explorer/">Graph-API-Explorer</HelpLink>.</p>
+                        </HelpTip>
+                      }><Input id="tok" type="password" autoComplete="off" value={secret[c.kind === 'facebook' ? 'pageToken' : 'token'] ?? ''} onChange={(e) => setSecret({ ...secret, [c.kind === 'facebook' ? 'pageToken' : 'token']: e.target.value })} /></FieldWrap>
+                      <div><Button onClick={async () => { if ((await saveConfig()) === null) return; if (hasSecret) await saveSecrets(); }}>Speichern</Button></div>
                     </div>
                   </details>
                   {c.secrets_set.length > 0 && <p className="m-0 text-meta text-fg-muted">Gespeichert (verschlüsselt): {c.secrets_set.join(', ')}</p>}
@@ -182,7 +265,7 @@ export default function ConnectionDetail() {
                   </FieldWrap>
                   {cfg.format === 'nina' ? (
                     <FieldWrap label="Amtlicher Regionalschlüssel (ARS) des Kreises" labelAction={
-                      <HelpTip title="Regionalschlüssel des Kreises finden">
+                      <HelpTip title="Regionalschlüssel des Kreises finden" more="/hilfe/verbindungen#regionalschluessel-und-gebietsfilter">
                         <p className="m-0">Der ARS hat 12 Stellen. Für den Kreis zählen nur die ersten 5, der Rest sind Nullen.</p>
                         <ol className="m-0 pl-4 flex flex-col gap-1">
                           <li>Eigene Gemeinde im <HelpLink href="https://www.statistikportal.de/de/gemeindeverzeichnis">Gemeindeverzeichnis-Online</HelpLink> suchen (ab drei Buchstaben).</li>
@@ -193,17 +276,22 @@ export default function ConnectionDetail() {
                       </HelpTip>
                     } help="12 Stellen; die Schnittstelle liefert Meldungen auf Kreisebene (erste 5 Stellen). Meldungen von dort gelten auch für jede Gemeinde im Kreis." htmlFor="wf-ars"><Input id="wf-ars" mono value={cfg.ars ?? ''} onChange={(e) => setCfg({ ...cfg, ars: e.target.value })} /></FieldWrap>
                   ) : (
-                    <FieldWrap label="Adresse" htmlFor="wf-url"><Input id="wf-url" type="url" value={cfg.url ?? ''} onChange={(e) => setCfg({ ...cfg, url: e.target.value })} /></FieldWrap>
+                    <FieldWrap label="Adresse" htmlFor="wf-url" labelAction={
+                      <HelpTip title="CAP-Adresse" more="/hilfe/verbindungen#eigene-cap-quelle">
+                        <p className="m-0">Eine <code className="font-mono">https://</code>-Adresse, die ein CAP-Dokument (<HelpLink href="https://docs.oasis-open.org/emergency/cap/v1.2/CAP-v1.2-os.html">OASIS-Standard</HelpLink>) oder einen Atom-Feed mit eingebetteten CAP-Meldungen liefert. Die Adresse nennt der Betreiber des Warnsystems.</p>
+                        <p className="m-0 text-fg-muted">Feeds, die nur auf CAP-Dateien verlinken, und ZIP-Archive (z. B. DWD Open Data) werden nicht gelesen – DWD-Warnungen kommen über die Warn-App-Schnittstelle.</p>
+                      </HelpTip>
+                    }><Input id="wf-url" type="url" value={cfg.url ?? ''} onChange={(e) => setCfg({ ...cfg, url: e.target.value })} /></FieldWrap>
                   )}
                   <div className="grid sm:grid-cols-2 gap-3">
                     <FieldWrap label="Gebietsfilter: Geocode-Präfixe (Komma)" labelAction={
-                      <HelpTip title="Geocode-Präfix (optional)">
+                      <HelpTip title="Geocode-Präfix (optional)" more="/hilfe/verbindungen#regionalschluessel-und-gebietsfilter">
                         <p className="m-0">Der vollständige 12-stellige ARS der eigenen Gemeinde. Er steht im kostenlosen <HelpLink href="https://www.statistikportal.de/de/veroeffentlichungen/anschriftenverzeichnis">Anschriftenverzeichnis</HelpLink> des Statistikportals.</p>
                         <p className="m-0">Warnungen für den ganzen Kreis oder das Land gelten trotzdem mit. Das Feld darf leer bleiben – dann reichen die Ortsnamen als Filter.</p>
                       </HelpTip>
                     } help="z. B. ARS der eigenen Gemeinde. Kreis- und Landeswarnungen gelten mit." htmlFor="wf-codes"><ListInput id="wf-codes" mono value={cfg.areaFilter?.codes ?? []} onChange={(codes) => setCfg({ ...cfg, areaFilter: { ...(cfg.areaFilter ?? {}), codes } })} /></FieldWrap>
                     <FieldWrap label="Gebietsfilter: Ortsnamen (Komma)" labelAction={
-                      <HelpTip title="Ortsnamen">
+                      <HelpTip title="Ortsnamen" more="/hilfe/verbindungen#regionalschluessel-und-gebietsfilter">
                         <p className="m-0">Gemeinde und Ortsteile so, wie sie in Warnungen genannt werden, durch Komma getrennt – z. B. <code className="font-mono">Musterstadt, Nordheim, Südfeld</code>.</p>
                         <p className="m-0">Sie filtern die Meldungen und bestimmen, welche Orte im Bannertext stehen. Für den Anfang reicht dieser Filter.</p>
                       </HelpTip>
@@ -212,7 +300,10 @@ export default function ConnectionDetail() {
                   <FieldWrap label="Abrufintervall (Minuten)" htmlFor="wf-int"><Input id="wf-int" type="number" min={2} max={120} value={cfg.intervalMinutes ?? 5} onChange={(e) => setCfg({ ...cfg, intervalMinutes: Number(e.target.value) })} className="max-w-[120px]" /></FieldWrap>
                 </>
               )}
-              <div><Button variant="primary" icon="Save" disabled={busy} onClick={saveConfig}>Einstellungen speichern</Button></div>
+              <div className="flex flex-col gap-1.5 items-start">
+                <Button variant="primary" icon="Save" disabled={busy} onClick={saveConfig}>Einstellungen speichern</Button>
+                <p className="m-0 text-meta text-fg-muted">Geänderte Einstellungen oder Zugangsdaten verlangen einen neuen Test; eine aktive Verbindung hält bis dahin an. Nur der Name{c.kind === 'warnfeed' ? ' und das Abrufintervall' : c.kind === 'fe2' ? ' und „Beitragsentwürfe anlegen“' : ''} lassen sich ohne neuen Test ändern.</p>
+              </div>
             </div>
           </Card>
           {c.private_target && (
@@ -294,7 +385,7 @@ export default function ConnectionDetail() {
         <div className="flex flex-col gap-4">
           <Card title="Betrieb">
             <div className="flex flex-col gap-3">
-              {revoked ? <Notice>Die Verbindung ist widerrufen; Zugangsdaten sind gelöscht. Für eine neue Anbindung eine neue Verbindung anlegen.</Notice> : c.status === 'active' ? <Notice tone="success">Aktiv seit {fmtDateTime(c.activated_at)}.</Notice> : !test?.ok ? <Notice tone="warning">Aktivieren ist erst nach einem bestandenen Test möglich.</Notice> : null}
+              {revoked ? <Notice>Die Verbindung ist widerrufen; Zugangsdaten sind gelöscht. Für eine neue Anbindung eine neue Verbindung anlegen.</Notice> : c.status === 'active' ? <Notice tone="success">Aktiv seit {fmtDateTime(c.activated_at)}.</Notice> : !test?.ok ? <Notice tone="warning">Aktivieren ist erst nach einem bestandenen Test mit den aktuellen Einstellungen möglich.</Notice> : null}
               <div className="flex flex-wrap gap-2">
                 {c.status !== 'active' && !revoked && <Button variant="primary" icon="Power" disabled={busy || !test?.ok} onClick={() => act(() => post(`/connections/${id}/activate`), 'Aktiviert')}>Aktivieren</Button>}
                 {c.status === 'active' && <Button icon="PowerOff" onClick={() => act(() => post(`/connections/${id}/disable`), 'Angehalten')}>Anhalten</Button>}
@@ -313,7 +404,12 @@ export default function ConnectionDetail() {
                     {Object.entries(c.review_checks).map(([k, label]) => (
                       <label key={k} className="flex items-start gap-2"><input type="checkbox" className="mt-1" checked={!!review.checks[k]} onChange={(e) => setReview({ ...review, checks: { ...review.checks, [k]: e.target.checked } })} /> {label as string}</label>
                     ))}
-                    <FieldWrap label="Dokumentation der Prüfung" htmlFor="rv-note"><Textarea id="rv-note" rows={2} value={review.note} onChange={(e) => setReview({ ...review, note: e.target.value })} /></FieldWrap>
+                    <FieldWrap label="Dokumentation der Prüfung" htmlFor="rv-note" labelAction={
+                      <HelpTip title="Fachliche Prüfung" more="/hilfe/verbindungen#automatische-banner-und-pruefliste">
+                        <p className="m-0">Festhalten, wer was geprüft hat – z. B. Gebietsfilter mit echten Meldungen, Ablauf und Entwarnung.</p>
+                        <p className="m-0">Weiterverwendung von Bundeswarnungen vorher mit dem BBK klären (Programm <HelpLink href="https://www.bbk.bund.de/DE/Warnung-Vorsorge/Warnung-in-Deutschland/Warnmultiplikatoren/warnmultiplikatoren_node.html">Warnmultiplikatoren</HelpLink>) und das Ergebnis hier vermerken.</p>
+                      </HelpTip>
+                    }><Textarea id="rv-note" rows={2} value={review.note} onChange={(e) => setReview({ ...review, note: e.target.value })} /></FieldWrap>
                     <div><Button disabled={review.note.trim().length < 10} onClick={() => act(() => post(`/connections/${id}/review`, review), 'Prüfung dokumentiert')}>Prüfung dokumentieren</Button></div>
                   </>
                 )}

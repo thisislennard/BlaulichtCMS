@@ -48,7 +48,7 @@ Mit eingeschaltetem **Vier-Augen-Prinzip** (Einstellungen → Redaktion) kann nu
 
 Bei **unklarem Ergebnis** versendet BlaulichtCMS nie automatisch erneut. Erst nach der Prüfung („ist angekommen“ / „ist nicht angekommen“) ist ein neuer Versand möglich.
 
-**Testmodus:** Solange er aktiv ist (Standard), gehen alle Warnmails ausschließlich an das hinterlegte **Testpostfach**; Betreff mit `[TEST]`, die vorgesehenen Empfänger stehen nur im Mailtext.
+**Testmodus:** Solange er aktiv ist (Standard), gehen alle Warnmails ausschließlich an das hinterlegte **Testpostfach**; Betreff mit `[TEST]`, die vorgesehenen Empfänger stehen nur im Mailtext. Ausschalten lässt er sich erst nach einer erfolgreichen Testmail mit den gespeicherten Einstellungen – Einrichtung und Werte bekannter Anbieter unter [E-Mail-Versand](/hilfe/stichwoerter-regeln#e-mail-versand).
 
 ## Datenschutz
 

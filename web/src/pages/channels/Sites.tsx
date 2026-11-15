@@ -6,6 +6,8 @@ import { Badge, Button, Card, EmptyState, ErrorBox, FieldWrap, Input, Notice, Pa
 import { put } from '../../api/client';
 import { Icon } from '../../components/ui/Icon';
 import { CopyButton, Dialog, useErrorToast, useConfirm } from '../../components/ui/overlays';
+import { HelpLink, HelpTip } from '../../components/ui/HelpTip';
+import { Link } from 'react-router';
 import { useAuth } from '../../lib/auth';
 import { fmtDateTime, fmtRelative } from '../../lib/format';
 import { safeHref } from '../../lib/url';
@@ -21,7 +23,7 @@ function PairingDialog({ pairing, onClose }: { pairing: Pairing; onClose: () => 
     <Dialog open onClose={onClose} title={`Website „${pairing.site.name}“ koppeln`} width={600} footer={<Button variant="primary" onClick={onClose}>Fertig</Button>}>
       <ol className="m-0 pl-5 flex flex-col gap-3 text-sm">
         <li>
-          BlaulichtCMS Bridge herunterladen und in WordPress unter <b>Plugins → Installieren → Plugin hochladen</b> installieren und aktivieren.
+          BlaulichtCMS Bridge herunterladen und in WordPress unter <b>Plugins → Installieren → Plugin hochladen</b> installieren und aktivieren (<HelpLink href="https://wordpress.org/documentation/article/manage-plugins/#upload-via-wordpress-admin">Anleitung von WordPress</HelpLink>).
           <div className="mt-2">
             <Button size="sm" icon="Download" onClick={() => download('/sites/plugin.zip')}>
               BlaulichtCMS Bridge (ZIP)
@@ -32,18 +34,28 @@ function PairingDialog({ pairing, onClose }: { pairing: Pairing; onClose: () => 
           In WordPress <b>Einstellungen → BlaulichtCMS Bridge</b> öffnen und eintragen:
           <div className="mt-2 grid gap-2">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-fg-muted w-28">BlaulichtCMS-Adresse</span>
+              <span className="text-fg-muted w-28 inline-flex items-center gap-1">BlaulichtCMS-Adresse
+                <HelpTip title="BlaulichtCMS-Adresse" more="/hilfe/wordpress#voraussetzungen">
+                  <p className="m-0">Die öffentliche Adresse aus Einstellungen → Allgemein. Die Website muss sie per HTTPS erreichen können; einen Eingang in WordPress braucht es nicht.</p>
+                </HelpTip>
+              </span>
               <code className="bg-raised rounded-control px-2 py-1">{pairing.blaulichtcmsUrl}</code>
               <CopyButton size="sm" value={pairing.blaulichtcmsUrl} />
             </div>
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-fg-muted w-28">Kopplungscode</span>
+              <span className="text-fg-muted w-28 inline-flex items-center gap-1">Kopplungscode
+                <HelpTip title="Kopplungscode" more="/hilfe/wordpress#kopplungscode">
+                  <p className="m-0">Einmalig und 30 Minuten gültig, nur jetzt sichtbar. Abgelaufen? Auf der Website-Karte „Neuen Kopplungscode“ wählen.</p>
+                  <p className="m-0">Die Kopplung ist zugleich der Test: Danach zeigt die Karte „Aktiv“ und den letzten Abruf.</p>
+                </HelpTip>
+              </span>
               <code className="bg-raised rounded-control px-2 py-1 text-lg tracking-widest font-semibold">{pairing.pairingCode}</code>
               <CopyButton size="sm" value={pairing.pairingCode} />
             </div>
           </div>
         </li>
         <li>„Koppeln“ klicken. Die Website erscheint danach hier als aktiv.</li>
+        <li>Für zuverlässigen Abruf jede Minute einen Cronjob einrichten – siehe <Link to="/hilfe/wordpress#abruf-und-cronjob">Abruf und Cronjob</Link>.</li>
       </ol>
       <Notice tone="warning" className="mt-4">
         Der Code ist einmalig und bis {pairing.site.pairing_expires_at ? fmtDateTime(pairing.site.pairing_expires_at) : 'in 30 Minuten'} gültig. Er wird nur jetzt angezeigt. Der daraus entstehende Schlüssel gilt nur für diese eine Website und lässt sich jederzeit widerrufen.
@@ -109,7 +121,7 @@ export default function Sites() {
                 <dt className="text-fg-muted">Aufträge</dt>
                 <dd className="m-0">{s.open_jobs} offen · {s.published_count} veröffentlicht</dd>
               </dl>
-              {stale && <Notice tone="warning" className="mt-3">Die Website hat sich seit über 15 Minuten nicht gemeldet. WP-Cron bzw. Host-Cron prüfen.</Notice>}
+              {stale && <Notice tone="warning" className="mt-3">Die Website hat sich seit über 15 Minuten nicht gemeldet. WP-Cron bzw. Host-Cron prüfen – <Link to="/hilfe/wordpress#abruf-und-cronjob">Abruf und Cronjob</Link>.</Notice>}
               {manage && s.status !== 'revoked' && (
                 <div className="flex gap-2 mt-3 flex-wrap">
                   {s.status === 'pending' && (
@@ -220,7 +232,11 @@ function BridgeUpdates() {
         </ul>
         {!released && (
           <div className="flex flex-wrap items-end gap-2 border-t border-line pt-3">
-            <FieldWrap label="Prüfnotiz (Testwebsite, Theme, Ergebnis)" htmlFor="br-note" className="flex-1 min-w-[240px]">
+            <FieldWrap label="Prüfnotiz (Testwebsite, Theme, Ergebnis)" htmlFor="br-note" className="flex-1 min-w-[240px]" labelAction={
+              <HelpTip title="Bridge-Update freigeben" more="/hilfe/updates#blaulichtcms-bridge">
+                <p className="m-0">Erst eine Testwebsite in den Kanal „Test“ setzen, dort in WordPress aktualisieren und prüfen (Beitrag, Banner, Zurückziehen). Freigeben lässt sich die Version erst, wenn die Testwebsite sie meldet.</p>
+              </HelpTip>
+            }>
               <Input id="br-note" value={note} onChange={(e) => setNote(e.target.value)} />
             </FieldWrap>
             <Button variant="primary" icon="CheckCircle2" disabled={note.trim().length < 5} onClick={() => act(() => post('/sites/bridge-release', { version: bundled.version, note }))}>

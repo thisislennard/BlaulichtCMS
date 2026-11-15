@@ -28,6 +28,31 @@ Unter [Datenschutzanfragen](/datenschutz-anfragen) (Recht „Datenschutzanfragen
 
 Löschfristen für alle Datenarten stehen unter **Einstellungen → Datenschutz** (mit Probelauf „Was würde gelöscht?“).
 
+## Schadsoftwareprüfung (ClamAV)
+
+Uploads lassen sich vor jeder Verarbeitung mit **ClamAV** auf Schadsoftware prüfen. Das schaltet der Betrieb am Docker-Host ein – nicht in der Oberfläche:
+
+1. In der `.env` neben `compose.yaml` eintragen:
+   ```
+   COMPOSE_PROFILES=clamav
+   CLAMAV_HOST=clamav
+   ```
+2. `docker compose up -d` startet zusätzlich den Dienst `clamav` (erster Start lädt Signaturen, 1–2 Minuten, ca. 1,5–3 GB Arbeitsspeicher).
+3. Damit auch große Videos geprüft werden, in `clamd.conf` `StreamMaxLength`, `MaxFileSize` und `MaxScanSize` mindestens auf die maximale Dateigröße anheben – sonst bleiben größere Dateien in der Quarantäne ([Optionen von clamd](https://github.com/Cisco-Talos/clamav/blob/main/etc/clamd.conf.sample), [ClamAV im Container](https://docs.clamav.net/manual/Installing/Docker.html)).
+
+Treffer werden gelöscht und gemeldet; ist ClamAV länger nicht erreichbar, bleiben Uploads in der Quarantäne und die Administration erhält eine Meldung. Einzelheiten und Restrisiko ohne ClamAV: `docs/betrieb.md`, Abschnitt „Schadsoftwareprüfung“.
+
+## Audit-Weiterleitung
+
+Das Audit-Protokoll lässt sich zusätzlich an eine **zentrale Protokollierung** weiterleiten – eine Kopie außerhalb des Servers macht nachträgliche Änderungen erkennbar. Ob sie aktiv ist, zeigt **Systemstatus → Audit-Integrität → Weiterleitung**. Eingeschaltet wird sie am Docker-Host in der `.env`:
+
+| Variable | Wirkung |
+|---|---|
+| `AUDIT_FORWARD=stdout` | jeder Eintrag zusätzlich als JSON-Zeile im Container-Protokoll – ein Docker-Logging-Treiber (z. B. `journald`, `syslog`, `gelf`) oder Log-Sammler übernimmt sie |
+| `AUDIT_FORWARD=syslog` | direkt per Syslog; dazu `AUDIT_SYSLOG_HOST`, `AUDIT_SYSLOG_PORT` (Standard 514) und `AUDIT_SYSLOG_PROTOCOL` (`udp` oder `tcp`) |
+
+Danach `docker compose up -d`. Weitergeleitet werden alle Einträge und nach jedem Versiegeln ein Kontrollpunkt; stimmt der letzte Kontrollpunkt im zentralen Protokoll nicht mit *Letztes Siegel* im Systemstatus überein, wurde das Audit verändert. Einzelheiten: `docs/betrieb.md`.
+
 ## Bei einem Sicherheitsvorfall
 
 1. **Sofort die Administration informieren** – bei verlorenem Telefon, verdächtigen Meldungen, einem Upload-Link in

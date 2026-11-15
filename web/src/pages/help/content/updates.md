@@ -13,6 +13,20 @@ Unter [Einstellungen → Updates](/einstellungen#updates) stehen Quelle und Prü
 
 Änderungen an diesen Einstellungen und jede Installation verlangen eine Bestätigung mit dem Passwort und stehen im Audit-Protokoll.
 
+### Zugriffstoken für private Repositories
+
+Ein Token ist **nur** nötig, wenn das Repository privat ist. So entsteht ein Token, der nur lesen darf:
+
+1. Auf GitHub **Settings → Developer settings → Personal access tokens → Fine-grained tokens → Generate new token** ([Anleitung von GitHub](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens)).
+2. Name und Ablaufdatum festlegen (z. B. 1 Jahr, Erinnerung im Kalender eintragen).
+3. Unter **Repository access** „Only select repositories“ und nur das BlaulichtCMS-Repository wählen.
+4. Unter **Permissions → Repository permissions** nur **Contents: Read-only** setzen – das genügt für Releases und ihre Dateien ([benötigte Rechte](https://docs.github.com/en/rest/authentication/permissions-required-for-fine-grained-personal-access-tokens)).
+5. Token erzeugen, sofort kopieren und unter Einstellungen → Updates eintragen. GitHub zeigt ihn nur einmal.
+
+Läuft der Token ab, meldet „Jetzt prüfen“ einen Anmeldefehler – dann einen neuen erzeugen und eintragen.
+
+### Version installieren
+
 **„Version X installieren“** – BlaulichtCMS
 
 1. lädt das Release und prüft Prüfsumme und **Signatur**: Nur Pakete aus dem offiziellen Release-Ablauf werden angenommen, ältere oder gleiche Versionen nie;

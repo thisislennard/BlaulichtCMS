@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { get, post, put } from '../../api/client';
 import { Badge, Button, Card, Chip, ErrorBox, FieldWrap, Input, Notice, PageHeader, Select, SkeletonRows, StatusBadge, Switch, Tabs, Textarea } from '../../components/ui/core';
 import { Dialog, useErrorToast, useToast, useConfirm } from '../../components/ui/overlays';
+import { HelpLink, HelpTip } from '../../components/ui/HelpTip';
 import { useAuth } from '../../lib/auth';
 import { fmtDateTime } from '../../lib/format';
 
@@ -41,6 +42,8 @@ export default function WarningConfig() {
   const [smtp, setSmtp] = useState<any>(null);
   const [testTo, setTestTo] = useState('');
   const [mailing, setMailing] = useState(false);
+  // Formularwerte, mit denen zuletzt eine Testmail erfolgreich war (Echtbetrieb nur mit genau diesen Werten)
+  const [verifiedKey, setVerifiedKey] = useState<string | null>(null);
   const [tpl, setTpl] = useState<any>(null);
   // Bearbeiten: Stichwort (Bezeichnung, Aliase) und Zuständigkeit (Name, Gebiet, Empfänger)
   const [editKw, setEditKw] = useState<{ id: string; code: string; label: string; aliases: string; active: boolean } | null>(null);
@@ -51,6 +54,11 @@ export default function WarningConfig() {
   const c = q.data;
   const kwById = Object.fromEntries(c.keywords.map((k: any) => [k.id, k]));
   const s = smtp ?? { ...c.smtp, password: '', testMode: c.testMode.active, testRecipient: c.testMode.recipient };
+  const smtpKey = (x: any) => JSON.stringify([String(x.host ?? '').trim().toLowerCase(), Number(x.port), x.security, String(x.user ?? '').trim(), String(x.from ?? '').trim(), x.password ?? '']);
+  const smtpDirty = smtpKey(s) !== smtpKey({ ...c.smtp, password: '' });
+  const verified = verifiedKey === smtpKey(s);
+  // Testmodus ausschalten bzw. im Echtbetrieb Versandeinstellungen ändern: nur nach erfolgreicher Testmail mit diesen Werten
+  const needsTestMail = !s.testMode && (c.testMode.active || smtpDirty) && !verified;
 
   /** Bedingungen als Zeilen „frage = antwort1 | antwort2“ */
   const parseConditions = (txt: string) =>
@@ -261,11 +269,33 @@ export default function WarningConfig() {
       {tab === 'versand' && can('system.manage') && (
         <Card title="E-Mail-Versand (SMTP)" subtitle="Zugangsdaten werden verschlüsselt gespeichert und nie wieder angezeigt.">
           <div className="flex flex-col gap-4">
-            <Switch checked={s.testMode} onChange={(x) => setSmtp({ ...s, testMode: x })} label="Testmodus" description="Alle Warnmails gehen ausschließlich an das Testpostfach. Für den Echtbetrieb erst nach Abstimmung mit der zuständigen Stelle ausschalten." />
-            <FieldWrap label="Testpostfach" htmlFor="s-tr"><Input id="s-tr" type="email" value={s.testRecipient} onChange={(e) => setSmtp({ ...s, testRecipient: e.target.value })} /></FieldWrap>
+            <Switch
+              checked={s.testMode}
+              disabled={s.testMode && c.testMode.active && !verified}
+              onChange={(x) => setSmtp({ ...s, testMode: x })}
+              label="Testmodus"
+              description={
+                s.testMode && c.testMode.active && !verified
+                  ? 'Ausschalten erst nach einer erfolgreichen Testmail mit genau den Einstellungen unten („Testmail senden“). Für den Echtbetrieb außerdem vorher mit der zuständigen Stelle abstimmen.'
+                  : 'Alle Warnmails gehen ausschließlich an das Testpostfach. Für den Echtbetrieb erst nach Abstimmung mit der zuständigen Stelle ausschalten.'
+              }
+            />
+            <FieldWrap label="Testpostfach" htmlFor="s-tr" labelAction={
+              <HelpTip title="Testpostfach" more="/hilfe/stichwoerter-regeln#testmail-und-testmodus">
+                <p className="m-0">Ein eigenes Postfach, an das im Testmodus alle Warnmails gehen (Betreff mit [TEST]). Nicht die Adresse der zuständigen Stelle eintragen.</p>
+              </HelpTip>
+            }><Input id="s-tr" type="email" value={s.testRecipient} onChange={(e) => setSmtp({ ...s, testRecipient: e.target.value })} /></FieldWrap>
             <div className="grid sm:grid-cols-3 gap-3">
-              <FieldWrap label="Server" htmlFor="s-host"><Input id="s-host" value={s.host} onChange={(e) => setSmtp({ ...s, host: e.target.value })} placeholder="smtp.example.org" /></FieldWrap>
-              <FieldWrap label="Port" htmlFor="s-port"><Input id="s-port" type="number" value={s.port} onChange={(e) => setSmtp({ ...s, port: Number(e.target.value) })} /></FieldWrap>
+              <FieldWrap label="Server" htmlFor="s-host" labelAction={
+                <HelpTip title="SMTP-Server" more="/hilfe/stichwoerter-regeln#werte-bekannter-anbieter">
+                  <p className="m-0">Der Postausgangsserver des E-Mail-Anbieters – die Daten kommen von der eigenen IT bzw. dem Anbieter. Beispiele: Microsoft 365 <code className="font-mono">smtp.office365.com</code>, IONOS <code className="font-mono">smtp.ionos.de</code>, STRATO <code className="font-mono">smtp.strato.de</code>.</p>
+                </HelpTip>
+              }><Input id="s-host" value={s.host} onChange={(e) => setSmtp({ ...s, host: e.target.value })} placeholder="smtp.example.org" /></FieldWrap>
+              <FieldWrap label="Port" htmlFor="s-port" labelAction={
+                <HelpTip title="Port und Verschlüsselung" more="/hilfe/stichwoerter-regeln#port-und-verschluesselung">
+                  <p className="m-0"><strong>587</strong> mit STARTTLS oder <strong>465</strong> mit TLS – welche Kombination der Server erwartet, steht in der Hilfe des Anbieters. Ohne Verschlüsselung ist keine Anmeldung möglich.</p>
+                </HelpTip>
+              }><Input id="s-port" type="number" value={s.port} onChange={(e) => setSmtp({ ...s, port: Number(e.target.value) })} /></FieldWrap>
               <FieldWrap label="Verschlüsselung" htmlFor="s-sec">
                 <Select id="s-sec" value={s.security} onChange={(e) => setSmtp({ ...s, security: e.target.value })}>
                   <option value="starttls">STARTTLS (587)</option>
@@ -273,16 +303,45 @@ export default function WarningConfig() {
                   <option value="none">keine (nur Testserver ohne Anmeldung)</option>
                 </Select>
               </FieldWrap>
-              <FieldWrap label="Benutzer" htmlFor="s-user"><Input id="s-user" value={s.user} onChange={(e) => setSmtp({ ...s, user: e.target.value })} autoComplete="off" /></FieldWrap>
+              <FieldWrap label="Benutzer" htmlFor="s-user" labelAction={
+                <HelpTip title="Benutzer und Passwort" more="/hilfe/stichwoerter-regeln#woher-die-zugangsdaten-kommen">
+                  <p className="m-0">Anmeldename des Postfachs, meist die vollständige E-Mail-Adresse. Manche Anbieter verlangen ein App-Passwort (z. B. Google) oder eine Freischaltung (Microsoft 365: „Authentifiziertes SMTP“, GMX/WEB.DE: POP3/IMAP einschalten).</p>
+                </HelpTip>
+              }><Input id="s-user" value={s.user} onChange={(e) => setSmtp({ ...s, user: e.target.value })} autoComplete="off" /></FieldWrap>
               <FieldWrap label={c.smtp.password_set ? 'Passwort (gespeichert – nur zum Ersetzen ausfüllen)' : 'Passwort'} htmlFor="s-pw"><Input id="s-pw" type="password" value={s.password} onChange={(e) => setSmtp({ ...s, password: e.target.value })} autoComplete="new-password" /></FieldWrap>
-              <FieldWrap label="Absender" htmlFor="s-from"><Input id="s-from" value={s.from} onChange={(e) => setSmtp({ ...s, from: e.target.value })} placeholder="blaulichtcms@example.org" /></FieldWrap>
+              <FieldWrap label="Absender" htmlFor="s-from" labelAction={
+                <HelpTip title="Absender" more="/hilfe/stichwoerter-regeln#spf-dkim-und-dmarc">
+                  <p className="m-0">Die Adresse, die als Absender erscheint. Sie muss zum Postfach gehören oder dafür freigegeben sein, sonst lehnt der Server ab oder die Mail landet im Spam (SPF/DKIM, <HelpLink href="https://www.bsi.bund.de/DE/Themen/Verbraucherinnen-und-Verbraucher/Informationen-und-Empfehlungen/Onlinekommunikation/E-Mail-Sicherheit/technischer-Hintergrund-E-Mail-Sicherheit/technischer-Hintergrund-E-Mail-Sicherheit_node.html">Erklärung des BSI</HelpLink>).</p>
+                </HelpTip>
+              }><Input id="s-from" value={s.from} onChange={(e) => setSmtp({ ...s, from: e.target.value })} placeholder="blaulichtcms@example.org" /></FieldWrap>
+            </div>
+            {needsTestMail && (
+              <Notice tone="warning">
+                {c.testMode.active ? 'Der Testmodus lässt sich erst ausschalten,' : 'Im Echtbetrieb lassen sich die Versandeinstellungen erst speichern,'} nachdem mit genau diesen Einstellungen eine Testmail erfolgreich versendet wurde (unten „Testmail senden“, gilt 60 Minuten).
+              </Notice>
+            )}
+            <div className="flex flex-wrap gap-2 items-end border-t border-line pt-4">
+              <FieldWrap label="Testmail an" htmlFor="s-test" help="Gesendet wird mit den Werten im Formular – auch ungespeicherten. Passwort leer = gespeichertes Passwort (nur für denselben Server).">
+                <Input id="s-test" type="email" value={testTo} onChange={(e) => setTestTo(e.target.value)} />
+              </FieldWrap>
+              <Button
+                icon="Mail"
+                disabled={!testTo || !s.host || !s.from}
+                loading={mailing}
+                onClick={async () => {
+                  setMailing(true);
+                  const key = smtpKey(s);
+                  const ok = await act(() => post('/warning-settings/test-mail', { to: testTo, host: s.host, port: s.port, security: s.security, user: s.user, from: s.from, password: s.password || undefined }), 'Testmail angenommen');
+                  if (ok) setVerifiedKey(key);
+                  setMailing(false);
+                }}
+              >
+                Testmail senden
+              </Button>
+              {verified && <Badge tone="success">Testmail mit diesen Einstellungen erfolgreich</Badge>}
             </div>
             <div>
-              <Button variant="primary" icon="Save" onClick={async () => (await act(() => put('/warning-settings', { host: s.host, port: s.port, security: s.security, user: s.user, from: s.from, password: s.password || undefined, testMode: s.testMode, testRecipient: s.testRecipient }), 'Gespeichert')) && setSmtp(null)}>Speichern</Button>
-            </div>
-            <div className="flex flex-wrap gap-2 items-end border-t border-line pt-4">
-              <FieldWrap label="Testmail an" htmlFor="s-test"><Input id="s-test" type="email" value={testTo} onChange={(e) => setTestTo(e.target.value)} /></FieldWrap>
-              <Button icon="Mail" disabled={!testTo} loading={mailing} onClick={async () => { setMailing(true); await act(() => post('/warning-settings/test-mail', { to: testTo }), 'Testmail angenommen'); setMailing(false); }}>Testmail senden</Button>
+              <Button variant="primary" icon="Save" disabled={needsTestMail} onClick={async () => (await act(() => put('/warning-settings', { host: s.host, port: s.port, security: s.security, user: s.user, from: s.from, password: s.password || undefined, testMode: s.testMode, testRecipient: s.testRecipient }), 'Gespeichert')) && setSmtp(null)}>Speichern</Button>
             </div>
           </div>
         </Card>

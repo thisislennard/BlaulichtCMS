@@ -151,7 +151,8 @@ function AuditIntegrityCard() {
               </dd>
               <dt>Weiterleitung</dt>
               <dd className="m-0">
-                {v.forward ? `aktiv (${v.forward})` : "aus – nur in der Datenbank (AUDIT_FORWARD, siehe Betriebsdoku)"}
+                {v.forward ? `aktiv (${v.forward})` : "aus – nur in der Datenbank (AUDIT_FORWARD) – "}
+                {!v.forward && <Link to="/hilfe/sicherheit#audit-weiterleitung">einrichten</Link>}
               </dd>
             </dl>
           </>

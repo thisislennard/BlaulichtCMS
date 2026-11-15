@@ -97,6 +97,8 @@ Gemeinde-, Kreis- und Landesfilter jeweils 1 von 1. Bundesweit waren 8 MoWaS-Mel
   BlaulichtCMS setzt ihn im Bannertext und verlinkt die Originalmeldung.
 - **MoWaS / Warn-App-Schnittstelle des BBK:** keine veröffentlichten Bedingungen für die Weiterverwendung gefunden;
   die Schnittstelle ist nicht offiziell dokumentiert. Vor dem Einsatz automatischer Banner schriftlich beim BBK
-  (NINA@bbk.bund.de) bestätigen lassen. Bis dahin: Banner nur als Entwurf mit normaler Freigabe (Standard), Link auf
+  bestätigen lassen – Weg für Weiterverbreiter ist das Programm
+  [Warnmultiplikatoren](https://www.bbk.bund.de/DE/Warnung-Vorsorge/Warnung-in-Deutschland/Warnmultiplikatoren/warnmultiplikatoren_node.html)
+  (Warnmultiplikatoren@bbk.bund.de; NINA@bbk.bund.de ist der Helpdesk der Warn-App). Bis dahin: Banner nur als Entwurf mit normaler Freigabe (Standard), Link auf
   warnung.bund.de als maßgebliche Quelle.
 
