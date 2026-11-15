@@ -1,0 +1,462 @@
+/**
+ * Regressionstest „Textfelder verlieren beim Tippen den Fokus“ (v0.2.1).
+ *
+ * Besucht alle Seiten der Oberfläche, öffnet die über Schaltflächen und Menüs erreichbaren Dialoge und tippt in jedes
+ * sichtbare Textfeld (input, textarea, contenteditable) Zeichen für Zeichen. Nach dem Tippen muss der Fokus noch im
+ * Feld liegen und der Wert den getippten Text enthalten. Während des Tippens laufen Live-Ereignisse (parallel angelegte
+ * Beiträge) und eine vollständige Neuabfrage aller Daten (offline/online), damit Formulare, die sich aus
+ * Abfragedaten neu befüllen, auffallen.
+ *
+ * Voraussetzungen: eine FRISCHE, laufende Instanz (Ersteinrichtung noch offen; der Test legt Testdaten an) und
+ * Playwright mit Chromium. Aufruf aus dem Repository-Wurzelverzeichnis, z. B.:
+ *   BLAULICHTCMS_URL=http://localhost:7310 SETUP_TOKEN_FILE=/pfad/zu/data/setup-token.txt node test/e2e/focus-check.mjs
+ * (statt SETUP_TOKEN_FILE auch SETUP_TOKEN=…). Ergebnis: test/e2e/out/focus-report.json, Exit-Code 1 bei Fehlern.
+ */
+import fs from 'node:fs';
+import http from 'node:http';
+import path from 'node:path';
+import { createRequire } from 'node:module';
+import { fileURLToPath } from 'node:url';
+import { Api, totp, inviteUser, login, sleep } from './lib/common.mjs';
+
+const require = createRequire(import.meta.url);
+const { chromium } = require('playwright');
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
+const sharp = createRequire(path.join(ROOT, 'server/package.json'))('sharp');
+const BC = process.env.BLAULICHTCMS_URL ?? 'http://localhost:7310';
+const OUT = path.join(ROOT, 'test/e2e/out');
+fs.mkdirSync(OUT, { recursive: true });
+const ONLY = process.env.FOCUS_ONLY ? new RegExp(process.env.FOCUS_ONLY) : null;
+
+const FIELD_SEL = 'input:not([type]), input[type=text], input[type=email], input[type=url], input[type=search], input[type=password], input[type=number], input[type=tel], textarea, [contenteditable=""], [contenteditable="true"]';
+// Schaltflächen, die Daten unwiderruflich ändern, abmelden oder wegnavigieren, werden nicht angeklickt
+const DENY = /lösch|entfern|abmelden|sitzung|widerruf|sperr|entsperr|deaktiv|archiv|install|neustart|neu starten|^wiederherstellen|zurücksetz|trennen|veröffentlich|senden|versand|speichern|übernehmen|herunterladen|download|export|drucken|sicherung|jetzt prüfen|nach updates|aktualisieren|ausführen|wartung|aufräumen|bereinig|kopieren|abbrechen|schließen|zurückziehen|einreichen|löschfrist|alle gelesen|als gelesen|neu laden/i;
+
+const failures = [];
+const tested = [];
+const seenGlobal = new Set();
+
+const ADMIN = { name: 'Alex Admin', email: 'admin@example.org', password: 'Admin-Testkennwort-2026' };
+
+function setupToken() {
+  if (process.env.SETUP_TOKEN) return process.env.SETUP_TOKEN.trim();
+  if (process.env.SETUP_TOKEN_FILE) return fs.readFileSync(process.env.SETUP_TOKEN_FILE, 'utf8').trim();
+  throw new Error('SETUP_TOKEN oder SETUP_TOKEN_FILE setzen (frische Instanz nötig)');
+}
+
+async function jpeg(seed) {
+  const r = (seed * 53) % 255, g = (seed * 97) % 255, b = (seed * 31) % 255;
+  return sharp({ create: { width: 640, height: 480, channels: 3, background: { r, g, b } } }).jpeg().toBuffer();
+}
+
+/** Kleiner RSS-Feed für die Quellen-Seite */
+function rssServer() {
+  const srv = http.createServer((req, res) => {
+    res.writeHead(200, { 'content-type': 'application/rss+xml' });
+    res.end(`<?xml version="1.0"?><rss version="2.0"><channel><title>Testquelle</title><link>http://example.org</link><description>t</description>
+      <item><title>Meldung eins</title><link>http://example.org/1</link><guid>1</guid><description>Text eins</description><pubDate>${new Date().toUTCString()}</pubDate></item>
+      <item><title>Meldung zwei</title><link>http://example.org/2</link><guid>2</guid><description>Text zwei</description><pubDate>${new Date().toUTCString()}</pubDate></item>
+    </channel></rss>`);
+  });
+  return new Promise((r) => srv.listen(0, '127.0.0.1', () => r(srv)));
+}
+
+/* ------------------------------------------ Feldprüfung ------------------------------------------ */
+
+async function fieldInfo(h) {
+  return h.evaluate((el) => {
+    const r = el.getBoundingClientRect();
+    const st = getComputedStyle(el);
+    const visible = r.width > 0 && r.height > 0 && st.visibility !== 'hidden' && st.display !== 'none';
+    const lbl = el.getAttribute('aria-label') || (el.labels && el.labels[0]?.innerText) || el.getAttribute('placeholder') || el.getAttribute('name') || el.id || el.tagName.toLowerCase();
+    const inChrome = !!el.closest('header, nav, aside') && !el.closest('[role=dialog]');
+    return {
+      visible,
+      enabled: !el.disabled && !el.readOnly && el.getAttribute('aria-disabled') !== 'true',
+      label: String(lbl).replace(/\s+/g, ' ').trim().slice(0, 80),
+      type: el.isContentEditable ? 'contenteditable' : el.tagName === 'TEXTAREA' ? 'textarea' : el.type || 'text',
+      inputMode: el.getAttribute('inputmode') || '',
+      maxLength: el.maxLength > 0 ? el.maxLength : 0,
+      len: el.isContentEditable ? el.textContent.length : el.value.length,
+      inChrome,
+    };
+  });
+}
+
+/** Tippt in alle sichtbaren Felder im Bereich `scope` (Selektor). seen verhindert doppelte Prüfung desselben Felds. */
+async function checkFields(page, where, scope, seen) {
+  // Zugeklappte Bereiche (<details>) öffnen, damit auch deren Felder geprüft werden
+  await page.evaluate(() => document.querySelectorAll('details:not([open])').forEach((d) => (d.open = true))).catch(() => {});
+  const loc = page.locator(scope ? `${scope} :is(${FIELD_SEL})` : `:is(${FIELD_SEL}):not([role=dialog] *)`);
+  const n = await loc.count();
+  for (let i = 0; i < n; i++) {
+    const h = await loc.nth(i).elementHandle({ timeout: 1000 }).catch(() => null);
+    if (!h) continue;
+    const info = await fieldInfo(h).catch(() => null);
+    if (!info || !info.visible || !info.enabled || !(await h.isVisible().catch(() => false))) continue;
+    const key = `${info.label}|${info.type}`;
+    if (info.inChrome) {
+      if (seenGlobal.has(key)) continue;
+      seenGlobal.add(key);
+    }
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const numeric = info.type === 'number' || info.type === 'tel' || info.inputMode === 'numeric';
+    let text = numeric ? '1234567890' : 'Fokustestabcdefghij';
+    if (info.maxLength) text = text.slice(0, Math.max(0, info.maxLength - info.len));
+    if (text.length < 2) continue;
+    try {
+      await h.scrollIntoViewIfNeeded({ timeout: 1500 });
+      await h.click({ timeout: 2000 });
+      await page.keyboard.press(info.type === 'textarea' || info.type === 'contenteditable' ? 'Control+End' : 'End');
+      const half = Math.floor(text.length / 2);
+      await page.keyboard.type(text.slice(0, half), { delay: 30 });
+      // Vollständige Neuabfrage aller Daten mitten im Tippen (wie nach einem Netzwechsel)
+      await page.evaluate(() => {
+        window.dispatchEvent(new Event('offline'));
+        window.dispatchEvent(new Event('online'));
+      });
+      await sleep(250);
+      await page.keyboard.type(text.slice(half), { delay: 30 });
+      await sleep(300);
+      const res = await h.evaluate((el, t) => {
+        const a = document.activeElement;
+        const v = el.isContentEditable ? el.textContent : el.value;
+        return { connected: el.isConnected, focused: a === el || el.contains(a), value: v, activeDesc: a ? `${a.tagName.toLowerCase()}${a.getAttribute('aria-label') ? `[${a.getAttribute('aria-label')}]` : ''}${a.id ? `#${a.id}` : ''}` : 'null', ok: v.replace(/\s/g, '').endsWith(t.replace(/\s/g, '')) || v.replace(/\D/g, '').endsWith(t.replace(/\D/g, '') || 'x') };
+      }, text);
+      tested.push({ where, field: info.label, type: info.type });
+      if (!res.connected || !res.focused || !res.ok) {
+        const f = { where, field: info.label, type: info.type, connected: res.connected, focused: res.focused, valueOk: res.ok, value: res.value.slice(-40), active: res.activeDesc };
+        failures.push(f);
+        console.log(`  ✘ ${where} › ${info.label}: ${!res.connected ? 'Feld neu erzeugt' : !res.focused ? `Fokus verloren (jetzt ${res.activeDesc})` : `Wert „${res.value.slice(-30)}“`}`);
+      }
+      // Eingabe zurücknehmen, damit Formulare im Ausgangszustand bleiben
+      if (res.connected && res.focused) for (let k = 0; k < text.length; k++) await page.keyboard.press('Backspace');
+    } catch (e) {
+      console.log(`  ? ${where} › ${info.label}: nicht prüfbar (${String(e.message).split('\n')[0].slice(0, 100)})`);
+    }
+  }
+}
+
+/* ------------------------------------------ Dialoge ------------------------------------------ */
+
+const dialogOpen = (page) => page.locator('[role=dialog]').first().isVisible().catch(() => false);
+
+async function closeDialogs(page, route) {
+  for (let k = 0; k < 3 && (await dialogOpen(page)); k++) {
+    await page.keyboard.press('Escape');
+    await sleep(250);
+    if (await dialogOpen(page)) {
+      await page.locator('[role=dialog] [data-close]').last().click({ timeout: 1000 }).catch(() => {});
+      await sleep(250);
+    }
+  }
+  if (await dialogOpen(page)) await gotoRoute(page, route);
+}
+
+async function gotoRoute(page, route) {
+  await page.goto(BC + route, { waitUntil: 'domcontentloaded' });
+  await page.waitForLoadState('networkidle', { timeout: 8000 }).catch(() => {});
+  await sleep(400);
+}
+
+async function buttonNames(page) {
+  return page.evaluate((deny) => {
+    const re = new RegExp(deny.source, deny.flags);
+    const out = [];
+    const btns = [...document.querySelectorAll('main button, main [role=tab], body > div:not(#root) button')].filter((b) => !b.closest('[role=dialog]'));
+    for (const b of btns) {
+      const r = b.getBoundingClientRect();
+      if (!r.width || !r.height || b.disabled) continue;
+      const name = (b.getAttribute('aria-label') || b.innerText || '').replace(/\s+/g, ' ').trim();
+      // Reiter und Menü-Knöpfe nur umschalten bzw. öffnen – nie ausschließen
+      if (re.test(name) && b.getAttribute('aria-haspopup') !== 'menu' && b.getAttribute('role') !== 'tab') continue;
+      out.push({ name, menu: b.getAttribute('aria-haspopup') === 'menu', tab: b.getAttribute('role') === 'tab' });
+    }
+    return out;
+  }, { source: DENY.source, flags: DENY.flags });
+}
+
+async function clickNth(page, name, idx, sel = 'main button, main [role=tab], body > div:not(#root) button') {
+  const ok = await page.evaluate(
+    ({ name, idx, sel }) => {
+      const btns = [...document.querySelectorAll(sel)].filter((b) => !b.closest('[role=dialog]') && b.getBoundingClientRect().width && !b.disabled);
+      const same = btns.filter((b) => (b.getAttribute('aria-label') || b.innerText || '').replace(/\s+/g, ' ').trim() === name);
+      const b = same[idx];
+      if (!b) return false;
+      b.setAttribute('data-focus-target', '1');
+      return true;
+    },
+    { name, idx, sel },
+  );
+  if (!ok) return false;
+  const l = page.locator('[data-focus-target="1"]').first();
+  try {
+    await l.scrollIntoViewIfNeeded({ timeout: 1500 });
+    await l.click({ timeout: 2500 });
+  } catch {
+    await page.evaluate(() => document.querySelector('[data-focus-target="1"]')?.removeAttribute('data-focus-target'));
+    return false;
+  }
+  await page.evaluate(() => document.querySelector('[data-focus-target="1"]')?.removeAttribute('data-focus-target'));
+  return true;
+}
+
+/** Nach einem Klick: Dialog prüfen bzw. neue Felder auf der Seite (Popover, eingeblendete Formulare). */
+const DEBUG = process.env.FOCUS_DEBUG === '1';
+async function afterClick(page, route, where, label, seen) {
+  await sleep(450);
+  if (DEBUG) console.log(`    · Klick „${label}“ → ${(await dialogOpen(page)) ? 'Dialog' : new URL(page.url()).pathname}`);
+  if (await dialogOpen(page)) {
+    const title = (await page.locator('[role=dialog] h2').last().innerText().catch(() => '')).trim();
+    await checkFields(page, `${where} › Dialog „${title || label}“`, '[role=dialog]', new Set());
+    await closeDialogs(page, route);
+  } else {
+    await checkFields(page, `${where} › nach „${label}“`, null, seen);
+  }
+}
+
+const samePath = (page, route) => new URL(page.url()).pathname === new URL(BC + route).pathname;
+const activeTab = (page) => page.locator('[role=tab][aria-selected=true]').first().innerText({ timeout: 500 }).then((t) => t.replace(/\s+/g, ' ').trim()).catch(() => null);
+
+/** Klickt alle (nicht ausgeschlossenen) Schaltflächen und Menüeinträge im aktuellen Zustand; reset() stellt ihn her. */
+async function scanButtons(page, route, where, tab, reset, seen, done) {
+  const dirty = async () => !samePath(page, route) || (await dialogOpen(page)) || (tab && (await activeTab(page)) !== tab);
+  const list = (await buttonNames(page)).filter((b) => !b.tab);
+  const count = {};
+  for (const b of list) {
+    const idx = (count[b.name] = (count[b.name] ?? -1) + 1);
+    const key = `${b.name}#${idx}`;
+    if (done.has(key)) continue;
+    done.add(key);
+    if (await dirty()) await reset();
+    if (b.menu) {
+      if (!(await clickNth(page, b.name, idx))) continue;
+      await sleep(300);
+      const items = (await page.locator('[role=menuitem]:not([disabled])').allInnerTexts()).map((t) => t.replace(/\s+/g, ' ').trim());
+      if (DEBUG) console.log(`    · Menü „${b.name}“#${idx}: ${items.join(', ') || '(leer)'}`);
+      await page.keyboard.press('Escape');
+      for (const it of items) {
+        if (DENY.test(it)) continue;
+        if (await dirty()) await reset();
+        if (!(await clickNth(page, b.name, idx))) break;
+        await sleep(300);
+        const mi = page.locator('[role=menuitem]', { hasText: it }).first();
+        if (!(await mi.isVisible().catch(() => false))) continue;
+        await mi.click({ timeout: 2000 }).catch(() => {});
+        await afterClick(page, route, where, `${b.name} › ${it}`, seen);
+      }
+      continue;
+    }
+    if (!(await clickNth(page, b.name, idx))) continue;
+    await afterClick(page, route, where, b.name || '(Symbol)', seen);
+  }
+}
+
+async function scanRoute(page, route, { buttons = true } = {}) {
+  if (ONLY && !ONLY.test(route)) return;
+  console.log(`▶ ${route}`);
+  await gotoRoute(page, route);
+  const seen = new Set();
+  await checkFields(page, route, null, seen);
+  if (!buttons) return;
+  // Jeder Reiter der Seite ist ein eigener Ausgangszustand (Felder, Schaltflächen, Dialoge darin)
+  const tabs = [...new Set((await buttonNames(page)).filter((b) => b.tab).map((b) => b.name))];
+  if (DEBUG) console.log(`    · Reiter: ${tabs.join(', ') || '–'}`);
+  for (const tab of [null, ...tabs]) {
+    // Je Reiter eigene Merklisten: gleich benannte Schaltflächen/Felder in verschiedenen Reitern sind verschiedene
+    const done = new Set();
+    const tabSeen = tab ? new Set() : seen;
+    const reset = async () => {
+      await gotoRoute(page, route);
+      if (tab) {
+        await clickNth(page, tab, 0);
+        await sleep(400);
+      }
+    };
+    const where = tab ? `${route} › Reiter „${tab}“` : route;
+    if (tab) {
+      await reset();
+      await checkFields(page, where, null, tabSeen);
+    }
+    await scanButtons(page, route, where, tab, reset, tabSeen, done);
+  }
+}
+
+/* ------------------------------------------ Ablauf ------------------------------------------ */
+
+let churn = null;
+let rss = null;
+
+async function freshSetup() {
+  // Ersteinrichtung im Browser (Felder der Einrichtungsseite), danach per API
+  const pre = await browser.newContext({ bypassCSP: true });
+  const p0 = await pre.newPage();
+  p0.on('dialog', (d) => d.accept().catch(() => {}));
+  await scanRoute(p0, '/einrichtung', { buttons: false });
+  await scanRoute(p0, '/login', { buttons: false });
+  await pre.close();
+
+  const admin = new Api();
+  await admin.post('/auth/setup', { token: setupToken(), organization: 'Musterorganisation', publicUrl: BC, timezone: 'Europe/Berlin', ...ADMIN });
+  const mfa = await admin.get('/auth/mfa/setup');
+  await admin.post('/auth/mfa/setup', { code: totp(mfa.secret) });
+  admin.reauth = { password: ADMIN.password, totpSecret: mfa.secret };
+  console.log('✔ Ersteinrichtung');
+
+  // 2) Testdaten
+  const editor = await inviteUser(admin, 'redaktion@example.org', ['editor', 'media_manager'], 'Robin Redaktion', 'Redaktion-Testkennwort-2026');
+  const openInvite = await admin.post('/users/invite', { email: 'offen@example.org', roles: ['viewer'], name: 'Offene Einladung' });
+  const post = await admin.post('/posts', { title: 'Testbeitrag Fokus', kind: 'news' });
+  const sub = await editor.post('/posts', { title: 'Eingereichter Beitrag', kind: 'news' });
+  const sd = await editor.get(`/posts/${sub.id}`);
+  await editor.put(`/posts/${sub.id}/revision`, { baseRevision: sd.revision.n ?? sd.revision.number ?? 1, title: 'Eingereichter Beitrag', body: 'Text zur Freigabe.' }).catch((e) => console.log('  (Fassung)', e.message));
+  await editor.post(`/posts/${sub.id}/submit`, { revision: 2 }).catch((e) => console.log('  (Einreichen)', e.message));
+  const col = await admin.post('/collections', { title: 'Testsammlung Fokus', purpose: 'Test', postId: post.id });
+  const token = col.link.url.split('/u/')[1];
+  for (let i = 1; i <= 3; i++) {
+    const fd = new FormData();
+    fd.append('file', new Blob([await jpeg(i)], { type: 'image/jpeg' }), `bild-${i}.jpg`);
+    const r = await fetch(`${BC}/api/v1/public/upload/${token}`, { method: 'POST', body: fd, headers: { 'x-blaulichtcms-request': '1' } });
+    if (!r.ok) console.log('  (Upload)', r.status, await r.text());
+  }
+  await admin.post('/templates', { name: 'Testvorlage', kind: 'news', title: 'Vorlagentitel', body: 'Vorlagentext' });
+  rss = await rssServer();
+  await admin.post('/rss/feeds', { url: `http://127.0.0.1:${rss.address().port}/feed.xml`, title: 'Testquelle' }).catch((e) => console.log('  (RSS)', e.message));
+  const conn = await admin.post('/connections', { kind: 'fe2', name: 'FE2 Test', config: {} }).catch((e) => (console.log('  (Verbindung)', e.message), null));
+  const wf = await admin.post('/connections', { kind: 'warnfeed', name: 'Amtliche Warnungen Test', config: {} }).catch((e) => (console.log('  (Warnfeed)', e.message), null));
+  // Website wie die Bridge koppeln (ohne WordPress), damit Banner und Kanäle Inhalt haben
+  try {
+    const s = await admin.post('/sites', { name: 'Testwebsite' });
+    const pr = await new Api().post('/bridge/pair', { code: s.pairingCode, site_url: 'https://wp.example.org', site_name: 'Testwebsite', wp_version: '6.8', plugin_version: '0.7.0' });
+    const banner = { siteId: pr.site_id, title: 'Testbanner', text: 'Bitte Umleitung beachten.', tone: 'danger', priority: 3, endsAt: new Date(Date.now() + 86400_000).toISOString() };
+    await editor.post('/banners', banner).catch(() => admin.post('/banners', banner)).catch((e) => console.log('  (Banner)', e.message));
+    await admin.post('/sites', { name: 'Zweite Website' });
+  } catch (e) {
+    console.log('  (Website)', e.message);
+  }
+  await admin.post('/responsibilities', { name: 'Leitstelle (fiktiv)', area: 'Musterkreis', recipients: ['leitstelle@example.invalid'] }).catch((e) => console.log('  (Zuständigkeit)', e.message));
+  const kw = await admin.post('/warning-keywords', { code: 'F-TEST-1', label: 'Testeinsatz', aliases: ['test'] }).catch((e) => (console.log('  (Stichwort)', e.message), null));
+  if (kw) await admin.post(`/warning-keywords/${kw.id}/questions`, { key: 'frage_eins', text: 'Testfrage?' }).catch(() => {});
+  const warn = await admin.post('/warnings', { kind: 'initial' }).catch((e) => (console.log('  (Warnung)', e.message), null));
+  console.log('✔ Testdaten');
+  const st = {
+    adminSecret: mfa.secret,
+    editor: { email: 'redaktion@example.org', password: 'Redaktion-Testkennwort-2026', secret: editor.totpSecret },
+    token,
+    openInviteToken: openInvite.link.split('/einladung/')[1],
+    postId: post.id,
+    subId: sub.id,
+    collectionId: col.collection.id,
+    connectionId: conn ? (conn.connection ?? conn).id : null,
+    warnfeedId: wf ? (wf.connection ?? wf).id : null,
+    warningId: warn?.id ?? null,
+  };
+  return { admin, editor, st };
+
+}
+
+const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined });
+let exitCode = 1;
+try {
+  const STATE = path.join(OUT, 'focus-state.json');
+  let admin, editor, st;
+  if (process.env.FOCUS_REUSE === '1' && fs.existsSync(STATE)) {
+    // Wiederholung gegen dieselbe Instanz (zum Eingrenzen mit FOCUS_ONLY): Testdaten aus dem letzten Lauf
+    st = JSON.parse(fs.readFileSync(STATE, 'utf8'));
+    admin = await login(new Api(), ADMIN.email, ADMIN.password, st.adminSecret);
+    admin.reauth = { password: ADMIN.password, totpSecret: st.adminSecret };
+    editor = await login(new Api(), st.editor.email, st.editor.password, st.editor.secret);
+    rss = await rssServer();
+    console.log('✔ Anmeldung (Wiederholung)');
+  } else {
+    ({ admin, editor, st } = await freshSetup());
+    fs.writeFileSync(STATE, JSON.stringify(st, null, 2));
+  }
+  const { token, openInviteToken } = st;
+  const post = { id: st.postId };
+  const sub = { id: st.subId };
+  const col = { collection: { id: st.collectionId } };
+  const conn = st.connectionId ? { id: st.connectionId } : null;
+  const warn = st.warningId ? { id: st.warningId } : null;
+
+  // 3) Öffentliche Seiten und Einladung
+  const pub = await browser.newContext({ bypassCSP: true });
+  const pp = await pub.newPage();
+  pp.on('dialog', (d) => d.accept().catch(() => {}));
+  await scanRoute(pp, `/u/${token}`);
+  await scanRoute(pp, `/einladung/${openInviteToken}`, { buttons: false });
+  // 2FA-Seite: Anmeldung mit Passwort, dann Code-Seite
+  await gotoRoute(pp, '/login');
+  try {
+    await checkFields(pp, '/login', null, new Set());
+    await pp.locator('#email').fill(ADMIN.email, { timeout: 5000 });
+    await pp.locator('#pw').fill(ADMIN.password);
+    await pp.keyboard.press('Enter');
+    await pp.waitForURL(/\/2fa/, { timeout: 8000 });
+    await checkFields(pp, '/2fa', null, new Set());
+  } catch (e) {
+    console.log(`  ? Anmeldung/2FA nicht prüfbar: ${pp.url()} – ${String(e.message).split('\n')[0]} – ${(await pp.locator('body').innerText()).slice(0, 200).replace(/\n+/g, ' | ')}`);
+  }
+  await pub.close();
+
+  // 4) Angemeldete Seiten
+  const ctx = await browser.newContext({ bypassCSP: true, viewport: { width: 1440, height: 1000 } });
+  await ctx.addCookies(admin.cookie.split('; ').map((c) => ({ name: c.split('=')[0], value: c.split('=').slice(1).join('='), url: BC })));
+  const page = await ctx.newPage();
+  page.on('dialog', (d) => d.accept().catch(() => {}));
+  // Live-Ereignisse während des ganzen Laufs: alle 2 s ein Beitrag (posts → Beitragslisten, Dashboard)
+  let n = 0;
+  churn = setInterval(() => editor.post('/posts', { title: `Live-Ereignis ${++n}`, kind: 'news' }).catch(() => {}), 2000);
+
+  const routes = ['/', '/beitraege', `/beitraege/${post.id}`, `/beitraege/${sub.id}`, '/vorlagen', '/freigaben', '/medien', `/medien/${col.collection.id}`, '/quellen', '/banner', '/kanaele', '/warnungen', '/warnungen/pflege', ...(warn ? [`/warnungen/${warn.id}`] : []), '/verbindungen', ...(conn ? [`/verbindungen/${conn.id}`] : []), ...(st.warnfeedId ? [`/verbindungen/${st.warnfeedId}`] : []), '/amtliche-warnungen', '/benutzer', '/system', '/protokolle', '/datenschutz-anfragen', '/einstellungen', '/profil', '/hilfe', '/aktivitaeten', '/benachrichtigungen'];
+  for (const r of routes) await scanRoute(page, r);
+
+  // Dialog zur erneuten Bestätigung (Reauth): API-Antwort „reauth_required“ für eine Anfrage vortäuschen
+  if (!ONLY || ONLY.test('reauth')) {
+    await gotoRoute(page, '/benachrichtigungen');
+    let once = false;
+    await page.route('**/api/v1/notifications**', (route) => {
+      if (once) return route.continue();
+      once = true;
+      return route.fulfill({ status: 403, contentType: 'application/json', body: JSON.stringify({ error: 'reauth_required', message: 'Bitte bestätigen.' }) });
+    });
+    await page.evaluate(() => {
+      window.dispatchEvent(new Event('offline'));
+      window.dispatchEvent(new Event('online'));
+    });
+    await page.locator('[role=dialog]').first().waitFor({ timeout: 6000 }).catch(() => {});
+    if (await dialogOpen(page)) await checkFields(page, 'Dialog „Erneut bestätigen“ (Reauth)', '[role=dialog]', new Set());
+    else console.log('  ? Reauth-Dialog nicht geöffnet');
+    await page.unroute('**/api/v1/notifications**');
+    await closeDialogs(page, '/benachrichtigungen');
+  }
+
+  // Befehlspalette (Strg+K)
+  await gotoRoute(page, '/');
+  await page.keyboard.press('Control+k');
+  await sleep(400);
+  if (await dialogOpen(page)) await checkFields(page, 'Befehlspalette', '[role=dialog]', new Set());
+  else await checkFields(page, 'Befehlspalette', null, new Set());
+
+  // Handy-Ansicht: Navigation als Schublade, einige Seiten erneut
+  const mob = await browser.newContext({ bypassCSP: true, viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+  await mob.addCookies(admin.cookie.split('; ').map((c) => ({ name: c.split('=')[0], value: c.split('=').slice(1).join('='), url: BC })));
+  const mp = await mob.newPage();
+  mp.on('dialog', (d) => d.accept().catch(() => {}));
+  seenGlobal.clear();
+  for (const r of [`/beitraege/${post.id}`, '/profil', ...(warn ? [`/warnungen/${warn.id}`] : [])]) await scanRoute(mp, r, { buttons: false });
+
+  const uniqueFields = new Set(tested.map((t) => `${t.where}|${t.field}`)).size;
+  const where = new Set(tested.map((t) => t.where)).size;
+  fs.writeFileSync(path.join(OUT, 'focus-report.json'), JSON.stringify({ finished: new Date().toISOString(), tested, failures }, null, 2));
+  console.log(`\n${failures.length ? 'FEHLGESCHLAGEN' : 'ERFOLGREICH'}: ${uniqueFields} Felder in ${where} Ansichten/Dialogen geprüft, ${failures.length} Fehler – Bericht: test/e2e/out/focus-report.json`);
+  exitCode = failures.length ? 1 : 0;
+} catch (e) {
+  console.error(e);
+} finally {
+  if (churn) clearInterval(churn);
+  rss?.close();
+  await browser.close();
+  process.exit(exitCode);
+}

@@ -89,13 +89,21 @@ export function useErrorToast() {
 export function Dialog({ open, onClose, title, children, footer, width = 520 }: { open: boolean; onClose: () => void; title: ReactNode; children: ReactNode; footer?: ReactNode; width?: number }) {
   const ref = useRef<HTMLDivElement>(null);
   const hid = useId();
+  // onClose ist bei den Aufrufern meist eine Inline-Funktion (bei jedem Rendern neu). Steckte sie in den
+  // Abhängigkeiten des Effekts, liefe dieser bei jedem Tastendruck im Formular erneut: Fokus zurück auf das vorherige
+  // Element und dann auf das erste Feld – Tippen in späteren Feldern bräche ab. Deshalb nur `open` als Abhängigkeit.
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  });
   useEffect(() => {
     if (!open) return;
     const prev = document.activeElement as HTMLElement | null;
     const el = ref.current;
-    el?.querySelector<HTMLElement>('input, textarea, select, button:not([data-close])')?.focus();
+    // Bereits fokussiertes Element im Dialog (z. B. autoFocus) nicht übergehen
+    if (!el?.contains(document.activeElement)) el?.querySelector<HTMLElement>('input, textarea, select, button:not([data-close])')?.focus();
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') onCloseRef.current();
       if (e.key === 'Tab' && el) {
         const f = [...el.querySelectorAll<HTMLElement>('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])')].filter((x) => !x.hasAttribute('disabled'));
         if (!f.length) return;
@@ -111,9 +119,11 @@ export function Dialog({ open, onClose, title, children, footer, width = 520 }: 
     document.addEventListener('keydown', onKey);
     return () => {
       document.removeEventListener('keydown', onKey);
-      prev?.focus?.();
+      // Nur zurückgeben, wenn der Fokus noch im Dialog liegt oder verloren ging (nicht aus einem anderen Feld reißen)
+      const active = document.activeElement;
+      if (prev?.isConnected && (!active || active === document.body || el?.contains(active))) prev.focus?.();
     };
-  }, [open, onClose]);
+  }, [open]);
   if (!open) return null;
   return createPortal(
     <div className="fixed inset-0 z-[90] flex items-center justify-center p-4 bg-scrim" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
@@ -199,6 +209,11 @@ export function DeleteDialog({ open, onClose, objectType, name, confirmValue, on
 export function Popover({ open, onClose, anchor, children, align = 'end', width = 280, className }: { open: boolean; onClose: () => void; anchor: React.RefObject<HTMLElement | null>; children: ReactNode; align?: 'start' | 'end'; width?: number; className?: string }) {
   const ref = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<{ top: number; left: number; maxHeight: number } | null>(null);
+  // onClose per Ref: Inline-Funktionen der Aufrufer sollen den Effekt nicht bei jedem Rendern neu starten
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  });
   useEffect(() => {
     if (!open || !anchor.current) return;
     const place = () => {
@@ -221,9 +236,9 @@ export function Popover({ open, onClose, anchor, children, align = 'end', width 
     window.addEventListener('resize', place);
     window.addEventListener('scroll', place, true);
     const onDown = (e: MouseEvent) => {
-      if (!ref.current?.contains(e.target as Node) && !anchor.current?.contains(e.target as Node)) onClose();
+      if (!ref.current?.contains(e.target as Node) && !anchor.current?.contains(e.target as Node)) onCloseRef.current();
     };
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onCloseRef.current();
     document.addEventListener('mousedown', onDown);
     document.addEventListener('keydown', onKey);
     return () => {
@@ -232,7 +247,7 @@ export function Popover({ open, onClose, anchor, children, align = 'end', width 
       document.removeEventListener('mousedown', onDown);
       document.removeEventListener('keydown', onKey);
     };
-  }, [open, anchor, onClose, align, width]);
+  }, [open, anchor, align, width]);
   if (!open || !pos) return null;
   return createPortal(
     <div ref={ref} className={cx('fixed z-[80] bg-card border border-line rounded-card shadow-float overflow-y-auto', className)} style={{ top: pos.top, left: pos.left, width: Math.min(width, window.innerWidth - 16), maxHeight: pos.maxHeight }}>
@@ -251,6 +266,8 @@ export function Menu({ items, label = 'Weitere Aktionen', icon = 'MoreHorizontal
   useEffect(() => {
     if (open) setActive(0);
   }, [open]);
+  // Stabile Ref-Funktion: eine Inline-Funktion liefe bei jedem Rendern erneut und holte den Fokus zurück ins Menü
+  const focusMenu = useCallback((el: HTMLDivElement | null) => el?.focus(), []);
   return (
     <>
       <Button ref={btn} iconOnly icon={icon} size={size} aria-label={label} aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((o) => !o)} variant="secondary" />
@@ -258,7 +275,7 @@ export function Menu({ items, label = 'Weitere Aktionen', icon = 'MoreHorizontal
         <div
           role="menu"
           tabIndex={-1}
-          ref={(el) => el?.focus()}
+          ref={focusMenu}
           className="p-1.5 outline-none"
           onKeyDown={(e) => {
             if (e.key === 'ArrowDown') setActive((a) => (a + 1) % list.length);

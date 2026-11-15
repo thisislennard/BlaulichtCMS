@@ -3,8 +3,9 @@ import { execSync } from 'node:child_process';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-export const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), '../../..');
+export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 export const BC = process.env.BLAULICHTCMS_URL ?? 'http://localhost:7310';
 export const WP = process.env.WP_URL ?? 'http://localhost:8080';
 export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));

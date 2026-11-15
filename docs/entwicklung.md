@@ -34,6 +34,7 @@ startet PostgreSQL) ist für den Container gedacht, funktioniert aber auch lokal
 |---|---|---|
 | Typprüfung | `npm run typecheck` | Server und Oberfläche |
 | Unit + Integration | `TEST_DATABASE_URL=… npm test` | 90 Tests: Rechte, Krypto, SSRF, Fassungen, Upload, Warnentwürfe, Verbindungen, Import, Sicherheit – braucht ffmpeg und pdftotext |
+| Fokus-Test | `node test/e2e/focus-check.mjs` | Tippen in alle Textfelder und Dialoge ohne Fokusverlust (laufende Instanz nötig) |
 | Abnahme M1 | `node test/e2e/m1-flow.mjs` | 34 Schritte über Container, Browser (Desktop + Handy) und WordPress inkl. Sicherung/Wiederherstellung |
 
 > [!WARNING]
@@ -61,6 +62,23 @@ DOC_SHOTS=1 node test/e2e/m1-flow.mjs      # zusätzlich Screenshots für die Do
 Der Test setzt **beide Volumes zurück** (`docker compose down -v`) – nicht auf einer Instanz mit echten Daten ausführen.
 WordPress läuft dabei separat über `test/wordpress/compose.yaml` (Port 8080) und erreicht BlaulichtCMS über
 `host.docker.internal:7310`.
+
+## Fokus-Test der Textfelder
+
+`test/e2e/focus-check.mjs` besucht alle Seiten, öffnet die über Schaltflächen und Menüs erreichbaren Dialoge und tippt
+in jedes sichtbare Textfeld. Danach muss der Fokus noch im Feld liegen und der Text vollständig angekommen sein –
+auch während Live-Ereignisse eintreffen und alle Abfragen neu geladen werden (Regressionstest für 0.2.1).
+
+Der Test braucht eine **frische, laufende Instanz** (Ersteinrichtung offen; er legt Testdaten an), z. B. lokal ohne
+Docker mit Wegwerf-Datenbank (`npm run build`, dann `node --env-file=… server/dist/api.js` und `… worker.js`):
+
+```bash
+BLAULICHTCMS_URL=http://localhost:7310 SETUP_TOKEN_FILE=<Datenverzeichnis>/setup-token.txt node test/e2e/focus-check.mjs
+```
+
+`SETUP_TOKEN=…` statt der Datei geht auch. `FOCUS_ONLY=<RegExp>` beschränkt auf passende Seiten, `FOCUS_REUSE=1`
+wiederholt den Test gegen dieselbe Instanz mit den Testdaten des letzten Laufs (`test/e2e/out/focus-state.json`),
+`FOCUS_DEBUG=1` protokolliert jeden Klick, `CHROMIUM_PATH` wählt ein vorhandenes Chromium. Ergebnis: `test/e2e/out/focus-report.json`, Exit-Code 1 bei Fehlern.
 
 ## Image hinter einem TLS-Proxy bauen
 
