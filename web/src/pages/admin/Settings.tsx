@@ -93,6 +93,8 @@ const RANGES: Record<string, [number, number]> = {
   'privacy.upload_link_days': [0, 3650],
   'privacy.uploader_months': [0, 120],
   'media.blocked_days': [0, 3650],
+  'media.export_hours': [1, 336],
+  'media.export_max_gb': [1, 500],
   'media.security_log_days': [0, 3650],
   'media.max_file_mb': [1, 20000],
   'media.link_max_files': [1, 1000],
@@ -432,6 +434,8 @@ export default function Settings() {
                   <NumField k="media.collection_max_files" label="Dateien je Sammlung" min={1} max={100000} v={v} set={set} ro={ro} />
                   <NumField k="media.collection_max_gb" label="Speicher je Sammlung" unit="GB" min={1} max={10000} v={v} set={set} ro={ro} />
                   <NumField k="media.min_free_gb" label="Mindestens frei halten" help="Darunter werden Uploads gesperrt und der Healthcheck meldet einen Fehler." unit="GB" min={1} max={10000} v={v} set={set} ro={ro} />
+                  <NumField k="media.export_hours" label="ZIP-Downloads verfügbar" help="Danach wird das ZIP gelöscht." unit="Stunden" min={1} max={336} v={v} set={set} ro={ro} />
+                  <NumField k="media.export_max_gb" label="Max. Größe eines ZIP" unit="GB" min={1} max={500} v={v} set={set} ro={ro} />
                   <NumField k="media.storage_warn_gb" label="Speicherwarnung unter" help="Benachrichtigung an „Medien administrieren“ (höchstens alle 12 Stunden). 0 = aus." unit="GB" min={0} max={100000} v={v} set={set} ro={ro} />
                 </FieldGrid>
                 <Switch

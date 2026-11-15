@@ -74,7 +74,9 @@ Unter **Mein Konto → Benachrichtigungen: Medien** lässt sich jede Art für si
 ## Grenzen
 
 - Dateigröße je Datei, Anzahl Dateien je Link und Umfang je Sammlung sind begrenzt (einstellbar unter Einstellungen → Medien).
-- Wird der Speicher knapp, sperrt BlaulichtCMS Uploads, bevor das System voll läuft.
+- Wird der Speicher knapp, sperrt BlaulichtCMS Uploads, bevor das System voll läuft. Vorher warnt die Glocke (Speicherwarnung).
+- **Speicherübersicht:** [Medien → Verwaltung](/medien/verwaltung) (nur „Medien administrieren“) zeigt freien Platz, Verbrauch je Art (Fotos, Videos), je Sammlung und je Ordner sowie den Platz von Papierkorb, gesperrten Dateien und ZIP-Downloads.
+- **ZIP-Downloads** liegen standardmäßig 24 Stunden bereit und sind höchstens 20 GB groß (Einstellungen → Medien).
 
 ## Widerrufen und Ablauf
 

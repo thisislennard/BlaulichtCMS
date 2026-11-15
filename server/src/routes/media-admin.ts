@@ -10,6 +10,8 @@ import { EVENT_LABELS, logPublicEvent } from '../lib/public-security.js';
 import { securityAlert } from '../lib/security-alerts.js';
 import { enqueue } from '../jobs/queue.js';
 import { mediaPaths } from '../media/storage.js';
+import { config } from '../config.js';
+import { getSettings } from '../lib/settings.js';
 import { mediaPayload } from './media.js';
 import { purgeMedia } from './media-trash.js';
 
@@ -34,6 +36,58 @@ async function requeue(id: string, opts: { skipDecode?: boolean; userId?: string
 
 export async function mediaAdminRoutes(app: FastifyInstance) {
   const admin = { preHandler: requireAuth('media.admin') };
+
+  /*
+   * Speicherübersicht (Paket 9): Verbrauch je Sammlung, Ordner und Art, Papierkorb, Quarantäne/gesperrt, Sammeldownloads,
+   * freier Platz und Warnschwelle. Grundlage sind die Größen der hochgeladenen Dateien (Originale); Vorschauen und
+   * öffentliche Fassungen kommen etwa 5–15 % dazu.
+   */
+  app.get('/media-admin/storage', admin, async (req) => {
+    const { collection } = z.object({ collection: z.uuid().optional() }).parse(req.query);
+    const s = await getSettings();
+    let disk: { free: number; total: number } | null = null;
+    try {
+      const st = fs.statfsSync(config.dataDir);
+      disk = { free: st.bavail * st.bsize, total: st.blocks * st.bsize };
+    } catch {
+      disk = null;
+    }
+    if (collection) {
+      const folders = await many<any>(
+        `SELECT f.id, f.name, f.parent_id, count(m.id)::int AS files, COALESCE(sum(m.size_bytes),0)::bigint AS bytes
+           FROM collection_folders f LEFT JOIN media m ON m.folder_id = f.id AND m.deleted_at IS NULL AND m.status <> 'rejected'
+          WHERE f.collection_id = $1 AND f.deleted_at IS NULL GROUP BY f.id ORDER BY bytes DESC`,
+        [collection],
+      );
+      const top = await one<any>(`SELECT count(*)::int AS files, COALESCE(sum(size_bytes),0)::bigint AS bytes FROM media WHERE collection_id = $1 AND folder_id IS NULL AND deleted_at IS NULL AND status <> 'rejected'`, [collection]);
+      return { folders: folders.map((f) => ({ ...f, bytes: Number(f.bytes) })), top: { files: top.files, bytes: Number(top.bytes) } };
+    }
+    const sum = async (where: string) => {
+      const r = await one<any>(`SELECT count(*)::int AS files, COALESCE(sum(size_bytes),0)::bigint AS bytes FROM media WHERE ${where}`);
+      return { files: r.files, bytes: Number(r.bytes) };
+    };
+    const byKind = await many<any>(
+      `SELECT COALESCE(kind, 'unbekannt') AS kind, count(*)::int AS files, COALESCE(sum(size_bytes),0)::bigint AS bytes FROM media WHERE deleted_at IS NULL AND status = 'ready' GROUP BY 1 ORDER BY bytes DESC`,
+    );
+    const byCollection = await many<any>(
+      `SELECT c.id, c.title, c.archived_at IS NOT NULL AS archived, c.max_bytes, count(m.id)::int AS files, COALESCE(sum(m.size_bytes),0)::bigint AS bytes
+         FROM collections c LEFT JOIN media m ON m.collection_id = c.id AND m.deleted_at IS NULL AND m.status <> 'rejected'
+        WHERE c.deleted_at IS NULL GROUP BY c.id ORDER BY bytes DESC LIMIT 50`,
+    );
+    const exportsRow = await one<any>(`SELECT count(*)::int AS files, COALESCE(sum(size_bytes),0)::bigint AS bytes FROM exports WHERE status = 'ready'`);
+    return {
+      disk,
+      min_free_gb: s['media.min_free_gb'],
+      warn_gb: s['media.storage_warn_gb'],
+      ready: await sum(`deleted_at IS NULL AND status = 'ready'`),
+      checking: await sum(`deleted_at IS NULL AND status = 'quarantine'`),
+      blocked: await sum(`deleted_at IS NULL AND status = 'blocked'`),
+      trash: await sum(`deleted_at IS NOT NULL AND status <> 'rejected'`),
+      exports: { files: exportsRow.files, bytes: Number(exportsRow.bytes) },
+      by_kind: byKind.map((k) => ({ ...k, bytes: Number(k.bytes) })),
+      by_collection: byCollection.map((c) => ({ ...c, bytes: Number(c.bytes), max_bytes: Number(c.max_bytes) })),
+    };
+  });
 
   /* Gesperrte Dateien über alle Sammlungen */
   app.get('/media-admin/blocked', admin, async () => {

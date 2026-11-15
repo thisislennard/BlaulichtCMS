@@ -8,6 +8,7 @@ import { Dialog, useConfirm, useErrorToast, useToast } from '../../components/ui
 import { fmtDateTime, fmtRelative } from '../../lib/format';
 import { mediaName } from './gallery';
 import { MediaNav } from './MediaNav';
+import { StorageCard } from './StorageCard';
 
 
 type Blocked = MediaItem & { reject_step: string | null; collection_title: string; link_label: string | null; processed_at: string | null; file_present: boolean };
@@ -101,7 +102,7 @@ export default function MediaAdmin() {
     <div className="flex flex-col gap-5">
       <PageHeader title="Verwaltung der Medien" subtitle="Gesperrte Dateien, Sicherheitsereignisse der Upload-Seiten, Aufträge und Speicher." />
       <MediaNav />
-
+      <StorageCard />
       <Card
         title="Gesperrte Dateien"
         subtitle="Dateien mit Prüfbefund bleiben in der Quarantäne (nie ausgeliefert) und werden nach der Frist gelöscht. Schadsoftware wird sofort gelöscht."

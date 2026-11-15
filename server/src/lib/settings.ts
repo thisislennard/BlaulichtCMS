@@ -97,6 +97,9 @@ export const DEFAULT_SETTINGS = {
   'media.camera_buttons': true,
   /** Text nach erfolgreichem Upload (leer = Standardtext). */
   'media.done_text': '',
+  /** ZIP-Sammeldownloads: so viele Stunden verfügbar, höchstens so groß (GB) – wie press_export_hours/_max_gb. */
+  'media.export_hours': 24,
+  'media.export_max_gb': 20,
   /** Gesperrte Dateien (Prüfbefund) nach so vielen Tagen samt Datei löschen (0 = nie) – wie press_blocked_days. */
   'media.blocked_days': 30,
   /** Sicherheitsereignisse der öffentlichen Seiten so viele Tage aufbewahren (0 = immer) – wie press_security_log_days. */
@@ -263,6 +266,8 @@ export const SETTING_RANGES: Record<string, [number, number]> = {
   'media.link_max_days': [1, 365],
   'media.storage_warn_gb': [0, 100000],
   'media.blocked_days': [0, 3650],
+  'media.export_hours': [1, 336],
+  'media.export_max_gb': [1, 500],
   'media.security_log_days': [0, 3650],
   'media.collection_max_files': [1, 100000],
   'media.collection_max_gb': [1, 10000],

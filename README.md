@@ -86,6 +86,8 @@ flowchart LR
   nur, wer „Medien administrieren“ hat, oder die Löschfrist.
 - **Benachrichtigungen:** neue Dateien über Upload-Links (gebündelt), Link läuft bald ab, Kontingent erreicht,
   Speicher knapp – je Person abschaltbar.
+- **Speicherübersicht:** Verbrauch je Sammlung, Ordner und Art, Papierkorb, Quarantäne und ZIP-Downloads, freier Platz
+  mit Warnschwelle; Frist und Höchstgröße der ZIP-Downloads einstellbar.
 - **Abgebildete Personen:** Markierungen für erkennbare Personen, Verletzte, Kennzeichen und sensible Inhalte;
   markierte Medien verlangen vor der Freigabe eine bewusste Datenschutz-Prüfung.
 - **Unkenntlich machen:** Bereiche verpixeln, weichzeichnen oder abdecken, Bilder zuschneiden, Videos ohne Ton

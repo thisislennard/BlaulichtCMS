@@ -868,9 +868,13 @@ export async function mediaRoutes(app: FastifyInstance) {
 
   /** ZIP-Auftrag anlegen (gemeinsam für Sammlung, Ordner und sammlungsübergreifende Auswahl). */
   async function requestExport(req: FastifyRequest, opts: { collectionId: string | null; label: string; ids: string[]; variant: 'public' | 'original'; withFolders: boolean; withCsv: boolean; audit: Record<string, unknown> }) {
+    // Höchstgröße und Aufbewahrung des ZIP einstellbar (wie press_export_max_gb / press_export_hours)
+    const s = await getSettings();
+    const total = Number((await one<any>(`SELECT COALESCE(sum(size_bytes),0) AS b FROM media WHERE id = ANY($1)`, [opts.ids]))!.b);
+    if (total > s['media.export_max_gb'] * 1024 ** 3) throw badRequest(`Das ZIP würde größer als ${s['media.export_max_gb']} GB. Bitte weniger Dateien auswählen.`);
     const ex = await one<any>(
-      `INSERT INTO exports (collection_id, media_ids, variant, created_by, with_folders, with_csv, label) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
-      [opts.collectionId, opts.ids, opts.variant, req.auth!.user?.id ?? null, opts.withFolders, opts.withCsv, opts.label.slice(0, 120)],
+      `INSERT INTO exports (collection_id, media_ids, variant, created_by, with_folders, with_csv, label, expires_at) VALUES ($1,$2,$3,$4,$5,$6,$7, now() + make_interval(hours => $8)) RETURNING *`,
+      [opts.collectionId, opts.ids, opts.variant, req.auth!.user?.id ?? null, opts.withFolders, opts.withCsv, opts.label.slice(0, 120), s['media.export_hours']],
     );
     await enqueue('export.zip', { exportId: ex.id }, { dedupKey: `export:${ex.id}` });
     await audit(req.auth!.actor, 'media.export_requested', { type: opts.collectionId ? 'collection' : 'media', id: opts.collectionId, label: opts.label }, { dateien: opts.ids.length, fassung: opts.variant, ordner: opts.withFolders, metadaten: opts.withCsv, ...opts.audit });

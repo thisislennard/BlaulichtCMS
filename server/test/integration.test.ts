@@ -4849,6 +4849,39 @@ describe('Medien wie LiFeOS 8: Prüftiefe und Formate', () => {
   });
 });
 
+describe('Medien wie LiFeOS 9: Speicherübersicht, Frist und Höchstgröße der ZIP-Downloads', () => {
+  it('zeigt Verbrauch je Art, Sammlung und Ordner, Papierkorb, Quarantäne und freien Platz – nur für „Medien administrieren“', async () => {
+    const st = await admin.get('/media-admin/storage');
+    expect(st.status).toBe(200);
+    expect(st.json.ready.files).toBeGreaterThan(0);
+    expect(st.json.by_kind.map((k: any) => k.kind)).toContain('image');
+    expect(st.json.by_collection.length).toBeGreaterThan(0);
+    expect(st.json).toHaveProperty('trash');
+    expect(st.json).toHaveProperty('blocked');
+    expect(st.json.warn_gb).toBe(10);
+    const col = st.json.by_collection.find((c: any) => c.title === 'Ordner-Test');
+    const detail = await admin.get(`/media-admin/storage?collection=${col.id}`);
+    expect(detail.json.folders.map((f: any) => f.name)).toEqual(expect.arrayContaining(['Einsatz']));
+    expect((await editor.get('/media-admin/storage')).status).toBe(403);
+  });
+
+  it('ZIP: Verfügbarkeit in Stunden und Höchstgröße einstellbar', async () => {
+    const f = await mediaFixture(editor, 'ZIP-Grenzen');
+    await uploadPublic(f.token, 'z.jpg', await sharp({ create: { width: 50, height: 50, channels: 3, background: { r: 3, g: 4, b: 5 } } }).jpeg().toBuffer());
+    await processAllQuarantine();
+    await setSettings({ 'media.export_hours': 2 });
+    const ex = await editor.post(`/collections/${f.col.id}/exports`, { selection: 'all' });
+    const row = await one<any>(`SELECT expires_at FROM exports WHERE id = $1`, [ex.json.id]);
+    expect(Math.abs(new Date(row.expires_at).getTime() - (Date.now() + 2 * 3600_000))).toBeLessThan(60_000);
+    await setSettings({ 'media.export_hours': 24, 'media.export_max_gb': 1 });
+    await pool.query(`UPDATE media SET size_bytes = 2147483648 WHERE collection_id = $1`, [f.col.id]);
+    const big = await editor.post(`/collections/${f.col.id}/exports`, { selection: 'all' });
+    expect(big.status).toBe(400);
+    expect(big.json.message).toMatch(/größer als 1 GB/);
+    await setSettings({ 'media.export_max_gb': 20 });
+  });
+});
+
 /* @@MEDIA-TESTS-END@@ */
 
 describe('In-App-Updates aus GitHub-Releases', () => {
