@@ -41,7 +41,7 @@ export const PERMISSIONS: PermissionDef[] = [
   { id: 'warning.approve', module: 'warnings', label: 'Warnentwurf freigeben', level: 'critical', description: 'Eine erzeugte PDF-Fassung eines Warnentwurfs freigeben.' },
   { id: 'warning.rules', module: 'warnings', label: 'Stichwörter und Regeln pflegen', level: 'critical', description: 'Stichwörter, Prüffragen, Warnstufen-Regeln, Vorlagen und Zuständigkeiten pflegen.' },
   { id: 'warning.send', module: 'warnings', label: 'Warnentwurf versenden', level: 'critical', description: 'Freigegebene Warnentwürfe per E-Mail an die zuständige Stelle senden.' },
-  { id: 'connection.manage', module: 'connections', label: 'Verbindungen verwalten', level: 'critical', description: 'Optionale Verbindungen (FE2, Feuersoftware Connect, Facebook, Instagram, amtliche Warnfeeds) einrichten, testen, aktivieren und widerrufen.' },
+  { id: 'connection.manage', module: 'connections', label: 'Verbindungen verwalten', level: 'critical', description: 'Optionale Verbindungen (FE2, Feuersoftware Connect, Facebook, Instagram, amtliche Warnfeeds) einrichten, testen, aktivieren, widerrufen und löschen.' },
   { id: 'user.read', module: 'users', label: 'Benutzer ansehen', level: 'read', description: 'Benutzerliste und Rollen ansehen.' },
   { id: 'user.manage', module: 'users', label: 'Benutzer verwalten', level: 'critical', description: 'Einladen, Rollen ändern, deaktivieren, Zwei-Faktor zurücksetzen.' },
   { id: 'audit.read', module: 'system', label: 'Audit-Protokoll ansehen', level: 'read', description: 'Wer hat wann was geändert.' },

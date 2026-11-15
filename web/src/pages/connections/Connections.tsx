@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router';
 import { get, post } from '../../api/client';
-import { Badge, Button, Card, EmptyState, ErrorBox, FieldWrap, Input, Notice, PageHeader, Select, SkeletonRows, StatusBadge } from '../../components/ui/core';
+import { Badge, Button, Card, EmptyState, ErrorBox, FieldWrap, Input, Notice, PageHeader, Select, SkeletonRows, StatusBadge, Switch } from '../../components/ui/core';
+import { useAuth } from '../../lib/auth';
 import { Icon } from '../../components/ui/Icon';
 import { Dialog, OneTimeSecret, useErrorToast } from '../../components/ui/overlays';
 import { fmtRelative } from '../../lib/format';
@@ -20,7 +21,9 @@ export const KINDS = [
 export default function Connections() {
   const nav = useNavigate();
   const toastError = useErrorToast();
-  const q = useQuery({ queryKey: ['connections'], queryFn: () => get<any[]>('/connections') });
+  const { can } = useAuth();
+  const [showDeleted, setShowDeleted] = useState(false);
+  const q = useQuery({ queryKey: ['connections', showDeleted], queryFn: () => get<any[]>(`/connections${showDeleted ? '?deleted=1' : ''}`) });
   const [create, setCreate] = useState<{ kind: string; name: string } | null>(null);
   const [token, setToken] = useState<{ id: string; token: string } | null>(null);
   const submit = async () => {
@@ -44,6 +47,7 @@ export default function Connections() {
           </Button>
         }
       />
+      {can('system.manage') && <Switch checked={showDeleted} onChange={setShowDeleted} label="Gelöschte anzeigen" description="Auch widerrufene und gelöschte Verbindungen – zur Nachvollziehbarkeit, ohne Zugangsdaten." />}
       {q.isLoading && <SkeletonRows rows={4} />}
       {q.error && <ErrorBox title="Verbindungen konnten nicht geladen werden">{(q.error as Error).message}</ErrorBox>}
       {q.data?.length === 0 && <EmptyState icon="Plug" title="Keine Verbindungen" text="Facebook, Instagram, FE2, Feuersoftware Connect oder amtliche Warnungen lassen sich hier anbinden." />}
@@ -55,6 +59,7 @@ export default function Connections() {
                 <Icon name={KINDS.find((k) => k.id === c.kind)?.icon ?? 'Plug'} size={16} />
                 <strong>{c.name}</strong>
                 <Badge dot={false}>{c.kind_label}</Badge>
+                {c.deleted_at && <Badge tone="error">Gelöscht {fmtRelative(c.deleted_at)}</Badge>}
               </div>
               <div className="flex items-center gap-2 flex-wrap">
                 <StatusBadge status={c.status === 'tested' ? 'approved' : c.status === 'disabled' ? 'ended' : c.status} labels={{ [c.status === 'tested' ? 'approved' : c.status === 'disabled' ? 'ended' : c.status]: CONN_STATE[c.status] }} />

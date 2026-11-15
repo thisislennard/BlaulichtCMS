@@ -17,7 +17,7 @@ import { postState } from './posts.js';
 import { publicFileFor } from './media.js';
 import { sendFileResponse } from './files.js';
 import { publicFileName } from '../media/names.js';
-import { connectionSecrets, KIND_LABEL, loadConnection, requireRetest, retestRelevantConfig, saveTest, scrub, updateConnectionSecrets, type Connection, type ConnectionKind } from '../connections/common.js';
+import { connectionSecrets, connectionUsage, KIND_LABEL, loadConnection, requireRetest, retestRelevantConfig, saveTest, scrub, updateConnectionSecrets, type Connection, type ConnectionKind } from '../connections/common.js';
 import { FE2_ALLOWED_FIELDS, FE2_DEFAULT_MAPPING, handleFe2Event } from '../connections/fe2.js';
 import { checkFormats, connectionTestImage, deleteFacebookPost, facebookAuthorizeUrl, facebookExchange, instagramAuthorizeUrl, instagramExchange, markerFor, mediaForRevision, mediaUrl, socialText, testFacebook, testInstagram } from '../connections/meta.js';
 import { FEUERSOFTWARE_DEFAULT_INTERVAL, FEUERSOFTWARE_INTERVALS, pollFeuersoftware, testFeuersoftware } from '../connections/feuersoftware.js';
@@ -47,6 +47,7 @@ async function view(c: Connection) {
     consecutive_failures: (c as any).consecutive_failures ?? 0,
     activated_at: (c as any).activated_at,
     created_at: (c as any).created_at,
+    deleted_at: c.deleted_at ?? null,
     secrets_set: Object.keys(sec).filter((k) => k !== 'pages'),
     insecure_source: c.kind === 'warnfeed' ? insecureFeed(c.config) : undefined,
     pages: sec.pages ? (JSON.parse(sec.pages) as any[]).map((p) => ({ id: p.id, name: p.name })) : [],
@@ -125,8 +126,10 @@ export async function connectionRoutes(app: FastifyInstance) {
   const manage = requireAuth('connection.manage');
 
   app.get('/connections', { preHandler: requireAnyAuth('connection.manage', 'post.edit', 'post.publish') }, async (req) => {
-    const rows = await many<Connection>(`SELECT * FROM connections WHERE status <> 'revoked' ORDER BY kind, name`);
     const full = req.auth!.permissions.has('connection.manage');
+    // „Gelöschte anzeigen“ nur für die Administration: widerrufene und gelöschte Verbindungen zur Nachvollziehbarkeit
+    const withDeleted = full && req.auth!.permissions.has('system.manage') && (req.query as any)?.deleted === '1';
+    const rows = await many<Connection>(withDeleted ? `SELECT * FROM connections ORDER BY (deleted_at IS NOT NULL OR status = 'revoked'), kind, name` : `SELECT * FROM connections WHERE status <> 'revoked' AND deleted_at IS NULL ORDER BY kind, name`);
     if (full) return Promise.all(rows.map(view));
     // Redaktion sieht nur verfügbare soziale Kanäle (Name, Art, Funktionen)
     return rows.filter((c) => ['facebook', 'instagram'].includes(c.kind) && ['tested', 'active'].includes(c.status)).map((c) => ({ id: c.id, kind: c.kind, kind_label: KIND_LABEL[c.kind], name: c.name, status: c.status, capabilities: c.capabilities, account: { name: c.account?.name ?? c.account?.username ?? null } }));
@@ -134,10 +137,12 @@ export async function connectionRoutes(app: FastifyInstance) {
 
   app.get('/connections/:id', { preHandler: manage }, async (req) => {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
-    const c = await loadConnection(id);
+    const c = await loadConnection(id, pool, { includeDeleted: true });
+    if (c.deleted_at && !req.auth!.permissions.has('system.manage')) throw notFound('Verbindung nicht gefunden.');
     const base = await publicBase(req);
     return {
       ...(await view(c)),
+      usage: await connectionUsage(c.id),
       inbound_url: c.kind === 'fe2' ? `${base}/api/v1/inbound/fe2/${c.id}` : null,
       oauth_redirect: ['facebook', 'instagram'].includes(c.kind) ? `${base}/api/v1/connections/oauth/callback` : null,
       allowed_fields: c.kind === 'fe2' ? FE2_ALLOWED_FIELDS : null,
@@ -361,6 +366,33 @@ export async function connectionRoutes(app: FastifyInstance) {
     return { ok: true };
   });
 
+  /**
+   * Löschen: Eine nie benutzte Verbindung wird samt Geheimnissen endgültig gelöscht. Hat sie Bezüge (Veröffentlichungen,
+   * Einsatzmeldungen, amtliche Warnungen, Zielkanal in einer Fassung), wird sie widerrufen, ihre Geheimnisse werden
+   * gelöscht und sie wird als gelöscht markiert: aus den Listen ausgeblendet, Bezüge zeigen „Verbindung gelöscht“.
+   * Abrufe, Eingang und Veröffentlichungen ignorieren sie (Status „widerrufen“).
+   */
+  app.delete('/connections/:id', { preHandler: manage }, async (req) => {
+    const { id } = z.object({ id: z.uuid() }).parse(req.params);
+    const userId = req.auth!.user?.id ?? null;
+    const r = await tx(async (db) => {
+      const c = await one<Connection>(`SELECT * FROM connections WHERE id = $1 AND deleted_at IS NULL FOR UPDATE`, [id], db);
+      if (!c) throw notFound('Verbindung nicht gefunden.');
+      const usage = await connectionUsage(id, db);
+      await db.query(`UPDATE connections SET secret_id = NULL WHERE id = $1`, [id]);
+      await db.query(`DELETE FROM secrets WHERE owner_type = 'connection' AND owner_id = $1`, [id]);
+      if (!usage.used) {
+        await db.query(`DELETE FROM connections WHERE id = $1`, [id]);
+      } else {
+        await db.query(`UPDATE connections SET status = 'revoked', deleted_at = now(), deleted_by = $2, config = config - 'oauthState', updated_at = now() WHERE id = $1`, [id, userId]);
+      }
+      const { used, ...counts } = usage;
+      await audit(req.auth!.actor, 'connection.deleted', { type: 'connection', id, label: c.name }, { art: c.kind, endgueltig: !used, ...(used ? { verwendet: Object.fromEntries(Object.entries(counts).filter(([, n]) => n > 0)) } : {}) }, 'ok', db);
+      return { mode: used ? 'hidden' : 'deleted', usage };
+    });
+    return r;
+  });
+
   /** Internes Ziel (privates Netz) ausdrücklich freigeben – nur Plattform-Administration. */
   app.post('/connections/:id/approve-private', { preHandler: [manage, requirePlatformAdmin()] }, async (req) => {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
@@ -457,7 +489,7 @@ export async function connectionRoutes(app: FastifyInstance) {
     const st = await postState(id);
     if (!st) throw notFound();
     const media = await mediaForRevision(st.current);
-    const targets = st.current.social_targets?.length ? await many<any>(`SELECT id, kind, name, status, capabilities FROM connections WHERE id = ANY($1)`, [st.current.social_targets]) : [];
+    const targets = st.current.social_targets?.length ? await many<any>(`SELECT id, kind, CASE WHEN deleted_at IS NOT NULL THEN 'Verbindung gelöscht' ELSE name END AS name, status, capabilities FROM connections WHERE id = ANY($1)`, [st.current.social_targets]) : [];
     return targets.map((t) => {
       const text = socialText(st.current, t.kind);
       return { id: t.id, kind: t.kind, name: t.name, status: t.status, text, issues: checkFormats(t.kind, media, text) };
@@ -617,7 +649,7 @@ export async function connectionRoutes(app: FastifyInstance) {
 
   app.get('/official-warnings', { preHandler: requireAuth('post.read') }, async () =>
     many<any>(
-      `SELECT w.id, w.identifier, w.msg_type, w.severity, w.event, w.headline, w.areas, w.effective_at, w.expires_at, w.web_url, w.in_area, w.cancelled, w.superseded_by IS NOT NULL AS superseded, w.banner_id, w.received_at, c.name AS source
+      `SELECT w.id, w.identifier, w.msg_type, w.severity, w.event, w.headline, w.areas, w.effective_at, w.expires_at, w.web_url, w.in_area, w.cancelled, w.superseded_by IS NOT NULL AS superseded, w.banner_id, w.received_at, c.name || CASE WHEN c.deleted_at IS NOT NULL THEN ' (Verbindung gelöscht)' ELSE '' END AS source
          FROM official_warnings w JOIN connections c ON c.id = w.connection_id ORDER BY w.received_at DESC LIMIT 100`,
     ),
   );

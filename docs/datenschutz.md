@@ -31,6 +31,9 @@ Warnfeeds (amtliche Warnungen) ◀──Abruf───────────�
 - **Veröffentlichung:** Nur freigegebene Fassungen und öffentliche Fassungen der Dateien (neutral benannt) verlassen
   BlaulichtCMS. Keine Originale, keine Uploader-Hinweise.
 - **Warnentwurf:** Rückrufkontakt (Name, Telefon), bestätigende/freigebende Personen, Empfängeradressen, PDF.
+- **Verbindung löschen:** Zugangsdaten (alle Versionen) werden sofort gelöscht. Eine nie verwendete Verbindung
+  verschwindet ganz; eine verwendete bleibt als „gelöscht“ markiert (ohne Zugangsdaten), damit der
+  Veröffentlichungsverlauf nachvollziehbar bleibt.
 - **Feuersoftware Connect (Quelle, optional):** BlaulichtCMS ruft beim Anbieter Feuersoftware die Einsätze des
   eigenen Standorts ab (HTTPS, API-Key verschlüsselt gespeichert). An Feuersoftware gehen dabei nur der Schlüssel und
   die Abfrage selbst. Von der Antwort bleiben nur die Felder der Allowlist; Lagemeldungen (Freitext, ggf.

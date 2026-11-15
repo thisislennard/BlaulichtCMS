@@ -259,7 +259,7 @@ export async function postRoutes(app: FastifyInstance) {
       })),
       collections,
       social: await many<any>(
-        `SELECT sp.id, sp.status, sp.remote_url, sp.remote_id, sp.error, sp.error_class, sp.attempts, sp.created_at, sp.published_at, sp.removal_status, sp.removal_error, sp.removed_at, c.name AS connection_name, c.kind, r.number AS revision_number
+        `SELECT sp.id, sp.status, sp.remote_url, sp.remote_id, sp.error, sp.error_class, sp.attempts, sp.created_at, sp.published_at, sp.removal_status, sp.removal_error, sp.removed_at, CASE WHEN c.deleted_at IS NOT NULL THEN 'Verbindung gelöscht' ELSE c.name END AS connection_name, c.kind, r.number AS revision_number
            FROM social_publications sp JOIN connections c ON c.id = sp.connection_id JOIN post_revisions r ON r.id = sp.revision_id WHERE sp.post_id = $1 ORDER BY sp.created_at DESC`,
         [id],
       ),

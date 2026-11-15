@@ -22,6 +22,7 @@ export interface Connection {
   preview: any;
   private_target: string | null;
   private_approved_at: string | null;
+  deleted_at?: string | null;
 }
 
 export interface TestStep {
@@ -48,10 +49,30 @@ export const KIND_LABEL: Record<ConnectionKind, string> = {
   feuersoftware: 'Feuersoftware Connect (Einsatzentwürfe)',
 };
 
-export async function loadConnection(id: string, db: Queryable = pool): Promise<Connection> {
+/** Verbindung laden; gelöschte nur mit `includeDeleted` (Ansicht), sonst wie nicht vorhanden. */
+export async function loadConnection(id: string, db: Queryable = pool, opts: { includeDeleted?: boolean } = {}): Promise<Connection> {
   const c = await one<Connection>('SELECT * FROM connections WHERE id = $1', [id], db);
-  if (!c) throw notFound('Verbindung nicht gefunden.');
+  if (!c || (c.deleted_at && !opts.includeDeleted)) throw notFound('Verbindung nicht gefunden.');
   return c;
+}
+
+/**
+ * Wo eine Verbindung verwendet wird (alle Bezüge auf connections): Veröffentlichungen auf sozialen Kanälen,
+ * Einsatzmeldungen, übernommene Einsätze, amtliche Warnungen und Zielkanäle in Beitragsfassungen. Ohne Bezüge darf sie
+ * endgültig gelöscht werden.
+ */
+export async function connectionUsage(id: string, db: Queryable = pool) {
+  const u = await one<{ publications: number; events: number; seen: number; warnings: number; targets: number }>(
+    `SELECT (SELECT count(*)::int FROM social_publications WHERE connection_id = $1) AS publications,
+            (SELECT count(*)::int FROM fe2_events WHERE connection_id = $1) AS events,
+            (SELECT count(*)::int FROM connection_seen_events WHERE connection_id = $1) AS seen,
+            (SELECT count(*)::int FROM official_warnings WHERE connection_id = $1) AS warnings,
+            (SELECT count(*)::int FROM post_revisions WHERE social_targets @> ARRAY[$1::uuid]) AS targets`,
+    [id],
+    db,
+  );
+  const usage = u ?? { publications: 0, events: 0, seen: 0, warnings: 0, targets: 0 };
+  return { ...usage, used: Object.values(usage).some((n) => n > 0) };
 }
 
 export async function connectionSecrets(c: Connection, db: Queryable = pool): Promise<Record<string, string>> {

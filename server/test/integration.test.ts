@@ -4240,6 +4240,71 @@ describe('Feuersoftware Connect als zweite Einsatzquelle', () => {
   });
 });
 
+describe('Verbindungen löschen', () => {
+  it('nie benutzt: endgültig samt Geheimnissen; nur mit Recht; auditiert', async () => {
+    const c = await admin.post('/connections', { kind: 'facebook', name: 'Facebook ungenutzt', config: { appId: '1' } });
+    const id = c.json.id;
+    await admin.put(`/connections/${id}/secrets`, { appSecret: 'ungenutztes-geheimnis-1', pageToken: 'ungenutzter-token-2' });
+    expect((await one<any>(`SELECT count(*)::int AS n FROM secrets WHERE owner_type = 'connection' AND owner_id = $1`, [id]))!.n).toBeGreaterThan(0);
+    expect((await admin.get(`/connections/${id}`)).json.usage).toMatchObject({ used: false, publications: 0 });
+    expect((await editor.raw('DELETE', `/connections/${id}`, { body: {} })).status).toBe(403);
+    const d = await admin.raw('DELETE', `/connections/${id}`, { body: {} });
+    expect(d.status).toBe(200);
+    expect(d.json.mode).toBe('deleted');
+    expect(await one(`SELECT 1 FROM connections WHERE id = $1`, [id])).toBeNull();
+    expect((await one<any>(`SELECT count(*)::int AS n FROM secrets WHERE owner_type = 'connection' AND owner_id = $1`, [id]))!.n).toBe(0);
+    const a = await one<any>(`SELECT details FROM audit_events WHERE action = 'connection.deleted' AND object_id = $1::text`, [id]);
+    expect(a.details).toMatchObject({ art: 'facebook', endgueltig: true });
+    expect((await admin.get(`/connections/${id}`)).status).toBe(404);
+  });
+
+  it('benutzt: widerrufen, Geheimnisse gelöscht, ausgeblendet; Bezüge zeigen „Verbindung gelöscht“', async () => {
+    const fb = await one<any>(`SELECT c.id, c.name, sp.post_id FROM connections c JOIN social_publications sp ON sp.connection_id = c.id WHERE c.kind = 'facebook' AND c.deleted_at IS NULL LIMIT 1`);
+    expect(fb).not.toBeNull();
+    await pool.query(`UPDATE connections SET status = 'active' WHERE id = $1`, [fb.id]);
+    expect((await admin.get(`/connections/${fb.id}`)).json.usage.used).toBe(true);
+    const d = await admin.raw('DELETE', `/connections/${fb.id}`, { body: {} });
+    expect(d.status).toBe(200);
+    expect(d.json.mode).toBe('hidden');
+    const row = await one<any>(`SELECT status, secret_id, deleted_at, deleted_by FROM connections WHERE id = $1`, [fb.id]);
+    expect(row).toMatchObject({ status: 'revoked', secret_id: null });
+    expect(row.deleted_at).not.toBeNull();
+    expect(row.deleted_by).not.toBeNull();
+    expect((await one<any>(`SELECT count(*)::int AS n FROM secrets WHERE owner_type = 'connection' AND owner_id = $1`, [fb.id]))!.n).toBe(0);
+    expect((await one<any>(`SELECT details FROM audit_events WHERE action = 'connection.deleted' AND object_id = $1::text`, [fb.id])).details).toMatchObject({ endgueltig: false });
+    // Ausgeblendet – auch für die Redaktion; „Gelöschte anzeigen“ nur für die Administration
+    expect((await admin.get('/connections')).json.some((x: any) => x.id === fb.id)).toBe(false);
+    expect((await editor.get('/connections')).json.some((x: any) => x.id === fb.id)).toBe(false);
+    expect((await editor.get('/connections?deleted=1')).json.some((x: any) => x.id === fb.id)).toBe(false);
+    const all = (await admin.get('/connections?deleted=1')).json;
+    expect(all.find((x: any) => x.id === fb.id).deleted_at).toBeTruthy();
+    expect((await admin.get(`/connections/${fb.id}`)).json.deleted_at).toBeTruthy();
+    // Bezüge bleiben, zeigen aber „Verbindung gelöscht“
+    const p = (await editor.get(`/posts/${fb.post_id}`)).json;
+    expect(p.social.length).toBeGreaterThan(0);
+    expect(p.social.filter((s: any) => s.kind === 'facebook').every((s: any) => s.connection_name === 'Verbindung gelöscht')).toBe(true);
+    expect(p.social.some((s: any) => s.connection_name === 'Verbindung gelöscht')).toBe(true);
+    // Keine weiteren Aktionen an einer gelöschten Verbindung
+    expect((await admin.post(`/connections/${fb.id}/activate`)).status).toBe(404);
+    expect((await admin.put(`/connections/${fb.id}/secrets`, { pageToken: 'neu-123456' })).status).toBe(404);
+    expect((await admin.raw('DELETE', `/connections/${fb.id}`, { body: {} })).status).toBe(404);
+  });
+
+  it('Abrufe ignorieren gelöschte Verbindungen', async () => {
+    const fs = (await one<any>(`INSERT INTO connections (kind, name, status, config) VALUES ('feuersoftware', 'Feuersoftware gelöscht', 'active', '{"intervalSeconds":60}') RETURNING id`))!;
+    await pool.query(`INSERT INTO connection_seen_events (connection_id, ref_hash) VALUES ($1, 'x')`, [fs.id]);
+    expect((await admin.raw('DELETE', `/connections/${fs.id}`, { body: {} })).json.mode).toBe('hidden');
+    const { pollFeuersoftware } = await import('../src/connections/feuersoftware.js');
+    expect((await pollFeuersoftware(fs.id)).skipped).toContain('nicht aktiv');
+    const wf = (await one<any>(`INSERT INTO connections (kind, name, status, config) VALUES ('warnfeed', 'Warnfeed gelöscht', 'active', '{"format":"cap","url":"https://warn.example.invalid/cap.xml"}') RETURNING id`))!;
+    await pool.query(`INSERT INTO official_warnings (connection_id, identifier) VALUES ($1, 'geloescht-1')`, [wf.id]);
+    expect((await admin.raw('DELETE', `/connections/${wf.id}`, { body: {} })).json.mode).toBe('hidden');
+    const ow = (await admin.get('/official-warnings')).json.find((w: any) => w.identifier === 'geloescht-1');
+    expect(ow.source).toBe('Warnfeed gelöscht (Verbindung gelöscht)');
+    expect((await one<any>(`SELECT count(*)::int AS n FROM connections WHERE id = ANY($1) AND status = 'revoked'`, [[fs.id, wf.id]]))!.n).toBe(2);
+  });
+});
+
 /* ---------------------------- Medien wie LiFeOS (Pakete 1–10) ---------------------------- */
 
 /** Neue Sammlung mit Link über die API; liefert IDs und Token. */

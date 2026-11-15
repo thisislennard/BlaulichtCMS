@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link, useParams, useSearchParams } from 'react-router';
-import { get, post, put } from '../../api/client';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
+import { del, get, post, put } from '../../api/client';
 import { Badge, Button, Card, cx, ErrorBox, FieldWrap, Input, KeyValue, Notice, PageHeader, Select, SkeletonRows, StatusBadge, Switch, Textarea } from '../../components/ui/core';
 import { Icon } from '../../components/ui/Icon';
 import { HelpLink, HelpTip } from '../../components/ui/HelpTip';
@@ -44,6 +44,7 @@ export default function ConnectionDetail() {
   const [params, setParams] = useSearchParams();
   const qc = useQueryClient();
   const { me } = useAuth();
+  const nav = useNavigate();
   const toast = useToast();
   const toastError = useErrorToast();
   const q = useQuery({ queryKey: ['connection', id], queryFn: () => get<any>(`/connections/${id}`) });
@@ -113,7 +114,37 @@ export default function ConnectionDetail() {
     return r;
   };
   const revoked = c.status === 'revoked';
+  const deleted = !!c.deleted_at;
   const test = c.last_test;
+  const usageText = () => {
+    const u = c.usage ?? {};
+    const parts = [u.publications && `${u.publications} Veröffentlichung(en) auf sozialen Kanälen`, u.targets && `${u.targets} Beitragsfassung(en) mit diesem Kanal`, u.events && `${u.events} Einsatzmeldung(en)`, u.warnings && `${u.warnings} amtliche Warnung(en)`, !u.events && u.seen && 'übernommene Einsätze'].filter(Boolean);
+    return parts.join(', ');
+  };
+  const remove = async () => {
+    const used = !!c.usage?.used;
+    const ok = await ask({
+      title: `Verbindung „${c.name}“ löschen?`,
+      text: used ? (
+        <>
+          <p className="m-0">Die Verbindung wird verwendet ({usageText()}). Sie wird deshalb <strong>widerrufen</strong>, ihre Zugangsdaten werden gelöscht und sie verschwindet aus den Listen. Bezüge wie der Veröffentlichungsverlauf bleiben erhalten und zeigen „Verbindung gelöscht“.</p>
+          <p className="m-0 mt-2">Das lässt sich nicht rückgängig machen.</p>
+        </>
+      ) : (
+        <>
+          <p className="m-0">Die Verbindung wurde nie verwendet und wird samt Zugangsdaten <strong>endgültig gelöscht</strong>.</p>
+          <p className="m-0 mt-2">Das lässt sich nicht rückgängig machen.</p>
+        </>
+      ),
+      confirmLabel: 'Verbindung löschen',
+    });
+    if (!ok) return;
+    const r: any = await act(() => del(`/connections/${id}`));
+    if (!r) return;
+    toast({ tone: 'success', title: r.mode === 'deleted' ? 'Verbindung endgültig gelöscht' : 'Verbindung gelöscht (widerrufen und ausgeblendet)' });
+    await qc.invalidateQueries({ queryKey: ['connections'] });
+    nav('/verbindungen');
+  };
 
   return (
     <div className="flex flex-col gap-5">
@@ -137,7 +168,7 @@ export default function ConnectionDetail() {
           })}
         </ol>
       </nav>
-      {revoked && <Notice tone="error">Diese Verbindung wurde widerrufen; ihre Zugangsdaten sind gelöscht.</Notice>}
+      {deleted ? <Notice tone="error">Diese Verbindung wurde am {fmtDateTime(c.deleted_at)} gelöscht; ihre Zugangsdaten sind gelöscht. Sie ist nur noch zur Nachvollziehbarkeit sichtbar.</Notice> : revoked && <Notice tone="error">Diese Verbindung wurde widerrufen; ihre Zugangsdaten sind gelöscht.</Notice>}
 
       {step === 'verbinden' && !revoked && (
         <div className="flex flex-col gap-4">
@@ -456,7 +487,8 @@ export default function ConnectionDetail() {
                 {c.status !== 'active' && !revoked && <Button variant="primary" icon="Power" disabled={busy || !test?.ok} onClick={() => act(() => post(`/connections/${id}/activate`), 'Aktiviert')}>Aktivieren</Button>}
                 {c.status === 'active' && <Button icon="PowerOff" onClick={() => act(() => post(`/connections/${id}/disable`), 'Angehalten')}>Anhalten</Button>}
                 {(c.kind === 'warnfeed' || c.kind === 'feuersoftware') && c.status === 'active' && <Button icon="RefreshCw" loading={busy} onClick={() => act(() => post(`/connections/${id}/refresh`), 'Abgerufen')}>Jetzt abrufen</Button>}
-                {!revoked && <Button variant="danger" icon="Trash2" onClick={async () => (await ask({ title: 'Verbindung widerrufen?', text: 'Die gespeicherten Zugangsdaten werden gelöscht. Für eine neue Anbindung ist eine neue Verbindung nötig.', confirmLabel: 'Widerrufen' })) && act(() => post(`/connections/${id}/revoke`), 'Widerrufen')}>Widerrufen</Button>}
+                {!revoked && <Button variant="danger" icon="Ban" onClick={async () => (await ask({ title: 'Verbindung widerrufen?', text: 'Die gespeicherten Zugangsdaten werden gelöscht. Für eine neue Anbindung ist eine neue Verbindung nötig.', confirmLabel: 'Widerrufen' })) && act(() => post(`/connections/${id}/revoke`), 'Widerrufen')}>Widerrufen</Button>}
+                {!deleted && <Button variant="danger" icon="Trash2" disabled={busy} onClick={remove}>Löschen</Button>}
               </div>
             </div>
           </Card>

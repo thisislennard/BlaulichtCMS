@@ -338,7 +338,7 @@ async function endBanner(bannerId: string, why: string) {
 /** Fälliger Abruf aller aktiven Warnfeeds (Worker). */
 export async function refreshDueWarnfeeds() {
   const rows = await many<any>(
-    `SELECT * FROM connections WHERE kind = 'warnfeed' AND status = 'active'
+    `SELECT * FROM connections WHERE kind = 'warnfeed' AND status = 'active' AND deleted_at IS NULL
        AND (last_event_at IS NULL OR last_event_at < now() - make_interval(mins => GREATEST(2, COALESCE((config->>'intervalMinutes')::int, 5))))`,
   );
   for (const c of rows) {

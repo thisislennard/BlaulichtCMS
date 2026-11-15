@@ -259,7 +259,7 @@ async function claim(id: string, force: boolean): Promise<Connection | null> {
   // Regulär: Abstand der Verbindung (2 s Spielraum für den Takt des Workers); „Jetzt abrufen“: mindestens 15 s
   return one<Connection>(
     `UPDATE connections SET last_poll_at = now()
-      WHERE id = $1 AND kind = 'feuersoftware' AND status = 'active'
+      WHERE id = $1 AND kind = 'feuersoftware' AND status = 'active' AND deleted_at IS NULL
         AND (retry_after_until IS NULL OR retry_after_until <= now())
         AND (last_poll_at IS NULL OR last_poll_at <= now() - make_interval(secs => CASE WHEN $2 THEN 15
               ELSE GREATEST(58, COALESCE((config->>'intervalSeconds')::int, ${FEUERSOFTWARE_DEFAULT_INTERVAL}) - 2) END))
@@ -352,7 +352,7 @@ async function recordSuccess(c: Connection) {
 /** Fällige Abrufe aller aktiven Feuersoftware-Verbindungen (Worker, nacheinander). */
 export async function pollDueFeuersoftware() {
   const rows = await many<Connection>(
-    `SELECT * FROM connections WHERE kind = 'feuersoftware' AND status = 'active'
+    `SELECT * FROM connections WHERE kind = 'feuersoftware' AND status = 'active' AND deleted_at IS NULL
        AND (retry_after_until IS NULL OR retry_after_until <= now())`,
   );
   for (const c of rows) {

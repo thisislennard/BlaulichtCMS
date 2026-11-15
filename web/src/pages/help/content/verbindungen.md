@@ -3,7 +3,7 @@ Verbindungen sind **optional**. BlaulichtCMS funktioniert vollständig ohne. Jed
 1. **Verbinden** – Einstellungen und Zugangsdaten. Zugangsdaten werden verschlüsselt gespeichert und nie wieder angezeigt.
 2. **Testen** – zeigt jeden Prüfschritt mit Ergebnis. Eine erfolgreiche Anmeldung allein ist **kein** Veröffentlichungstest.
 3. **Vorschau** – welche Funktionen das Konto tatsächlich bietet und wie Daten ankommen würden.
-4. **Aktivieren** – erst nach bestandenem Test. Anhalten und Widerrufen sind jederzeit möglich.
+4. **Aktivieren** – erst nach bestandenem Test. Anhalten, Widerrufen und Löschen sind jederzeit möglich.
 
 ## Test und Aktivierung
 
@@ -14,6 +14,16 @@ Eine Verbindung lässt sich nur mit einem **bestandenen Test der aktuellen Einst
 - **Ohne neuen Test** änderbar sind der Name, das Abrufintervall bzw. der Abrufabstand, „Beitragsentwürfe anlegen“ und die automatischen Banner (die haben eigene Voraussetzungen, siehe [unten](#automatische-banner-und-pruefliste)).
 - Eine angehaltene Verbindung mit unveränderten Einstellungen lässt sich ohne neuen Test wieder aktivieren.
 - Jede Rücksetzung steht im Audit-Protokoll („Neuer Test nötig“ mit vorherigem Status und Grund).
+
+## Widerrufen und löschen
+
+Beides steht in der Verbindung unter Schritt **Aktivieren** und braucht das Recht „Verbindungen verwalten“. Jede Aktion steht im Audit-Protokoll.
+
+- **Widerrufen** löscht die Zugangsdaten; die Verbindung bleibt sichtbar und lässt sich nicht wieder aktivieren.
+- **Löschen** entfernt eine Verbindung, die **nie verwendet** wurde, endgültig samt Zugangsdaten.
+- Wurde sie verwendet – Veröffentlichungen auf einem sozialen Kanal, Zielkanal in einer Beitragsfassung, Einsatzmeldungen aus FE2 oder Feuersoftware Connect, amtliche Warnungen –, wird sie stattdessen **widerrufen, ihre Zugangsdaten werden gelöscht** und sie verschwindet aus den Listen. Der Veröffentlichungsverlauf und andere Bezüge bleiben erhalten und zeigen „Verbindung gelöscht“. Abrufe, der FE2-Eingang und Veröffentlichungen ignorieren sie.
+- Der Bestätigungsdialog nennt vorher, welcher der beiden Fälle eintritt.
+- Die Administration (Recht „System verwalten“) kann unter Verbindungen mit **Gelöschte anzeigen** auch widerrufene und gelöschte Verbindungen einsehen.
 
 ## Facebook-Seite und Instagram-Konto
 
