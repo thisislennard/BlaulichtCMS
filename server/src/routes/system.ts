@@ -204,6 +204,12 @@ export async function systemRoutes(app: FastifyInstance) {
       if (!/^https?:\/\/[^\s]+$/i.test(u)) throw badRequest('Datenschutzerklärung: bitte eine vollständige Adresse mit https:// angeben.');
       patch['privacy.policy_url'] = u;
     }
+    if (patch['media.allowed_types'] != null) {
+      const { cleanTypeList } = await import('../media/types.js');
+      const types = cleanTypeList(patch['media.allowed_types']);
+      if (!types.length) throw badRequest('Bitte mindestens einen erlaubten Dateityp wählen.');
+      patch['media.allowed_types'] = types;
+    }
     if (patch['general.public_url'] != null && patch['general.public_url'] !== '') {
       patch['general.public_url'] = normalizePublicUrl(String(patch['general.public_url']));
     }

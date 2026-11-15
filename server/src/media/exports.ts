@@ -83,12 +83,12 @@ export async function buildExport(id: string) {
         (m.sensitive_flags ?? []).join(', '),
       ];
       // Angaben zu Hochladenden (Originalname, Hinweis, Vorgangsnummer) nur beim internen Export der Originale
-      rows.push(ex.variant === 'original' ? [...base, m.original_name, m.uploader_note, m.upload_ref ?? ''] : base);
+      rows.push(ex.variant === 'original' ? [...base, m.original_name, m.uploader_note, m.upload_ref ?? '', m.uploader?.name ?? '', m.uploader?.email ?? '', m.uploader?.place ?? '', m.uploader?.date ?? ''] : base);
     }
   }
   if (ex.with_csv) {
     const head = ['datei', 'anzeigename', 'beschreibung', 'schlagworte', 'sammlung', 'ordner', 'eingang', 'aufnahmezeit', 'art', 'aufloesung', 'groesse_bytes', 'sha256', 'sichtung', 'markierungen'];
-    if (ex.variant === 'original') head.push('originalname', 'hinweis', 'vorgangsnummer');
+    if (ex.variant === 'original') head.push('originalname', 'hinweis', 'vorgangsnummer', 'name', 'email', 'aufnahmeort', 'aufnahmedatum');
     // UTF-8 mit BOM, Semikolon als Trenner (deutsche Tabellenprogramme)
     const csv = '﻿' + [head, ...rows].map((r) => r.map(csvCell).join(';')).join('\r\n') + '\r\n';
     zip.addBuffer(Buffer.from(csv, 'utf8'), 'metadaten.csv');

@@ -8,7 +8,8 @@ import type { Actor } from '../lib/audit.js';
 import { AppError, badRequest, notFound } from '../lib/errors.js';
 import { getSettings } from '../lib/settings.js';
 import { ensureMediaDirs, freeBytes, mediaPaths } from '../media/storage.js';
-import { finalizeUpload, loadPublicLink, mediaPayload, UPLOAD_REF_RE, uploadAllowance, type UploadContext } from './media.js';
+import { finalizeUpload, mediaPayload, publicUploadContext, publicUploaderFrom, UPLOAD_REF_RE, uploadAllowance, type UploadContext } from './media.js';
+import { assertLinkRoom } from '../media/public-link.js';
 import { assertFolder } from './media-organize.js';
 
 /**
@@ -33,6 +34,9 @@ const createBody = z.object({
   ref: z.string().regex(UPLOAD_REF_RE).optional(),
   /** Zielordner (nur interner Upload; öffentlich gilt der Zielordner des Links) */
   folderId: z.uuid().optional(),
+  /** Abgefragte Angaben der Hochladenden (je nach Link) und Bestätigung */
+  uploader: z.object({ name: z.string().max(200).optional(), email: z.string().max(300).optional(), place: z.string().max(300).optional(), date: z.string().max(20).optional() }).optional(),
+  consent: z.boolean().optional(),
 });
 
 function sessionPayload(s: any, media?: any) {
@@ -52,7 +56,7 @@ async function staleFinishedSession(s: any): Promise<boolean> {
   return true;
 }
 
-async function createSession(ctx: UploadContext, body: z.infer<typeof createBody>) {
+async function createSession(ctx: UploadContext, body: z.infer<typeof createBody>, extra: { uploader?: Record<string, string> | null; consentAt?: Date | null } = {}) {
   // Schon vollständig hochgeladen (z. B. nach Abbruch der letzten Antwort)? → als Duplikat melden
   const existingMedia = await one<any>(`SELECT * FROM media WHERE collection_id = $1 AND client_key = $2 AND deleted_at IS NULL`, [ctx.collection.id, body.clientKey]);
   if (existingMedia) return { id: null, received: Number(existingMedia.size_bytes), size: Number(existingMedia.size_bytes), complete: true, duplicate: true };
@@ -80,13 +84,15 @@ async function createSession(ctx: UploadContext, body: z.infer<typeof createBody
         db,
       );
       if (l && l.upload_count + l.open >= l.max_files) throw new AppError(409, 'link_full', 'Über diesen Link wurden bereits alle erlaubten Dateien hochgeladen.');
+      // Weitere Grenzen des Links (Uploads, Dateien je Upload, Gesamtgröße)
+      if (ctx.link) await assertLinkRoom(db, ctx.link, { ref: body.ref ?? null, size: body.size });
     }
     const limit = await uploadAllowance(ctx, db);
     if (body.size > limit) throw new AppError(413, 'file_too_large', limit < ctx.maxFileBytes ? 'Die Datei passt nicht mehr in den verbleibenden Speicher der Sammlung.' : `Datei ist größer als ${Math.round(limit / 1024 / 1024)} MB.`);
     return one<any>(
-      `INSERT INTO upload_sessions (collection_id, upload_link_id, user_id, client_key, file_name, declared_type, note, size_bytes, upload_ref, folder_id)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) ON CONFLICT (collection_id, client_key) DO NOTHING RETURNING *`,
-      [ctx.collection.id, ctx.linkId, ctx.userId, body.clientKey, body.name.replace(/[\u0000-\u001f\\/]/g, '_'), body.type, body.note, body.size, body.ref ?? null, ctx.folderId ?? null],
+      `INSERT INTO upload_sessions (collection_id, upload_link_id, user_id, client_key, file_name, declared_type, note, size_bytes, upload_ref, folder_id, uploader, consent_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) ON CONFLICT (collection_id, client_key) DO NOTHING RETURNING *`,
+      [ctx.collection.id, ctx.linkId, ctx.userId, body.clientKey, body.name.replace(/[\u0000-\u001f\\/]/g, '_'), body.type, body.note, body.size, body.ref ?? null, ctx.folderId ?? null, extra.uploader ? JSON.stringify(extra.uploader) : null, extra.consentAt ?? null],
       db,
     );
   });
@@ -177,12 +183,12 @@ async function appendChunkLocked(ctx: UploadContext, sessionId: string, offset: 
   await new Promise<void>((resolve, reject) => fs.createReadStream(file).on('data', (c) => hash.update(c)).on('end', () => resolve()).on('error', reject));
   let res;
   try {
-    res = await finalizeUpload({ ...ctx, folderId: s.folder_id ?? ctx.folderId ?? null, stored: { tmpPath: file, size: received, sha256: hash.digest('hex') }, name: s.file_name, declaredType: s.declared_type, note: s.note, uploadRef: s.upload_ref, clientKey: s.client_key, sessionId: s.id, keepTmpOnError: true });
+    res = await finalizeUpload({ ...ctx, folderId: s.folder_id ?? ctx.folderId ?? null, stored: { tmpPath: file, size: received, sha256: hash.digest('hex') }, name: s.file_name, declaredType: s.declared_type, note: s.note, uploader: s.uploader ?? null, consentAt: s.consent_at ?? null, uploadRef: s.upload_ref, clientKey: s.client_key, sessionId: s.id, keepTmpOnError: true });
   } catch (e) {
     // Endgültig (Kontingent erschöpft): Sitzung und Teildatei entfernen, sonst reserviert die Sitzung 24 h lang Platz
     // in Sammlung und Link (#152). Vorübergehende Fehler (z. B. Datenbank): Teildatei bleibt, ein leerer Teil am Ende
     // stößt den Abschluss erneut an, ohne dass die ganze Datei neu gesendet werden muss.
-    if (e instanceof AppError && ['collection_full', 'link_full', 'collection_gone', 'link_closed'].includes(e.code)) {
+    if (e instanceof AppError && ['collection_full', 'link_full', 'upload_full', 'collection_gone', 'link_closed'].includes(e.code)) {
       await pool.query('DELETE FROM upload_sessions WHERE id = $1 AND media_id IS NULL', [s.id]);
       fs.rmSync(file, { force: true });
     }
@@ -210,19 +216,7 @@ export async function uploadRoutes(app: FastifyInstance) {
   // Rohdaten-Teile als Stream annehmen (ohne Puffern im Speicher)
   app.addContentTypeParser('application/octet-stream', (_req, payload, done) => done(null, payload));
 
-  const publicCtx = async (token: string, req: FastifyRequest): Promise<UploadContext & { link: any }> => {
-    const l = await loadPublicLink(token);
-    const s = await getSettings();
-    return {
-      link: l,
-      collection: { id: l.c_id, max_files: l.c_max_files, max_bytes: l.c_max_bytes },
-      linkId: l.id,
-      userId: null,
-      maxFileBytes: Math.min(Number(l.max_file_bytes), s['media.max_file_mb'] * 1024 * 1024),
-      actor: { id: null, name: `Upload-Link ${l.label || l.id.slice(0, 8)}`, type: 'system', ip: req.ip } as Actor,
-      folderId: l.folder_id ?? null,
-    };
-  };
+  const publicCtx = (token: string, req: FastifyRequest) => publicUploadContext(req, token);
   const internalCtx = async (collectionId: string, req: FastifyRequest): Promise<UploadContext> => {
     const c = await one<any>('SELECT * FROM collections WHERE id = $1', [collectionId]);
     if (!c) throw notFound('Sammlung nicht gefunden.');
@@ -240,8 +234,10 @@ export async function uploadRoutes(app: FastifyInstance) {
     const { token } = tokenP.parse(req.params);
     const ctx = await publicCtx(token, req);
     const body = createBody.parse(req.body);
+    // Abgefragte Angaben und Bestätigung prüfen; abgeschaltete Felder werden verworfen
+    const extra = publicUploaderFrom(ctx.link, { uploader: body.uploader, consent: body.consent, note: body.note });
     // Link-Kontingent (übernommene Dateien + offene Sitzungen) prüft createSession unter der Sammlungssperre (#151)
-    const r = await createSession(ctx, body);
+    const r = await createSession(ctx, { ...body, note: extra.note }, extra);
     return { id: r.id, received: r.received, size: r.size, complete: r.complete, duplicate: (r as any).duplicate ?? false, chunkSize: 8 * 1024 * 1024 };
   });
   app.get('/public/upload/:token/sessions/:id', lim(600), async (req) => {

@@ -8,6 +8,7 @@ import { Dialog, Menu, useConfirm, useErrorToast, useToast } from '../../compone
 import { useAuth } from '../../lib/auth';
 import { fmtBytes, fmtDateTime, fmtRelative } from '../../lib/format';
 import { FolderOptions, folderPath, type Folder } from './organize';
+import { LinkOptionsFields, optsFromLink, optsPayload, optsValid, type LinkOpts } from './LinkOptions';
 
 /** Zielordner eines Links (nur wenn die Sammlung Ordner hat). */
 function FolderField({ folders, value, onChange, id }: { folders: Folder[]; value: string; onChange: (v: string) => void; id: string }) {
@@ -82,6 +83,7 @@ export function NewLinkDialog({ collectionId, folders = [], onClose, onCreated }
   const toastError = useErrorToast();
   const [validity, setValidity] = useState<Validity>(DEFAULT_VALIDITY);
   const [folderId, setFolderId] = useState('');
+  const [opts, setOpts] = useState<LinkOpts>(optsFromLink());
   const [label, setLabel] = useState('');
   const [welcome, setWelcome] = useState('');
   const [busy, setBusy] = useState(false);
@@ -96,11 +98,12 @@ export function NewLinkDialog({ collectionId, folders = [], onClose, onCreated }
           <Button
             variant="primary"
             loading={busy}
-            disabled={validity.mode === 'date' && !validity.date}
+            disabled={(validity.mode === 'date' && !validity.date) || !!optsValid(opts)}
+            title={optsValid(opts) ?? undefined}
             onClick={async () => {
               setBusy(true);
               try {
-                const l = await post<UploadLink>(`/collections/${collectionId}/links`, { label: label.trim(), welcomeText: welcome.trim(), folderId: folderId || null, ...validityPayload(validity) });
+                const l = await post<UploadLink>(`/collections/${collectionId}/links`, { label: label.trim(), welcomeText: welcome.trim(), folderId: folderId || null, ...validityPayload(validity), ...optsPayload(opts, true) });
                 onCreated(l);
               } catch (e) {
                 toastError(e);
@@ -123,6 +126,8 @@ export function NewLinkDialog({ collectionId, folders = [], onClose, onCreated }
         <FieldWrap label="Begrüßungstext (optional)" help="Erscheint oben auf der Upload-Seite dieses Links – statt des Hinweises der Sammlung." htmlFor="l-welcome">
           <Textarea id="l-welcome" rows={3} maxLength={2000} value={welcome} onChange={(e) => setWelcome(e.target.value)} />
         </FieldWrap>
+        <LinkOptionsFields value={opts} onChange={setOpts} idPrefix="l" />
+        {optsValid(opts) && <p className="m-0 text-sm text-err" role="alert">{optsValid(opts)}</p>}
       </div>
     </Dialog>
   );
@@ -133,6 +138,7 @@ function EditLinkDialog({ link, folders, onClose, onSaved }: { link: UploadLink;
   const toastError = useErrorToast();
   const [label, setLabel] = useState(link.label);
   const [folderId, setFolderId] = useState(link.folder_id ?? '');
+  const [opts, setOpts] = useState<LinkOpts>(optsFromLink(link));
   const [welcome, setWelcome] = useState(link.welcome_text ?? '');
   const [busy, setBusy] = useState(false);
   return (
@@ -149,7 +155,7 @@ function EditLinkDialog({ link, folders, onClose, onSaved }: { link: UploadLink;
             onClick={async () => {
               setBusy(true);
               try {
-                await patch(`/upload-links/${link.id}`, { label: label.trim(), welcomeText: welcome.trim(), ...(folders.length ? { folderId: folderId || null } : {}) });
+                await patch(`/upload-links/${link.id}`, { label: label.trim(), welcomeText: welcome.trim(), ...(folders.length ? { folderId: folderId || null } : {}), ...optsPayload(opts, false) });
                 onSaved();
               } catch (e) {
                 toastError(e);
@@ -170,6 +176,8 @@ function EditLinkDialog({ link, folders, onClose, onSaved }: { link: UploadLink;
           <Textarea id="le-welcome" rows={4} maxLength={2000} value={welcome} onChange={(e) => setWelcome(e.target.value)} />
         </FieldWrap>
         <FolderField folders={folders} value={folderId} onChange={setFolderId} id="le-folder" />
+        <LinkOptionsFields value={opts} onChange={setOpts} idPrefix="le" hasPassword={link.has_password} />
+        {optsValid(opts) && <p className="m-0 text-sm text-err" role="alert">{optsValid(opts)}</p>}
       </div>
     </Dialog>
   );
@@ -229,6 +237,20 @@ export function OnceLinkDialog({ link, title, purpose, onClose }: { link: Upload
       </div>
     </Dialog>
   );
+}
+
+/** Kurzfassung der erweiterten Optionen für die Link-Liste. */
+function linkOptionSummary(l: UploadLink): string {
+  const parts: string[] = [];
+  if (l.has_password) parts.push('mit Passwort');
+  if (l.max_uploads) parts.push(`${l.uploads ?? 0} von ${l.max_uploads} Uploads`);
+  if (l.max_files_per_upload) parts.push(`je Upload höchstens ${l.max_files_per_upload} Dateien`);
+  if (l.max_total_bytes) parts.push(`höchstens ${fmtBytes(l.max_total_bytes)} gesamt`);
+  if (l.allowed_types) parts.push(`nur ${l.allowed_types.join(', ').toUpperCase()}`);
+  const asked = Object.entries(l.fields ?? {}).filter(([k, v]) => v !== 'off' && k !== 'note').map(([k, v]) => `${({ name: 'Name', email: 'E-Mail', place: 'Ort', date: 'Datum' } as Record<string, string>)[k]}${v === 'required' ? ' (Pflicht)' : ''}`);
+  if (asked.length) parts.push(`fragt ${asked.join(', ')}`);
+  if (l.consent_required) parts.push('mit Bestätigung');
+  return parts.join(' · ');
 }
 
 /* ------------------------------------ Link-Übersicht ------------------------------------ */
@@ -299,6 +321,14 @@ export function UploadLinksCard({ collection, links, folders = [], onChanged }: 
                       { label: 'Um 7 Tage verlängern', icon: 'Clock', onClick: () => act(() => post(`/upload-links/${l.id}/extend`, { hours: 168 }), 'Link verlängert') },
                       { label: 'Bis Termin …', icon: 'CalendarClock', onClick: () => setDeadline(l) },
                       {
+                        label: 'Angaben der Hochladenden löschen',
+                        icon: 'EyeOff',
+                        onClick: async () => {
+                          if (!(await ask({ title: 'Angaben der Hochladenden löschen?', text: 'Name, E-Mail, Aufnahmeort, Aufnahmedatum und Hinweise aller Uploads über diesen Link werden entfernt. Die Dateien bleiben.', confirmLabel: 'Angaben löschen' }))) return;
+                          await act(() => post(`/upload-links/${l.id}/clear-uploader`), 'Angaben gelöscht');
+                        },
+                      },
+                      {
                         label: 'Neu erzeugen',
                         icon: 'RefreshCw',
                         onClick: async () => {
@@ -327,6 +357,7 @@ export function UploadLinksCard({ collection, links, folders = [], onChanged }: 
                 )}
               </div>
               {l.welcome_text && <p className="m-0 text-sm text-fg-muted line-clamp-2">Begrüßung: {l.welcome_text}</p>}
+              {linkOptionSummary(l) && <p className="m-0 text-sm text-fg-muted">{linkOptionSummary(l)}</p>}
               {l.folder_id && folders.some((f) => f.id === l.folder_id) && (
                 <p className="m-0 text-sm text-fg-muted">Zielordner: {folderPath(folders, l.folder_id).map((f) => f.name).join(' › ')}</p>
               )}
@@ -336,7 +367,7 @@ export function UploadLinksCard({ collection, links, folders = [], onChanged }: 
                 {l.last_used_at ? ` · zuletzt genutzt ${fmtRelative(l.last_used_at)}` : ''}
                 {l.regenerated_at ? ` · neu erzeugt ${fmtRelative(l.regenerated_at)}` : ''}
               </div>
-              {(l.state === 'active' || l.state === 'paused') && l.url && !c.archived_at && (
+              {(l.state === 'active' || l.state === 'paused' || l.state === 'full') && l.url && !c.archived_at && (
                 <ShareActions
                   share
                   target={{

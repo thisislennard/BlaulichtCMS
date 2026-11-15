@@ -91,6 +91,7 @@ const RANGES: Record<string, [number, number]> = {
   'privacy.warning_days': [0, 3650],
   'privacy.official_warning_days': [0, 3650],
   'privacy.upload_link_days': [0, 3650],
+  'privacy.uploader_months': [0, 120],
   'media.max_file_mb': [1, 20000],
   'media.link_max_files': [1, 1000],
   'media.link_default_days': [1, 90],
@@ -394,6 +395,7 @@ export default function Settings() {
                   <NumField k="privacy.collection_retention_days" label="Abgeschlossene Sammlungen löschen nach" help="Archivierte Sammlungen bzw. Sammlungen ohne aktiven Link, gerechnet ab der letzten Aktivität. Dateien in laufenden Beiträgen bleiben. 0 = nie." unit={t("admin.common.days")} v={v} set={set} ro={ro} />
                   <NumField k="privacy.deleted_media_days" label="Papierkorb leeren nach" help="Gelöschte Dateien, Ordner und Sammlungen bleiben so lange im Papierkorb wiederherstellbar; danach werden Dateien und Datensätze endgültig entfernt. Gilt auch für Datensätze abgewiesener Dateien. 0 = nie automatisch." unit={t("admin.common.days")} v={v} set={set} ro={ro} />
                   <NumField k="privacy.upload_link_days" label="Abgelaufene Upload-Links" help="Abgelaufene oder widerrufene Links (Token, Bezeichnung) und Weiterleitungen aus dem Import. 0 = nie." unit={t("admin.common.days")} v={v} set={set} ro={ro} />
+                  <NumField k="privacy.uploader_months" label="Angaben der Hochladenden" help="Name, E-Mail-Adresse, Aufnahmeort und -datum (je Upload-Link abfragbar) danach entfernen; die Dateien bleiben. 0 = nie." unit="Monate" min={0} max={120} v={v} set={set} ro={ro} />
                   <NumField k="privacy.warning_days" label="Warnvorgänge" help="Nach dem letzten Bearbeitungsschritt des Vorgangs samt Aktualisierungen: Fassungen mit Rückrufkontakt, PDF, Versandnachweise. 0 = nie." unit={t("admin.common.days")} v={v} set={set} ro={ro} />
                   <NumField k="privacy.fe2_event_days" label="FE2-Einsatzmeldungen" help="Stichwort, Ort, Zeit, Einheiten. Beiträge und Warnvorgänge daraus bleiben. 0 = nie." unit={t("admin.common.days")} v={v} set={set} ro={ro} />
                   <NumField k="privacy.official_warning_days" label="Amtliche Warnungen" help="Gerechnet ab dem Ablauf der Warnung, frühestens ab dem letzten Abruf, in dem die Quelle sie noch geliefert hat. 0 = nie." unit={t("admin.common.days")} v={v} set={set} ro={ro} />
@@ -431,6 +433,7 @@ export default function Settings() {
                   label="Standortdaten auch aus Originalen entfernen"
                   description="Nach der Prüfung werden GPS-Angaben, Seriennummern, Personen- und XMP/IPTC-Angaben verlustfrei aus dem Original entfernt (Bilddaten bleiben unverändert, Videos werden ohne Metadaten und Datenspuren umverpackt). Ältere Originale bereinigt der Hintergrunddienst nach und nach. Entfernte Angaben lassen sich nicht wiederherstellen."
                 />
+                <AllowedTypesField value={v["media.allowed_types"]} ro={ro} onChange={(x) => set("media.allowed_types", x)} />
                 <Switch
                   checked={!!v["media.notices"]}
                   disabled={ro}
@@ -745,6 +748,44 @@ function timeZones(current: string): string[] {
   if (!list.length)
     list = ["Europe/Berlin", "Europe/Vienna", "Europe/Zurich", "UTC"];
   return list.includes(current) || !current ? list : [current, ...list];
+}
+
+const TYPE_OPTIONS: [string, string][] = [
+  ["jpeg", "JPEG"],
+  ["png", "PNG"],
+  ["webp", "WebP"],
+  ["heic", "HEIC/HEIF"],
+  ["avif", "AVIF"],
+  ["gif", "GIF"],
+  ["mp4", "MP4"],
+  ["mov", "MOV"],
+  ["webm", "WebM"],
+  ["3gp", "3GP"],
+];
+
+/** Global erlaubte Dateitypen (je Upload-Link weiter einschränkbar). */
+function AllowedTypesField({ value, onChange, ro }: { value: unknown; onChange: (v: string[]) => void; ro: boolean }) {
+  const list = Array.isArray(value) ? (value as string[]) : [];
+  return (
+    <fieldset className="m-0 p-0 border-0 flex flex-col gap-2">
+      <legend className="text-sm font-medium mb-1">Erlaubte Dateitypen</legend>
+      <div className="flex flex-wrap gap-x-4 gap-y-2">
+        {TYPE_OPTIONS.map(([k, label]) => (
+          <label key={k} className="inline-flex items-center gap-2 text-sm cursor-pointer">
+            <input
+              type="checkbox"
+              className="w-4 h-4 accent-[var(--bc-primary-solid)]"
+              disabled={ro || (list.length === 1 && list.includes(k))}
+              checked={list.includes(k)}
+              onChange={(e) => onChange(e.target.checked ? [...list, k] : list.filter((x) => x !== k))}
+            />
+            {label}
+          </label>
+        ))}
+      </div>
+      <p className="m-0 text-meta text-fg-muted">Geprüft wird der Dateiinhalt. Je Upload-Link lässt sich die Auswahl weiter einschränken.</p>
+    </fieldset>
+  );
 }
 
 function TextField({

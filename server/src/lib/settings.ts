@@ -39,6 +39,11 @@ export const DEFAULT_SETTINGS = {
   'privacy.warning_days': 365,
   'privacy.official_warning_days': 90,
   'privacy.upload_link_days': 90,
+  /**
+   * Angaben der Hochladenden (Name, E-Mail, Aufnahmeort, Aufnahmedatum – je Link abfragbar) nach so vielen Monaten
+   * entfernen; die Dateien bleiben (wie press_uploader_anonymize_months in LiFeOS). 0 = nie.
+   */
+  'privacy.uploader_months': 12,
   'privacy.controller': '',
   'privacy.dpo_contact': '',
   'privacy.policy_url': '',
@@ -92,6 +97,8 @@ export const DEFAULT_SETTINGS = {
   'media.camera_buttons': true,
   /** Text nach erfolgreichem Upload (leer = Standardtext). */
   'media.done_text': '',
+  /** Global erlaubte Dateitypen (Schlüssel aus media/types.ts); je Link weiter einschränkbar. */
+  'media.allowed_types': ['jpeg', 'png', 'webp', 'heic', 'mp4', 'mov', 'webm'] as string[],
   /** Benachrichtigungen der Medien (neue Dateien, Link läuft ab, Kontingent, Speicher) – lib/media-notify.ts. */
   'media.notices': true,
   /** Speicherwarnung an „Medien administrieren“, wenn weniger frei ist (GB, 0 = aus). */
@@ -233,6 +240,7 @@ export const SETTING_RANGES: Record<string, [number, number]> = {
   'privacy.warning_days': [0, 3650],
   'privacy.official_warning_days': [0, 3650],
   'privacy.upload_link_days': [0, 3650],
+  'privacy.uploader_months': [0, 120],
   'media.max_file_mb': [1, 20000],
   'media.link_max_files': [1, 1000],
   'media.link_default_days': [1, 90],

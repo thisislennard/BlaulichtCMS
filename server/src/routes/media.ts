@@ -10,7 +10,7 @@ import { AppError, badRequest, conflict, forbidden, notFound } from '../lib/erro
 import { getSettings, privacyIncomplete, privacyInfo } from '../lib/settings.js';
 import { publicBase } from '../lib/urls.js';
 import { enqueue } from '../jobs/queue.js';
-import { ACCEPT_ATTR } from '../media/process.js';
+
 import { sendFileResponse } from './files.js';
 import { exportPath } from '../media/exports.js';
 import { publicFileName } from '../media/names.js';
@@ -20,6 +20,11 @@ import { computeExpiry, extendExpiry, LINK_UNAVAILABLE, linkState } from '../med
 import { descendants } from '../media/folders.js';
 import { trashCollection, trashMedia } from './media-trash.js';
 import { noticeQuota } from '../lib/media-notify.js';
+import { hashPassword, verifyPassword } from '../auth/passwords.js';
+import { auditThrottled } from '../lib/audit.js';
+import { cleanFields, cleanUploader, DEFAULT_FIELDS, linkIsFull, type UploaderInput } from '../media/link-options.js';
+import { assertLinkRoom, assertUnlocked, linkClosedFull, linkUsage, setUnlockCookie } from '../media/public-link.js';
+import { acceptAttr, cleanTypeList, effectiveTypes, typeLabels } from '../media/types.js';
 import { assertFolder, loadFolders } from './media-organize.js';
 import { freeBytes, mediaPaths, moveFile, SizeLimitError, streamToTemp } from '../media/storage.js';
 
@@ -39,7 +44,9 @@ export async function freshLinkUrl(req: FastifyRequest | undefined, token: strin
 }
 
 export async function linkPayload(req: FastifyRequest, l: any) {
-  const state = linkState(l);
+  const base = linkState(l);
+  // „Schließen bei Grenze“: Kontingent (Uploads oder Gesamtgröße) erreicht → Zustand „voll“
+  const state = base === 'active' && l.close_when_full && linkIsFull(l, { uploads: Number(l.uploads ?? 0), bytes: Number(l.bytes ?? 0) }) ? 'full' : base;
   // Frisch angelegter oder neu erzeugter Link: Klartext-Token liegt nur in diesem Aufruf vor (auch bei „nur einmal anzeigen“)
   const url = l._token ? await freshLinkUrl(req, l._token) : state === 'active' || state === 'paused' ? await uploadLinkUrl(req, l.token_enc, l.id) : null;
   return {
@@ -63,6 +70,17 @@ export async function linkPayload(req: FastifyRequest, l: any) {
     created_at: l.created_at,
     created_by_name: l.created_by_name ?? null,
     bytes: l.bytes != null ? Number(l.bytes) : null,
+    uploads: l.uploads != null ? Number(l.uploads) : null,
+    // Erweiterte Optionen (Paket 6)
+    max_uploads: Number(l.max_uploads ?? 0),
+    max_files_per_upload: Number(l.max_files_per_upload ?? 0),
+    max_total_bytes: Number(l.max_total_bytes ?? 0),
+    close_when_full: !!l.close_when_full,
+    allowed_types: l.allowed_types ?? null,
+    fields: cleanFields(l.fields),
+    consent_required: !!l.consent_required,
+    consent_text: l.consent_text ?? '',
+    has_password: !!l.password_hash,
   };
 }
 
@@ -133,6 +151,54 @@ export interface LinkInput {
   maxFiles?: number;
   welcomeText?: string;
   folderId?: string | null;
+  maxUploads?: number;
+  maxFilesPerUpload?: number;
+  maxFileMb?: number;
+  maxTotalMb?: number;
+  closeWhenFull?: boolean;
+  allowedTypes?: string[] | null;
+  fields?: Record<string, string>;
+  consentRequired?: boolean;
+  consentText?: string;
+  password?: string;
+  removePassword?: boolean;
+}
+
+/** Erweiterte Link-Optionen prüfen und als Spaltenwerte liefern (nur gesetzte Felder). */
+async function linkOptionColumns(input: LinkInput, s: Awaited<ReturnType<typeof getSettings>>): Promise<Record<string, unknown>> {
+  const out: Record<string, unknown> = {};
+  if (input.maxUploads !== undefined) out.max_uploads = input.maxUploads;
+  if (input.maxFilesPerUpload !== undefined) out.max_files_per_upload = input.maxFilesPerUpload;
+  if (input.maxFileMb !== undefined) out.max_file_bytes = Math.min(input.maxFileMb, s['media.max_file_mb']) * 1024 * 1024;
+  if (input.maxTotalMb !== undefined) out.max_total_bytes = input.maxTotalMb * 1024 * 1024;
+  if (input.closeWhenFull !== undefined) out.close_when_full = input.closeWhenFull;
+  if (input.allowedTypes !== undefined) {
+    if (input.allowedTypes === null) out.allowed_types = null;
+    else {
+      const types = effectiveTypes(s['media.allowed_types'], cleanTypeList(input.allowedTypes));
+      if (!types.length) throw badRequest('Bitte mindestens einen erlaubten Dateityp wählen.');
+      out.allowed_types = types;
+    }
+  }
+  if (input.fields !== undefined) out.fields = JSON.stringify(cleanFields(input.fields));
+  if (input.consentRequired !== undefined) out.consent_required = input.consentRequired;
+  if (input.consentText !== undefined) out.consent_text = input.consentText.trim().slice(0, 2000);
+  if ((input.consentRequired ?? false) && input.consentText !== undefined && !input.consentText.trim()) throw badRequest('Für die Bestätigung bitte einen Text eingeben.');
+  if (input.removePassword) {
+    out.password_hash = null;
+    out.password_set_at = null;
+  } else if (input.password) {
+    if (input.password.length < 10) throw badRequest('Das Passwort muss mindestens 10 Zeichen lang sein.');
+    out.password_hash = await hashPassword(input.password);
+    out.password_set_at = new Date();
+  }
+  return out;
+}
+
+async function applyLinkOptions(id: string, cols: Record<string, unknown>, db: any = pool) {
+  const keys = Object.keys(cols);
+  if (!keys.length) return;
+  await db.query(`UPDATE upload_links SET ${keys.map((k, i) => `${k} = $${i + 2}`).join(', ')} WHERE id = $1`, [id, ...keys.map((k) => cols[k])]);
 }
 
 export async function createUploadLink(actor: Actor, userId: string | null, collectionId: string, input: LinkInput, db: any = pool) {
@@ -148,9 +214,27 @@ export async function createUploadLink(actor: Actor, userId: string | null, coll
     [id, collectionId, sha256Hex(token), tokenEnc, input.label ?? '', expires, s['media.max_file_mb'] * 1024 * 1024, Math.min(1000, input.maxFiles ?? s['media.link_max_files']), (input.welcomeText ?? '').trim().slice(0, 2000), await assertFolder(collectionId, input.folderId, db), userId],
     db,
   );
-  await audit(actor, 'upload_link.created', { type: 'upload_link', id: l.id, label: input.label || collectionId }, { sammlung: collectionId, gueltig_bis: expires.toISOString(), nur_einmal: !tokenEnc }, 'ok', db);
-  return { ...l, _token: token };
+  // Neue Links schließen bei erreichter Grenze (wie LiFeOS); bestehende Links behalten ihr Verhalten
+  const opts = await linkOptionColumns({ closeWhenFull: true, ...input }, s);
+  await applyLinkOptions(l.id, opts, db);
+  await audit(actor, 'upload_link.created', { type: 'upload_link', id: l.id, label: input.label || collectionId }, { sammlung: collectionId, gueltig_bis: expires.toISOString(), nur_einmal: !tokenEnc, optionen: Object.keys(opts).map((k) => (k === 'password_hash' ? 'passwort' : k)).filter((k) => k !== 'password_set_at') }, 'ok', db);
+  return { ...(await one<any>(`SELECT * FROM upload_links WHERE id = $1`, [l.id], db)), _token: token };
 }
+
+/** Eingaben für die erweiterten Optionen eines Links (Anlegen und Bearbeiten). */
+const linkOptionsSchema = {
+  maxUploads: z.number().int().min(0).max(100000).optional(),
+  maxFilesPerUpload: z.number().int().min(0).max(1000).optional(),
+  maxFileMb: z.number().int().min(1).max(102400).optional(),
+  maxTotalMb: z.number().int().min(0).max(1048576).optional(),
+  closeWhenFull: z.boolean().optional(),
+  allowedTypes: z.array(z.string().max(20)).max(20).nullable().optional(),
+  fields: z.record(z.string(), z.enum(['off', 'optional', 'required'])).optional(),
+  consentRequired: z.boolean().optional(),
+  consentText: z.string().max(2000).optional(),
+  password: z.string().max(200).optional(),
+  removePassword: z.boolean().optional(),
+};
 
 /** Eingaben für Gültigkeit und Begrüßungstext eines Links (Anlegen). */
 const linkInputSchema = z.object({
@@ -161,13 +245,14 @@ const linkInputSchema = z.object({
   maxFiles: z.number().int().min(1).max(1000).optional(),
   welcomeText: z.string().max(2000).default(''),
   folderId: z.uuid().nullable().optional(),
+  ...linkOptionsSchema,
 });
 
 /** Nimmt genau eine Datei entgegen (Multipart), legt sie in Quarantäne und plant die Prüfung ein. */
 async function receiveFile(req: FastifyRequest, opts: UploadContext) {
   const limit = await uploadAllowance(opts);
 
-  const part = await req.file({ limits: { fileSize: limit, files: 1, fields: 5, fieldSize: 2000 } });
+  const part = await req.file({ limits: { fileSize: limit, files: 1, fields: 12, fieldSize: 2000 } });
   if (!part) throw badRequest('Keine Datei empfangen.');
   const fields: Record<string, string> = {};
   for (const [k, v] of Object.entries(part.fields ?? {})) if (v && (v as any).type === 'field') fields[k] = String((v as any).value ?? '');
@@ -192,7 +277,28 @@ async function receiveFile(req: FastifyRequest, opts: UploadContext) {
     throw badRequest('Die Datei ist leer.');
   }
   const name = (part.filename || 'datei').replace(/[\u0000-\u001f\\/]/g, '_').slice(0, 200);
-  return finalizeUpload({ ...opts, stored, name, declaredType: String(part.mimetype ?? ''), note: fields.note ?? '', uploadRef: UPLOAD_REF_RE.test(fields.ref ?? '') ? fields.ref : null, clientKey, folderId: opts.folderId ?? null });
+  let extra: { uploader: Record<string, string> | null; consentAt: Date | null; note: string } = { uploader: null, consentAt: null, note: fields.note ?? '' };
+  if (opts.link) {
+    try {
+      extra = publicUploaderFrom(opts.link, { uploader: { name: fields.name, email: fields.email, place: fields.place, date: fields.date }, consent: fields.consent === 'true' || fields.consent === '1', note: fields.note ?? '' });
+    } catch (e) {
+      fs.rmSync(stored.tmpPath, { force: true });
+      throw e;
+    }
+  }
+  return finalizeUpload({ ...opts, stored, name, declaredType: String(part.mimetype ?? ''), note: extra.note, uploader: extra.uploader, consentAt: extra.consentAt, uploadRef: UPLOAD_REF_RE.test(fields.ref ?? '') ? fields.ref : null, clientKey, folderId: opts.folderId ?? null });
+}
+
+/**
+ * Angaben der Hochladenden für einen öffentlichen Link prüfen (abgefragte Felder, Pflichtfelder, Bestätigung).
+ * Abgeschaltete Felder werden verworfen – auch der Hinweis, wenn der Link ihn nicht abfragt.
+ */
+export function publicUploaderFrom(link: any, input: { uploader?: UploaderInput; consent?: boolean; note?: string }) {
+  const fields = cleanFields(link.fields);
+  const note = fields.note === 'off' ? '' : String(input.note ?? '').slice(0, 500);
+  const uploader = cleanUploader(fields, input.uploader, note);
+  if (link.consent_required && !input.consent) throw badRequest('Bitte die Bestätigung ankreuzen.');
+  return { uploader, consentAt: link.consent_required ? new Date() : null, note };
 }
 
 export interface UploadContext {
@@ -203,6 +309,8 @@ export interface UploadContext {
   actor: Actor;
   /** Zielordner (Upload-Link mit Zielordner bzw. interner Upload in einen Ordner) */
   folderId?: string | null;
+  /** Öffentlicher Link (Grenzen, abgefragte Angaben) */
+  link?: any;
 }
 
 /**
@@ -241,6 +349,9 @@ export async function finalizeUpload(
     /** Vorgangsnummer der Upload-Seite (#141) */
     uploadRef?: string | null;
     clientKey: string | null;
+    /** Abgefragte Angaben der Hochladenden und Zeitpunkt der Bestätigung (Paket 6) */
+    uploader?: Record<string, string> | null;
+    consentAt?: Date | string | null;
     /** Eigene Upload-Sitzung: zählt beim Byte-Kontingent nicht doppelt (#151). */
     sessionId?: string;
     /** Teildatei bei einem Fehler nicht löschen (fortsetzbarer Upload entscheidet selbst, #152). */
@@ -257,16 +368,18 @@ export async function finalizeUpload(
       if (!col || col.deleted_at) throw new AppError(410, 'collection_gone', 'Diese Sammlung wurde inzwischen gelöscht. Die Datei wurde nicht übernommen.');
       if (col.archived_at) throw new AppError(410, 'link_closed', 'Diese Sammlung ist inzwischen geschlossen. Die Datei wurde nicht übernommen.');
       const m = await one<any>(
-        `INSERT INTO media (collection_id, upload_link_id, uploaded_by, uploader_note, client_key, original_name, declared_type, size_bytes, sha256, upload_ref, folder_id, sort_order)
+        `INSERT INTO media (collection_id, upload_link_id, uploaded_by, uploader_note, client_key, original_name, declared_type, size_bytes, sha256, upload_ref, folder_id, uploader, consent_at, sort_order)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,
-                 (SELECT id FROM collection_folders WHERE id = $11::uuid AND collection_id = $1 AND deleted_at IS NULL),
+                 (SELECT id FROM collection_folders WHERE id = $11::uuid AND collection_id = $1 AND deleted_at IS NULL), $12, $13,
                  (SELECT COALESCE(max(sort_order),0)+1 FROM media WHERE collection_id = $1))
          ON CONFLICT (collection_id, client_key) WHERE client_key IS NOT NULL AND deleted_at IS NULL DO NOTHING
          RETURNING *`,
-        [opts.collection.id, opts.linkId, opts.userId, opts.note.slice(0, 500), clientKey, name, opts.declaredType.slice(0, 100), stored.size, stored.sha256, opts.uploadRef ?? null, opts.folderId ?? null],
+        [opts.collection.id, opts.linkId, opts.userId, opts.note.slice(0, 500), clientKey, name, opts.declaredType.slice(0, 100), stored.size, stored.sha256, opts.uploadRef ?? null, opts.folderId ?? null, opts.uploader ? JSON.stringify(opts.uploader) : null, opts.consentAt ?? null],
         db,
       );
       if (!m) return null;
+      // Grenzen des Links (Uploads, Dateien je Upload, Gesamtgröße) unter Sperre – die neue Datei zählt schon mit
+      if (opts.link) await assertLinkRoom(db, opts.link, { ref: opts.uploadRef ?? m.id, size: stored.size, excludeSession: opts.sessionId ?? null, alreadyCounted: true });
       // Grenzen unter Sperre erneut prüfen (parallele Abschlüsse)
       const cnt = await one<any>(`SELECT count(*)::int AS n FROM media WHERE collection_id = $1 AND deleted_at IS NULL AND status <> 'rejected'`, [opts.collection.id], db);
       if (cnt!.n > col.max_files) throw new AppError(409, 'collection_full', 'Die Sammlung hat die maximale Anzahl an Dateien erreicht.');
@@ -312,6 +425,26 @@ export function publicFileFor(m: any): { path: string; type: string; ext: string
 }
 
 
+
+/** Kontext für Uploads über einen öffentlichen Link: gültig, freigeschaltet (Passwort), nicht voll („schließen bei Grenze“). */
+export async function publicUploadContext(req: FastifyRequest, token: string): Promise<UploadContext & { link: any }> {
+  const l = await loadPublicLink(token);
+  assertUnlocked(req, l);
+  if (await linkClosedFull(l)) throw new AppError(410, 'link_unavailable', LINK_UNAVAILABLE);
+  const s = await getSettings();
+  return {
+    link: l,
+    collection: { id: l.c_id, max_files: l.c_max_files, max_bytes: l.c_max_bytes },
+    linkId: l.id,
+    userId: null,
+    maxFileBytes: Math.min(Number(l.max_file_bytes), s['media.max_file_mb'] * 1024 * 1024),
+    actor: { id: null, name: `Upload-Link ${l.label || l.id.slice(0, 8)}`, type: 'system', ip: req.ip } as Actor,
+    folderId: l.folder_id ?? null,
+  };
+}
+
+/** Sicherheitsereignis der öffentlichen Seiten (Paket 7 legt die Tabelle an; bis dahin nur Protokoll). */
+async function publicSecurityEvent(_req: FastifyRequest, _event: string, _opts: { linkId?: string }) {}
 
 export async function loadPublicLink(token: string) {
   const l = await one<any>(
@@ -408,7 +541,8 @@ export async function mediaRoutes(app: FastifyInstance) {
     const links = req.auth!.permissions.has('media.manage')
       ? await many<any>(
           `SELECT l.*, u.name AS created_by_name,
-                  (SELECT COALESCE(sum(m.size_bytes),0) FROM media m WHERE m.upload_link_id = l.id AND m.deleted_at IS NULL AND m.status <> 'rejected') AS bytes
+                  (SELECT COALESCE(sum(m.size_bytes),0) FROM media m WHERE m.upload_link_id = l.id AND m.status <> 'rejected') AS bytes,
+                  (SELECT count(DISTINCT COALESCE(m.upload_ref, m.id::text))::int FROM media m WHERE m.upload_link_id = l.id AND m.status <> 'rejected') AS uploads
              FROM upload_links l LEFT JOIN users u ON u.id = l.created_by WHERE l.collection_id = $1 ORDER BY l.created_at DESC`,
           [id],
         )
@@ -417,8 +551,9 @@ export async function mediaRoutes(app: FastifyInstance) {
       collection: { ...c, max_bytes: Number(c.max_bytes) },
       media: media.map(mediaPayload),
       folders,
-      links: await Promise.all(links.map((l) => linkPayload(req, l))),
-      accept: ACCEPT_ATTR,
+      // Mit Grenzen: genauer Verbrauch inklusive offener Upload-Sitzungen (wie die öffentliche Seite)
+      links: await Promise.all(links.map(async (l) => linkPayload(req, Number(l.max_uploads) || Number(l.max_total_bytes) ? { ...l, ...(await linkUsage(l.id)) } : l))),
+      accept: acceptAttr(effectiveTypes((await getSettings())['media.allowed_types'], null)),
     };
   });
 
@@ -528,10 +663,12 @@ export async function mediaRoutes(app: FastifyInstance) {
   app.patch('/upload-links/:id', { preHandler: requireAuth('media.manage') }, async (req) => {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
     const body = z
-      .object({ label: z.string().trim().max(80).optional(), welcomeText: z.string().max(2000).optional(), expiresAt: z.iso.datetime({ offset: true }).optional(), folderId: z.uuid().nullable().optional() })
+      .object({ label: z.string().trim().max(80).optional(), welcomeText: z.string().max(2000).optional(), expiresAt: z.iso.datetime({ offset: true }).optional(), folderId: z.uuid().nullable().optional(), ...linkOptionsSchema })
       .parse(req.body ?? {});
     const cur = await changeableLink(id);
     const s = await getSettings();
+    const optCols = await linkOptionColumns(body, s);
+    await applyLinkOptions(id, { ...optCols, ...(optCols.max_uploads !== undefined || optCols.max_total_bytes !== undefined ? { quota_notified_at: null } : {}) });
     const expires = body.expiresAt ? computeExpiry({ expiresAt: body.expiresAt }, { defaultDays: s['media.link_default_days'], maxDays: s['media.link_max_days'] }) : null;
     const folder = body.folderId !== undefined ? await assertFolder(cur.collection_id, body.folderId) : null;
     const l = await one<any>(
@@ -541,8 +678,19 @@ export async function mediaRoutes(app: FastifyInstance) {
         WHERE id = $1 RETURNING *`,
       [id, body.label ?? null, body.welcomeText !== undefined ? body.welcomeText.trim() : null, expires, body.folderId !== undefined, folder],
     );
-    await audit(req.auth!.actor, 'upload_link.updated', { type: 'upload_link', id, label: l.label || l.collection_id }, { felder: Object.keys(body), ...(expires ? { gueltig_bis: expires.toISOString() } : {}) });
-    return linkPayload(req, l);
+    await audit(req.auth!.actor, 'upload_link.updated', { type: 'upload_link', id, label: l.label || l.collection_id }, { felder: Object.keys(body).map((k) => (k === 'password' ? 'passwort' : k)), ...(expires ? { gueltig_bis: expires.toISOString() } : {}) });
+    return linkPayload(req, { ...l, ...(await linkUsage(id)) });
+  });
+
+  /* Angaben aller Uploads dieses Links löschen (Name, E-Mail, Ort, Datum, Hinweis) – Dateien bleiben */
+  app.post('/upload-links/:id/clear-uploader', { preHandler: requireAuth('media.manage') }, async (req) => {
+    const { id } = z.object({ id: z.uuid() }).parse(req.params);
+    const l = await one<any>(`SELECT id, label, collection_id FROM upload_links WHERE id = $1`, [id]);
+    if (!l) throw notFound('Link nicht gefunden.');
+    const r = await pool.query(`UPDATE media SET uploader = NULL, uploader_note = '' WHERE upload_link_id = $1 AND (uploader IS NOT NULL OR uploader_note <> '')`, [id]);
+    await pool.query(`UPDATE upload_sessions SET uploader = NULL, note = '' WHERE upload_link_id = $1`, [id]);
+    await audit(req.auth!.actor, 'upload_link.uploader_cleared', { type: 'upload_link', id, label: l.label || l.collection_id }, { dateien: r.rowCount });
+    return { ok: true, media: r.rowCount };
   });
 
   /* Neu erzeugen: neuer Token mit denselben Einstellungen – alter Link, QR-Code und Aushang sind sofort ungültig */
@@ -639,6 +787,9 @@ export async function mediaRoutes(app: FastifyInstance) {
     );
     return {
       media: mediaPayload(m),
+      // Angaben der Hochladenden (personenbezogen) nur mit „Medien verwalten“
+      uploader: req.auth!.permissions.has('media.manage') ? (m.uploader ?? null) : null,
+      consent_at: req.auth!.permissions.has('media.manage') ? (m.consent_at ?? null) : null,
       sha256: m.sha256,
       collection_title: m.collection_title,
       link_label: m.link_label ?? null,
@@ -846,7 +997,21 @@ export async function mediaRoutes(app: FastifyInstance) {
     const { token } = z.object({ token: z.string().min(10).max(100) }).parse(req.params);
     const l = await loadPublicLink(token);
     const s = await getSettings();
+    const organization = s['general.organization'] || s['general.instance_name'];
+    assertUnlocked(req, l, organization);
+    if (await linkClosedFull(l)) throw new AppError(410, 'link_unavailable', LINK_UNAVAILABLE);
+    const types = effectiveTypes(s['media.allowed_types'], l.allowed_types);
+    const fields = cleanFields(l.fields);
+    const usage = await linkUsage(l.id);
     return {
+      fields,
+      consent_required: !!l.consent_required,
+      consent_text: l.consent_required ? l.consent_text : '',
+      max_files_per_upload: Number(l.max_files_per_upload) || null,
+      remaining_uploads: Number(l.max_uploads) ? Math.max(0, Number(l.max_uploads) - usage.uploads) : null,
+      remaining_bytes: Number(l.max_total_bytes) ? Math.max(0, Number(l.max_total_bytes) - usage.bytes) : null,
+      types: typeLabels(types),
+      uploader_months: s['privacy.uploader_months'],
       collection: { title: l.c_title, purpose: l.c_purpose, note: l.c_note },
       // Begrüßungstext des Links hat Vorrang vor dem Hinweis der Sammlung
       welcome_text: (l.welcome_text || '').trim() || null,
@@ -856,7 +1021,7 @@ export async function mediaRoutes(app: FastifyInstance) {
       expires_at: l.expires_at,
       max_file_bytes: Math.min(Number(l.max_file_bytes), s['media.max_file_mb'] * 1024 * 1024),
       remaining_files: Math.max(0, l.max_files - l.upload_count),
-      accept: ACCEPT_ATTR,
+      accept: acceptAttr(types),
       // Informationspflichten (Art. 13 DSGVO, #96) – immer sichtbar auf der Upload-Seite
       privacy: privacyInfo(s),
       // Hinweis nur für angemeldete Verwaltung: Pflichtangaben fehlen noch
@@ -864,14 +1029,26 @@ export async function mediaRoutes(app: FastifyInstance) {
     };
   });
 
+  /* Passwortgeschützter Link: Passwort prüfen, kurzlebige Freigabe als Cookie nur für diesen Link */
+  app.post('/public/upload/:token/unlock', { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, async (req, reply) => {
+    const { token } = z.object({ token: z.string().min(10).max(100) }).parse(req.params);
+    const { password } = z.object({ password: z.string().min(1).max(200) }).parse(req.body ?? {});
+    const l = await loadPublicLink(token);
+    if (!l.password_hash) return { ok: true };
+    if (!(await verifyPassword(l.password_hash, password))) {
+      await auditThrottled(`link-pw:${l.id}:${req.ip}`, 10 * 60_000, { id: null, name: 'Upload-Seite', type: 'system', ip: req.ip }, 'upload_link.password_failed', { type: 'upload_link', id: l.id, label: l.label || l.collection_id }, {}, 'denied').catch(() => {});
+      await publicSecurityEvent(req, 'password_failed', { linkId: l.id }).catch(() => {});
+      throw new AppError(401, 'password_wrong', 'Das Passwort stimmt nicht.');
+    }
+    setUnlockCookie(reply, token, l);
+    return { ok: true };
+  });
+
   app.post('/public/upload/:token', { config: { rateLimit: { max: 120, timeWindow: '1 minute' } } }, async (req) => {
     const { token } = z.object({ token: z.string().min(10).max(100) }).parse(req.params);
-    const l = await loadPublicLink(token);
-    if (l.upload_count >= l.max_files) throw new AppError(409, 'link_full', 'Über diesen Link wurden bereits alle erlaubten Dateien hochgeladen.');
-    const s = await getSettings();
-    const collection = { id: l.c_id, max_files: l.c_max_files, max_bytes: l.c_max_bytes };
-    const actor: Actor = { id: null, name: `Upload-Link ${l.label || l.id.slice(0, 8)}`, type: 'system', ip: req.ip };
-    const res = await receiveFile(req, { collection, linkId: l.id, userId: null, maxFileBytes: Math.min(Number(l.max_file_bytes), s['media.max_file_mb'] * 1024 * 1024), actor, folderId: l.folder_id ?? null });
+    const ctx = await publicUploadContext(req, token);
+    if (ctx.link.upload_count >= ctx.link.max_files) throw new AppError(409, 'link_full', 'Über diesen Link wurden bereits alle erlaubten Dateien hochgeladen.');
+    const res = await receiveFile(req, ctx);
     // Öffentliche Antwort ohne interne Details
     return { ok: true, duplicate: res.duplicate, name: res.media.original_name, size: res.media.size_bytes };
   });

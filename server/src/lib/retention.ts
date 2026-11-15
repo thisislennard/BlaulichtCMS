@@ -254,6 +254,19 @@ export async function runRetention(opts: { dryRun: boolean; actor?: Actor; setti
   }
   report.categories.push(dead, trash);
 
+  /* Angaben der Hochladenden (Name, E-Mail, Ort, Datum – je Link abfragbar): entfernen, Dateien bleiben (Paket 6) */
+  const uMonths = Math.max(0, Math.floor(Number(s['privacy.uploader_months']) || 0));
+  const up: RetentionCategory = { key: 'uploader', label: 'Angaben der Hochladenden (Name, E-Mail, Aufnahmeort, Aufnahmedatum)', days: uMonths * 30, count: 0 };
+  if (uMonths > 0) {
+    const where = `uploader IS NOT NULL AND created_at < now() - make_interval(months => $1)`;
+    if (opts.dryRun) up.count = (await one<{ n: number }>(`SELECT count(*)::int AS n FROM media WHERE ${where}`, [uMonths]))!.n;
+    else {
+      up.count = (await pool.query(`UPDATE media SET uploader = NULL WHERE id IN (SELECT id FROM media WHERE ${where} LIMIT 10000)`, [uMonths])).rowCount ?? 0;
+      await pool.query(`UPDATE upload_sessions SET uploader = NULL WHERE ${where}`, [uMonths]);
+    }
+  }
+  report.categories.push(up);
+
   /* Weitere personenbezogene Daten (#116) */
   report.categories.push(
     await simpleCategory(opts.dryRun, {

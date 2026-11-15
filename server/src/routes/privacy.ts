@@ -74,9 +74,10 @@ export async function privacySearch(term: string): Promise<PrivacyHit[]> {
 
   const media = await many<any>(
     `SELECT m.id, m.collection_id, c.title AS collection, m.original_name, m.uploader_note, m.upload_ref, m.status, m.kind, m.created_at, m.deleted_at,
-            m.uploaded_by IS NULL AS anonymous, m.had_location, m.display_name, m.description, m.internal_note
+            m.uploaded_by IS NULL AS anonymous, m.had_location, m.display_name, m.description, m.internal_note, m.uploader, m.consent_at
        FROM media m JOIN collections c ON c.id = m.collection_id
       WHERE m.uploader_note ILIKE $1 OR m.original_name ILIKE $1 OR m.display_name ILIKE $1 OR m.description ILIKE $1 OR m.internal_note ILIKE $1
+         OR m.uploader->>'name' ILIKE $1 OR m.uploader->>'email' ILIKE $1 OR m.uploader->>'place' ILIKE $1
          OR ($2::text IS NOT NULL AND m.upload_ref = $2)
       ORDER BY m.created_at DESC LIMIT ${LIMIT}`,
     [like, ref],
@@ -95,6 +96,11 @@ export async function privacySearch(term: string): Promise<PrivacyHit[]> {
         anzeigename: m.display_name || undefined,
         beschreibung: m.description || undefined,
         interne_notiz: m.internal_note || undefined,
+        name: m.uploader?.name,
+        email: m.uploader?.email,
+        aufnahmeort: m.uploader?.place,
+        aufnahmedatum: m.uploader?.date,
+        bestaetigt_am: iso(m.consent_at),
         vorgangsnummer: m.upload_ref,
         sammlung: m.collection,
         status: m.deleted_at ? 'gelöscht (Datensatz bis zur Frist)' : m.status,
@@ -110,7 +116,7 @@ export async function privacySearch(term: string): Promise<PrivacyHit[]> {
 
   for (const s of await many<any>(
     `SELECT id, collection_id, file_name, note, upload_ref, created_at FROM upload_sessions
-      WHERE note ILIKE $1 OR file_name ILIKE $1 OR ($2::text IS NOT NULL AND upload_ref = $2) ORDER BY created_at DESC LIMIT ${LIMIT}`,
+      WHERE note ILIKE $1 OR file_name ILIKE $1 OR uploader->>'name' ILIKE $1 OR uploader->>'email' ILIKE $1 OR ($2::text IS NOT NULL AND upload_ref = $2) ORDER BY created_at DESC LIMIT ${LIMIT}`,
     [like, ref],
   )) {
     hits.push({ kind: 'upload_session', id: s.id, title: 'Unterbrochener Upload', at: iso(s.created_at), fields: { dateiname: s.file_name, hinweis: s.note, vorgangsnummer: s.upload_ref }, actions: ['delete'] });
@@ -232,9 +238,9 @@ export async function privacyRoutes(app: FastifyInstance) {
       if (!m) throw notFound('Datei nicht gefunden.');
       if (b.action === 'pseudonymize') {
         const ext = /\.([A-Za-z0-9]{1,5})$/.exec(m.original_name)?.[1]?.toLowerCase();
-        await pool.query(`UPDATE media SET uploader_note = '', display_name = '', description = '', internal_note = '', original_name = $2 WHERE id = $1`, [b.id, `datei-${b.id.slice(0, 8)}${ext ? `.${ext}` : ''}`]);
-        await pool.query(`UPDATE upload_sessions SET note = '', file_name = $2 WHERE media_id = $1`, [b.id, `datei-${b.id.slice(0, 8)}`]);
-        await audit(actor, 'privacy.pseudonymized', { type: 'media', id: b.id, label: 'Datei' }, { ...details, felder: ['Dateiname', 'Hinweis', 'Anzeigename', 'Beschreibung', 'interne Notiz'] });
+        await pool.query(`UPDATE media SET uploader_note = '', display_name = '', description = '', internal_note = '', uploader = NULL, original_name = $2 WHERE id = $1`, [b.id, `datei-${b.id.slice(0, 8)}${ext ? `.${ext}` : ''}`]);
+        await pool.query(`UPDATE upload_sessions SET note = '', uploader = NULL, file_name = $2 WHERE media_id = $1`, [b.id, `datei-${b.id.slice(0, 8)}`]);
+        await audit(actor, 'privacy.pseudonymized', { type: 'media', id: b.id, label: 'Datei' }, { ...details, felder: ['Dateiname', 'Hinweis', 'Anzeigename', 'Beschreibung', 'interne Notiz', 'Angaben der Hochladenden'] });
         return { ok: true };
       }
       const usedIn = (await usedMedia([m.collection_id])).get(b.id);

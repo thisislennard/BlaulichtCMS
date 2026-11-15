@@ -100,7 +100,7 @@ export interface Redaction extends Region {
 export interface UploadLink {
   id: string;
   label: string;
-  state: 'active' | 'paused' | 'expired' | 'revoked';
+  state: 'active' | 'paused' | 'full' | 'expired' | 'revoked';
   url: string | null;
   /** Link wurde nur einmal angezeigt (Einstellung „Link nur einmal anzeigen“) und ist nicht mehr abrufbar. */
   url_hidden?: boolean;
@@ -119,6 +119,16 @@ export interface UploadLink {
   created_at: string;
   created_by_name?: string | null;
   bytes?: number | null;
+  uploads?: number | null;
+  max_uploads?: number;
+  max_files_per_upload?: number;
+  max_total_bytes?: number;
+  close_when_full?: boolean;
+  allowed_types?: string[] | null;
+  fields?: Record<string, 'off' | 'optional' | 'required'>;
+  consent_required?: boolean;
+  consent_text?: string;
+  has_password?: boolean;
 }
 
 export interface Site {

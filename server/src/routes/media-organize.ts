@@ -9,6 +9,7 @@ import { AppError, badRequest, notFound } from '../lib/errors.js';
 import { getSettings } from '../lib/settings.js';
 import { cleanFolderName, depthAfterMove, FOLDER_MAX_DEPTH, wouldCycle, type FolderNode } from '../media/folders.js';
 import { freeBytes, mediaPaths } from '../media/storage.js';
+import { effectiveTypes, TYPE_DEFS } from '../media/types.js';
 import { mediaPayload } from './media.js';
 
 /*
@@ -257,6 +258,12 @@ export async function mediaOrganizeRoutes(app: FastifyInstance) {
     });
     for (const x of created) await audit(req.auth!.actor, 'media.copied', { type: 'media', id: x.id, label: x.name }, { von: x.from, sammlung: body.collectionId });
     return { copied: created.length, ids: created.map((x) => x.id) };
+  });
+
+  /* Dateitypen für die Link-Optionen: alle bekannten, mit „global erlaubt“ */
+  app.get('/media/types', { preHandler: requireAuth('media.manage') }, async () => {
+    const allowed = effectiveTypes((await getSettings())['media.allowed_types'], null);
+    return TYPE_DEFS.map((t) => ({ key: t.key, label: t.label, kind: t.kind, allowed: allowed.includes(t.key) }));
   });
 
   /* --------------------------------- Mediensuche über alle Sammlungen --------------------------------- */

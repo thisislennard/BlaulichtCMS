@@ -39,7 +39,19 @@ Die Upload-Seite zeigt immer einen Abschnitt **Datenschutz** (Art. 13 DSGVO): ve
 
 Die Angaben stehen unter **Einstellungen → Datenschutz** (verantwortliche Stelle, Datenschutzbeauftragte/r, Datenschutzerklärung, optional ein eigener Hinweis z. B. zur Rechtsgrundlage). Solange verantwortliche Stelle oder Datenschutzerklärung fehlen, erinnern Sammlung, Aushang und – nur für angemeldete Verwaltung – die Upload-Seite daran.
 
-Das Hinweisfeld fragt bewusst nicht nach Namen: Wer genannt werden möchte, kann das schreiben, Angaben zu anderen Personen gehören nicht hinein.
+Standardmäßig fragt die Upload-Seite nur einen freiwilligen Hinweis ab und bewusst keinen Namen. Fragt ein Link Name, E-Mail-Adresse, Aufnahmeort oder -datum ab (siehe „Erweiterte Optionen“), nennt der Datenschutzabschnitt diese Angaben automatisch samt Löschfrist (Einstellungen → Datenschutz → „Angaben der Hochladenden“, Standard 12 Monate; die Dateien bleiben).
+
+## Erweiterte Optionen je Link
+
+Beim Anlegen und unter **Bearbeiten** öffnet „Erweitert“ weitere Einstellungen (wie in LiFeOS):
+
+- **Grenzen** (0 = unbegrenzt): Uploads je Link (ein Upload = ein Vorgang mit eigener Vorgangsnummer), Dateien je Upload, maximale Dateigröße, Gesamtgröße. **Link schließen, wenn eine Grenze erreicht ist** (Standard bei neuen Links): Die Upload-Seite zeigt dann „Dieser Link funktioniert nicht (mehr)“, die Liste „Kontingent erreicht“. Ohne diese Option bleibt die Seite erreichbar und weist weitere Dateien mit Hinweis ab. Die Dateien je Link und das Kontingent der Sammlung gelten immer zusätzlich.
+- **Erlaubte Dateitypen:** Auswahl aus den global erlaubten Typen (Einstellungen → Medien). Andere Dateien weist die Prüfung mit Grund ab.
+- **Abgefragte Angaben:** Name, E-Mail-Adresse, Hinweis, Aufnahmeort, Aufnahmedatum – je **nicht abfragen**, **freiwillig** oder **Pflicht**. Die Angaben sieht nur, wer „Medien verwalten“ hat (Details der Datei). Nur abfragen, was wirklich gebraucht wird.
+- **Bestätigung vor dem Upload:** Pflicht-Kästchen mit eigenem Text (z. B. „Ich habe die Aufnahmen selbst gemacht …“); der Zeitpunkt wird je Datei gespeichert.
+- **Passwort** (mindestens 10 Zeichen): Wer den Link öffnet, gibt es zuerst ein; die Freigabe gilt 12 Stunden in diesem Browser. Ein neues Passwort beendet alle bisherigen Freigaben. Fehlversuche werden protokolliert und gebremst.
+
+Das Menü eines Links bietet außerdem **Angaben der Hochladenden löschen**: Name, E-Mail, Ort, Datum und Hinweise aller Uploads über diesen Link werden entfernt, die Dateien bleiben.
 
 ## Löschen und Löschfristen
 

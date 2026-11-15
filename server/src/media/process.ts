@@ -13,6 +13,7 @@ import { config } from '../config.js';
 import { audit } from '../lib/audit.js';
 import { securityAlert } from '../lib/security-alerts.js';
 import { noticeNewMedia } from '../lib/media-notify.js';
+import { effectiveTypes, typeByMime, typeLabels } from './types.js';
 
 /** Zugelassene Formate – geprüft wird der Dateiinhalt, nicht Dateiname oder angegebener Typ. */
 export const ALLOWED: Record<string, { kind: 'image' | 'video'; ext: string }> = {
@@ -159,7 +160,7 @@ async function processVideo(id: string, file: string, ext: string) {
  * öffentliche Fassung ohne Standortdaten. Erst danach wird sie sichtbar („ready“).
  */
 export async function processMedia(id: string): Promise<'ready' | 'rejected' | 'skipped' | 'deferred'> {
-  const row = await one<any>(`SELECT id, status, original_name, created_at FROM media WHERE id = $1`, [id]);
+  const row = await one<any>(`SELECT m.id, m.status, m.original_name, m.created_at, l.allowed_types AS link_types FROM media m LEFT JOIN upload_links l ON l.id = m.upload_link_id WHERE m.id = $1`, [id]);
   if (!row || row.status !== 'quarantine') return 'skipped';
   const file = mediaPaths.quarantine(id);
   if (!fs.existsSync(file)) {
@@ -171,8 +172,14 @@ export async function processMedia(id: string): Promise<'ready' | 'rejected' | '
   if (scan !== 'clean') return scan;
   try {
     const ft = await fileTypeFromFile(file);
-    const allowed = ft ? ALLOWED[ft.mime] : undefined;
-    if (!ft || !allowed) throw new Rejected(`${ft ? `Das Dateiformat ${ft.mime} ist nicht erlaubt.` : 'Das Dateiformat wurde nicht erkannt und ist deshalb nicht erlaubt.'} Erlaubt sind Fotos (JPEG, PNG, WebP, HEIC) und Videos (MP4, MOV, WebM).`);
+    // Erlaubte Typen: global (media.allowed_types) und je Upload-Link (Paket 6)
+    const types = effectiveTypes((await getSettings())['media.allowed_types'], row.link_types ?? null);
+    const def = ft ? typeByMime(ft.mime) : undefined;
+    const allowed = ft && def && types.includes(def.key) ? ALLOWED[ft.mime] : undefined;
+    if (!ft || !allowed) {
+      const what = !ft ? 'Das Dateiformat wurde nicht erkannt und ist deshalb nicht erlaubt.' : def ? `Der Dateityp ${def.label.replace(/ \(.*\)$/, '')} ist für diesen Upload nicht erlaubt.` : `Das Dateiformat ${ft.mime} ist nicht erlaubt.`;
+      throw new Rejected(`${what} Erlaubt sind: ${typeLabels(types)}.`);
+    }
     const r = allowed.kind === 'image' ? await processImage(id, file, ft.mime) : await processVideo(id, file, allowed.ext);
     // Erst nach der öffentlichen Fassung: Standort- und Gerätedaten auch aus dem Original entfernen (#119)
     const strip = (await getSettings())['media.strip_location'] ? await stripLocation(file, ft.mime, allowed.kind) : null;

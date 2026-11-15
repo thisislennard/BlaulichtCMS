@@ -19,6 +19,8 @@ interface Details {
   processed_at: string | null;
   duplicates: { id: string; collection_id: string; collection_title: string; original_name: string; display_name: string; created_at: string }[];
   posts: { id: string; title: string; current: boolean }[];
+  uploader?: { name?: string; email?: string; place?: string; date?: string } | null;
+  consent_at?: string | null;
 }
 
 /** Details je Datei (wie die Detailseite in LiFeOS): bearbeitbare Angaben, Prüfsumme, Duplikate, Upload, Beiträge. */
@@ -111,6 +113,11 @@ export function MediaDetailsDialog({ mediaId, manage, onClose, onSaved }: { medi
               {row('Eingang', `${fmtDateTime(m.created_at)} · ${m.via_link ? `Upload-Link${d.link_label ? ` „${d.link_label}“` : ''}` : (m.uploaded_by_name ?? 'intern')}`)}
               {m.upload_ref ? row('Vorgangsnummer', <span className="font-mono">{m.upload_ref}</span>) : null}
               {m.uploader_note ? row('Hinweis beim Upload', m.uploader_note) : null}
+              {d.uploader?.name ? row('Name (Hochladende/r)', d.uploader.name) : null}
+              {d.uploader?.email ? row('E-Mail', d.uploader.email) : null}
+              {d.uploader?.place ? row('Aufnahmeort', d.uploader.place) : null}
+              {d.uploader?.date ? row('Aufnahmedatum', d.uploader.date) : null}
+              {d.consent_at ? row('Bestätigt', fmtDateTime(d.consent_at)) : null}
               {d.processed_at ? row('Geprüft', fmtDateTime(d.processed_at)) : null}
               {row(
                 'Sichtung',

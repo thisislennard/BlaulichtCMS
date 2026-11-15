@@ -1007,3 +1007,26 @@ describe('Benachrichtigungen der Medien', () => {
     expect(expiringThresholdMs(t0, '2026-11-15T02:00:00Z')).toBe(3600_000);
   });
 });
+
+describe('Erweiterte Link-Optionen und Dateitypen', () => {
+  it('Felder, Angaben der Hochladenden, Grenzen und Typen', async () => {
+    const { cleanFields, cleanUploader, linkIsFull, DEFAULT_FIELDS } = await import('../src/media/link-options.js');
+    const { effectiveTypes, acceptAttr, cleanTypeList, typeLabels } = await import('../src/media/types.js');
+    expect(cleanFields(null)).toEqual(DEFAULT_FIELDS);
+    expect(cleanFields({ name: 'required', email: 'x', bogus: 'required' })).toMatchObject({ name: 'required', email: 'off', note: 'optional' });
+    const f = cleanFields({ name: 'required', email: 'optional', place: 'off' });
+    expect(cleanUploader(f, { name: ' Erika ', email: '', place: 'Markt' }, '')).toEqual({ name: 'Erika' });
+    expect(() => cleanUploader(f, { name: '' }, '')).toThrow(/Name/);
+    expect(() => cleanUploader(f, { name: 'A', email: 'kein-mail' }, '')).toThrow(/E-Mail/);
+    expect(cleanUploader(cleanFields({}), { name: 'X' }, 'Hinweis')).toBeNull();
+    expect(() => cleanUploader(cleanFields({ note: 'required' }), {}, ' ')).toThrow(/Hinweis/);
+    expect(linkIsFull({ max_uploads: 2, max_total_bytes: 0 }, { uploads: 2, bytes: 0 })).toBe(true);
+    expect(linkIsFull({ max_uploads: 0, max_total_bytes: 100 }, { uploads: 50, bytes: 99 })).toBe(false);
+    expect(linkIsFull({ max_uploads: 0, max_total_bytes: 0 }, { uploads: 1e6, bytes: 1e12 })).toBe(false);
+    expect(cleanTypeList(['png', 'exe', 'png'])).toEqual(['png']);
+    expect(effectiveTypes(['jpeg', 'png'], ['png', 'mp4'])).toEqual(['png']);
+    expect(effectiveTypes(['jpeg', 'png'], null)).toEqual(['jpeg', 'png']);
+    expect(acceptAttr(['heic', 'mov'])).toBe('image/heic,image/heif,video/quicktime');
+    expect(typeLabels(['jpeg', 'mov'])).toBe('JPEG, MOV');
+  });
+});

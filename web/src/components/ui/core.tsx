@@ -117,6 +117,7 @@ export const STATUS: Record<string, { tone: Tone; label: string; pulse?: boolean
   // Links und Kanäle
   active: { tone: 'success', label: 'Aktiv' },
   paused: { tone: 'warning', label: 'Pausiert' },
+  full: { tone: 'warning', label: 'Kontingent erreicht' },
   expired: { tone: 'neutral', label: 'Abgelaufen' },
   revoked: { tone: 'error', label: 'Widerrufen' },
   // Warnentwürfe und Versand

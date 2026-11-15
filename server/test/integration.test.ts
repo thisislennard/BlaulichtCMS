@@ -4377,6 +4377,97 @@ describe('Medien wie LiFeOS 5: Benachrichtigungen', () => {
   });
 });
 
+describe('Medien wie LiFeOS 6: Erweiterte Link-Optionen', () => {
+  const jpeg = (r: number) => sharp({ create: { width: 64, height: 48, channels: 3, background: { r, g: 33, b: 77 } } }).jpeg().toBuffer();
+  const session = (c: Client, token: string, body: Record<string, unknown>) =>
+    c.post(`/public/upload/${token}/sessions`, { clientKey: `s-${crypto.randomBytes(6).toString('hex')}`, name: 'foto.jpg', size: 1000, type: 'image/jpeg', ...body });
+
+  it('abgefragte Angaben (aus/optional/Pflicht) und Bestätigung; Datenschutzsuche, Löschen je Link und Löschfrist', async () => {
+    const f = await mediaFixture(editor, 'Angaben-Test', { fields: { name: 'required', email: 'optional', note: 'off' }, consentRequired: true, consentText: 'Ich habe die Fotos selbst gemacht.' });
+    expect(f.link.fields).toMatchObject({ name: 'required', email: 'optional', note: 'off', place: 'off' });
+    const info = await anonymous.get(`/public/upload/${f.token}`);
+    expect(info.json).toMatchObject({ consent_required: true, consent_text: 'Ich habe die Fotos selbst gemacht.', uploader_months: 12 });
+    expect((await session(anonymous, f.token, { consent: true })).json.message).toMatch(/Name/);
+    expect((await session(anonymous, f.token, { uploader: { name: 'Erika Beispiel' } })).json.message).toMatch(/Bestätigung/);
+    expect((await session(anonymous, f.token, { uploader: { name: 'Erika Beispiel', email: 'kaputt' }, consent: true })).status).toBe(400);
+    // Abgeschaltete Felder (Hinweis, Ort) werden verworfen
+    const mp = multipart({ name: 'mit-angaben.jpg', data: await jpeg(1), type: 'image/jpeg' }, { clientKey: 'angaben-0001', name: 'Erika Beispiel', email: 'erika@example.org', place: 'Marktplatz', note: 'geheim', consent: 'true', ref: 'ABCD-EFGH' });
+    expect((await anonymous.raw('POST', `/public/upload/${f.token}`, mp)).status).toBe(200);
+    const m = await one<any>(`SELECT * FROM media WHERE client_key = 'angaben-0001'`);
+    expect(m.uploader).toEqual({ name: 'Erika Beispiel', email: 'erika@example.org' });
+    expect(m.uploader_note).toBe('');
+    expect(m.consent_at).not.toBeNull();
+    await processAllQuarantine();
+    expect((await editor.get(`/media/${m.id}/details`)).json.uploader.name).toBe('Erika Beispiel');
+    expect((await publisher.get(`/media/${m.id}/details`)).json.uploader).toBeNull();
+    const hit = (await admin.get(`/privacy/search?q=erika%40example.org`)).json.hits.find((h: any) => h.id === m.id);
+    expect(hit.fields).toMatchObject({ name: 'Erika Beispiel', email: 'erika@example.org' });
+    // Löschfrist: nach privacy.uploader_months werden die Angaben entfernt, die Datei bleibt
+    await pool.query(`UPDATE media SET created_at = now() - interval '13 months' WHERE id = $1`, [m.id]);
+    const preview = await admin.get('/system/retention');
+    expect(preview.json.categories.find((c: any) => c.key === 'uploader').count).toBeGreaterThanOrEqual(1);
+    await admin.post('/system/retention/run', {});
+    expect(await one<any>(`SELECT uploader, deleted_at FROM media WHERE id = $1`, [m.id])).toEqual({ uploader: null, deleted_at: null });
+    await pool.query(`UPDATE media SET uploader = '{"name":"X"}', created_at = now() WHERE id = $1`, [m.id]);
+    expect((await editor.post(`/upload-links/${f.link.id}/clear-uploader`)).json.media).toBe(1);
+    expect((await one<any>(`SELECT uploader FROM media WHERE id = $1`, [m.id])).uploader).toBeNull();
+  });
+
+  it('Passwort: Seite erst nach Eingabe, Freigabe nur für diesen Link, neues Passwort beendet Freigaben', async () => {
+    const f = await mediaFixture(editor, 'Passwort-Test', { password: 'kurz' }).catch(() => null);
+    expect(f).toBeNull();
+    const g = await mediaFixture(editor, 'Passwort-Test', { password: 'Sommerfest-2026' });
+    expect(g.link.has_password).toBe(true);
+    const visitor = new Client(app, '10.20.0.9');
+    const locked = await visitor.get(`/public/upload/${g.token}`);
+    expect(locked.status).toBe(401);
+    expect(locked.json.error).toBe('password_required');
+    expect(JSON.stringify(locked.json)).not.toContain('Passwort-Test');
+    expect((await session(visitor, g.token, {})).status).toBe(401);
+    expect((await visitor.post(`/public/upload/${g.token}/unlock`, { password: 'falsch-falsch' })).status).toBe(401);
+    expect(await one(`SELECT 1 FROM audit_events WHERE action = 'upload_link.password_failed' AND object_id = $1`, [g.link.id])).not.toBeNull();
+    expect((await visitor.post(`/public/upload/${g.token}/unlock`, { password: 'Sommerfest-2026' })).status).toBe(200);
+    expect((await visitor.get(`/public/upload/${g.token}`)).status).toBe(200);
+    expect((await session(visitor, g.token, {})).status).toBe(200);
+    await editor.patch(`/upload-links/${g.link.id}`, { password: 'Neues-Passwort-2026' });
+    expect((await visitor.get(`/public/upload/${g.token}`)).status).toBe(401);
+    await editor.patch(`/upload-links/${g.link.id}`, { removePassword: true });
+    expect((await new Client(app).get(`/public/upload/${g.token}`)).status).toBe(200);
+  });
+
+  it('Grenzen je Link: Dateien je Upload, Uploads, Gesamtgröße, schließen bei Grenze; erlaubte Typen je Link', async () => {
+    const f = await mediaFixture(editor, 'Grenzen-Test', { maxFilesPerUpload: 1, maxUploads: 2, closeWhenFull: false });
+    expect((await session(anonymous, f.token, { ref: 'AAAA-AAAA' })).status).toBe(200);
+    const second = await session(anonymous, f.token, { ref: 'AAAA-AAAA' });
+    expect(second.status).toBe(409);
+    expect(second.json.error).toBe('upload_full');
+    expect((await session(anonymous, f.token, { ref: 'BBBB-BBBB' })).status).toBe(200);
+    const third = await session(anonymous, f.token, { ref: 'CCCC-CCCC' });
+    expect(third.json.error).toBe('link_full');
+    expect((await anonymous.get(`/public/upload/${f.token}`)).json.remaining_uploads).toBe(0);
+    // „Schließen bei Grenze“: der Link gilt dann als voll und die Seite ist nicht mehr erreichbar
+    await editor.patch(`/upload-links/${f.link.id}`, { closeWhenFull: true });
+    expect((await anonymous.get(`/public/upload/${f.token}`)).status).toBe(410);
+    expect((await editor.get(`/collections/${f.col.id}`)).json.links[0].state).toBe('full');
+    expect((await session(anonymous, f.token, { ref: 'DDDD-DDDD' })).status).toBe(410);
+    // Gesamtgröße
+    const g = await mediaFixture(editor, 'Gesamtgröße-Test', { maxTotalMb: 1 });
+    expect((await session(anonymous, g.token, { size: 900_000 })).status).toBe(200);
+    expect((await session(anonymous, g.token, { size: 300_000 })).json.error).toBe('link_full');
+    // Erlaubte Typen je Link: nur PNG → JPEG wird bei der Prüfung abgewiesen; accept passt sich an
+    const h = await mediaFixture(editor, 'Typen-Test', { allowedTypes: ['png'] });
+    expect(h.link.allowed_types).toEqual(['png']);
+    expect((await anonymous.get(`/public/upload/${h.token}`)).json).toMatchObject({ accept: 'image/png', types: 'PNG' });
+    await uploadPublic(h.token, 'falsch.jpg', await jpeg(2));
+    await processAllQuarantine();
+    const bad = await one<any>(`SELECT status, reject_reason FROM media WHERE upload_link_id = $1`, [h.link.id]);
+    expect(bad.status).not.toBe('ready');
+    expect(bad.reject_reason).toMatch(/JPEG ist für diesen Upload nicht erlaubt.*PNG/);
+    expect((await editor.post(`/collections/${h.col.id}/links`, { allowedTypes: ['exe'] })).status).toBe(400);
+    expect((await admin.patch('/settings', { 'media.allowed_types': [] })).status).toBe(400);
+  });
+});
+
 /* @@MEDIA-TESTS-END@@ */
 
 describe('In-App-Updates aus GitHub-Releases', () => {

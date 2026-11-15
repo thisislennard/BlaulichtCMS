@@ -59,6 +59,8 @@ flowchart LR
   braucht kein Konto.
 - **Links bedienen:** Gültigkeit in Stunden, Tagen oder bis zu einem Termin; pausieren, fortsetzen, verlängern, neu
   erzeugen (alter Link und QR-Code sofort ungültig), eigener Begrüßungstext je Link.
+- **Optionen je Link:** Grenzen (Uploads, Dateien je Upload, Größe), erlaubte Dateitypen, abgefragte Angaben (Name,
+  E-Mail, Ort, Datum – je aus, freiwillig oder Pflicht, mit Löschfrist), Bestätigung vor dem Upload, optional Passwort.
 - **Upload am Handy:** großer Knopf für die Galerie, „Foto aufnehmen“ und „Video aufnehmen“ für die Kamera, mehrere
   Dateien auf einmal, Fortschritt je Datei, unterbrochene Uploads werden fortgesetzt
   (auch große Videos), Vorgangsnummer für Rückfragen, Hinweis für das Team im Feld.
