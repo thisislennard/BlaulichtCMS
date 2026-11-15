@@ -4000,6 +4000,246 @@ describe('Löschfrist amtlicher Warnungen: noch gelieferte bleiben (#180)', () =
   });
 });
 
+describe('Feuersoftware Connect als zweite Einsatzquelle', () => {
+  // Lokaler Ersatz für die Öffentliche Connect Schnittstelle – es wird nichts an Feuersoftware gesendet
+  const KEY = 'fs-geheimer-api-key-2026';
+  // Einsätze von vor einer Stunde (übernommen werden nur die der letzten 24 Stunden)
+  const START = new Date(Math.floor(Date.now() / 60_000) * 60_000 - 3600_000).toISOString();
+  const START_LOCAL = new Intl.DateTimeFormat('de-DE', { timeZone: 'Europe/Berlin', hour: '2-digit', minute: '2-digit' }).format(new Date(START));
+  let srv: import('node:http').Server;
+  const fake: { calls: { path: string; auth: string }[]; mode: 'ok' | '429' | '500' | 'html'; ops: any[] } = { calls: [], mode: 'ok', ops: [] };
+  const op = (id: string, ric: string, extra: any = {}) => ({
+    Id: id,
+    Start: START,
+    End: null,
+    Keyword: 'B3 Wohnungsbrand',
+    Category: 'Brand',
+    Facts: 'VERTRAULICH Person bewusstlos, Max Mustermann',
+    Ric: ric,
+    Number: '4711-2026',
+    Reporter: { Name: 'Erika Musterfrau', PhoneNumber: '0123 456789' },
+    Address: { Street: 'Hauptstraße', HouseNumber: '12', City: 'Musterstadt', District: 'Nord', CityWithDistrict: 'Musterstadt - Nord', StreetWithHouseNumber: 'Hauptstraße 12', Lat: 50.1, Lng: 8.6, ZipCode: '12345' },
+    ...extra,
+  });
+  let id = '';
+  const tester = () => {
+    const t = new Client(app, '198.51.100.77');
+    t.cookie = admin.cookie;
+    return t;
+  };
+  const row = () => one<any>(`SELECT * FROM connections WHERE id = $1`, [id]);
+
+  beforeAll(async () => {
+    const http = await import('node:http');
+    srv = http.createServer((req, res) => {
+      fake.calls.push({ path: req.url ?? '', auth: String(req.headers.authorization ?? '') });
+      if (req.headers.authorization !== `bearer ${KEY}`) {
+        res.writeHead(401);
+        return res.end('Unauthorized');
+      }
+      if (fake.mode === '429') {
+        res.writeHead(429, { 'retry-after': '120' });
+        return res.end('Too many requests');
+      }
+      if (fake.mode === '500') {
+        res.writeHead(503);
+        return res.end();
+      }
+      if (fake.mode === 'html') {
+        res.writeHead(200, { 'content-type': 'text/html' });
+        return res.end('<html>Wartung</html>');
+      }
+      if (req.url === '/operation?onlyLatest=true') {
+        res.writeHead(200, { 'content-type': 'application/json' });
+        return res.end(JSON.stringify(fake.ops));
+      }
+      res.writeHead(404);
+      res.end();
+    });
+    await new Promise<void>((r) => srv.listen(0, '127.0.0.1', r));
+    process.env.BLAULICHTCMS_FEUERSOFTWARE_URL = `http://127.0.0.1:${(srv.address() as any).port}`;
+    fake.ops = [
+      op('FS-1', 'Musterwehr Vollalarm'),
+      op('FS-2', 'Nachbarwehr', { Keyword: 'TH 1', Category: 'Hilfeleistung', Address: { City: 'Nachbarort', Street: 'Ringstraße' } }),
+      // Kleingeschriebene Feldnamen (camelCase) werden ebenso erkannt
+      { id: 'FS-3', start: START, keyword: 'B2 Kleinbrand', category: 'Brand', ric: 'Musterwehr Vollalarm, Drehleiter', address: { city: 'Musterstadt', street: 'Gartenweg', houseNumber: '3' } },
+      // Älter als 24 Stunden: wird nie übernommen, auch wenn die RIC passt
+      op('FS-ALT', 'Musterwehr Vollalarm', { Start: new Date(Date.now() - 3 * 86400_000).toISOString(), Keyword: 'B1 Altfall' }),
+    ];
+  });
+  afterAll(() => {
+    srv?.close();
+    delete process.env.BLAULICHTCMS_FEUERSOFTWARE_URL;
+  });
+
+  it('Verbinden, Fehlerzuordnung (401), Test mit Filter und Vorschau ohne Adresse', async () => {
+    const c = await admin.post('/connections', { kind: 'feuersoftware', name: 'Feuersoftware Leitstelle (Test)' });
+    expect(c.status).toBe(200);
+    expect(c.json.token).toBeNull();
+    id = c.json.id;
+    const d = await admin.get(`/connections/${id}`);
+    expect(d.json).toMatchObject({ kind: 'feuersoftware', status: 'draft', config: { intervalSeconds: 120, rics: [], keywords: [], createDrafts: true } });
+    expect(d.json.intervals).toEqual([60, 120, 180, 300]);
+    // Unzulässiger Abstand (häufiger als das Limit erlaubt)
+    expect((await admin.put(`/connections/${id}`, { name: 'Feuersoftware Leitstelle (Test)', config: { intervalSeconds: 30 } })).status).toBe(400);
+    // Ohne Schlüssel: Test scheitert am ersten Schritt, ohne Abruf
+    const t0 = await tester().post(`/connections/${id}/test`);
+    expect(t0.json.ok).toBe(false);
+    expect(t0.json.steps[0].message).toContain('Öffentliche Connect Schnittstelle');
+    expect(fake.calls).toHaveLength(0);
+    // Falscher Schlüssel → 401 mit verständlicher Meldung
+    expect((await admin.put(`/connections/${id}/secrets`, { apiKey: 'falscher-schluessel' })).status).toBe(200);
+    const t1 = await tester().post(`/connections/${id}/test`);
+    expect(t1.json.ok).toBe(false);
+    expect(t1.json.steps[1].message).toMatch(/abgelehnt \(401\).*Öffentliche Connect Schnittstelle/);
+    expect(fake.calls[0]).toMatchObject({ path: '/operation?onlyLatest=true', auth: 'bearer falscher-schluessel' });
+    // Richtiger Schlüssel, Filter auf die eigene RIC
+    await admin.put(`/connections/${id}/secrets`, { apiKey: KEY });
+    await admin.put(`/connections/${id}`, { name: 'Feuersoftware Leitstelle (Test)', config: { rics: ['Musterwehr Vollalarm'] } });
+    const t2 = await tester().post(`/connections/${id}/test`);
+    expect(t2.json.ok).toBe(true);
+    expect(t2.json.steps.map((s: any) => s.name)).toEqual(['API-Key', 'Einsätze abrufen', 'Filter (RIC, Stichwort)']);
+    expect(t2.json.steps[1].message).toContain('4 Einsatz/Einsätze gelesen, davon 3 aus den letzten 24 Stunden');
+    expect(t2.json.steps[2].message).toContain('2 von 3 passen');
+    expect(t2.json.steps[2].message).toContain('RICs der Einsätze: Musterwehr Vollalarm, Nachbarwehr, Drehleiter');
+    const pv = (await admin.get(`/connections/${id}`)).json;
+    expect(pv.preview).toMatchObject({ total: 3, matched: 2 });
+    expect(pv.preview.operations[0]).toMatchObject({ title: 'B3 Wohnungsbrand in Musterstadt - Nord', matched: true, area: 'Musterstadt - Nord' });
+    expect(pv.preview.operations[2]).toMatchObject({ title: 'B2 Kleinbrand in Musterstadt', matched: true });
+    const shown = JSON.stringify(pv);
+    for (const secret of ['Hauptstraße', 'Gartenweg', 'Mustermann', 'Musterfrau', '0123 456789', '4711-2026', KEY]) expect(shown).not.toContain(secret);
+    // Kein Entwurf vor der Aktivierung
+    expect((await one<any>(`SELECT count(*)::int AS n FROM fe2_events WHERE connection_id = $1`, [id]))!.n).toBe(0);
+  });
+
+  it('nur aktive Verbindungen fragen ab; je Einsatz genau ein Entwurf ohne Adresse, auch nach Neustart und Löschung', async () => {
+    const { pollFeuersoftware, pollDueFeuersoftware } = await import('../src/connections/feuersoftware.js');
+    const before = fake.calls.length;
+    expect((await pollFeuersoftware(id)).skipped).toContain('nicht aktiv');
+    await pollDueFeuersoftware();
+    expect(fake.calls.length).toBe(before);
+    expect((await admin.post(`/connections/${id}/activate`)).status).toBe(200);
+    // Der Test eben zählt als Abruf – der reguläre Abruf wartet den Abstand ab
+    await pollDueFeuersoftware();
+    expect(fake.calls.length).toBe(before);
+    await pool.query(`UPDATE connections SET last_poll_at = now() - interval '10 minutes' WHERE id = $1`, [id]);
+    await pollDueFeuersoftware();
+    expect(fake.calls.length).toBe(before + 1);
+    const events = await many<any>(`SELECT * FROM fe2_events WHERE connection_id = $1 ORDER BY event_key`, [id]);
+    expect(events.map((e) => e.event_key)).toEqual([`${id}:FS-1`, `${id}:FS-3`]);
+    expect(events.every((e) => e.source === 'feuersoftware' && e.post_id)).toBe(true);
+    const rev = await one<any>(`SELECT * FROM post_revisions WHERE post_id = $1`, [events[0].post_id]);
+    expect(rev.title).toBe('B3 Wohnungsbrand in Musterstadt - Nord');
+    expect(rev.body).toContain('Automatischer Entwurf aus Feuersoftware Connect');
+    expect(rev.body).toContain('Ort: Musterstadt - Nord');
+    // Alarmzeit in der Zeitzone der Instanz
+    expect(rev.body).toContain(START_LOCAL);
+    expect(await one(`SELECT 1 FROM fe2_events WHERE event_key = $1`, [`${id}:FS-ALT`])).toBeNull();
+    const stored = JSON.stringify(events) + rev.body;
+    for (const secret of ['Hauptstraße', '12345', 'Mustermann', 'Musterfrau', '0123', '4711-2026', 'VERTRAULICH', '50.1']) expect(stored).not.toContain(secret);
+    const logs = await one<any>(`SELECT count(*)::int AS n FROM app_logs WHERE message ILIKE ANY($1) OR details::text ILIKE ANY($1)`, [['%Hauptstraße%', '%Mustermann%', `%${KEY}%`, '%FS-1%']]);
+    expect(logs!.n).toBe(0);
+    expect((await one<any>(`SELECT count(*)::int AS n FROM audit_events WHERE action = 'feuersoftware.draft_created'`))!.n).toBe(2);
+    // Erneuter Abruf (z. B. nach einem Neustart): keine Duplikate
+    await pool.query(`UPDATE connections SET last_poll_at = NULL WHERE id = $1`, [id]);
+    expect(await pollFeuersoftware(id)).toMatchObject({ seen: 3, matched: 2, created: 0 });
+    // Gelöschter Einsatz (z. B. Datenschutz-Anfrage) wird nicht erneut angelegt
+    const del = await admin.post('/privacy/action', { kind: 'fe2_event', id: events[0].id, action: 'delete' });
+    expect(del.status).toBe(200);
+    await pool.query(`UPDATE connections SET last_poll_at = NULL WHERE id = $1`, [id]);
+    expect(await pollFeuersoftware(id)).toMatchObject({ created: 0 });
+    expect(await one(`SELECT 1 FROM fe2_events WHERE event_key = $1`, [`${id}:FS-1`])).toBeNull();
+    // Ende des Einsatzes aktualisiert den unbearbeiteten Entwurf (Folgeereignis)
+    fake.ops[2] = { ...fake.ops[2], end: '2026-11-14T19:00:00Z' };
+    await pool.query(`UPDATE connections SET last_poll_at = NULL WHERE id = $1`, [id]);
+    await pollFeuersoftware(id);
+    expect((await one<any>(`SELECT status, sequence FROM fe2_events WHERE event_key = $1`, [`${id}:FS-3`]))).toMatchObject({ status: 'closed', sequence: 2 });
+    // Zwei gleichzeitige Abrufe: nur einer fragt ab
+    await pool.query(`UPDATE connections SET last_poll_at = NULL WHERE id = $1`, [id]);
+    const n = fake.calls.length;
+    const both = await Promise.all([pollFeuersoftware(id), pollFeuersoftware(id)]);
+    expect(fake.calls.length).toBe(n + 1);
+    expect(both.filter((r) => r.skipped)).toHaveLength(1);
+  });
+
+  it('429 mit Retry-After: Pause wird eingehalten; nach drei Fehlschlägen Meldung, bei Erfolg aufgehoben', async () => {
+    const { pollFeuersoftware, pollDueFeuersoftware } = await import('../src/connections/feuersoftware.js');
+    fake.mode = '429';
+    await pool.query(`UPDATE connections SET last_poll_at = NULL WHERE id = $1`, [id]);
+    const r = await pollFeuersoftware(id);
+    expect(r.error).toContain('Zu viele Abfragen (429)');
+    expect(r.error).toContain('120 s');
+    const c1 = await row();
+    expect(c1.consecutive_failures).toBe(1);
+    const wait = new Date(c1.retry_after_until).getTime() - Date.now();
+    expect(wait).toBeGreaterThan(100_000);
+    expect(wait).toBeLessThanOrEqual(121_000);
+    expect(c1.last_error).toContain('429');
+    // Während der Pause kein Abruf – weder regulär noch über „Jetzt abrufen“
+    const n = fake.calls.length;
+    await pool.query(`UPDATE connections SET last_poll_at = NULL WHERE id = $1`, [id]);
+    await pollDueFeuersoftware();
+    expect(fake.calls.length).toBe(n);
+    const manual = await admin.post(`/connections/${id}/refresh`);
+    expect(manual.status).toBe(409);
+    expect(manual.json.message).toContain('Pause');
+    expect(fake.calls.length).toBe(n);
+    // Serverfehler und Nicht-JSON zählen als Fehlschlag; beim dritten in Folge wird die Verwaltung benachrichtigt
+    fake.mode = '500';
+    await pool.query(`UPDATE connections SET last_poll_at = NULL, retry_after_until = NULL WHERE id = $1`, [id]);
+    expect((await pollFeuersoftware(id)).error).toContain('Serverfehler (503)');
+    const alerts = () => one<any>(`SELECT count(*)::int AS n FROM notifications WHERE link = $1 AND title LIKE '%gestört'`, [`/verbindungen/${id}`]).then((x) => x!.n);
+    expect(await alerts()).toBe(0);
+    fake.mode = 'html';
+    await pool.query(`UPDATE connections SET last_poll_at = NULL WHERE id = $1`, [id]);
+    expect((await pollFeuersoftware(id)).error).toContain('kein JSON');
+    expect((await row()).consecutive_failures).toBe(3);
+    expect(await alerts()).toBe(1);
+    expect((await admin.get('/connections')).json.find((x: any) => x.id === id).last_error).toContain('kein JSON');
+    // Erfolg hebt Zähler, Fehler und Meldung auf
+    fake.mode = 'ok';
+    await pool.query(`UPDATE connections SET last_poll_at = NULL WHERE id = $1`, [id]);
+    expect((await pollFeuersoftware(id)).error).toBeUndefined();
+    expect(await row()).toMatchObject({ consecutive_failures: 0, last_error: null, retry_after_until: null });
+    expect(await alerts()).toBe(0);
+    expect(await one(`SELECT 1 FROM notifications WHERE link = $1 AND title LIKE '%wieder erreichbar'`, [`/verbindungen/${id}`])).not.toBeNull();
+    // „Jetzt abrufen“ (auditiert); gleich danach nochmals: zu früh
+    await pool.query(`UPDATE connections SET last_poll_at = NULL WHERE id = $1`, [id]);
+    const now = await admin.post(`/connections/${id}/refresh`);
+    expect(now.status).toBe(200);
+    expect(now.json).toMatchObject({ seen: 3, matched: 2 });
+    expect((await admin.post(`/connections/${id}/refresh`)).status).toBe(409);
+  });
+
+  it('neuer Test nur bei Filter- oder Schlüsseländerung; Löschfrist gilt wie bei FE2', async () => {
+    const iv = await admin.put(`/connections/${id}`, { name: 'Feuersoftware Leitstelle (Test)', config: { intervalSeconds: 300, createDrafts: true } });
+    expect(iv.json).toMatchObject({ retest: false, deactivated: false });
+    expect((await row()).status).toBe('active');
+    const kw = await admin.put(`/connections/${id}`, { name: 'Feuersoftware Leitstelle (Test)', config: { keywords: ['B3'] } });
+    expect(kw.json).toMatchObject({ retest: true, deactivated: true });
+    expect(await row()).toMatchObject({ status: 'draft', last_test: null, preview: null });
+    const { pollFeuersoftware } = await import('../src/connections/feuersoftware.js');
+    expect((await pollFeuersoftware(id)).skipped).toContain('nicht aktiv');
+    expect((await tester().post(`/connections/${id}/test`)).json.ok).toBe(true);
+    expect((await admin.post(`/connections/${id}/activate`)).status).toBe(200);
+    const sec = await admin.put(`/connections/${id}/secrets`, { apiKey: KEY });
+    expect(sec.json).toMatchObject({ retest: true, deactivated: true });
+    // Löschfrist: Einsatzmeldungen aus Feuersoftware fallen unter dieselbe Frist wie FE2-Meldungen
+    await pool.query(`UPDATE fe2_events SET received_at = now() - interval '400 days', updated_at = now() - interval '400 days' WHERE connection_id = $1`, [id]);
+    const { runRetention } = await import('../src/lib/retention.js');
+    const rep = await runRetention({ dryRun: false });
+    expect(rep.categories.find((c) => c.key === 'fe2_events')!.label).toContain('Feuersoftware');
+    expect((await one<any>(`SELECT count(*)::int AS n FROM fe2_events WHERE connection_id = $1`, [id]))!.n).toBe(0);
+    // … und auch danach kein erneutes Anlegen (Prüfsummen bleiben 30 Tage)
+    expect((await one<any>(`SELECT count(*)::int AS n FROM connection_seen_events WHERE connection_id = $1`, [id]))!.n).toBe(2);
+    expect((await tester().post(`/connections/${id}/test`)).json.ok).toBe(true);
+    expect((await admin.post(`/connections/${id}/activate`)).status).toBe(200);
+    await pool.query(`UPDATE connections SET last_poll_at = NULL WHERE id = $1`, [id]);
+    expect(await pollFeuersoftware(id)).toMatchObject({ created: 0 });
+    await admin.post(`/connections/${id}/disable`);
+  });
+});
+
 /* ---------------------------- Medien wie LiFeOS (Pakete 1–10) ---------------------------- */
 
 /** Neue Sammlung mit Link über die API; liefert IDs und Token. */

@@ -23,7 +23,7 @@ const STEP_KIND: Record<string, string> = { login: 'Anmeldung', publish: 'Veröf
  * Wie der Server (connections/common.ts, retestRelevantConfig): Name, Abrufintervall, „Beitragsentwürfe anlegen“ und
  * die Banner-Schalter verlangen keinen neuen Test, alles andere schon.
  */
-const RETEST_EXEMPT = ['name', 'intervalMinutes', 'createDrafts', 'autoBanner', 'bannerSiteId', 'review', 'oauthState', 'tokenExpiresAt'];
+const RETEST_EXEMPT = ['name', 'intervalMinutes', 'intervalSeconds', 'createDrafts', 'autoBanner', 'bannerSiteId', 'review', 'oauthState', 'tokenExpiresAt'];
 function relevantConfig(cfg: Record<string, any>) {
   const out: Record<string, unknown> = {};
   for (const k of Object.keys(cfg ?? {}).sort()) {
@@ -255,6 +255,53 @@ export default function ConnectionDetail() {
                 </>
               )}
 
+              {c.kind === 'feuersoftware' && (
+                <>
+                  <FieldWrap label={c.secrets_set.includes('apiKey') ? 'API-Key (gespeichert – nur zum Ersetzen)' : 'API-Key'} htmlFor="fs-key" labelAction={
+                    <HelpTip title="API-Key der Öffentlichen Connect Schnittstelle" more="/hilfe/verbindungen#feuersoftware-api-key">
+                      <p className="m-0">Im Connect Portal den Standort wählen → <strong>Schnittstellen</strong> → <strong>„Öffentliche Connect Schnittstelle“</strong> erzeugen bzw. aktivieren und den angezeigten Schlüssel hier eintragen.</p>
+                      <p className="m-0">Ein Standort-Key liefert nur die Einsätze dieses Standorts. BlaulichtCMS speichert ihn verschlüsselt, zeigt ihn nie wieder an und fragt damit nur ab – den Schlüssel trotzdem vertraulich behandeln.</p>
+                    </HelpTip>
+                  }>
+                    <Input id="fs-key" type="password" autoComplete="off" value={secret.apiKey ?? ''} onChange={(e) => setSecret({ ...secret, apiKey: e.target.value })} />
+                  </FieldWrap>
+                  <div><Button disabled={!secret.apiKey?.trim()} onClick={saveSecrets}>API-Key speichern</Button></div>
+                  <FieldWrap label="Abrufabstand" htmlFor="fs-int" labelAction={
+                    <HelpTip title="Abrufabstand" more="/hilfe/verbindungen#feuersoftware-connect">
+                      <p className="m-0">Connect meldet Einsätze nicht von sich aus – BlaulichtCMS fragt im eingestellten Abstand nach. Feuersoftware begrenzt die Zahl der Abfragen, daher mindestens 1 Minute. Übernommen werden nur Einsätze der letzten 24 Stunden.</p>
+                      <p className="m-0 text-fg-muted">Bittet Feuersoftware um eine Pause (429), wartet BlaulichtCMS selbst ab. Der Abstand lässt sich ohne neuen Test ändern.</p>
+                    </HelpTip>
+                  }>
+                    <Select id="fs-int" value={String(cfg.intervalSeconds ?? 120)} onChange={(e) => setCfg({ ...cfg, intervalSeconds: Number(e.target.value) })} className="max-w-[220px]">
+                      {(c.intervals ?? [60, 120, 180, 300]).map((n: number) => <option key={n} value={n}>{n === 60 ? '1 Minute' : `${n / 60} Minuten`}{n === 120 ? ' (Standard)' : ''}</option>)}
+                    </Select>
+                  </FieldWrap>
+                  <div className="grid sm:grid-cols-2 gap-3">
+                    <FieldWrap label="RICs (Komma)" htmlFor="fs-rics" labelAction={
+                      <HelpTip title="RICs" more="/hilfe/verbindungen#feuersoftware-filter">
+                        <p className="m-0">Alarmierungsadresse bzw. Name der Alarmgruppe, wie er in Connect bei der Alarmierung steht, z. B. <code className="font-mono">Musterwehr Vollalarm</code>. Mehrere durch Komma trennen.</p>
+                        <p className="m-0">Nach einem Test zeigt BlaulichtCMS die RICs der aktuellen Einsätze an, wenn nicht alle passen.</p>
+                      </HelpTip>
+                    } help="Optional. Nur Einsätze mit passender RIC oder passendem Stichwort werden übernommen."><ListInput id="fs-rics" value={cfg.rics ?? []} onChange={(rics) => setCfg({ ...cfg, rics })} /></FieldWrap>
+                    <FieldWrap label="Stichwörter (Komma)" htmlFor="fs-kw" labelAction={
+                      <HelpTip title="Stichwörter" more="/hilfe/verbindungen#feuersoftware-filter">
+                        <p className="m-0">Teile des Einsatzstichworts, z. B. <code className="font-mono">B3, TH</code>. Ein Einsatz passt, wenn sein Stichwort einen der Begriffe enthält.</p>
+                        <p className="m-0 text-fg-muted">Ohne RICs und Stichwörter wird jeder Einsatz des Standorts übernommen.</p>
+                      </HelpTip>
+                    } help="Optional. Ohne Filter gilt jeder Einsatz des Standorts."><ListInput id="fs-kw" value={cfg.keywords ?? []} onChange={(keywords) => setCfg({ ...cfg, keywords })} /></FieldWrap>
+                  </div>
+                  <Switch checked={cfg.createDrafts !== false} onChange={(v) => setCfg({ ...cfg, createDrafts: v })} label="Beitragsentwürfe anlegen" description="Je Einsatz genau ein interner Entwurf mit Stichwort, Einsatzart, Ort (ohne Straße und Hausnummer) und Alarmzeit." />
+                  <p className="m-0 text-meta text-fg-muted">Lagemeldungen, Sachverhalt, Adresse und Angaben zur meldenden Person übernimmt BlaulichtCMS nicht.</p>
+                  {(c.last_error || (c.retry_after_until && new Date(c.retry_after_until) > new Date())) && (
+                    <Notice tone="warning" title={c.consecutive_failures ? `Letzter Abruf fehlgeschlagen (${c.consecutive_failures}× in Folge)` : 'Hinweis von Feuersoftware'}>
+                      {c.last_error}
+                      {c.retry_after_until && new Date(c.retry_after_until) > new Date() ? ` Nächster Versuch nicht vor ${fmtDateTime(c.retry_after_until)}.` : ''}
+                    </Notice>
+                  )}
+                  {c.last_poll_at && <p className="m-0 text-meta text-fg-muted">Zuletzt abgefragt {fmtDateTime(c.last_poll_at)}.</p>}
+                </>
+              )}
+
               {c.kind === 'warnfeed' && (
                 <>
                   <FieldWrap label="Quelle" htmlFor="wf-fmt">
@@ -302,7 +349,7 @@ export default function ConnectionDetail() {
               )}
               <div className="flex flex-col gap-1.5 items-start">
                 <Button variant="primary" icon="Save" disabled={busy} onClick={saveConfig}>Einstellungen speichern</Button>
-                <p className="m-0 text-meta text-fg-muted">Geänderte Einstellungen oder Zugangsdaten verlangen einen neuen Test; eine aktive Verbindung hält bis dahin an. Nur der Name{c.kind === 'warnfeed' ? ' und das Abrufintervall' : c.kind === 'fe2' ? ' und „Beitragsentwürfe anlegen“' : ''} lassen sich ohne neuen Test ändern.</p>
+                <p className="m-0 text-meta text-fg-muted">Geänderte Einstellungen oder Zugangsdaten verlangen einen neuen Test; eine aktive Verbindung hält bis dahin an. Nur der Name{c.kind === 'warnfeed' ? ' und das Abrufintervall' : c.kind === 'fe2' ? ' und „Beitragsentwürfe anlegen“' : c.kind === 'feuersoftware' ? ', der Abrufabstand und „Beitragsentwürfe anlegen“' : ''} lassen sich ohne neuen Test ändern.</p>
               </div>
             </div>
           </Card>
@@ -370,6 +417,25 @@ export default function ConnectionDetail() {
               )}
             </Card>
           )}
+          {c.kind === 'feuersoftware' && c.preview?.operations && (
+            <Card title="Aktuelle Einsätze" subtitle={`${c.preview.matched} von ${c.preview.total} passen zu den Filtern · ohne Adresse`}>
+              {c.preview.operations.length ? (
+                <ul className="m-0 p-0 list-none flex flex-col gap-2 text-sm">
+                  {c.preview.operations.map((o: any, i: number) => (
+                    <li key={i} className="flex gap-2 items-start">
+                      <Icon name={o.matched ? 'CheckCircle2' : 'XCircle'} size={16} className={o.matched ? 'text-ok mt-0.5' : 'text-fg-muted mt-0.5'} />
+                      <div>
+                        <div className="font-medium">{o.title}</div>
+                        <div className="text-meta text-fg-muted">{[o.start ? fmtDateTime(o.start) : null, o.ric ? `RIC ${o.ric}` : null, o.reason].filter(Boolean).join(' · ')}</div>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="m-0 text-sm text-fg-muted">Zurzeit liefert Connect keinen aktuellen Einsatz.</p>
+              )}
+            </Card>
+          )}
           {c.kind === 'warnfeed' && c.preview?.warnings && (
             <Card title="Meldungen im eigenen Gebiet" subtitle={`${c.preview.warnings.length} von ${c.preview.total} gelesenen`}>
               <ul className="m-0 pl-4 text-sm">{c.preview.warnings.map((w: any) => <li key={w.identifier}>{w.headline} <span className="text-fg-muted">({w.areas.join(', ')})</span></li>)}</ul>
@@ -389,7 +455,7 @@ export default function ConnectionDetail() {
               <div className="flex flex-wrap gap-2">
                 {c.status !== 'active' && !revoked && <Button variant="primary" icon="Power" disabled={busy || !test?.ok} onClick={() => act(() => post(`/connections/${id}/activate`), 'Aktiviert')}>Aktivieren</Button>}
                 {c.status === 'active' && <Button icon="PowerOff" onClick={() => act(() => post(`/connections/${id}/disable`), 'Angehalten')}>Anhalten</Button>}
-                {c.kind === 'warnfeed' && c.status === 'active' && <Button icon="RefreshCw" loading={busy} onClick={() => act(() => post(`/connections/${id}/refresh`), 'Abgerufen')}>Jetzt abrufen</Button>}
+                {(c.kind === 'warnfeed' || c.kind === 'feuersoftware') && c.status === 'active' && <Button icon="RefreshCw" loading={busy} onClick={() => act(() => post(`/connections/${id}/refresh`), 'Abgerufen')}>Jetzt abrufen</Button>}
                 {!revoked && <Button variant="danger" icon="Trash2" onClick={async () => (await ask({ title: 'Verbindung widerrufen?', text: 'Die gespeicherten Zugangsdaten werden gelöscht. Für eine neue Anbindung ist eine neue Verbindung nötig.', confirmLabel: 'Widerrufen' })) && act(() => post(`/connections/${id}/revoke`), 'Widerrufen')}>Widerrufen</Button>}
               </div>
             </div>

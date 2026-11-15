@@ -11,6 +11,7 @@ import { safeHref } from '../../lib/url';
 export const CONN_STATE: Record<string, string> = { draft: 'Eingerichtet – Test ausstehend', tested: 'Getestet – bereit zum Aktivieren', active: 'Aktiv', disabled: 'Angehalten', revoked: 'Widerrufen' };
 export const KINDS = [
   { id: 'fe2', label: 'FE2 – Einsatzentwürfe', icon: 'Siren', text: 'Eingehende Einsätze als interne Beitragsentwürfe. Die Alarmierung bleibt unabhängig.' },
+  { id: 'feuersoftware', label: 'Feuersoftware Connect', icon: 'RadioTower', text: 'Einsätze aus Feuersoftware Connect regelmäßig abrufen und als interne Beitragsentwürfe anlegen – wie bei FE2.' },
   { id: 'facebook', label: 'Facebook-Seite', icon: 'Share2', text: 'Freigegebene Beiträge auf einer Facebook-Seite veröffentlichen.' },
   { id: 'instagram', label: 'Instagram-Konto', icon: 'Camera', text: 'Freigegebene Beiträge mit Bild oder Video auf einem professionellen Instagram-Konto.' },
   { id: 'warnfeed', label: 'Amtliche Warnungen', icon: 'AlertTriangle', text: 'Warnungen für das eigene Gebiet anzeigen – getrennt vom eigenen Warnentwurf.' },
@@ -45,7 +46,7 @@ export default function Connections() {
       />
       {q.isLoading && <SkeletonRows rows={4} />}
       {q.error && <ErrorBox title="Verbindungen konnten nicht geladen werden">{(q.error as Error).message}</ErrorBox>}
-      {q.data?.length === 0 && <EmptyState icon="Plug" title="Keine Verbindungen" text="Facebook, Instagram, FE2 oder amtliche Warnungen lassen sich hier anbinden." />}
+      {q.data?.length === 0 && <EmptyState icon="Plug" title="Keine Verbindungen" text="Facebook, Instagram, FE2, Feuersoftware Connect oder amtliche Warnungen lassen sich hier anbinden." />}
       <div className="grid gap-3 md:grid-cols-2">
         {(q.data ?? []).map((c) => (
           <Card key={c.id}>

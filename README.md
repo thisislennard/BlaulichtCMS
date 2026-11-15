@@ -135,8 +135,9 @@ flowchart LR
 
 ### Verbindungen
 
-- **FE2:** Alarm-Meldungen erzeugen je Einsatz einen internen Beitragsentwurf (nur freigegebene Felder, keine
-  Adressen).
+- **FE2 und Feuersoftware Connect:** Einsätze erzeugen je Einsatz einen internen Beitragsentwurf (nur freigegebene
+  Felder, keine Adressen). FE2 meldet per HTTP-Eingang, Feuersoftware Connect wird regelmäßig abgefragt (Filter nach
+  RIC und Stichwort, Rücksicht auf das Abfragelimit).
 - **Einheitlicher Ablauf** für alle Verbindungen: Verbinden → Testen → Vorschau → Aktivieren.
 - **Medienimport:** einmalige Übernahme von Medien und gültigen Upload-Links aus einem Altsystem (Austauschformat,
   Exportskript für LiFeOS).
@@ -165,7 +166,7 @@ flowchart LR
 
 - **Auskunft und Löschung je Person:** Suche über alle personenbezogenen Daten, Export als ZIP, Löschen oder
   Pseudonymisieren je Treffer.
-- **Löschfristen** für Sammlungen, Upload-Links, Warnvorgänge, FE2-Meldungen und Protokolle – mit Vorschau „Was würde
+- **Löschfristen** für Sammlungen, Upload-Links, Warnvorgänge, Einsatzmeldungen (FE2, Feuersoftware Connect) und Protokolle – mit Vorschau „Was würde
   gelöscht?“.
 - **Vorlagen** für Verarbeitungsverzeichnis und Datenschutz-Folgenabschätzung, Hinweise zu Empfängern wie Meta.
 

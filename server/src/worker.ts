@@ -25,6 +25,7 @@ import { redactAnonymousIps } from './lib/audit.js';
 import { sealAudit, verifyAudit } from './lib/audit-chain.js';
 import { cleanupMediaTokens } from './connections/meta.js';
 import { refreshDueWarnfeeds } from './connections/warnfeed.js';
+import { pollDueFeuersoftware } from './connections/feuersoftware.js';
 import { runRetention } from './lib/retention.js';
 import { checkExpiringLinks, checkStorage } from './lib/media-notify.js';
 import { checkForUpdate, updateCheckDue } from './updates/github.js';
@@ -124,6 +125,8 @@ async function cleanup() {
   await q(`DELETE FROM exports WHERE status IN ('expired', 'failed') AND created_at < now() - interval '30 days'`);
   await q(`DELETE FROM import_runs WHERE created_at < now() - make_interval(days => $1)`, [s['retention.audit_days']]);
   await q(`DELETE FROM idempotency_records WHERE created_at < now() - interval '30 days'`);
+  // Prüfsummen übernommener Einsätze (Schutz vor erneuter Anlage gelöschter Einsätze) – die Quelle liefert nur Stunden zurück
+  await q(`DELETE FROM connection_seen_events WHERE seen_at < now() - interval '30 days'`);
   await q(`DELETE FROM worker_heartbeats WHERE last_seen_at < now() - interval '1 day'`);
   // Widerrufene Geheimnisse (alte SMTP-Passwörter, rotierte Verbindungs-Tokens) nach 30 Tagen endgültig löschen (#172).
   await q(`DELETE FROM secrets WHERE revoked_at < now() - interval '30 days' AND NOT EXISTS (SELECT 1 FROM connections c WHERE c.secret_id = secrets.id)`);
@@ -206,6 +209,8 @@ async function maintenance(isLeader: boolean) {
   // In-App-Updates: neues Release im eingestellten Abstand prüfen (installiert wird nur von Hand)
   if (due('update-check', 10 * 60_000) && (await updateCheckDue())) await checkForUpdate();
   if (due('warnfeed', 60_000)) await refreshDueWarnfeeds().catch((e) => log('warn', 'warnfeed', e.message));
+  // Feuersoftware Connect: jede aktive Verbindung in ihrem Abstand (60–300 s); geprüft wird alle 10 s
+  if (due('feuersoftware', 10_000)) await pollDueFeuersoftware().catch((e) => log('warn', 'feuersoftware', e.message));
   if (s['backup.enabled'] && due('backup-check', 10 * 60_000)) {
     const now = new Date(new Date().toLocaleString('en-US', { timeZone: s['general.timezone'] }));
     if (now.getHours() === s['backup.hour']) {

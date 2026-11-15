@@ -294,7 +294,7 @@ export async function runRetention(opts: { dryRun: boolean; actor?: Actor; setti
   report.categories.push(
     await simpleCategory(opts.dryRun, {
       key: 'fe2_events',
-      label: 'Einsatzmeldungen aus FE2 (Stichwort, Ort, Zeit, Einheiten)',
+      label: 'Einsatzmeldungen aus FE2 und Feuersoftware Connect (Stichwort, Ort, Zeit, Einheiten)',
       days: days(s['privacy.fe2_event_days']),
       table: 'fe2_events',
       where: `GREATEST(received_at, updated_at) < now() - make_interval(days => $1)`,

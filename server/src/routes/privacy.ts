@@ -151,8 +151,8 @@ export async function privacySearch(term: string): Promise<PrivacyHit[]> {
     hits.push({ kind: 'responsibility', id: r.id, title: `Zuständigkeit „${r.name}“`, at: iso(r.created_at), fields: { name: r.name, gebiet: r.area, empfaenger: r.recipients }, actions: [], note: 'Unter Warnentwurf → Pflege ändern.', link: '/warnungen/pflege' });
   }
 
-  for (const e of await many<any>(`SELECT id, event_key, keyword, title, fields, received_at FROM fe2_events WHERE title ILIKE $1 OR fields::text ILIKE $1 ORDER BY received_at DESC LIMIT ${LIMIT}`, [like])) {
-    hits.push({ kind: 'fe2_event', id: e.id, title: `FE2-Meldung ${e.keyword ?? ''}`.trim(), at: iso(e.received_at), fields: { einsatz: e.event_key, titel: e.title, felder: e.fields }, actions: ['delete'] });
+  for (const e of await many<any>(`SELECT id, event_key, keyword, title, fields, received_at, source FROM fe2_events WHERE title ILIKE $1 OR fields::text ILIKE $1 ORDER BY received_at DESC LIMIT ${LIMIT}`, [like])) {
+    hits.push({ kind: 'fe2_event', id: e.id, title: `${e.source === 'feuersoftware' ? 'Feuersoftware-Einsatz' : 'FE2-Meldung'} ${e.keyword ?? ''}`.trim(), at: iso(e.received_at), fields: { einsatz: e.event_key, titel: e.title, felder: e.fields }, actions: ['delete'] });
   }
 
   for (const p of await many<any>(
@@ -272,7 +272,7 @@ export async function privacyRoutes(app: FastifyInstance) {
       const r = await pool.query(`DELETE FROM fe2_events WHERE id = $1`, [b.id]);
       if (!r.rowCount) throw notFound();
     }
-    await audit(actor, 'privacy.deleted', { type: b.kind, id: b.id, label: b.kind === 'fe2_event' ? 'FE2-Meldung' : 'Upload' }, details);
+    await audit(actor, 'privacy.deleted', { type: b.kind, id: b.id, label: b.kind === 'fe2_event' ? 'Einsatzmeldung' : 'Upload' }, details);
     return { ok: true };
   });
 }

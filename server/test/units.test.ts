@@ -135,6 +135,47 @@ describe('FE2-Eingang: Zuordnung', () => {
   });
 });
 
+describe('Feuersoftware Connect: Felder, Filter, Pausen', () => {
+  it('Feldnamen in PascalCase und camelCase; nur Ort ohne Straße, keine Personen- oder Sachverhaltsdaten', async () => {
+    const { normalizeKeys, operationFields, locationArea } = await import('../src/connections/feuersoftware.js');
+    const op = normalizeKeys({ id: 'A1', keyword: 'B3', category: 'Brand', start: '2026-07-01T08:00:00Z', facts: 'Person verletzt', reporter: { name: 'Erika', phoneNumber: '0123' }, address: { street: 'Hauptstraße', houseNumber: '1', city: 'Musterstadt', cityWithDistrict: 'Musterstadt - Nord' } });
+    expect(op.Address.CityWithDistrict).toBe('Musterstadt - Nord');
+    expect(locationArea(op)).toBe('Musterstadt - Nord');
+    expect(locationArea({ Address: { City: 'Musterstadt', Street: 'X' } })).toBe('Musterstadt');
+    const f = operationFields(op);
+    expect(f).toEqual({ eventId: 'A1', closed: false, fields: { keyword: 'B3', category: 'Brand', municipality: 'Musterstadt - Nord', started_at: '2026-07-01T08:00:00.000Z' } });
+    expect(operationFields({ Id: 'x'.repeat(65) }).eventId).toBeNull();
+    expect(operationFields({ Id: 'A2', End: '2026-07-01T09:00:00Z' })).toMatchObject({ closed: true, fields: { status: 'beendet' } });
+  });
+  it('RIC als ganzes Wort oder gleich (ohne Leerzeichen bei Zahlen-RICs), Stichwort als Teilwort', async () => {
+    const { ricHit, matchReason } = await import('../src/connections/feuersoftware.js');
+    expect(ricHit('2-Drohne', 'KEL 2-Drohne TE')).toBe(true);
+    expect(ricHit('123', '1234567')).toBe(false);
+    expect(ricHit('12 34', '1234; 999')).toBe(true);
+    expect(ricHit('musterwehr  vollalarm', 'Musterwehr Vollalarm, Drehleiter')).toBe(true);
+    expect(matchReason({ Ric: 'X' }, {}).ok).toBe(true);
+    expect(matchReason({ Ric: 'Nachbar', Keyword: 'TH 1' }, { rics: ['Musterwehr'], keywords: ['B3'] })).toMatchObject({ ok: false });
+    expect(matchReason({ Ric: 'Nachbar', Keyword: 'B3 Wohnung' }, { rics: ['Musterwehr'], keywords: ['b3'] })).toMatchObject({ ok: true, reason: 'Stichwort enthält „b3“' });
+  });
+  it('nur Einsätze der letzten 24 Stunden', async () => {
+    const { isRecent } = await import('../src/connections/feuersoftware.js');
+    const now = Date.parse('2026-11-15T12:00:00Z');
+    expect(isRecent({ Start: '2026-11-15T01:00:00Z' }, now)).toBe(true);
+    expect(isRecent({ Start: '2026-11-13T12:00:00Z' }, now)).toBe(false);
+    expect(isRecent({ CreatedAt: '2026-11-15T11:00:00Z' }, now)).toBe(true);
+    expect(isRecent({}, now)).toBe(true);
+  });
+  it('Retry-After als Sekunden oder Datum, begrenzt auf 1 s bis 1 h', async () => {
+    const { retryAfterSeconds } = await import('../src/connections/feuersoftware.js');
+    expect(retryAfterSeconds('120')).toBe(120);
+    expect(retryAfterSeconds(undefined)).toBe(60);
+    expect(retryAfterSeconds('99999')).toBe(3600);
+    const in90 = retryAfterSeconds(new Date(Date.now() + 90_000).toUTCString());
+    expect(in90).toBeGreaterThanOrEqual(88);
+    expect(in90).toBeLessThanOrEqual(91);
+  });
+});
+
 describe('Amtliche Warnungen: Gebietsfilter', () => {
   it('Gebiete überschneiden sich in beide Richtungen (Kreis-/Landeswarnung betrifft die Gemeinde)', async () => {
     const { inArea } = await import('../src/connections/warnfeed.js');

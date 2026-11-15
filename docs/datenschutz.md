@@ -20,6 +20,7 @@ Redaktion (Konten) ──Beitrag, Fassung, Freigabe────┤
                                                    ├──▶ WordPress (BlaulichtCMS Bridge, ruft selbst ab) ──▶ öffentlich
                                                    ├──▶ Facebook-Seite / Instagram (Meta, auch USA) ──▶ öffentlich
 FE2 (Einsatzdaten, Allowlist) ──HTTP──────────────▶│
+Feuersoftware Connect (Einsätze) ◀──Abruf──────────┤
 Warnfeeds (amtliche Warnungen) ◀──Abruf────────────┤
                                                    └──▶ Mailserver (Warnentwurf an zuständige Stellen)
 ```
@@ -30,6 +31,11 @@ Warnfeeds (amtliche Warnungen) ◀──Abruf───────────�
 - **Veröffentlichung:** Nur freigegebene Fassungen und öffentliche Fassungen der Dateien (neutral benannt) verlassen
   BlaulichtCMS. Keine Originale, keine Uploader-Hinweise.
 - **Warnentwurf:** Rückrufkontakt (Name, Telefon), bestätigende/freigebende Personen, Empfängeradressen, PDF.
+- **Feuersoftware Connect (Quelle, optional):** BlaulichtCMS ruft beim Anbieter Feuersoftware die Einsätze des
+  eigenen Standorts ab (HTTPS, API-Key verschlüsselt gespeichert). An Feuersoftware gehen dabei nur der Schlüssel und
+  die Abfrage selbst. Von der Antwort bleiben nur die Felder der Allowlist; Lagemeldungen (Freitext, ggf.
+  Gesundheitsdaten nach Art. 9 DSGVO) ruft BlaulichtCMS nicht ab. Für die Nutzung von Connect selbst gilt der Vertrag
+  der Organisation mit Feuersoftware.
 - **Betrieb:** Konten, Sitzungen (IP, Browser), Audit, Systemprotokoll, Sicherungen.
 
 ## Datenkategorien je Bereich
@@ -43,7 +49,8 @@ Warnfeeds (amtliche Warnungen) ◀──Abruf───────────�
 | Beiträge (`posts`, `post_revisions`, `approvals`, `publications`, `social_publications`) | Redaktion, im Text genannte Personen, Abgebildete | Texte, Fassungen, Freigaben, Veröffentlichungsstatus | keine automatische Löschung (redaktionelles Archiv); von Hand bearbeiten/zurückziehen | – |
 | Warnvorgänge (`warnings`, `warning_revisions`, `warning_approvals`, `warning_sends`) | Rückrufkontakte, Redaktion, Empfänger | Name, Telefon, E-Mail-Adressen, PDF, SMTP-Antworten | **365 Tage** nach dem letzten Bearbeitungsschritt | `privacy.warning_days` |
 | Zuständigkeiten (`responsibilities`) | Ansprechstellen | Funktionsadressen | solange gepflegt | – |
-| FE2 (`fe2_events`) | ggf. Betroffene eines Einsatzes (indirekt über Ort/Zeit) | Stichwort, Ort, Zeit, Einheiten (Allowlist, keine Alarmtexte) | **90 Tage** | `privacy.fe2_event_days` |
+| Einsatzmeldungen aus FE2 und Feuersoftware Connect (`fe2_events`, Spalte `source`) | ggf. Betroffene eines Einsatzes (indirekt über Ort/Zeit) | Stichwort, Einsatzart, Ort bzw. Ort mit Ortsteil, Zeit, Einheiten (Allowlist; keine Alarmtexte, kein Sachverhalt, keine Straße/Hausnummer, keine meldende Person, keine Telefonnummern, keine Lagemeldungen) | **90 Tage** | `privacy.fe2_event_days` |
+| Übernommene Einsätze (`connection_seen_events`) | – | nur Prüfsumme aus Verbindung und Einsatz-ID (verhindert, dass gelöschte Einsätze erneut angelegt werden) | **30 Tage** | fest |
 | Amtliche Warnungen (`official_warnings`) | – | keine personenbezogenen Daten | **90 Tage** nach Ablauf und nachdem die Quelle sie nicht mehr liefert | `privacy.official_warning_days` |
 | Konten (`users`, `sessions`, `invitations`, `trusted_devices`) | Redaktion, Administration | Name, E-Mail, Rollen, Passwort-Hash, TOTP (verschlüsselt), letzte Anmeldung, Sitzungen mit IP und Browser, gemerkte Geräte der Zwei-Faktor-Anmeldung (Browser-Kennung, Zeitpunkte, Hash der Gerätekennung, keine IP) | Konto bis zur Löschung; Sitzungen und gemerkte Geräte 7 Tage nach Ende bzw. Ablauf; Einladungen 30 Tage nach Ablauf | `security.remember_days`, `security.mfa_remember_days` |
 | Audit (`audit_events`) | alle Handelnden, Hochladende (IP) | Name, E-Mail, Aktion, Objekt, IP | **365 Tage**; IP ohne Konto **30 Tage** | `retention.audit_days`, `privacy.upload_ip_retention_days` |

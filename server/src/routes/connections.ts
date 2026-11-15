@@ -20,6 +20,7 @@ import { publicFileName } from '../media/names.js';
 import { connectionSecrets, KIND_LABEL, loadConnection, requireRetest, retestRelevantConfig, saveTest, scrub, updateConnectionSecrets, type Connection, type ConnectionKind } from '../connections/common.js';
 import { FE2_ALLOWED_FIELDS, FE2_DEFAULT_MAPPING, handleFe2Event } from '../connections/fe2.js';
 import { checkFormats, connectionTestImage, deleteFacebookPost, facebookAuthorizeUrl, facebookExchange, instagramAuthorizeUrl, instagramExchange, markerFor, mediaForRevision, mediaUrl, socialText, testFacebook, testInstagram } from '../connections/meta.js';
+import { FEUERSOFTWARE_DEFAULT_INTERVAL, FEUERSOFTWARE_INTERVALS, pollFeuersoftware, testFeuersoftware } from '../connections/feuersoftware.js';
 import { insecureFeed, insecureFeedUrl, REVIEW_CHECKS, refreshWarnfeed, testWarnfeed, warningBannerText } from '../connections/warnfeed.js';
 
 /** Öffentliche Sicht auf eine Verbindung – nie mit Geheimnissen. */
@@ -41,6 +42,9 @@ async function view(c: Connection) {
     private_approved_at: c.private_approved_at,
     last_event_at: (c as any).last_event_at,
     last_error: (c as any).last_error,
+    last_poll_at: (c as any).last_poll_at,
+    retry_after_until: (c as any).retry_after_until,
+    consecutive_failures: (c as any).consecutive_failures ?? 0,
     activated_at: (c as any).activated_at,
     created_at: (c as any).created_at,
     secrets_set: Object.keys(sec).filter((k) => k !== 'pages'),
@@ -65,6 +69,13 @@ const configSchema: Record<ConnectionKind, z.ZodType<any>> = {
     intervalMinutes: z.number().int().min(2).max(120).default(5),
     autoBanner: z.boolean().default(false),
     bannerSiteId: z.uuid().nullable().default(null),
+  }),
+  feuersoftware: z.object({
+    // 50 Abfragen je Stunde sind dokumentiert – kürzester Abstand 60 s, Standard 120 s
+    intervalSeconds: z.union(FEUERSOFTWARE_INTERVALS.map((n) => z.literal(n)) as any).default(FEUERSOFTWARE_DEFAULT_INTERVAL),
+    rics: z.array(z.string().trim().regex(/^[\p{L}\p{N} _.\-]{1,40}$/u, 'Eine RIC darf nur Buchstaben, Ziffern, Leerzeichen, Punkt, Binde- und Unterstrich enthalten.')).max(30).default([]),
+    keywords: z.array(z.string().trim().min(1).max(60)).max(30).default([]),
+    createDrafts: z.boolean().default(true),
   }),
 };
 
@@ -132,12 +143,13 @@ export async function connectionRoutes(app: FastifyInstance) {
       allowed_fields: c.kind === 'fe2' ? FE2_ALLOWED_FIELDS : null,
       default_mapping: c.kind === 'fe2' ? FE2_DEFAULT_MAPPING : null,
       review_checks: c.kind === 'warnfeed' ? REVIEW_CHECKS : null,
+      intervals: c.kind === 'feuersoftware' ? FEUERSOFTWARE_INTERVALS : null,
     };
   });
 
   /** Schritt 1 „Verbinden“: anlegen (Entwurf). FE2 erhält einen Zugangsschlüssel, der nur jetzt angezeigt wird. */
   app.post('/connections', { preHandler: manage }, async (req) => {
-    const b = z.object({ kind: z.enum(['fe2', 'facebook', 'instagram', 'warnfeed']), name: z.string().trim().min(2).max(100), config: z.record(z.string(), z.any()).default({}) }).parse(req.body);
+    const b = z.object({ kind: z.enum(['fe2', 'facebook', 'instagram', 'warnfeed', 'feuersoftware']), name: z.string().trim().min(2).max(100), config: z.record(z.string(), z.any()).default({}) }).parse(req.body);
     const config = configSchema[b.kind].parse(b.config);
     if (b.kind === 'warnfeed') assertSecureFeed(config, null);
     const userId = req.auth!.user?.id ?? null;
@@ -188,7 +200,7 @@ export async function connectionRoutes(app: FastifyInstance) {
   app.put('/connections/:id/secrets', { preHandler: manage }, async (req) => {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
     const c = await loadConnection(id);
-    const allowed: Record<ConnectionKind, string[]> = { fe2: [], facebook: ['appSecret', 'pageToken'], instagram: ['appSecret', 'token'], warnfeed: [] };
+    const allowed: Record<ConnectionKind, string[]> = { fe2: [], facebook: ['appSecret', 'pageToken'], instagram: ['appSecret', 'token'], warnfeed: [], feuersoftware: ['apiKey'] };
     const b = z.record(z.string(), z.string().max(2000).nullable()).parse(req.body);
     const patch = Object.fromEntries(Object.entries(b).filter(([k]) => allowed[c.kind].includes(k)));
     if (!Object.keys(patch).length) throw badRequest('Keine gültigen Felder.');
@@ -307,6 +319,8 @@ export async function connectionRoutes(app: FastifyInstance) {
       const url = base.startsWith('https://') || process.env.BLAULICHTCMS_META_GRAPH_URL ? `${base}/api/v1/connection-test-image.jpg?v=${randomToken(8)}` : null;
       r = await testInstagram(c, sec, url);
       if (r.userId) await pool.query(`UPDATE connections SET config = config || $2 WHERE id = $1`, [id, JSON.stringify({ userId: r.userId })]);
+    } else if (c.kind === 'feuersoftware') {
+      r = await testFeuersoftware(c);
     } else {
       r = await testWarnfeed(c);
     }
@@ -375,7 +389,14 @@ export async function connectionRoutes(app: FastifyInstance) {
   app.post('/connections/:id/refresh', { preHandler: manage }, async (req) => {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
     const c = await loadConnection(id);
-    if (c.kind !== 'warnfeed' || c.status !== 'active') throw badRequest('Nur für aktive Warnfeeds.');
+    if (c.kind === 'feuersoftware' && c.status === 'active') {
+      const r = await pollFeuersoftware(c.id, { force: true });
+      if (r.skipped) throw conflict(r.skipped);
+      if (r.error) throw new AppError(502, 'upstream', r.error);
+      await audit(req.auth!.actor, 'connection.polled', { type: 'connection', id, label: c.name }, { einsaetze: r.seen, passend: r.matched, neu: r.created });
+      return r;
+    }
+    if (c.kind !== 'warnfeed' || c.status !== 'active') throw badRequest('Nur für aktive Warnfeeds und Feuersoftware-Verbindungen.');
     return refreshWarnfeed(c);
   });
 

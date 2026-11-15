@@ -327,7 +327,7 @@ function WarningCaseInner({ id }: { id: string }) {
             <Notice tone="success" title="Keine Warnstufe">Eine Entwarnung hat keine Warnstufe und setzt die Stufe nicht auf 3.</Notice>
           ) : (
             <>
-              <Card title="Feuerwehrstichwort" subtitle="Durchsuchbar nach Kürzel, Bezeichnung oder Alias. Kann aus FE2 vorbelegt, manuell gewählt oder leer gelassen werden.">
+              <Card title="Feuerwehrstichwort" subtitle="Durchsuchbar nach Kürzel, Bezeichnung oder Alias. Kann aus einem Einsatz (FE2, Feuersoftware Connect) vorbelegt, manuell gewählt oder leer gelassen werden.">
                 <div className="flex flex-col gap-3">
                   {v.keyword ? (
                     <div className="flex flex-wrap items-center gap-2">
@@ -360,7 +360,7 @@ function WarningCaseInner({ id }: { id: string }) {
                       )}
                       {(fe2.data?.length ?? 0) > 0 && (
                         <details>
-                          <summary className="cursor-pointer text-sm">Aus FE2-Einsatz übernehmen</summary>
+                          <summary className="cursor-pointer text-sm">Aus Einsatz übernehmen (FE2, Feuersoftware Connect)</summary>
                           <ul className="mt-2 flex flex-col gap-1">
                             {fe2.data!.map((e) => (
                               <li key={e.id}>

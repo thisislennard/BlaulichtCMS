@@ -10,8 +10,8 @@ Verbindungen sind **optional**. BlaulichtCMS funktioniert vollständig ohne. Jed
 Eine Verbindung lässt sich nur mit einem **bestandenen Test der aktuellen Einstellungen** aktivieren.
 
 - Ändern sich Einstellungen oder Zugangsdaten, verwirft BlaulichtCMS den letzten Test und setzt die Verbindung auf **Entwurf** – auch eine aktive oder angehaltene. Vor dem Speichern an einer aktiven Verbindung fragt BlaulichtCMS nach: Sie verarbeitet bis zum neuen Test und zur erneuten Aktivierung keine Meldungen und veröffentlicht nichts.
-- Dazu zählen: Quelle, Regionalschlüssel, Gebietsfilter, Feldzuordnung, App-ID, App-Geheimnis, Token, gewählte Seite, eine neue Anmeldung bei Meta und ein neuer FE2-Zugangsschlüssel.
-- **Ohne neuen Test** änderbar sind der Name, das Abrufintervall, „Beitragsentwürfe anlegen“ und die automatischen Banner (die haben eigene Voraussetzungen, siehe [unten](#automatische-banner-und-pruefliste)).
+- Dazu zählen: Quelle, Regionalschlüssel, Gebietsfilter, Feldzuordnung, App-ID, App-Geheimnis, Token, gewählte Seite, eine neue Anmeldung bei Meta, ein neuer FE2-Zugangsschlüssel sowie API-Key, RICs und Stichwörter bei Feuersoftware Connect.
+- **Ohne neuen Test** änderbar sind der Name, das Abrufintervall bzw. der Abrufabstand, „Beitragsentwürfe anlegen“ und die automatischen Banner (die haben eigene Voraussetzungen, siehe [unten](#automatische-banner-und-pruefliste)).
 - Eine angehaltene Verbindung mit unveränderten Einstellungen lässt sich ohne neuen Test wieder aktivieren.
 - Jede Rücksetzung steht im Audit-Protokoll („Neuer Test nötig“ mit vorherigem Status und Grund).
 
@@ -173,6 +173,58 @@ Danach **Testen** (prüft: Schlüssel hinterlegt, Meldung empfangen, Einsatz-ID 
 | 400 „Keine Einsatz-ID gefunden“ | Feldzuordnung für die Einsatz-ID passt nicht zur Meldung. |
 | 409 „Die Verbindung ist angehalten“ | Verbindung in BlaulichtCMS angehalten. |
 | Meldung kommt an, aber kein Entwurf | Verbindung nicht aktiv (nur Vorschau), Kopfzeile `X-BlaulichtCMS-Test: 1` gesetzt oder „Beitragsentwürfe anlegen“ aus. |
+
+## Feuersoftware Connect
+
+Feuersoftware Connect ist die zweite Einsatzquelle neben FE2: Aus jedem neuen Einsatz entsteht **genau ein interner Beitragsentwurf** – dieselbe Art Entwurf wie bei FE2 (Stichwort, Einsatzart, Ort, Alarmzeit). Connect meldet Einsätze nicht von sich aus; BlaulichtCMS fragt die **Öffentliche Connect Schnittstelle** im eingestellten Abstand ab (1, 2, 3 oder 5 Minuten, Standard 2 Minuten). Die Alarmierung selbst läuft unabhängig von BlaulichtCMS.
+
+1. Unter [Verbindungen](/verbindungen) **Neue Verbindung → Feuersoftware Connect** anlegen.
+2. **API-Key** eintragen und speichern (siehe unten), bei Bedarf **RICs** und **Stichwörter** als Filter.
+3. **Testen:** BlaulichtCMS ruft die aktuellen Einsätze ab und zeigt, wie viele zu den Filtern passen. Die **Vorschau** listet sie – ohne Adresse.
+4. **Aktivieren:** Erst jetzt fragt der Worker regelmäßig ab und legt Entwürfe an. **Jetzt abrufen** (Schritt *Aktivieren*) fragt sofort ab.
+
+- Übernommen werden nur Einsätze der **letzten 24 Stunden** – ältere Einsätze aus der Liste von Connect werden nie zu Entwürfen.
+- Wiederholungen erkennt BlaulichtCMS an der Einsatz-ID, auch nach einem Neustart. Ein Einsatz, der in BlaulichtCMS gelöscht wurde (z. B. über eine Datenschutz-Anfrage oder die Löschfrist), wird nicht erneut angelegt.
+- Endet der Einsatz in Connect, wird ein noch unbearbeiteter Entwurf aktualisiert; ein bearbeiteter Entwurf bleibt unverändert, die Redaktion erhält einen Hinweis.
+- **Feuersoftware begrenzt die Zahl der Abfragen** und kann Schlüssel bei Überlast sperren. Deshalb mindestens 1 Minute Abstand und nie zwei Abfragen gleichzeitig. Antwortet Connect mit „zu viele Abfragen“ (429), wartet BlaulichtCMS die erbetene Pause ab.
+- **Lagemeldungen** ruft BlaulichtCMS nicht ab: Ihr Freitext kann Angaben zu Verletzten enthalten und wird für einen redaktionellen Entwurf nicht gebraucht.
+
+### Feuersoftware: API-Key
+
+Der Schlüssel stammt aus dem [Connect Portal](https://connect.feuersoftware.com): Standort wählen → **Schnittstellen** → **„Öffentliche Connect Schnittstelle“** erzeugen bzw. aktivieren und den angezeigten Schlüssel in BlaulichtCMS eintragen ([Beschreibung der Schnittstelle bei Feuersoftware](https://docsv2.feuersoftware.com/connect/schnittstellen/public_api)).
+
+- Ein Standort-Key liefert nur die Einsätze dieses Standorts.
+- BlaulichtCMS speichert den Schlüssel verschlüsselt und zeigt ihn nie wieder an. Ein neuer Schlüssel verlangt einen neuen Test.
+- Mit dem Schlüssel ließen sich in Connect auch Einsätze anlegen – BlaulichtCMS fragt nur ab. Den Schlüssel trotzdem vertraulich behandeln und im Portal erneuern, wenn er abgeflossen sein könnte.
+- Der Server muss `connectapi.feuersoftware.com` über HTTPS erreichen (Internet, DNS, Firewall).
+
+### Feuersoftware: Filter
+
+Damit nur **eigene** Einsätze zu Entwürfen werden, lassen sich RICs und Stichwörter einstellen. Ein Einsatz passt, wenn **eine** RIC **oder** **ein** Stichwort passt. Ohne beides wird **jeder** Einsatz des Standorts übernommen.
+
+- **RIC:** Alarmierungsadresse bzw. Name der Alarmgruppe, wie er in Connect bei der Alarmierung steht (oft ein Name wie „Musterwehr Vollalarm“). Passt bei gleicher Schreibweise (ohne Groß-/Kleinschreibung) oder als ganzes Wort im RIC-Feld – „123“ passt nicht auf „1234567“.
+- **Stichwort:** passt, wenn das Einsatzstichwort den Begriff enthält, z. B. `B3` oder `TH`.
+- Passt beim Test nicht jeder Einsatz, nennt BlaulichtCMS die RICs der aktuellen Einsätze – so lässt sich die richtige Schreibweise nach einem Probealarm ablesen.
+- Geänderte Filter verlangen einen neuen Test.
+
+### Typische Fehler (Feuersoftware)
+
+| Meldung | Ursache und Abhilfe |
+|---|---|
+| „Der API-Key wird abgelehnt (401)“ | Schlüssel falsch, erneuert oder die „Öffentliche Connect Schnittstelle“ im Connect Portal nicht aktiv. Schlüssel neu eintragen. |
+| „Zugriff verweigert (403)“ | Schlüssel darf diese Daten nicht lesen (anderer Standort, Schnittstelle deaktiviert oder wegen Überlast gesperrt). |
+| „Adresse … nicht gefunden (404)“ | Die Schnittstelle hat sich geändert – BlaulichtCMS aktualisieren bzw. melden. |
+| „Zu viele Abfragen (429)“ | Abfragelimit erreicht. BlaulichtCMS wartet die erbetene Pause ab; bei Wiederholung den Abrufabstand erhöhen. |
+| „Serverfehler (5xx)“, „Zeitüberschreitung“ | Meist vorübergehend; der nächste Abruf läuft automatisch. |
+| „nicht erreichbar“ | Der Server erreicht `connectapi.feuersoftware.com` nicht (Internet, DNS, Firewall, Proxy). |
+| „kein JSON“ | Unerwartete Antwort, z. B. Wartungsseite. |
+| Test bestanden, aber kein Entwurf | Verbindung nicht aktiv, Filter passt nicht, Einsatz älter als 24 Stunden oder „Beitragsentwürfe anlegen“ aus. |
+
+Die letzte Störung steht in der Verbindung und in der Übersicht. Nach **drei Fehlschlägen in Folge** benachrichtigt BlaulichtCMS alle mit dem Recht „Verbindungen verwalten“; beim nächsten erfolgreichen Abruf wird die Meldung aufgehoben.
+
+### Datenschutz bei Feuersoftware Connect
+
+Übernommen werden nur Stichwort, Einsatzart, Ort bzw. Ort mit Ortsteil, Alarmzeit und Ende. Straße, Hausnummer, Koordinaten, Sachverhalt, Einsatznummer, meldende Person, Telefonnummern und Lagemeldungen werden nie gespeichert oder protokolliert; die Vorschau zeigt keine Adresse. Gespeicherte Einsatzmeldungen fallen unter dieselbe Löschfrist wie FE2-Meldungen (*Einstellungen → Datenschutz*, Standard 90 Tage) und unter die Datenschutzsuche. Damit gelöschte Einsätze nicht erneut angelegt werden, bleibt 30 Tage lang nur eine Prüfsumme der Einsatz-ID.
 
 ## Amtliche Warnungen
 

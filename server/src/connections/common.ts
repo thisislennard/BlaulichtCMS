@@ -7,7 +7,7 @@ import { notFound } from '../lib/errors.js';
  * Gemeinsamer Rahmen der optionalen Verbindungen: Verbinden → Testen → Vorschau → Aktivieren.
  * Geheimnisse liegen verschlüsselt in `secrets` (Schlüssel unter /data); die API gibt sie nie zurück.
  */
-export type ConnectionKind = 'fe2' | 'facebook' | 'instagram' | 'warnfeed';
+export type ConnectionKind = 'fe2' | 'facebook' | 'instagram' | 'warnfeed' | 'feuersoftware';
 
 export interface Connection {
   id: string;
@@ -45,6 +45,7 @@ export const KIND_LABEL: Record<ConnectionKind, string> = {
   facebook: 'Facebook-Seite',
   instagram: 'Instagram-Konto',
   warnfeed: 'Amtliche Warnungen',
+  feuersoftware: 'Feuersoftware Connect (Einsatzentwürfe)',
 };
 
 export async function loadConnection(id: string, db: Queryable = pool): Promise<Connection> {
@@ -85,7 +86,7 @@ export async function updateConnectionSecrets(c: Connection, patch: Record<strin
  * eigene Voraussetzungen: dokumentierte fachliche Prüfung, gekoppelte Website, HTTPS-Quelle). Alles andere – Quelle,
  * Gebiet, Feldzuordnung, App-ID, Seite, Konto – und jede Änderung der Zugangsdaten verlangt einen neuen Test.
  */
-export const RETEST_EXEMPT_KEYS = ['intervalMinutes', 'createDrafts', 'autoBanner', 'bannerSiteId', 'review', 'oauthState', 'tokenExpiresAt'] as const;
+export const RETEST_EXEMPT_KEYS = ['intervalMinutes', 'intervalSeconds', 'createDrafts', 'autoBanner', 'bannerSiteId', 'review', 'oauthState', 'tokenExpiresAt'] as const;
 
 /** Vergleichsform einer Konfiguration für die Frage „neuer Test nötig?“ (leere Zuordnungen = Standard). */
 export function retestRelevantConfig(cfg: Record<string, any> | null | undefined): string {
@@ -109,7 +110,7 @@ export function retestRelevantConfig(cfg: Record<string, any> | null | undefined
  */
 export async function requireRetest(c: Connection, db: Queryable = pool): Promise<Connection['status'] | null> {
   const r = await one<{ before: Connection['status']; had_test: boolean }>(
-    `UPDATE connections n SET status = 'draft', last_test = NULL, preview = CASE WHEN n.kind = 'fe2' THEN NULL ELSE n.preview END, updated_at = now()
+    `UPDATE connections n SET status = 'draft', last_test = NULL, preview = CASE WHEN n.kind IN ('fe2','feuersoftware') THEN NULL ELSE n.preview END, updated_at = now()
        FROM connections o WHERE n.id = o.id AND n.id = $1 AND o.status <> 'revoked'
      RETURNING o.status AS before, (o.last_test IS NOT NULL) AS had_test`,
     [c.id],

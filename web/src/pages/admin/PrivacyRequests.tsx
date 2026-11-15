@@ -23,7 +23,7 @@ const KIND_LABEL: Record<HitKind, string> = {
   upload_session: "Unterbrochene Uploads",
   warning: "Warnvorgänge",
   responsibility: "Zuständigkeiten (Warnempfänger)",
-  fe2_event: "FE2-Meldungen",
+  fe2_event: "Einsatzmeldungen (FE2, Feuersoftware Connect)",
   post: "Beiträge",
   session: "Sitzungen",
   audit: "Audit-Protokoll",
@@ -105,7 +105,7 @@ export default function PrivacyRequests() {
           )}
         </form>
         <p className="m-0 mt-3 text-sm text-fg-muted">
-          Gesucht wird in Uploads (Hinweis, Dateiname, Vorgangsnummer), Warnvorgängen (Rückrufkontakt, Empfänger), Zuständigkeiten, FE2-Meldungen, Beiträgen, Konten, Sitzungen und im Audit. Suche, Export und jede Löschung werden protokolliert. Die ZIP-Datei enthält alle Treffer und die hochgeladenen Originale – vor der Herausgabe prüfen, ob sie Daten anderer Personen enthält.
+          Gesucht wird in Uploads (Hinweis, Dateiname, Vorgangsnummer), Warnvorgängen (Rückrufkontakt, Empfänger), Zuständigkeiten, Einsatzmeldungen aus FE2 und Feuersoftware Connect, Beiträgen, Konten, Sitzungen und im Audit. Suche, Export und jede Löschung werden protokolliert. Die ZIP-Datei enthält alle Treffer und die hochgeladenen Originale – vor der Herausgabe prüfen, ob sie Daten anderer Personen enthält.
         </p>
       </Card>
       {error && <ErrorBox title="Suche nicht möglich">{error}</ErrorBox>}

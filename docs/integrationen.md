@@ -10,6 +10,7 @@ an die Öffentlichkeit). Alle Verbindungen sind optional und durchlaufen **Verbi
 | **Facebook-Seite** | ✅ Graph API v26.0, OAuth, Seitenwahl, Text/Fotos/Video, Status je Kanal, gezieltes Wiederholen, Prüfung bei unbekanntem Ergebnis, manueller Export | ✅ Graph-API-Ersatz: unveröffentlichter Testbeitrag + Löschen, Ablehnung (400), Serverfehler nach Anlage (500 → „unbekannt“ → gefunden, kein Duplikat), OAuth-Rückweg ohne Cookie | ❌ | ❌ | Meta-App mit Facebook Login, App-Prüfung der Rechte `pages_manage_posts` u. a., Testseite; Veröffentlichung eines nicht öffentlichen Testbeitrags |
 | **Instagram-Konto** | ✅ Instagram Login, Container, Statusprüfung, Karussell, Reels, Kontingent | ✅ Graph-API-Ersatz: Container ohne Veröffentlichung im Test, Veröffentlichung mit Permalink, keine Doppelveröffentlichung | ❌ | ❌ | professionelles Testkonto, App-Prüfung für `instagram_business_content_publish`, öffentlich erreichbare HTTPS-Adresse für den Medienabruf |
 | **FE2** | ✅ Eingang mit Zugangsschlüssel, Allowlist, ein Entwurf je Einsatz, Folgeereignisse | ✅ HTTP-Testmeldungen: Vorschau vor Aktivierung, Wiederholung erkannt, Alarmtext verworfen, keine Inhalte in Protokollen; zusätzlich Formular, `text/plain`, Einheiten als Objekte, deutsche Alarmzeit | ❌ | ❌ | anonymisierte Testmeldung aus der echten FE2-Instanz (HTTP-Ausgang, tatsächliches Format) – Anleitung unten |
+| **Feuersoftware Connect** | ✅ Abruf `GET /operation?onlyLatest=true` mit API-Key, Abstand 60/120/180/300 s, Retry-After, höchstens ein Abruf gleichzeitig, Filter RIC/Stichwort, nur Einsätze der letzten 24 Stunden, ein Entwurf je Einsatz (gemeinsamer Weg mit FE2), Störungsmeldung nach drei Fehlschlägen | ✅ nachgebildete Connect-Schnittstelle: Test mit Filter und Vorschau ohne Adresse, 401/403/404/429/5xx/kein JSON, Pause nach 429, keine Duplikate, gelöschte Einsätze nicht erneut, Abruf nur aktiver Verbindungen, Löschfrist | ❌ | ❌ | API-Key der Öffentlichen Connect Schnittstelle eines Standorts, Probealarm in Connect, Abgleich der tatsächlich gelieferten Felder (RIC, Adresse, Start) |
 | **SMTP (Warnentwurf)** | ✅ PDF-Anhang, Testmodus, Status angenommen/fehlgeschlagen/unbekannt | ✅ lokaler Test-Mailserver: Annahme, 550-Ablehnung, Abbruch nach DATA; **STARTTLS und TLS (465) mit Anmeldung und Zertifikatsprüfung** (unbekanntes Zertifikat und falsches Passwort klar abgewiesen, ohne TLS keine Anmeldung) | ❌ | ❌ | Versand über den Mailserver der Organisation an ein abgestimmtes Testpostfach der zuständigen Stelle (TLS, SPF/DKIM) |
 | **RSS / Atom** | ✅ Vorschau, Deduplizierung, ETag, Themenideen | ✅ WordPress-Feed als Quelle | – | ❌ | echte Feeds der Organisation |
 | **Amtliche Warnfeeds** | ✅ Warn-App-Schnittstelle (Regionalschlüssel) und CAP-Adressen, Gebietsfilter, Aktualisierung, Entwarnung, automatische Banner nur nach dokumentierter Prüfung | ✅ CAP-Testquelle: privates Ziel erst nach Freigabe, Gebietsfilter, Update ersetzt, Cancel beendet Banner | ✅ echte Warn-App-Schnittstelle (warnung.bund.de) mit einem Regionalschlüssel im Main-Taunus-Kreis, siehe unten | ❌ | schriftliche Bestätigung des BBK zur Weiterverwendung der MoWaS-Inhalte auf der eigenen Website |
@@ -75,6 +76,31 @@ Formulardaten und JSON als `text/plain`.
 `https://<blaulichtcms>/api/v1/inbound/fe2/<verbindungs-id>` anlegen und den Schlüssel (`bcfe2_…`) als
 `Authorization: Bearer …` oder `X-BlaulichtCMS-Token` eintragen. Erste Meldung mit Kopfzeile `X-BlaulichtCMS-Test: 1` senden
 (nur Vorschau) und unter *Verbindungen → FE2* prüfen, welche Felder übernommen wurden; bei Bedarf die Zuordnung anpassen.
+
+## Feuersoftware Connect – Anbindung
+
+BlaulichtCMS fragt die Öffentliche Connect Schnittstelle ab (`https://connectapi.feuersoftware.com/interfaces/public`,
+Beschreibung in der [Feuersoftware-Dokumentation](https://docsv2.feuersoftware.com/connect/schnittstellen/public_api)).
+Der API-Key entsteht im [Connect Portal](https://connect.feuersoftware.com) unter Standort → Schnittstellen →
+„Öffentliche Connect Schnittstelle“. Abgerufen wird nur `GET /operation?onlyLatest=true` (Kopfzeile
+`Authorization: bearer <Key>`); Lagemeldungen (`/operation/{id}/message`) ruft BlaulichtCMS bewusst nicht ab.
+
+| Feld in Connect | Im Entwurf |
+|---|---|
+| `Id` | Einsatz-ID (Erkennung von Wiederholungen, nur als Prüfsumme im Protokoll) |
+| `Keyword` / `Category` | Stichwort / Einsatzart |
+| `Address.CityWithDistrict` bzw. `Address.City` | Ort (ohne Straße und Hausnummer) |
+| `Start` | Alarmzeit (Zeitzone der Instanz); nur Einsätze der letzten 24 Stunden |
+| `End` | schließt den Einsatz |
+| `Ric` | nur für den Filter |
+
+Sachverhalt (`Facts`), Einsatznummer, Koordinaten, meldende Person und Telefonnummern werden nie gespeichert.
+Feldnamen in camelCase werden ebenso gelesen. Fehlerbilder: 401 (Key abgelehnt bzw. Schnittstelle im Portal nicht
+aktiv), 403, 404, 429 (Pause nach `Retry-After`, sonst 60 s), 5xx, Zeitüberschreitung, nicht erreichbar, keine JSON-Antwort.
+Nach drei Fehlschlägen in Folge erhält die Verwaltung eine Benachrichtigung, beim nächsten Erfolg wird sie aufgehoben.
+
+**Offen (Live-Test):** API-Key eines Standorts eintragen, *Testen*, Probealarm in Connect auslösen, *Jetzt abrufen*
+und den Entwurf prüfen – insbesondere, welche RIC-Bezeichnung Connect tatsächlich liefert.
 
 ## Amtliche Warnfeeds – Abruf der echten Schnittstelle am 14.11.2026
 
