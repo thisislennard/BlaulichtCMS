@@ -5,7 +5,7 @@ WordPress über die BlaulichtCMS Bridge, Warnentwurf, Verbindungen).
 
 ## Orientierung
 
-Überblick, Teststand und Grenzen: `README.md`. Architekturentscheidungen: `docs/architektur.md`. Design-Regeln:
+Funktionsübersicht: `README.md`; Installation und Betrieb: `docs/installation.md`; Aufbau, Teststand und Grenzen: `docs/technik.md`. Architekturentscheidungen: `docs/architektur.md`. Design-Regeln:
 `docs/design-leitstand.md` (verbindlich). Offene Aufgaben stehen als GitHub-Issues, nicht in Dateien.
 
 ## Betrieb
