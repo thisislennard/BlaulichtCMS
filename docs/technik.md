@@ -130,7 +130,16 @@ Ortszeit der Zeitzone `tz` gebildet und erst dann in UTC umgerechnet (Intl, IANA
 verschiebt Serien nicht. Ausgelassene Termine stehen in `exdates`, geänderte Einzeltermine als eigene Zeile mit
 `series_id` und `recurrence_id`. `until_at` (Ende des letzten Termins, NULL = unbegrenzt) begrenzt die Abfrage nach
 Zeitraum; aufgelöst wird beim Lesen (`server/src/calendar/store.ts`, höchstens 400 Tage je Abfrage). Weitere Module
-können Einträge über `registerCalendarProvider` beisteuern.
+können Einträge über `registerCalendarProvider` beisteuern (geplante Beiträge und Presse-Fristen:
+`server/src/calendar/providers.ts`).
+
+iCal-Quellen (#202, Migration 111): `calendar_sources` (Adresse verschlüsselt in `secrets`, Besitzer
+`calendar_source`; gespeichert wird nur der Hostname), Abruf über `lib/http.ts` (SSRF-Schutz, 3 MB, 15 s, ETag/
+Last-Modified) im Worker, Abgleich je UID und RECURRENCE-ID in `server/src/calendar/sources.ts`, Empfangsprotokoll
+`calendar_source_log` (höchstens 200 Einträge je Quelle). Eigener Leser für RFC 5545 (`server/src/calendar/ical.ts`:
+Zeilenfaltung, Maskierung, TZID inkl. Windows-Zeitzonen, DATE/UTC/schwebende Zeiten, DURATION, EXDATE, RECURRENCE-ID,
+STATUS:CANCELLED). Abo: `calendar_feeds` speichert nur die SHA-256-Prüfsumme des Links; `GET /api/v1/public/calendar/:token`
+liefert einzelne Termine (UTC bzw. Datum) für 60 Tage zurück bis 365 Tage voraus.
 
 ---
 

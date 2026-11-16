@@ -6,7 +6,7 @@ import { aad as purposes, decrypt, encrypt, fingerprint } from './crypto.js';
  * Besitzer (Verbindung, Webhook, Einstellung). Rotation erzeugt eine neue Version; alte
  * Versionen bleiben bis zum Widerruf erhalten. Klartext verlässt den Server nie über die API.
  */
-export type SecretOwner = 'connection' | 'webhook' | 'setting';
+export type SecretOwner = 'connection' | 'webhook' | 'setting' | 'calendar_source';
 
 export interface StoredSecretMeta {
   id: string;

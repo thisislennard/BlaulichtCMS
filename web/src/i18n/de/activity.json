@@ -267,7 +267,14 @@
       "category_deleted": "Kalender-Kategorie gelöscht",
       "event_created": "Termin angelegt",
       "event_updated": "Termin geändert",
-      "event_deleted": "Termin gelöscht"
+      "event_deleted": "Termin gelöscht",
+      "source_created": "iCal-Kalender hinzugefügt",
+      "source_updated": "iCal-Kalender geändert",
+      "source_deleted": "iCal-Kalender entfernt",
+      "feed_created": "Kalender-Abo erstellt",
+      "feed_renewed": "Kalender-Abo erneuert",
+      "feed_updated": "Kalender-Abo geändert",
+      "feed_revoked": "Kalender-Abo widerrufen"
     }
   },
   "sentences": {
@@ -511,7 +518,14 @@
       "category_deleted": "hat die Kalender-Kategorie „{o}“ gelöscht",
       "event_created": "hat den Termin „{o}“ angelegt",
       "event_updated": "hat den Termin „{o}“ geändert",
-      "event_deleted": "hat den Termin „{o}“ gelöscht"
+      "event_deleted": "hat den Termin „{o}“ gelöscht",
+      "source_created": "hat den iCal-Kalender „{o}“ hinzugefügt",
+      "source_updated": "hat den iCal-Kalender „{o}“ geändert",
+      "source_deleted": "hat den iCal-Kalender „{o}“ entfernt",
+      "feed_created": "hat einen Abo-Link für den Kalender erstellt",
+      "feed_renewed": "hat den Abo-Link für den Kalender erneuert",
+      "feed_updated": "hat das Kalender-Abo geändert",
+      "feed_revoked": "hat den Abo-Link für den Kalender widerrufen"
     }
   },
   "notifications": {

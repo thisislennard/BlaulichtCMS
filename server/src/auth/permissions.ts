@@ -104,6 +104,8 @@ export const PERMISSIONS: PermissionDef[] = [
   /* Kalender (#200) */
   P('calendar.view', 'calendar', 'read', 'Kalender ansehen', 'Termine, Kategorien und eingelesene Kalender ansehen; geplante Beiträge erscheinen zusätzlich mit „Beiträge ansehen“.'),
   P('calendar.manage', 'calendar', 'write', 'Termine verwalten', 'Eigene Termine und Serien anlegen, ändern und löschen; Kategorien mit Farben verwalten.', ['calendar.view']),
+  P('calendar.sources', 'calendar', 'write', 'iCal-Kalender einlesen', 'Externe Kalender (iCal-Links) hinzufügen, testen, ändern, abrufen, schalten und löschen; Empfangsprotokoll ansehen. Die Adressen werden verschlüsselt gespeichert und nicht angezeigt.', ['calendar.view']),
+  P('calendar.subscribe', 'calendar', 'write', 'Kalender abonnieren', 'Einen eigenen geheimen iCal-Abo-Link (Outlook, Google, iPhone) erzeugen, erneuern, einstellen und widerrufen. Das Abo enthält nur Titel, Zeit und Kategorie, auf Wunsch die Beschreibung.', ['calendar.view']),
 
   /* Einsatzliste (#213) */
   P('incident.view', 'incidents', 'read', 'Einsatzliste ansehen', 'Einträge der Einsatzliste, ihren Stand auf der Website und die Einstellungen ansehen.'),
@@ -271,11 +273,11 @@ export const LEGACY_ROLE_PERMISSIONS: Record<string, string[]> = {
  * bekommen (die Sammelbezeichnungen bleiben davon unberührt). Angepasste Rollen erhalten sie nicht automatisch.
  */
 export const ROLE_DEFAULT_ADDITIONS: Record<string, string[]> = {
-  media_manager: ['templates.view', 'templates.manage', 'calendar.view'],
-  editor: ['templates.view', 'templates.manage', 'calendar.view', 'calendar.manage'],
-  approver: ['templates.view', 'calendar.view'],
-  publisher: ['templates.view', 'calendar.view'],
-  viewer: ['templates.view', 'calendar.view'],
+  media_manager: ['templates.view', 'templates.manage', 'calendar.view', 'calendar.subscribe'],
+  editor: ['templates.view', 'templates.manage', 'calendar.view', 'calendar.manage', 'calendar.sources', 'calendar.subscribe'],
+  approver: ['templates.view', 'calendar.view', 'calendar.subscribe'],
+  publisher: ['templates.view', 'calendar.view', 'calendar.subscribe'],
+  viewer: ['templates.view', 'calendar.view', 'calendar.subscribe'],
 };
 
 const sys = (id: string, label: string, description: string): RoleDef => ({

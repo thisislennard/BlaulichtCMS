@@ -33,6 +33,7 @@ import { checkExpiringLinks, checkStorage } from './lib/media-notify.js';
 import { cleanupDesignImages } from './routes/media-design.js';
 import { checkForUpdate, updateCheckDue } from './updates/github.js';
 import { executeRun } from './automations/engine.js';
+import { refreshDueCalendarSources } from './calendar/sources.js';
 import { automationTick } from './automations/events.js';
 import { deliverNotification } from './lib/notify-channels.js';
 import { migratePlaintextSecrets } from './lib/secret-audit.js';
@@ -249,6 +250,8 @@ async function maintenance(isLeader: boolean) {
   if (due('rss', 60_000)) await refreshDueFeeds().catch((e) => log('warn', 'rss', e.message));
   // In-App-Updates: neues Release im eingestellten Abstand prüfen (installiert wird nur von Hand)
   if (due('update-check', 10 * 60_000) && (await updateCheckDue())) await checkForUpdate();
+  // Kalender: eingelesene iCal-Quellen in ihrem Abstand (#202)
+  if (due('calendar-sources', 60_000)) await refreshDueCalendarSources().catch((e) => log('warn', 'calendar', e.message));
   if (due('warnfeed', 60_000)) await refreshDueWarnfeeds().catch((e) => log('warn', 'warnfeed', e.message));
   // Feuersoftware Connect: jede aktive Verbindung in ihrem Abstand (60–300 s); geprüft wird alle 10 s
   if (due('feuersoftware', 10_000)) await pollDueFeuersoftware().catch((e) => log('warn', 'feuersoftware', e.message));

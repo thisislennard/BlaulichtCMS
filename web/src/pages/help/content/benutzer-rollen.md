@@ -142,6 +142,8 @@ Alle Rechte, nach Bereichen. Die Tabelle entspricht dem Rollen-Editor; „Setzt 
 | --- | --- | --- | --- |
 | Kalender ansehen | lesen | Termine, Kategorien und eingelesene Kalender ansehen; geplante Beiträge erscheinen zusätzlich mit „Beiträge ansehen“. | – |
 | Termine verwalten | ändern | Eigene Termine und Serien anlegen, ändern und löschen; Kategorien mit Farben verwalten. | Kalender ansehen |
+| iCal-Kalender einlesen | ändern | Externe Kalender (iCal-Links) hinzufügen, testen, ändern, abrufen, schalten und löschen; Empfangsprotokoll ansehen. Die Adressen werden verschlüsselt gespeichert und nicht angezeigt. | Kalender ansehen |
+| Kalender abonnieren | ändern | Einen eigenen geheimen iCal-Abo-Link (Outlook, Google, iPhone) erzeugen, erneuern, einstellen und widerrufen. Das Abo enthält nur Titel, Zeit und Kategorie, auf Wunsch die Beschreibung. | Kalender ansehen |
 
 **Einsatzliste**
 

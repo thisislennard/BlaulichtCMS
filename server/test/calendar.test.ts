@@ -1,3 +1,4 @@
+import http from 'node:http';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import { many, one, pool } from '../src/db/pool.js';
@@ -7,6 +8,8 @@ import { setSettings } from '../src/lib/settings.js';
 import { hashPassword } from '../src/auth/passwords.js';
 import { invalidateRoles } from '../src/auth/roles.js';
 import { fromCivil, localDate, toCivil } from '../src/calendar/recurrence.js';
+import { parseIcal } from '../src/calendar/ical.js';
+import { refreshDueCalendarSources } from '../src/calendar/sources.js';
 
 /**
  * Kalender (#200–#203) gegen eine echte PostgreSQL-Datenbank (TEST_DATABASE_URL). Die Datenbank wird zu Beginn
@@ -274,5 +277,176 @@ describe('Kalender: geplante Beiträge und Presse-Fristen (#201)', () => {
     expect(press[0]).toMatchObject({ readOnly: true, color: 'press', link: expect.stringMatching(/^\/presse\//) });
     expect((await entries(viewer, from, to)).some((e) => e.kind === 'press')).toBe(false);
     expect((await entries(admin, from, to, '&sources=press')).every((e) => e.kind === 'press')).toBe(true);
+  });
+});
+
+describe('Kalender: iCal einlesen und als Abo anbieten (#202)', () => {
+  // Beispiel-Kalender auf einem lokalen Server; Inhalt und Antwort sind je Test einstellbar
+  let ics = '';
+  let status = 200;
+  let hits = 0;
+  let server: http.Server;
+  let base = '';
+  const cal = (events: string[]) => ['BEGIN:VCALENDAR', 'VERSION:2.0', 'X-WR-CALNAME:Wehr-Kalender', ...events, 'END:VCALENDAR'].join('\r\n');
+  const SERIES = ['BEGIN:VEVENT', 'UID:dienst@wehr', 'SUMMARY:Dienstabend', 'DTSTART;TZID=W. Europe Standard Time:20261102T193000', 'DTEND;TZID=W. Europe Standard Time:20261102T213000', 'RRULE:FREQ=WEEKLY;BYDAY=MO;COUNT=6', 'EXDATE;TZID=W. Europe Standard Time:20261109T193000', 'CATEGORIES:Ausbildung', 'END:VEVENT'].join('\r\n');
+  const MOVED = ['BEGIN:VEVENT', 'UID:dienst@wehr', 'RECURRENCE-ID;TZID=W. Europe Standard Time:20261116T193000', 'SUMMARY:Dienstabend (Atemschutz)', 'DTSTART;TZID=W. Europe Standard Time:20261117T190000', 'DTEND;TZID=W. Europe Standard Time:20261117T210000', 'END:VEVENT'].join('\r\n');
+  const CANCELLED = ['BEGIN:VEVENT', 'UID:dienst@wehr', 'RECURRENCE-ID;TZID=W. Europe Standard Time:20261123T193000', 'STATUS:CANCELLED', 'SUMMARY:Dienstabend', 'DTSTART;TZID=W. Europe Standard Time:20261123T193000', 'END:VEVENT'].join('\r\n');
+  const FEST = ['BEGIN:VEVENT', 'UID:fest@wehr', 'SUMMARY:Sommerfest', 'DESCRIPTION:Mit Fahrzeugschau', 'LOCATION:Gerätehaus', 'DTSTART;VALUE=DATE:20261205', 'DTEND;VALUE=DATE:20261207', 'END:VEVENT'].join('\r\n');
+  let sourceId: string;
+
+  beforeAll(async () => {
+    server = http.createServer((req, res) => {
+      hits++;
+      if (req.url === '/redirect') {
+        res.writeHead(302, { location: 'file:///etc/passwd' });
+        return res.end();
+      }
+      res.writeHead(status, { 'content-type': 'text/calendar' });
+      res.end(status === 200 ? ics : 'Fehler');
+    });
+    await new Promise<void>((r) => server.listen(0, '127.0.0.1', () => r()));
+    base = `http://127.0.0.1:${(server.address() as any).port}`;
+  });
+  afterAll(() => {
+    server.close();
+  });
+
+  it('Schutz: interne Adressen ohne Freigabe gesperrt, Zugangsdaten in der Adresse abgewiesen, Rechte', async () => {
+    ics = cal([SERIES]);
+    const blocked = await admin.post('/calendar/sources/test', { url: `${base}/kalender.ics?token=geheim` });
+    expect(blocked.status).toBe(400);
+    expect(blocked.json.message).toMatch(/internes Netz/);
+    expect(hits).toBe(0);
+    expect((await admin.post('/calendar/sources/test', { url: 'https://nutzer:pw@example.org/k.ics' })).status).toBe(400);
+    expect((await admin.post('/calendar/sources/test', { url: 'ftp://example.org/k.ics' })).status).toBe(400);
+    expect((await viewer.post('/calendar/sources/test', { url: `${base}/k.ics` })).status).toBe(403);
+    expect((await viewer.get('/calendar/sources')).status).toBe(403);
+    await setSettings({ 'security.allowed_private_hosts': ['127.0.0.1'] } as any);
+  });
+
+  it('Verbindungstest liest die Datei, ohne etwas zu speichern; Fehler verständlich', async () => {
+    ics = cal([SERIES, MOVED, FEST]);
+    const t = await admin.post('/calendar/sources/test', { url: `${base}/kalender.ics?token=geheim` });
+    expect(t.status).toBe(200);
+    expect(t.json).toMatchObject({ name: 'Wehr-Kalender', events: 3, recurring: 1 });
+    expect(await one('SELECT 1 FROM calendar_sources')).toBeNull();
+    ics = '<html>Anmeldung</html>';
+    expect((await admin.post('/calendar/sources/test', { url: `${base}/k.ics` })).json.message).toMatch(/keine Kalenderdatei/);
+    status = 404;
+    expect((await admin.post('/calendar/sources/test', { url: `${base}/k.ics` })).json.message).toMatch(/404/);
+    status = 200;
+    expect((await admin.post('/calendar/sources/test', { url: `${base}/redirect` })).status).toBe(400);
+  });
+
+  it('Quelle anlegen: Adresse verschlüsselt, Termine schreibgeschützt mit Kategorie, Serie mit Ausnahme und Änderung', async () => {
+    ics = cal([SERIES, MOVED, FEST]);
+    const cats = (await admin.get('/calendar/categories')).json;
+    const uebung = cats.find((c: any) => c.name === 'Übung').id;
+    const r = await admin.post('/calendar/sources', { name: 'Wehr', url: `${base}/kalender.ics?token=geheim`, categoryId: uebung, intervalMin: 30 });
+    expect(r.status).toBe(200);
+    sourceId = r.json.id;
+    expect(r.json).toMatchObject({ name: 'Wehr', host: '127.0.0.1', eventCount: 3, active: true });
+    expect(JSON.stringify(r.json)).not.toContain('geheim');
+    const src = await one<any>('SELECT * FROM calendar_sources WHERE id = $1', [sourceId]);
+    const secret = await one<any>('SELECT ciphertext, owner_type FROM secrets WHERE id = $1', [src.url_secret_id]);
+    expect(secret.owner_type).toBe('calendar_source');
+    expect(secret.ciphertext).not.toContain('geheim');
+    expect(JSON.stringify(await many('SELECT * FROM audit_events WHERE action LIKE $1', ['calendar.source%']))).not.toContain('geheim');
+    const list = (await entries(admin, berlin(2026, 11, 1), berlin(2026, 12, 31), `&sources=ical:${sourceId}`)).map((e) => `${hm(e.start)} ${e.title}`);
+    expect(list).toEqual(['2026-11-02 19:30 Dienstabend', '2026-11-17 19:00 Dienstabend (Atemschutz)', '2026-11-23 19:30 Dienstabend', '2026-11-30 19:30 Dienstabend', '2026-12-05 00:00 Sommerfest', '2026-12-07 19:30 Dienstabend']);
+    const e = (await entries(admin, berlin(2026, 11, 1), berlin(2026, 12, 31), '&sources=ical')).find((x) => x.title === 'Sommerfest')!;
+    expect(e).toMatchObject({ readOnly: true, source: 'ical', sourceName: 'Wehr', allDay: true, category: { name: 'Übung' }, tags: [] });
+    expect((await admin.put(`/calendar/events/${e.id}`, { title: 'X', allDay: true, startDate: '2026-12-05' })).status).toBe(409);
+    expect((await admin.del(`/calendar/events/${e.id}`)).status).toBe(409);
+    expect((await admin.get('/calendar/entries?from=2026-11-01T00:00:00Z&to=2026-11-02T00:00:00Z')).json.sources.map((s: any) => s.id)).toContain(`ical:${sourceId}`);
+    // webcal:// wird zu https://
+    expect((await admin.post('/calendar/sources/test', { url: 'webcal://nicht-vorhanden.invalid/k.ics' })).json.message).not.toMatch(/Protokoll|webcal/);
+  });
+
+  it('Abruf übernimmt Änderungen, Absagen und gelöschte Termine; Empfangsprotokoll', async () => {
+    ics = cal([SERIES.replace('SUMMARY:Dienstabend', 'SUMMARY:Übungsabend'), CANCELLED]);
+    const r = await admin.post(`/calendar/sources/${sourceId}/refresh`);
+    expect(r.status).toBe(200);
+    expect(r.json).toMatchObject({ events: 2, added: 0, changed: 1, removed: 2 });
+    const list = (await entries(admin, berlin(2026, 11, 1), berlin(2026, 12, 31), '&sources=ical')).map((e) => `${hm(e.start)} ${e.title}`);
+    expect(list).toEqual(['2026-11-02 19:30 Übungsabend', '2026-11-16 19:30 Übungsabend', '2026-11-30 19:30 Übungsabend', '2026-12-07 19:30 Übungsabend']);
+    const log = (await admin.get(`/calendar/sources/${sourceId}/log`)).json;
+    expect(log[0]).toMatchObject({ ok: true, trigger: 'manual', events: 2, changed: 1, removed: 2 });
+    expect(log.at(-1)).toMatchObject({ trigger: 'test', added: 3 });
+    // Fehler landen im Protokoll, die Termine bleiben
+    status = 500;
+    expect((await admin.post(`/calendar/sources/${sourceId}/refresh`)).status).toBe(502);
+    status = 200;
+    expect((await admin.get(`/calendar/sources/${sourceId}/log`)).json[0]).toMatchObject({ ok: false, message: expect.stringMatching(/HTTP 500/) });
+    expect((await admin.get('/calendar/sources')).json[0]).toMatchObject({ lastError: expect.stringMatching(/HTTP 500/), eventCount: 1 });
+    // Worker: fällig erst nach dem Intervall
+    hits = 0;
+    await refreshDueCalendarSources();
+    expect(hits).toBe(0);
+    await pool.query(`UPDATE calendar_sources SET last_fetch_at = now() - interval '31 minutes'`);
+    await refreshDueCalendarSources();
+    expect(hits).toBe(1);
+    // Deaktivieren: kein Abruf mehr; ohne Kategorie
+    await admin.put(`/calendar/sources/${sourceId}`, { name: 'Wehr', categoryId: null, intervalMin: 30, active: false });
+    await pool.query(`UPDATE calendar_sources SET last_fetch_at = now() - interval '2 hours'`);
+    await refreshDueCalendarSources();
+    expect(hits).toBe(1);
+    expect((await entries(admin, berlin(2026, 11, 1), berlin(2026, 12, 31), '&sources=ical'))[0].category).toBeNull();
+  });
+
+  it('iCal-Abo: geheimer Link je Person, Kategorien wählbar, Beschreibung optional, erneuern und widerrufen', async () => {
+    expect((await viewer.get('/calendar/feed')).json).toMatchObject({ active: false });
+    const c = await viewer.post('/calendar/feed', {});
+    expect(c.status).toBe(200);
+    const feedUrl: string = c.json.url;
+    expect(feedUrl).toMatch(/\/api\/v1\/public\/calendar\/bcal_[A-Za-z0-9_-]{40,}\.ics$/);
+    const token = feedUrl.split('/').pop()!;
+    expect(await one('SELECT 1 FROM calendar_feeds WHERE token_hash = $1', [token])).toBeNull();
+    const pub = (t: string) => app.inject({ method: 'GET', url: `/api/v1/public/calendar/${t}` });
+    let res = await pub(token);
+    expect(res.statusCode).toBe(200);
+    expect(res.headers['content-type']).toMatch(/text\/calendar/);
+    let parsed = parseIcal(res.body, TZ);
+    const titles = parsed.events.map((e) => e.summary);
+    expect(titles).toContain('Übungsabend');
+    expect(titles).toContain('Jahreshauptversammlung');
+    // keine Beiträge, keine Presse-Fristen, ohne Zustimmung keine Beschreibung und kein Ort
+    expect(titles.some((t) => /Tag der offenen Tür|Frist/.test(t))).toBe(false);
+    expect(res.body).not.toContain('DESCRIPTION');
+    expect(res.body).not.toContain('LOCATION');
+    expect(parsed.events.find((e) => e.summary === 'Weihnachtsmarkt')).toMatchObject({ allDay: true });
+    // Kategorien wählen + Beschreibung
+    const cats = (await admin.get('/calendar/categories')).json;
+    const veranstaltung = cats.find((x: any) => x.name === 'Veranstaltung').id;
+    const now = new Date();
+    const c2 = toCivil(+now + 20 * 86_400_000, TZ);
+    await admin.post('/calendar/events', { title: 'Tag der Feuerwehr', description: 'Mit Vorführung', location: 'Marktplatz', start: berlin(c2.y, c2.m, c2.d, 10), end: berlin(c2.y, c2.m, c2.d, 16), categoryId: veranstaltung });
+    expect((await viewer.put('/calendar/feed', { categories: [veranstaltung], includeDescription: true })).status).toBe(200);
+    res = await pub(token);
+    parsed = parseIcal(res.body, TZ);
+    expect(parsed.events.map((e) => e.summary)).toEqual(['Tag der Feuerwehr']);
+    expect(parsed.events[0]).toMatchObject({ description: 'Mit Vorführung', location: 'Marktplatz', categories: ['Veranstaltung'] });
+    // Erneuern: alter Link ungültig
+    const renewed: string = (await viewer.post('/calendar/feed', {})).json.url;
+    expect((await pub(token)).statusCode).toBe(404);
+    const token2 = renewed.split('/').pop()!;
+    expect((await pub(token2)).statusCode).toBe(200);
+    expect((await viewer.get('/calendar/feed')).json).toMatchObject({ active: true, categories: [veranstaltung], includeDescription: true });
+    // Konto deaktiviert → Link liefert nichts
+    await pool.query(`UPDATE users SET status = 'disabled' WHERE email = 'lesen@example.org'`);
+    expect((await pub(token2)).statusCode).toBe(404);
+    await pool.query(`UPDATE users SET status = 'active' WHERE email = 'lesen@example.org'`);
+    // Widerrufen
+    expect((await viewer.del('/calendar/feed')).status).toBe(200);
+    expect((await pub(token2)).statusCode).toBe(404);
+    expect((await pub('bcal_unsinn')).statusCode).toBe(404);
+    const actions = (await many<any>(`SELECT action FROM audit_events WHERE action LIKE 'calendar.feed%' ORDER BY id`)).map((a) => a.action);
+    expect(actions).toEqual(['calendar.feed_created', 'calendar.feed_updated', 'calendar.feed_renewed', 'calendar.feed_revoked']);
+  });
+
+  it('Quelle löschen entfernt Termine und die verschlüsselte Adresse', async () => {
+    expect((await admin.del(`/calendar/sources/${sourceId}`)).status).toBe(200);
+    expect(await one(`SELECT 1 FROM calendar_events WHERE source = 'ical'`)).toBeNull();
+    expect(await one(`SELECT 1 FROM secrets WHERE owner_type = 'calendar_source'`)).toBeNull();
   });
 });

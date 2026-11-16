@@ -106,9 +106,10 @@ export function computeUntil(v: { starts_at: Date | number; ends_at: Date | numb
 
 /** Abfrage aller Zeilen (Einzeltermine, Serien, geänderte Termine), die den Zeitraum berühren können. */
 const ROWS_SQL = `
-  SELECT e.*, c.name AS cat_name, c.color AS cat_color, NULL::text AS source_name
+  SELECT e.*, c.name AS cat_name, c.color AS cat_color, s.name AS source_name
     FROM calendar_events e
     LEFT JOIN calendar_categories c ON c.id = e.category_id
+    LEFT JOIN calendar_sources s ON s.id = e.source_id
    WHERE (e.rrule IS NULL AND e.starts_at < $2 AND e.ends_at >= $1)
       OR (e.rrule IS NOT NULL AND e.starts_at < $2 AND (e.until_at IS NULL OR e.until_at >= $1))`;
 

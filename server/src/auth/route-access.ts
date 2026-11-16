@@ -54,6 +54,8 @@ export const PUBLIC_ROUTES: string[] = [
   // Datenschutzerklärung und Impressum (#187)
   'GET /public/legal',
   'GET /public/legal/:kind',
+  // iCal-Abo des Kalenders (#202): geheimer Link je Person, Drosselung
+  'GET /public/calendar/:token',
 ];
 
 const API = '/api/v1';

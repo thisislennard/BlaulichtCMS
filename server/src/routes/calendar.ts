@@ -270,6 +270,7 @@ export async function calendarRoutes(app: FastifyInstance) {
       truncated: entries.length > 3000,
       sources: [
         { id: 'own', label: 'Eigene Termine' },
+        ...(await many<{ id: string; name: string }>('SELECT id, name FROM calendar_sources ORDER BY lower(name)')).map((s) => ({ id: `ical:${s.id}`, label: `iCal: ${s.name}` })),
         ...calendarProviders().filter((p) => perms.has(p.permission)).map((p) => ({ id: p.id, label: p.label })),
       ],
     };

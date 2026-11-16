@@ -73,3 +73,47 @@ Nicht verschieben lassen sich Beiträge, deren Veröffentlichung **bereits beauf
 ## Fristen von Presseanfragen
 
 Offene [Presseanfragen](/presse) (neu oder in Bearbeitung) mit Frist erscheinen am Fristtermin – mit Vorgangsnummer, Thema, Medium und Zuständigkeit, ohne Kontaktdaten. **Überfällige** Fristen sind rot umrandet und mit Warnsymbol und dem Wort „überfällig“ markiert. Sichtbar nur mit **Presseanfragen ansehen**; die Frist selbst ändert man in der Anfrage.
+
+## Kalender einlesen
+
+Externe Kalender – etwa der Outlook-Kalender der Wehrführung, ein Google-Kalender oder ein Wehr-Kalender einer anderen Software – lassen sich über ihren **iCal-Link** (Adresse einer `.ics`-Datei) einlesen. Dafür braucht es das Recht **iCal-Kalender einlesen**.
+
+1. **iCal-Kalender** → **Kalender hinzufügen**.
+2. Den **iCal-Link** einfügen (`https://…` oder `webcal://…`).
+3. **Verbindung testen**: BlaulichtCMS ruft die Adresse ab und zeigt Anzahl und die nächsten Termine. Ohne erfolgreichen Test lässt sich der Kalender nicht hinzufügen.
+4. **Name**, **Kategorie** (gilt für alle Termine der Quelle) und **Abruf** (15 Minuten bis täglich) wählen → **Kalender hinzufügen**. Die Termine erscheinen sofort.
+
+**Wo finde ich den iCal-Link?**
+
+| Kalender | Weg |
+|---|---|
+| Outlook / Microsoft 365 (Web) | Einstellungen → Kalender → **Freigegebene Kalender** → „Kalender veröffentlichen“: Kalender und „Kann alle Details anzeigen“ wählen → **ICS**-Link kopieren |
+| Google Kalender | Einstellungen des Kalenders → **Kalender integrieren** → „**Privatadresse im iCal-Format**“ (oder „Öffentliche Adresse“ bei öffentlichen Kalendern) |
+| Andere Software | Funktion „Kalender abonnieren“, „iCal-Export“ oder „ICS-Link“ – die Adresse endet meist auf `.ics` |
+
+**Was übernommen wird:** Titel, Beginn und Ende (auch ganztägig und mit Zeitzone), Ort, Beschreibung, Kategorien der Quelle als Schlagwörter, **Wiederholungen** (täglich bis jährlich, z. B. „jeden 1. Samstag“), **Ausnahmen**, einzeln **geänderte** und **abgesagte** Termine. Bei jedem Abruf werden Änderungen übernommen und Termine, die es in der Quelle nicht mehr gibt, entfernt. Eingelesene Termine sind **schreibgeschützt** – Änderungen bitte im Ursprungskalender. Stündliche Wiederholungen werden nicht unterstützt (es erscheint nur der erste Termin, mit Hinweis im Protokoll).
+
+**Verwalten:** Je Quelle zeigt die Liste Zustand, Anzahl der Termine und den letzten erfolgreichen Abruf. **Jetzt abrufen** holt sofort, der Schalter pausiert den Abruf, **Protokoll** zeigt das **Empfangsprotokoll** (Zeitpunkt, Ergebnis, neue/geänderte/entfernte Termine, Fehler, Hinweise). **Entfernen** löscht die eingelesenen Termine, der Ursprungskalender bleibt unverändert.
+
+**Schutz:** Die Adresse kann einen geheimen Schlüssel enthalten. Sie wird **verschlüsselt** gespeichert und nie wieder angezeigt (nur der Servername). Abgerufen wird nur über das Internet: Adressen im internen Netz sind gesperrt, bis die Administration sie unter **Einstellungen → Sicherheit** freigibt. Weiterleitungen werden geprüft, Dateien über 3 MB und Antworten nach 15 Sekunden abgebrochen. Zugangsdaten in der Form `benutzer:passwort@` sind nicht erlaubt.
+
+## Kalender abonnieren
+
+Mit **Abonnieren** (Recht **Kalender abonnieren**) erzeugt jede Person ihren eigenen, **geheimen Abo-Link**. Damit erscheinen die Termine im eigenen Kalenderprogramm und werden dort regelmäßig aktualisiert.
+
+- Enthalten sind eigene und eingelesene Termine von **60 Tagen zurück bis ein Jahr voraus** – nur **Titel, Zeit und Kategorie**. **Beschreibung und Ort** nur, wenn eingeschaltet. Geplante Beiträge und Presse-Fristen sind nie enthalten.
+- Unter **Kategorien im Abo** lässt sich das Abo auf einzelne Kategorien begrenzen (z. B. nur „Übung“).
+- Der Link wird **nur einmal angezeigt**. **Link erneuern** erzeugt einen neuen – der alte funktioniert dann sofort nicht mehr. **Link widerrufen** beendet das Abo.
+- Wird das Konto deaktiviert oder fehlt das Recht, liefert der Link keine Termine mehr.
+
+**Einrichten:**
+
+| Programm | Weg |
+|---|---|
+| Outlook (Web / neues Outlook) | Kalender → **Kalender hinzufügen** → „**Aus dem Internet abonnieren**“ → Link einfügen |
+| Outlook (klassisch, Windows) | Kalender → **Kalender hinzufügen** → „**Aus dem Internet**“ → Link einfügen |
+| Google Kalender (Web) | Neben „Weitere Kalender“ auf **+** → „**Per URL**“ → Link einfügen. Google aktualisiert Abos nur alle paar Stunden. |
+| iPhone / iPad | Einstellungen → **Kalender** → **Accounts** → **Account hinzufügen** → Andere → „**Kalenderabo hinzufügen**“ → Link einfügen (oder den **webcal-Link** antippen) |
+| Mac | Kalender-App → Ablage → **Neues Kalenderabonnement** → Link einfügen |
+
+Wer den Link kennt, sieht die Termine. Bei Verdacht, dass er weitergegeben wurde, den Link erneuern.

@@ -114,7 +114,9 @@ flowchart LR
   (am Handy Liste), Filter nach Kategorie und Quelle; Zeitzone Europe/Berlin inklusive Sommer-/Winterzeit. Geplante
   Beiträge mit Status und Kanälen erscheinen im Kalender und lassen sich per Ziehen (oder Datum/Uhrzeit) verschieben –
   mit Hinweis und neuer Freigabe, wenn der Termin zur freigegebenen Fassung gehört; Fristen von Presseanfragen,
-  überfällige hervorgehoben.
+  überfällige hervorgehoben. iCal-Kalender (Outlook, Google, Wehr-Kalender) einlesen – mit Verbindungstest,
+  Abrufintervall, Kategorie je Quelle, Empfangsprotokoll, verschlüsselt gespeicherter Adresse; persönlicher, geheimer
+  iCal-Abo-Link (nur Titel/Zeit/Kategorie, wählbare Kategorien) für Outlook, Google und iPhone.
 
 ### Designvorlagen
 

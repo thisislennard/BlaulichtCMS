@@ -6,6 +6,7 @@ import { HelpTip } from '../../components/ui/HelpTip';
 import { useAuth } from '../../lib/auth';
 import { fromLocalInput } from '../../lib/format';
 import { CategoriesDialog, EntryDialog, EventDialog, type EditTarget } from './dialogs';
+import { SourcesDialog, SubscribeDialog } from './ical';
 import { dayStart, shift, today, viewRange, type CalendarCategory, type CalendarEntry, type View } from './model';
 import { ListView, MonthView, WeekView } from './views';
 import { RescheduleForm, usePlanning, useReschedule } from './planning';
@@ -43,7 +44,7 @@ export default function CalendarPage() {
   const [source, setSource] = useState('');
   const [open, setOpen] = useState<CalendarEntry | null>(null);
   const [edit, setEdit] = useState<EditTarget | null>(null);
-  const [showCats, setShowCats] = useState(false);
+  const [dialog, setDialog] = useState<'categories' | 'sources' | 'subscribe' | null>(null);
   const canManage = can('calendar.manage');
   const setView = (v: View) => {
     setViewState(v);
@@ -91,16 +92,28 @@ export default function CalendarPage() {
         }
         subtitle="Termine, Serien und Planung"
         actions={
-          canManage && (
-            <>
-              <Button icon="Tags" onClick={() => setShowCats(true)}>
-                Kategorien
+          <>
+            {can('calendar.subscribe') && (
+              <Button icon="Link2" onClick={() => setDialog('subscribe')}>
+                Abonnieren
               </Button>
-              <Button variant="primary" icon="Plus" onClick={() => setEdit({})}>
-                Neuer Termin
+            )}
+            {can('calendar.sources') && (
+              <Button icon="Download" onClick={() => setDialog('sources')}>
+                iCal-Kalender
               </Button>
-            </>
-          )
+            )}
+            {canManage && (
+              <>
+                <Button icon="Tags" onClick={() => setDialog('categories')}>
+                  Kategorien
+                </Button>
+                <Button variant="primary" icon="Plus" onClick={() => setEdit({})}>
+                  Neuer Termin
+                </Button>
+              </>
+            )}
+          </>
         }
       />
 
@@ -193,7 +206,9 @@ export default function CalendarPage() {
           }}
         />
       )}
-      {showCats && <CategoriesDialog categories={categories.data ?? []} onClose={() => setShowCats(false)} />}
+      {dialog === 'categories' && <CategoriesDialog categories={categories.data ?? []} onClose={() => setDialog(null)} />}
+      {dialog === 'sources' && <SourcesDialog categories={categories.data ?? []} onClose={() => setDialog(null)} />}
+      {dialog === 'subscribe' && <SubscribeDialog categories={categories.data ?? []} onClose={() => setDialog(null)} />}
     </div>
   );
 }
