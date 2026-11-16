@@ -52,6 +52,11 @@ async function checkInputRefs(kind: InputKind, cfg: any) {
     if (!c || c.deleted_at || c.kind !== def.connectionKind) throw badRequest('Die gewählte Verbindung gibt es nicht (mehr) oder sie hat die falsche Art.');
   }
   if (kind === 'rss' && cfg.feedId && !(await one(`SELECT 1 FROM rss_feeds WHERE id = $1`, [cfg.feedId]))) throw badRequest('Die gewählte Quelle gibt es nicht.');
+  if (kind === 'calendar') {
+    if (cfg.categoryIds.length && (await one<{ n: number }>(`SELECT count(*)::int AS n FROM calendar_categories WHERE id = ANY($1::uuid[])`, [cfg.categoryIds]))!.n !== new Set(cfg.categoryIds).size) throw badRequest('Mindestens eine gewählte Kategorie gibt es nicht (mehr).');
+    const srcIds = (cfg.sources as string[]).filter((s) => s !== 'own');
+    if (srcIds.length && (await one<{ n: number }>(`SELECT count(*)::int AS n FROM calendar_sources WHERE id = ANY($1::uuid[])`, [srcIds]))!.n !== new Set(srcIds).size) throw badRequest('Mindestens ein gewählter iCal-Kalender ist nicht mehr vorhanden.');
+  }
   if (kind === 'upload' && cfg.collectionId && !(await one(`SELECT 1 FROM collections WHERE id = $1 AND deleted_at IS NULL`, [cfg.collectionId]))) throw badRequest('Die gewählte Sammlung gibt es nicht.');
   if (kind === 'manual') {
     const keys = (cfg.fields as { key: string }[]).map((f) => f.key);
@@ -145,6 +150,9 @@ export async function automationRoutes(app: FastifyInstance) {
       roles: activeRoles().map((r) => ({ id: r.id, label: r.label })),
       connections: await many<any>(`SELECT id, kind, name, status FROM connections WHERE deleted_at IS NULL AND kind IN ('fe2','feuersoftware','warnfeed') ORDER BY name`),
       feeds: await many<any>(`SELECT id, title FROM rss_feeds ORDER BY title`),
+      // Kalender (#203): Kategorien und iCal-Quellen für den Eingang „Kalendereintrag“
+      calendarCategories: await many<any>(`SELECT id, name, color FROM calendar_categories ORDER BY position, lower(name)`),
+      calendarSources: await many<any>(`SELECT id, name FROM calendar_sources ORDER BY lower(name)`),
       collections: await many<any>(`SELECT id, title FROM collections WHERE deleted_at IS NULL AND archived_at IS NULL ORDER BY created_at DESC LIMIT 200`),
       // Kategorien der Website, wie die Bridge sie meldet (#186) – Auswahl im Beitrags-Ausgang
       sites: await many<any>(`SELECT id, name, status, COALESCE(bridge_report->'categories', '[]'::jsonb) AS categories FROM wp_sites WHERE status <> 'revoked' ORDER BY name`),

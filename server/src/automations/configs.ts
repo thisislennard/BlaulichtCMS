@@ -23,6 +23,18 @@ export const INPUT_CONFIG: Record<InputKind, z.ZodType<any>> = {
   ]),
   // Presseanfragen (#204): leer = jeder Eingangsweg
   press: z.object({ channels: z.array(z.enum(['phone', 'mail', 'mailbox', 'in_person', 'other'])).max(5).default([]) }),
+  // Kalendereintrag (#203): Zeitpunkt je Workflow, Filter; leere Listen = alle
+  calendar: z
+    .object({
+      timing: z.enum(['start', 'end', 'before']).default('start'),
+      beforeValue: z.number().int().min(1).max(999).default(60),
+      beforeUnit: z.enum(['minutes', 'hours', 'days']).default('minutes'),
+      categoryIds: z.array(z.uuid()).max(50).default([]),
+      tags: z.array(z.string().trim().min(1).max(40)).max(20).default([]),
+      sources: z.array(z.union([z.literal('own'), z.uuid()])).max(20).default([]),
+      textContains: z.string().trim().max(100).default(''),
+    })
+    .refine((c) => c.timing !== 'before' || c.beforeValue * ({ minutes: 1, hours: 60, days: 1440 } as const)[c.beforeUnit] <= 30 * 1440, { message: 'Höchstens 30 Tage vorher.', path: ['beforeValue'] }),
   manual: z.object({
     fields: z
       .array(z.object({ key: z.string().regex(FIELD_KEY, 'Feldnamen: Kleinbuchstaben, Ziffern und _'), label: z.string().trim().min(1).max(80), example: z.string().max(300).default('') }))

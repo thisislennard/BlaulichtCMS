@@ -116,7 +116,8 @@ flowchart LR
   mit Hinweis und neuer Freigabe, wenn der Termin zur freigegebenen Fassung gehört; Fristen von Presseanfragen,
   überfällige hervorgehoben. iCal-Kalender (Outlook, Google, Wehr-Kalender) einlesen – mit Verbindungstest,
   Abrufintervall, Kategorie je Quelle, Empfangsprotokoll, verschlüsselt gespeicherter Adresse; persönlicher, geheimer
-  iCal-Abo-Link (nur Titel/Zeit/Kategorie, wählbare Kategorien) für Outlook, Google und iPhone.
+  iCal-Abo-Link (nur Titel/Zeit/Kategorie, wählbare Kategorien) für Outlook, Google und iPhone. Workflow-Eingang
+  „Kalendereintrag“: Termine lösen zu Beginn, zum Ende oder X vorher Workflows aus (z. B. Übung → Banner „Achtung Übung“).
 
 ### Designvorlagen
 
@@ -217,7 +218,7 @@ flowchart LR
   steht in der Liste und im Editor als ein Satz („Wenn ein neuer Alarm … eingeht, erscheint nach Freigabe auf der
   Website ein Banner …“); eine Checkliste zeigt vor dem Aktivieren, was noch fehlt.
 - **Erweitert – visueller Editor:** Eingänge (FE2-Alarm, Feuersoftware-Einsatz, amtliche Warnung, RSS-Eintrag, neue Uploads,
-  Zeitplan, neue Presseanfrage, manueller Start), Verarbeitung (Bedingung, Verzweigung, Felder setzen, Warten, Einmal je Vorgang, Freigabe
+  Zeitplan, neue Presseanfrage, Kalendereintrag, manueller Start), Verarbeitung (Bedingung, Verzweigung, Felder setzen, Warten, Einmal je Vorgang, Freigabe
   anfordern, Zusammenführen) und Ausgänge (Banner, Beitrag, E-Mail, App-Benachrichtigung, Warnentwurf vorbereiten, Einsatz in Einsatzliste)
   auf einer Fläche verbinden – mit Palette, Minikarte, automatischer Anordnung, Rückgängig und einer Listenansicht für
   Tastatur und Handy.

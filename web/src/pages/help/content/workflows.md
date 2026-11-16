@@ -18,6 +18,7 @@ Unter [Workflows](/workflows) steht jeder Workflow mit einem Satz, was er tut �
 | DWD-Warnung → Banner + Beitragsentwurf | Amtliche Warnung (eigenes Gebiet) | `quelle` ist gleich „Deutscher Wetterdienst“ | Banner nach Warnstufe bis `gueltig_bis` und Beitragsentwurf „Lage“ |
 | Alarm mit Stichwort-Kategorie Brand → Beitragsentwurf | FE2-Alarm oder Feuersoftware-Einsatz | `stichwort_kategorie` ist gleich „Brand“ | Beitragsentwurf „Einsatz“ |
 | Warnung → Benachrichtigen | Amtliche Warnung (eigenes Gebiet) | – | App-Benachrichtigung an die Rolle Redaktion |
+| Übung im Kalender → Banner „Achtung Übung“ | Kalendereintrag (zu Beginn) | `kategorie` ist gleich „Übung“ | Banner „Achtung Übung“ (Hinweis) bis zum Ende des Termins (`gueltig_bis`), zur Freigabe |
 | Leer beginnen | – | – | – |
 
 Gibt es genau einen passenden Auslöser bzw. eine passende Aktion, setzt die Vorlage ihn gleich ein. Sonst bleibt der **Platz offen** (gelb, „Offen“): einen vorhandenen wählen oder mit **Neu anlegen …** direkt im Workflow einrichten – das Formular ist mit den Werten der Vorlage vorbelegt (z. B. Banner-Titel und Stufe); Pflichtangaben wie die Website oder die Verbindung wählt man selbst.
@@ -48,6 +49,7 @@ Ein Eingang hört auf eine vorhandene Quelle. Zugangsdaten, Tests und Gebietsfil
 | Neue Uploads | geprüften Dateien über einen Upload-Link, gebündelt je Zeitfenster | `sammlung`, `sammlung_link`, `anzahl` |
 | Zeitplan | täglich zu einer Uhrzeit (optional nur an Wochentagen) oder alle N Minuten (mind. 15) | `zeitpunkt`, `offene_beitraege`, `offene_beitraege_liste`, `offene_banner`, `offene_warnentwuerfe` |
 | Neue Presseanfrage | Anfrage von Hand erfasst oder aus dem Presse-Postfach (wahlweise nur bestimmte Eingangswege) | `nummer`, `thema`, `medium`, `eingangsweg`, `frist`, `zustaendig`, `anfrage_link` – ohne Kontaktdaten |
+| Kalendereintrag | Termin im [Kalender](/hilfe/kalender#workflows-mit-kalenderterminen) beginnt, endet oder steht bevor (X Minuten/Stunden/Tage vorher); Filter Kategorie, Schlagwort, Quelle, Text | `titel`, `beschreibung`, `beginn`, `ende`, `ganztaegig`, `ort`, `kategorie`, `schlagwoerter`, `quelle`, `zeitpunkt`, `gueltig_bis` (= Ende) |
 | Manueller Start | Knopf „Jetzt starten“ im Workflow | eigene Felder, `gestartet_von` |
 
 Immer verfügbar: `automation` (Name des Workflows), `lauf`, `jetzt`. Bei FE2 und Feuersoftware gibt es nur die Felder der Allowlist – Straße, Meldende, Patientendaten kommen nie in einen Workflow. Bei Uploads werden keine Angaben der Hochladenden übergeben. Verpasste Zeitplan-Termine (Ausfall länger als 10 Minuten) werden nicht nachgeholt; das erste Einlesen einer neuen RSS-Quelle startet keine Läufe.

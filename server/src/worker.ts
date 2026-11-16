@@ -34,6 +34,7 @@ import { cleanupDesignImages } from './routes/media-design.js';
 import { checkForUpdate, updateCheckDue } from './updates/github.js';
 import { executeRun } from './automations/engine.js';
 import { refreshDueCalendarSources } from './calendar/sources.js';
+import { calendarTriggerTick } from './calendar/triggers.js';
 import { automationTick } from './automations/events.js';
 import { deliverNotification } from './lib/notify-channels.js';
 import { migratePlaintextSecrets } from './lib/secret-audit.js';
@@ -269,6 +270,8 @@ async function maintenance(isLeader: boolean) {
   // Threads-Anmeldungen (60 Tage gültig) rechtzeitig verlängern
   if (due('threads-token', 24 * 60 * 60_000)) await refreshThreadsTokens().catch((e) => log('warn', 'threads', e.message));
   if (due('automations', 30_000)) await automationTick().catch((e) => log('warn', 'automation', e.message));
+  // Workflow-Eingang „Kalendereintrag“ (#203): Beginn, Ende oder X vorher
+  if (due('calendar-triggers', 30_000)) await calendarTriggerTick().catch((e) => log('warn', 'automation', `Kalender-Auslöser: ${e.message}`));
   // Presseanfragen: Erinnerung vor Ablauf der Frist und bei Überschreitung (#204)
   // Presse-Postfach (#205): im eingestellten Abstand (geprüft alle 30 s)
   if (due('press-mailbox', 30_000)) await pollPressMailbox().catch((e) => log('warn', 'press', `Presse-Postfach: ${e.message}`));

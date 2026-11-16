@@ -85,6 +85,20 @@ export const TEMPLATES: TemplateDef[] = [
       },
     ],
   },
+  {
+    id: 'calendar-exercise-banner',
+    title: 'Übung im Kalender → Banner „Achtung Übung“',
+    description: 'Zu Beginn eines Termins der Kategorie „Übung“ einen Banner-Entwurf auf der Website vorbereiten, der bis zum Ende der Übung gilt.',
+    icon: 'CalendarDays',
+    input: { kinds: ['calendar'], preset: { name: 'Kalender: Beginn eines Termins', config: { timing: 'start' } } },
+    rules: [{ field: 'kategorie', op: 'eq', value: 'Übung' }],
+    outputs: [
+      {
+        kind: 'banner',
+        preset: { name: 'Banner „Achtung Übung“', config: { title: 'Achtung Übung', text: '{{titel}} – {{ort}}. Es handelt sich um eine Übung, es besteht keine Gefahr.', tone: 'info', priority: 2, durationHours: 4, endFromField: true, submit: true } },
+      },
+    ],
+  },
 ];
 
 export function templateById(id: string): TemplateDef | undefined {

@@ -117,3 +117,23 @@ Mit **Abonnieren** (Recht **Kalender abonnieren**) erzeugt jede Person ihren eig
 | Mac | Kalender-App → Ablage → **Neues Kalenderabonnement** → Link einfügen |
 
 Wer den Link kennt, sieht die Termine. Bei Verdacht, dass er weitergegeben wurde, den Link erneuern.
+
+## Workflows mit Kalenderterminen
+
+Termine können [Workflows](/hilfe/workflows) starten – zum Beispiel: Beginnt ein Termin der Kategorie „Übung“, erscheint auf der Website der Banner „Achtung Übung“ bis zum Ende der Übung (Vorlage **Übung im Kalender → Banner „Achtung Übung“** unter **Neuer Workflow**).
+
+Den Eingang **Kalendereintrag** richtet man unter [Workflows → Eingänge](/workflows/eingaenge) ein:
+
+| Einstellung | Möglichkeiten |
+|---|---|
+| Zeitpunkt | **zu Beginn**, **zum Ende** oder **vorher** – 1 bis 999 Minuten, Stunden oder Tage vor Beginn (höchstens 30 Tage) |
+| Kategorien | nur Termine dieser Kategorien (leer = alle) |
+| Quellen | eigene Termine und/oder bestimmte eingelesene iCal-Kalender (leer = alle) |
+| Schlagwörter | mindestens eines davon (Groß-/Kleinschreibung egal) |
+| Text enthält | Titel oder Beschreibung enthält den Text |
+
+**Felder für Platzhalter und Bedingungen:** `{{titel}}`, `{{beschreibung}}`, `{{beginn}}`, `{{ende}}`, `{{ganztaegig}}`, `{{ort}}`, `{{kategorie}}`, `{{schlagwoerter}}`, `{{quelle}}` (eigene Termine oder Name des iCal-Kalenders), `{{zeitpunkt}}` (beginn, ende, vorher), `{{gueltig_bis}}` (= Ende, damit ein Banner genau bis zum Ende des Termins läuft) und `{{termin_link}}`. Zeiten erscheinen in Texten in der Zeitzone der Instanz.
+
+**Genau einmal:** Jeder Termin – auch jeder einzelne Termin einer Serie und jeder eingelesene Termin – löst je Workflow genau einmal aus, auch nach einem Neustart. Wird ein Termin **verschoben**, löst er zum neuen Zeitpunkt aus (der alte entfällt bzw. hat schon ausgelöst); ausgelassene Termine einer Serie lösen nicht aus. Geprüft wird alle 30 Sekunden. Verpasste Zeitpunkte (z. B. während eines Updates) werden höchstens **10 Minuten** nachgeholt, Zeitpunkte vor dem Aktivieren des Workflows nie.
+
+**Testlauf:** Im Workflow läuft der Test mit einem Beispieltermin („Übungsdienst Atemschutz“, Kategorie „Übung“); eigene Werte lassen sich dort eintragen.

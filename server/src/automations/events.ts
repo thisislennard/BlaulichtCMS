@@ -16,7 +16,7 @@ import { lookupKeyword } from '../keywords/store.js';
  * Meldung gespeichert wird.
  */
 
-interface Trigger {
+export interface Trigger {
   automationId: string;
   automationName: string;
   version: number;
@@ -28,7 +28,7 @@ interface Trigger {
 }
 
 /** Eingangs-Knoten aller aktiven Automationen für eine Art von Eingang (Momentaufnahme der aktiven Version). */
-async function activeTriggers(kind: InputKind, db: pg.PoolClient | pg.Pool = pool): Promise<Trigger[]> {
+export async function activeTriggers(kind: InputKind, db: pg.PoolClient | pg.Pool = pool): Promise<Trigger[]> {
   const rows = await many<any>(
     `SELECT a.id, a.name, a.direct_publish, v.version, v.graph, v.direct_publish AS v_direct, v.activated_at
        FROM automations a JOIN automation_versions v ON v.automation_id = a.id AND v.version = a.active_version
@@ -48,7 +48,7 @@ async function activeTriggers(kind: InputKind, db: pg.PoolClient | pg.Pool = poo
   return out;
 }
 
-async function start(t: Trigger, eventKey: string, payload: Data, db: pg.PoolClient | pg.Pool, opts: { trigger?: 'event' | 'schedule'; runAt?: Date } = {}) {
+export async function start(t: Trigger, eventKey: string, payload: Data, db: pg.PoolClient | pg.Pool, opts: { trigger?: 'event' | 'schedule'; runAt?: Date } = {}) {
   return createRun(
     { automationId: t.automationId, version: t.version, mode: 'live', trigger: opts.trigger ?? 'event', inputNode: t.nodeId, eventKey: `${t.nodeId}|${eventKey}`.slice(0, 300), snapshot: t.snapshot, directAllowed: t.directAllowed, payload, runAt: opts.runAt },
     db,

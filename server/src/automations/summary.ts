@@ -50,6 +50,16 @@ function inputPhrase(n: GraphNode, inputs: Map<string, InputRef>): string {
       return c.mode === 'interval' ? `alle ${c.minutes} Minuten der Zeitplan „${inp.name}“ fällig ist` : `es ${c.time} Uhr ist${Array.isArray(c.weekdays) && c.weekdays.length ? ` (${c.weekdays.map((d: number) => WEEKDAYS[d - 1]).join(', ')})` : ''}`;
     case 'press':
       return `eine neue Presseanfrage${via} eingeht`;
+    case 'calendar': {
+      const units: Record<string, [string, string]> = { minutes: ['Minute', 'Minuten'], hours: ['Stunde', 'Stunden'], days: ['Tag', 'Tagen'] };
+      const n = Number(c.beforeValue) || 0;
+      const u = units[c.beforeUnit ?? 'minutes'] ?? units.minutes;
+      const filters = [Array.isArray(c.categoryIds) && c.categoryIds.length ? 'der gewählten Kategorie' : '', Array.isArray(c.tags) && c.tags.length ? `mit Schlagwort ${c.tags.join('/')}` : '', c.textContains ? `mit „${c.textContains}“` : ''].filter(Boolean).join(' ');
+      const what = `ein Kalendertermin${filters ? ` ${filters}` : ''}${via}`;
+      if (c.timing === 'end') return `${what} endet`;
+      if (c.timing === 'before') return `${what} in ${n} ${n === 1 ? u[0] : u[1]} beginnt`;
+      return `${what} beginnt`;
+    }
     case 'manual':
       return `jemand den Workflow${inp ? ` über „${inp.name}“` : ''} von Hand startet`;
     default:

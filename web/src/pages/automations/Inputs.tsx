@@ -20,7 +20,23 @@ const DEFAULTS: Record<string, Record<string, any>> = {
   schedule: { mode: 'daily', time: '07:00', weekdays: [] },
   manual: { fields: [] },
   press: { channels: [] },
+  calendar: { timing: 'start', beforeValue: 60, beforeUnit: 'minutes', categoryIds: [], tags: [], sources: [], textContains: '' },
 };
+
+/** Kommagetrennte Liste: Text bleibt beim Tippen erhalten, gespeichert wird die bereinigte Liste. */
+function TagsInput({ id, value, onChange }: { id: string; value: string[]; onChange: (v: string[]) => void }) {
+  const [text, setText] = useState(value.join(', '));
+  return (
+    <Input
+      id={id}
+      value={text}
+      onChange={(e) => {
+        setText(e.target.value);
+        onChange(e.target.value.split(',').map((x) => x.trim()).filter(Boolean).slice(0, 20));
+      }}
+    />
+  );
+}
 
 /** Dialog zum Anlegen/Bearbeiten – auch direkt aus dem Workflow (`preset`: Startwerte einer Vorlage; `onClose` liefert die ID). */
 export function InputDialog({ input, kind, cat, onClose, preset }: { input: InputDef | null; kind: string; cat: Catalog; onClose: (saved: boolean, id?: string) => void; preset?: { name?: string; config?: Record<string, any> } }) {
@@ -107,6 +123,37 @@ export function InputDialog({ input, kind, cat, onClose, preset }: { input: Inpu
             <Notice>Verpasste Termine (z. B. während eines Neustarts länger als 10 Minuten) werden nicht nachgeholt.</Notice>
           </>
         )}
+        {kind === 'calendar' && (
+          <>
+            <SelectField
+              id="in-cal-timing"
+              label="Zeitpunkt"
+              value={c.timing ?? 'start'}
+              onChange={(v) => set({ timing: v })}
+              options={[
+                { value: 'start', label: 'Zu Beginn des Termins' },
+                { value: 'end', label: 'Zum Ende des Termins' },
+                { value: 'before', label: 'Vor Beginn (X Minuten/Stunden/Tage)' },
+              ]}
+              help="Gilt für eigene und eingelesene Termine, auch für jeden Termin einer Serie – jeder Zeitpunkt löst genau einmal aus."
+              labelAction={<Help title="Kalendereintrag" anchor="eingaenge">Der Worker prüft alle 30 Sekunden. Wird ein Termin verschoben, löst er zum neuen Zeitpunkt aus. Verpasste Zeitpunkte (z. B. Neustart) werden höchstens 10 Minuten nachgeholt, Zeitpunkte vor dem Aktivieren des Workflows nie.</Help>}
+            />
+            {c.timing === 'before' && (
+              <div className="grid grid-cols-[1fr_1fr] gap-3">
+                <NumberField id="in-cal-before" label="Wie lange vorher" min={1} max={999} value={c.beforeValue} onChange={(v) => set({ beforeValue: v })} help="Höchstens 30 Tage." />
+                <SelectField id="in-cal-unit" label="Einheit" value={c.beforeUnit ?? 'minutes'} onChange={(v) => set({ beforeUnit: v })} options={[{ value: 'minutes', label: 'Minuten' }, { value: 'hours', label: 'Stunden' }, { value: 'days', label: 'Tage' }]} />
+              </div>
+            )}
+            <CheckList legend="Nur Termine dieser Kategorien (leer = alle)" columns={2} options={(cat.calendarCategories ?? []).map((x) => ({ value: x.id, label: x.name }))} value={c.categoryIds ?? []} onChange={(v) => set({ categoryIds: v })} />
+            <CheckList legend="Nur aus diesen Quellen (leer = alle)" columns={2} options={[{ value: 'own', label: 'Eigene Termine' }, ...(cat.calendarSources ?? []).map((x) => ({ value: x.id, label: `iCal: ${x.name}` }))]} value={c.sources ?? []} onChange={(v) => set({ sources: v })} />
+            <FieldWrap label="Schlagwörter (eines davon, leer = alle)" htmlFor="in-cal-tags" help="Mehrere mit Komma trennen; Groß-/Kleinschreibung egal.">
+              <TagsInput id="in-cal-tags" value={c.tags ?? []} onChange={(tags) => set({ tags })} />
+            </FieldWrap>
+            <FieldWrap label="Titel oder Beschreibung enthält" htmlFor="in-cal-text" help="Leer = keine Einschränkung.">
+              <Input id="in-cal-text" value={c.textContains ?? ''} maxLength={100} onChange={(e) => set({ textContains: e.target.value })} />
+            </FieldWrap>
+          </>
+        )}
         {kind === 'press' && (
           <CheckList
             legend="Nur bei diesen Eingangswegen (leer = jeder)"
@@ -172,7 +219,7 @@ export default function Inputs() {
     <div className="flex flex-col gap-5">
       <PageHeader
         title="Eingänge"
-        subtitle="Auslöser für Workflows: Einsätze, amtliche Warnungen, RSS-Einträge, Uploads, Zeitpläne und manueller Start."
+        subtitle="Auslöser für Workflows: Einsätze, amtliche Warnungen, RSS-Einträge, Uploads, Zeitpläne, Presseanfragen, Kalendertermine und manueller Start."
         actions={manage && <Button variant="primary" icon="Plus" disabled={!cat.data} onClick={() => setChoose(true)}>Neuer Eingang</Button>}
       />
       {cat.data && !cat.data.enabled && <Notice tone="warning" title="Workflows sind abgeschaltet">Unter Einstellungen → Redaktion lassen sie sich wieder einschalten.</Notice>}

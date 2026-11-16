@@ -10,6 +10,7 @@ import { invalidateRoles } from '../src/auth/roles.js';
 import { fromCivil, localDate, toCivil } from '../src/calendar/recurrence.js';
 import { parseIcal } from '../src/calendar/ical.js';
 import { refreshDueCalendarSources } from '../src/calendar/sources.js';
+import { calendarTriggerTick } from '../src/calendar/triggers.js';
 
 /**
  * Kalender (#200–#203) gegen eine echte PostgreSQL-Datenbank (TEST_DATABASE_URL). Die Datenbank wird zu Beginn
@@ -448,5 +449,117 @@ describe('Kalender: iCal einlesen und als Abo anbieten (#202)', () => {
     expect((await admin.del(`/calendar/sources/${sourceId}`)).status).toBe(200);
     expect(await one(`SELECT 1 FROM calendar_events WHERE source = 'ical'`)).toBeNull();
     expect(await one(`SELECT 1 FROM secrets WHERE owner_type = 'calendar_source'`)).toBeNull();
+  });
+});
+
+describe('Workflows: Eingang „Kalendereintrag“ (#203)', () => {
+  const node = (id: string, type: string, data: any, y = 0) => ({ id, type, position: { x: 0, y }, data });
+  const edge = (id: string, source: string, target: string) => ({ id, source, target, sourceHandle: 'out' });
+  let uebung: string;
+  let notifyId: string;
+  const runs = async (automationId: string) => many<any>(`SELECT payload, event_key, trigger FROM automation_runs WHERE automation_id = $1 AND mode = 'live' ORDER BY created_at`, [automationId]);
+
+  async function workflow(name: string, config: any) {
+    const inp = await admin.post('/automation-inputs', { name, kind: 'calendar', config });
+    expect(inp.status, JSON.stringify(inp.json)).toBe(200);
+    const a = (await admin.post('/automations', { name })).json.id;
+    const cur = await admin.get(`/automations/${a}`);
+    const g = { nodes: [node('in', 'input', { inputId: inp.json.id }), node('n', 'output', { outputId: notifyId }, 100)], edges: [edge('e1', 'in', 'n')] };
+    expect((await admin.put(`/automations/${a}`, { name, description: '', graph: g, baseHash: cur.json.draft_hash })).status).toBe(200);
+    // Testlauf mit Beispieltermin
+    const t = await admin.post(`/automations/${a}/test`, {});
+    expect(t.json.status, JSON.stringify(t.json.steps)).toBe('succeeded');
+    expect((await one<any>(`SELECT payload FROM automation_runs WHERE automation_id = $1 AND mode = 'test'`, [a]))!.payload).toMatchObject({ titel: 'Übungsdienst Atemschutz', kategorie: 'Übung', zeitpunkt: 'beginn' });
+    expect((await admin.post(`/automations/${a}/activate`)).status).toBe(200);
+    return a as string;
+  }
+  // Zeitpunkte in Ortszeit, sicher nach der Aktivierung (übermorgen und später)
+  const day = (plus: number) => toCivil(Date.now() + plus * 86_400_000, TZ);
+  const at = (plus: number, h: number, mi = 0) => {
+    const c = day(plus);
+    return berlin(c.y, c.m, c.d, h, mi);
+  };
+
+  beforeAll(async () => {
+    await setSettings({ 'automations.enabled': true } as any);
+    uebung = (await admin.get('/calendar/categories')).json.find((c: any) => c.name === 'Übung').id;
+    const n = await admin.post('/automation-outputs', { name: 'Hinweis an Admin', kind: 'notify', config: { roles: ['platform_admin'], title: '{{zeitpunkt}}: {{titel}}', body: '{{beginn}} – {{ort}}' } });
+    expect(n.status, JSON.stringify(n.json)).toBe(200);
+    notifyId = n.json.id;
+  });
+
+  it('Eingang prüft Einstellungen und Filter-Verweise; Katalog liefert Felder und Vorlage', async () => {
+    expect((await admin.post('/automation-inputs', { name: 'Zu früh', kind: 'calendar', config: { timing: 'before', beforeValue: 31, beforeUnit: 'days' } })).status).toBe(400);
+    expect((await admin.post('/automation-inputs', { name: 'Unbekannt', kind: 'calendar', config: { categoryIds: ['00000000-0000-4000-8000-000000000000'] } })).status).toBe(400);
+    const cat = (await admin.get('/automations/catalog')).json;
+    const k = cat.inputKinds.find((x: any) => x.kind === 'calendar');
+    expect(k.fields.map((f: any) => f.key)).toEqual(expect.arrayContaining(['titel', 'beginn', 'ende', 'ort', 'kategorie', 'schlagwoerter', 'quelle', 'zeitpunkt', 'gueltig_bis']));
+    expect(cat.calendarCategories.map((c: any) => c.name)).toContain('Übung');
+    expect(cat.templates.find((t: any) => t.id === 'calendar-exercise-banner')).toMatchObject({ input: { kinds: ['calendar'] } });
+  });
+
+  it('zu Beginn: nur passende Termine, jeder Zeitpunkt genau einmal, Zeitzone korrekt', async () => {
+    const a = await workflow('Übung beginnt', { timing: 'start', categoryIds: [uebung], sources: ['own'] });
+    const ev = await admin.post('/calendar/events', { title: 'Übung Brandhaus', location: 'Übungsgelände', start: at(2, 10), end: at(2, 12), categoryId: uebung, tags: ['Atemschutz'] });
+    await admin.post('/calendar/events', { title: 'Besprechung', start: at(2, 10), end: at(2, 11) });
+    const t = Date.parse(at(2, 10));
+    expect(await calendarTriggerTick(t - 60_000)).toBe(0);
+    expect(await calendarTriggerTick(t + 5_000)).toBe(1);
+    // nochmal (z. B. nach Neustart) und später im Nachholfenster: kein zweiter Lauf
+    expect(await calendarTriggerTick(t + 35_000)).toBe(0);
+    expect(await calendarTriggerTick(t + 9 * 60_000)).toBe(0);
+    const r = await runs(a);
+    expect(r).toHaveLength(1);
+    expect(r[0].payload).toMatchObject({ titel: 'Übung Brandhaus', ort: 'Übungsgelände', kategorie: 'Übung', schlagwoerter: 'Atemschutz', quelle: 'Eigene Termine', zeitpunkt: 'beginn', ganztaegig: 'nein', beginn: at(2, 10), ende: at(2, 12), gueltig_bis: at(2, 12) });
+    // Ortszeit 10:00 → UTC je nach Sommer-/Winterzeit
+    const off = (Date.parse(at(2, 10)) - Date.UTC(day(2).y, day(2).m - 1, day(2).d, 10)) / -3_600_000;
+    expect([1, 2]).toContain(off);
+    // Verschieben nach dem Auslösen: neuer Zeitpunkt löst einmal aus
+    await admin.put(`/calendar/events/${ev.json.id}`, { title: 'Übung Brandhaus', start: at(2, 14), end: at(2, 16), categoryId: uebung });
+    expect(await calendarTriggerTick(Date.parse(at(2, 14)) + 1_000)).toBe(1);
+    expect(await calendarTriggerTick(Date.parse(at(2, 14)) + 31_000)).toBe(0);
+    expect(await runs(a)).toHaveLength(2);
+    // Verpasst (länger als 10 Minuten): nicht nachgeholt
+    await admin.post('/calendar/events', { title: 'Nachtübung', start: at(3, 22), end: at(3, 23), categoryId: uebung });
+    expect(await calendarTriggerTick(Date.parse(at(3, 22)) + 11 * 60_000)).toBe(0);
+    await admin.post(`/automations/${a}/disable`).catch(() => {});
+    await pool.query(`UPDATE automations SET status = 'disabled' WHERE id = $1`, [a]);
+  });
+
+  it('Serie: jeder Termin löst einmal aus, ausgelassene nicht, verschobene zum neuen Zeitpunkt', async () => {
+    const a = await workflow('Dienstabend', { timing: 'start', tags: ['dienst'] });
+    const s = await admin.post('/calendar/events', { title: 'Dienstabend', start: at(4, 19), end: at(4, 21), tags: ['Dienst'], recurrence: { freq: 'daily', ends: 'count', count: 3 } });
+    // zweiten Termin verschieben, dritten auslassen
+    await admin.put(`/calendar/events/${s.json.id}`, { scope: 'instance', instance: at(5, 19), title: 'Dienstabend (später)', start: at(5, 20), end: at(5, 22), tags: ['Dienst'] });
+    await admin.del(`/calendar/events/${s.json.id}?scope=instance&instance=${encodeURIComponent(at(6, 19))}`);
+    for (const t of [at(4, 19), at(5, 19), at(5, 20), at(6, 19)]) {
+      await calendarTriggerTick(Date.parse(t) + 2_000);
+      await calendarTriggerTick(Date.parse(t) + 40_000);
+    }
+    const r = await runs(a);
+    expect(r.map((x) => `${x.payload.titel} ${hm(x.payload.beginn)}`)).toEqual([`Dienstabend ${hm(at(4, 19))}`, `Dienstabend (später) ${hm(at(5, 20))}`]);
+    await pool.query(`UPDATE automations SET status = 'disabled' WHERE id = $1`, [a]);
+  });
+
+  it('vorher (X Stunden) und zum Ende; Text-Filter', async () => {
+    const before = await workflow('2 Stunden vorher', { timing: 'before', beforeValue: 2, beforeUnit: 'hours', textContains: 'tag der offenen' });
+    const end = await workflow('Zum Ende', { timing: 'end', textContains: 'tag der offenen' });
+    await admin.post('/calendar/events', { title: 'Tag der offenen Tür', start: at(7, 11), end: at(7, 17) });
+    await admin.post('/calendar/events', { title: 'Anderer Termin', start: at(7, 11), end: at(7, 17) });
+    expect(await calendarTriggerTick(Date.parse(at(7, 9)) + 1_000)).toBe(1);
+    expect(await calendarTriggerTick(Date.parse(at(7, 11)) + 1_000)).toBe(0);
+    expect(await calendarTriggerTick(Date.parse(at(7, 17)) + 1_000)).toBe(1);
+    expect((await runs(before))[0].payload).toMatchObject({ zeitpunkt: 'vorher', titel: 'Tag der offenen Tür' });
+    expect((await runs(end))[0].payload).toMatchObject({ zeitpunkt: 'ende' });
+    expect(await runs(end)).toHaveLength(1);
+    // Zeitpunkte vor der Aktivierung lösen nie aus
+    expect(await calendarTriggerTick(Date.now() - 60 * 60_000)).toBe(0);
+  });
+
+  it('Workflows abgeschaltet: nichts startet', async () => {
+    await admin.post('/calendar/events', { title: 'Tag der offenen Tür 2', start: at(8, 11), end: at(8, 17) });
+    await setSettings({ 'automations.enabled': false } as any);
+    expect(await calendarTriggerTick(Date.parse(at(8, 9)) + 1_000)).toBe(0);
+    await setSettings({ 'automations.enabled': true } as any);
   });
 });

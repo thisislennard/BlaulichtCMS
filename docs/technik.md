@@ -150,6 +150,12 @@ Zeilenfaltung, Maskierung, TZID inkl. Windows-Zeitzonen, DATE/UTC/schwebende Zei
 STATUS:CANCELLED). Abo: `calendar_feeds` speichert nur die SHA-256-Prüfsumme des Links; `GET /api/v1/public/calendar/:token`
 liefert einzelne Termine (UTC bzw. Datum) für 60 Tage zurück bis 365 Tage voraus.
 
+Workflow-Eingang „Kalendereintrag“ (#203, `server/src/calendar/triggers.ts`): Der Worker (Leader) prüft alle 30 s
+je Zeitversatz die Termine, deren Auslösezeitpunkt (Beginn, Ende oder Beginn minus Versatz) im Fenster der letzten
+10 Minuten liegt, und startet je passendem Workflow einen Lauf. `event_key` = Termin bzw. Serie (eigene) oder
+Quelle + UID (iCal) + ursprünglicher Beginn des Einzeltermins + Art + Auslösezeitpunkt – derselbe Zeitpunkt startet
+nie zweimal (eindeutiger Index in `automation_runs`), ein verschobener Termin einmal zum neuen Zeitpunkt.
+
 ---
 
 ## Sicherheit

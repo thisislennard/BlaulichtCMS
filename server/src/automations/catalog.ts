@@ -15,7 +15,7 @@ export interface FieldDef {
   options?: string[];
 }
 
-export type InputKind = 'fe2' | 'feuersoftware' | 'warnfeed' | 'rss' | 'upload' | 'schedule' | 'manual' | 'press';
+export type InputKind = 'fe2' | 'feuersoftware' | 'warnfeed' | 'rss' | 'upload' | 'schedule' | 'manual' | 'press' | 'calendar';
 export type OutputKind = 'banner' | 'post' | 'mail' | 'notify' | 'warning_draft' | 'incident_entry';
 export type NodeType = 'input' | 'output' | 'condition' | 'switch' | 'template' | 'delay' | 'dedup' | 'approval' | 'merge';
 
@@ -148,6 +148,25 @@ export const INPUT_KINDS: Record<InputKind, { label: string; description: string
       { key: 'frist', label: 'Frist', type: 'datetime', example: '2026-11-16T15:00:00.000Z' },
       { key: 'zustaendig', label: 'Zuständige Person', type: 'text', example: 'Alex Beispiel' },
       { key: 'anfrage_link', label: 'Link zur Anfrage', type: 'url', example: '/presse/…' },
+    ],
+  },
+  calendar: {
+    label: 'Kalendereintrag',
+    description: 'Ein Termin aus dem Kalender (eigene und eingelesene, auch Serien) beginnt, endet oder steht bevor – gefiltert nach Kategorie, Schlagwort, Quelle oder Text.',
+    icon: 'CalendarDays',
+    fields: [
+      { key: 'titel', label: 'Titel des Termins', type: 'text', example: 'Übungsdienst Atemschutz' },
+      { key: 'beschreibung', label: 'Beschreibung', type: 'text', example: 'Übung am Gerätehaus mit Rauchentwicklung.' },
+      { key: 'beginn', label: 'Beginn', type: 'datetime', example: '2026-11-21T09:00:00.000Z' },
+      { key: 'ende', label: 'Ende', type: 'datetime', example: '2026-11-21T12:00:00.000Z' },
+      { key: 'ganztaegig', label: 'Ganztägig', type: 'choice', example: 'nein', options: ['ja', 'nein'] },
+      { key: 'ort', label: 'Ort', type: 'text', example: 'Gerätehaus Nord' },
+      { key: 'kategorie', label: 'Kategorie', type: 'text', example: 'Übung' },
+      { key: 'schlagwoerter', label: 'Schlagwörter', type: 'text', example: 'Atemschutz, Ausbildung' },
+      { key: 'quelle', label: 'Quelle (eigene Termine oder Name des iCal-Kalenders)', type: 'text', example: 'Eigene Termine' },
+      { key: 'zeitpunkt', label: 'Auslöser', type: 'choice', example: 'beginn', options: ['beginn', 'ende', 'vorher'] },
+      { key: 'gueltig_bis', label: 'Gültig bis (Ende des Termins)', type: 'datetime', example: '2026-11-21T12:00:00.000Z' },
+      { key: 'termin_link', label: 'Link zum Kalender', type: 'url', example: '/kalender' },
     ],
   },
   manual: {

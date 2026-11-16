@@ -25,6 +25,9 @@ export interface Catalog {
   roles: { id: string; label: string }[];
   connections: { id: string; kind: string; name: string; status: string }[];
   feeds: { id: string; title: string }[];
+  /** Kalender (#203): Kategorien und iCal-Quellen für den Eingang „Kalendereintrag“ */
+  calendarCategories?: { id: string; name: string; color: string }[];
+  calendarSources?: { id: string; name: string }[];
   collections: { id: string; title: string }[];
   sites: { id: string; name: string; status: string; categories?: { id: number; name: string; parent?: number }[] }[];
   socialChannels?: { id: string; kind: string; name: string; status: string; manual: boolean }[];
@@ -165,6 +168,13 @@ export function inputSummary(i: Pick<InputDef, 'kind' | 'config'>, cat?: Catalog
     case 'press': {
       const labels: Record<string, string> = { phone: 'Telefon', mail: 'E-Mail', mailbox: 'Presse-Postfach', in_person: 'Persönlich', other: 'Sonstiges' };
       return c.channels?.length ? `Eingangsweg: ${c.channels.map((x: string) => labels[x] ?? x).join(', ')}` : 'jeder Eingangsweg';
+    }
+    case 'calendar': {
+      const units: Record<string, string> = { minutes: 'Min.', hours: 'Std.', days: 'Tage' };
+      const when = c.timing === 'end' ? 'zum Ende' : c.timing === 'before' ? `${c.beforeValue} ${units[c.beforeUnit] ?? 'Min.'} vorher` : 'zu Beginn';
+      const cats = (c.categoryIds ?? []).map((id: string) => cat?.calendarCategories?.find((x) => x.id === id)?.name ?? 'Kategorie');
+      const srcs = (c.sources ?? []).map((id: string) => (id === 'own' ? 'eigene Termine' : (cat?.calendarSources?.find((x) => x.id === id)?.name ?? 'iCal')));
+      return [when, cats.length ? `Kategorie: ${cats.join(', ')}` : 'alle Kategorien', c.tags?.length ? `Schlagwort: ${c.tags.join(', ')}` : '', srcs.length ? `Quelle: ${srcs.join(', ')}` : '', c.textContains ? `Text enthält „${c.textContains}“` : ''].filter(Boolean).join(' · ');
     }
     case 'manual':
       return c.fields?.length ? `Felder: ${c.fields.map((f: any) => f.label).join(', ')}` : 'ohne eigene Felder';
