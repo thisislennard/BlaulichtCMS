@@ -50,6 +50,9 @@ export const PUBLIC_ROUTES: string[] = [
   'POST /public/upload/:token/sessions',
   'GET /public/upload/:token/sessions/:id',
   'PUT /public/upload/:token/sessions/:id',
+  // Datenschutzerklärung und Impressum (#187)
+  'GET /public/legal',
+  'GET /public/legal/:kind',
 ];
 
 const API = '/api/v1';

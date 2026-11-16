@@ -104,6 +104,20 @@
   overflow-x: auto;
   margin: 0 0 14px;
 }
+/* Datenschutzerklärung und Impressum (#187) */
+.bc-legal ul {
+  list-style: disc;
+}
+.bc-legal ol {
+  list-style: decimal;
+}
+.bc-legal blockquote {
+  margin: 0 0 12px;
+  padding: 8px 12px;
+  border-left: 3px solid var(--bc-border);
+  background: var(--bc-raised);
+  border-radius: 6px;
+}
 .bc-prose pre code {
   background: none;
   padding: 0;

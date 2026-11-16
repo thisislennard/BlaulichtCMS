@@ -6,6 +6,7 @@ import { Icon } from '../../components/ui/Icon';
 import { fmtBytes, fmtDateTime } from '../../lib/format';
 import { uploadResumable } from '../../lib/upload';
 import { DesignedPage, type UploadDesign } from './DesignedPage';
+import { LegalLinks } from '../../components/legal/LegalLinks';
 
 type FieldMode = 'off' | 'optional' | 'required';
 
@@ -448,6 +449,7 @@ export function UploadPage() {
             <PrivacySection info={info} />
           </>
         )}
+        <LegalLinks newTab className="pt-2" />
       </main>
     </div>
   );

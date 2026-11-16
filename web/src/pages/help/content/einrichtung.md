@@ -19,7 +19,7 @@ Die öffentliche Adresse steht in Einladungen, Upload-Links und QR-Codes. Späte
 |---|---|
 | Allgemein | Instanzname, Organisation, Absender, öffentliche Adresse, Zeitzone |
 | Redaktion | Vier-Augen-Prinzip, Gültigkeit von Einladungen, Aufbewahrung |
-| Datenschutz | Verantwortliche Stelle, Datenschutzbeauftragte/r, Datenschutzerklärung und eigener Hinweis für Upload-Seite und Aushang |
+| Datenschutz | Verantwortliche Stelle, Datenschutzbeauftragte/r, Datenschutzerklärung und eigener Hinweis für Upload-Seite und Aushang; eigene Texte für die öffentlichen Seiten [Datenschutzerklärung und Impressum](/hilfe/foto-link#datenschutzerklaerung-und-impressum) |
 | Medien | Dateigröße, Dateien je Link und Sammlung, Speicher je Sammlung, Mindestspeicher |
 | Sicherheit | Zwei-Faktor-Pflicht, Sitzungsdauer, Sperre nach Fehlversuchen, Passwortlänge |
 | Sicherung | Tägliche Sicherung, Uhrzeit, Anzahl |

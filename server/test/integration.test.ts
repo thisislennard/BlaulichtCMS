@@ -4073,6 +4073,32 @@ describe('Keine Empfängeradressen im Audit (#185)', () => {
   });
 });
 
+describe('Datenschutzerklärung und Impressum (#187)', () => {
+  it('öffentlich ohne Anmeldung lesbar, nur mit settings.privacy änderbar, verlinkt als Datenschutzerklärung', async () => {
+    const before = (await admin.get('/settings')).json.settings;
+    await admin.patch('/settings', { 'legal.privacy_text': '', 'legal.imprint_text': '', 'privacy.policy_url': '' });
+    expect((await anonymous.get('/public/legal')).json).toEqual({ privacy: false, imprint: false });
+    expect((await anonymous.get('/public/legal/datenschutz')).json.text).toBe('');
+    expect((await anonymous.get('/public/legal/unbekannt')).status).toBe(400);
+    expect((await editor.patch('/settings', { 'legal.imprint_text': 'Nicht erlaubt' })).status).toBe(403);
+    const text = ['# Datenschutzerklärung', '', '<script>alert(1)</script> [Link](javascript:alert(1))'].join('\n');
+    expect((await admin.patch('/settings', { 'legal.privacy_text': text, 'legal.imprint_text': 'Angaben gemäß § 5 DDG' })).status).toBe(200);
+    expect((await anonymous.get('/public/legal')).json).toEqual({ privacy: true, imprint: true });
+    const d = await anonymous.get('/public/legal/datenschutz');
+    expect(d.status).toBe(200);
+    // Rohtext (Markdown); die Oberfläche stellt ihn ohne HTML dar
+    expect(d.json.text).toBe(text);
+    expect((await anonymous.get('/public/legal/impressum')).json.text).toBe('Angaben gemäß § 5 DDG');
+    // Ohne eigene Adresse verweist die Datenschutzerklärung der Upload-Seite auf die eigene Seite
+    const me = await admin.get('/auth/me');
+    expect(me.json.instance.privacy.policy_url).toMatch(/\/datenschutz$/);
+    // Höchstlänge
+    await admin.patch('/settings', { 'legal.imprint_text': 'x'.repeat(30_000) });
+    expect((await anonymous.get('/public/legal/impressum')).json.text.length).toBe(20_000);
+    await admin.patch('/settings', { 'legal.privacy_text': before['legal.privacy_text'] ?? '', 'legal.imprint_text': before['legal.imprint_text'] ?? '', 'privacy.policy_url': before['privacy.policy_url'] });
+  });
+});
+
 describe('Löschfrist amtlicher Warnungen: noch gelieferte bleiben (#180)', () => {
   it('löscht erst, wenn abgelaufen und seit der Frist nicht mehr in der Quelle', async () => {
     const conn = (await one<any>(`INSERT INTO connections (kind, name, status, config) VALUES ('warnfeed', 'Löschfrist-Feed', 'draft', '{"format":"cap","url":"https://warn.example.invalid/cap.xml"}') RETURNING id`))!;

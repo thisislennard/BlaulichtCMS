@@ -23,6 +23,7 @@ import {
 } from "../../components/ui/core";
 import { CopyButton, UnsavedChangesGuard, useToast, useConfirm } from "../../components/ui/overlays";
 import { Icon } from "../../components/ui/Icon";
+import { LegalMarkdown } from "../../components/legal/LegalMarkdown";
 import { t } from "../../i18n";
 import { useAuth } from "../../lib/auth";
 import {
@@ -125,6 +126,7 @@ function settingPermission(key: string): string {
       return "settings.general";
     case "privacy":
     case "retention":
+    case "legal":
       return "settings.privacy";
     case "media":
       return "settings.media";
@@ -427,7 +429,7 @@ export default function Settings() {
                 description="Angaben nach Art. 13 DSGVO für Upload-Seite und Aushang sowie Löschfristen."
                 bodyClassName="flex flex-col gap-5"
               >
-                {(!String(v["privacy.controller"] ?? "").trim() || !String(v["privacy.policy_url"] ?? "").trim()) && (
+                {(!String(v["privacy.controller"] ?? "").trim() || (!String(v["privacy.policy_url"] ?? "").trim() && !String(v["legal.privacy_text"] ?? "").trim())) && (
                   <Notice tone="warning" title="Pflichtangaben fehlen">
                     Ohne verantwortliche Stelle und Datenschutzerklärung zeigt die Upload-Seite nur den allgemeinen Hinweis; angemeldete Verwaltung sieht dort eine Erinnerung.
                   </Notice>
@@ -435,7 +437,7 @@ export default function Settings() {
                 <FieldGrid>
                   <TextField k="privacy.controller" label="Verantwortliche Stelle" help="Name und Anschrift, z. B. „Gemeinde Musterstadt, Hauptstraße 1, 12345 Musterstadt“." max={400} v={v} set={set} ro={ro("privacy.controller")} />
                   <TextField k="privacy.dpo_contact" label="Datenschutzbeauftragte/r (Kontakt)" help="E-Mail-Adresse oder Anschrift; leer lassen, wenn keine Benennung besteht." max={300} v={v} set={set} ro={ro("privacy.dpo_contact")} />
-                  <TextField k="privacy.policy_url" label="Datenschutzerklärung (Adresse)" help="Vollständige Adresse mit https://. Wird auf Upload-Seite und Aushang verlinkt." max={500} v={v} set={set} ro={ro("privacy.policy_url")} />
+                  <TextField k="privacy.policy_url" label="Datenschutzerklärung (Adresse)" help="Vollständige Adresse mit https://. Wird auf Upload-Seite und Aushang verlinkt. Leer lassen, um die eigene Seite /datenschutz (unten) zu verlinken." max={500} v={v} set={set} ro={ro("privacy.policy_url")} />
                 </FieldGrid>
                 <FieldGrid>
                   <NumField k="privacy.collection_retention_days" label="Abgeschlossene Sammlungen löschen nach" help="Archivierte Sammlungen bzw. Sammlungen ohne aktiven Link, gerechnet ab der letzten Aktivität. Dateien in laufenden Beiträgen bleiben. 0 = nie." unit={t("admin.common.days")} v={v} set={set} ro={ro("privacy.collection_retention_days")} />
@@ -457,6 +459,8 @@ export default function Settings() {
                 <p className="m-0 text-sm text-fg-muted">
                   Die Upload-Seite nennt immer: Zweck, mögliche Veröffentlichung auf Website und in sozialen Medien (Meta, auch USA), was erfasst wird (Dateien, Hinweis, Dateiname, IP-Adresse zur Missbrauchsabwehr), die Speicherdauer und die Rechte der Betroffenen. Hinweise und Vorlagen: Hilfe → Sicherheit bzw. <code>docs/datenschutz.md</code>.
                 </p>
+                <LegalTextField k="legal.privacy_text" path="/datenschutz" label="Datenschutzerklärung" max={50000} controller={v["privacy.controller"] ?? ""} v={v} set={set} ro={ro("legal.privacy_text")} />
+                <LegalTextField k="legal.imprint_text" path="/impressum" label="Impressum" max={20000} controller={v["privacy.controller"] ?? ""} v={v} set={set} ro={ro("legal.imprint_text")} />
               </SectionCard>
 
               {/* Medien */}
@@ -861,6 +865,118 @@ function AllowedTypesField({ value, onChange, ro }: { value: unknown; onChange: 
       </div>
       <p className="m-0 text-meta text-fg-muted">Geprüft wird der Dateiinhalt. Je Upload-Link lässt sich die Auswahl weiter einschränken.</p>
     </fieldset>
+  );
+}
+
+/* Datenschutzerklärung und Impressum (#187): Markdown mit Vorschau, öffentlich unter /datenschutz bzw. /impressum. */
+const TEMPLATE_MARK = "Vorlage – bitte vollständig prüfen und anpassen";
+function legalTemplate(kind: "legal.privacy_text" | "legal.imprint_text", controller: string): string {
+  const head = `> **${TEMPLATE_MARK}.** Diese Gliederung ist nur ein Ausgangspunkt und ersetzt keine rechtliche Prüfung. Alle Angaben in [eckigen Klammern] ersetzen, nicht zutreffende Abschnitte entfernen und diesen Hinweis zum Schluss löschen.
+
+`;
+  const who = controller.trim() || "[Name der Organisation]  \n[Anschrift]";
+  if (kind === "legal.imprint_text") {
+    return `${head}# Impressum
+
+${who}
+
+**Vertreten durch:** [Name, Funktion]
+
+**Kontakt:** [Telefon] · [E-Mail-Adresse]
+
+**Verantwortlich für den Inhalt:** [Name, Anschrift]
+
+[Weitere Angaben, z. B. Aufsichtsbehörde oder Register]
+`;
+  }
+  return `${head}# Datenschutzerklärung
+
+## Verantwortliche Stelle
+
+${who}
+
+[E-Mail-Adresse, Telefon]
+
+## Datenschutzbeauftragte/r
+
+[Kontakt oder Hinweis, dass keine Benennung besteht]
+
+## Welche Daten verarbeitet werden
+
+### Foto-Links (Upload-Seite)
+
+[Hochgeladene Dateien, abgefragte Angaben, IP-Adresse zur Missbrauchsabwehr]
+
+### Anmeldung in BlaulichtCMS
+
+[Konten der Mitarbeitenden, Anmelde- und Aktivitätsprotokoll]
+
+## Zwecke und Rechtsgrundlagen
+
+[Zweck je Verarbeitung und Rechtsgrundlage]
+
+## Empfänger und Übermittlung in Drittländer
+
+[z. B. Veröffentlichung auf der Website und in sozialen Medien, Dienstleister]
+
+## Speicherdauer
+
+[Fristen, siehe Einstellungen → Datenschutz]
+
+## Ihre Rechte
+
+[Rechte der Betroffenen und zuständige Aufsichtsbehörde]
+
+## Stand
+
+[Datum]
+`;
+}
+
+function LegalTextField({ k, path, label, max, controller, v, set, ro }: { k: "legal.privacy_text" | "legal.imprint_text"; path: string; label: string; max: number; controller: string; v: Values; set: (k: string, x: unknown) => void; ro: boolean }) {
+  const ask = useConfirm();
+  const [preview, setPreview] = useState(false);
+  const id = `s-${k.replace(/\W/g, "-")}`;
+  const text = String(v[k] ?? "");
+  const insert = async () => {
+    if (text.trim() && !(await ask({ title: "Vorlage einfügen?", text: "Der bisherige Text wird durch die Vorlage ersetzt.", confirmLabel: "Ersetzen" }))) return;
+    set(k, legalTemplate(k, controller));
+    setPreview(false);
+  };
+  return (
+    <FieldWrap
+      label={label}
+      htmlFor={id}
+      help={`Markdown (# Überschrift, **fett**, - Liste, [Link](https://…)); HTML wird nicht übernommen. Öffentlich ohne Anmeldung unter ${path}; leer = Seite und Links ausgeblendet. ${text.length.toLocaleString("de-DE")} / ${max.toLocaleString("de-DE")} Zeichen.`}
+      labelAction={
+        <div className="flex items-center gap-1.5">
+          {!ro && (
+            <Button size="sm" icon="FileText" onClick={insert}>
+              Vorlage einfügen
+            </Button>
+          )}
+          <Button size="sm" icon={preview ? "Pencil" : "Eye"} onClick={() => setPreview((p) => !p)} aria-pressed={preview}>
+            {preview ? "Bearbeiten" : "Vorschau"}
+          </Button>
+        </div>
+      }
+    >
+      {text.includes(TEMPLATE_MARK) && (
+        <Notice tone="warning">Der Text enthält noch den Vorlagenhinweis. Bitte alle Angaben prüfen, ergänzen und den Hinweis entfernen.</Notice>
+      )}
+      {preview ? (
+        <div className="border border-line rounded-control p-4 bg-bg min-h-[120px] max-h-[480px] overflow-y-auto">
+          {text.trim() ? <LegalMarkdown text={text} /> : <p className="m-0 text-sm text-fg-muted">Noch kein Text hinterlegt.</p>}
+        </div>
+      ) : (
+        <Textarea id={id} rows={10} maxLength={max} disabled={ro} value={text} onChange={(e) => set(k, e.target.value)} />
+      )}
+      {text.trim() && (
+        <a href={path} target="_blank" rel="noopener" className="text-meta self-start">
+          Gespeicherte Seite öffnen
+        </a>
+      )}
+    </FieldWrap>
   );
 }
 

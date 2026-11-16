@@ -6,6 +6,7 @@ import { useAuth } from '../../lib/auth';
 import { Button, FieldWrap, Input, Notice, Select, Spinner } from '../../components/ui/core';
 import { CopyButton } from '../../components/ui/overlays';
 import { Icon } from '../../components/ui/Icon';
+import { LegalLinks } from '../../components/legal/LegalLinks';
 
 function AuthLayout({ title, subtitle, children }: { title: string; subtitle?: ReactNode; children: ReactNode }) {
   return (
@@ -41,6 +42,7 @@ function AuthLayout({ title, subtitle, children }: { title: string; subtitle?: R
             <li><strong className="text-fg">Konto gesperrt:</strong> Die Meldung unterscheidet nicht zwischen falschem Passwort und Sperre. Nach mehreren Fehlversuchen 15 Minuten warten oder einen Admin um Entsperren bitten.</li>
           </ul>
         </details>
+        <LegalLinks />
       </main>
     </div>
   );

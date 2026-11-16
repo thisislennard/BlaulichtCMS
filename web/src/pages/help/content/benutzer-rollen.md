@@ -205,7 +205,7 @@ Alle Rechte, nach Bereichen. Die Tabelle entspricht dem Rollen-Editor; „Setzt 
 | Einstellungen ansehen | lesen | Alle Einstellungen und die Vorschau der Löschfristen ansehen (ohne Passwörter). | – |
 | Allgemeine Einstellungen ändern | ändern | Name der Instanz, Organisation, Adresse, Zeitzone. | Einstellungen ansehen |
 | Sicherheitseinstellungen ändern | kritisch | Zwei-Faktor-Pflicht, Sitzungen, Kontosperre, Passwortlänge, Sicherheitsmeldungen, Gültigkeit von Einladungen, interne Zieladressen. | Einstellungen ansehen |
-| Datenschutzeinstellungen ändern | kritisch | Löschfristen, Aufbewahrung der Protokolle, Angaben zu Verantwortlichen und Datenschutzhinweise. | Einstellungen ansehen |
+| Datenschutzeinstellungen ändern | kritisch | Löschfristen, Aufbewahrung der Protokolle, Angaben zu Verantwortlichen, Datenschutzhinweise, Datenschutzerklärung und Impressum. | Einstellungen ansehen |
 | Medieneinstellungen ändern | ändern | Dateigrößen, erlaubte Dateitypen, Vorgaben für Upload-Links, Prüftiefe und Speichergrenzen. | Einstellungen ansehen |
 | Redaktionseinstellungen ändern | kritisch | Vier-Augen-Prinzip und weitere Vorgaben für Redaktion und Freigabe. | Einstellungen ansehen |
 | Systemeinstellungen ändern | ändern | Parallele Aufträge, Ausführung der Automationen und weitere technische Einstellungen. | Einstellungen ansehen |

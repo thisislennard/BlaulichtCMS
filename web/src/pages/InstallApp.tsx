@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
 import { Button, Notice } from '../components/ui/core';
 import { Icon } from '../components/ui/Icon';
+import { LegalLinks } from '../components/legal/LegalLinks';
 
 /**
  * PWA-Installationslink – bewusst getrennt von persönlichen Einladungen.
@@ -45,6 +46,7 @@ export default function InstallApp() {
           </Notice>
         )}
         <Link to="/login">Zur Anmeldung</Link>
+        <LegalLinks className="justify-start" />
       </main>
     </div>
   );

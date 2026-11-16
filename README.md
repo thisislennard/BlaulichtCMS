@@ -199,6 +199,8 @@ flowchart LR
 - **Löschfristen** für Sammlungen, Upload-Links, Warnvorgänge, Einsatzmeldungen (FE2, Feuersoftware Connect) und Protokolle – mit Vorschau „Was würde
   gelöscht?“.
 - **Vorlagen** für Verarbeitungsverzeichnis und Datenschutz-Folgenabschätzung, Hinweise zu Empfängern wie Meta.
+- **Datenschutzerklärung und Impressum** als eigene öffentliche Seiten (`/datenschutz`, `/impressum`), gepflegt in den
+  Einstellungen mit Vorschau und neutraler Vorlage; verlinkt auf Anmeldung, Upload-Seite und in der App.
 
 ### Betrieb
 

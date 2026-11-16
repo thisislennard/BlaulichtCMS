@@ -41,6 +41,7 @@ const AutomationOutputs = lazy(() => import('./pages/automations/Outputs'));
 const Help = lazy(() => import('./pages/help/Help'));
 const PrintSheet = lazy(() => import('./pages/print/PrintSheet'));
 const InstallApp = lazy(() => import('./pages/InstallApp'));
+const LegalPage = lazy(() => import('./pages/public/LegalPage'));
 
 function Loading() {
   return <SkeletonRows rows={6} className="pt-2" />;
@@ -83,6 +84,9 @@ const router = createBrowserRouter([
   // Öffentliche Upload-Seite (ohne Konto)
   { path: '/u/:token', element: <UploadPage /> },
   { path: '/app', element: <Suspense fallback={null}><InstallApp /></Suspense> },
+  // Datenschutzerklärung und Impressum (#187), ohne Anmeldung
+  { path: '/datenschutz', element: <Suspense fallback={null}><LegalPage kind="datenschutz" /></Suspense> },
+  { path: '/impressum', element: <Suspense fallback={null}><LegalPage kind="impressum" /></Suspense> },
   {
     path: '/drucken',
     element: (

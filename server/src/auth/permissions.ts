@@ -148,7 +148,7 @@ export const PERMISSIONS: PermissionDef[] = [
   P('settings.view', 'settings', 'read', 'Einstellungen ansehen', 'Alle Einstellungen und die Vorschau der Löschfristen ansehen (ohne Passwörter).'),
   P('settings.general', 'settings', 'write', 'Allgemeine Einstellungen ändern', 'Name der Instanz, Organisation, Adresse, Zeitzone.', ['settings.view'], true),
   P('settings.security', 'settings', 'critical', 'Sicherheitseinstellungen ändern', 'Zwei-Faktor-Pflicht, Sitzungen, Kontosperre, Passwortlänge, Sicherheitsmeldungen, Gültigkeit von Einladungen, interne Zieladressen.', ['settings.view'], true),
-  P('settings.privacy', 'settings', 'critical', 'Datenschutzeinstellungen ändern', 'Löschfristen, Aufbewahrung der Protokolle, Angaben zu Verantwortlichen und Datenschutzhinweise.', ['settings.view'], true),
+  P('settings.privacy', 'settings', 'critical', 'Datenschutzeinstellungen ändern', 'Löschfristen, Aufbewahrung der Protokolle, Angaben zu Verantwortlichen, Datenschutzhinweise, Datenschutzerklärung und Impressum.', ['settings.view'], true),
   P('settings.media', 'settings', 'write', 'Medieneinstellungen ändern', 'Dateigrößen, erlaubte Dateitypen, Vorgaben für Upload-Links, Prüftiefe und Speichergrenzen.', ['settings.view'], true),
   P('settings.editorial', 'settings', 'critical', 'Redaktionseinstellungen ändern', 'Vier-Augen-Prinzip und weitere Vorgaben für Redaktion und Freigabe.', ['settings.view'], true),
   P('settings.system', 'settings', 'write', 'Systemeinstellungen ändern', 'Parallele Aufträge, Ausführung der Automationen und weitere technische Einstellungen.', ['settings.view'], true),
@@ -324,6 +324,7 @@ export function settingPermission(key: string): string {
       return 'settings.general';
     case 'privacy':
     case 'retention':
+    case 'legal':
       return 'settings.privacy';
     case 'media':
       return 'settings.media';

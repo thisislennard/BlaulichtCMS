@@ -127,7 +127,10 @@ was fällig ist. Jeder Lauf steht im Audit (`retention.run`).
 
 - **Information (Art. 13):** Abschnitt „Datenschutz“ auf der Upload-Seite, Zeile auf dem Aushang; Angaben unter
   *Einstellungen → Datenschutz*. Die Datenschutzerklärung der Website muss Upload, Veröffentlichung, Meta und
-  Cookies abdecken.
+  Cookies abdecken. Alternativ lassen sich Datenschutzerklärung und Impressum direkt in BlaulichtCMS hinterlegen
+  (*Einstellungen → Datenschutz*, öffentlich unter `/datenschutz` und `/impressum`); ohne eigene Adresse verlinken
+  Upload-Seite und Aushang dann die Seite `/datenschutz`. Die eingebaute Vorlage ist nur eine Gliederung mit
+  Platzhaltern und ersetzt keine rechtliche Prüfung.
 - **Auskunft und Löschung (Art. 15, 17):** *Verwaltung → Datenschutzanfragen* (Recht „Datenschutzanfragen
   bearbeiten“): Suche nach Name, E-Mail, Telefon, Dateiname, Hinweistext, Vorgangsnummer oder IP über alle Bereiche,
   Export als ZIP, Löschen/Pseudonymisieren je Treffer. Hochladende erhalten nach dem Upload eine Vorgangsnummer.

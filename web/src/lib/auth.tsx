@@ -25,8 +25,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     queryFn: fetchMe,
     staleTime: 60_000,
     retry: false,
-    // Öffentliche Upload-Seite: Hochladende haben kein Konto – keine Sitzungsabfrage (sonst 401 in der Konsole)
-    enabled: !window.location.pathname.startsWith('/u/'),
+    // Öffentliche Seiten (Upload, Datenschutz, Impressum): ohne Konto – keine Sitzungsabfrage (sonst 401 in der Konsole)
+    enabled: !/^\/(u\/|datenschutz$|impressum$)/.test(window.location.pathname),
   });
   const me = q.data ?? null;
 

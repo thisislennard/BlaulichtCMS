@@ -41,6 +41,12 @@ Die Angaben stehen unter **Einstellungen → Datenschutz** (verantwortliche Stel
 
 Standardmäßig fragt die Upload-Seite nur einen freiwilligen Hinweis ab und bewusst keinen Namen. Fragt ein Link Name, E-Mail-Adresse, Aufnahmeort oder -datum ab (siehe „Erweiterte Optionen“), nennt der Datenschutzabschnitt diese Angaben automatisch samt Löschfrist (Einstellungen → Datenschutz → „Angaben der Hochladenden“, Standard 12 Monate; die Dateien bleiben).
 
+## Datenschutzerklärung und Impressum
+
+Unter **Einstellungen → Datenschutz** lassen sich eine eigene **Datenschutzerklärung** und ein **Impressum** als Text hinterlegen (Markdown: `# Überschrift`, `**fett**`, `- Liste`, `[Link](https://…)`; HTML wird nicht übernommen). **Vorschau** zeigt die Darstellung, **Vorlage einfügen** setzt eine neutrale Gliederung mit Platzhaltern in eckigen Klammern ein – sie ist ausdrücklich als Vorlage markiert, ersetzt keine rechtliche Prüfung und muss vollständig angepasst werden. Solange der Vorlagenhinweis im Text steht, erinnert die Einstellungsseite daran.
+
+Die Texte sind ohne Anmeldung unter `/datenschutz` und `/impressum` erreichbar und unten auf der Anmeldeseite, der Upload-Seite, der App-Installationsseite und in der App verlinkt. Ist ein Feld leer, zeigt die Seite „Noch kein Text hinterlegt“ und die Links sind ausgeblendet. Ist keine eigene Adresse für die Datenschutzerklärung eingetragen, verlinken Upload-Seite und Aushang die eigene Seite `/datenschutz`. Ändern darf, wer das Recht **Datenschutzeinstellungen ändern** hat.
+
 ## Erweiterte Optionen je Link
 
 Beim Anlegen und unter **Bearbeiten** öffnet „Erweitert“ weitere Einstellungen (wie in LiFeOS):

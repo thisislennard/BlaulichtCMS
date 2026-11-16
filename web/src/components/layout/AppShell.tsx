@@ -11,6 +11,7 @@ import { Icon } from '../ui/Icon';
 import { Popover } from '../ui/overlays';
 import { CommandPalette } from './CommandPalette';
 import { useLive } from '../../lib/live';
+import { LegalLinks } from '../legal/LegalLinks';
 
 /* Seitentitel/Brotkrumen: Seiten ohne eigenen Menüpunkt (Editor, Details) setzen ihn selbst. */
 interface PageMeta {
@@ -404,6 +405,7 @@ export function AppShell() {
         <main id="main" className={cx('flex-1 min-w-0', meta.fullBleed ? '' : 'w-full max-w-content mx-auto px-4 md:px-8 pt-8 pb-14 flex flex-col gap-6')}>
           <Outlet />
         </main>
+        {!meta.fullBleed && <LegalLinks className="pb-6 print:hidden" />}
       </div>
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
     </PageMetaCtx.Provider>

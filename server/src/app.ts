@@ -75,6 +75,7 @@ import { connectionRoutes } from './routes/connections.js';
 import { privacyRoutes } from './routes/privacy.js';
 import { updateRoutes } from './routes/updates.js';
 import { automationRoutes } from './routes/automations.js';
+import { legalRoutes } from './routes/legal.js';
 import { healthStatus, isLocalHealthRequest, publicHealth } from './routes/health.js';
 
 export const PERMISSIONS_POLICY = [
@@ -245,6 +246,7 @@ export async function buildApp(): Promise<FastifyInstance> {
       await api.register(privacyRoutes);
       await api.register(updateRoutes);
       await api.register(automationRoutes);
+      await api.register(legalRoutes);
     },
     { prefix: '/api/v1' },
   );

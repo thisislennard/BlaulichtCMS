@@ -1,4 +1,5 @@
 import { many, pool, type Queryable } from '../db/pool.js';
+import { config } from '../config.js';
 
 /**
  * Systemeinstellungen mit Standardwerten. Neue Einstellungen nur hier ergänzen – und nur, wenn sie auch ausgewertet
@@ -53,6 +54,12 @@ export const DEFAULT_SETTINGS = {
   'privacy.dpo_contact': '',
   'privacy.policy_url': '',
   'privacy.upload_notice': '',
+  /**
+   * Eigene Datenschutzerklärung und eigenes Impressum (#187) als Markdown, öffentlich unter /datenschutz und /impressum
+   * (routes/legal.ts). Leer = Seite zeigt „noch kein Text hinterlegt“, Links darauf sind ausgeblendet.
+   */
+  'legal.privacy_text': '',
+  'legal.imprint_text': '',
 
   'security.require_2fa_admins': true,
   'security.require_2fa_all': false,
@@ -231,6 +238,8 @@ export const SETTING_TEXT_MAX: Record<string, number> = {
   'privacy.policy_url': 500,
   'privacy.upload_notice': 2000,
   'media.done_text': 1000,
+  'legal.privacy_text': 50_000,
+  'legal.imprint_text': 20_000,
 };
 
 /** Datenschutzangaben für öffentliche Seiten (Upload-Seite, Aushang) – #96. */
@@ -238,11 +247,18 @@ export function privacyInfo(s: Settings) {
   return {
     controller: String(s['privacy.controller'] ?? '').trim(),
     dpo_contact: String(s['privacy.dpo_contact'] ?? '').trim(),
-    policy_url: String(s['privacy.policy_url'] ?? '').trim(),
+    // Ohne eigene Adresse, aber mit eigener Datenschutzerklärung (#187): die öffentliche Seite /datenschutz
+    policy_url: String(s['privacy.policy_url'] ?? '').trim() || (String(s['legal.privacy_text'] ?? '').trim() ? legalUrl(s, '/datenschutz') : ''),
     notice: String(s['privacy.upload_notice'] ?? '').trim(),
     ip_retention_days: s['privacy.upload_ip_retention_days'],
     collection_retention_days: s['privacy.collection_retention_days'],
   };
+}
+
+/** Adresse einer öffentlichen Seite von BlaulichtCMS (vollständig, wenn die öffentliche Adresse bekannt ist). */
+export function legalUrl(s: Settings, pathname: '/datenschutz' | '/impressum'): string {
+  const base = String(s['general.public_url'] || config.publicUrl || '').replace(/\/+$/, '');
+  return `${base}${pathname}`;
 }
 
 /** Pflichtangaben fehlen: weder verantwortliche Stelle noch Datenschutzerklärung eingetragen. */
