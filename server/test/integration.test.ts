@@ -6439,7 +6439,7 @@ describe('In-App-Updates aus GitHub-Releases', () => {
   fs.writeFileSync(path.join(runtime, 'node_modules', 'dummy', 'index.js'), 'module.exports = 1;\n');
   fs.writeFileSync(path.join(runtime, 'package-lock.json'), JSON.stringify(lock));
 
-  type Release = { version: string; zip: Buffer; sha: string; sig: string };
+  type Release = { version: string; zip: Buffer; sha: string; sig: string; notes: string };
   function buildRelease(version: string, opts: { minImage?: string; lock?: unknown; signWith?: crypto.KeyObject; cliOutput?: string; versionFile?: string } = {}): Release {
     const z = new AdmZip();
     const add = (name: string, data: string | Buffer) => z.addFile(name, Buffer.isBuffer(data) ? data : Buffer.from(data));
@@ -6458,7 +6458,9 @@ describe('In-App-Updates aus GitHub-Releases', () => {
     const zip = z.toBuffer();
     const sha = crypto.createHash('sha256').update(zip).digest('hex');
     const sig = crypto.sign(null, Buffer.from(`BlaulichtCMS-Update-Signatur v1\n${sha}`), opts.signWith ?? key.privateKey).toString('base64');
-    return { version, zip, sha, sig: `# Signatur\n${sig}\n` };
+    // Versionshinweise wie von scripts/build-release.mjs: der Satz zur Mindestversion des Images steht am Ende
+    const notes = `## Neu\n\n- Testeintrag${opts.minImage ? `\n\n---\n\nInstallation: Einstellungen → Updates (signiert). Neue Image-Basis nötig ab Mindestversion ${opts.minImage}.` : ''}`;
+    return { version, zip, sha, sig: `# Signatur\n${sig}\n`, notes };
   }
 
   // Stellvertreter der GitHub-API: releases/latest, Asset-API mit 302 auf einen „Speicher“-Pfad
@@ -6475,7 +6477,7 @@ describe('In-App-Updates aus GitHub-Releases', () => {
         JSON.stringify({
           tag_name: `v${release.version}`,
           name: `BlaulichtCMS ${release.version}`,
-          body: '## Neu\n\n- Testeintrag',
+          body: release.notes,
           published_at: '2026-11-15T10:00:00Z',
           html_url: 'https://github.com/beispiel/blaulichtcms/releases/tag/v' + release.version,
           assets: [
@@ -6580,6 +6582,19 @@ describe('In-App-Updates aus GitHub-Releases', () => {
     const info = await admin.get('/updates');
     expect(info.json).toMatchObject({ available: true, lastCheckError: null });
     expect(info.json.latest.notes).toContain('Testeintrag');
+    expect(info.json.imageUpdate).toBeNull();
+    // Braucht das Release ein neueres Image (Satz in den Versionshinweisen), zeigen Oberfläche und Benachrichtigung das
+    // schon vor der Installation – samt Weg über install.sh am Host
+    // (direkt statt über POST /updates/check – dessen Abfragelimit von 6 je Minute braucht der Rest dieses Tests)
+    const { checkForUpdate } = await import('../src/updates/github.js');
+    release = buildRelease('9.9.10', { minImage: '9.9.10' });
+    await checkForUpdate();
+    expect((await admin.get('/updates')).json.imageUpdate).toEqual({ minImageVersion: '9.9.10', imageVersion: config.version });
+    const ni = await one<any>(`SELECT body FROM notifications WHERE title = 'Update verfügbar: Version 9.9.10'`);
+    expect(ni.body).toMatch(/neues Docker-Image \(mindestens 9\.9\.10.*install\.sh/);
+    release = buildRelease('9.9.9', { minImage: '0.1.0' });
+    await checkForUpdate();
+    expect((await admin.get('/updates')).json.imageUpdate).toBeNull();
     // Keine Anmeldung ohne Token
     expect(seen.filter((s) => s.path.includes('/releases/latest')).every((s) => s.auth === null)).toBe(true);
     // Fehlerhafte Quelle: Fehler wird gemerkt

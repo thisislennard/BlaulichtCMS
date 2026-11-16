@@ -8,7 +8,7 @@ import { revokeSecret, storeSecret } from '../lib/secrets.js';
 import { securityAlert } from '../lib/security-alerts.js';
 import { getSettings, setSettings } from '../lib/settings.js';
 import { compareVersions } from '../updates/core.js';
-import { checkForUpdate, normalizeApiUrl, REPO_RE, UpdateSourceError } from '../updates/github.js';
+import { checkForUpdate, imageUpdateNeeded, normalizeApiUrl, REPO_RE, UpdateSourceError } from '../updates/github.js';
 import { imageInfo, installState, startInstall, supervised, updateHistory } from '../updates/installer.js';
 import { readPointer } from '../updates/releases.js';
 import { publicKeyStatus } from '../updates/signing.js';
@@ -30,13 +30,16 @@ export async function updateRoutes(app: FastifyInstance) {
     const latest = s['updates.latest'] as any;
     const image = await imageInfo();
     const pointer = readPointer(config.dataDir);
+    const available = !!latest?.version && compareVersions(latest.version, config.version) > 0;
     return {
       current: config.version,
       image: { version: image.version, nodeMajor: image.nodeMajor, postgresMajor: image.postgresMajor, ffmpeg: image.ffmpeg },
       runningFrom: pointer?.version === config.version ? 'update' : 'image',
       supervised: supervised(),
       latest: latest ?? null,
-      available: !!latest?.version && compareVersions(latest.version, config.version) > 0,
+      available,
+      // Braucht das verfügbare Release ein neueres Image? Dann geht es nur über install.sh am Docker-Host.
+      imageUpdate: available ? imageUpdateNeeded(latest, image.version) : null,
       lastCheckAt: s['updates.last_check_at'],
       lastCheckError: s['updates.last_check_error'],
       settings: {

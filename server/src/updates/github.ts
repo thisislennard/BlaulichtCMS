@@ -5,7 +5,7 @@ import { log } from '../lib/log.js';
 import { notify } from '../lib/notify.js';
 import { readSecret } from '../lib/secrets.js';
 import { getSettings, setSettings } from '../lib/settings.js';
-import { compareVersions, parseVersion, ZIP_LIMITS } from './core.js';
+import { compareVersions, IMAGE_UPDATE_HINT, minImageFromNotes, parseVersion, ZIP_LIMITS } from './core.js';
 
 /**
  * Update-Quelle GitHub-Releases (wie LiFeOS): `GET /repos/<besitzer>/<name>/releases/latest`, Dateien über die
@@ -33,6 +33,18 @@ interface AssetRef {
 }
 
 export class UpdateSourceError extends Error {}
+
+/** Version des laufenden Images (vom Supervisor gesetzt; ohne Container die Programmversion). */
+export const runningImageVersion = () => process.env.BLAULICHTCMS_IMAGE_VERSION || config.version;
+
+/**
+ * Braucht das Release ein neueres Image als das laufende? Vorab aus den Versionshinweisen (siehe minImageNote) – null,
+ * wenn nicht oder unbekannt. Die Installation prüft ohnehin manifest.json und die Laufzeit-Abhängigkeiten.
+ */
+export function imageUpdateNeeded(latest: Pick<ReleaseInfo, 'notes'> | null, imageVersion = runningImageVersion()): { minImageVersion: string; imageVersion: string } | null {
+  const min = latest ? minImageFromNotes(latest.notes) : null;
+  return min && compareVersions(min, imageVersion) > 0 ? { minImageVersion: min, imageVersion } : null;
+}
 
 const isTestLocal = (u: URL) => process.env.NODE_ENV === 'test' && u.protocol === 'http:' && ['127.0.0.1', 'localhost', '[::1]'].includes(u.hostname);
 
@@ -152,10 +164,13 @@ export async function checkForUpdate(): Promise<CheckResult> {
     const s = await getSettings(true);
     if (available && s['updates.notified_version'] !== latest!.version) {
       await setSettings({ 'updates.notified_version': latest!.version });
+      const image = imageUpdateNeeded(latest);
       await notify({
         kind: 'info',
         title: `Update verfügbar: Version ${latest!.version}`,
-        body: `BlaulichtCMS ${latest!.version} steht bereit (installiert: ${config.version}). Installation unter Einstellungen → Updates.`,
+        body: image
+          ? `BlaulichtCMS ${latest!.version} steht bereit (installiert: ${config.version}) und braucht ein neues Docker-Image (mindestens ${image.minImageVersion}, laufend ${image.imageVersion}). ${IMAGE_UPDATE_HINT}`
+          : `BlaulichtCMS ${latest!.version} steht bereit (installiert: ${config.version}). Installation unter Einstellungen → Updates.`,
         link: '/einstellungen#updates',
         permission: 'update.install',
       });

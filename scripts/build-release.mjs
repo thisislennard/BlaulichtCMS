@@ -12,8 +12,9 @@
  * wordpress-plugin/blaulichtcms-bridge/**. Keine node_modules: die Laufzeit-Abhängigkeiten kommen aus dem Image.
  *
  * Bricht ab, wenn der Tag nicht v<VERSION> ist, Build-Dateien fehlen, verbotene Dateien (.env, Schlüssel, Daten)
- * enthalten wären, ein Text nach privatem Schlüssel aussieht oder sich Image-relevante Dateien seit dem letzten Tag
- * geändert haben, ohne dass MIN_IMAGE_VERSION auf die neue Version gesetzt wurde.
+ * enthalten wären, ein Text nach privatem Schlüssel aussieht oder sich Image-relevante Dateien bzw. die
+ * Laufzeit-Abhängigkeiten des Servers (package-lock.json) seit dem letzten Tag geändert haben, ohne dass
+ * MIN_IMAGE_VERSION auf die neue Version gesetzt wurde.
  */
 import crypto from 'node:crypto';
 import fs from 'node:fs';
@@ -22,7 +23,7 @@ import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import yazl from 'yazl';
 import AdmZip from 'adm-zip';
-import { checkZipEntries, forbiddenPath, parseManifest, parseVersion, zipEntryInfos } from '../server/src/updates/core.ts';
+import { checkZipEntries, compareRuntimeDependencies, forbiddenPath, minImageNote, parseManifest, parseVersion, zipEntryInfos } from '../server/src/updates/core.ts';
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const arg = (name, fallback) => {
@@ -37,7 +38,7 @@ const die = (msg) => {
 const read = (rel) => fs.readFileSync(path.join(ROOT, rel), 'utf8');
 const git = (...args) => {
   try {
-    return execFileSync('git', ['-C', ROOT, ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+    return execFileSync('git', ['-C', ROOT, ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], maxBuffer: 64 * 1024 * 1024 }).trim();
   } catch {
     return null;
   }
@@ -58,8 +59,13 @@ const IMAGE_FILES = ['Dockerfile', 'compose.yaml', 'install.sh', 'scripts/update
 const prevTag = git('describe', '--tags', '--abbrev=0', '--match', 'v*', 'HEAD^');
 if (prevTag) {
   const changed = (git('diff', '--name-only', prevTag, 'HEAD', '--', ...IMAGE_FILES) ?? '').split('\n').filter(Boolean);
+  // Laufzeit-Abhängigkeiten des Servers kommen nur mit dem Image (kein npm im Container): ohne neue Mindestversion böte
+  // die Oberfläche das Update an und bräche erst bei der Installation mit „Image-Update nötig“ ab
+  const prevLock = git('show', `${prevTag}:package-lock.json`);
+  const deps = prevLock ? compareRuntimeDependencies(JSON.parse(prevLock), JSON.parse(read('package-lock.json'))).diff : [];
+  if (deps.length) changed.push(`Laufzeit-Abhängigkeiten des Servers (${deps.slice(0, 8).join(', ')}${deps.length > 8 ? ', …' : ''})`);
   if (changed.length && minImageVersion !== version) {
-    die(`Seit ${prevTag} geändert: ${changed.join(', ')}. Diese Dateien kommen nur mit einem neuen Image an – MIN_IMAGE_VERSION auf ${version} setzen.`);
+    die(`Seit ${prevTag} geändert: ${changed.join(', ')}. Das kommt nur mit einem neuen Image an – MIN_IMAGE_VERSION auf ${version} setzen.`);
   }
 }
 
@@ -139,6 +145,6 @@ await new Promise((resolve, reject) => zip.outputStream.pipe(fs.createWriteStrea
 checkZipEntries(zipEntryInfos(new AdmZip(zipPath)));
 const digest = crypto.createHash('sha256').update(fs.readFileSync(zipPath)).digest('hex');
 fs.writeFileSync(`${zipPath}.sha256`, `${digest}  ${name}\n`);
-fs.writeFileSync(`${zipPath}.notes.md`, `${notes}\n\n---\n\nSHA-256 von \`${name}\`: \`${digest}\`\n\nInstallation: Einstellungen → Updates (signiert). Neue Image-Basis nötig ab Mindestversion ${minImageVersion}.\n`);
+fs.writeFileSync(`${zipPath}.notes.md`, `${notes}\n\n---\n\nSHA-256 von \`${name}\`: \`${digest}\`\n\nInstallation: ${minImageVersion === version ? 'neues Image nötig – am Docker-Host `sudo bash /opt/apps/blaulichtcms/install.sh`' : 'Einstellungen → Updates (signiert)'}. ${minImageNote(minImageVersion)}\n`);
 console.log(`${name}: ${files.length + 2} Dateien, ${Math.round(fs.statSync(zipPath).size / 1024)} KB`);
 console.log(`SHA-256 ${digest}`);

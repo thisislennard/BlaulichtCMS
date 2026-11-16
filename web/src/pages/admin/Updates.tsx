@@ -4,7 +4,7 @@ import { Link } from "react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { get, post, put } from "../../api/client";
 import { Badge, Button, ErrorBox, FieldWrap, Input, Notice, Switch, Table, Td, Th, cx } from "../../components/ui/core";
-import { useConfirm, useToast } from "../../components/ui/overlays";
+import { CopyButton, useConfirm, useToast } from "../../components/ui/overlays";
 import { Icon } from "../../components/ui/Icon";
 import { useAuth } from "../../lib/auth";
 import { fmtDateTime, fmtRelative } from "../../lib/format";
@@ -39,6 +39,8 @@ interface UpdatesInfo {
   supervised: boolean;
   latest: { tag: string; version: string; name: string; notes: string; publishedAt: string | null; url: string; assets: { zip: unknown; sha256: unknown; sig: unknown } } | null;
   available: boolean;
+  /** Das verfügbare Release braucht ein neueres Docker-Image (Hinweis aus den Versionshinweisen). */
+  imageUpdate: { minImageVersion: string; imageVersion: string } | null;
   lastCheckAt: string | null;
   lastCheckError: string | null;
   settings: { enabled: boolean; repo: string; apiUrl: string; checkHours: number; tokenSet: boolean };
@@ -77,7 +79,7 @@ export function UpdateAvailableNotice() {
   return (
     <Notice tone="info" icon="Download" title={`Update verfügbar: Version ${d.latest.version}`}>
       <p className="m-0">
-        Installiert ist {d.current}. {can("settings.view") && <Link to="/einstellungen#updates">Zu den Updates</Link>}
+        Installiert ist {d.current}.{d.imageUpdate && " Braucht ein neues Docker-Image – Installation am Docker-Host."} {can("settings.view") && <Link to="/einstellungen#updates">Zu den Updates</Link>}
       </p>
     </Notice>
   );
@@ -214,7 +216,9 @@ export function UpdatesSection({ manage }: { manage: boolean }) {
             )}
           </div>
           {d.latest.notes ? <Markdown source={d.latest.notes} className="text-sm max-h-[320px] overflow-auto" /> : <p className="m-0 text-sm text-fg-muted">Keine Versionshinweise.</p>}
-          {manage && (
+          {d.imageUpdate ? (
+            <ImageUpdateSteps version={d.latest.version} need={d.imageUpdate} />
+          ) : manage && (
             <div>
               <Button variant="primary" icon="Download" onClick={install} disabled={blockers.length > 0 || d.state.busy}>
                 Version {d.latest.version} installieren
@@ -284,6 +288,34 @@ export function UpdatesSection({ manage }: { manage: boolean }) {
         />
       )}
     </SectionCard>
+  );
+}
+
+const INSTALL_CMD = "sudo bash /opt/apps/blaulichtcms/install.sh";
+
+/** Das Release braucht ein neueres Image: nicht in der Oberfläche installierbar – Schritte am Docker-Host. */
+function ImageUpdateSteps({ version, need }: { version: string; need: { minImageVersion: string; imageVersion: string } }) {
+  return (
+    <Notice tone="warning" title="Neues Docker-Image nötig">
+      <p className="m-0">
+        Version {version} braucht mindestens Image {need.minImageVersion}, der Container läuft mit Image {need.imageVersion}. Geänderte Abhängigkeiten und Änderungen am Container kommen nur mit einem neu gebauten Image an – in der Oberfläche lässt sich dieses Update deshalb nicht installieren.
+      </p>
+      <ol className="m-0 mt-2 pl-5 list-decimal flex flex-col gap-1.5">
+        <li>Am Docker-Host anmelden (z. B. per SSH).</li>
+        <li>
+          Das Installationsskript ausführen (bei einem anderen Installationsordner dessen <code className="font-mono">install.sh</code>):
+          <span className="mt-1 flex flex-wrap items-center gap-2">
+            <code className="font-mono text-fg bg-card border border-line rounded-chip px-2 py-1 break-all">{INSTALL_CMD}</code>
+            <CopyButton size="sm" value={INSTALL_CMD} label="Befehl kopieren" />
+          </span>
+        </li>
+        <li>Das Skript holt Version {version}, baut das Image (einige Minuten), schaltet den Wartungsmodus ein, sichert alles und wechselt – bei einem Fehler automatisch zurück. Daten, Einstellungen und .env bleiben erhalten; beim Wechsel ist BlaulichtCMS etwa eine Minute nicht erreichbar.</li>
+        <li>Danach diese Seite neu laden: Als laufende Version steht {version} „aus dem Image“.</li>
+      </ol>
+      <p className="m-0 mt-2">
+        <Link to="/hilfe/updates#wenn-ein-update-ein-neues-image-braucht">Ablauf in der Hilfe</Link>
+      </p>
+    </Notice>
   );
 }
 

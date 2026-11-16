@@ -30,7 +30,7 @@ Läuft der Token ab, meldet „Jetzt prüfen“ einen Anmeldefehler – dann ein
 **„Version X installieren“** – BlaulichtCMS
 
 1. lädt das Release und prüft Prüfsumme und **Signatur**: Nur Pakete aus dem offiziellen Release-Ablauf werden angenommen, ältere oder gleiche Versionen nie;
-2. prüft, ob das Paket zum laufenden Container passt. Braucht es ein neueres Image, erscheint der Hinweis, das Installationsskript am Host auszuführen;
+2. prüft, ob das Paket zum laufenden Container passt (Mindestversion des Images, Laufzeit-Abhängigkeiten). Braucht ein Release ein neueres Image, steht das schon nach der Prüfung da: Statt „Installieren“ zeigt die Karte **„Neues Docker-Image nötig“** mit den Schritten am Host (siehe [Wenn ein Update ein neues Image braucht](#wenn-ein-update-ein-neues-image-braucht));
 3. schaltet den **Wartungsmodus** ein, wartet auf die Vorabprüfung und erstellt eine **Datenbanksicherung**;
 4. startet mit der neuen Version neu (etwa eine Minute nicht erreichbar). Die Fortschrittsanzeige wartet auf den Neustart.
 
@@ -59,6 +59,15 @@ sudo bash /opt/apps/blaulichtcms/install.sh
 ```
 
 Das Installationsskript holt den neuen Stand, baut das Image und ruft damit `scripts/update.sh … --rollback` auf. Das Update-Skript schaltet den Wartungsmodus ein, wartet auf „bereit“, legt eine vollständige Sicherung außerhalb des Volumes an, wechselt das Image, prüft den Start und beendet den Wartungsmodus. Mit `--rollback` kehrt es bei einem Fehler automatisch zum alten Image **mit** dem Datenstand von vor dem Update zurück. Bricht das Update vor dem Imagewechsel ab, wird der Wartungsmodus wieder beendet und der bisherige Stand läuft weiter.
+
+### Wenn ein Update ein neues Image braucht
+
+Manche Versionen bringen geänderte Abhängigkeiten oder Änderungen am Container mit. Die kommen nur mit einem neu gebauten Image an, deshalb lässt sich so ein Update nicht in der Oberfläche installieren. Unter [Einstellungen → Updates](/einstellungen#updates) steht dann „Neues Docker-Image nötig“ mit der nötigen und der laufenden Image-Version. So geht es:
+
+1. Am Docker-Host anmelden (z. B. per SSH).
+2. `sudo bash /opt/apps/blaulichtcms/install.sh` ausführen (bei einem anderen Installationsordner dessen `install.sh`). `--rebuild` ist dafür nicht nötig.
+3. Das Skript holt die neue Version, baut das Image (einige Minuten), schaltet den Wartungsmodus ein, sichert alles und wechselt – bei einem Fehler automatisch zurück. Daten, Einstellungen und `.env` bleiben erhalten; beim Wechsel ist BlaulichtCMS etwa eine Minute nicht erreichbar.
+4. Danach die Seite neu laden: Unter Einstellungen → Updates steht die neue Version „aus dem Image“. Folgende Versionen ohne neues Image lassen sich wieder in der Oberfläche installieren.
 
 Ohne neuen Programmstand **monatlich** `sudo bash /opt/apps/blaulichtcms/install.sh --rebuild` ausführen: Das Image wird mit aktuellen Basis-Images (Sicherheitsupdates von Betriebssystem, Node.js und PostgreSQL) neu gebaut und mit Sicherung und Rückweg gewechselt.
 

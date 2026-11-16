@@ -13,7 +13,7 @@ import { getSettings } from '../lib/settings.js';
 import { runBackup } from '../ops/backup.js';
 import { setMaintenance, updatePreflight } from '../ops/update.js';
 import { checkZipEntries, compareRuntimeDependencies, compareVersions, compatibilityProblem, IMAGE_UPDATE_HINT, parseManifest, sha256File, UpdateError, zipEntryInfos, type ImageInfo } from './core.js';
-import { downloadRelease, fetchLatestRelease } from './github.js';
+import { downloadRelease, fetchLatestRelease, runningImageVersion } from './github.js';
 import { cleanupReleases, readActivation, readPointer, releasesDir, writeActivation, writePending, type PendingActivation } from './releases.js';
 import { verifyDigestSignature } from './signing.js';
 
@@ -105,7 +105,7 @@ export async function imageInfo(): Promise<ImageInfo & { root: string }> {
     ffmpeg = false;
   }
   return {
-    version: process.env.BLAULICHTCMS_IMAGE_VERSION || config.version,
+    version: runningImageVersion(),
     root: process.env.BLAULICHTCMS_IMAGE_ROOT || APP_ROOT,
     nodeMajor: Number(process.versions.node.split('.')[0]),
     postgresMajor,

@@ -1034,6 +1034,15 @@ describe('In-App-Updates: Versionen, Paket, Signatur, Manifest, Zeiger', () => {
     expect(() => parseManifest('kein json')).toThrow(/JSON/);
   });
 
+  it('Mindest-Image vorab aus den Versionshinweisen (Satz von build-release)', async () => {
+    const { minImageFromNotes, minImageNote } = await import('../src/updates/core.js');
+    expect(minImageFromNotes(`## Neu\n\n---\n\nInstallation: Einstellungen → Updates (signiert). ${minImageNote('0.4.2')}\n`)).toBe('0.4.2');
+    // Text eines bereits veröffentlichten Releases (v0.4.0)
+    expect(minImageFromNotes('Installation: Einstellungen → Updates (signiert). Neue Image-Basis nötig ab Mindestversion 0.2.0.')).toBe('0.2.0');
+    expect(minImageFromNotes('## Neu\n\n- ohne Hinweis')).toBeNull();
+    expect(minImageFromNotes(null)).toBeNull();
+  });
+
   it('Laufzeit-Abhängigkeiten: nur der Server-Baum zählt', async () => {
     const { compareRuntimeDependencies, runtimeDependencies } = await import('../src/updates/core.js');
     const lock = (over: Record<string, any> = {}) => ({

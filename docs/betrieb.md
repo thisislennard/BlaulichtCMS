@@ -668,6 +668,11 @@ Für normale Releases muss niemand an den Host. Unter **Einstellungen → Update
   neuen Version erhält „Updates einstellen und installieren“ einmal je Version eine Benachrichtigung; der Systemstatus zeigt
   „Update verfügbar: Version X“. Installiert wird **nie automatisch**. Die Prüfung sendet außer der Versionsangabe im
   User-Agent keine Daten; wer keinen Abruf nach außen möchte, schaltet „Automatisch prüfen“ aus.
+- **Neues Image nötig?** Die Versionshinweise jedes Releases enden mit „Neue Image-Basis nötig ab Mindestversion X“
+  (`scripts/build-release.mjs`). Ist X neuer als das laufende Image, zeigen Einstellungen → Updates, Systemstatus und
+  Benachrichtigung das schon bei der Prüfung an: Karte **„Neues Docker-Image nötig“** mit den Schritten am Host statt
+  der Schaltfläche „Installieren“ (siehe [Neues Image für eine bestehende Installation](#neues-image-für-eine-bestehende-installation)).
+  Maßgeblich bleibt die Prüfung des signierten Pakets (Schritte 3 und 4).
 - **Installation** (Recht „Updates einstellen und installieren“, Passwortbestätigung, auditiert, Sicherheitsmeldung):
   1. ZIP, `.sha256` und `.sig` über die Asset-API laden (Größen- und Zeitgrenzen, SSRF-Schutz). Die Weiterleitung zum
      Dateispeicher von GitHub wird ohne `Authorization` und nur über HTTPS verfolgt.
@@ -676,8 +681,8 @@ Für normale Releases muss niemand an den Host. Unter **Einstellungen → Update
      falscher Signatur, bei gleicher oder älterer Version: Abbruch.
   3. Paket prüfen: keine absoluten Pfade, kein `..`, keine symbolischen Links, keine `.env`/Schlüssel/`node_modules`,
      nur erlaubte Orte, Größen- und Dateigrenzen, Pflichtdateien. `manifest.json` nennt die Mindestversion des Images
-     und dessen Anforderungen (Node.js, PostgreSQL-Hauptversion, ffmpeg). Ist das Image älter: Abbruch mit dem Hinweis
-     `sudo bash /opt/apps/blaulichtcms/install.sh` (ohne neuen Programmstand mit `--rebuild`).
+     und dessen Anforderungen (Node.js, PostgreSQL-Hauptversion, ffmpeg). Ist das Image älter: Abbruch mit dem Hinweis,
+     am Host `sudo bash /opt/apps/blaulichtcms/install.sh` auszuführen.
   4. **Laufzeit-Abhängigkeiten:** Das Image enthält kein npm (und keinen Compiler für native Module wie sharp und
      argon2). Die neuen Programmdateien laufen deshalb mit einer Kopie der `node_modules` des laufenden Codes – nur
      wenn die Laufzeit-Abhängigkeiten des Servers laut `package-lock.json` gleich sind. Sonst: „Image-Update nötig“.
@@ -711,6 +716,32 @@ weiter.
 dessen Version mindestens so neu wie das installierte In-App-Update, läuft wieder der Image-Code. Die Volume-Sicherung
 von `update.sh` enthält `/data/releases` mit.
 
+### Neues Image für eine bestehende Installation
+
+Setzt ein Release `MIN_IMAGE_VERSION` auf seine eigene Version (geänderte Laufzeit-Abhängigkeiten des Servers,
+`Dockerfile`, Supervisor, Compose oder Skripte), kommt es nur über `install.sh` am Docker-Host an – auch wenn die
+Installation bisher über die Oberfläche aktualisiert wurde:
+
+1. **Oberfläche:** Einstellungen → Updates zeigt beim verfügbaren Release die Karte „Neues Docker-Image nötig“
+   (mindestens nötige und laufende Image-Version, Befehl zum Kopieren) statt „Installieren“; Systemstatus und
+   Benachrichtigung sagen dasselbe. Ein über die API trotzdem gestarteter Versuch bricht nach Download und
+   Signaturprüfung ohne jede Änderung ab („Dieses Update braucht ein neueres Docker-Image …“ bzw. „Image-Update
+   nötig …“, Eintrag „abgebrochen“ im Update-Protokoll).
+2. **Am Docker-Host:** `sudo bash /opt/apps/blaulichtcms/install.sh` (anderer Installationsordner: dessen `install.sh`).
+   `--rebuild` ist dafür nicht nötig – die neue Version bekommt ohnehin einen neuen Image-Namen.
+3. **Was das Skript tut:** `git fetch --tags`, neuesten Release-Tag auf `main` wählen (Kanal `release`, Standard;
+   Signatur- und CI-Prüfung optional), auschecken, Image `blaulichtcms:<version>-<commit>` mit `--pull` bauen (einige
+   Minuten, Protokoll `build.log`), dann `scripts/update.sh … --rollback`: Vorabprüfung und Wartungsmodus, Warten auf
+   laufende Aufträge, verschlüsselte Volume-Sicherung nach `/opt/apps/blaulichtcms-sicherungen/vor-update`, Wechsel von
+   `BLAULICHTCMS_IMAGE` in `.env`, Neustart mit Migrationen, Healthcheck und Selbsttest, Wartungsmodus aus. Bei einem
+   Fehler automatisch zurück zum alten Image mit dem Datenstand von vor dem Update.
+4. **Was bleibt:** `.env`, Datenvolume, Master- und Sicherungsschlüssel. Ein früher per In-App-Update installiertes
+   Release wird nicht mehr verwendet – das neue Image ist mindestens so neu, der Supervisor entfernt den Zeiger und
+   startet den Code des Images. Die Release-Ordner in `/data/releases` begrenzt das nächste In-App-Update wieder auf
+   die drei neuesten.
+5. **Danach:** Einstellungen → Updates zeigt „Laufende Version X (aus dem Image)“. Folgende Releases ohne neues Image
+   lassen sich wieder in der Oberfläche installieren.
+
 ### In-App-Update: Rückweg von Hand
 
 Scheitert auch der automatische Rückweg (die vorige Version startet nach dem Zurückspielen nicht), zeigt der Webport
@@ -733,7 +764,9 @@ Meldet der Start danach „Datenstand neuer als dieses Programm“, die Sicherun
 1. `VERSION`, `server/package.json` und `web/package.json` erhöhen. Ändert sich etwas, das nur mit dem Image ankommt
    (`Dockerfile`, `compose.yaml`, `install.sh`, `scripts/update.sh`, `server/src/main.ts`,
    `server/src/updates/releases.ts`, Laufzeit-Abhängigkeiten), `MIN_IMAGE_VERSION` auf die neue Version setzen –
-   `scripts/build-release.mjs` prüft das für die genannten Dateien seit dem letzten Tag.
+   `scripts/build-release.mjs` prüft das für die genannten Dateien und die Laufzeit-Abhängigkeiten des Servers
+   (`package-lock.json`) seit dem letzten Tag. In den Versionshinweisen dann die Schritte für bestehende Installationen
+   nennen (siehe [Neues Image für eine bestehende Installation](#neues-image-für-eine-bestehende-installation)).
 2. Committen, CI abwarten, Tag `v<version>` setzen (signiert, siehe oben) und pushen.
 3. `.github/workflows/release.yml` baut das Paket (`node scripts/build-release.mjs --tag v<version>`), signiert es in
    einem getrennten Job mit dem Secret `BLAULICHTCMS_UPDATE_SIGNING_KEY` und legt das GitHub-Release mit

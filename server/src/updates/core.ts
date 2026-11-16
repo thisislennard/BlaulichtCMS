@@ -186,12 +186,24 @@ export interface ImageInfo {
   ffmpeg: boolean | null;
 }
 
-export const IMAGE_UPDATE_HINT = 'Auf dem Docker-Host ausführen: sudo bash /opt/apps/blaulichtcms/install.sh (bei unverändertem Programmstand mit --rebuild).';
+export const IMAGE_UPDATE_HINT =
+  'In der Oberfläche lässt sich dieses Update nicht installieren. Am Docker-Host „sudo bash /opt/apps/blaulichtcms/install.sh“ ausführen (Standard-Installationsordner): Das Skript holt die neue Version, baut das Image und wechselt mit Sicherung und automatischem Rückweg; Daten, Einstellungen und .env bleiben erhalten.';
+
+/**
+ * Satz am Ende der Versionshinweise jedes Releases (scripts/build-release.mjs). Die Update-Prüfung liest daraus schon
+ * vor dem Herunterladen, ob ein neues Image nötig ist (Hinweis in der Oberfläche); maßgeblich bleibt manifest.json im
+ * signierten Paket.
+ */
+export const minImageNote = (version: string) => `Neue Image-Basis nötig ab Mindestversion ${version}.`;
+export function minImageFromNotes(notes: unknown): string | null {
+  const m = /Neue Image-Basis nötig ab Mindestversion (\d+\.\d+\.\d+)/.exec(String(notes ?? ''));
+  return m && parseVersion(m[1]) ? m[1] : null;
+}
 
 /** Passt das laufende Image zu den Anforderungen des Pakets? Liefert die Begründung, wenn nicht. */
 export function compatibilityProblem(m: UpdateManifest, image: ImageInfo): string | null {
   const why: string[] = [];
-  if (compareVersions(m.minImageVersion, image.version) > 0) why.push(`Image-Version mindestens ${m.minImageVersion} (vorhanden ${image.version})`);
+  if (compareVersions(m.minImageVersion, image.version) > 0) why.push(`Image-Version mindestens ${m.minImageVersion} (laufendes Image: ${image.version})`);
   if (m.requires.nodeMajor && image.nodeMajor < m.requires.nodeMajor) why.push(`Node.js ${m.requires.nodeMajor} (vorhanden ${image.nodeMajor})`);
   if (m.requires.postgresMajor && image.postgresMajor !== null && image.postgresMajor !== m.requires.postgresMajor) {
     why.push(`PostgreSQL ${m.requires.postgresMajor} (vorhanden ${image.postgresMajor})`);
