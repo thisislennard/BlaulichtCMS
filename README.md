@@ -195,6 +195,9 @@ flowchart LR
   Mailversand) – rein lesend, Verbindungstest vor Aktivierung, Passwort verschlüsselt; neue Mails werden Anfragen,
   Antworten im Mail-Verlauf werden zugeordnet, automatische Antworten/Spam/Newsletter ignoriert, Anhänge mit
   Größenlimit und Typprüfung, HTML entschärft, Empfangsprotokoll.
+- **Antworten aus BlaulichtCMS:** Antwort-Editor in der Anfrage, Versand über SMTP oder Microsoft 365 mit richtigen
+  Kopfzeilen für den Mail-Verlauf, Textbausteine mit Platzhaltern, optionale Freigabe durch eine zweite Person
+  (Standard aus), Status automatisch „beantwortet“, nie automatischer Doppelversand.
 
 ### Verbindungen
 

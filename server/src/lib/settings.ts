@@ -165,6 +165,8 @@ export const DEFAULT_SETTINGS = {
    * (ohne Zuständigkeit an alle mit „Presseanfragen bearbeiten“). 0 = nur bei Überschreitung.
    */
   'press.reminder_hours': 2,
+  /** Antworten auf Presseanfragen (#206) erst nach Freigabe durch eine zweite Person senden. Standard aus. */
+  'press.reply_approval': false,
   /**
    * Presse-Postfach (#205, press/mailbox.ts): Abruf per IMAP oder Microsoft 365 – eigene Seite mit Verbindungstest
    * (routes/press-mailbox.ts). Passwort verschlüsselt in `secrets`; `press.mailbox_state` merkt sich den Stand des Abrufs.

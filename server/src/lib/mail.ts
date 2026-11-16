@@ -225,6 +225,41 @@ export async function m365Send(c: M365Settings, m: MailOptions): Promise<{ messa
   }
 }
 
+/**
+ * Fertige MIME-Nachricht über Microsoft Graph senden (Presse-Antworten #206): Graph übernimmt dabei alle Kopfzeilen der
+ * Nachricht – auch In-Reply-To/References für den Mail-Verlauf, die das JSON-Format nicht erlaubt. Gespeichert wird in
+ * „Gesendete Elemente“ des Absenderpostfachs.
+ */
+export async function m365SendMime(c: M365Settings, raw: Buffer): Promise<{ response: string }> {
+  const body = raw.toString('base64');
+  if (Buffer.byteLength(body) > MAX_REQUEST_BYTES) throw mailError('Die Nachricht samt Anhang ist für den Versand über Microsoft 365 zu groß (höchstens etwa 3 MB).', { code: 'EMESSAGE' });
+  const url = `${graphBase()}/users/${encodeURIComponent(c.sender.trim())}/sendMail`;
+  for (let attempt = 1; ; attempt++) {
+    const token = await m365Token(c, { fresh: attempt > 1 });
+    let res: HttpResponse;
+    try {
+      res = await httpRequest({ method: 'POST', url, headers: { authorization: `Bearer ${token}`, 'content-type': 'text/plain', accept: 'application/json' }, body, timeoutMs: Number(process.env.BLAULICHTCMS_SMTP_TIMEOUT_MS ?? 60_000), maxResponseBytes: 256 * 1024, maxRedirects: 0, allowPrivateHosts: privateHosts() });
+    } catch (e) {
+      throw networkError(e, 'Microsoft Graph');
+    }
+    if (res.status === 202 || res.status === 200) return { response: `Microsoft Graph: ${res.status} angenommen` };
+    if (RETRY_STATUS.has(res.status) && attempt < 3) {
+      await new Promise((r) => setTimeout(r, process.env.VITEST ? 10 : Math.min(10, Math.max(1, Number(res.headers['retry-after']) || 2 ** attempt)) * 1000));
+      continue;
+    }
+    let code = '';
+    let detail = res.text().slice(0, 200);
+    try {
+      const err = (res.json() as any)?.error;
+      code = String(err?.code ?? '');
+      detail = String(err?.message ?? detail).slice(0, 200);
+    } catch {
+      /* Text bleibt */
+    }
+    throw mailError(`${graphHint(res.status, c.sender, code)} (Graph ${res.status}${code ? ` ${code}` : ''}: ${detail})`, { responseCode: res.status });
+  }
+}
+
 /** Transport-Hülle im Stil von Nodemailer (sendMail/close). */
 export function m365Transport(c: M365Settings) {
   return {

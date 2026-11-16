@@ -261,5 +261,5 @@ async function pressRequestExtras(id: string, _req: FastifyRequest): Promise<Rec
        FROM press_messages m LEFT JOIN users u ON u.id = m.created_by WHERE m.request_id = $1 ORDER BY COALESCE(m.received_at, m.created_at), m.created_at`,
     [id],
   );
-  return { messages: messages.map(({ external_id, source, ...m }) => m) };
+  return { messages: messages.map(({ external_id, source, ...m }) => m), replyApproval: !!(await getSettings())['press.reply_approval'] };
 }

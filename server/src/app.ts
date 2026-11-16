@@ -87,6 +87,7 @@ import { pressMailboxRoutes } from './routes/press-mailbox.js';
 import { calendarIcalRoutes } from './routes/calendar-ical.js';
 import { designImageRoutes } from './routes/design-images.js';
 import { backupOffsiteRoutes } from './routes/backup-offsite.js';
+import { pressReplyRoutes } from './routes/press-replies.js';
 import { observeProxy } from './lib/proxy-check.js';
 import { healthStatus, isLocalHealthRequest, publicHealth } from './routes/health.js';
 
@@ -274,6 +275,7 @@ export async function buildApp(): Promise<FastifyInstance> {
       await api.register(pressMailboxRoutes);
       await api.register(calendarIcalRoutes);
       await api.register(backupOffsiteRoutes);
+      await api.register(pressReplyRoutes);
     },
     { prefix: '/api/v1' },
   );

@@ -11,7 +11,8 @@ import { runRetention } from '../src/lib/retention.js';
 import { storeSecret } from '../src/lib/secrets.js';
 import { resetM365TokenCache } from '../src/lib/mail.js';
 import { pollPressMailbox } from '../src/press/mailbox.js';
-import { fakeGraph, fakeImap } from './press-fakes.js';
+import { fakeGraph, fakeImap, fakeSmtp } from './press-fakes.js';
+import { deliverPressReply } from '../src/routes/press-replies.js';
 
 /**
  * Presseanfragen (#204–#207) gegen eine echte PostgreSQL-Datenbank (TEST_DATABASE_URL). Die Datenbank wird zu Beginn
@@ -398,6 +399,124 @@ describe('Presse-Postfach (#205)', () => {
       await graph.close();
       await admin.reauth();
       await admin.put('/press/mailbox', { ...cfg(), enabled: false });
+    }
+  });
+});
+
+describe('Antworten per Mail (#206)', () => {
+  let smtp: Awaited<ReturnType<typeof fakeSmtp>>;
+  let requestId: string;
+  let approver: Client;
+
+  beforeAll(async () => {
+    smtp = await fakeSmtp();
+    await setSettings({ 'mail.transport': 'smtp', 'smtp.host': '127.0.0.1', 'smtp.port': smtp.port, 'smtp.security': 'none', 'smtp.user': '', 'smtp.from': 'presse@feuerwehr.example', 'general.sender_name': 'Feuerwehr Musterstadt' } as any);
+    requestId = (await one<any>(`SELECT id FROM press_requests WHERE channel = 'mailbox' ORDER BY created_at LIMIT 1`))!.id;
+    approver = (await login('freigabe@example.org', 'Frieda Freigabe', ['approver'])).client;
+  });
+  afterAll(async () => {
+    await smtp?.close();
+  });
+
+  it('Textbausteine: verwalten nur mit Recht, lesen auch beim Antworten', async () => {
+    expect((await reader.get('/press/snippets')).status).toBe(403);
+    expect((await reader.post('/press/snippets', { title: 'X', body: 'Y' })).status).toBe(403);
+    const s = await editor.post('/press/snippets', { title: 'Begrüßung', body: 'Guten Tag {{name}},\nzu Ihrer Anfrage „{{thema}}“ ({{nummer}}):' });
+    expect(s.status).toBe(200);
+    expect((await editor.put(`/press/snippets/${s.json.id}`, { title: 'Begrüßung', body: 'Guten Tag {{name}},' })).status).toBe(200);
+    expect((await editor.get('/press/snippets')).json).toEqual([expect.objectContaining({ title: 'Begrüßung', body: 'Guten Tag {{name}},' })]);
+    expect((await approver.get('/press/snippets')).status).toBe(403);
+    expect(await one(`SELECT 1 FROM audit_events WHERE action = 'press.snippet_updated'`)).not.toBeNull();
+  });
+
+  it('ohne Freigabe: Versand mit Verlaufs-Kopfzeilen, Status „beantwortet“, Verlauf und Audit', async () => {
+    expect((await reader.post(`/press/requests/${requestId}/replies`, { to: ['a@b.example'], subject: 'AW: x', body: 'y' })).status).toBe(403);
+    expect((await editor.post(`/press/requests/${requestId}/replies`, { to: ['kein-mail'], subject: 'AW: x', body: 'y' })).status).toBe(400);
+    const r = await editor.post(`/press/requests/${requestId}/replies`, { to: ['paula@zeitung.example'], subject: 'AW: Großbrand in der Halle', body: 'Guten Tag Frau Müller,\nes waren 40 Kräfte im Einsatz.' });
+    expect(r.json).toMatchObject({ status: 'queued' });
+    const job = await one<any>(`SELECT kind, max_attempts FROM jobs WHERE kind = 'press.reply' AND payload->>'id' = $1`, [r.json.id]);
+    expect(job).toMatchObject({ max_attempts: 1 });
+    await deliverPressReply(r.json.id);
+    expect(smtp.received).toHaveLength(1);
+    const raw = smtp.received[0].raw;
+    expect(smtp.received[0].to).toEqual(['paula@zeitung.example']);
+    expect(raw).toMatch(/^In-Reply-To: <reply1@zeitung\.example>/m);
+    expect(raw).toMatch(/^References: [\s\S]*<reply1@zeitung\.example>/m);
+    expect(raw).toMatch(/^Message-ID: <press-[0-9a-f-]+@feuerwehr\.example>/m);
+    expect((await one<any>(`SELECT subject FROM press_messages WHERE id = $1`, [r.json.id]))!.subject).toMatch(/^AW: Großbrand in der Halle \[P-\d{4}-\d{4}\]$/);
+    expect(raw).toMatch(/^Subject: =\?UTF-8\?Q\?AW=3A_Gro=C3=9Fbrand/m);
+    expect(raw).toContain('Feuerwehr Musterstadt');
+    const d = (await editor.get(`/press/requests/${requestId}`)).json;
+    expect(d.request.status).toBe('answered');
+    const out = d.messages.find((m: any) => m.id === r.json.id);
+    expect(out).toMatchObject({ direction: 'out', status: 'sent', from_address: 'presse@feuerwehr.example' });
+    expect(d.events.some((e: any) => e.kind === 'mail_out')).toBe(true);
+    expect(await one(`SELECT 1 FROM audit_events WHERE action = 'press.reply_sent'`)).not.toBeNull();
+    // Rückfrage der Redaktion auf diese Antwort landet wieder bei der Anfrage
+    const msgId = (await one<any>(`SELECT message_id FROM press_messages WHERE id = $1`, [r.json.id]))!.message_id;
+    const { ingestPressMail } = await import('../src/press/mailbox.js');
+    const back = await ingestPressMail(Buffer.from(`From: paula@zeitung.example\r\nSubject: Re: AW\r\nMessage-ID: <rueck@zeitung.example>\r\nIn-Reply-To: ${msgId}\r\n\r\nDanke!`), { source: 'imap', externalId: 'x1', receivedAt: null, maxAttachmentMb: 5, ownAddresses: [] });
+    expect(back).toMatchObject({ outcome: 'assigned', requestId });
+  });
+
+  it('mit Freigabe: zweite Person nötig, Zurückweisen mit Begründung', async () => {
+    await setSettings({ 'press.reply_approval': true } as any);
+    const r = await admin.post(`/press/requests/${requestId}/replies`, { to: ['paula@zeitung.example'], subject: 'AW: Nachfrage', body: 'Entwurf' });
+    expect(r.json.status).toBe('pending');
+    expect(await one(`SELECT 1 FROM jobs WHERE kind = 'press.reply' AND payload->>'id' = $1`, [r.json.id])).toBeNull();
+    expect(await one(`SELECT 1 FROM notifications WHERE permission = 'press.approve' AND category = 'approval'`)).not.toBeNull();
+    expect((await editor.post(`/press/replies/${r.json.id}/decision`, { decision: 'approved' })).status).toBe(403);
+    expect((await admin.post(`/press/replies/${r.json.id}/decision`, { decision: 'approved' })).status).toBe(403); // eigene
+    expect((await approver.post(`/press/replies/${r.json.id}/decision`, { decision: 'rejected' })).status).toBe(400);
+    expect((await approver.post(`/press/replies/${r.json.id}/decision`, { decision: 'rejected', note: 'Zahl prüfen' })).status).toBe(200);
+    expect(await one<any>(`SELECT status, decision_note FROM press_messages WHERE id = $1`, [r.json.id])).toMatchObject({ status: 'rejected', decision_note: 'Zahl prüfen' });
+    expect((await admin.del(`/press/replies/${r.json.id}`)).status).toBe(200);
+    const r2 = await editor.post(`/press/requests/${requestId}/replies`, { to: ['paula@zeitung.example'], subject: 'AW: Nachfrage', body: 'Korrigiert' });
+    expect((await approver.post(`/press/replies/${r2.json.id}/decision`, { decision: 'approved' })).status).toBe(200);
+    expect((await approver.post(`/press/replies/${r2.json.id}/decision`, { decision: 'approved' })).status).toBe(409);
+    await deliverPressReply(r2.json.id);
+    expect(smtp.received.at(-1)!.raw).toContain('Korrigiert');
+    expect((await one<any>(`SELECT status FROM press_messages WHERE id = $1`, [r2.json.id]))!.status).toBe('sent');
+    await setSettings({ 'press.reply_approval': false } as any);
+  });
+
+  it('Versand fehlgeschlagen: erneut senden; Ergebnis unbekannt nie automatisch', async () => {
+    await setSettings({ 'smtp.port': 1 } as any);
+    const r = await editor.post(`/press/requests/${requestId}/replies`, { to: ['paula@zeitung.example'], subject: 'AW: x', body: 'y' });
+    await deliverPressReply(r.json.id);
+    expect((await one<any>(`SELECT status FROM press_messages WHERE id = $1`, [r.json.id]))!.status).toBe('failed');
+    await setSettings({ 'smtp.port': smtp.port } as any);
+    expect((await editor.post(`/press/replies/${r.json.id}/retry`)).status).toBe(200);
+    await deliverPressReply(r.json.id);
+    expect((await one<any>(`SELECT status FROM press_messages WHERE id = $1`, [r.json.id]))!.status).toBe('sent');
+    // unterbrochen (Status „sending“ beim Start des Auftrags) ⇒ unbekannt, kein Neuversand
+    await pool.query(`UPDATE press_messages SET status = 'sending' WHERE id = $1`, [r.json.id]);
+    const before = smtp.received.length;
+    await deliverPressReply(r.json.id);
+    expect((await one<any>(`SELECT status FROM press_messages WHERE id = $1`, [r.json.id]))!.status).toBe('unknown');
+    expect(smtp.received.length).toBe(before);
+    expect((await editor.post(`/press/replies/${r.json.id}/retry`)).status).toBe(409);
+    expect((await editor.post(`/press/replies/${r.json.id}/resolve`, { sent: true })).status).toBe(200);
+  });
+
+  it('Microsoft 365: Antwort als MIME-Nachricht über Graph (Verlaufs-Kopfzeilen bleiben erhalten)', async () => {
+    const graph = await fakeGraph();
+    process.env.BLAULICHTCMS_M365_TEST_URL = graph.url;
+    resetM365TokenCache();
+    try {
+      await setSettings({ 'mail.transport': 'm365' } as any);
+      const r = await editor.post(`/press/requests/${requestId}/replies`, { to: ['paula@zeitung.example'], subject: 'AW: Graph', body: 'Antwort über Microsoft 365' });
+      await deliverPressReply(r.json.id);
+      expect(await one<any>(`SELECT status, error FROM press_messages WHERE id = $1`, [r.json.id])).toMatchObject({ status: 'sent' });
+      expect(graph.sent).toHaveLength(1);
+      expect(graph.sent[0].contentType).toBe('text/plain');
+      const mime = Buffer.from(graph.sent[0].body, 'base64').toString('utf8');
+      expect(mime).toMatch(/^In-Reply-To: </m);
+      expect(mime).toMatch(/^To: paula@zeitung\.example/m);
+    } finally {
+      delete process.env.BLAULICHTCMS_M365_TEST_URL;
+      await graph.close();
+      await setSettings({ 'mail.transport': 'smtp' } as any);
     }
   });
 });

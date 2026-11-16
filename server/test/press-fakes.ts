@@ -139,3 +139,25 @@ export async function fakeGraph() {
     close: () => new Promise<void>((r) => server.close(() => r())),
   };
 }
+
+/** SMTP-Stellvertreter: sammelt Umschlag und Rohnachricht. */
+export async function fakeSmtp() {
+  const { SMTPServer } = await import('smtp-server');
+  const received: { from: string; to: string[]; raw: string }[] = [];
+  const smtp = new SMTPServer({
+    authOptional: true,
+    disabledCommands: ['STARTTLS'],
+    disableReverseLookup: true,
+    logger: false,
+    onData(stream: any, session: any, cb: any) {
+      const chunks: Buffer[] = [];
+      stream.on('data', (c: Buffer) => chunks.push(c));
+      stream.on('end', () => {
+        received.push({ from: session.envelope.mailFrom?.address ?? '', to: session.envelope.rcptTo.map((r: any) => r.address), raw: Buffer.concat(chunks).toString('utf8') });
+        cb();
+      });
+    },
+  } as any);
+  await new Promise<void>((r) => smtp.listen(0, '127.0.0.1', r));
+  return { port: (smtp.server.address() as AddressInfo).port, received, close: () => new Promise<void>((r) => smtp.close(() => r())) };
+}

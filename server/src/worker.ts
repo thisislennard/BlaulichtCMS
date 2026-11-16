@@ -40,6 +40,7 @@ import { deliverNotification } from './lib/notify-channels.js';
 import { migratePlaintextSecrets } from './lib/secret-audit.js';
 import { checkPressDeadlines } from './press/deadlines.js';
 import { pollPressMailbox } from './press/mailbox.js';
+import { deliverPressReply } from './routes/press-replies.js';
 
 process.env.BLAULICHTCMS_ROLE ??= 'worker';
 
@@ -78,6 +79,10 @@ const handlers: Record<string, (job: Job) => Promise<void>> = {
     await executeRun(String(job.payload.runId), job);
   },
   // Benachrichtigungen per Push/E-Mail (#191); Fehler einzelner Geräte/Postfächer werden protokolliert, nicht wiederholt
+  // Antworten auf Presseanfragen (#206): genau ein Versuch, Ergebnis unklar ⇒ Prüfung statt Neuversand
+  'press.reply': async (job) => {
+    await deliverPressReply(String(job.payload.id));
+  },
   'notify.deliver': async (job) => {
     await deliverNotification(Number(job.payload.id));
   },

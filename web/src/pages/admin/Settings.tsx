@@ -448,6 +448,13 @@ export default function Settings() {
                   label="Alternativtext ist Pflicht"
                   description="An: Ohne Alternativtext je Bild lässt sich ein Beitrag für Website oder soziale Kanäle nicht freigeben. Aus: Die Freigabe zeigt nur eine Warnung."
                 />
+                <Switch
+                  checked={!!v["press.reply_approval"]}
+                  disabled={ro("press.reply_approval")}
+                  onChange={(x) => set("press.reply_approval", x)}
+                  label="Antworten an die Presse freigeben lassen"
+                  description="Antworten auf Presseanfragen gehen erst raus, wenn eine zweite Person mit „Antworten an die Presse freigeben“ zugestimmt hat."
+                />
                 <FieldGrid>
                   <NumField k="invites.valid_hours" label="Einladungen gültig" unit="Std." min={1} max={720} v={v} set={set} ro={ro("invites.valid_hours")} />
                   <NumField k="press.reminder_hours" label="Erinnerung vor Frist (Presseanfragen)" help="An die zuständige Person, sonst an alle mit „Presseanfragen bearbeiten“. 0 = nur bei Überschreitung." unit="Std." min={0} max={72} v={v} set={set} ro={ro("press.reminder_hours")} />

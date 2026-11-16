@@ -69,6 +69,45 @@ Verwendet wird **dieselbe App-Registrierung wie für den Mailversand** (siehe [B
 | Presse-Postfach nicht gefunden | Adresse prüfen; es muss ein Exchange-Online-Postfach sein |
 | Microsoft 365 ist noch nicht eingerichtet | zuerst die App-Registrierung unter *Einstellungen → Benachrichtigungen und E-Mail* eintragen |
 
+## Antworten per Mail
+
+In der Anfrage unter **Mails und Antworten → Antworten** (Recht „Presseanfragen beantworten“):
+
+1. **An** ist mit der E-Mail-Adresse der Anfrage vorbelegt, **Kopie an** optional (mehrere Adressen mit Komma).
+2. **Betreff** – BlaulichtCMS hängt die Vorgangsnummer `[P-…]` an, damit Rückfragen bei dieser Anfrage landen.
+3. **Textbaustein einfügen** (optional) und den Text schreiben.
+4. **Senden** bzw. – mit eingeschalteter Freigabe – **Zur Freigabe einreichen**.
+
+Gesendet wird über den eingestellten Mailweg (SMTP oder Microsoft 365, *Einstellungen → Benachrichtigungen und E-Mail*) mit der dort eingetragenen Absenderadresse. Die Mail trägt die richtigen Kopfzeilen für den Mail-Verlauf (`In-Reply-To`, `References`) – bei der Redaktion erscheint sie als Antwort auf deren Mail, und deren Rückfragen ordnet das [Presse-Postfach](#presse-postfach-abrufen) wieder der Anfrage zu. Bei Microsoft 365 liegt die Antwort zusätzlich in „Gesendete Elemente“ des Absenderpostfachs.
+
+Nach dem Versand steht die Antwort im Verlauf, und die Anfrage bekommt **automatisch den Status „Beantwortet“** (eine erledigte Anfrage bleibt erledigt).
+
+| Stand der Antwort | Bedeutung |
+|---|---|
+| Wartet auf Freigabe | eingereicht, eine zweite Person muss zustimmen |
+| Zurückgewiesen | mit Begründung zurückgewiesen – verwerfen und neu schreiben |
+| Wird gesendet | in der Warteschlange bzw. beim Mailserver |
+| Gesendet | vom Mailserver angenommen |
+| Versand fehlgeschlagen | sicher nicht gesendet (z. B. Mailserver nicht erreichbar) – **Erneut senden** |
+| Ergebnis unbekannt – prüfen | Verbindung brach nach dem Senden ab. BlaulichtCMS sendet **nie automatisch erneut** (sonst käme die Antwort womöglich doppelt an). Nach Prüfung **Ist angekommen** oder **Ist nicht angekommen** wählen. |
+
+## Freigabe von Antworten
+
+Unter *Einstellungen → Redaktion → Antworten an die Presse freigeben lassen* (Standard **aus**). Ist sie eingeschaltet, geht jede Antwort erst raus, wenn eine **zweite Person** mit dem Recht „Antworten an die Presse freigeben“ in der Anfrage **Freigeben und senden** wählt – die eigene Antwort freigeben geht nicht. **Zurückweisen** verlangt eine kurze Begründung, die die verfassende Person als Benachrichtigung erhält. Wer freigeben darf, bekommt eingereichte Antworten als Benachrichtigung der Art „Freigabe angefordert“.
+
+## Textbausteine
+
+Unter [Presse → Postfach & Textbausteine](/presse/einstellungen) → *Textbausteine* (Recht „Textbausteine verwalten“). Platzhalter werden beim Einfügen in eine Antwort ersetzt:
+
+| Platzhalter | wird zu |
+|---|---|
+| `{{name}}` | Name der anfragenden Person |
+| `{{medium}}` | Medium/Redaktion |
+| `{{thema}}` | Thema der Anfrage |
+| `{{nummer}}` | Vorgangsnummer |
+| `{{frist}}` | Frist |
+| `{{absender}}` | eigener Name |
+
 ## Verknüpfungen, Notizen und Verlauf
 
 - **Einsatz:** eine Einsatzmeldung aus FE2 oder Feuersoftware Connect.
@@ -92,8 +131,11 @@ Der Eingang **Neue Presseanfrage** startet einen [Workflow](/hilfe/workflows), s
 | Presseanfragen ansehen | Anfragen mit Kontaktdaten, Verlauf, Mails und Anhängen lesen |
 | Presseanfragen bearbeiten | erfassen, Status, Zuständigkeit, Frist, Verknüpfungen, Notizen, löschen |
 | Presse-Postfach einrichten | Abruf einrichten, testen, schalten, Empfangsprotokoll |
+| Presseanfragen beantworten | Antworten schreiben und senden bzw. zur Freigabe einreichen |
+| Antworten an die Presse freigeben | eingereichte Antworten anderer freigeben oder zurückweisen |
+| Textbausteine verwalten | Textbausteine anlegen, ändern, löschen |
 
-Ab Werk haben die Rolle **Redaktion** beide Rechte, die Rolle **Lesezugriff** keines (Kontaktdaten). Jede Anlage, Änderung, Notiz und Löschung steht im Audit – mit Vorgangsnummer, ohne Kontaktdaten.
+Ab Werk: **Redaktion** – ansehen, bearbeiten, beantworten, Textbausteine, Presseverteiler; **Freigabe** – ansehen und Antworten freigeben; **Veröffentlichung** – ansehen, Presseverteiler und Pressemitteilungen versenden; **Administration** – alles; **Lesezugriff** – nichts (Kontaktdaten). Jede Anlage, Änderung, Notiz, Antwort, Freigabe und Löschung steht im Audit – mit Vorgangsnummer, ohne Kontaktdaten.
 
 ## Datenschutz und Löschfrist
 
