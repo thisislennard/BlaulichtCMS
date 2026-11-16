@@ -61,6 +61,7 @@ export async function systemStatus() {
   } catch {
     disk = null;
   }
+  const settings = await getSettings();
   const services = [
     { id: 'api', name: 'API', state: 'ok', detail: `läuft seit ${Math.round((Date.now() - startedAt) / 60000)} Min.`, ms: null },
     { id: 'db', name: 'Datenbank', state: dbOk ? 'ok' : 'error', detail: dbOk ? `PostgreSQL ${dbVersion}` : 'nicht erreichbar', ms: dbMs },
@@ -88,12 +89,15 @@ export async function systemStatus() {
     {
       id: 'disk',
       name: 'Speicher',
-      state: disk && disk.free < (await getSettings())['media.min_free_gb'] * 1024 ** 3 ? 'error' : 'ok',
+      state: disk && disk.free < settings['media.min_free_gb'] * 1024 ** 3 ? 'error' : 'ok',
       detail: disk ? `${de1(disk.free / 1024 ** 3)} GB frei von ${de1(disk.total / 1024 ** 3)} GB` : 'unbekannt',
       ms: null,
     },
   ];
-  return { services, workers, queue, sites, lastBackup, disk, dbSize, version: config.version, uptimeSec: Math.round((Date.now() - startedAt) / 1000), node: process.version };
+  // Wartungsmodus für die eigene Karte im Systemstatus (Recht system.maintenance, unabhängig von update.install)
+  const m = settings['system.maintenance'] as { since: string; byName: string; reason: string } | null | undefined;
+  const maintenance = m ? { since: m.since, byName: m.byName, reason: m.reason } : null;
+  return { services, workers, queue, sites, lastBackup, disk, dbSize, maintenance, version: config.version, uptimeSec: Math.round((Date.now() - startedAt) / 1000), node: process.version };
 }
 
 export async function systemRoutes(app: FastifyInstance) {

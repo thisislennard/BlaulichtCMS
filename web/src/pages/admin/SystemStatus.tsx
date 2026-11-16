@@ -1,6 +1,7 @@
 import { Link } from "react-router";
-import { useQuery } from "@tanstack/react-query";
-import { get } from "../../api/client";
+import { useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { get, post } from "../../api/client";
 import {
   Badge,
   Button,
@@ -18,6 +19,7 @@ import {
 } from "../../components/ui/core";
 import { KpiCard } from "../../components/ui/data";
 import { Icon } from "../../components/ui/Icon";
+import { useConfirm, useToast } from "../../components/ui/overlays";
 import { t } from "../../i18n";
 import {
   fmtBytes,
@@ -63,6 +65,7 @@ export interface SystemStatusData {
     error: string | null;
   } | null;
   disk: { free: number; total: number } | null;
+  maintenance?: { since: string; byName: string; reason: string } | null;
   dbSize: number;
   version: string;
   uptimeSec: number;
@@ -158,6 +161,65 @@ function AuditIntegrityCard() {
             </dl>
           </>
         )}
+      </div>
+    </Card>
+  );
+}
+
+/** Wartungsmodus: eigene Karte, damit das Recht system.maintenance ohne update.install genügt. */
+function MaintenanceCard({ data }: { data: SystemStatusData | undefined }) {
+  const { can } = useAuth();
+  const ask = useConfirm();
+  const toast = useToast();
+  const qc = useQueryClient();
+  const [busy, setBusy] = useState(false);
+  if (!can("system.maintenance") || !data) return null;
+  const m = data.maintenance ?? null;
+  const toggle = async (enabled: boolean) => {
+    setBusy(true);
+    try {
+      await post("/system/maintenance", { enabled, reason: enabled ? "Wartung" : "" });
+      toast({ tone: "success", title: enabled ? "Wartungsmodus aktiv" : "Wartungsmodus beendet" });
+      await qc.invalidateQueries({ queryKey: ["system-status"] });
+      qc.invalidateQueries({ queryKey: ["update-preflight"] });
+    } catch (e) {
+      toast({ tone: "error", title: (e as Error).message });
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Card
+      title="Wartungsmodus"
+      action={<Badge tone={m ? "warning" : "neutral"}>{m ? "aktiv" : "Normalbetrieb"}</Badge>}
+    >
+      <div className="flex flex-col gap-3 text-sm">
+        <p className="m-0 text-fg-muted">
+          {m
+            ? `Aktiv seit ${fmtDateTime(m.since)} (${m.byName}): ${m.reason}. Schreibende Vorgänge und neue Aufträge sind angehalten.`
+            : "Im Wartungsmodus pausieren schreibende Vorgänge und neue Aufträge, zum Beispiel vor einem Update oder einer Wiederherstellung."}
+        </p>
+        <div className="flex flex-wrap gap-2">
+          {m ? (
+            <Button loading={busy} onClick={() => toggle(false)}>
+              Wartungsmodus beenden
+            </Button>
+          ) : (
+            <Button
+              icon="Hourglass"
+              loading={busy}
+              onClick={async () =>
+                (await ask({
+                  title: "Wartungsmodus einschalten?",
+                  text: "Schreibende Vorgänge und neue Aufträge pausieren, bis der Wartungsmodus wieder aus ist.",
+                  confirmLabel: "Einschalten",
+                })) && toggle(true)
+              }
+            >
+              Wartungsmodus einschalten
+            </Button>
+          )}
+        </div>
       </div>
     </Card>
   );
@@ -368,6 +430,8 @@ export default function SystemStatus() {
           )}
         </Card>
       </div>
+
+      <MaintenanceCard data={d} />
 
       <AuditIntegrityCard />
 

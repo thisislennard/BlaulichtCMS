@@ -1161,6 +1161,7 @@ function OpsSection() {
 function UpdatePreflight() {
   const ask = useConfirm();
   const mayMaintenance = useAuth().can("system.maintenance");
+  const qc = useQueryClient();
   const q = useQuery({ queryKey: ["update-preflight"], queryFn: () => get<any>("/system/update-preflight"), refetchInterval: 10_000 });
   const toast = useToast();
   const d = q.data;
@@ -1169,6 +1170,7 @@ function UpdatePreflight() {
       await post("/system/maintenance", { enabled, reason: enabled ? "Update wird vorbereitet" : "" });
       toast({ tone: "success", title: enabled ? "Wartungsmodus aktiv" : "Wartungsmodus beendet" });
       q.refetch();
+      qc.invalidateQueries({ queryKey: ["system-status"] });
     } catch (e) {
       toast({ tone: "error", title: (e as Error).message });
     }
