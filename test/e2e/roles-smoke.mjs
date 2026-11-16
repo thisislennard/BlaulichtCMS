@@ -54,12 +54,28 @@ try {
     await page.goto(`${BC}${route}`, { waitUntil: 'networkidle' }).catch(() => {});
     await sleep(500);
   };
-  const navLabels = async () => [...new Set(await page.locator('nav a').allInnerTexts())].map((s) => s.replace(/\s*\d+$/, '').trim()).filter(Boolean);
+  const clean = (xs) => [...new Set(xs.map((s) => s.replace(/\s*\d+$/, '').trim()).filter(Boolean))];
+  /** Gruppen der Hauptnavigation (obere Zeile) */
+  const navGroups = async () => clean(await page.locator('nav[aria-label="Hauptnavigation"]:visible a').allInnerTexts());
+  /** Alle Menüpunkte: je Gruppe die zweite Zeile einsammeln */
+  const navLabels = async () => {
+    const hrefs = await page.locator('nav[aria-label="Hauptnavigation"]:visible a').evaluateAll((as) => as.map((a) => a.getAttribute('href')));
+    const out = [];
+    for (const h of hrefs) {
+      await go(h);
+      out.push(...(await page.locator('nav:visible:not([aria-label="Brotkrumen"]) a').allInnerTexts()));
+    }
+    return clean(out);
+  };
   const hasButton = async (name) => (await page.getByRole('button', { name }).count()) > 0;
 
   await go('/');
+  const groups = await navGroups();
   const nav = await navLabels();
-  console.log(`  Navigation: ${nav.join(' | ')}`);
+  console.log(`  Gruppen: ${groups.join(' | ')}
+  Navigation: ${nav.join(' | ')}`);
+  check(JSON.stringify(groups) === JSON.stringify(['Übersicht', 'Redaktion']), 'Nur die Gruppen „Übersicht“ und „Redaktion“ – Gruppen ohne erlaubten Punkt entfallen');
+  await go('/');
   for (const want of ['Beiträge', 'Medien']) check(nav.includes(want), `Navigation zeigt „${want}“`);
   for (const not of ['Freigaben', 'Quellen', 'Vorlagen', 'Banner', 'Websites', 'Verbindungen', 'Warnvorgänge', 'Amtliche Warnungen', 'Benutzer und Rollen', 'Systemstatus', 'Protokolle', 'Einstellungen', 'Datenschutzanfragen', 'Aktivitäten'])
     check(!nav.some((n) => n === not || n.startsWith(not)), `Navigation zeigt „${not}“ nicht`);
@@ -78,7 +94,7 @@ try {
   check((await page.getByRole('link', { name: /Papierkorb|Gestaltung|Verwaltung/ }).count()) === 0, 'Medien: keine Reiter Papierkorb, Gestaltung, Verwaltung');
   await go(`/medien/${st.collectionId}`);
   for (const b of [/^Neuer Link/, /^Hochladen/, /^Neuer Ordner/, /ZIP/]) check(!(await hasButton(b)), `Sammlung: keine Schaltfläche ${b}`);
-  check(await hasButton(/^Sichten/), 'Sammlung: „Sichten“ ist da (erlaubt)');
+  check(await hasButton(/sichten$/i), 'Sammlung: „Sichten“ ist da (erlaubt)');
 
   for (const route of ['/benutzer', '/einstellungen', '/medien/papierkorb', '/kanaele', '/banner', '/verbindungen', '/warnungen', '/protokolle', '/system', '/quellen', '/aktivitaeten', '/datenschutz-anfragen']) {
     await go(route);
@@ -99,8 +115,10 @@ try {
   // Rolle erweitern: wirkt ohne neue Anmeldung
   await admin.put(`/roles/${role.id}`, { permissions: ['media.review', 'post.view', 'post.create', 'banner.view'] });
   await go('/');
-  const nav2 = await navLabels();
-  check(nav2.includes('Banner'), 'Nach dem Erweitern der Rolle erscheint „Banner“ ohne neue Anmeldung');
+  const groups2 = await navGroups();
+  check(groups2.includes('Kanäle'), 'Nach dem Erweitern der Rolle erscheint die Gruppe „Kanäle“ (Banner) ohne neue Anmeldung');
+  await go('/banner');
+  check(!/Kein Zugriff/.test(await page.locator('body').innerText()), 'Nach dem Erweitern: Banner-Seite ist erreichbar');
   await go('/beitraege');
   check(await hasButton(/^Neuer Beitrag/), 'Nach dem Erweitern: „Neuer Beitrag“ ist da');
   await page.screenshot({ path: path.join(ROOT, 'test/e2e/out/roles-smoke.png') });
