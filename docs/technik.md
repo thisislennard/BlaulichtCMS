@@ -320,7 +320,7 @@ nicht archivierten Beiträge (bei 4 800 Beiträgen ohne Freigaben 46 ms) – Bei
 
 ## Teststand und Grenzen
 
-**Automatisiert (bei jedem Push in der CI):** Typprüfung, rund 200 Server-Tests gegen echtes PostgreSQL (inklusive
+**Automatisiert (bei jedem Push in der CI):** Typprüfung, rund 600 Server-Tests gegen echtes PostgreSQL (inklusive
 Video-Verarbeitung mit ffmpeg), Build, PHP-Lint des Plugins, Probelauf mit Docker Compose (Rollen, Schlüsselwechsel,
 Audit-Kette), Abhängigkeits-, Image- und Secret-Scan sowie Browsertests der Kernabläufe mit Playwright/Chromium
 (Einrichtung mit Zwei-Faktor, Beitrag bis zur Freigabe, Workflow aus Vorlage, Rollen, Dashboard, Fokus-Check).
@@ -346,9 +346,22 @@ Ergebnisse je Verbindung: [docs/integrationen.md](integrationen.md).
   (Hessen: Runderlass vom 30.08.2024, Scan – abgeglichen mit der digitalen Fassung vom 01.11.2022; Bayern: ABek-Anlage
   Stand 15.03.2017, nur Kürzel der Übersicht, ABek laut gesetze-bayern.de befristet bis 16.07.2027). Neue Fassungen
   müssen von Hand nachgetragen werden; `test/keywords.test.ts` prüft Wortlaut-Stichproben und Dubletten.
-- Einsatzliste in WordPress (Bridge 0.9.0, #213): Server, Aufträge und Rückmeldungen sind automatisiert getestet; Darstellung
-  (Liste, Statistik, Detailseite, Einstellungsseite) noch auf einem Test-WordPress mit dem eigenen Theme prüfen. Der
-  CSV-Import folgt dem Exportformat der Erweiterung „Einsatzverwaltung“ (Spaltennamen aus deren Quelltext), nicht einer echten Exportdatei.
+- Einsatzliste in WordPress (Bridge 0.9.0, #213): Server, Aufträge und Rückmeldungen sind automatisiert getestet. Liste,
+  Statistik und Detailseite liefen beim Erstellen der README-Bilder (#221) in WordPress 7.1.4 / PHP 8.5 mit Twenty
+  Twenty-Five (SQLite, Abholung per `wp blaulichtcms-bridge poll`); Einstellungsseite und das eigene Theme der Website
+  noch prüfen. Der CSV-Import folgt dem Exportformat der Erweiterung „Einsatzverwaltung“ (Spaltennamen aus deren
+  Quelltext), nicht einer echten Exportdatei.
+- Presse-Postfach, Antworten und Pressemitteilungen (#205–#207): gegen IMAP-, SMTP- und Graph-Stellvertreter getestet;
+  mit dem echten Postfach (IMAP-Server bzw. Microsoft 365 mit `Mail.Read`) und echter Zustellung samt Abmeldelink in
+  gängigen Mailprogrammen noch prüfen.
+- Kalender (#202): iCal-Abruf mit Beispiel-ICS über einen lokalen Server getestet; echte Kalender (Outlook, Google,
+  Wehr-Kalender) einlesen und das Abo in Outlook, Google und am iPhone noch prüfen.
+- Reichweite (#218): gegen Mastodon- und Bluesky-Stellvertreter getestet; Statistik-Rechte und Zahlen mit echten
+  Konten (Meta ggf. erst nach App-Prüfung, X nur mit eigener API) noch prüfen.
+- Sicherung außer Haus und Probe-Wiederherstellung (#212): gegen einen WebDAV-Stellvertreter mit echtem TLS getestet;
+  mit dem echten NAS (z. B. Synology „WebDAV Server“) und die zeitgesteuerte Probe auf dem Zielhost noch prüfen.
+- Freigabe aus der Push-Mitteilung (#216): Ob ein Gerät Aktionsknöpfe zeigt, entscheidet der Browser; auf echten
+  Geräten (Android, iPhone, Windows, macOS) noch ansehen.
 - Gesichtsvorschläge (#214): Erkennungsrate und Rechenzeit auf echten Einsatzfotos und auf der Zielhardware (2 Kerne)
   messen; geprüft ist das Modell bisher auf gemeinfreien Testfotos und einem Entwicklungsrechner.
 - Datenschutz: Angaben unter *Einstellungen → Datenschutz* ausfüllen, Verarbeitungsverzeichnis und DSFA mit den

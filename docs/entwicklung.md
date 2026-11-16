@@ -37,7 +37,7 @@ startet PostgreSQL) ist für den Container gedacht, funktioniert aber auch lokal
 | Ebene | Befehl | Inhalt |
 |---|---|---|
 | Typprüfung | `npm run typecheck` | Server und Oberfläche |
-| Unit + Integration | `TEST_DATABASE_URL=… npm test` | 90 Tests: Rechte, Krypto, SSRF, Fassungen, Upload, Warnentwürfe, Verbindungen, Import, Sicherheit – braucht ffmpeg und pdftotext |
+| Unit + Integration | `TEST_DATABASE_URL=… npm test` | rund 600 Tests: Rechte, Krypto, SSRF, Fassungen, Upload, Warnentwürfe, Verbindungen, Workflows, Kalender, Presse, Einsatzliste, Import, Sicherheit – braucht ffmpeg und pdftotext |
 | Kernabläufe | `node test/e2e/core-flows.mjs` | Ersteinrichtung mit Zwei-Faktor, Anmeldung mit Code, Beitrag anlegen → einreichen → freigeben (Vier-Augen), Workflow aus Vorlage anlegen und testen (frische Instanz nötig; läuft in der CI) |
 | Fokus-Test | `node test/e2e/focus-check.mjs` | Tippen in alle Textfelder und Dialoge ohne Fokusverlust (laufende Instanz nötig) |
 | Dashboard anpassen | `node test/e2e/dashboard-dnd.mjs` | Verschieben mit Maus, Finger (Touch-Emulation) und Tastatur, Abbrechen, Speichern, Vorlagen (Instanz mit den Testdaten des Fokus-Tests nötig) |

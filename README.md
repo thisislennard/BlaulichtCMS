@@ -4,7 +4,7 @@
 
 **Selbst gehostetes Redaktionssystem für Öffentlichkeitsarbeit und Krisenkommunikation**
 
-Fotos per Link vom Handy sammeln · sichten · Beiträge schreiben · Fassung freigeben · auf der Website veröffentlichen – nachvollziehbar und auf dem eigenen Server
+Fotos per Link vom Handy sammeln · sichten · Beiträge schreiben · Fassung freigeben · auf Website und sozialen Kanälen veröffentlichen – dazu Kalender, Presseanfragen, Einsatzliste und Workflows, nachvollziehbar und auf dem eigenen Server
 
 [![CI](https://github.com/thisislennard/BlaulichtCMS/actions/workflows/ci.yml/badge.svg)](https://github.com/thisislennard/BlaulichtCMS/actions/workflows/ci.yml)
 [![Sicherheitsprüfung](https://github.com/thisislennard/BlaulichtCMS/actions/workflows/security.yml/badge.svg)](https://github.com/thisislennard/BlaulichtCMS/actions/workflows/security.yml)
@@ -226,16 +226,16 @@ flowchart LR
 ### Workflows
 
 - **Vorlagen:** „Alarm → Banner auf der Website“, „DWD-Warnung → Banner + Beitragsentwurf“, „Alarm mit
-  Stichwort-Kategorie Brand → Beitragsentwurf“, „Warnung → Benachrichtigen“, „Kalendertermin Übung → Story-Bild + Banner“
-  oder leer beginnen; passende Ein- und
-  Ausgänge werden eingesetzt, offene Plätze hervorgehoben.
+  Stichwort-Kategorie Brand → Beitragsentwurf“, „Warnung → Benachrichtigen“, „Übung im Kalender → Banner
+  ‚Achtung Übung‘“, „Kalendertermin Übung → Story-Bild + Banner“, „Termin von Hand → Story-Bild + Beitragsentwurf“
+  oder leer beginnen; passende Ein- und Ausgänge werden eingesetzt, offene Plätze hervorgehoben.
 - **Geführt in drei Schritten:** *Wenn* (Auslöser) – *Nur wenn* (Feld – Vergleich – Wert, mit Vorschlägen aus dem
   Stichwortverzeichnis) – *Dann* (Aktionen). Fehlende Ein- und Ausgänge direkt im Workflow anlegen. Jeder Workflow
   steht in der Liste und im Editor als ein Satz („Wenn ein neuer Alarm … eingeht, erscheint nach Freigabe auf der
   Website ein Banner …“); eine Checkliste zeigt vor dem Aktivieren, was noch fehlt.
 - **Erweitert – visueller Editor:** Eingänge (FE2-Alarm, Feuersoftware-Einsatz, amtliche Warnung, RSS-Eintrag, neue Uploads,
   Zeitplan, neue Presseanfrage, Kalendereintrag, manueller Start), Verarbeitung (Bedingung, Verzweigung, Felder setzen, Warten, Einmal je Vorgang, Freigabe
-  anfordern, Zusammenführen) und Ausgänge (Banner, Beitrag, E-Mail, App-Benachrichtigung, Warnentwurf vorbereiten, Einsatz in Einsatzliste, Pressemitteilung an Verteiler)
+  anfordern, Zusammenführen, Bild aus Vorlage erzeugen) und Ausgänge (Banner, Beitrag, E-Mail, App-Benachrichtigung, Warnentwurf vorbereiten, Einsatz in Einsatzliste, Pressemitteilung an Verteiler)
   auf einer Fläche verbinden – mit Palette, Minikarte, automatischer Anordnung, Rückgängig und einer Listenansicht für
   Tastatur und Handy.
 - **Ein- und Ausgänge** werden auf eigenen Seiten eingerichtet (z. B. Banner-Stil nach Warnstufe, Beitragsvorlage mit
@@ -255,8 +255,8 @@ flowchart LR
   erreichbar (mit automatischem erneutem Versuch), kein Zugriff, Seite nicht gefunden, Wartung, zu viele Versuche (mit
   Wartezeit) und unerwartete Fehler (mit Details) – jeweils mit Symbol, Erklärung und „Was tun?“.
 - **Dashboard:** Kennzahlen-Reihe und Kacheln in bis zu vier Spalten (offene Freigaben, bestätigter Stand der
-  Veröffentlichungen, neue Uploads, Banner, Websites); per Drag-and-drop mit Maus, Finger oder Tastatur anpassbar,
-  eigene Reihenfolge fürs Handy, Vorlagen für alle oder je Rolle.
+  Veröffentlichungen, neue Uploads, Banner, Websites, Presseanfragen, Reichweite); per Drag-and-drop mit Maus, Finger
+  oder Tastatur anpassbar, eigene Reihenfolge fürs Handy, Vorlagen für alle oder je Rolle.
 - **Live:** neue Uploads, Freigaben und Veröffentlichungen erscheinen ohne Neuladen; Benachrichtigungen in der App.
 - **Push und E-Mail:** je Person und Art wählbar (Freigabe angefordert, Entscheidung, Einsatz-Eingang, neue Fotos,
   amtliche Warnungen, Verbindungsfehler, fehlgeschlagene Workflows, Updates …) – nur Arten, für die das Konto Rechte
@@ -265,14 +265,14 @@ flowchart LR
 - **App für Handy und Computer:** installierbar (PWA) auf Android, iPhone/iPad und am Computer (Chrome, Edge, Safari am Mac – „Zum Dock hinzufügen“), mit eigenem Fenster, Push-Mitteilungen des Betriebssystems, Zähler ungelesener Benachrichtigungen am App-Symbol und Schnellzugriffen auf Neuer Beitrag, Medien sammeln und Freigaben; „App installieren“ im Benutzermenü.
 - **Schnell bedienbar:** Suche und Schnellaktionen mit `Strg` + `K`, vollständig per Tastatur nutzbar, heller und
   dunkler Modus, Design „Leitstand“ für draußen und nachts.
-- **Hilfe-Center:** 26 Kapitel mit Volltextsuche direkt in der App.
+- **Hilfe-Center:** 31 Kapitel mit Volltextsuche direkt in der App.
 
 ### Benutzer und Sicherheit
 
 - **Rollen:** Administration, Medienverwaltung, Redaktion, Freigabe, Veröffentlichung, Warnentwurf, Warnfreigabe,
   Warnversand, Lesezugriff – kombinierbar, Rechte werden bei jeder Aktion serverseitig geprüft.
-- **Eigene Rollen und feine Rechte:** Rollen selbst anlegen, kopieren und anpassen; 80 Rechte je Funktion
-  (ansehen, anlegen, freigeben, veröffentlichen, löschen …) in elf Bereichen. Was jemand nicht darf, wird nicht
+- **Eigene Rollen und feine Rechte:** Rollen selbst anlegen, kopieren und anpassen; 101 Rechte je Funktion
+  (ansehen, anlegen, freigeben, veröffentlichen, löschen …) in 15 Bereichen. Was jemand nicht darf, wird nicht
   angezeigt. Vergabe nur innerhalb der eigenen Rechte, Vorschau der Änderung vor dem Speichern, sofort wirksam;
   die Zwei-Faktor-Pflicht richtet sich nach den Rechten.
 - **Anmeldung:** Einladung per Link, Zwei-Faktor-Anmeldung mit Wiederherstellungscodes, erneute Bestätigung für
@@ -284,7 +284,7 @@ flowchart LR
 
 - **Auskunft und Löschung je Person:** Suche über alle personenbezogenen Daten, Export als ZIP, Löschen oder
   Pseudonymisieren je Treffer.
-- **Löschfristen** für Sammlungen, Upload-Links, Warnvorgänge, Einsatzmeldungen (FE2, Feuersoftware Connect) und Protokolle – mit Vorschau „Was würde
+- **Löschfristen** für Sammlungen, Upload-Links, Warnvorgänge, Einsatzmeldungen (FE2, Feuersoftware Connect), Presseanfragen und Protokolle – mit Vorschau „Was würde
   gelöscht?“.
 - **Vorlagen** für Verarbeitungsverzeichnis und Datenschutz-Folgenabschätzung, Hinweise zu Empfängern wie Meta.
 - **Datenschutzerklärung und Impressum** als eigene öffentliche Seiten (`/datenschutz`, `/impressum`), gepflegt in den
@@ -294,9 +294,14 @@ flowchart LR
 
 - **Ein Container, ein Skript:** Das Installationsskript führt durch die Einrichtung und prüft am Ende die Adresse.
 - **Updates aus der App:** neue Versionen unter *Einstellungen → Updates*, nur mit gültiger Signatur, mit Sicherung
-  vorab und automatischem Rückweg.
+  vorab und automatischem Rückweg. Braucht eine Version ein neues Docker-Image, zeigt die Seite das schon bei der
+  Prüfung und nennt die Schritte am Host (ein Aufruf des Installationsskripts).
 - **Sicherung:** täglich, verschlüsselt, auf Wunsch zusätzlich **außer Haus** auf ein NAS (WebDAV, mit Prüfsummenkontrolle und Aufbewahrung je Tag/Woche/Monat); **Probe-Wiederherstellung** in eine Wegwerf-Datenbank auf Knopfdruck und nach Zeitplan, mit Ergebnisprotokoll im Systemstatus.
-- **Systemstatus:** Dienste, Speicher, Sicherungen, Audit-Integrität, Wartungsmodus und Vorabprüfung vor Updates.
+- **Systemstatus:** Dienste, Speicher, Sicherungen, Probe-Wiederherstellung, Audit-Integrität, Wartungsmodus und
+  Vorabprüfung vor Updates.
+- **Geprüft bei jeder Änderung:** Server-Tests gegen echtes PostgreSQL, Browsertests der Kernabläufe (Einrichtung,
+  Anmeldung mit Zwei-Faktor, Beitrag bis zur Freigabe, Workflow aus Vorlage), Image-Bau und Sicherheitsprüfung;
+  wöchentlich eine Versionsprüfung aller Abhängigkeiten.
 
 ---
 
@@ -313,13 +318,23 @@ flowchart LR
     <td><b>Sammlung</b><br/>Upload-Links mit QR-Code und Aushang<br/><br/><img src="docs/bilder/sammlung.webp" alt="Sammlung"/></td>
   </tr>
   <tr>
-    <td colspan="2"><b>Auf der Website</b><br/>veröffentlicht von der BlaulichtCMS Bridge<br/><br/><img src="docs/bilder/wordpress-beitrag.webp" alt="Beitrag auf WordPress"/></td>
-    <td><b>Hilfe-Center</b><br/>26 Kapitel mit Volltextsuche<br/><br/><img src="docs/bilder/hilfe.webp" alt="Hilfe-Center"/></td>
+    <td><b>Auf der Website</b><br/>veröffentlicht von der BlaulichtCMS Bridge<br/><br/><img src="docs/bilder/wordpress-beitrag.webp" alt="Beitrag auf WordPress"/></td>
+    <td><b>Einsatzliste auf der Website</b><br/>mit Jahresstatistik, freigegeben in BlaulichtCMS<br/><br/><img src="docs/bilder/einsatzliste.webp" alt="Einsatzliste mit Jahresstatistik auf WordPress"/></td>
+    <td><b>Hilfe-Center</b><br/>31 Kapitel mit Volltextsuche<br/><br/><img src="docs/bilder/hilfe.webp" alt="Hilfe-Center"/></td>
   </tr>
   <tr>
     <td><b>Warnentwurf am Handy</b><br/>Stichwort, Lagefragen, Vorschlag<br/><br/><img src="docs/bilder/warnentwurf-handy.webp" alt="Warnentwurf-Assistent am Handy"/></td>
     <td><b>Freigegebene PDF</b><br/>mit bestätigter Warnstufe und Prüfsumme<br/><br/><img src="docs/bilder/warnentwurf-pdf.webp" alt="PDF eines Warnentwurfs"/></td>
     <td><b>Regeln pflegen</b><br/>versioniert, fachlich freigegeben<br/><br/><img src="docs/bilder/warnstufen-regeln.webp" alt="Pflege der Warnstufen-Regeln"/></td>
+  </tr>
+  <tr>
+    <td colspan="2"><b>Workflows</b><br/>geführt in drei Schritten: Wenn – Nur wenn – Dann<br/><br/><img src="docs/bilder/workflow.webp" alt="Workflow in der geführten Ansicht"/></td>
+    <td><b>Kalender</b><br/>Termine, Serien, geplante Beiträge und Fristen<br/><br/><img src="docs/bilder/kalender.webp" alt="Kalender in der Monatsansicht"/></td>
+  </tr>
+  <tr>
+    <td><b>Presseanfragen</b><br/>Status, Zuständigkeit, Frist und Verlauf<br/><br/><img src="docs/bilder/presse.webp" alt="Liste der Presseanfragen"/></td>
+    <td><b>Bild aus Vorlage</b><br/>ausfüllen mit Live-Vorschau<br/><br/><img src="docs/bilder/bildvorlage.webp" alt="Bild aus einer befüllbaren Bildvorlage erzeugen"/></td>
+    <td><b>Reichweite</b><br/>Aufrufe und Interaktionen je Kanal, nur Summen<br/><br/><img src="docs/bilder/reichweite.webp" alt="Reichweite der Social-Posts"/></td>
   </tr>
 </table>
 
@@ -346,7 +361,7 @@ Optionen, Updates, Sicherung, WordPress: **[Installation und Betrieb](docs/insta
 |---|---|
 | [docs/installation.md](docs/installation.md) | Installation, Updates, Sicherung, Wiederherstellung, erste Schritte, WordPress verbinden |
 | [docs/technik.md](docs/technik.md) | Aufbau, Verbindungen, Sicherheit, Leistung, Teststand und Grenzen, Entwicklung, Projektstruktur |
-| [docs/betrieb.md](docs/betrieb.md) | Start, Betriebswerte, Lasttest, Sicherung, Wiederherstellung, Updates, Datenbankrollen, Schlüsselwechsel, Protokollierung und Sicherheitsvorfälle, Notfall |
+| [docs/betrieb.md](docs/betrieb.md) | Start, Betriebswerte, Lasttest, Sicherung (auch außer Haus), Probe-Wiederherstellung, Wiederherstellung, Updates, Datenbankrollen, Schlüsselwechsel, Protokollierung und Sicherheitsvorfälle, Notfall |
 | [docs/reverse-proxy.md](docs/reverse-proxy.md) | HTTPS mit Nginx Proxy Manager, nginx, Caddy, Traefik, HAProxy, IIS |
 | [docs/integrationen.md](docs/integrationen.md) | Stand und Einrichtung je Verbindung, Ergebnisse der Live-Tests |
 | [docs/import.md](docs/import.md) | einmaliger Medienimport (Austauschformat, alte Links, Exportskript für LiFeOS) |
@@ -357,7 +372,7 @@ Optionen, Updates, Sicherung, WordPress: **[Installation und Betrieb](docs/insta
 | [docs/sicherheitspruefung.md](docs/sicherheitspruefung.md) | Ergebnis der Sicherheitsprüfung mit Nachweisen |
 | [docs/datenschutz.md](docs/datenschutz.md) | Datenschutz: Datenkategorien, Empfänger, Löschfristen, TOMs, Vorlagen für Verarbeitungsverzeichnis und DSFA |
 | [docs/entwicklung.md](docs/entwicklung.md) | Entwicklungsumgebung |
-| Hilfe-Center in der App (`/hilfe`) | 26 Kapitel für Redaktion und Administration |
+| Hilfe-Center in der App (`/hilfe`) | 31 Kapitel für Redaktion und Administration |
 
 ---
 
