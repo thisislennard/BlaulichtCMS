@@ -39,13 +39,13 @@ In WordPress unter **Einstellungen → BlaulichtCMS Bridge**:
 
 ### Kategorie
 
-Die Bridge meldet die Kategorien der Website an BlaulichtCMS (ab Bridge 0.8.0). Im Beitrag erscheint unter **Zielkanal** die Auswahl **Kategorie auf der Website**, ebenso im [Ausgang „Beitrag“](/hilfe/automationen#ausgaenge) einer Automation, sobald dort ein Zielkanal gewählt ist. Die Kategorie gehört zur freigegebenen Fassung – eine Änderung braucht eine neue Freigabe. Ohne Auswahl gilt die Standardkategorie. Eine neu angelegte Kategorie erscheint nach dem nächsten Abruf in BlaulichtCMS.
+Die Bridge meldet die Kategorien der Website an BlaulichtCMS (ab Bridge 0.8.0). Im Beitrag erscheint unter **Zielkanal** die Auswahl **Kategorie auf der Website**, ebenso im [Ausgang „Beitrag“](/hilfe/workflows#ausgaenge) eines Workflows, sobald dort ein Zielkanal gewählt ist. Die Kategorie gehört zur freigegebenen Fassung – eine Änderung braucht eine neue Freigabe. Ohne Auswahl gilt die Standardkategorie. Eine neu angelegte Kategorie erscheint nach dem nächsten Abruf in BlaulichtCMS.
 
 ### Autor
 
 Die Bridge legt den eigenen Autor bzw. die Autoren aus BlaulichtCMS beim ersten Beitrag **selbst an**. Diese Konten haben die Rolle „BlaulichtCMS-Autor“ **ohne jede Berechtigung**, kein bekanntes Passwort und keine E-Mail-Adresse; Anmeldung, Passwort-Zurücksetzen und Anwendungspasswörter sind gesperrt. Sie dienen nur der Autorenangabe.
 
-Für **Person aus BlaulichtCMS** muss in BlaulichtCMS auf der Website-Karte unter [Websites](/kanaele) **Autorenname übertragen** eingeschaltet sein (Vorgabe: aus). Übertragen wird nur der Anzeigename; statt der Konto-ID geht ein nicht umkehrbarer Schlüssel an die Website. Beiträge aus Automationen haben keine verfassende Person und erhalten den eigenen Autor der Bridge.
+Für **Person aus BlaulichtCMS** muss in BlaulichtCMS auf der Website-Karte unter [Websites](/kanaele) **Autorenname übertragen** eingeschaltet sein (Vorgabe: aus). Übertragen wird nur der Anzeigename; statt der Konto-ID geht ein nicht umkehrbarer Schlüssel an die Website. Beiträge aus Workflows haben keine verfassende Person und erhalten den eigenen Autor der Bridge.
 
 ## Abruf und Cronjob
 

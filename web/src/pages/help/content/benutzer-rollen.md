@@ -113,7 +113,7 @@ Alle Rechte, nach Bereichen. Die Tabelle entspricht dem Rollen-Editor; „Setzt 
 | --- | --- | --- | --- |
 | Beiträge freigeben | kritisch | Eine konkrete Fassung eines Beitrags freigeben oder zurückweisen und eine Freigabe zurücknehmen. | Beiträge ansehen |
 | Banner freigeben | kritisch | Eingereichte Banner freigeben oder zurückweisen. | Banner ansehen |
-| Freigaben in Automationen erteilen | kritisch | Wartende Freigabeschritte laufender Automationen freigeben oder ablehnen. | – |
+| Freigaben in Workflows erteilen | kritisch | Wartende Freigabeschritte laufender Workflows freigeben oder ablehnen. | – |
 
 **Veröffentlichung**
 
@@ -161,13 +161,13 @@ Alle Rechte, nach Bereichen. Die Tabelle entspricht dem Rollen-Editor; „Setzt 
 | Interne Zieladressen erlauben | kritisch | Den Abruf von Adressen im internen Netz für eine Verbindung ausdrücklich erlauben. | Verbindungen verwalten |
 | Empfangsprotokoll ansehen | lesen | Empfangsprotokoll eingehender Verbindungen (amtliche Warnungen, FE2, Feuersoftware Connect) mit Entscheidungen und Rohdaten ansehen. | Verbindungen verwalten |
 
-**Automationen**
+**Workflows**
 
 | Recht | Stufe | Erlaubt | Setzt voraus |
 | --- | --- | --- | --- |
-| Automationen ansehen | lesen | Automationen, Eingänge, Ausgänge und Laufprotokolle ansehen. | – |
-| Automationen verwalten | ändern | Eingänge, Ausgänge und Abläufe anlegen, bearbeiten, testen, aktivieren und deaktivieren. Ausgänge legen nur Entwürfe und Benachrichtigungen an; Freigaben bleiben bei den Menschen. | Automationen ansehen |
-| Automationen direkt veröffentlichen lassen | kritisch | Einer Automation erlauben, markierte Ausgänge ohne menschliche Freigabe zu veröffentlichen bzw. zu versenden (mit Passwortbestätigung, Audit und Sicherheitsmeldung). | Automationen verwalten |
+| Workflows ansehen | lesen | Workflows, Eingänge, Ausgänge und Laufprotokolle ansehen. | – |
+| Workflows verwalten | ändern | Eingänge, Ausgänge und Workflows anlegen, bearbeiten, testen, aktivieren und deaktivieren. Ausgänge legen nur Entwürfe und Benachrichtigungen an; Freigaben bleiben bei den Menschen. | Workflows ansehen |
+| Workflows direkt veröffentlichen lassen | kritisch | Einem Workflow erlauben, markierte Ausgänge ohne menschliche Freigabe zu veröffentlichen bzw. zu versenden (mit Passwortbestätigung, Audit und Sicherheitsmeldung). | Workflows verwalten |
 
 **Benutzer und Rollen**
 
@@ -209,7 +209,7 @@ Alle Rechte, nach Bereichen. Die Tabelle entspricht dem Rollen-Editor; „Setzt 
 | Medieneinstellungen ändern | ändern | Dateigrößen, erlaubte Dateitypen, Vorgaben für Upload-Links, Prüftiefe und Speichergrenzen. | Einstellungen ansehen |
 | Redaktionseinstellungen ändern | kritisch | Vier-Augen-Prinzip und weitere Vorgaben für Redaktion und Freigabe. | Einstellungen ansehen |
 | E-Mail-Versand und Push einstellen | kritisch | Weg für E-Mails wählen (SMTP oder Microsoft 365), Microsoft 365 einrichten und prüfen, Push- und E-Mail-Benachrichtigungen global schalten. | Einstellungen ansehen |
-| Systemeinstellungen ändern | ändern | Parallele Aufträge, Ausführung der Automationen und weitere technische Einstellungen. | Einstellungen ansehen |
+| Systemeinstellungen ändern | ändern | Parallele Aufträge, Ausführung der Workflows und weitere technische Einstellungen. | Einstellungen ansehen |
 
 <!-- rechte:ende -->
 

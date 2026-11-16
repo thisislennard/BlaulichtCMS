@@ -230,6 +230,31 @@ describe('Automationen: Entwurf, Test, Aktivierung', () => {
     expect(act.json.error).toBe('not_tested');
   });
 
+  it('Workflow aus Vorlage: einziger passender Eingang wird eingesetzt, offene Plätze gemeldet; Satz in Liste und Prüfung', async () => {
+    const cat = await editor.get('/automations/catalog');
+    expect(cat.json.templates.map((t: any) => t.id)).toContain('alarm-fire-post');
+    expect((await admin.post('/automations', { name: 'Unbekannt', template: 'gibt-es-nicht' })).status).toBe(400);
+    // Genau ein FE2-Eingang vorhanden → eingesetzt; Beitragsausgang auch genau einer → eingesetzt
+    const c = await admin.post('/automations', { name: 'Brand aus Vorlage', template: 'alarm-fire-post' });
+    expect(c.status, JSON.stringify(c.json)).toBe(200);
+    expect(c.json.open).toBe(0);
+    const d = await admin.get(`/automations/${c.json.id}`);
+    expect(d.json.validation.errors).toEqual([]);
+    expect(d.json.summary).toBe('Wenn ein neuer Alarm über „FE2-Alarm“ eingeht und Stichwort-Kategorie „Brand“ ist, entsteht ein Beitragsentwurf, der zur Freigabe eingereicht wird.');
+    // Kein Warnfeed-Eingang, kein Benachrichtigungs-Ausgang → zwei offene Plätze mit verständlicher Meldung
+    const w = await admin.post('/automations', { name: 'Warnung melden', template: 'warning-notify' });
+    expect(w.json.open).toBe(2);
+    const wd = await admin.get(`/automations/${w.json.id}`);
+    expect(wd.json.validation.open).toHaveLength(2);
+    expect(wd.json.validation.errors.map((e: any) => e.message).join(' ')).toMatch(/Auslöser \(Eingang\) noch nicht gewählt.*Aktion \(Ausgang\) noch nicht gewählt/);
+    expect(wd.json.graph.nodes.find((n: any) => n.type === 'input').data.want.kinds).toEqual(['warnfeed']);
+    const v = await editor.post(`/automations/${w.json.id}/validate`, { graph: wd.json.graph });
+    expect(v.json.summary).toMatch(/^Wenn eine neue amtliche Warnung/);
+    const list = await editor.get('/automations');
+    expect(list.json.find((x: any) => x.id === c.json.id).summary).toMatch(/Beitragsentwurf/);
+    for (const id of [c.json.id, w.json.id]) expect((await admin.del(`/automations/${id}`)).status).toBe(200);
+  });
+
   it('Testlauf (Trockenlauf) legt nichts an und beschreibt, was passieren würde', async () => {
     const before = (await one<any>(`SELECT count(*)::int AS n FROM posts`))!.n;
     const t = await admin.post(`/automations/${autoFe2}/test`, { payload: { stichwort: 'B2', ort: 'Testort', unbekannt: 'wird ignoriert' } });
@@ -380,7 +405,7 @@ describe('Automationen: Direktversand je Automation', () => {
     await freshReauth();
     const act = await admin.post(`/automations/${autoFe2}/activate`);
     expect(act.status, JSON.stringify(act.json)).toBe(200);
-    expect(await one(`SELECT 1 FROM notifications WHERE title LIKE 'Automation mit Direktversand aktiviert%'`)).not.toBeNull();
+    expect(await one(`SELECT 1 FROM notifications WHERE title LIKE 'Workflow mit Direktversand aktiviert%'`)).not.toBeNull();
     expect(await one(`SELECT 1 FROM audit_events WHERE action = 'automation.direct_enabled'`)).not.toBeNull();
     const list = await editor.get('/automations');
     expect(list.json.find((x: any) => x.id === autoFe2).direct_publish).toBe(true);
@@ -496,7 +521,7 @@ describe('Automationen: Verarbeitung, Grenzen, Notbremse, Löschfrist', () => {
     }
     expect(limited).toBeGreaterThanOrEqual(1);
     expect(await one(`SELECT 1 FROM automation_runs WHERE automation_id = $1 AND status = 'limited'`, [manualAuto])).not.toBeNull();
-    expect(await one(`SELECT 1 FROM notifications WHERE title = 'Automation: zu viele Läufe'`)).not.toBeNull();
+    expect(await one(`SELECT 1 FROM notifications WHERE title = 'Workflow: zu viele Läufe'`)).not.toBeNull();
     await setSettings({ 'automations.max_runs_per_minute': 20 });
   });
 
@@ -624,7 +649,7 @@ describe('Automationen: Export und Import (#196)', () => {
     expect(r.json.message).toMatch(/neueren BlaulichtCMS-Version/);
     r = await bad({ ...exported, automations: [] });
     expect(r.json.message).toMatch(/unvollständig oder beschädigt/);
-    expect(r.json.details.problems[0].message).toMatch(/keine Automation/);
+    expect(r.json.details.problems[0].message).toMatch(/keinen Workflow/);
     const tamper = (fn: (a: any) => void) => {
       const c = structuredClone(exported);
       fn(c);

@@ -7,8 +7,8 @@ import { Dialog, useToast } from '../../components/ui/overlays';
 import { Icon } from '../../components/ui/Icon';
 import type { AutomationListItem } from './Automations';
 
-/* Export und Import von Automationen (#196). Die Datei enthält nur Abläufe und für Ein-/Ausgänge Art und Name –
-   keine Kennungen, keine Zugangsdaten. Importierte Automationen starten immer als Entwurf. */
+/* Export und Import von Workflows (#196). Die Datei enthält nur Abläufe und für Ein-/Ausgänge Art und Name –
+   keine Kennungen, keine Zugangsdaten. Importierte Workflows starten immer als Entwurf. */
 
 /** Gleiche Grenze wie der Server (automations/transfer.ts). */
 const MAX_BYTES = 1024 * 1024;
@@ -27,7 +27,7 @@ export function ExportDialog({ items, onClose }: { items: AutomationListItem[]; 
     <Dialog
       open
       onClose={onClose}
-      title="Automationen exportieren"
+      title="Workflows exportieren"
       footer={
         <>
           <Button onClick={onClose}>Abbrechen</Button>
@@ -40,7 +40,7 @@ export function ExportDialog({ items, onClose }: { items: AutomationListItem[]; 
               onClose();
             }}
           >
-            {sel.size === 1 ? '1 Automation exportieren' : `${sel.size} Automationen exportieren`}
+            {sel.size === 1 ? '1 Workflow exportieren' : `${sel.size} Workflows exportieren`}
           </Button>
         </>
       }
@@ -66,7 +66,7 @@ export function ExportDialog({ items, onClose }: { items: AutomationListItem[]; 
             </li>
           ))}
         </ul>
-        {tooMany && <Notice tone="warning">Höchstens 50 Automationen je Datei – bitte weniger auswählen.</Notice>}
+        {tooMany && <Notice tone="warning">Höchstens 50 Workflows je Datei – bitte weniger auswählen.</Notice>}
       </div>
     </Dialog>
   );
@@ -176,8 +176,8 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
       const clean = (m: Record<string, string>) => Object.fromEntries(Object.entries(m).map(([k, v]) => [k, v || null]));
       const r = await post<{ created: { id: string; name: string; open: number }[] }>('/automations/import', { file, mapping: { inputs: clean(inputs), outputs: clean(outputs) } });
       await qc.invalidateQueries({ queryKey: ['automations'] });
-      toast({ tone: 'success', title: r.created.length === 1 ? 'Automation importiert' : `${r.created.length} Automationen importiert`, text: 'Als Entwurf angelegt – vor dem Aktivieren prüfen und testen.' });
-      if (r.created.length === 1) nav(`/automationen/${r.created[0].id}`);
+      toast({ tone: 'success', title: r.created.length === 1 ? 'Workflow importiert' : `${r.created.length} Workflows importiert`, text: 'Als Entwurf angelegt – vor dem Aktivieren prüfen und testen.' });
+      if (r.created.length === 1) nav(`/workflows/${r.created[0].id}`);
       else onClose();
     } catch (e) {
       setError(fileError(e));
@@ -190,7 +190,7 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
       open
       onClose={onClose}
       width={640}
-      title="Automationen importieren"
+      title="Workflows importieren"
       footer={
         <>
           <Button onClick={onClose}>Abbrechen</Button>
@@ -241,7 +241,7 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
             </div>
             <MappingRows title="Eingänge zuordnen" kind="Eingang" rows={preview.inputs} value={inputs} onChange={(ref, id) => setInputs((m) => ({ ...m, [ref]: id }))} />
             <MappingRows title="Ausgänge zuordnen" kind="Ausgang" rows={preview.outputs} value={outputs} onChange={(ref, id) => setOutputs((m) => ({ ...m, [ref]: id }))} />
-            <Notice title="Importierte Automationen starten als Entwurf">
+            <Notice title="Importierte Workflows starten als Entwurf">
               Sie sind nicht aktiv, nicht getestet und haben keinen Direktversand. {open > 0 ? `${open} Bezug/Bezüge bleiben offen und müssen im Editor gewählt werden. ` : ''}Vor dem Aktivieren im Editor prüfen und testen.
             </Notice>
           </>

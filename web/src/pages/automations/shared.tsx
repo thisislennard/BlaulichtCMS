@@ -4,7 +4,7 @@ import { get } from '../../api/client';
 import { Badge, Chip, cx, FieldWrap, Input, Select, Textarea, type Tone } from '../../components/ui/core';
 import { HelpTip } from '../../components/ui/HelpTip';
 
-/* Gemeinsame Typen und Bausteine der Automationen (Eingänge, Ausgänge, Editor). */
+/* Gemeinsame Typen und Bausteine der Workflows (Eingänge, Ausgänge, Editor). */
 
 export interface FieldDef {
   key: string;
@@ -31,6 +31,23 @@ export interface Catalog {
   responsibilities: { id: string; name: string; area: string }[];
   warningFields: { key: string; label: string; required: boolean }[];
   users: { id: string; name: string }[];
+  /** Vorlagen für neue Workflows (server/src/automations/templates.ts) */
+  templates?: WorkflowTemplate[];
+}
+
+export interface SlotPreset {
+  name?: string;
+  config?: Record<string, any>;
+}
+
+export interface WorkflowTemplate {
+  id: string;
+  title: string;
+  description: string;
+  icon: string;
+  input?: { kinds: string[]; preset?: SlotPreset };
+  rules?: { field: string; op: string; value?: string }[];
+  outputs: { kind: string; preset: SlotPreset }[];
 }
 
 export interface InputDef {
@@ -282,7 +299,7 @@ export function SelectField({ id, label, value, onChange, options, help, disable
 
 export function Help({ title, children, anchor }: { title: string; children: ReactNode; anchor?: string }) {
   return (
-    <HelpTip title={title} more={`/hilfe/automationen${anchor ? `#${anchor}` : ''}`}>
+    <HelpTip title={title} more={`/hilfe/workflows${anchor ? `#${anchor}` : ''}`}>
       {children}
     </HelpTip>
   );

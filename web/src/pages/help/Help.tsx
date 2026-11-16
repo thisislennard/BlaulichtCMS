@@ -1,6 +1,6 @@
 /* Hilfe: Kapitelnavigation, Volltextsuche, Inhaltsverzeichnis, Referenzkapitel aus dem Katalog. */
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Link, NavLink, useLocation, useNavigate, useParams, useSearchParams } from 'react-router';
+import { Link, Navigate, NavLink, useLocation, useNavigate, useParams, useSearchParams } from 'react-router';
 import { Keyboard, Printer } from 'lucide-react';
 import { Button, EmptyState, ErrorBox, Skeleton, SkeletonRows, cx } from '../../components/ui/core';
 import { Icon } from '../../components/ui/Icon';
@@ -499,11 +499,26 @@ function SearchResults({ q }: { q: string }) {
 
 /* ---------------------------------------- Seite ---------------------------------------- */
 
+/**
+ * Umbenannte Kapitel: alte Adressen (Lesezeichen, Links in älteren Texten) führen samt Anker auf das neue Kapitel.
+ * „Automationen“ heißt seit 0.3.1 „Workflows“; Abschnitte mit „Automation“ im Titel bekamen neue Anker.
+ */
+const RENAMED: Record<string, { slug: string; anchors?: Record<string, string> }> = {
+  automationen: { slug: 'workflows', anchors: { 'direktversand-je-automation': 'direktversand-je-workflow', editor: 'erweiterter-editor' } },
+};
+
 export default function Help() {
   const { chapter: slug } = useParams();
   const [params] = useSearchParams();
+  const loc = useLocation();
   const q = params.get('suche')?.trim() ?? '';
   const chapter = chapterBySlug(slug);
+  const renamed = slug ? RENAMED[slug] : undefined;
+  if (renamed) {
+    const anchor = decodeURIComponent(loc.hash.replace(/^#/, ''));
+    const next = renamed.anchors?.[anchor] ?? anchor;
+    return <Navigate replace to={`/hilfe/${renamed.slug}${loc.search}${next ? `#${next}` : ''}`} />;
+  }
 
   let main: ReactNode;
   if (slug && !chapter) {

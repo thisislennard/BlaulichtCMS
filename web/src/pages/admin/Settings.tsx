@@ -445,11 +445,11 @@ export default function Settings() {
                   checked={!!v["automations.enabled"]}
                   disabled={ro("automations.enabled")}
                   onChange={(x) => set("automations.enabled", x)}
-                  label="Automationen ausführen"
-                  description="Globaler Schalter für alle Automationen. Aus: Ereignisse und Zeitpläne starten keine Läufe mehr, offene Läufe werden abgebrochen. Die Abläufe selbst bleiben erhalten."
+                  label="Workflows ausführen"
+                  description="Globaler Schalter für alle Workflows. Aus: Ereignisse und Zeitpläne starten keine Läufe mehr, offene Läufe werden abgebrochen. Die Abläufe selbst bleiben erhalten."
                 />
                 <FieldGrid>
-                  <NumField k="automations.max_runs_per_minute" label="Läufe je Automation und Minute höchstens" help="Schutz gegen Schleifen und Fluten: darüber werden Ereignisse verworfen und die Verwaltung benachrichtigt (1 bis 600)." min={1} max={600} v={v} set={set} ro={ro("automations.max_runs_per_minute")} />
+                  <NumField k="automations.max_runs_per_minute" label="Läufe je Workflow und Minute höchstens" help="Schutz gegen Schleifen und Fluten: darüber werden Ereignisse verworfen und die Verwaltung benachrichtigt (1 bis 600)." min={1} max={600} v={v} set={set} ro={ro("automations.max_runs_per_minute")} />
                 </FieldGrid>
               </SectionCard>
 
@@ -479,7 +479,7 @@ export default function Settings() {
                   <NumField k="privacy.uploader_months" label="Angaben der Hochladenden" help="Name, E-Mail-Adresse, Aufnahmeort und -datum (je Upload-Link abfragbar) danach entfernen; die Dateien bleiben. 0 = nie." unit="Monate" min={0} max={120} v={v} set={set} ro={ro("privacy.uploader_months")} />
                   <NumField k="privacy.warning_days" label="Warnvorgänge" help="Nach dem letzten Bearbeitungsschritt des Vorgangs samt Aktualisierungen: Fassungen mit Rückrufkontakt, PDF, Versandnachweise. 0 = nie." unit={t("admin.common.days")} v={v} set={set} ro={ro("privacy.warning_days")} />
                   <NumField k="privacy.fe2_event_days" label="Einsatzmeldungen (FE2, Feuersoftware Connect)" help="Stichwort, Einsatzart, Ort, Zeit, Einheiten. Beiträge und Warnvorgänge daraus bleiben. 0 = nie." unit={t("admin.common.days")} v={v} set={set} ro={ro("privacy.fe2_event_days")} />
-                  <NumField k="privacy.automation_run_days" label="Laufprotokolle der Automationen" help="Eingangsdaten, Schritte und Freigaben abgeschlossener Läufe (1 bis 3650 Tage)." unit={t("admin.common.days")} min={1} max={3650} v={v} set={set} ro={ro("privacy.automation_run_days")} />
+                  <NumField k="privacy.automation_run_days" label="Laufprotokolle der Workflows" help="Eingangsdaten, Schritte und Freigaben abgeschlossener Läufe (1 bis 3650 Tage)." unit={t("admin.common.days")} min={1} max={3650} v={v} set={set} ro={ro("privacy.automation_run_days")} />
                   <NumField k="privacy.official_warning_days" label="Amtliche Warnungen" help="Gerechnet ab dem Ablauf der Warnung, frühestens ab dem letzten Abruf, in dem die Quelle sie noch geliefert hat. 0 = nie." unit={t("admin.common.days")} v={v} set={set} ro={ro("privacy.official_warning_days")} />
                   <NumField k="privacy.receipt_days" label="Empfangsprotokoll der Verbindungen" help="Abrufe und eingehende Meldungen von amtlichen Warnungen, FE2 und Feuersoftware Connect samt Entscheidung und Rohdaten (Einsatzdaten nur geschwärzt). Höchstens 500 Einträge je Verbindung. 1–30 Tage." unit={t("admin.common.days")} min={1} max={30} v={v} set={set} ro={ro("privacy.receipt_days")} />
                 </FieldGrid>

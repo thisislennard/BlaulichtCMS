@@ -34,8 +34,8 @@
   "warningConfig": "Keywords & rules",
   "connections": "Connections",
   "officialWarnings": "Official warnings",
-  "automations": "Automation",
-  "automationList": "Automations",
+  "automations": "Workflows",
+  "automationList": "All workflows",
   "automationInputs": "Inputs",
   "automationOutputs": "Outputs"
 }

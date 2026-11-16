@@ -55,9 +55,13 @@ Alle Verbindungen sind optional und laufen unter *Kanäle → Verbindungen* nach
 
 Details und Einrichtung: [docs/integrationen.md](integrationen.md), Hilfe → *Verbindungen*.
 
-## Automationen
+## Workflows (intern „automations“)
 
-Bereich *Automation* (Liste, Eingänge, Ausgänge, Editor). Der Editor nutzt **React Flow** (`@xyflow/react`, MIT) für
+Bereich *Workflows* (Liste, Eingänge, Ausgänge, Editor; bis 0.3.0 „Automationen“). Umbenannt ist nur, was man sieht:
+Oberfläche unter `/workflows` (alte Adressen `/automationen/…` leiten weiter, ebenso `/hilfe/automationen` samt
+Ankern), Texte, Benachrichtigungen, Audit-Anzeige und Anzeigenamen der Rechte. API-Pfade (`/api/automations…`),
+Tabellen, Einstellungen (`automations.*`), Rechte-IDs (`automation.*`) und das Exportformat `blaulichtcms.automations`
+bleiben gleich – eine bestehende Installation läuft ohne Migration weiter. Der Editor nutzt **React Flow** (`@xyflow/react`, MIT) für
 die Fläche und **dagre** (`@dagrejs/dagre`, MIT) für „Automatisch anordnen“ – beides nur in der Oberfläche
 (`web/dist`), keine neuen Laufzeit-Abhängigkeiten des Servers. Server: `server/src/automations/` (Katalog, Prüfung,
 Vorlagen/Bedingungen, Engine, Ereignisse), API `server/src/routes/automations.ts`, Migration `060_automations.sql`.
@@ -70,9 +74,12 @@ Vorlagen/Bedingungen, Engine, Ereignisse), API `server/src/routes/automations.ts
 | Ausführung | Auftrag `automation.run`, Advisory-Lock je Lauf, Schritt je Knoten, Ergebnis + Schritt in einer Transaktion, Wiederholung mit Backoff, Warten/Freigabe als Fortsetzung |
 | Grenzen | `automations.max_runs_per_minute` (20), `automations.enabled`, Deaktivieren als Notbremse, `privacy.automation_run_days` (30) |
 | Direktversand | je Automation, Recht `automation.publish`, Passwortbestätigung, Test, Audit, Sicherheitsmeldung (Architektur E17) |
+| Vorlagen | `automations/templates.ts`: Abläufe nur aus Katalog-Bausteinen, im Katalog (`templates`) ausgeliefert; `POST /automations` mit `template` setzt den einzigen passenden Ein-/Ausgang ein, sonst bleibt ein offener Platz (`data.want`: passende Arten + Startwerte fürs Anlegen) |
+| Geführte Ansicht | `web/src/pages/automations/workflowModel.ts` (reine Funktionen): Ablauf ↔ Modell „Wenn → Nur wenn → Dann“ (Eingänge, höchstens eine Bedingung ohne Untergruppen, Ausgänge, Kanten genau nach Muster); alles andere nur lesend mit Hinweis auf „Erweitert“; Checkliste vor dem Aktivieren aus `validateGraph` (`open` = offene Plätze) |
+| Zusammenfassung | `automations/summary.ts`: ein Satz je Workflow, in Liste, Detail und `POST /automations/:id/validate` (`summary`) |
 | Export/Import | `automations/transfer.ts`: Format `blaulichtcms.automations`, `schemaVersion` 1, App-Version; Ein-/Ausgänge nur als Bezug (Art + Name), kein `direct`; `GET /automations/export` (automation.read), `POST /automations/import/preview` und `/automations/import` (automation.manage, höchstens 1 MB und 50 Automationen, Import immer als Entwurf) |
 
-Tests: `server/test/automation-logic.test.ts` (ohne Datenbank: Vorlagen, Bedingungen, Entprellen, Zeitplan, Prüfung,
+Tests: `server/test/workflow-guided.test.ts` (ohne Datenbank: Roundtrip Ablauf ↔ geführte Ansicht, nicht darstellbare Abläufe, Checkliste, Vorlagen gegen Katalog und Einstellungen, Zusammenfassung), `server/test/automation-logic.test.ts` (ohne Datenbank: Vorlagen, Bedingungen, Entprellen, Zeitplan, Prüfung,
 Prüfsumme, Rechte) und `server/test/automations.test.ts` (gegen PostgreSQL: Rechte, Ein-/Ausgänge, Test und
 Aktivierung, FE2/Warnfeed/RSS-Ereignisse, Zeitplan mit Mail und Freigabe, Direktversand, Warten, Entprellen, Grenze,
 Notbremse, Löschfrist, Export → Import und abgelehnte Dateien).

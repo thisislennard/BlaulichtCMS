@@ -109,6 +109,27 @@ export function outputNeeds(o: Pick<OutputRef, 'kind' | 'config'>): string[] {
   return [...new Set(outputTemplates(o).flatMap((t) => placeholders(t)))];
 }
 
+/* ------------------------------------------------------------------ Offene Plätze */
+
+/**
+ * Offener Platz aus einer Vorlage: `data.want.kinds` nennt die passenden Arten (z. B. FE2 oder Feuersoftware), damit
+ * die Oberfläche nur passende Ein-/Ausgänge anbietet und einen neuen vorbelegt anlegen kann.
+ */
+export function slotKinds(n: { type: string; data?: any }): string[] {
+  const k = n.data?.want?.kinds;
+  if (!Array.isArray(k)) return [];
+  const known = n.type === 'input' ? INPUT_KINDS : OUTPUT_KINDS;
+  return k.filter((x: unknown): x is string => typeof x === 'string' && x in known);
+}
+
+/** Felder eines offenen Eingangs-Platzes: gemeinsame Felder der gewünschten Arten, ohne Angabe die aller Arten. */
+export function slotFields(n: { type: string; data?: any }): FieldDef[] {
+  const kinds = slotKinds(n) as InputKind[];
+  const lists = (kinds.length ? kinds : (Object.keys(INPUT_KINDS) as InputKind[])).map((k) => INPUT_KINDS[k].fields);
+  const pick = kinds.length ? lists[0].filter((f) => lists.every((l) => l.some((x) => x.key === f.key))) : [...new Map(lists.flat().map((f) => [f.key, f])).values()];
+  return [...SYSTEM_FIELDS, ...pick];
+}
+
 /* ------------------------------------------------------------------ Prüfung */
 
 export interface Problem {
@@ -127,6 +148,8 @@ export interface Validation {
   order: string[];
   /** Ausgänge mit „direkt“ */
   directNodes: string[];
+  /** Offene Plätze: Ein- und Ausgangs-Knoten ohne gewählten Eingang bzw. Ausgang (Vorlage, Import) */
+  open: string[];
 }
 
 /** Topologische Reihenfolge (Kahn); null bei Kreisen. Stabil nach Position (oben links zuerst). */
@@ -167,6 +190,7 @@ export function validateGraph(g: Graph, ctx: { inputs: Map<string, InputRef>; ou
   const warnings: Problem[] = [];
   const fields: Record<string, string[]> = {};
   const directNodes: string[] = [];
+  const open: string[] = [];
   const byId = new Map<string, GraphNode>();
   for (const n of g.nodes) {
     if (byId.has(n.id)) errors.push({ nodeId: n.id, message: 'Doppelte Knoten-Kennung.' });
@@ -174,6 +198,12 @@ export function validateGraph(g: Graph, ctx: { inputs: Map<string, InputRef>; ou
   }
   // Daten je Knotentyp
   for (const n of g.nodes) {
+    // Offener Platz (aus einer Vorlage oder einem Import): verständliche Meldung statt „Einstellungen unvollständig“
+    if ((n.type === 'input' && !n.data?.inputId) || (n.type === 'output' && !n.data?.outputId)) {
+      open.push(n.id);
+      errors.push({ nodeId: n.id, message: n.type === 'input' ? `${n.data?.label ? `„${n.data.label}“: ` : ''}Auslöser (Eingang) noch nicht gewählt.` : `${n.data?.label ? `„${n.data.label}“: ` : ''}Aktion (Ausgang) noch nicht gewählt.` });
+      continue;
+    }
     const r = NODE_DATA[n.type as NodeType]?.safeParse(n.data);
     if (!r?.success) {
       const first = r?.error.issues[0];
@@ -199,8 +229,8 @@ export function validateGraph(g: Graph, ctx: { inputs: Map<string, InputRef>; ou
       if (!depthOk) errors.push({ nodeId: n.id, message: 'Bedingungen: höchstens eine Ebene Untergruppen.' });
     }
   }
-  if (!g.nodes.some((n) => n.type === 'input')) errors.push({ message: 'Der Ablauf braucht mindestens einen Eingang.' });
-  if (!g.nodes.some((n) => n.type === 'output')) errors.push({ message: 'Der Ablauf braucht mindestens einen Ausgang.' });
+  if (!g.nodes.some((n) => n.type === 'input')) errors.push({ message: 'Der Workflow braucht mindestens einen Auslöser (Eingang).' });
+  if (!g.nodes.some((n) => n.type === 'output')) errors.push({ message: 'Der Workflow braucht mindestens eine Aktion (Ausgang).' });
 
   // Kanten
   const seen = new Set<string>();
@@ -219,7 +249,7 @@ export function validateGraph(g: Graph, ctx: { inputs: Map<string, InputRef>; ou
     seen.add(k);
   }
   const order = topoOrder(g);
-  if (!order) errors.push({ message: 'Der Ablauf enthält einen Kreis. Verbindungen dürfen nicht zu einem früheren Knoten zurückführen.' });
+  if (!order) errors.push({ message: 'Der Workflow enthält einen Kreis. Verbindungen dürfen nicht zu einem früheren Knoten zurückführen.' });
 
   // Pflicht-Anschlüsse
   for (const n of g.nodes) {
@@ -240,7 +270,7 @@ export function validateGraph(g: Graph, ctx: { inputs: Map<string, InputRef>; ou
       let avail: Set<string>;
       if (n.type === 'input') {
         const inp = ctx.inputs.get(n.data?.inputId);
-        avail = new Set(inp ? inputFields(inp).map((f) => f.key) : SYSTEM_FIELDS.map((f) => f.key));
+        avail = new Set(inp ? inputFields(inp).map((f) => f.key) : slotFields(n).map((f) => f.key));
       } else {
         const sets = g.edges.filter((e) => e.target === nid && out.has(e.source)).map((e) => out.get(e.source)!);
         avail = sets.length ? new Set([...sets[0]].filter((k) => sets.every((s) => s.has(k)))) : new Set();
@@ -280,10 +310,12 @@ export function validateGraph(g: Graph, ctx: { inputs: Map<string, InputRef>; ou
             break;
           }
         }
+      } else if (n.type === 'output' && !n.data?.outputId) {
+        for (const k of slotKinds(n)) for (const f of OUTPUT_KINDS[k as OutputKind]?.produces ?? []) produced.add(f.key);
       }
       out.set(nid, produced);
     }
     // Nicht erreichbare Knoten (nur über Knoten ohne Eingang erreichbar ist ausgeschlossen, weil jeder Knoten einen Eingang braucht)
   }
-  return { ok: errors.length === 0, errors, warnings, fields, order: order ?? [], directNodes };
+  return { ok: errors.length === 0, errors, warnings, fields, order: order ?? [], directNodes, open };
 }

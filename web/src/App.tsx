@@ -8,6 +8,12 @@ import { UploadPage } from './pages/public/UploadPage';
 import { LiveProvider } from './lib/live';
 import { CrashView, FeedbackPage, FeedbackView, feedbackFor } from './components/feedback/Feedback';
 
+/** /automationen/… → /workflows/… (Pfad, Suche und Anker bleiben erhalten). */
+function LegacyWorkflowRedirect() {
+  const loc = useLocation();
+  return <Navigate replace to={`${loc.pathname.replace(/^\/automationen/, '/workflows')}${loc.search}${loc.hash}`} />;
+}
+
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const Activities = lazy(() => import('./pages/Activities'));
 const Notifications = lazy(() => import('./pages/Notifications'));
@@ -154,10 +160,13 @@ const router = createBrowserRouter(withErrors([
       { path: 'warnungen/:id', element: <Page perm={['warning.view']}><WarningCase /></Page> },
       { path: 'verbindungen', element: <Page perm={['connection.configure']}><Connections /></Page> },
       { path: 'verbindungen/:id', element: <Page perm={['connection.configure']}><ConnectionDetail /></Page> },
-      { path: 'automationen', element: <Page perm={['automation.read']}><Automations /></Page> },
-      { path: 'automationen/eingaenge', element: <Page perm={['automation.read']}><AutomationInputs /></Page> },
-      { path: 'automationen/ausgaenge', element: <Page perm={['automation.read']}><AutomationOutputs /></Page> },
-      { path: 'automationen/:id', element: <Page perm={['automation.read']}><AutomationEditor /></Page> },
+      { path: 'workflows', element: <Page perm={['automation.read']}><Automations /></Page> },
+      { path: 'workflows/eingaenge', element: <Page perm={['automation.read']}><AutomationInputs /></Page> },
+      { path: 'workflows/ausgaenge', element: <Page perm={['automation.read']}><AutomationOutputs /></Page> },
+      { path: 'workflows/:id', element: <Page perm={['automation.read']}><AutomationEditor /></Page> },
+      // Frühere Adressen (bis 0.3.0 „Automationen“): Lesezeichen, Benachrichtigungen und Audit-Links bleiben gültig
+      { path: 'automationen/*', element: <LegacyWorkflowRedirect /> },
+      { path: 'automationen', element: <LegacyWorkflowRedirect /> },
       { path: 'amtliche-warnungen', element: <Page perm={['official.view']}><OfficialWarnings /></Page> },
       { path: 'benutzer', element: <Page perm={['user.view']}><Users /></Page> },
       { path: 'system', element: <Page perm={['system.status']}><SystemStatus /></Page> },

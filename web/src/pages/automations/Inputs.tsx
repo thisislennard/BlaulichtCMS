@@ -21,10 +21,11 @@ const DEFAULTS: Record<string, Record<string, any>> = {
   manual: { fields: [] },
 };
 
-function InputDialog({ input, kind, cat, onClose }: { input: InputDef | null; kind: string; cat: Catalog; onClose: (saved: boolean) => void }) {
+/** Dialog zum Anlegen/Bearbeiten – auch direkt aus dem Workflow (`preset`: Startwerte einer Vorlage; `onClose` liefert die ID). */
+export function InputDialog({ input, kind, cat, onClose, preset }: { input: InputDef | null; kind: string; cat: Catalog; onClose: (saved: boolean, id?: string) => void; preset?: { name?: string; config?: Record<string, any> } }) {
   const toastError = useErrorToast();
-  const [name, setName] = useState(input?.name ?? cat.inputKinds.find((k) => k.kind === kind)?.label ?? '');
-  const [c, setC] = useState<Record<string, any>>({ ...DEFAULTS[kind], ...(input?.config ?? {}) });
+  const [name, setName] = useState(input?.name ?? preset?.name ?? cat.inputKinds.find((k) => k.kind === kind)?.label ?? '');
+  const [c, setC] = useState<Record<string, any>>({ ...DEFAULTS[kind], ...(input ? input.config : (preset?.config ?? {})) });
   const [busy, setBusy] = useState(false);
   const def = cat.inputKinds.find((k) => k.kind === kind)!;
   const set = (patch: Record<string, any>) => setC((x) => ({ ...x, ...patch }));
@@ -33,9 +34,10 @@ function InputDialog({ input, kind, cat, onClose }: { input: InputDef | null; ki
     setBusy(true);
     try {
       const body = { name, config: c };
-      if (input) await put(`/automation-inputs/${input.id}`, body);
-      else await post('/automation-inputs', { ...body, kind });
-      onClose(true);
+      if (input) {
+        await put(`/automation-inputs/${input.id}`, body);
+        onClose(true, input.id);
+      } else onClose(true, (await post<{ id: string }>('/automation-inputs', { ...body, kind })).id);
     } catch (e) {
       toastError(e, 'Eingang nicht gespeichert');
     } finally {
@@ -74,7 +76,7 @@ function InputDialog({ input, kind, cat, onClose }: { input: InputDef | null; ki
               placeholder="Bitte wählen …"
               options={conns.map((x) => ({ value: x.id, label: `${x.name}${x.status !== 'active' ? ` (${x.status === 'disabled' ? 'deaktiviert' : 'nicht aktiv'})` : ''}` }))}
               help={conns.length ? 'Nur aktive Verbindungen liefern Ereignisse. Eingerichtet wird die Verbindung unter Kanäle → Verbindungen.' : undefined}
-              labelAction={<Help title="Verbindung" anchor="eingaenge">Ein Eingang hört auf eine bestehende Verbindung. Zugangsdaten, Tests und Gebietsfilter bleiben dort; hier wird nur festgelegt, welche Ereignisse eine Automation starten.</Help>}
+              labelAction={<Help title="Verbindung" anchor="eingaenge">Ein Eingang hört auf eine bestehende Verbindung. Zugangsdaten, Tests und Gebietsfilter bleiben dort; hier wird nur festgelegt, welche Ereignisse einen Workflow starten.</Help>}
             />
             {!conns.length && <Notice tone="warning">Es gibt noch keine passende Verbindung. <Link to="/verbindungen">Verbindungen öffnen →</Link></Notice>}
             <CheckList legend="Welche Vorgänge starten einen Lauf?" options={(def.phases ?? []).map((p) => ({ value: p.value, label: p.label }))} value={c.phases ?? []} onChange={(v) => set({ phases: v })} />
@@ -160,13 +162,13 @@ export default function Inputs() {
     <div className="flex flex-col gap-5">
       <PageHeader
         title="Eingänge"
-        subtitle="Auslöser für Automationen: Einsätze, amtliche Warnungen, RSS-Einträge, Uploads, Zeitpläne und manueller Start."
+        subtitle="Auslöser für Workflows: Einsätze, amtliche Warnungen, RSS-Einträge, Uploads, Zeitpläne und manueller Start."
         actions={manage && <Button variant="primary" icon="Plus" disabled={!cat.data} onClick={() => setChoose(true)}>Neuer Eingang</Button>}
       />
-      {cat.data && !cat.data.enabled && <Notice tone="warning" title="Automationen sind abgeschaltet">Unter Einstellungen → Redaktion lassen sie sich wieder einschalten.</Notice>}
+      {cat.data && !cat.data.enabled && <Notice tone="warning" title="Workflows sind abgeschaltet">Unter Einstellungen → Redaktion lassen sie sich wieder einschalten.</Notice>}
       {(q.isLoading || cat.isLoading) && <SkeletonRows rows={4} />}
       {q.error && <ErrorBox title="Eingänge konnten nicht geladen werden">{(q.error as Error).message}</ErrorBox>}
-      {q.data && q.data.length === 0 && <EmptyState icon="Zap" title="Noch keine Eingänge" text="Ein Eingang legt fest, welches Ereignis eine Automation startet." />}
+      {q.data && q.data.length === 0 && <EmptyState icon="Zap" title="Noch keine Eingänge" text="Ein Eingang legt fest, welches Ereignis einen Workflow startet." />}
       <div className="grid gap-4 lg:grid-cols-2">
         {(q.data ?? []).map((i) => {
           const kind = cat.data?.inputKinds.find((k) => k.kind === i.kind);
@@ -202,13 +204,13 @@ export default function Inputs() {
                   <>
                     Verwendet in:
                     {i.used_by.map((u) => (
-                      <Link key={u.id} to={`/automationen/${u.id}`}>
+                      <Link key={u.id} to={`/workflows/${u.id}`}>
                         <Chip>{u.name}</Chip>
                       </Link>
                     ))}
                   </>
                 ) : (
-                  'Noch in keiner Automation verwendet.'
+                  'Noch in keinem Workflow verwendet.'
                 )}
                 <span className="ml-auto">geändert {fmtDateTime(i.updated_at)}{i.updated_by_name ? ` · ${i.updated_by_name}` : ''}</span>
               </div>

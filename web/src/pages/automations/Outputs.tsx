@@ -29,11 +29,12 @@ function allFields(cat: Catalog) {
   return [...m.values()].sort((a, b) => a.label.localeCompare(b.label, 'de'));
 }
 
-function OutputDialog({ output, kind, cat, onClose }: { output: OutputDef | null; kind: string; cat: Catalog; onClose: (saved: boolean) => void }) {
+/** Dialog zum Anlegen/Bearbeiten – auch direkt aus dem Workflow (`preset`: Startwerte einer Vorlage; `onClose` liefert die ID). */
+export function OutputDialog({ output, kind, cat, onClose, preset }: { output: OutputDef | null; kind: string; cat: Catalog; onClose: (saved: boolean, id?: string) => void; preset?: { name?: string; config?: Record<string, any> } }) {
   const toastError = useErrorToast();
   const def = cat.outputKinds.find((k) => k.kind === kind)!;
-  const [name, setName] = useState(output?.name ?? def.label);
-  const [c, setC] = useState<Record<string, any>>({ ...DEFAULTS[kind], ...(output?.config ?? {}) });
+  const [name, setName] = useState(output?.name ?? preset?.name ?? def.label);
+  const [c, setC] = useState<Record<string, any>>({ ...DEFAULTS[kind], ...(output ? output.config : (preset?.config ?? {})) });
   const [busy, setBusy] = useState(false);
   const set = (patch: Record<string, any>) => setC((x) => ({ ...x, ...patch }));
   const fields = useMemo(() => allFields(cat), [cat]);
@@ -43,9 +44,10 @@ function OutputDialog({ output, kind, cat, onClose }: { output: OutputDef | null
     setBusy(true);
     try {
       const body = { name, config: c };
-      if (output) await put(`/automation-outputs/${output.id}`, body);
-      else await post('/automation-outputs', { ...body, kind });
-      onClose(true);
+      if (output) {
+        await put(`/automation-outputs/${output.id}`, body);
+        onClose(true, output.id);
+      } else onClose(true, (await post<{ id: string }>('/automation-outputs', { ...body, kind })).id);
     } catch (e) {
       toastError(e, 'Ausgang nicht gespeichert');
     } finally {
@@ -172,7 +174,7 @@ function OutputDialog({ output, kind, cat, onClose }: { output: OutputDef | null
 
         {kind === 'warning_draft' && (
           <>
-            <Notice tone="warning" title="Nur vorbereiten">Die Automation legt einen Warnentwurf mit vorausgefüllten Feldern an. Warnstufe, Freigabe und Versand bleiben immer bei den zuständigen Personen.</Notice>
+            <Notice tone="warning" title="Nur vorbereiten">Der Workflow legt einen Warnentwurf mit vorausgefüllten Feldern an. Warnstufe, Freigabe und Versand bleiben immer bei den zuständigen Personen.</Notice>
             {cat.warningFields.length === 0 && <Notice tone="warning">Es gibt keine aktive Warnvorlage.</Notice>}
             {cat.warningFields.map((f) => (
               <TemplateField key={f.key} id={`o-wf-${f.key}`} label={`${f.label}${f.required ? ' (Pflicht in der Vorlage)' : ''}`} rows={f.key.includes('text') || f.key.includes('desc') ? 3 : 1} value={c.data?.[f.key] ?? ''} onChange={(v) => set({ data: Object.fromEntries(Object.entries({ ...c.data, [f.key]: v }).filter(([, x]) => String(x).length)) })} fields={fields} max={2000} />
@@ -214,10 +216,10 @@ export default function Outputs() {
         subtitle="Aktionen mit ihrer Gestaltung: Banner-Stil, Beitragsvorlage, E-Mail, App-Benachrichtigung, Warnentwurf."
         actions={manage && <Button variant="primary" icon="Plus" disabled={!cat.data} onClick={() => setChoose(true)}>Neuer Ausgang</Button>}
       />
-      <Notice icon="ShieldCheck">Ausgänge legen Entwürfe und Benachrichtigungen an – die Freigabe bleibt bei den Menschen. Direktversand ist nur je Automation mit eigenem Recht möglich.</Notice>
+      <Notice icon="ShieldCheck">Ausgänge legen Entwürfe und Benachrichtigungen an – die Freigabe bleibt bei den Menschen. Direktversand ist nur je Workflow mit eigenem Recht möglich.</Notice>
       {(q.isLoading || cat.isLoading) && <SkeletonRows rows={4} />}
       {q.error && <ErrorBox title="Ausgänge konnten nicht geladen werden">{(q.error as Error).message}</ErrorBox>}
-      {q.data && q.data.length === 0 && <EmptyState icon="Send" title="Noch keine Ausgänge" text="Ein Ausgang legt fest, was eine Automation tut – etwa einen Banner-Entwurf im Stil „Unwetter“ anlegen." />}
+      {q.data && q.data.length === 0 && <EmptyState icon="Send" title="Noch keine Ausgänge" text="Ein Ausgang legt fest, was ein Workflow tut – etwa einen Banner-Entwurf im Stil „Unwetter“ anlegen." />}
       <div className="grid gap-4 lg:grid-cols-2">
         {(q.data ?? []).map((o) => {
           const kind = cat.data?.outputKinds.find((k) => k.kind === o.kind);
@@ -261,17 +263,17 @@ export default function Outputs() {
                   <>
                     Verwendet in:
                     {o.used_by.map((u) => (
-                      <Link key={u.id} to={`/automationen/${u.id}`}>
+                      <Link key={u.id} to={`/workflows/${u.id}`}>
                         <Chip>{u.name}</Chip>
                       </Link>
                     ))}
                   </>
                 ) : (
-                  'Noch in keiner Automation verwendet.'
+                  'Noch in keinem Workflow verwendet.'
                 )}
                 <span className="ml-auto">geändert {fmtDateTime(o.updated_at)}{o.updated_by_name ? ` · ${o.updated_by_name}` : ''}</span>
               </div>
-              {o.used_by.length > 0 && <p className="m-0 mt-2 text-meta text-fg-muted">Änderungen wirken erst, wenn die Automation neu getestet und aktiviert wurde.</p>}
+              {o.used_by.length > 0 && <p className="m-0 mt-2 text-meta text-fg-muted">Änderungen wirken erst, wenn der Workflow neu getestet und aktiviert wurde.</p>}
             </Card>
           );
         })}
@@ -304,8 +306,8 @@ function SocialTargetsField({ channels, value, onChange }: { channels: { id: str
     <fieldset className="border border-line rounded-card p-3 flex flex-col gap-2">
       <legend className="px-1 text-sm font-medium flex items-center gap-1">
         Soziale Kanäle vorauswählen (optional)
-        <Help title="Soziale Kanäle in Automationen" anchor="ausgaenge">
-          Der Beitragsentwurf bekommt diese Kanäle samt Format (Beitrag, Story oder beides) schon mit. Veröffentlicht wird erst, wenn eine Person den Beitrag freigegeben und „Auf sozialen Kanälen veröffentlichen“ gewählt hat – Automationen posten nie selbst in sozialen Netzwerken. Kanäle ohne Schnittstelle (X im Modus „Teilen von Hand“, WhatsApp-Kanal) erscheinen danach als „Zum Teilen bereit“ samt Benachrichtigung. Storys brauchen ein Bild oder Video, das die Redaktion im Entwurf ergänzt.
+        <Help title="Soziale Kanäle in Workflows" anchor="ausgaenge">
+          Der Beitragsentwurf bekommt diese Kanäle samt Format (Beitrag, Story oder beides) schon mit. Veröffentlicht wird erst, wenn eine Person den Beitrag freigegeben und „Auf sozialen Kanälen veröffentlichen“ gewählt hat – Workflows posten nie selbst in sozialen Netzwerken. Kanäle ohne Schnittstelle (X im Modus „Teilen von Hand“, WhatsApp-Kanal) erscheinen danach als „Zum Teilen bereit“ samt Benachrichtigung. Storys brauchen ein Bild oder Video, das die Redaktion im Entwurf ergänzt.
         </Help>
       </legend>
       {!visible.length && <p className="m-0 text-sm text-fg-muted">Noch kein sozialer Kanal verbunden (Verwaltung → Verbindungen).</p>}

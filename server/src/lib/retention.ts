@@ -342,7 +342,7 @@ export async function runRetention(opts: { dryRun: boolean; actor?: Actor; setti
   report.categories.push(
     await simpleCategory(opts.dryRun, {
       key: 'automation_runs',
-      label: 'Laufprotokolle der Automationen (Eingangsdaten, Schritte, Freigaben)',
+      label: 'Laufprotokolle der Workflows (Eingangsdaten, Schritte, Freigaben)',
       days: days(s['privacy.automation_run_days']),
       table: 'automation_runs',
       where: `status NOT IN ('queued','running','waiting') AND COALESCE(finished_at, created_at) < now() - make_interval(days => $1)`,

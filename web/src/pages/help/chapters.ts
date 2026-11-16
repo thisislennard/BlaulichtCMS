@@ -47,7 +47,7 @@ export const GROUPS: ChapterGroup[] = [
   G('channels', [
     ['wordpress', 'Globe'],
     ['verbindungen', 'Plug'],
-    ['automationen', 'Workflow'],
+    ['workflows', 'Workflow'],
     ['banner', 'Megaphone'],
     ['ohne-website', 'Unlink'],
   ]),

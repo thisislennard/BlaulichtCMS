@@ -32,10 +32,10 @@ const C = (id: string, label: string, description: string, permissions: string[]
 });
 
 export const NOTIFY_CATEGORIES: NotifyCategory[] = [
-  C('approval', 'Freigabe angefordert', 'Ein Beitrag, Banner, Warnentwurf oder Schritt einer Automation wartet auf Freigabe.', ['approval.post', 'approval.banner', 'approval.automation', 'warning.approve'], ['push'], { urgency: 'high' }),
+  C('approval', 'Freigabe angefordert', 'Ein Beitrag, Banner, Warnentwurf oder Schritt eines Workflows wartet auf Freigabe.', ['approval.post', 'approval.banner', 'approval.automation', 'warning.approve'], ['push'], { urgency: 'high' }),
   C('decision', 'Eigene Fassung freigegeben oder zurückgewiesen', 'Eine selbst eingereichte Fassung wurde freigegeben oder zurückgewiesen.', ['post.submit'], ['push']),
   C('incident', 'Einsatz-Eingang (FE2, Feuersoftware Connect)', 'Aus einer Einsatzmeldung wurde ein Beitragsentwurf angelegt oder aktualisiert.', ['post.edit'], ['push'], { urgency: 'high' }),
-  C('drafts', 'Neue Entwürfe aus Automationen', 'Eine Automation hat einen Beitrags- oder Warnentwurf vorbereitet.', ['post.edit', 'warning.draft'], []),
+  C('drafts', 'Neue Entwürfe aus Workflows', 'Ein Workflow hat einen Beitrags- oder Warnentwurf vorbereitet.', ['post.edit', 'warning.draft'], []),
   C('media_new', 'Neue Dateien über Foto-Links', 'Über einen Upload-Link sind Fotos oder Videos eingegangen und geprüft (gebündelt je Sammlung, höchstens eine Meldung je Stunde).', ['media.review'], ['push']),
   C('media_link', 'Upload-Links und Kontingente', 'Ein Upload-Link läuft bald ab oder ein Kontingent ist erreicht.', ['media.review'], []),
   C('media_storage', 'Speicherplatz der Medien', 'Der Speicher für Medien unterschreitet die Warnschwelle.', ['media.admin'], ['mail']),
@@ -43,8 +43,8 @@ export const NOTIFY_CATEGORIES: NotifyCategory[] = [
   C('publish', 'Veröffentlichungen', 'Ergebnis einer Veröffentlichung auf Website oder sozialen Kanälen, Banner nicht übertragen, Rückzug.', ['publish.website', 'publish.social', 'banner.publish'], []),
   C('warning_send', 'Versand von Warnentwürfen', 'Der Versand eines Warnentwurfs ist fehlgeschlagen oder sein Ergebnis ist unklar.', ['warning.send'], ['push', 'mail'], { urgency: 'high' }),
   C('connection', 'Verbindungsfehler', 'Eine Verbindung (z. B. Feuersoftware Connect, Warnfeed, Website) ist gestört oder wurde getrennt.', ['connection.configure', 'channel.sites'], ['mail']),
-  C('automation', 'Automation fehlgeschlagen', 'Ein Lauf einer Automation ist fehlgeschlagen oder wurde gebremst.', ['automation.manage'], ['mail']),
-  C('automation_message', 'Benachrichtigungen aus Automationen', 'Eine Automation benachrichtigt das Konto ausdrücklich (Ausgang „Benachrichtigen“).', [], ['push']),
+  C('automation', 'Workflow fehlgeschlagen', 'Ein Lauf eines Workflows ist fehlgeschlagen oder wurde gebremst.', ['automation.manage'], ['mail']),
+  C('automation_message', 'Benachrichtigungen aus Workflows', 'Ein Workflow benachrichtigt das Konto ausdrücklich (Ausgang „Benachrichtigen“).', [], ['push']),
   C('update', 'Update verfügbar und installiert', 'Eine neue Version von BlaulichtCMS steht bereit bzw. ein Update wurde abgeschlossen.', ['update.install'], ['mail']),
   C('system', 'Sicherung fehlgeschlagen', 'Eine Datenbank- oder Volume-Sicherung ist fehlgeschlagen.', ['backup.manage'], ['mail']),
   C('security', 'Sicherheitsmeldungen', 'Sicherheitsrelevante Ereignisse für die Administration. Die E-Mail dazu regeln die Sicherheitseinstellungen.', ['settings.security', 'user.assign_roles', 'channel.sites', 'connection.configure', 'media.admin', 'update.install', 'automation.publish', 'audit.view'], ['push'], { channels: ['push'] }),

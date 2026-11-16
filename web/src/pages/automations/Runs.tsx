@@ -243,7 +243,7 @@ export function StartDialog({ automationId, inputs, onClose, onStarted }: { auto
     <Dialog
       open
       onClose={onClose}
-      title="Automation jetzt starten"
+      title="Workflow jetzt starten"
       footer={
         <>
           <Button onClick={onClose}>Abbrechen</Button>

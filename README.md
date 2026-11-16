@@ -118,7 +118,7 @@ flowchart LR
 
 - **WordPress über die BlaulichtCMS Bridge:** Plugin direkt aus BlaulichtCMS, Kopplung per Einmalcode, die Website holt
   Aufträge per HTTPS ab – kein offener Eingang zur Website. WordPress-ID und URL kommen zurück; auch eine doppelte
-  Abholung erzeugt nie einen zweiten Beitrag. Kategorie je Beitrag und je Automation; Autor als eigener Autor der
+  Abholung erzeugt nie einen zweiten Beitrag. Kategorie je Beitrag und je Workflow; Autor als eigener Autor der
   Bridge oder je Person (ohne Rechte, ohne Anmeldung). Kein Host-Cron nötig. Updates des Plugins sind signiert und
   laufen auf Wunsch automatisch.
 - **Banner auf der Website:** Hinweise und Gefahrenmeldungen mit Laufzeit, automatisch am Seitenanfang oder per Block
@@ -147,7 +147,7 @@ flowchart LR
   eine andere Person frei.
 - **Stichwortverzeichnis je Bundesland:** amtliche Verzeichnisse für Hessen (Runderlass 2024) und Bayern (ABek-Anlage)
   wortgetreu mitgeliefert, für alle Länder eigene Liste per CSV/JSON importier- und exportierbar; Bedeutung der
-  Stichworte in Einsatzmeldungen, Automationen und Filtern.
+  Stichworte in Einsatzmeldungen, Workflows und Filtern.
 - **Amtliche Warnungen:** Warn-App-Schnittstelle des Bundes (NINA, gefiltert nach Regionalschlüssel) oder CAP-Feeds,
   auf Wunsch als Banner auf der Website mit Quellenvermerk.
 
@@ -163,9 +163,16 @@ flowchart LR
 - **Medienimport:** einmalige Übernahme von Medien und gültigen Upload-Links aus einem Altsystem (Austauschformat,
   Exportskript für LiFeOS).
 
-### Automationen
+### Workflows
 
-- **Visueller Editor:** Eingänge (FE2-Alarm, Feuersoftware-Einsatz, amtliche Warnung, RSS-Eintrag, neue Uploads,
+- **Vorlagen:** „Alarm → Banner auf der Website“, „DWD-Warnung → Banner + Beitragsentwurf“, „Alarm mit
+  Stichwort-Kategorie Brand → Beitragsentwurf“, „Warnung → Benachrichtigen“ oder leer beginnen; passende Ein- und
+  Ausgänge werden eingesetzt, offene Plätze hervorgehoben.
+- **Geführt in drei Schritten:** *Wenn* (Auslöser) – *Nur wenn* (Feld – Vergleich – Wert, mit Vorschlägen aus dem
+  Stichwortverzeichnis) – *Dann* (Aktionen). Fehlende Ein- und Ausgänge direkt im Workflow anlegen. Jeder Workflow
+  steht in der Liste und im Editor als ein Satz („Wenn ein neuer Alarm … eingeht, erscheint nach Freigabe auf der
+  Website ein Banner …“); eine Checkliste zeigt vor dem Aktivieren, was noch fehlt.
+- **Erweitert – visueller Editor:** Eingänge (FE2-Alarm, Feuersoftware-Einsatz, amtliche Warnung, RSS-Eintrag, neue Uploads,
   Zeitplan, manueller Start), Verarbeitung (Bedingung, Verzweigung, Felder setzen, Warten, Einmal je Vorgang, Freigabe
   anfordern, Zusammenführen) und Ausgänge (Banner, Beitrag, E-Mail, App-Benachrichtigung, Warnentwurf vorbereiten)
   auf einer Fläche verbinden – mit Palette, Minikarte, automatischer Anordnung, Rückgängig und einer Listenansicht für
@@ -174,8 +181,8 @@ flowchart LR
   Texten je Kanal, E-Mail an Rollen oder Zuständigkeiten) und in vielen Abläufen wiederverwendet.
 - **Sicher:** Abläufe sind Daten (keine Formeln, kein Code); Testlauf ohne Wirkung, aktiv nur nach erfolgreichem Test,
   Versionen, Schrittprotokoll, Grenzen je Minute, Notbremse. Ausgänge legen Entwürfe an – Direktversand ohne
-  Freigabe nur je Automation mit eigenem Recht, Passwortbestätigung, Audit und Sicherheitsmeldung.
-- **Export und Import:** Automationen als JSON-Datei (versioniert, ohne Kennungen und Zugangsdaten) exportieren und
+  Freigabe nur je Workflow mit eigenem Recht, Passwortbestätigung, Audit und Sicherheitsmeldung.
+- **Export und Import:** Workflows als JSON-Datei (versioniert, ohne Kennungen und Zugangsdaten) exportieren und
   mit Vorschau und Zuordnung der Ein- und Ausgänge als Entwurf importieren.
 
 ### Übersicht und Bedienung
@@ -188,7 +195,7 @@ flowchart LR
   eigene Reihenfolge fürs Handy, Vorlagen für alle oder je Rolle.
 - **Live:** neue Uploads, Freigaben und Veröffentlichungen erscheinen ohne Neuladen; Benachrichtigungen in der App.
 - **Push und E-Mail:** je Person und Art wählbar (Freigabe angefordert, Entscheidung, Einsatz-Eingang, neue Fotos,
-  amtliche Warnungen, Verbindungsfehler, fehlgeschlagene Automationen, Updates …) – nur Arten, für die das Konto Rechte
+  amtliche Warnungen, Verbindungsfehler, fehlgeschlagene Workflows, Updates …) – nur Arten, für die das Konto Rechte
   hat. Push an Browser und installierte App (Web Push, ohne Fremddienst); E-Mail über SMTP oder Microsoft 365
   (Microsoft Graph als Anwendung, aktivierbar erst nach bestandener Testmail).
 - **App für Handy und Computer:** installierbar (PWA) auf Android, iPhone/iPad und am Computer (Chrome, Edge, Safari am Mac – „Zum Dock hinzufügen“), mit eigenem Fenster, Push-Mitteilungen des Betriebssystems, Zähler ungelesener Benachrichtigungen am App-Symbol und Schnellzugriffen auf Neuer Beitrag, Medien sammeln und Freigaben; „App installieren“ im Benutzermenü.

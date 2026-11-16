@@ -11,10 +11,10 @@ Unter [Mein Konto → Benachrichtigungen](/profil#benachrichtigungen):
 
 | Art | Wer sie bekommen kann | Vorgabe |
 |---|---|---|
-| Freigabe angefordert | Rechte zum Freigeben (Beiträge, Banner, Automationen, Warnentwürfe) | Push |
+| Freigabe angefordert | Rechte zum Freigeben (Beiträge, Banner, Workflows, Warnentwürfe) | Push |
 | Eigene Fassung freigegeben oder zurückgewiesen | wer Fassungen einreicht | Push |
 | Einsatz-Eingang (FE2, Feuersoftware Connect) | Beiträge bearbeiten | Push |
-| Neue Entwürfe aus Automationen | Beiträge bearbeiten, Warnentwurf erstellen | – |
+| Neue Entwürfe aus Workflows | Beiträge bearbeiten, Warnentwurf erstellen | – |
 | Neue Dateien über Foto-Links | Medien sichten | Push |
 | Upload-Links und Kontingente | Medien sichten | – |
 | Speicherplatz der Medien | Medien administrieren | E-Mail |
@@ -22,8 +22,8 @@ Unter [Mein Konto → Benachrichtigungen](/profil#benachrichtigungen):
 | Veröffentlichungen | Auf Website/sozialen Kanälen veröffentlichen, Banner veröffentlichen | – |
 | Versand von Warnentwürfen | Warnentwurf versenden | Push und E-Mail |
 | Verbindungsfehler | Verbindungen verwalten, Websites koppeln | E-Mail |
-| Automation fehlgeschlagen | Automationen verwalten | E-Mail |
-| Benachrichtigungen aus Automationen | alle (der Ausgang „Benachrichtigen“ wählt die Personen) | Push |
+| Workflow fehlgeschlagen | Workflows verwalten | E-Mail |
+| Benachrichtigungen aus Workflows | alle (der Ausgang „Benachrichtigen“ wählt die Personen) | Push |
 | Update verfügbar und installiert | Updates installieren | E-Mail |
 | Sicherung fehlgeschlagen | Sicherungen erstellen | E-Mail |
 | Sicherheitsmeldungen | Verwaltungsrechte | Push (E-Mail regeln die Sicherheitseinstellungen) |
@@ -56,7 +56,7 @@ Push funktioniert auch am Computer – im Browser (Chrome, Edge, Firefox, Safari
 Unter [Einstellungen → Benachrichtigungen und E-Mail](/einstellungen#benachrichtigungen) (Recht „E-Mail-Versand und Push einstellen“):
 
 - **Push- und E-Mail-Benachrichtigungen** global ein- oder ausschalten.
-- **Versandweg für alle E-Mails:** SMTP oder Microsoft 365. Er gilt für Warnversand, Sicherheitsmeldungen, Automationen und Benachrichtigungen. Die SMTP-Angaben stehen unter [Warnentwürfe → Pflege → Versand](/warnungen/pflege).
+- **Versandweg für alle E-Mails:** SMTP oder Microsoft 365. Er gilt für Warnversand, Sicherheitsmeldungen, Workflows und Benachrichtigungen. Die SMTP-Angaben stehen unter [Warnentwürfe → Pflege → Versand](/warnungen/pflege).
 - **Push-Schlüssel:** BlaulichtCMS erzeugt das Schlüsselpaar für Web Push (VAPID) selbst; der private Schlüssel liegt verschlüsselt auf dem Server. „Schlüssel erneuern“ macht alle Push-Abos ungültig – alle Geräte müssen Push neu einschalten.
 
 ## Microsoft 365

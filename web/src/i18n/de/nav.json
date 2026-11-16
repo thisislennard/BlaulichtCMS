@@ -35,8 +35,8 @@
   "warningConfig": "Stichwörter & Regeln",
   "connections": "Verbindungen",
   "officialWarnings": "Amtliche Warnungen",
-  "automations": "Automation",
-  "automationList": "Automationen",
+  "automations": "Workflows",
+  "automationList": "Alle Workflows",
   "automationInputs": "Eingänge",
   "automationOutputs": "Ausgänge"
 }

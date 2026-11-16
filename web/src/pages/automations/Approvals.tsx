@@ -20,14 +20,14 @@ interface Approval {
   can_decide: boolean;
 }
 
-/** Offene Freigaben aus Automationen („Freigabe anfordern“, E-Mail an externe Empfänger) – auf der Seite Freigaben. */
+/** Offene Freigaben aus Workflows („Freigabe anfordern“, E-Mail an externe Empfänger) – auf der Seite Freigaben. */
 export function AutomationApprovals({ compact }: { compact?: boolean }) {
   const { canAny, can } = useAuth();
   const q = useQuery({ queryKey: ['automation-approvals'], queryFn: () => get<Approval[]>('/automation-approvals'), enabled: canAny('approval.automation', 'automation.manage'), refetchInterval: 20_000 });
   const [open, setOpen] = useState<Approval | null>(null);
   if (!q.data?.length) return null;
   return (
-    <Card title={`Freigaben aus Automationen (${q.data.length})`} subtitle="Ein Lauf wartet auf eine Entscheidung. Ohne Entscheidung gilt die Anfrage nach Ablauf der Frist als abgelehnt.">
+    <Card title={`Freigaben aus Workflows (${q.data.length})`} subtitle="Ein Lauf wartet auf eine Entscheidung. Ohne Entscheidung gilt die Anfrage nach Ablauf der Frist als abgelehnt.">
       <ul className="m-0 p-0 list-none flex flex-col divide-y divide-line">
         {q.data.slice(0, compact ? 3 : 50).map((a) => (
           <li key={a.id} className="py-2.5 flex flex-wrap items-center gap-3">
@@ -37,7 +37,7 @@ export function AutomationApprovals({ compact }: { compact?: boolean }) {
                 <Badge tone="warning">{a.kind === 'mail' ? 'E-Mail-Versand' : 'Freigabe'}</Badge>
               </div>
               <div className="text-meta text-fg-muted">
-                {can('automation.read') ? <Link to={`/automationen/${a.automation_id}`}>{a.automation_name}</Link> : a.automation_name} · {fmtRelative(a.created_at)} · Frist bis {fmtDateTime(a.expires_at)}
+                {can('automation.read') ? <Link to={`/workflows/${a.automation_id}`}>{a.automation_name}</Link> : a.automation_name} · {fmtRelative(a.created_at)} · Frist bis {fmtDateTime(a.expires_at)}
               </div>
             </div>
             <Button size="sm" variant={a.can_decide ? 'primary' : 'secondary'} icon="ShieldCheck" onClick={() => setOpen(a)}>
@@ -99,10 +99,10 @@ function DecisionDialog({ a, onClose }: { a: Approval; onClose: () => void }) {
     >
       <div className="flex flex-col gap-3">
         <p className="m-0 text-meta text-fg-muted">
-          Aus der Automation „{a.automation_name}“ · angefordert {fmtDateTime(a.created_at)} · Lauf <span className="font-mono">{a.run_id.slice(0, 8)}</span>
+          Aus dem Workflow „{a.automation_name}“ · angefordert {fmtDateTime(a.created_at)} · Lauf <span className="font-mono">{a.run_id.slice(0, 8)}</span>
         </p>
         {a.summary ? <pre className="m-0 whitespace-pre-wrap font-sans text-sm bg-raised rounded-node p-3 max-h-[320px] overflow-auto">{a.summary}</pre> : <p className="m-0 text-sm text-fg-muted">Keine weiteren Angaben.</p>}
-        {!a.can_decide && <p className="m-0 text-sm text-fg-muted">Entscheiden kann eine Person mit dem Recht „Freigaben in Automationen erteilen“, die die Automation nicht zuletzt geändert oder aktiviert hat (Vier-Augen-Prinzip, falls eingeschaltet).</p>}
+        {!a.can_decide && <p className="m-0 text-sm text-fg-muted">Entscheiden kann eine Person mit dem Recht „Freigaben in Workflows erteilen“, die den Workflow nicht zuletzt geändert oder aktiviert hat (Vier-Augen-Prinzip, falls eingeschaltet).</p>}
         {a.can_decide && (
           <FieldWrap label="Notiz" htmlFor="ap-note" help="Beim Ablehnen Pflicht.">
             <Textarea id="ap-note" rows={2} maxLength={500} value={note} onChange={(e) => setNote(e.target.value)} />

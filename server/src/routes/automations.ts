@@ -14,6 +14,8 @@ import { approvalConflict, buildSnapshot, cancelOpenRuns, createRun, decideAppro
 import { graphSchema, inputFields, outputNeeds, validateGraph, type Graph } from '../automations/graph.js';
 import { redactForLog } from '../automations/logic.js';
 import { buildExport, mappedGraph, parseTransferFile, suggestions, TRANSFER_MAX_AUTOMATIONS, TRANSFER_MAX_BYTES, TransferError, type TransferFile } from '../automations/transfer.js';
+import { summarizeGraph, type SummaryLabels } from '../automations/summary.js';
+import { templateById, templateGraph, TEMPLATES } from '../automations/templates.js';
 import { config } from '../config.js';
 
 /**
@@ -27,7 +29,7 @@ const directNodes = (g: Graph) => g.nodes.filter((n) => n.type === 'output' && n
 
 async function loadAutomation(id: string) {
   const a = await one<any>(`SELECT * FROM automations WHERE id = $1 AND deleted_at IS NULL`, [id]);
-  if (!a) throw notFound('Automation nicht gefunden.');
+  if (!a) throw notFound('Workflow nicht gefunden.');
   return a;
 }
 
@@ -82,8 +84,14 @@ async function checkOutputRefs(kind: OutputKind, cfg: any) {
   if (kind === 'notify' && cfg.link && !/^(\/|\{\{)/.test(cfg.link)) throw badRequest('Link: nur Seiten innerhalb von BlaulichtCMS (beginnend mit /) oder ein Link-Feld wie {{beitrag_link}}.');
 }
 
-/** Zustand einer Automation für Liste und Editor. */
-async function describe(a: any, refs: Awaited<ReturnType<typeof loadRefs>>) {
+/** Namen von Websites und Rollen für die Zusammenfassung in einem Satz. */
+async function summaryLabels(): Promise<SummaryLabels> {
+  const sites = await many<{ id: string; name: string }>(`SELECT id, name FROM wp_sites WHERE status <> 'revoked'`);
+  return { sites: new Map(sites.map((x) => [x.id, x.name])), roles: new Map(activeRoles().map((x) => [x.id, x.label])) };
+}
+
+/** Zustand eines Workflows für Liste und Editor. */
+async function describe(a: any, refs: Awaited<ReturnType<typeof loadRefs>>, labels?: SummaryLabels) {
   const graph = a.graph as Graph;
   const snap = buildSnapshot(graph, refs);
   const current = snapshotHash(snap);
@@ -103,6 +111,7 @@ async function describe(a: any, refs: Awaited<ReturnType<typeof loadRefs>>) {
     updated_at: a.updated_at,
     draft_hash: a.graph_hash,
     inputs: [...new Set(graph.nodes.filter((n) => n.type === 'input').map((n) => refs.inputs.get(n.data?.inputId)?.kind).filter(Boolean))],
+    summary: summarizeGraph(graph, refs, labels ?? (await summaryLabels()), !!a.direct_publish),
   };
 }
 
@@ -128,6 +137,7 @@ export async function automationRoutes(app: FastifyInstance) {
       maxRunsPerMinute: s['automations.max_runs_per_minute'],
       inputKinds: Object.entries(INPUT_KINDS).map(([kind, d]) => ({ kind, ...d, fields: inputFields({ kind: kind as InputKind, config: {} }) })),
       outputKinds: Object.entries(OUTPUT_KINDS).map(([kind, d]) => ({ kind, ...d })),
+      templates: TEMPLATES,
       nodeTypes: Object.entries(NODE_TYPES).map(([type, d]) => ({ type, ...d })),
       operators: OPERATORS,
       limits: LIMITS,
@@ -226,6 +236,7 @@ export async function automationRoutes(app: FastifyInstance) {
 
   app.get('/automations', { preHandler: read }, async () => {
     const refs = await loadRefs();
+    const labels = await summaryLabels();
     const rows = await many<any>(
       `SELECT a.*, lr.status AS last_status, lr.created_at AS last_at,
               (SELECT count(*)::int FROM automation_runs r WHERE r.automation_id = a.id AND r.mode = 'live' AND r.created_at > now() - interval '24 hours') AS runs_24h,
@@ -235,15 +246,18 @@ export async function automationRoutes(app: FastifyInstance) {
          LEFT JOIN LATERAL (SELECT status, created_at FROM automation_runs r WHERE r.automation_id = a.id AND r.mode = 'live' ORDER BY created_at DESC LIMIT 1) lr ON true
         WHERE a.deleted_at IS NULL ORDER BY a.name`,
     );
-    return Promise.all(rows.map(async (a) => ({ ...(await describe(a, refs)), last_run: a.last_status ? { status: a.last_status, at: a.last_at } : null, runs_24h: a.runs_24h, failed_24h: a.failed_24h, pending_approvals: a.pending_approvals })));
+    return Promise.all(rows.map(async (a) => ({ ...(await describe(a, refs, labels)), last_run: a.last_status ? { status: a.last_status, at: a.last_at } : null, runs_24h: a.runs_24h, failed_24h: a.failed_24h, pending_approvals: a.pending_approvals })));
   });
 
   app.post('/automations', { preHandler: manage }, async (req) => {
-    const b = z.object({ name: z.string().trim().min(2).max(120), description: z.string().trim().max(500).default('') }).parse(req.body);
-    const graph: Graph = { nodes: [], edges: [] };
+    const b = z.object({ name: z.string().trim().min(2).max(120), description: z.string().trim().max(500).default(''), template: z.string().max(40).optional() }).parse(req.body);
+    // Vorlage: fertiger Ablauf aus dem Katalog; passende Ein-/Ausgänge werden eingesetzt, wenn es genau einen gibt
+    const tpl = b.template ? templateById(b.template) : undefined;
+    if (b.template && !tpl) throw badRequest('Unbekannte Vorlage.');
+    const { graph, open } = tpl ? templateGraph(tpl, await loadRefs()) : { graph: { nodes: [], edges: [] } as Graph, open: 0 };
     const row = await one<any>(`INSERT INTO automations (name, description, graph, graph_hash, created_by, updated_by) VALUES ($1,$2,$3,$4,$5,$5) RETURNING *`, [b.name, b.description, JSON.stringify(graph), draftHash(graph), actorUser(req)]);
-    await audit(req.auth!.actor, 'automation.created', { type: 'automation', id: row.id, label: b.name });
-    return { id: row.id };
+    await audit(req.auth!.actor, 'automation.created', { type: 'automation', id: row.id, label: b.name }, tpl ? { vorlage: tpl.id, offen: open } : {});
+    return { id: row.id, open };
   });
 
   /* ------------------------------------------------------------ Export und Import (#196) */
@@ -254,10 +268,10 @@ export async function automationRoutes(app: FastifyInstance) {
     const ids = (q.ids ?? '').split(',').map((x) => x.trim()).filter(Boolean);
     if (ids.some((x) => !z.uuid().safeParse(x).success)) throw badRequest('Ungültige Auswahl.');
     const rows = await many<any>(`SELECT id, name, description, graph FROM automations WHERE deleted_at IS NULL ${ids.length ? 'AND id = ANY($1::uuid[])' : ''} ORDER BY name`, ids.length ? [ids] : []);
-    if (!rows.length) throw notFound('Keine Automation zum Exportieren gefunden.');
-    if (rows.length > TRANSFER_MAX_AUTOMATIONS) throw badRequest(`Höchstens ${TRANSFER_MAX_AUTOMATIONS} Automationen auf einmal exportieren – bitte eine Auswahl treffen.`);
+    if (!rows.length) throw notFound('Kein Workflow zum Exportieren gefunden.');
+    if (rows.length > TRANSFER_MAX_AUTOMATIONS) throw badRequest(`Höchstens ${TRANSFER_MAX_AUTOMATIONS} Workflows auf einmal exportieren – bitte eine Auswahl treffen.`);
     const file = buildExport(rows, await loadRefs(), config.version);
-    await audit(req.auth!.actor, 'automation.exported', { type: 'automation', id: rows.length === 1 ? rows[0].id : undefined, label: rows.length === 1 ? rows[0].name : `${rows.length} Automationen` }, { anzahl: rows.length });
+    await audit(req.auth!.actor, 'automation.exported', { type: 'automation', id: rows.length === 1 ? rows[0].id : undefined, label: rows.length === 1 ? rows[0].name : `${rows.length} Workflows` }, { anzahl: rows.length });
     const stamp = new Date().toISOString().slice(0, 10);
     reply.header('content-disposition', `attachment; filename="automationen-${stamp}.json"`);
     return file;
@@ -364,9 +378,10 @@ export async function automationRoutes(app: FastifyInstance) {
   /** Entwurf prüfen, ohne zu speichern (Editor zeigt Fehler direkt an den Knoten). */
   app.post('/automations/:id/validate', { preHandler: read }, async (req) => {
     const { id } = uuidParam.parse(req.params);
-    await loadAutomation(id);
+    const a = await loadAutomation(id);
     const graph = graphSchema.parse((req.body as any)?.graph);
-    return validateGraph(graph, await loadRefs());
+    const refs = await loadRefs();
+    return { ...validateGraph(graph, refs), summary: summarizeGraph(graph, refs, await summaryLabels(), !!a.direct_publish) };
   });
 
   app.put('/automations/:id', { preHandler: manage }, async (req) => {
@@ -374,12 +389,12 @@ export async function automationRoutes(app: FastifyInstance) {
     const b = z.object({ name: z.string().trim().min(2).max(120), description: z.string().trim().max(500).default(''), graph: graphSchema, baseHash: z.string().length(64) }).parse(req.body);
     const res = await tx(async (db) => {
       const a = await one<any>(`SELECT * FROM automations WHERE id = $1 AND deleted_at IS NULL FOR UPDATE`, [id], db);
-      if (!a) throw notFound('Automation nicht gefunden.');
-      if (a.graph_hash !== b.baseHash) throw conflict('Die Automation wurde inzwischen von jemand anderem geändert. Bitte neu laden.');
+      if (!a) throw notFound('Workflow nicht gefunden.');
+      if (a.graph_hash !== b.baseHash) throw conflict('Der Workflow wurde inzwischen von jemand anderem geändert. Bitte neu laden.');
       // Ausgänge als „direkt veröffentlichen“ markieren oder die Markierung ändern: nur mit automation.publish
       const before = directNodes(a.graph);
       const after = directNodes(b.graph);
-      if (JSON.stringify(before) !== JSON.stringify(after) && !req.auth!.permissions.has('automation.publish')) throw forbidden('Nur mit dem Recht „Automationen direkt veröffentlichen lassen“ dürfen Ausgänge für den Direktversand markiert werden.');
+      if (JSON.stringify(before) !== JSON.stringify(after) && !req.auth!.permissions.has('automation.publish')) throw forbidden('Nur mit dem Recht „Workflows direkt veröffentlichen lassen“ dürfen Ausgänge für den Direktversand markiert werden.');
       const hash = draftHash(b.graph);
       await db.query(`UPDATE automations SET name = $2, description = $3, graph = $4, graph_hash = $5, updated_at = now(), updated_by = $6 WHERE id = $1`, [id, b.name, b.description, JSON.stringify(b.graph), hash, actorUser(req)]);
       if (a.graph_hash !== hash || a.name !== b.name) await audit(req.auth!.actor, 'automation.updated', { type: 'automation', id, label: b.name }, { knoten: b.graph.nodes.length, verbindungen: b.graph.edges.length, direkt_markiert: after.length, direkt_geaendert: JSON.stringify(before) !== JSON.stringify(after) || undefined }, 'ok', db);
@@ -395,7 +410,7 @@ export async function automationRoutes(app: FastifyInstance) {
     const a = await loadAutomation(id);
     await tx(async (db) => {
       await db.query(`UPDATE automations SET deleted_at = now(), status = 'disabled', updated_by = $2 WHERE id = $1`, [id, actorUser(req)]);
-      await cancelOpenRuns(id, 'Die Automation wurde gelöscht.', db);
+      await cancelOpenRuns(id, 'Der Workflow wurde gelöscht.', db);
       await audit(req.auth!.actor, 'automation.deleted', { type: 'automation', id, label: a.name }, {}, 'ok', db);
     });
     return { ok: true };
@@ -435,9 +450,9 @@ export async function automationRoutes(app: FastifyInstance) {
     if (a.tested_hash !== hash) throw new AppError(409, 'not_tested', 'Bitte diesen Stand zuerst erfolgreich testen. Jede Änderung am Ablauf oder an einem verwendeten Ein- oder Ausgang verlangt einen neuen Test.');
     const direct = v.directNodes.length > 0;
     if (direct) {
-      if (!req.auth!.permissions.has('automation.publish')) throw forbidden('Ausgänge mit Direktversand: Aktivieren nur mit dem Recht „Automationen direkt veröffentlichen lassen“.');
+      if (!req.auth!.permissions.has('automation.publish')) throw forbidden('Ausgänge mit Direktversand: Aktivieren nur mit dem Recht „Workflows direkt veröffentlichen lassen“.');
       assertRecentAuth(req);
-      if (!a.direct_publish) throw new AppError(409, 'direct_not_allowed', 'Für diese Automation ist „Darf direkt veröffentlichen/versenden“ nicht eingeschaltet.');
+      if (!a.direct_publish) throw new AppError(409, 'direct_not_allowed', 'Für diesen Workflow ist „Darf direkt veröffentlichen/versenden“ nicht eingeschaltet.');
     }
     const testRun = await one<{ id: string }>(`SELECT id FROM automation_runs WHERE automation_id = $1 AND mode = 'test' AND status = 'succeeded' AND graph_hash = $2 ORDER BY created_at DESC LIMIT 1`, [id, hash]);
     const version = await tx(async (db) => {
@@ -449,9 +464,9 @@ export async function automationRoutes(app: FastifyInstance) {
     });
     if (direct) {
       await securityAlert('automation_direct_publish', {
-        title: `Automation mit Direktversand aktiviert: „${a.name}“`,
-        body: `${req.auth!.actor.name} hat Version ${version} aktiviert. ${v.directNodes.length} Ausgang/Ausgänge veröffentlichen bzw. versenden ohne menschliche Freigabe. Abschalten: Automationen → „${a.name}“ → Deaktivieren.`,
-        link: `/automationen/${id}`,
+        title: `Workflow mit Direktversand aktiviert: „${a.name}“`,
+        body: `${req.auth!.actor.name} hat Version ${version} aktiviert. ${v.directNodes.length} Ausgang/Ausgänge veröffentlichen bzw. versenden ohne menschliche Freigabe. Abschalten: Workflows → „${a.name}“ → Deaktivieren.`,
+        link: `/workflows/${id}`,
       });
     }
     return { ok: true, version };
@@ -463,7 +478,7 @@ export async function automationRoutes(app: FastifyInstance) {
     const a = await loadAutomation(id);
     const canceled = await tx(async (db) => {
       await db.query(`UPDATE automations SET status = 'disabled', updated_at = now() WHERE id = $1`, [id]);
-      const n = await cancelOpenRuns(id, 'Die Automation wurde deaktiviert.', db);
+      const n = await cancelOpenRuns(id, 'Der Workflow wurde deaktiviert.', db);
       await audit(req.auth!.actor, 'automation.disabled', { type: 'automation', id, label: a.name }, { abgebrochen: n }, 'ok', db);
       return n;
     });
@@ -476,7 +491,7 @@ export async function automationRoutes(app: FastifyInstance) {
     const { enabled } = z.object({ enabled: z.boolean() }).parse(req.body);
     const a = await loadAutomation(id);
     if (enabled) {
-      if (!req.auth!.permissions.has('automation.publish')) throw forbidden('Dafür ist das Recht „Automationen direkt veröffentlichen lassen“ nötig.');
+      if (!req.auth!.permissions.has('automation.publish')) throw forbidden('Dafür ist das Recht „Workflows direkt veröffentlichen lassen“ nötig.');
       assertRecentAuth(req);
       const refs = await loadRefs();
       if (a.tested_hash !== snapshotHash(buildSnapshot(a.graph, refs))) throw new AppError(409, 'not_tested', 'Bitte den aktuellen Stand zuerst erfolgreich testen.');
@@ -488,11 +503,11 @@ export async function automationRoutes(app: FastifyInstance) {
     });
     await securityAlert('automation_direct_publish', {
       kind: enabled ? 'warning' : 'info',
-      title: enabled ? `Direktversand erlaubt: Automation „${a.name}“` : `Direktversand entzogen: Automation „${a.name}“`,
+      title: enabled ? `Direktversand erlaubt: Workflow „${a.name}“` : `Direktversand entzogen: Workflow „${a.name}“`,
       body: enabled
-        ? `${req.auth!.actor.name} hat erlaubt, dass markierte Ausgänge dieser Automation ohne menschliche Freigabe veröffentlichen bzw. versenden. Wirksam erst mit einer aktivierten Version, die solche Ausgänge enthält.`
+        ? `${req.auth!.actor.name} hat erlaubt, dass markierte Ausgänge dieses Workflows ohne menschliche Freigabe veröffentlichen bzw. versenden. Wirksam erst mit einer aktivierten Version, die solche Ausgänge enthält.`
         : `${req.auth!.actor.name} hat den Direktversand abgeschaltet. Markierte Ausgänge legen ab sofort wieder nur Entwürfe an bzw. fordern eine Freigabe an.`,
-      link: `/automationen/${id}`,
+      link: `/workflows/${id}`,
     });
     return { ok: true, direct_publish: enabled };
   });
@@ -502,8 +517,8 @@ export async function automationRoutes(app: FastifyInstance) {
     const { id } = uuidParam.parse(req.params);
     const b = z.object({ inputNodeId: z.string().max(40), payload: z.record(z.string(), z.any()).default({}) }).parse(req.body);
     const a = await loadAutomation(id);
-    if (a.status !== 'active' || !a.active_version) throw conflict('Die Automation ist nicht aktiv.');
-    if (!(await getSettings())['automations.enabled']) throw conflict('Automationen sind unter Einstellungen abgeschaltet.');
+    if (a.status !== 'active' || !a.active_version) throw conflict('Der Workflow ist nicht aktiv.');
+    if (!(await getSettings())['automations.enabled']) throw conflict('Workflows sind unter Einstellungen abgeschaltet.');
     const v = await one<any>(`SELECT * FROM automation_versions WHERE automation_id = $1 AND version = $2`, [id, a.active_version]);
     const snap = v.graph as Snapshot;
     const node = snap.nodes.find((n) => n.id === b.inputNodeId && n.type === 'input');
@@ -599,7 +614,7 @@ export async function automationRoutes(app: FastifyInstance) {
     if (b.decision === 'rejected' && !b.note) throw badRequest('Bitte kurz begründen, warum abgelehnt wird.');
     const uid = req.auth!.user?.id ?? null;
     if ((await getSettings())['editorial.four_eyes'] && uid && (await approvalConflict(id, uid))) {
-      throw forbidden('Vier-Augen-Prinzip: Wer die Automation zuletzt geändert oder aktiviert hat, kann ihre Freigaben nicht selbst erteilen.');
+      throw forbidden('Vier-Augen-Prinzip: Wer den Workflow zuletzt geändert oder aktiviert hat, kann ihre Freigaben nicht selbst erteilen.');
     }
     try {
       await decideApproval(id, b.decision, b.note, req.auth!.actor, uid);

@@ -22,7 +22,7 @@ So arbeitet die Liste:
 Wo die Liste wirkt:
 
 - **Einsatzmeldungen** (FE2, Feuersoftware Connect): Fehlt der Klartext zum Stichwort, ergänzt BlaulichtCMS ihn aus der Liste, z. B. im Titel des Einsatzentwurfs. In der Vorschau der Einsätze steht die Bedeutung neben dem Stichwort.
-- **Automationen:** Bedingungen auf `stichwort` und `stichwort_kategorie` schlagen die Einträge der Liste vor. Das Feld `stichwort_kategorie` kommt aus der Liste.
+- **Workflows:** Bedingungen auf `stichwort` und `stichwort_kategorie` schlagen die Einträge der Liste vor. Das Feld `stichwort_kategorie` kommt aus der Liste.
 - **Warnentwurf:** Beim Übernehmen aus einem Einsatz wird das passende Stichwort gewählt.
 - **Feuersoftware-Filter:** Unter dem Stichwortfilter steht die Bedeutung der eingetragenen Stichworte.
 

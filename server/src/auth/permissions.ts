@@ -35,7 +35,7 @@ export const MODULES: ModuleDef[] = [
   { id: 'banners', label: 'Banner' },
   { id: 'warnings', label: 'Warnentwürfe und amtliche Warnungen' },
   { id: 'connections', label: 'Verbindungen' },
-  { id: 'automations', label: 'Automationen' },
+  { id: 'automations', label: 'Workflows' },
   { id: 'users', label: 'Benutzer und Rollen' },
   { id: 'system', label: 'System und Protokolle' },
   { id: 'settings', label: 'Einstellungen' },
@@ -80,7 +80,7 @@ export const PERMISSIONS: PermissionDef[] = [
   /* Freigabe */
   P('approval.post', 'approval', 'critical', 'Beiträge freigeben', 'Eine konkrete Fassung eines Beitrags freigeben oder zurückweisen und eine Freigabe zurücknehmen.', ['post.view']),
   P('approval.banner', 'approval', 'critical', 'Banner freigeben', 'Eingereichte Banner freigeben oder zurückweisen.', ['banner.view']),
-  P('approval.automation', 'approval', 'critical', 'Freigaben in Automationen erteilen', 'Wartende Freigabeschritte laufender Automationen freigeben oder ablehnen.'),
+  P('approval.automation', 'approval', 'critical', 'Freigaben in Workflows erteilen', 'Wartende Freigabeschritte laufender Workflows freigeben oder ablehnen.'),
 
   /* Veröffentlichung */
   P('publish.website', 'publishing', 'critical', 'Auf Website veröffentlichen', 'Freigegebene Fassungen an eine gekoppelte Website übergeben, Aufträge abbrechen, klären und wiederholen.', ['post.view', 'channel.view']),
@@ -117,9 +117,9 @@ export const PERMISSIONS: PermissionDef[] = [
   P('connection.log', 'connections', 'read', 'Empfangsprotokoll ansehen', 'Empfangsprotokoll eingehender Verbindungen (amtliche Warnungen, FE2, Feuersoftware Connect) mit Entscheidungen und Rohdaten ansehen.', ['connection.configure']),
 
   /* Automationen */
-  P('automation.read', 'automations', 'read', 'Automationen ansehen', 'Automationen, Eingänge, Ausgänge und Laufprotokolle ansehen.'),
-  P('automation.manage', 'automations', 'write', 'Automationen verwalten', 'Eingänge, Ausgänge und Abläufe anlegen, bearbeiten, testen, aktivieren und deaktivieren. Ausgänge legen nur Entwürfe und Benachrichtigungen an; Freigaben bleiben bei den Menschen.', ['automation.read'], true),
-  P('automation.publish', 'automations', 'critical', 'Automationen direkt veröffentlichen lassen', 'Einer Automation erlauben, markierte Ausgänge ohne menschliche Freigabe zu veröffentlichen bzw. zu versenden (mit Passwortbestätigung, Audit und Sicherheitsmeldung).', ['automation.manage'], true),
+  P('automation.read', 'automations', 'read', 'Workflows ansehen', 'Workflows, Eingänge, Ausgänge und Laufprotokolle ansehen.'),
+  P('automation.manage', 'automations', 'write', 'Workflows verwalten', 'Eingänge, Ausgänge und Workflows anlegen, bearbeiten, testen, aktivieren und deaktivieren. Ausgänge legen nur Entwürfe und Benachrichtigungen an; Freigaben bleiben bei den Menschen.', ['automation.read'], true),
+  P('automation.publish', 'automations', 'critical', 'Workflows direkt veröffentlichen lassen', 'Einem Workflow erlauben, markierte Ausgänge ohne menschliche Freigabe zu veröffentlichen bzw. zu versenden (mit Passwortbestätigung, Audit und Sicherheitsmeldung).', ['automation.manage'], true),
 
   /* Benutzer und Rollen */
   P('user.view', 'users', 'read', 'Benutzer ansehen', 'Benutzerliste, Rollen und deren Rechte ansehen.'),
@@ -152,7 +152,7 @@ export const PERMISSIONS: PermissionDef[] = [
   P('settings.media', 'settings', 'write', 'Medieneinstellungen ändern', 'Dateigrößen, erlaubte Dateitypen, Vorgaben für Upload-Links, Prüftiefe und Speichergrenzen.', ['settings.view'], true),
   P('settings.editorial', 'settings', 'critical', 'Redaktionseinstellungen ändern', 'Vier-Augen-Prinzip und weitere Vorgaben für Redaktion und Freigabe.', ['settings.view'], true),
   P('settings.mail', 'settings', 'critical', 'E-Mail-Versand und Push einstellen', 'Weg für E-Mails wählen (SMTP oder Microsoft 365), Microsoft 365 einrichten und prüfen, Push- und E-Mail-Benachrichtigungen global schalten.', ['settings.view'], true),
-  P('settings.system','settings', 'write', 'Systemeinstellungen ändern', 'Parallele Aufträge, Ausführung der Automationen und weitere technische Einstellungen.', ['settings.view'], true),
+  P('settings.system','settings', 'write', 'Systemeinstellungen ändern', 'Parallele Aufträge, Ausführung der Workflows und weitere technische Einstellungen.', ['settings.view'], true),
 ];
 
 export const PERMISSION_IDS = PERMISSIONS.map((p) => p.id);

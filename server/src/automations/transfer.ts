@@ -28,7 +28,7 @@ const fileNode = z.object({
 });
 
 export const transferFileSchema = z.object({
-  format: z.literal(TRANSFER_FORMAT, { message: 'Das ist keine Exportdatei für BlaulichtCMS-Automationen.' }),
+  format: z.literal(TRANSFER_FORMAT, { message: 'Das ist keine Exportdatei für BlaulichtCMS-Workflows.' }),
   schemaVersion: z.number().int().min(1),
   appVersion: z.string().max(40).optional(),
   exportedAt: z.string().max(40).optional(),
@@ -49,8 +49,8 @@ export const transferFileSchema = z.object({
         }),
       }),
     )
-    .min(1, 'Die Datei enthält keine Automation.')
-    .max(TRANSFER_MAX_AUTOMATIONS, `höchstens ${TRANSFER_MAX_AUTOMATIONS} Automationen je Datei`),
+    .min(1, 'Die Datei enthält keinen Workflow.')
+    .max(TRANSFER_MAX_AUTOMATIONS, `höchstens ${TRANSFER_MAX_AUTOMATIONS} Workflows je Datei`),
 });
 
 export type TransferFile = z.infer<typeof transferFileSchema>;
@@ -113,7 +113,7 @@ export class TransferError extends Error {
   }
 }
 
-const PATH_WORDS: Record<string, string> = { name: 'Name', description: 'Beschreibung', graph: 'Ablauf', nodes: 'Knoten', edges: 'Verbindung', data: 'Einstellungen', references: 'Bezüge', inputs: 'Eingang', outputs: 'Ausgang', automations: 'Automation', schemaVersion: 'Formatversion', kind: 'Art', type: 'Typ' };
+const PATH_WORDS: Record<string, string> = { name: 'Name', description: 'Beschreibung', graph: 'Ablauf', nodes: 'Knoten', edges: 'Verbindung', data: 'Einstellungen', references: 'Bezüge', inputs: 'Eingang', outputs: 'Ausgang', automations: 'Workflow', schemaVersion: 'Formatversion', kind: 'Art', type: 'Typ' };
 /** Lesbarer Ort eines Prüffehlers, z. B. „Automation 1 › Knoten 2 › Einstellungen“. */
 function pathLabel(p: PropertyKey[]): string {
   const out: string[] = [];
@@ -128,7 +128,7 @@ function pathLabel(p: PropertyKey[]): string {
 export function parseTransferFile(raw: unknown): TransferFile {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new TransferError('Die Datei enthält kein gültiges JSON-Objekt.');
   const r = raw as Record<string, unknown>;
-  if (r.format !== TRANSFER_FORMAT) throw new TransferError('Das ist keine Exportdatei für BlaulichtCMS-Automationen.');
+  if (r.format !== TRANSFER_FORMAT) throw new TransferError('Das ist keine Exportdatei für BlaulichtCMS-Workflows.');
   if (typeof r.schemaVersion === 'number' && r.schemaVersion > TRANSFER_SCHEMA_VERSION) {
     throw new TransferError(`Die Datei stammt aus einer neueren BlaulichtCMS-Version (Format ${r.schemaVersion}${typeof r.appVersion === 'string' ? `, Version ${r.appVersion.slice(0, 40)}` : ''}). Bitte BlaulichtCMS zuerst aktualisieren.`);
   }

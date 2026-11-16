@@ -25,7 +25,7 @@ bewussten Abweichung von einer Empfehlung samt Ausgleich.
 Stack: Node.js, TypeScript, Fastify, PostgreSQL, React, Vite, Tailwind. Bausteine: Anmeldung (Argon2id, TOTP, Sitzungen, CSRF, Login-Sperre), Rechte-Registry,
 Audit, Maskierung, AES-256-GCM-Geheimnisse, SSRF-Schutz, PostgreSQL-Warteschlange mit Lease und Idempotenz,
 verschlüsselte Datenbanksicherung, Notfall-CLI, UI-Bausteine, Hilfe-Center, CI.
-Bewusst nicht enthalten: IMAP, MQTT, Teams, allgemeine Webhooks. Updates siehe E9, Automationen (seit 0.3.0) siehe E17.
+Bewusst nicht enthalten: IMAP, MQTT, Teams, allgemeine Webhooks. Updates siehe E9, Workflows (seit 0.3.0, bis dahin „Automationen“) siehe E17.
 
 ### E2 – Ein Container mit internem PostgreSQL
 
@@ -253,6 +253,8 @@ Alles über Tokens in `web/src/theme/tokens.css` – das endgültige Design läs
   Datenbanksicherung von unmittelbar vor der Umschaltung zurück, sobald Migrationen der neuen Version liefen.
 
 ### E17 – Automationen: Abläufe als Daten, Entwurf → Test → Version, Direktversand je Automation (0.3.0)
+
+**Name:** In der Oberfläche heißen sie seit 0.3.1 **Workflows** (geführte Ansicht „Wenn → Nur wenn → Dann“, Vorlagen); im Code, in der API, der Datenbank und den Rechte-IDs bleibt `automation(s)` – so braucht die Umbenennung keine Migration.
 
 **Aufbau** (`server/src/automations/`, Migration `060_automations.sql`):
 

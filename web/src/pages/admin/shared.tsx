@@ -345,11 +345,11 @@ export function auditHref(
     case "plugin":
       return "/kanaele";
     case "automation":
-      return id && !deleted ? `/automationen/${id}` : "/automationen";
+      return id && !deleted ? `/workflows/${id}` : "/workflows";
     case "automation_input":
-      return "/automationen/eingaenge";
+      return "/workflows/eingaenge";
     case "automation_output":
-      return "/automationen/ausgaenge";
+      return "/workflows/ausgaenge";
     default:
       return null;
   }

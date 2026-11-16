@@ -48,9 +48,9 @@ export const navigation: NavGroup[] = [
   {
     group: 'nav.automations',
     items: [
-      { id: 'automations', path: '/automationen', label: 'nav.automationList', icon: 'Workflow', perm: ['automation.read'] },
-      { id: 'automationInputs', path: '/automationen/eingaenge', label: 'nav.automationInputs', icon: 'Zap', perm: ['automation.read'] },
-      { id: 'automationOutputs', path: '/automationen/ausgaenge', label: 'nav.automationOutputs', icon: 'Send', perm: ['automation.read'] },
+      { id: 'automations', path: '/workflows', label: 'nav.automationList', icon: 'Workflow', perm: ['automation.read'] },
+      { id: 'automationInputs', path: '/workflows/eingaenge', label: 'nav.automationInputs', icon: 'Zap', perm: ['automation.read'] },
+      { id: 'automationOutputs', path: '/workflows/ausgaenge', label: 'nav.automationOutputs', icon: 'Send', perm: ['automation.read'] },
     ],
   },
   {

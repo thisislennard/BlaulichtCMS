@@ -65,7 +65,7 @@ export function defaultData(type: NodeType, extra: Record<string, any> = {}): an
   }
 }
 
-interface Rule {
+export interface Rule {
   field: string;
   op: string;
   value?: string;
@@ -76,7 +76,7 @@ interface Group {
 }
 const isGroup = (r: Rule | Group): r is Group => Array.isArray((r as Group).rules);
 
-function RuleRow({ r, fields, ops, onChange, onRemove, idp, disabled }: { r: Rule; fields: { key: string; label: string }[]; ops: Record<string, string>; onChange: (r: Rule) => void; onRemove: () => void; idp: string; disabled?: boolean }) {
+export function RuleRow({ r, fields, ops, onChange, onRemove, idp, disabled }: { r: Rule; fields: { key: string; label: string }[]; ops: Record<string, string>; onChange: (r: Rule) => void; onRemove: () => void; idp: string; disabled?: boolean }) {
   const noValue = r.op === 'exists' || r.op === 'not_exists';
   const known = fields.some((f) => f.key === r.field);
   // Stichwortverzeichnis (#195): Vorschläge für Stichwort und Stichwort-Kategorie, unbekannte Werte bleiben erlaubt
@@ -167,6 +167,7 @@ export function NodePanel({
   errors,
   canPublish,
   readOnly,
+  onCreate,
 }: {
   node: GNode;
   onChange: (data: any) => void;
@@ -179,6 +180,8 @@ export function NodePanel({
   errors: string[];
   canPublish: boolean;
   readOnly: boolean;
+  /** Ein-/Ausgang direkt hier anlegen und einsetzen */
+  onCreate?: () => void;
 }) {
   const d = node.data ?? {};
   const set = (patch: Record<string, any>) => onChange({ ...d, ...patch });
@@ -216,7 +219,7 @@ export function NodePanel({
 
       {node.type === 'input' && (
         <>
-          <SelectField id={`${idp}-in`} label="Eingang" value={d.inputId ?? ''} disabled={readOnly} onChange={(v) => set({ inputId: v })} placeholder="Bitte wählen …" options={inputs.map((i) => ({ value: i.id, label: i.name }))} help={input ? inputSummary(input, cat) : undefined} labelAction={<Help title="Eingang" anchor="eingaenge">Eingänge werden unter Automationen → Eingänge eingerichtet. Ein Ablauf darf mehrere Eingänge haben; ein Lauf startet immer an genau einem.</Help>} />
+          <SelectField id={`${idp}-in`} label="Eingang" value={d.inputId ?? ''} disabled={readOnly} onChange={(v) => set({ inputId: v })} placeholder="Bitte wählen …" options={inputs.map((i) => ({ value: i.id, label: i.name }))} help={input ? inputSummary(input, cat) : undefined} labelAction={<Help title="Eingang" anchor="eingaenge">Eingänge werden unter Workflows → Eingänge eingerichtet. Ein Ablauf darf mehrere Eingänge haben; ein Lauf startet immer an genau einem.</Help>} />
           {input && (
             <details open>
               <summary className="cursor-pointer text-sm font-medium">Felder dieses Eingangs</summary>
@@ -225,7 +228,14 @@ export function NodePanel({
               </div>
             </details>
           )}
-          <Link to="/automationen/eingaenge" className="text-sm !text-fg-muted hover:!text-fg">Eingänge verwalten →</Link>
+          <div className="flex flex-wrap items-center gap-3">
+            {!readOnly && onCreate && (
+              <Button size="sm" icon="Plus" onClick={onCreate}>
+                Neuen Eingang anlegen …
+              </Button>
+            )}
+            <Link to="/workflows/eingaenge" className="text-sm !text-fg-muted hover:!text-fg">Eingänge verwalten →</Link>
+          </div>
         </>
       )}
 
@@ -246,14 +256,21 @@ export function NodePanel({
                 label="Direkt veröffentlichen / versenden"
                 description={
                   canPublish
-                    ? 'Ohne menschliche Freigabe – wirkt nur, wenn die Automation „Darf direkt veröffentlichen“ hat und die Version damit aktiviert wurde.'
-                    : 'Nur mit dem Recht „Automationen direkt veröffentlichen lassen“ (Administration).'
+                    ? 'Ohne menschliche Freigabe – wirkt nur, wenn der Workflow „Darf direkt veröffentlichen“ hat und die Version damit aktiviert wurde.'
+                    : 'Nur mit dem Recht „Workflows direkt veröffentlichen lassen“ (Administration).'
                 }
               />
               {d.direct && <Badge tone="warning" className="self-start">Direktversand markiert</Badge>}
             </div>
           )}
-          <Link to="/automationen/ausgaenge" className="text-sm !text-fg-muted hover:!text-fg">Ausgänge verwalten →</Link>
+          <div className="flex flex-wrap items-center gap-3">
+            {!readOnly && onCreate && (
+              <Button size="sm" icon="Plus" onClick={onCreate}>
+                Neuen Ausgang anlegen …
+              </Button>
+            )}
+            <Link to="/workflows/ausgaenge" className="text-sm !text-fg-muted hover:!text-fg">Ausgänge verwalten →</Link>
+          </div>
         </>
       )}
 
@@ -333,7 +350,7 @@ export function NodePanel({
           <TemplateField id={`${idp}-at`} label="Titel der Freigabe" value={d.title ?? ''} max={200} fields={fields} disabled={readOnly} onChange={(v) => set({ title: v })} />
           <TemplateField id={`${idp}-as`} label="Beschreibung" rows={4} value={d.summary ?? ''} max={1000} fields={fields} disabled={readOnly} onChange={(v) => set({ summary: v })} />
           <NumberField id={`${idp}-ah`} label="Frist" unit="Stunden" min={1} max={cat.limits.maxApprovalHours} value={d.timeoutHours} disabled={readOnly} onChange={(v) => set({ timeoutHours: v })} help="Ohne Entscheidung gilt die Anfrage danach als abgelehnt." />
-          <Notice>Entscheiden dürfen Personen mit „Fassungen freigeben“ – auf der Seite Freigaben. Mit Vier-Augen-Prinzip nicht, wer die Automation geändert oder aktiviert hat.</Notice>
+          <Notice>Entscheiden dürfen Personen mit „Fassungen freigeben“ – auf der Seite Freigaben. Mit Vier-Augen-Prinzip nicht, wer den Workflow geändert oder aktiviert hat.</Notice>
         </>
       )}
 

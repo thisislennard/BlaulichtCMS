@@ -64,7 +64,7 @@ export function buildSnapshot(g: Graph, refs: { inputs: Map<string, InputRef>; o
   return { nodes: g.nodes, edges: g.edges, refs: { inputs, outputs } };
 }
 
-const actorFor = (name: string): Actor => ({ id: null, name: `Automation „${name}“`, type: 'system' });
+const actorFor = (name: string): Actor => ({ id: null, name: `Workflow „${name}“`, type: 'system' });
 
 /* ------------------------------------------------------------------ Läufe anlegen */
 
@@ -103,7 +103,7 @@ export async function createRun(r: NewRun, db: Queryable = pool): Promise<string
            VALUES ($1,$2,'live',$3,$4,'limited',$5,$6,'{}',$7, now())`,
           [r.automationId, r.version, r.trigger, r.inputNode, JSON.stringify({ nodes: [], edges: [], refs: { inputs: {}, outputs: {} } }), '', `Grenze von ${s['automations.max_runs_per_minute']} Läufen je Minute erreicht – weitere Ereignisse in dieser Minute wurden verworfen.`],
         );
-        await notify({ kind: 'warning', title: 'Automation: zu viele Läufe', body: `Eine Automation wurde in einer Minute mehr als ${s['automations.max_runs_per_minute']}-mal ausgelöst. Weitere Ereignisse wurden verworfen. Bitte Bedingungen und Eingänge prüfen.`, link: `/automationen/${r.automationId}`, permission: 'automation.manage' });
+        await notify({ kind: 'warning', title: 'Workflow: zu viele Läufe', body: `Ein Workflow wurde in einer Minute mehr als ${s['automations.max_runs_per_minute']}-mal ausgelöst. Weitere Ereignisse wurden verworfen. Bitte Bedingungen und Eingänge prüfen.`, link: `/workflows/${r.automationId}`, permission: 'automation.manage' });
       }
       return null;
     }
@@ -215,8 +215,8 @@ async function executeLocked(runId: string, job?: { attempts: number; max_attemp
   const settings = await getSettings();
   const test = run.mode === 'test';
   if (!test) {
-    if (!settings['automations.enabled']) return cancelRun(run, 'Automationen sind unter Einstellungen → Automationen abgeschaltet.');
-    if (run.automation_status !== 'active' || run.automation_deleted) return cancelRun(run, 'Die Automation wurde deaktiviert.');
+    if (!settings['automations.enabled']) return cancelRun(run, 'Workflows sind unter Einstellungen → Redaktion abgeschaltet.');
+    if (run.automation_status !== 'active' || run.automation_deleted) return cancelRun(run, 'Der Workflow wurde deaktiviert.');
   }
   await pool.query(`UPDATE automation_runs SET status = 'running', started_at = COALESCE(started_at, now()), resume_at = NULL WHERE id = $1`, [runId]);
   const snap = run.graph as Snapshot;
@@ -301,7 +301,7 @@ async function cancelRun(run: any, why: string) {
 }
 
 async function notifyFailure(run: any, where: string, msg: string) {
-  await notify({ kind: 'error', title: `Automation „${run.automation_name}“ fehlgeschlagen`.slice(0, 200), body: `${where}: ${msg}`.slice(0, 500), link: `/automationen/${run.automation_id}?lauf=${run.id}`, permission: 'automation.manage' }).catch(() => {});
+  await notify({ kind: 'error', title: `Workflow „${run.automation_name}“ fehlgeschlagen`.slice(0, 200), body: `${where}: ${msg}`.slice(0, 500), link: `/workflows/${run.automation_id}?lauf=${run.id}`, permission: 'automation.manage' }).catch(() => {});
   log('warn', 'automation', `Lauf ${String(run.id).slice(0, 8)} („${run.automation_name}“) fehlgeschlagen: ${where}: ${msg}`);
 }
 
@@ -441,7 +441,7 @@ async function awaitApproval(
     await db.query(`UPDATE automation_runs SET status = 'waiting', resume_at = now() + make_interval(hours => $2) WHERE id = $1`, [runId, a.hours]);
     await audit(ctx.actor, 'automation.approval_requested', { type: 'automation', id: ctx.run.automation_id, label: a.title }, { lauf: String(runId).slice(0, 8), art: a.kind }, 'ok', db);
   });
-  await notify({ kind: 'info', title: `Freigabe erbeten: ${a.title}`.slice(0, 200), body: `Aus der Automation „${ctx.run.automation_name}“.`, link: '/freigaben', permission: 'approval.automation' });
+  await notify({ kind: 'info', title: `Freigabe erbeten: ${a.title}`.slice(0, 200), body: `Aus dem Workflow „${ctx.run.automation_name}“.`, link: '/freigaben', permission: 'approval.automation' });
   return { pause: true };
 }
 
@@ -501,7 +501,7 @@ async function runOutput(ctx: Ctx, node: GraphNode, data: Data, prev: StepRow | 
         }
         return done({ ports: ['out'], produced: { banner_link: '/banner' }, info: `Banner „${title}“ ${direct ? 'direkt veröffentlicht' : c.submit !== false ? 'angelegt und zur Freigabe eingereicht' : 'als Entwurf angelegt'} (${usable.length} Website(s)).`, log: { ...desc, banner: ids } }, db);
       }).then(async (res) => {
-        if (!direct && c.submit !== false) await notify({ kind: 'info', title: `Banner zur Freigabe: ${title}`.slice(0, 200), body: `Aus der Automation „${ctx.run.automation_name}“.`, link: '/banner', permission: 'approval.banner' });
+        if (!direct && c.submit !== false) await notify({ kind: 'info', title: `Banner zur Freigabe: ${title}`.slice(0, 200), body: `Aus dem Workflow „${ctx.run.automation_name}“.`, link: '/banner', permission: 'approval.banner' });
         return res;
       });
     }
@@ -544,13 +544,13 @@ async function runOutput(ctx: Ctx, node: GraphNode, data: Data, prev: StepRow | 
         const hash = revisionHash(rev);
         const rv = await one<any>(
           `INSERT INTO post_revisions (post_id, number, title, body, excerpt, site_id, content_hash, change_note, variants, submitted_at, social_targets, social_formats) VALUES ($1,1,$2,$3,$4,$5,$6,$7,$8, CASE WHEN $9 THEN now() END, $10, $11) RETURNING id`,
-          [p.id, title, body, excerpt, siteId, hash, `Automatisch aus der Automation „${ctx.run.automation_name}“`, JSON.stringify(variants), submit, socialTargets, JSON.stringify(socialFormats)],
+          [p.id, title, body, excerpt, siteId, hash, `Automatisch aus dem Workflow „${ctx.run.automation_name}“`, JSON.stringify(variants), submit, socialTargets, JSON.stringify(socialFormats)],
           db,
         );
         if (direct) {
           const a = await one<any>(
             `INSERT INTO approvals (post_id, revision_id, content_hash, decision, note, decided_by) VALUES ($1,$2,$3,'approved',$4,NULL) RETURNING id`,
-            [p.id, rv.id, hash, `Automatisch freigegeben: Direktveröffentlichung der Automation „${ctx.run.automation_name}“`.slice(0, 500)],
+            [p.id, rv.id, hash, `Automatisch freigegeben: Direktveröffentlichung des Workflows „${ctx.run.automation_name}“`.slice(0, 500)],
             db,
           );
           await db.query(`INSERT INTO publications (post_id, revision_id, approval_id, site_id, created_by, run_at) VALUES ($1,$2,$3,$4,NULL, now())`, [p.id, rv.id, a.id, siteId]);
@@ -558,8 +558,8 @@ async function runOutput(ctx: Ctx, node: GraphNode, data: Data, prev: StepRow | 
         await audit(ctx.actor, direct ? 'automation.post_published' : 'automation.post_created', { type: 'post', id: p.id, label: title }, { ...auditDetails, website: site?.name ?? null }, 'ok', db);
         return done({ ports: ['out'], produced: { beitrag_link: `/beitraege/${p.id}`, beitrag_titel: title }, info: `Beitrag „${title}“ ${direct ? `direkt an „${site!.name}“ übergeben` : submit ? 'angelegt und zur Freigabe eingereicht' : 'als Entwurf angelegt'}.`, log: { ...desc, beitrag: p.id } }, db);
       });
-      if (submit && !direct) await notify({ kind: 'info', title: `Freigabe erbeten: ${title}`.slice(0, 200), body: `Fassung 1 – aus der Automation „${ctx.run.automation_name}“`, link: res.produced?.beitrag_link as string, permission: 'approval.post' });
-      else if (!direct) await notify({ kind: 'info', title: `Neuer Beitragsentwurf: ${title}`.slice(0, 200), body: `Aus der Automation „${ctx.run.automation_name}“.`, link: res.produced?.beitrag_link as string, permission: 'post.edit' });
+      if (submit && !direct) await notify({ kind: 'info', title: `Freigabe erbeten: ${title}`.slice(0, 200), body: `Fassung 1 – aus dem Workflow „${ctx.run.automation_name}“`, link: res.produced?.beitrag_link as string, permission: 'approval.post' });
+      else if (!direct) await notify({ kind: 'info', title: `Neuer Beitragsentwurf: ${title}`.slice(0, 200), body: `Aus dem Workflow „${ctx.run.automation_name}“.`, link: res.produced?.beitrag_link as string, permission: 'post.edit' });
       return res;
     }
 
@@ -599,7 +599,7 @@ async function runOutput(ctx: Ctx, node: GraphNode, data: Data, prev: StepRow | 
       });
       try {
         // Alle Empfänger als Blindkopie: niemand sieht die anderen Adressen
-        await transport.sendMail({ from, bcc: to, subject, text: `${body}\n\n—\nAutomatisch versendet von BlaulichtCMS (Automation „${ctx.run.automation_name}“).`, messageId: `<automation-${ctx.run.id}-${node.id}@blaulichtcms.invalid>` });
+        await transport.sendMail({ from, bcc: to, subject, text: `${body}\n\n—\nAutomatisch versendet von BlaulichtCMS (Workflow „${ctx.run.automation_name}“).`, messageId: `<automation-${ctx.run.id}-${node.id}@blaulichtcms.invalid>` });
       } catch (e: any) {
         const outcome = classifySmtpError(e);
         if (outcome === 'unknown') {
@@ -652,7 +652,7 @@ async function runOutput(ctx: Ctx, node: GraphNode, data: Data, prev: StepRow | 
         await audit(ctx.actor, 'automation.warning_prepared', { type: 'warning', id: w.id, label: caseNo }, auditDetails, 'ok', db);
         return done({ ports: ['out'], produced: { warnentwurf_link: `/warnungen/${w.id}`, warnentwurf_nr: caseNo }, info: `Warnentwurf ${caseNo} vorbereitet – Warnstufe, Freigabe und Versand bleiben bei Menschen.`, log: values }, db);
       });
-      await notify({ kind: 'info', title: `Warnentwurf vorbereitet: ${res.produced?.warnentwurf_nr}`, body: `Aus der Automation „${ctx.run.automation_name}“ – bitte prüfen und ergänzen.`, link: res.produced?.warnentwurf_link as string, permission: 'warning.draft' });
+      await notify({ kind: 'info', title: `Warnentwurf vorbereitet: ${res.produced?.warnentwurf_nr}`, body: `Aus dem Workflow „${ctx.run.automation_name}“ – bitte prüfen und ergänzen.`, link: res.produced?.warnentwurf_link as string, permission: 'warning.draft' });
       return res;
     }
   }

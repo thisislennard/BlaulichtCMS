@@ -114,7 +114,7 @@ export function NotifySettingsSection({ manage }: { manage: boolean }) {
         <Switch checked={form.mailEnabled} disabled={ro} onChange={(v) => set({ mailEnabled: v })} label="E-Mail-Benachrichtigungen" description="Benachrichtigungen per E-Mail über den gewählten Versandweg. Warnversand und Sicherheitsmeldungen sind davon unabhängig." />
       </div>
 
-      <FieldWrap label="Versandweg für alle E-Mails" htmlFor="n-transport" help="Gilt für Warnversand, Sicherheitsmeldungen, Automationen und Benachrichtigungen." labelAction={
+      <FieldWrap label="Versandweg für alle E-Mails" htmlFor="n-transport" help="Gilt für Warnversand, Sicherheitsmeldungen, Workflows und Benachrichtigungen." labelAction={
         <HelpTip title="SMTP oder Microsoft 365" more="/hilfe/benachrichtigungen#microsoft-365">
           <p className="m-0">Mit Microsoft 365 sendet BlaulichtCMS als Anwendung über Microsoft Graph aus einem Funktionspostfach – ohne Postfach-Passwort und ohne „Authentifiziertes SMTP“. Dafür ist eine App-Registrierung in Microsoft Entra nötig.</p>
         </HelpTip>

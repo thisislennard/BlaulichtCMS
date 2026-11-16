@@ -2,11 +2,12 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router';
 import { get, post } from '../../api/client';
-import { Badge, Button, Card, EmptyState, ErrorBox, FieldWrap, Input, LinkButton, Notice, PageHeader, SkeletonRows, Table, Td, Textarea, Th } from '../../components/ui/core';
-import { Dialog, useErrorToast } from '../../components/ui/overlays';
+import { Badge, Button, Card, cx, EmptyState, ErrorBox, FieldWrap, Input, LinkButton, Notice, PageHeader, SkeletonRows, Table, Td, Textarea, Th } from '../../components/ui/core';
+import { Dialog, useErrorToast, useToast } from '../../components/ui/overlays';
+import { Icon } from '../../components/ui/Icon';
 import { useAuth } from '../../lib/auth';
 import { fmtRelative } from '../../lib/format';
-import { AutomationBadge, DirectBadge, RunBadge, useCatalog } from './shared';
+import { AutomationBadge, DirectBadge, RunBadge, useCatalog, type WorkflowTemplate } from './shared';
 import { AutomationApprovals } from './Approvals';
 import { ExportDialog, ImportDialog } from './Transfer';
 
@@ -25,29 +26,42 @@ export interface AutomationListItem {
   runs_24h: number;
   failed_24h: number;
   pending_approvals: number;
+  summary?: string;
 }
 
-function CreateDialog({ onClose }: { onClose: () => void }) {
+function CreateDialog({ onClose, templates }: { onClose: () => void; templates: WorkflowTemplate[] }) {
   const nav = useNavigate();
+  const toast = useToast();
   const toastError = useErrorToast();
+  const [tpl, setTpl] = useState<string>('');
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [busy, setBusy] = useState(false);
+  const choose = (id: string) => {
+    const t = templates.find((x) => x.id === id);
+    // Name aus der Vorlage vorschlagen, solange noch nichts Eigenes eingetragen ist
+    if (!name.trim() || templates.some((x) => x.title === name)) setName(t?.title ?? '');
+    if (!description.trim() || templates.some((x) => x.description === description)) setDescription(t?.description ?? '');
+    setTpl(id);
+  };
   const create = async () => {
     setBusy(true);
     try {
-      const r = await post<{ id: string }>('/automations', { name, description });
-      nav(`/automationen/${r.id}`);
+      const r = await post<{ id: string; open: number }>('/automations', { name, description, ...(tpl ? { template: tpl } : {}) });
+      if (r.open) toast({ tone: 'info', title: r.open === 1 ? '1 Platz noch offen' : `${r.open} Plätze noch offen`, text: 'Gelb markierte Auslöser und Aktionen wählen oder direkt neu anlegen.' });
+      nav(`/workflows/${r.id}`);
     } catch (e) {
       toastError(e);
       setBusy(false);
     }
   };
+  const tiles = [{ id: '', title: 'Leer beginnen', description: 'Auslöser, Bedingungen und Aktionen selbst zusammenstellen.', icon: 'Plus' }, ...templates];
   return (
     <Dialog
       open
       onClose={onClose}
-      title="Neue Automation"
+      width={720}
+      title="Neuer Workflow"
       footer={
         <>
           <Button onClick={onClose}>Abbrechen</Button>
@@ -58,6 +72,22 @@ function CreateDialog({ onClose }: { onClose: () => void }) {
       }
     >
       <div className="flex flex-col gap-4">
+        <fieldset className="m-0 p-0 border-0 flex flex-col gap-2">
+          <legend className="text-sm font-medium mb-2">Vorlage</legend>
+          <div className="grid sm:grid-cols-2 gap-2">
+            {tiles.map((t) => (
+              <label key={t.id || 'leer'} className={cx('flex gap-3 p-3 rounded-node border cursor-pointer focus-within:shadow-ring', tpl === t.id ? 'border-primary bg-primary-soft' : 'border-line bg-card hover:bg-raised')}>
+                <input type="radio" name="wf-template" className="sr-only" value={t.id} checked={tpl === t.id} onChange={() => choose(t.id)} />
+                <Icon name={t.icon} size={18} className="text-fg-muted mt-0.5 shrink-0" />
+                <span className="flex flex-col gap-0.5">
+                  <strong className="text-sm">{t.title}</strong>
+                  <span className="text-meta text-fg-muted">{t.description}</span>
+                </span>
+              </label>
+            ))}
+          </div>
+          <p className="m-0 text-meta text-fg-muted">Vorlagen nutzen vorhandene Auslöser und Aktionen, wenn es genau einen passenden gibt. Sonst bleibt der Platz offen und lässt sich im Workflow wählen oder neu anlegen.</p>
+        </fieldset>
         <FieldWrap label="Name" htmlFor="a-name" required>
           <Input id="a-name" value={name} maxLength={120} onChange={(e) => setName(e.target.value)} placeholder="z. B. Unwetter-Banner" onKeyDown={(e) => e.key === 'Enter' && name.trim().length >= 2 && create()} />
         </FieldWrap>
@@ -80,12 +110,12 @@ export default function Automations() {
   return (
     <div className="flex flex-col gap-5">
       <PageHeader
-        title="Automationen"
-        subtitle="Abläufe aus Eingängen, Verarbeitung und Ausgängen – getestet, versioniert und jederzeit abschaltbar."
+        title="Workflows"
+        subtitle="Wenn etwas passiert, erledigt BlaulichtCMS den nächsten Schritt – aus Vorlagen oder selbst gebaut, getestet, versioniert und jederzeit abschaltbar."
         actions={
           <>
-            <LinkButton to="/automationen/eingaenge" icon="Zap">Eingänge</LinkButton>
-            <LinkButton to="/automationen/ausgaenge" icon="Send">Ausgänge</LinkButton>
+            <LinkButton to="/workflows/eingaenge" icon="Zap">Eingänge</LinkButton>
+            <LinkButton to="/workflows/ausgaenge" icon="Send">Ausgänge</LinkButton>
             {!!q.data?.length && (
               <Button icon="Download" onClick={() => setTransfer('export')}>
                 Exportieren
@@ -98,26 +128,26 @@ export default function Automations() {
             )}
             {manage && (
               <Button variant="primary" icon="Plus" onClick={() => setCreate(true)}>
-                Neue Automation
+                Neuer Workflow
               </Button>
             )}
           </>
         }
       />
       {cat.data && !cat.data.enabled && (
-        <Notice tone="warning" title="Automationen sind global abgeschaltet">
+        <Notice tone="warning" title="Workflows sind global abgeschaltet">
           Ereignisse und Zeitpläne starten keine Läufe. Einschalten unter <Link to="/einstellungen#redaktion">Einstellungen → Redaktion</Link>.
         </Notice>
       )}
       {(can('approval.automation') || manage) && <AutomationApprovals compact />}
       {q.isLoading && <SkeletonRows rows={5} />}
-      {q.error && <ErrorBox title="Automationen konnten nicht geladen werden">{(q.error as Error).message}</ErrorBox>}
+      {q.error && <ErrorBox title="Workflows konnten nicht geladen werden">{(q.error as Error).message}</ErrorBox>}
       {q.data && q.data.length === 0 && (
         <EmptyState
           icon="Workflow"
-          title="Noch keine Automation"
-          text="Zuerst Eingänge und Ausgänge einrichten, dann im Editor verbinden. Beispiele stehen in der Hilfe."
-          action={<LinkButton to="/hilfe/automationen" icon="BookOpen">Hilfe: Automationen</LinkButton>}
+          title="Noch kein Workflow"
+          text="Mit „Neuer Workflow“ eine Vorlage wählen oder leer beginnen. Fehlende Auslöser und Aktionen lassen sich direkt im Workflow anlegen."
+          action={<LinkButton to="/hilfe/workflows" icon="BookOpen">Hilfe: Workflows</LinkButton>}
         />
       )}
       {q.data && q.data.length > 0 && (
@@ -125,7 +155,7 @@ export default function Automations() {
           <Table>
             <thead>
               <tr>
-                <Th>Automation</Th>
+                <Th>Workflow</Th>
                 <Th>Status</Th>
                 <Th>Eingänge</Th>
                 <Th>Letzter Lauf</Th>
@@ -136,9 +166,10 @@ export default function Automations() {
               {q.data.map((a) => (
                 <tr key={a.id} className="hover:bg-raised">
                   <Td>
-                    <Link to={`/automationen/${a.id}`} className="font-medium">
+                    <Link to={`/workflows/${a.id}`} className="font-medium">
                       {a.name}
                     </Link>
+                    {a.summary && <div className="text-sm line-clamp-2 max-w-[640px]">{a.summary}</div>}
                     {a.description && <div className="text-meta text-fg-muted line-clamp-1">{a.description}</div>}
                   </Td>
                   <Td>
@@ -171,7 +202,7 @@ export default function Automations() {
           </Table>
         </Card>
       )}
-      {create && <CreateDialog onClose={() => setCreate(false)} />}
+      {create && <CreateDialog templates={cat.data?.templates ?? []} onClose={() => setCreate(false)} />}
       {transfer === 'export' && q.data && <ExportDialog items={q.data} onClose={() => setTransfer(null)} />}
       {transfer === 'import' && <ImportDialog onClose={() => setTransfer(null)} />}
     </div>

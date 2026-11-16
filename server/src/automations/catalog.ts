@@ -23,7 +23,7 @@ export const FIELD_KEY = /^[a-z][a-z0-9_]{0,39}$/;
 
 /** Felder, die in jedem Lauf zur Verfügung stehen. */
 export const SYSTEM_FIELDS: FieldDef[] = [
-  { key: 'automation', label: 'Name der Automation', type: 'text', example: 'Einsatzentwurf aus FE2' },
+  { key: 'automation', label: 'Name des Workflows', type: 'text', example: 'Einsatzentwurf aus FE2' },
   { key: 'lauf', label: 'Lauf-Kennung (kurz)', type: 'text', example: '3f2a9c1d' },
   { key: 'jetzt', label: 'Zeitpunkt des Laufs', type: 'datetime', example: '2026-11-16T07:00:00.000Z' },
 ];
@@ -133,12 +133,12 @@ export const INPUT_KINDS: Record<InputKind, { label: string; description: string
       { key: 'offene_beitraege_liste', label: 'Titel der Beiträge zur Freigabe', type: 'text', example: '– Brand in Nord\n– Übung am Samstag' },
       { key: 'offene_banner', label: 'Banner zur Freigabe', type: 'number', example: '1' },
       { key: 'offene_warnentwuerfe', label: 'Warnentwürfe zur Freigabe', type: 'number', example: '0' },
-      { key: 'offene_automationsfreigaben', label: 'Offene Freigaben aus Automationen', type: 'number', example: '0' },
+      { key: 'offene_automationsfreigaben', label: 'Offene Freigaben aus Workflows', type: 'number', example: '0' },
     ],
   },
   manual: {
     label: 'Manueller Start',
-    description: 'Start per Knopf in der Automation – mit eigenen Feldern, die beim Start ausgefüllt werden.',
+    description: 'Start per Knopf im Workflow – mit eigenen Feldern, die beim Start ausgefüllt werden.',
     icon: 'MousePointerClick',
     fields: [{ key: 'gestartet_von', label: 'Gestartet von', type: 'text', example: 'Alex Beispiel' }],
   },

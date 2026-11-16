@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type DragEvent, type KeyboardEvent as ReactKeyboardEvent } from 'react';
+import { createContext, lazy, Suspense, useCallback, useContext, useEffect, useMemo, useRef, useState, type DragEvent, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -34,10 +34,16 @@ import { useAuth } from '../../lib/auth';
 import { fmtDateTime } from '../../lib/format';
 import { NodePanel, defaultData, newId, ports, type GEdge, type GNode, type NodeType } from './NodePanel';
 import { RunDialog, RunsCard, StartDialog, TestDialog, type RunDetail } from './Runs';
+import { ActivationChecklist, GuidedEditor } from './Guided';
+import { wantKinds, type GuidedGraph } from './workflowModel';
+import type { CreateRefRequest } from './CreateRef';
 import { AutomationBadge, DirectBadge, Help, STEP_STATUS, inputSummary, outputSummary, useCatalog, useInputs, useOutputs, type Catalog, type InputDef, type OutputDef } from './shared';
 
+// Formulare für Ein-/Ausgänge erst laden, wenn jemand direkt aus dem Workflow einen anlegt
+const CreateRefDialog = lazy(() => import('./CreateRef').then((m) => ({ default: m.CreateRefDialog })));
+
 /*
- * Editor einer Automation: Fläche (React Flow) mit Palette, Werkzeugleiste, Minikarte und Seitenleiste – dazu eine
+ * Editor eines Workflows: geführte Ansicht „Wenn → Nur wenn → Dann“ (Standard) und erweitert die Fläche (React Flow) mit Palette, Werkzeugleiste, Minikarte und Seitenleiste – dazu eine
  * Listenansicht für Tastatur und Handy („verbinden mit …“). Gespeichert wird nur der Ablauf als Daten.
  */
 
@@ -52,6 +58,8 @@ interface Validation {
   warnings: Problem[];
   fields: Record<string, string[]>;
   directNodes: string[];
+  open?: string[];
+  summary?: string;
 }
 interface AutomationDetail {
   id: string;
@@ -66,6 +74,7 @@ interface AutomationDetail {
   direct_publish_at: string | null;
   direct_nodes: number;
   draft_hash: string;
+  summary?: string;
   graph: { nodes: GNode[]; edges: GEdge[] };
   validation: Validation;
   versions: { version: number; activated_at: string; direct_publish: boolean; activated_by_name: string | null }[];
@@ -394,6 +403,8 @@ function EditorInner({ a, cat, inputs, outputs }: { a: AutomationDetail; cat: Ca
   const [validation, setValidation] = useState<Validation>(a.validation);
   const [view, setView] = useState<'canvas' | 'list'>(() => (typeof window !== 'undefined' && window.matchMedia?.('(max-width: 767px)').matches ? 'list' : 'canvas'));
   const [panelId, setPanelId] = useState<string | null>(null);
+  const [mode, setMode] = useState<'guided' | 'advanced'>('guided');
+  const [createReq, setCreateReq] = useState<{ req: CreateRefRequest; assign: (id: string) => void } | null>(null);
   const [steps, setSteps] = useState<Record<string, string>>({});
   const [dialog, setDialog] = useState<null | 'test' | 'start' | 'meta' | 'direct'>(null);
   const [runId, setRunId] = useState<string | null>(null);
@@ -504,6 +515,19 @@ function EditorInner({ a, cat, inputs, outputs }: { a: AutomationDetail; cat: Ca
     setNodes((ns) => [...ns.map((n) => ({ ...n, selected: false })), { id, type: 'bc', position: pos!, selected: true, data: { t: type, d: defaultData(type, data) } }]);
     setPanelId(id);
   };
+  /** Ganzen Ablauf ersetzen (geführte Ansicht) – rückgängig machbar wie jede andere Änderung. */
+  const applyGraph = (g: GuidedGraph) => {
+    if (readOnly) return;
+    record();
+    const f = fromG(g as { nodes: GNode[]; edges: GEdge[] });
+    setNodes(f.nodes);
+    setEdges(f.edges);
+  };
+  /** Eingang/Ausgang aus dem Seitenleisten-Panel direkt anlegen und in den Knoten einsetzen. */
+  const createForNode = (n: GNode) => {
+    const { want, ...rest } = n.data ?? {};
+    setCreateReq({ req: { type: n.type === 'input' ? 'input' : 'output', kinds: wantKinds(n.data), preset: want }, assign: (id) => updateData(n.id, { ...rest, [n.type === 'input' ? 'inputId' : 'outputId']: id }) });
+  };
   const removeNode = (id: string) => {
     record();
     setNodes((ns) => ns.filter((n) => n.id !== id));
@@ -571,7 +595,7 @@ function EditorInner({ a, cat, inputs, outputs }: { a: AutomationDetail; cat: Ca
       const r = await put<AutomationDetail>(`/automations/${a.id}`, { name: meta.name, description: meta.description, graph, baseHash });
       setBaseHash(r.draft_hash);
       setSavedJson(currentJson);
-      setValidation(r.validation);
+      setValidation({ ...r.validation, summary: r.summary });
       qc.setQueryData(['automation', a.id], (old: AutomationDetail | undefined) => (old ? { ...old, ...r, graph } : old));
       qc.invalidateQueries({ queryKey: ['automations'] });
       toast({ tone: 'success', title: 'Gespeichert', text: r.validation.ok ? 'Für das Aktivieren ist ein erfolgreicher Testlauf nötig.' : 'Der Ablauf hat noch Fehler (siehe Prüfung).' });
@@ -614,7 +638,7 @@ function EditorInner({ a, cat, inputs, outputs }: { a: AutomationDetail; cat: Ca
   const palette: { title: string; manage?: { to: string; label: string }; list: PaletteItem[] }[] = [
     {
       title: 'Eingänge',
-      manage: { to: '/automationen/eingaenge', label: 'Verwalten →' },
+      manage: { to: '/workflows/eingaenge', label: 'Verwalten →' },
       list: inputs.map((i) => ({ key: `in:${i.id}`, type: 'input', label: i.name, hint: cat.inputKinds.find((k) => k.kind === i.kind)?.label ?? i.kind, icon: cat.inputKinds.find((k) => k.kind === i.kind)?.icon ?? 'Zap', data: { inputId: i.id } })),
     },
     {
@@ -623,7 +647,7 @@ function EditorInner({ a, cat, inputs, outputs }: { a: AutomationDetail; cat: Ca
     },
     {
       title: 'Ausgänge',
-      manage: { to: '/automationen/ausgaenge', label: 'Verwalten →' },
+      manage: { to: '/workflows/ausgaenge', label: 'Verwalten →' },
       list: outputs.map((o) => ({ key: `out:${o.id}`, type: 'output', label: o.name, hint: cat.outputKinds.find((k) => k.kind === o.kind)?.label ?? o.kind, icon: cat.outputKinds.find((k) => k.kind === o.kind)?.icon ?? 'Send', data: { outputId: o.id } })),
     },
   ];
@@ -656,6 +680,54 @@ function EditorInner({ a, cat, inputs, outputs }: { a: AutomationDetail; cat: Ca
   const canActivate = !readOnly && !dirty && a.tested && validation.ok && !(a.status === 'active' && a.active?.current);
   const directMarked = graph.nodes.filter((n) => n.type === 'output' && n.data?.direct).length;
   const globalProblems = [...validation.errors.filter((e) => !e.nodeId), ...validation.warnings];
+  const summary = validation.summary ?? a.summary;
+  const checklist = <ActivationChecklist graph={graph} validation={validation} dirty={dirty} tested={a.tested} directMarked={directMarked} directAllowed={a.direct_publish} canPublish={canPublish} enabled={cat.enabled} />;
+
+  const infoCards = (
+    <>
+            <Card title="Prüfung" subtitle={validation.ok ? 'Keine Fehler. Vor dem Aktivieren ist ein erfolgreicher Testlauf nötig.' : 'Fehler verhindern Testlauf und Aktivierung; gespeichert werden kann trotzdem.'}>
+              {validation.ok && globalProblems.length === 0 && (
+                <p className="m-0 text-sm text-ok inline-flex items-center gap-1.5">
+                  <Icon name="CheckCircle2" size={15} />
+                  Ablauf vollständig.
+                </p>
+              )}
+              <ul className="m-0 p-0 list-none flex flex-col gap-1.5">
+                {[...validation.errors.map((e) => ({ ...e, tone: 'error' as const })), ...validation.warnings.map((w) => ({ ...w, tone: 'warning' as const }))].map((p, i) => (
+                  <li key={i} className="flex items-start gap-2 text-sm">
+                    <Icon name={p.tone === 'error' ? 'XCircle' : 'AlertTriangle'} size={15} className={cx('mt-0.5 shrink-0', p.tone === 'error' ? 'text-err' : 'text-warn')} />
+                    <span className="flex-1">{p.message}</span>
+                    {p.nodeId && graph.nodes.some((n) => n.id === p.nodeId) && (
+                      <Button size="sm" variant="ghost" onClick={() => (setMode('advanced'), select(p.nodeId!))}>
+                        Zum Knoten
+                      </Button>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </Card>
+
+            <RunsCard automationId={a.id} onOpen={setRunId} />
+
+            {a.versions.length > 0 && (
+              <Card title="Versionen" subtitle="Jede Aktivierung speichert den getesteten Stand samt Ein- und Ausgängen.">
+                <ul className="m-0 p-0 list-none flex flex-col gap-1 text-sm">
+                  {a.versions.map((v) => (
+                    <li key={v.version} className="flex flex-wrap gap-2 items-center">
+                      <span className="font-mono">V{v.version}</span>
+                      <span className="text-fg-muted">
+                        {fmtDateTime(v.activated_at)}
+                        {v.activated_by_name ? ` · ${v.activated_by_name}` : ''}
+                      </span>
+                      {v.direct_publish && <Badge tone="warning">mit Direktversand</Badge>}
+                      {a.active_version === v.version && <Badge tone="success">aktiv</Badge>}
+                    </li>
+                  ))}
+                </ul>
+              </Card>
+            )}
+    </>
+  );
 
   return (
     <EditorCtx.Provider value={ctx}>
@@ -691,7 +763,7 @@ function EditorInner({ a, cat, inputs, outputs }: { a: AutomationDetail; cat: Ca
                 </Button>
               )}
               {!readOnly && a.status === 'active' && (
-                <Button variant="danger" icon="PowerOff" onClick={async () => (await ask({ title: 'Automation deaktivieren?', text: 'Neue Ereignisse starten keine Läufe mehr; wartende Läufe und offene Freigaben werden abgebrochen.', confirmLabel: 'Deaktivieren' })) && act(() => post(`/automations/${a.id}/disable`), 'Deaktiviert')}>
+                <Button variant="danger" icon="PowerOff" onClick={async () => (await ask({ title: 'Workflow deaktivieren?', text: 'Neue Ereignisse starten keine Läufe mehr; wartende Läufe und offene Freigaben werden abgebrochen.', confirmLabel: 'Deaktivieren' })) && act(() => post(`/automations/${a.id}/disable`), 'Deaktiviert')}>
                   Deaktivieren
                 </Button>
               )}
@@ -701,14 +773,14 @@ function EditorInner({ a, cat, inputs, outputs }: { a: AutomationDetail; cat: Ca
                   !readOnly && { label: 'Name und Beschreibung …', icon: 'Pencil', onClick: () => setDialog('meta') },
                   !readOnly && (canPublish || a.direct_publish) && { label: a.direct_publish ? 'Direktversand entziehen …' : 'Direktversand erlauben …', icon: 'ShieldAlert', onClick: () => setDialog('direct') },
                   !readOnly && {
-                    label: 'Automation löschen',
+                    label: 'Workflow löschen',
                     icon: 'Trash2',
                     danger: true,
                     onClick: async () => {
-                      if (!(await ask({ title: 'Automation löschen?', text: `„${a.name}“ wird deaktiviert und entfernt. Laufprotokolle bleiben bis zur Löschfrist.`, confirmLabel: 'Löschen' }))) return;
+                      if (!(await ask({ title: 'Workflow löschen?', text: `„${a.name}“ wird deaktiviert und entfernt. Laufprotokolle bleiben bis zur Löschfrist.`, confirmLabel: 'Löschen' }))) return;
                       try {
                         await del(`/automations/${a.id}`);
-                        nav('/automationen');
+                        nav('/workflows');
                       } catch (e) {
                         toastError(e);
                       }
@@ -733,21 +805,38 @@ function EditorInner({ a, cat, inputs, outputs }: { a: AutomationDetail; cat: Ca
             {directMarked > 0 && !a.direct_publish && <Badge tone="neutral">{directMarked} für Direktversand markiert (nicht erlaubt)</Badge>}
             {readOnly && <Badge tone="neutral">Nur lesen</Badge>}
           </div>
+          {summary && (
+            <p className="m-0 pt-2 text-sm max-w-[900px]" aria-label="Zusammenfassung">
+              {summary}
+            </p>
+          )}
         </PageHeader>
 
-        {!cat.enabled && <Notice tone="warning" title="Automationen sind global abgeschaltet">Läufe starten erst wieder, wenn der Schalter unter Einstellungen → Redaktion an ist.</Notice>}
+        {!cat.enabled && <Notice tone="warning" title="Workflows sind global abgeschaltet">Läufe starten erst wieder, wenn der Schalter unter Einstellungen → Redaktion an ist.</Notice>}
 
         <div className="flex items-center gap-3 flex-wrap">
           <SegmentedControl
-            label="Ansicht"
-            value={view}
-            onChange={setView}
+            label="Bearbeiten"
+            value={mode}
+            onChange={setMode}
             options={[
-              { value: 'canvas', label: 'Fläche' },
-              { value: 'list', label: 'Liste (Tastatur, Handy)' },
+              { value: 'guided', label: 'Geführt (Wenn → Dann)' },
+              { value: 'advanced', label: 'Erweitert' },
             ]}
           />
-          <Help title="Editor bedienen" anchor="editor">
+          {mode === 'advanced' && (
+            <SegmentedControl
+              label="Ansicht"
+              value={view}
+              onChange={setView}
+              options={[
+                { value: 'canvas', label: 'Fläche' },
+                { value: 'list', label: 'Liste (Tastatur, Handy)' },
+              ]}
+            />
+          )}
+          <Help title="Editor bedienen" anchor={mode === 'guided' ? 'gefuehrt-wenn-nur-wenn-dann' : 'erweiterter-editor'}>
+            Geführt: Auslöser, optionale Bedingungen und Aktionen in drei Schritten. Erweitert: alle Bausteine auf der Fläche.
             Fläche: Bausteine aus der Palette ziehen, Punkte rechts (Ausgänge) mit dem Punkt links (Eingang) des nächsten Knotens verbinden, Knoten anklicken zum Einstellen. Entf löscht, Strg+Z/Strg+Y macht rückgängig, Strg+S speichert. Liste: dasselbe ohne Maus über „verbinden mit …“.
           </Help>
           {Object.keys(steps).length > 0 && (
@@ -757,6 +846,15 @@ function EditorInner({ a, cat, inputs, outputs }: { a: AutomationDetail; cat: Ca
           )}
         </div>
 
+        {mode === 'guided' ? (
+          <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_340px] items-start">
+            <div className="min-w-0 flex flex-col gap-4">
+              <GuidedEditor graph={graph} onChange={applyGraph} cat={cat} inputs={inputs} outputs={outputs} errors={errors} readOnly={readOnly} onCreate={(req, assign) => setCreateReq({ req, assign })} onAdvanced={() => setMode('advanced')} />
+              {infoCards}
+            </div>
+            <aside className="lg:sticky lg:top-4">{checklist}</aside>
+          </div>
+        ) : (
         <div className="grid gap-4 lg:grid-cols-[230px_minmax(0,1fr)] xl:grid-cols-[230px_minmax(0,1fr)_340px] items-start">
           <aside className="hidden lg:block lg:max-h-[calc(100vh-260px)] overflow-y-auto pr-1">
             <Palette items={palette} onAdd={(it) => addNode(it.type, it.data)} readOnly={readOnly} />
@@ -843,58 +941,20 @@ function EditorInner({ a, cat, inputs, outputs }: { a: AutomationDetail; cat: Ca
             {panelNode && (
               <div className="xl:hidden">
                 <Card>
-                  <NodePanel node={panelNode} onChange={(d) => updateData(panelNode.id, d)} onRemove={() => removeNode(panelNode.id)} onClose={() => setPanelId(null)} cat={cat} inputs={inputs} outputs={outputs} fields={panelFields} errors={errors[panelNode.id] ?? []} canPublish={canPublish} readOnly={readOnly} />
+                  <NodePanel node={panelNode} onChange={(d) => updateData(panelNode.id, d)} onRemove={() => removeNode(panelNode.id)} onClose={() => setPanelId(null)} cat={cat} inputs={inputs} outputs={outputs} fields={panelFields} errors={errors[panelNode.id] ?? []} canPublish={canPublish} readOnly={readOnly} onCreate={() => createForNode(panelNode)} />
                 </Card>
               </div>
             )}
 
-            <Card title="Prüfung" subtitle={validation.ok ? 'Keine Fehler. Vor dem Aktivieren ist ein erfolgreicher Testlauf nötig.' : 'Fehler verhindern Testlauf und Aktivierung; gespeichert werden kann trotzdem.'}>
-              {validation.ok && globalProblems.length === 0 && (
-                <p className="m-0 text-sm text-ok inline-flex items-center gap-1.5">
-                  <Icon name="CheckCircle2" size={15} />
-                  Ablauf vollständig.
-                </p>
-              )}
-              <ul className="m-0 p-0 list-none flex flex-col gap-1.5">
-                {[...validation.errors.map((e) => ({ ...e, tone: 'error' as const })), ...validation.warnings.map((w) => ({ ...w, tone: 'warning' as const }))].map((p, i) => (
-                  <li key={i} className="flex items-start gap-2 text-sm">
-                    <Icon name={p.tone === 'error' ? 'XCircle' : 'AlertTriangle'} size={15} className={cx('mt-0.5 shrink-0', p.tone === 'error' ? 'text-err' : 'text-warn')} />
-                    <span className="flex-1">{p.message}</span>
-                    {p.nodeId && graph.nodes.some((n) => n.id === p.nodeId) && (
-                      <Button size="sm" variant="ghost" onClick={() => select(p.nodeId!)}>
-                        Zum Knoten
-                      </Button>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            </Card>
+            {checklist}
 
-            <RunsCard automationId={a.id} onOpen={setRunId} />
-
-            {a.versions.length > 0 && (
-              <Card title="Versionen" subtitle="Jede Aktivierung speichert den getesteten Stand samt Ein- und Ausgängen.">
-                <ul className="m-0 p-0 list-none flex flex-col gap-1 text-sm">
-                  {a.versions.map((v) => (
-                    <li key={v.version} className="flex flex-wrap gap-2 items-center">
-                      <span className="font-mono">V{v.version}</span>
-                      <span className="text-fg-muted">
-                        {fmtDateTime(v.activated_at)}
-                        {v.activated_by_name ? ` · ${v.activated_by_name}` : ''}
-                      </span>
-                      {v.direct_publish && <Badge tone="warning">mit Direktversand</Badge>}
-                      {a.active_version === v.version && <Badge tone="success">aktiv</Badge>}
-                    </li>
-                  ))}
-                </ul>
-              </Card>
-            )}
+            {infoCards}
           </div>
 
           <aside className="hidden xl:block sticky top-4 max-h-[calc(100vh-120px)] overflow-y-auto">
             <Card>
               {panelNode ? (
-                <NodePanel node={panelNode} onChange={(d) => updateData(panelNode.id, d)} onRemove={() => removeNode(panelNode.id)} onClose={() => setPanelId(null)} cat={cat} inputs={inputs} outputs={outputs} fields={panelFields} errors={errors[panelNode.id] ?? []} canPublish={canPublish} readOnly={readOnly} />
+                <NodePanel node={panelNode} onChange={(d) => updateData(panelNode.id, d)} onRemove={() => removeNode(panelNode.id)} onClose={() => setPanelId(null)} cat={cat} inputs={inputs} outputs={outputs} fields={panelFields} errors={errors[panelNode.id] ?? []} canPublish={canPublish} readOnly={readOnly} onCreate={() => createForNode(panelNode)} />
               ) : (
                 <div className="flex flex-col gap-2 text-sm text-fg-muted">
                   <strong className="text-fg">Einstellungen</strong>
@@ -907,6 +967,7 @@ function EditorInner({ a, cat, inputs, outputs }: { a: AutomationDetail; cat: Ca
             </Card>
           </aside>
         </div>
+        )}
       </div>
 
       {dialog === 'test' && (
@@ -925,6 +986,11 @@ function EditorInner({ a, cat, inputs, outputs }: { a: AutomationDetail; cat: Ca
       {dialog === 'meta' && <MetaDialog value={meta} onClose={() => setDialog(null)} onSave={(m) => (setMeta(m), setDialog(null))} />}
       {dialog === 'direct' && <DirectDialog a={a} onClose={() => setDialog(null)} onDone={() => (setDialog(null), refresh(), qc.invalidateQueries({ queryKey: ['automations'] }))} />}
       {runId && <RunDialog runId={runId} onClose={() => setRunId(null)} />}
+      {createReq && (
+        <Suspense fallback={null}>
+          <CreateRefDialog req={createReq.req} cat={cat} onClose={() => setCreateReq(null)} onCreated={createReq.assign} />
+        </Suspense>
+      )}
     </EditorCtx.Provider>
   );
 }
@@ -992,10 +1058,10 @@ function DirectDialog({ a, onClose, onDone }: { a: AutomationDetail; onClose: ()
       {enable ? (
         <div className="flex flex-col gap-3 text-sm">
           <Notice tone="warning" title="Ohne Vier-Augen-Prinzip">
-            Markierte Ausgänge dieser Automation veröffentlichen Banner und Beiträge auf der Website bzw. senden E-Mails an externe Empfänger, ohne dass ein Mensch freigibt.
+            Markierte Ausgänge dieses Workflows veröffentlichen Banner und Beiträge auf der Website bzw. senden E-Mails an externe Empfänger, ohne dass ein Mensch freigibt.
           </Notice>
           <ul className="m-0 pl-5 flex flex-col gap-1 text-fg-muted">
-            <li>Nur mit dem Recht „Automationen direkt veröffentlichen lassen“ und frischer Passwortbestätigung.</li>
+            <li>Nur mit dem Recht „Workflows direkt veröffentlichen lassen“ und frischer Passwortbestätigung.</li>
             <li>Voraussetzung: ein erfolgreicher Testlauf des aktuellen Stands{a.tested ? ' (vorhanden)' : ' – noch nicht vorhanden'}.</li>
             <li>Wirksam erst mit einer neu aktivierten Version, die markierte Ausgänge enthält.</li>
             <li>Jede Änderung wird auditiert und der Administration als Sicherheitsmeldung gemeldet.</li>
@@ -1015,7 +1081,7 @@ export default function Editor() {
   const inputs = useInputs();
   const outputs = useOutputs();
   const q = useQuery({ queryKey: ['automation', id], queryFn: () => get<AutomationDetail>(`/automations/${id}`), enabled: !!id });
-  if (q.error || cat.error) return <ErrorBox title="Automation konnte nicht geladen werden">{((q.error ?? cat.error) as Error).message}</ErrorBox>;
+  if (q.error || cat.error) return <ErrorBox title="Workflow konnte nicht geladen werden">{((q.error ?? cat.error) as Error).message}</ErrorBox>;
   if (!q.data || !cat.data || !inputs.data || !outputs.data) return <SkeletonRows rows={8} />;
   return (
     <ReactFlowProvider>
