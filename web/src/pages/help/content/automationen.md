@@ -89,6 +89,14 @@ Voraussetzungen und Schutz:
 
 Die automatischen Banner amtlicher Warnungen unter [Verbindungen](/hilfe/verbindungen#automatische-banner-und-pruefliste) funktionieren unabhängig davon wie bisher.
 
+## Export und Import
+
+Abläufe lassen sich als JSON-Datei sichern oder auf eine andere BlaulichtCMS-Instanz übertragen.
+
+- **Exportieren** (Liste der Automationen, Recht *Automationen ansehen*): eine, mehrere oder alle Automationen auswählen (höchstens 50 je Datei). Die Datei enthält Name, Beschreibung und Ablauf. Ein- und Ausgänge stehen darin nur mit **Art und Name** – ohne ihre Einstellungen, ohne Kennungen und ohne Zugangsdaten. Die Markierung **Direkt** wird nie exportiert.
+- **Importieren** (Recht *Automationen bearbeiten*): Datei wählen (höchstens 1 MB). BlaulichtCMS prüft Format, Version und jeden Schritt und nennt Fehler verständlich, z. B. „keine Exportdatei“ oder „aus einer neueren BlaulichtCMS-Version“. Die **Vorschau** zeigt, was angelegt wird. Je Ein- und Ausgang aus der Datei einen vorhandenen derselben Art wählen – gleichnamige sind vorgeschlagen – oder **Nicht zuordnen** und später im Editor wählen.
+- Importierte Automationen sind immer **Entwürfe**: nicht aktiv, nicht getestet, ohne Direktversand. Ist der Name schon vergeben, wird „(Import)“ angehängt. Vor dem Aktivieren im Editor prüfen und testen.
+
 ## Beispiele
 
 ### Bei FE2-Alarm mit Stichwort B* einen internen Beitragsentwurf anlegen

@@ -13,6 +13,8 @@ import { INPUT_CONFIG, OUTPUT_CONFIG } from '../automations/configs.js';
 import { approvalConflict, buildSnapshot, cancelOpenRuns, createRun, decideApproval, examplePayload, executeRun, loadRefs, snapshotHash, type Snapshot } from '../automations/engine.js';
 import { graphSchema, inputFields, outputNeeds, validateGraph, type Graph } from '../automations/graph.js';
 import { redactForLog } from '../automations/logic.js';
+import { buildExport, mappedGraph, parseTransferFile, suggestions, TRANSFER_MAX_AUTOMATIONS, TRANSFER_MAX_BYTES, TransferError, type TransferFile } from '../automations/transfer.js';
+import { config } from '../config.js';
 
 /**
  * Automationen: Eingänge und Ausgänge (wiederverwendbare Bausteine), Abläufe mit Entwurf, Test, Aktivierung und
@@ -235,6 +237,112 @@ export async function automationRoutes(app: FastifyInstance) {
     const row = await one<any>(`INSERT INTO automations (name, description, graph, graph_hash, created_by, updated_by) VALUES ($1,$2,$3,$4,$5,$5) RETURNING *`, [b.name, b.description, JSON.stringify(graph), draftHash(graph), actorUser(req)]);
     await audit(req.auth!.actor, 'automation.created', { type: 'automation', id: row.id, label: b.name });
     return { id: row.id };
+  });
+
+  /* ------------------------------------------------------------ Export und Import (#196) */
+
+  /** Ausgewählte (ids, kommagetrennt) oder alle Automationen als JSON-Datei – ohne Kennungen und Zugangsdaten. */
+  app.get('/automations/export', { preHandler: read, config: { rateLimit: { max: 30, timeWindow: '1 minute' } } }, async (req, reply) => {
+    const q = z.object({ ids: z.string().max(40 * TRANSFER_MAX_AUTOMATIONS).optional() }).parse(req.query);
+    const ids = (q.ids ?? '').split(',').map((x) => x.trim()).filter(Boolean);
+    if (ids.some((x) => !z.uuid().safeParse(x).success)) throw badRequest('Ungültige Auswahl.');
+    const rows = await many<any>(`SELECT id, name, description, graph FROM automations WHERE deleted_at IS NULL ${ids.length ? 'AND id = ANY($1::uuid[])' : ''} ORDER BY name`, ids.length ? [ids] : []);
+    if (!rows.length) throw notFound('Keine Automation zum Exportieren gefunden.');
+    if (rows.length > TRANSFER_MAX_AUTOMATIONS) throw badRequest(`Höchstens ${TRANSFER_MAX_AUTOMATIONS} Automationen auf einmal exportieren – bitte eine Auswahl treffen.`);
+    const file = buildExport(rows, await loadRefs(), config.version);
+    await audit(req.auth!.actor, 'automation.exported', { type: 'automation', id: rows.length === 1 ? rows[0].id : undefined, label: rows.length === 1 ? rows[0].name : `${rows.length} Automationen` }, { anzahl: rows.length });
+    const stamp = new Date().toISOString().slice(0, 10);
+    reply.header('content-disposition', `attachment; filename="automationen-${stamp}.json"`);
+    return file;
+  });
+
+  const importBody = z.object({
+    file: z.unknown(),
+    mapping: z
+      .object({ inputs: z.record(z.string().max(10), z.uuid().nullable()).default({}), outputs: z.record(z.string().max(10), z.uuid().nullable()).default({}) })
+      .default({ inputs: {}, outputs: {} }),
+  });
+  const importOpts = { preHandler: manage, bodyLimit: TRANSFER_MAX_BYTES + 64 * 1024, config: { rateLimit: { max: 30, timeWindow: '1 minute' } } };
+
+  /** Datei prüfen; Fehler verständlich als 400 invalid_file mit Liste. */
+  const readFile = (raw: unknown): TransferFile => {
+    if (raw !== undefined && JSON.stringify(raw).length > TRANSFER_MAX_BYTES) throw new AppError(413, 'too_large', `Die Datei ist zu groß (höchstens ${TRANSFER_MAX_BYTES / 1024 / 1024} MB).`);
+    try {
+      return parseTransferFile(raw);
+    } catch (e) {
+      if (e instanceof TransferError) throw new AppError(400, 'invalid_file', e.message, { problems: e.details });
+      throw e;
+    }
+  };
+
+  /** Freier Name: bei Gleichstand „(Import)“, „(Import 2)“ … anhängen. */
+  const uniqueName = (name: string, taken: Set<string>) => {
+    let n = name;
+    for (let i = 1; taken.has(n.toLocaleLowerCase('de')); i++) {
+      const suffix = i === 1 ? ' (Import)' : ` (Import ${i})`;
+      n = name.slice(0, 120 - suffix.length) + suffix;
+    }
+    taken.add(n.toLocaleLowerCase('de'));
+    return n;
+  };
+  const takenNames = async () => new Set((await many<{ name: string }>(`SELECT name FROM automations WHERE deleted_at IS NULL`)).map((r) => r.name.toLocaleLowerCase('de')));
+
+  /** Vorschau: was angelegt würde und welche Ein-/Ausgänge zuzuordnen sind (mit Vorschlag bei gleichem Namen). */
+  app.post('/automations/import/preview', importOpts, async (req) => {
+    const b = importBody.parse(req.body);
+    const file = readFile(b.file);
+    const refs = await loadRefs();
+    const taken = await takenNames();
+    return {
+      schemaVersion: file.schemaVersion,
+      appVersion: file.appVersion ?? null,
+      exportedAt: file.exportedAt ?? null,
+      automations: file.automations.map((a) => ({
+        name: a.name,
+        finalName: uniqueName(a.name, taken),
+        description: a.description,
+        nodes: a.graph.nodes.length,
+        edges: a.graph.edges.length,
+        steps: Object.entries(a.graph.nodes.reduce<Record<string, number>>((acc, n) => ((acc[n.type] = (acc[n.type] ?? 0) + 1), acc), {})).map(([type, count]) => ({ type, label: NODE_TYPES[type as keyof typeof NODE_TYPES].label, count })),
+      })),
+      inputs: file.references.inputs.map((r) => ({ ...r, kindLabel: INPUT_KINDS[r.kind].label, ...suggestions(r, refs.inputs.values()) })),
+      outputs: file.references.outputs.map((r) => ({ ...r, kindLabel: OUTPUT_KINDS[r.kind].label, ...suggestions(r, refs.outputs.values()) })),
+    };
+  });
+
+  /** Import: legt die Automationen als Entwürfe an (nicht aktiv, nicht getestet, ohne Direktversand). */
+  app.post('/automations/import', importOpts, async (req) => {
+    const b = importBody.parse(req.body);
+    const file = readFile(b.file);
+    const refs = await loadRefs();
+    // Zuordnungen prüfen: nur vorhandene, nicht gelöschte Ein-/Ausgänge derselben Art
+    for (const r of file.references.inputs) {
+      const id = b.mapping.inputs[r.ref];
+      const t = id ? refs.inputs.get(id) : null;
+      if (id && (!t || t.archived || t.kind !== r.kind)) throw badRequest(`Die Zuordnung für den Eingang „${r.name}“ passt nicht (gelöscht oder andere Art).`);
+    }
+    for (const r of file.references.outputs) {
+      const id = b.mapping.outputs[r.ref];
+      const t = id ? refs.outputs.get(id) : null;
+      if (id && (!t || t.archived || t.kind !== r.kind)) throw badRequest(`Die Zuordnung für den Ausgang „${r.name}“ passt nicht (gelöscht oder andere Art).`);
+    }
+    const created = await tx(async (db) => {
+      const taken = await takenNames();
+      const out: { id: string; name: string; open: number }[] = [];
+      for (const a of file.automations) {
+        const { graph, open } = mappedGraph(a, file, b.mapping, refs);
+        const name = uniqueName(a.name, taken);
+        const row = await one<{ id: string }>(
+          `INSERT INTO automations (name, description, status, graph, graph_hash, created_by, updated_by) VALUES ($1,$2,'draft',$3,$4,$5,$5) RETURNING id`,
+          [name, a.description, JSON.stringify(graph), draftHash(graph), actorUser(req)],
+          db,
+        );
+        await audit(req.auth!.actor, 'automation.imported', { type: 'automation', id: row!.id, label: name }, { knoten: graph.nodes.length, offene_bezuege: open || undefined, version_der_datei: file.appVersion }, 'ok', db);
+        out.push({ id: row!.id, name, open });
+      }
+      return out;
+    });
+    return { created };
   });
 
   app.get('/automations/:id', { preHandler: read }, async (req) => {

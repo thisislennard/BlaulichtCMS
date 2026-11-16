@@ -68,11 +68,12 @@ Vorlagen/Bedingungen, Engine, Ereignisse), API `server/src/routes/automations.ts
 | Ausführung | Auftrag `automation.run`, Advisory-Lock je Lauf, Schritt je Knoten, Ergebnis + Schritt in einer Transaktion, Wiederholung mit Backoff, Warten/Freigabe als Fortsetzung |
 | Grenzen | `automations.max_runs_per_minute` (20), `automations.enabled`, Deaktivieren als Notbremse, `privacy.automation_run_days` (30) |
 | Direktversand | je Automation, Recht `automation.publish`, Passwortbestätigung, Test, Audit, Sicherheitsmeldung (Architektur E17) |
+| Export/Import | `automations/transfer.ts`: Format `blaulichtcms.automations`, `schemaVersion` 1, App-Version; Ein-/Ausgänge nur als Bezug (Art + Name), kein `direct`; `GET /automations/export` (automation.read), `POST /automations/import/preview` und `/automations/import` (automation.manage, höchstens 1 MB und 50 Automationen, Import immer als Entwurf) |
 
 Tests: `server/test/automation-logic.test.ts` (ohne Datenbank: Vorlagen, Bedingungen, Entprellen, Zeitplan, Prüfung,
 Prüfsumme, Rechte) und `server/test/automations.test.ts` (gegen PostgreSQL: Rechte, Ein-/Ausgänge, Test und
 Aktivierung, FE2/Warnfeed/RSS-Ereignisse, Zeitplan mit Mail und Freigabe, Direktversand, Warten, Entprellen, Grenze,
-Notbremse, Löschfrist).
+Notbremse, Löschfrist, Export → Import und abgelehnte Dateien).
 
 ---
 

@@ -8,6 +8,7 @@ import { useAuth } from '../../lib/auth';
 import { fmtRelative } from '../../lib/format';
 import { AutomationBadge, DirectBadge, RunBadge, useCatalog } from './shared';
 import { AutomationApprovals } from './Approvals';
+import { ExportDialog, ImportDialog } from './Transfer';
 
 export interface AutomationListItem {
   id: string;
@@ -74,6 +75,7 @@ export default function Automations() {
   const cat = useCatalog();
   const q = useQuery({ queryKey: ['automations'], queryFn: () => get<AutomationListItem[]>('/automations'), refetchInterval: 20_000 });
   const [create, setCreate] = useState(false);
+  const [transfer, setTransfer] = useState<null | 'export' | 'import'>(null);
   const kindLabel = (k: string) => cat.data?.inputKinds.find((x) => x.kind === k)?.label ?? k;
   return (
     <div className="flex flex-col gap-5">
@@ -84,6 +86,16 @@ export default function Automations() {
           <>
             <LinkButton to="/automationen/eingaenge" icon="Zap">Eingänge</LinkButton>
             <LinkButton to="/automationen/ausgaenge" icon="Send">Ausgänge</LinkButton>
+            {!!q.data?.length && (
+              <Button icon="Download" onClick={() => setTransfer('export')}>
+                Exportieren
+              </Button>
+            )}
+            {manage && (
+              <Button icon="FileUp" onClick={() => setTransfer('import')}>
+                Importieren
+              </Button>
+            )}
             {manage && (
               <Button variant="primary" icon="Plus" onClick={() => setCreate(true)}>
                 Neue Automation
@@ -160,6 +172,8 @@ export default function Automations() {
         </Card>
       )}
       {create && <CreateDialog onClose={() => setCreate(false)} />}
+      {transfer === 'export' && q.data && <ExportDialog items={q.data} onClose={() => setTransfer(null)} />}
+      {transfer === 'import' && <ImportDialog onClose={() => setTransfer(null)} />}
     </div>
   );
 }

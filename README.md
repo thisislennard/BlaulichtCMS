@@ -164,6 +164,8 @@ flowchart LR
 - **Sicher:** Abläufe sind Daten (keine Formeln, kein Code); Testlauf ohne Wirkung, aktiv nur nach erfolgreichem Test,
   Versionen, Schrittprotokoll, Grenzen je Minute, Notbremse. Ausgänge legen Entwürfe an – Direktversand ohne
   Freigabe nur je Automation mit eigenem Recht, Passwortbestätigung, Audit und Sicherheitsmeldung.
+- **Export und Import:** Automationen als JSON-Datei (versioniert, ohne Kennungen und Zugangsdaten) exportieren und
+  mit Vorschau und Zuordnung der Ein- und Ausgänge als Entwurf importieren.
 
 ### Übersicht und Bedienung
 

@@ -534,3 +534,107 @@ describe('Automationen: Verarbeitung, Grenzen, Notbremse, Löschfrist', () => {
     expect(await one(`SELECT 1 FROM audit_events WHERE action = 'automation.deleted'`)).not.toBeNull();
   });
 });
+
+describe('Automationen: Export und Import (#196)', () => {
+  let exported: any;
+  it('Export enthält Ablauf und Bezüge nach Art und Name – keine Kennungen, keine Zugangsdaten', async () => {
+    const r = await editor.raw('GET', `/automations/export?ids=${autoFe2}`);
+    expect(r.status, JSON.stringify(r.json)).toBe(200);
+    exported = r.json;
+    expect(exported.format).toBe('blaulichtcms.automations');
+    expect(exported.schemaVersion).toBe(1);
+    expect(typeof exported.appVersion).toBe('string');
+    expect(exported.automations).toHaveLength(1);
+    expect(exported.references.inputs).toEqual([{ ref: 'in1', kind: 'fe2', name: 'FE2-Alarm' }]);
+    expect(exported.references.outputs).toEqual([{ ref: 'out1', kind: 'post', name: 'Einsatzentwurf' }]);
+    const text = JSON.stringify(exported);
+    for (const secret of [fe2Input, postOutput, fe2Conn.id, siteId, autoFe2]) expect(text).not.toContain(secret);
+    expect(text).not.toMatch(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/);
+    expect(text).not.toContain('"direct"');
+    expect((await admin.raw('GET', '/automations/export?ids=kaputt')).status).toBe(400);
+    expect((await anonymous.raw('GET', '/automations/export')).status).toBe(401);
+    expect(await one(`SELECT 1 FROM audit_events WHERE action = 'automation.exported'`)).not.toBeNull();
+  });
+
+  it('Vorschau schlägt gleichnamige Ein-/Ausgänge vor; Import legt einen inaktiven Entwurf an (Roundtrip)', async () => {
+    expect((await editor.post('/automations/import/preview', { file: exported })).status).toBe(403);
+    const p = await admin.post('/automations/import/preview', { file: exported });
+    expect(p.status, JSON.stringify(p.json)).toBe(200);
+    expect(p.json.automations[0].finalName).toBe('B-Einsätze als Entwurf (Import)');
+    expect(p.json.inputs[0].suggested).toBe(fe2Input);
+    expect(p.json.outputs[0].suggested).toBe(postOutput);
+    expect(p.json.outputs[0].candidates.map((c: any) => c.id)).toContain(postOutput);
+    const i = await admin.post('/automations/import', { file: exported, mapping: { inputs: { in1: fe2Input }, outputs: { out1: postOutput } } });
+    expect(i.status, JSON.stringify(i.json)).toBe(200);
+    expect(i.json.created).toHaveLength(1);
+    expect(i.json.created[0].open).toBe(0);
+    const d = await admin.get(`/automations/${i.json.created[0].id}`);
+    expect(d.json.name).toBe('B-Einsätze als Entwurf (Import)');
+    expect(d.json.status).toBe('draft');
+    expect(d.json.tested).toBe(false);
+    expect(d.json.active_version).toBeNull();
+    expect(d.json.validation.ok).toBe(true);
+    const orig = await admin.get(`/automations/${autoFe2}`);
+    // Direktversand wird nie übernommen (verlangt automation.publish und eine eigene Freigabe je Automation)
+    const strip = (g: any) => g.nodes.map((n: any) => [n.id, n.type, (({ direct: _d, ...rest }) => rest)(n.data)]);
+    expect(strip(d.json.graph)).toEqual(strip(orig.json.graph));
+    expect(d.json.graph.nodes.some((n: any) => n.data.direct)).toBe(false);
+    expect(d.json.graph.edges.length).toBe(orig.json.graph.edges.length);
+    // Erneut exportiert: gleiche Datei (bis auf Zeitpunkt und Namen)
+    const again = (await admin.raw('GET', `/automations/export?ids=${i.json.created[0].id}`)).json;
+    expect(again.automations[0].graph).toEqual(exported.automations[0].graph);
+    expect(await one(`SELECT 1 FROM audit_events WHERE action = 'automation.imported'`)).not.toBeNull();
+  });
+
+  it('ohne Zuordnung bleiben Bezüge offen; falsche Zuordnungen werden abgelehnt', async () => {
+    const i = await admin.post('/automations/import', { file: exported });
+    expect(i.status, JSON.stringify(i.json)).toBe(200);
+    expect(i.json.created[0].name).toBe('B-Einsätze als Entwurf (Import 2)');
+    expect(i.json.created[0].open).toBe(2);
+    const d = await admin.get(`/automations/${i.json.created[0].id}`);
+    expect(d.json.status).toBe('draft');
+    expect(d.json.validation.ok).toBe(false);
+    expect(d.json.graph.nodes.find((n: any) => n.type === 'input').data.inputId).toBeUndefined();
+    // Ausgang als Eingang zugeordnet bzw. unbekannte Kennung
+    expect((await admin.post('/automations/import', { file: exported, mapping: { inputs: { in1: postOutput }, outputs: {} } })).status).toBe(400);
+    expect((await admin.post('/automations/import', { file: exported, mapping: { inputs: { in1: 'kein-uuid' } } })).status).toBe(400);
+  });
+
+  it('lehnt fremde, neuere, beschädigte und zu große Dateien verständlich ab', async () => {
+    const bad = async (file: unknown) => admin.post('/automations/import/preview', { file });
+    let r = await bad({ hallo: 'welt' });
+    expect(r.status).toBe(400);
+    expect(r.json.error).toBe('invalid_file');
+    expect(r.json.message).toMatch(/keine Exportdatei/);
+    r = await bad([1, 2, 3]);
+    expect(r.json.error).toBe('invalid_file');
+    r = await bad({ ...exported, schemaVersion: 99, appVersion: '9.0.0' });
+    expect(r.status).toBe(400);
+    expect(r.json.message).toMatch(/neueren BlaulichtCMS-Version/);
+    r = await bad({ ...exported, automations: [] });
+    expect(r.json.message).toMatch(/unvollständig oder beschädigt/);
+    expect(r.json.details.problems[0].message).toMatch(/keine Automation/);
+    const tamper = (fn: (a: any) => void) => {
+      const c = structuredClone(exported);
+      fn(c);
+      return c;
+    };
+    r = await bad(tamper((c) => (c.automations[0].graph.nodes[0].data = { inputId: fe2Input })));
+    expect(r.status).toBe(400);
+    expect(r.json.details.problems[0].message).toMatch(/unerwarteten Angaben/);
+    r = await bad(tamper((c) => (c.automations[0].graph.nodes[0].data = { inputRef: 'in7' })));
+    expect(r.json.details.problems[0].message).toMatch(/unbekannten Bezug/);
+    r = await bad(tamper((c) => (c.automations[0].graph.nodes.find((n: any) => n.type === 'condition').data = { combinator: 'xor', rules: [] })));
+    expect(r.json.details.problems[0].message).toMatch(/Bedingung/);
+    r = await bad(tamper((c) => (c.automations[0].graph.edges[0].target = 'gibtsnicht')));
+    expect(r.json.details.problems[0].message).toMatch(/unbekannten Knoten/);
+    r = await bad(tamper((c) => (c.automations = Array.from({ length: 51 }, () => c.automations[0]))));
+    expect(r.status).toBe(400);
+    // Zu groß: knapp über der Dateigrenze (eigene Prüfung) und weit darüber (Grenze der Anfrage)
+    r = await bad({ ...exported, padding: 'x'.repeat(1024 * 1024) });
+    expect(r.status).toBe(413);
+    r = await bad({ ...exported, padding: 'x'.repeat(3 * 1024 * 1024) });
+    expect(r.status).toBe(413);
+    expect((await one<any>(`SELECT count(*)::int AS n FROM automations WHERE name LIKE '%(Import%'`))!.n).toBe(2);
+  });
+});
