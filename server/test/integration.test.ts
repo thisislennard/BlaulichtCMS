@@ -4230,7 +4230,8 @@ describe('Feuersoftware Connect als zweite Einsatzquelle', () => {
     // Alarmzeit in der Zeitzone der Instanz
     expect(rev.body).toContain(START_LOCAL);
     expect(await one(`SELECT 1 FROM fe2_events WHERE event_key = $1`, [`${id}:FS-ALT`])).toBeNull();
-    const stored = JSON.stringify(events) + rev.body;
+    // Nur die Inhaltsfelder prüfen: IDs (UUIDs) und Zeitstempel könnten zufällig z. B. „0123“ oder „50.1“ enthalten
+    const stored = JSON.stringify(events.map((e) => ({ keyword: e.keyword, title: e.title, fields: e.fields }))) + rev.title + rev.body + rev.excerpt;
     for (const secret of ['Hauptstraße', '12345', 'Mustermann', 'Musterfrau', '0123', '4711-2026', 'VERTRAULICH', '50.1']) expect(stored).not.toContain(secret);
     const logs = await one<any>(`SELECT count(*)::int AS n FROM app_logs WHERE message ILIKE ANY($1) OR details::text ILIKE ANY($1)`, [['%Hauptstraße%', '%Mustermann%', `%${KEY}%`, '%FS-1%']]);
     expect(logs!.n).toBe(0);
@@ -4650,7 +4651,7 @@ describe('Empfangsprotokoll eingehender Verbindungen', () => {
   let fe2Token = '';
   const receipts = async (id: string, q = '') => admin.get(`/connections/${id}/receipts${q}`);
   const items = async (id: string, rid: string, q = '') => (await admin.get(`/connections/${id}/receipts/${rid}/items${q}`)).json.items as any[];
-  /** Alles, was zu einer Verbindung im Empfangsprotokoll gespeichert ist (Einträge, Meldungen, Rohdaten) */
+  /** Alles, was zu einer Verbindung im Empfangsprotokoll gespeichert ist (Einträge, Meldungen, Rohdaten); UUIDs ausgeblendet, damit Zufallsziffern nicht als Treffer zählen */
   const stored = async (id: string) =>
     JSON.stringify(
       await many<any>(
@@ -4658,7 +4659,7 @@ describe('Empfangsprotokoll eingehender Verbindungen', () => {
            LEFT JOIN connection_receipt_items i ON i.receipt_id = r.id LEFT JOIN connection_receipt_raws b ON b.hash = i.raw_hash WHERE r.connection_id = $1`,
         [id],
       ),
-    );
+    ).replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, '<id>');
 
   beforeAll(async () => {
     srv = http.createServer((req, res) => {
