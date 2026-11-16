@@ -108,7 +108,10 @@ flowchart LR
 - **Quellen:** RSS- und Atom-Feeds als Anregung für eigene Beiträge.
 - **Kalender:** eigene Termine und Serien (täglich, wöchentlich, monatlich auch „jeden 1. Samstag“, jährlich; Ende nach
   Datum oder Anzahl, einzelne Termine ändern oder auslassen), Kategorien mit Farben, Ansichten Monat, Woche und Liste
-  (am Handy Liste), Filter nach Kategorie und Quelle; Zeitzone Europe/Berlin inklusive Sommer-/Winterzeit.
+  (am Handy Liste), Filter nach Kategorie und Quelle; Zeitzone Europe/Berlin inklusive Sommer-/Winterzeit. Geplante
+  Beiträge mit Status und Kanälen erscheinen im Kalender und lassen sich per Ziehen (oder Datum/Uhrzeit) verschieben –
+  mit Hinweis und neuer Freigabe, wenn der Termin zur freigegebenen Fassung gehört; Fristen von Presseanfragen,
+  überfällige hervorgehoben.
 
 ### Designvorlagen
 

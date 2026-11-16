@@ -6,6 +6,7 @@ import { audit } from '../lib/audit.js';
 import { AppError, badRequest, notFound } from '../lib/errors.js';
 import { expand, formatRrule, localDate, midnight, parseRrule, toCivil, type Rrule } from '../calendar/recurrence.js';
 import { addDays } from '../calendar/ical.js';
+import { reschedulePost } from '../calendar/providers.js';
 import { CATEGORY_COLORS, MAX_RANGE_DAYS, calendarProviders, calendarTimeZone, computeUntil, occurrences, safeRrule, toEntry, type CalendarEntry, type EventRow } from '../calendar/store.js';
 
 /**
@@ -381,5 +382,16 @@ export async function calendarRoutes(app: FastifyInstance) {
     });
     return { ok: true };
   });
-}
 
+  /* ---------------------------------------------------------------- Geplante Beiträge (#201) */
+
+  /**
+   * Termin eines geplanten Beitrags verschieben (Ziehen im Kalender oder Datum/Uhrzeit ändern). Erzeugt eine neue
+   * Fassung; eine Freigabe der bisherigen Fassung entfällt nach den bestehenden Regeln.
+   */
+  app.post('/calendar/posts/:id/schedule', { preHandler: requireAuth('post.edit') }, async (req) => {
+    const { id } = z.object({ id: z.uuid() }).parse(req.params);
+    const body = z.object({ revision: z.number().int().min(1), publishAt: z.iso.datetime({ offset: true }) }).parse(req.body);
+    return reschedulePost(id, body, req.auth!.actor, req.auth!.user?.id ?? null);
+  });
+}

@@ -8,6 +8,8 @@ import { fromLocalInput } from '../../lib/format';
 import { CategoriesDialog, EntryDialog, EventDialog, type EditTarget } from './dialogs';
 import { dayStart, shift, today, viewRange, type CalendarCategory, type CalendarEntry, type View } from './model';
 import { ListView, MonthView, WeekView } from './views';
+import { RescheduleForm, usePlanning, useReschedule } from './planning';
+import { DndContext } from '@dnd-kit/core';
 
 /**
  * Kalender (#200): eigene und eingelesene Termine, Kategorien mit Farben, Wiederholungen; Monat, Woche und Liste
@@ -70,7 +72,9 @@ export default function CalendarPage() {
 
   const toggleCat = (id: string) => setCats((c) => (c.includes(id) ? c.filter((x) => x !== id) : [...c, id]));
   const sources = q.data?.sources ?? [{ id: 'own', label: 'Eigene Termine' }];
-  const viewProps = { entries, from: range.from, to: range.to, month, onOpen: setOpen, onDay: canManage ? newAt : undefined };
+  const reschedule = useReschedule(refresh);
+  const planning = usePlanning(can('post.edit'), reschedule);
+  const viewProps = { entries, from: range.from, to: range.to, month, onOpen: setOpen, onDay: canManage ? newAt : undefined, wrapEntry: planning.wrapEntry, wrapDay: planning.wrapDay };
 
   const catChips = useMemo(() => [...(categories.data ?? []).map((c) => ({ id: c.id, name: c.name, color: `var(--bc-cal-${c.color})` })), { id: 'none', name: 'Ohne Kategorie', color: 'var(--bc-cal-grau)' }], [categories.data]);
 
@@ -154,12 +158,11 @@ export default function CalendarPage() {
         <ErrorBox title="Kalender konnte nicht geladen werden">{(q.error as Error).message}</ErrorBox>
       ) : !q.data ? (
         <SkeletonRows rows={8} />
-      ) : view === 'month' ? (
-        <MonthView {...viewProps} />
-      ) : view === 'week' ? (
-        <WeekView {...viewProps} />
       ) : (
-        <ListView {...viewProps} />
+        <DndContext {...planning.dnd}>
+          {view === 'month' ? <MonthView {...viewProps} /> : view === 'week' ? <WeekView {...viewProps} /> : <ListView {...viewProps} />}
+          {planning.overlay}
+        </DndContext>
       )}
       {q.data?.truncated && <p className="m-0 text-meta text-fg-muted">Sehr viele Einträge – nicht alle werden angezeigt. Bitte filtern.</p>}
 
@@ -176,6 +179,7 @@ export default function CalendarPage() {
             setOpen(null);
             refresh();
           }}
+          extra={open.kind === 'post' && open.movable ? <RescheduleForm entry={open} reschedule={reschedule} onDone={() => setOpen(null)} /> : undefined}
         />
       )}
       {edit && (

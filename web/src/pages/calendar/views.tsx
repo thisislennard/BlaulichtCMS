@@ -83,7 +83,7 @@ export function MonthView({ entries, from, to, month, onOpen, onDay, wrapEntry =
               <div key={d} className={cx('min-h-[112px] border-r border-line last:border-r-0 p-1 flex flex-col gap-0.5 min-w-0', outside && 'bg-bg')}>
                 {wrapDay(
                   d,
-                  <div className="flex flex-col gap-0.5 min-w-0 h-full">
+                  <div className="flex flex-col gap-0.5 min-w-0 flex-1">
                     <div className="flex items-center justify-between">
                       {onDay ? (
                         <button type="button" onClick={() => onDay(d)} aria-label={`${dayLabel(d)}: neuer Termin`} title="Neuer Termin an diesem Tag" className={cx('w-7 h-7 rounded-full text-[12px] font-mono inline-flex items-center justify-center hover:bg-raised', d === t && 'bg-primary-solid text-on-primary hover:bg-primary-hover', outside && d !== t && 'text-fg-muted')}>
@@ -213,7 +213,7 @@ export function WeekView({ entries, from, to, onOpen, onDay, wrapEntry = ident, 
                 <div key={d} className="border-l border-line p-1 flex flex-col gap-0.5 min-h-[30px] min-w-0">
                   {wrapDay(
                     d,
-                    <div className="flex flex-col gap-0.5 min-h-[22px]">
+                    <div className="flex flex-col gap-0.5 min-h-[22px] flex-1">
                       {list.map((e) => (
                         <div key={e.key}>{wrapEntry(e, <EntryChip e={e} day={d} onOpen={onOpen} />)}</div>
                       ))}

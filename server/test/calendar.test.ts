@@ -198,3 +198,81 @@ describe('Kalender: Kategorien und Termine (#200)', () => {
     expect(new Set(audit.map((a) => a.action))).toEqual(new Set(['calendar.category_created', 'calendar.category_updated', 'calendar.category_deleted', 'calendar.event_created', 'calendar.event_updated', 'calendar.event_deleted']));
   });
 });
+
+describe('Kalender: geplante Beiträge und Presse-Fristen (#201)', () => {
+  let postId: string;
+  const inDays = (d: number, h = 9) => {
+    const t = new Date(Date.now() + d * 86_400_000);
+    const c = toCivil(+t, TZ);
+    return berlin(c.y, c.m, c.d, h, 0);
+  };
+  const range = () => [inDays(-3), inDays(30)] as const;
+
+  it('zeigt Beiträge mit Termin samt Status und Kanälen; Lesezugriff ohne Verschieben', async () => {
+    await setSettings({ 'editorial.four_eyes': false } as any);
+    const p = await admin.post('/posts', { title: 'Tag der offenen Tür', kind: 'event' });
+    postId = p.json.id;
+    expect((await admin.put(`/posts/${postId}/revision`, { baseRevision: 1, title: 'Tag der offenen Tür', body: 'Herzliche Einladung', publishAt: inDays(5) })).json.changed).toBe(true);
+    const [from, to] = range();
+    const list = (await entries(admin, from, to)).filter((e) => e.kind === 'post');
+    expect(list).toHaveLength(1);
+    expect(list[0]).toMatchObject({ id: postId, title: 'Tag der offenen Tür', start: inDays(5), status: 'draft', statusLabel: 'Entwurf', movable: true, link: `/beitraege/${postId}`, source: 'post', color: 'post' });
+    expect(list[0].meta).toMatchObject({ revision: 2 });
+    const asViewer = (await entries(viewer, from, to)).filter((e) => e.kind === 'post');
+    expect(asViewer[0]).toMatchObject({ movable: false, readOnly: true });
+    expect((await viewer.post(`/calendar/posts/${postId}/schedule`, { revision: 2, publishAt: inDays(6) })).status).toBe(403);
+    // Quellenfilter
+    expect((await entries(admin, from, to, '&sources=own')).some((e) => e.kind === 'post')).toBe(false);
+    expect((await admin.get(`/calendar/entries?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`)).json.sources.map((s: any) => s.id)).toEqual(['own', 'post', 'press']);
+    expect((await viewer.get(`/calendar/entries?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`)).json.sources.map((s: any) => s.id)).toEqual(['own', 'post']);
+  });
+
+  it('Verschieben erzeugt eine neue Fassung; die Freigabe entfällt nach den bestehenden Regeln', async () => {
+    expect((await admin.post(`/posts/${postId}/submit`, { revision: 2 })).status).toBe(200);
+    const st = (await admin.get(`/posts/${postId}`)).json;
+    expect((await admin.post(`/posts/${postId}/decision`, { revision: 2, contentHash: st.revision.content_hash, decision: 'approved' })).status).toBe(200);
+    const [from, to] = range();
+    expect((await entries(admin, from, to)).find((e) => e.kind === 'post')).toMatchObject({ status: 'approved', movable: true, meta: { approved: true } });
+    // veralteter Stand → 409, Vergangenheit → 400
+    expect((await admin.post(`/calendar/posts/${postId}/schedule`, { revision: 1, publishAt: inDays(6) })).status).toBe(409);
+    expect((await admin.post(`/calendar/posts/${postId}/schedule`, { revision: 2, publishAt: inDays(-2) })).status).toBe(400);
+    const r = await admin.post(`/calendar/posts/${postId}/schedule`, { revision: 2, publishAt: inDays(7, 18) });
+    expect(r.status).toBe(200);
+    expect(r.json).toMatchObject({ changed: true, number: 3, approvalInvalidated: true, wasSubmitted: true });
+    const after = (await admin.get(`/posts/${postId}`)).json;
+    expect(after.state).toBe('draft');
+    expect(after.revision).toMatchObject({ number: 3, publish_at: inDays(7, 18), body: 'Herzliche Einladung' });
+    expect(after.revisions[0].change_note).toBe('Termin im Kalender verschoben');
+    expect((await one<any>(`SELECT details FROM audit_events WHERE action = 'post.revised' ORDER BY id DESC LIMIT 1`))!.details).toMatchObject({ quelle: 'Kalender', freigabe_entfaellt: true, fassung: 3 });
+    // gleicher Termin: keine neue Fassung
+    expect((await admin.post(`/calendar/posts/${postId}/schedule`, { revision: 3, publishAt: inDays(7, 18) })).json.changed).toBe(false);
+  });
+
+  it('beauftragte Veröffentlichung lässt sich nicht im Kalender verschieben', async () => {
+    const st = (await admin.get(`/posts/${postId}`)).json;
+    await admin.post(`/posts/${postId}/submit`, { revision: 3 });
+    await admin.post(`/posts/${postId}/decision`, { revision: 3, contentHash: st.revision.content_hash, decision: 'approved' });
+    // Stellvertretend für einen beauftragten Social-Post
+    const conn = await one<any>(`INSERT INTO connections (kind, name, status, config) VALUES ('facebook', 'Seite', 'active', '{}') RETURNING id`);
+    const appr = await one<any>(`SELECT id FROM approvals WHERE revision_id = $1 AND revoked_at IS NULL`, [st.revision.id]);
+    await pool.query(`INSERT INTO social_publications (post_id, revision_id, approval_id, connection_id, status, marker) VALUES ($1, $2, $3, $4, 'queued', 'bc-test')`, [postId, st.revision.id, appr!.id, conn!.id]);
+    const [from, to] = range();
+    expect((await entries(admin, from, to)).find((e) => e.kind === 'post')).toMatchObject({ movable: false });
+    const r = await admin.post(`/calendar/posts/${postId}/schedule`, { revision: 3, publishAt: inDays(8) });
+    expect(r.status).toBe(409);
+    expect(r.json.message ?? r.json.error).toMatch(/sozialen Kanälen|bereits beauftragt/);
+  });
+
+  it('Fristen von Presseanfragen, überfällige hervorgehoben – nur mit Recht', async () => {
+    await pool.query(`INSERT INTO press_requests (case_no, topic, outlet, due_at, status) VALUES ('P-2026-0001', 'Nachfrage zum Brand', 'Tageblatt', $1, 'new'), ('P-2026-0002', 'Interview Jugendfeuerwehr', 'Radio', $2, 'in_progress'), ('P-2026-0003', 'Erledigt', '', $2, 'done')`, [inDays(-1), inDays(2)]);
+    const [from, to] = range();
+    const press = (await entries(admin, from, to)).filter((e) => e.kind === 'press');
+    expect(press.map((e) => [e.title, e.overdue, e.statusLabel])).toEqual([
+      ['Frist P-2026-0001: Nachfrage zum Brand', true, 'neu'],
+      ['Frist P-2026-0002: Interview Jugendfeuerwehr', false, 'in Bearbeitung'],
+    ]);
+    expect(press[0]).toMatchObject({ readOnly: true, color: 'press', link: expect.stringMatching(/^\/presse\//) });
+    expect((await entries(viewer, from, to)).some((e) => e.kind === 'press')).toBe(false);
+    expect((await entries(admin, from, to, '&sources=press')).every((e) => e.kind === 'press')).toBe(true);
+  });
+});

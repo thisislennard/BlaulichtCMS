@@ -54,3 +54,22 @@ Ein Klick auf einen Termin einer Serie bietet:
 ## Zeitzone
 
 Alle Zeiten gelten in der Zeitzone der Instanz (**Einstellungen → Allgemein → Zeitzone**, Standard Europe/Berlin), inklusive Sommer- und Winterzeit.
+
+## Geplante Beiträge
+
+Beiträge mit einem **geplanten Veröffentlichungstermin** (im Beitrag unter „Termin“) erscheinen im Kalender als eigene Einträge mit Beitragssymbol – sichtbar für alle mit **Beiträge ansehen**. Der Eintrag nennt den Status der aktuellen Fassung (**Entwurf**, **zur Freigabe**, **freigegeben**, **veröffentlicht** …) und die gewählten Kanäle: Website und soziale Kanäle samt Stand (geplant, veröffentlicht, fehlgeschlagen). Ein Klick öffnet die Übersicht, **Öffnen →** führt zum Beitrag. Über die Quelle **Geplante Beiträge** lassen sie sich allein anzeigen oder ausblenden.
+
+### Termin verschieben
+
+Mit dem Recht **Beiträge bearbeiten** lässt sich der Termin ändern:
+
+- **Ziehen und Ablegen:** in **Monat** auf einen anderen Tag (Uhrzeit bleibt) oder in **Woche** auf eine andere Stunde (Minuten bleiben) – mit Maus oder Finger.
+- **Ohne Ziehen (Tastatur):** Eintrag öffnen → **Termin ändern** → Datum und Uhrzeit wählen → **Termin speichern**.
+
+Der Termin gehört zur **Fassung** des Beitrags. Verschieben legt deshalb eine neue Fassung an („Termin im Kalender verschoben“). War die bisherige Fassung **freigegeben** oder **zur Freigabe eingereicht**, fragt der Kalender vorher nach: Die Freigabe gilt danach nicht mehr, der Beitrag muss erneut eingereicht und freigegeben werden. Das Vier-Augen-Prinzip bleibt unberührt – ein verschobener Termin zählt nicht als Schreiben am Inhalt.
+
+Nicht verschieben lassen sich Beiträge, deren Veröffentlichung **bereits beauftragt** ist (Website oder soziale Kanäle), die gerade veröffentlicht werden oder schon veröffentlicht sind. Dann den Termin im Beitrag ändern und vorher den Auftrag abbrechen. Termine in der Vergangenheit sind nicht möglich.
+
+## Fristen von Presseanfragen
+
+Offene [Presseanfragen](/presse) (neu oder in Bearbeitung) mit Frist erscheinen am Fristtermin – mit Vorgangsnummer, Thema, Medium und Zuständigkeit, ohne Kontaktdaten. **Überfällige** Fristen sind rot umrandet und mit Warnsymbol und dem Wort „überfällig“ markiert. Sichtbar nur mit **Presseanfragen ansehen**; die Frist selbst ändert man in der Anfrage.
