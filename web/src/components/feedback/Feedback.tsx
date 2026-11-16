@@ -241,6 +241,22 @@ export function isChunkError(e: unknown) {
   return /Failed to fetch dynamically imported module|Importing a module script failed|error loading dynamically imported module|ChunkLoadError/i.test(String((e as Error)?.message ?? e));
 }
 
+/**
+ * Einmal automatisch neu laden, wenn Programmteile der alten Version fehlen (höchstens alle 30 s, damit ein echter
+ * Ausfall nicht in einer Neuladeschleife endet). Liefert true, wenn neu geladen wird.
+ */
+export function reloadForNewVersion(): boolean {
+  try {
+    const last = Number(sessionStorage.getItem('bc-chunk-reload') ?? 0);
+    if (Date.now() - last < 30_000) return false;
+    sessionStorage.setItem('bc-chunk-reload', String(Date.now()));
+  } catch {
+    return false;
+  }
+  window.location.reload();
+  return true;
+}
+
 function errorDetails(error: unknown, info?: string) {
   const e = error as Error;
   return [`${e?.name ?? 'Fehler'}: ${e?.message ?? String(error)}`, `Seite: ${window.location.pathname}`, `Zeit: ${new Date().toISOString()}`, (e?.stack ?? '').split('\n').slice(0, 8).join('\n'), info ?? ''].filter(Boolean).join('\n');
@@ -249,6 +265,9 @@ function errorDetails(error: unknown, info?: string) {
 /** Darstellung eines Absturzes (Fehlergrenze und Router). */
 export function CrashView({ error, info, page }: { error: unknown; info?: string; page?: boolean }) {
   const chunk = isChunkError(error);
+  useEffect(() => {
+    if (chunk) reloadForNewVersion();
+  }, [chunk]);
   const props = {
     kind: 'error' as const,
     title: chunk ? 'Neue Version verfügbar' : undefined,

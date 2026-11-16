@@ -14,7 +14,7 @@ import { AuthProvider, ThemeSync } from './lib/auth';
 import { ConfirmProvider, ToastProvider } from './components/ui/overlays';
 import { OfflineBanner } from './components/OfflineBanner';
 import { ReauthProvider } from './components/ReauthDialog';
-import { ErrorBoundary } from './components/feedback/Feedback';
+import { ErrorBoundary, isChunkError, reloadForNewVersion } from './components/feedback/Feedback';
 
 // Farbschema vor dem ersten Rendern setzen (kein Aufblitzen)
 try {
@@ -29,6 +29,14 @@ const queryClient = new QueryClient({
     // Nicht erneut versuchen bei 4xx und Zeitüberschreitung (sonst dreht die Ladeanzeige bis zu 90 s)
     queries: { refetchOnWindowFocus: true, retry: (n, e: any) => n < 2 && !(e?.status >= 400 && e?.status < 500) && e?.code !== 'timeout', staleTime: 10_000 },
   },
+});
+
+// Nach einem Update fehlen die Programmteile der alten Version: einmal automatisch neu laden statt Fehlermeldung.
+window.addEventListener('vite:preloadError', (e) => {
+  if (reloadForNewVersion()) e.preventDefault();
+});
+window.addEventListener('unhandledrejection', (e) => {
+  if (isChunkError(e.reason) && reloadForNewVersion()) e.preventDefault();
 });
 
 // Service Worker für die installierbare App (nur Oberfläche, keine API-Daten)
