@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router';
 import { del, post, put } from '../../api/client';
-import { Button, Card, Chip, EmptyState, ErrorBox, FieldWrap, Input, Notice, PageHeader, SkeletonRows, Switch } from '../../components/ui/core';
+import { Button, Card, Chip, EmptyState, ErrorBox, FieldWrap, Input, Notice, PageHeader, Select, SkeletonRows, Switch } from '../../components/ui/core';
 import { Icon } from '../../components/ui/Icon';
 import { Dialog, useConfirm, useErrorToast, useToast } from '../../components/ui/overlays';
 import { useAuth } from '../../lib/auth';
@@ -15,7 +15,7 @@ import { CheckList, Help, NumberField, SelectField, TemplateField, outputSummary
 
 const DEFAULTS: Record<string, Record<string, any>> = {
   banner: { siteIds: [], title: '', text: '', tone: 'auto', priority: 2, durationHours: 6, endFromField: true, linkUrl: '', linkText: '', display: 'auto', submit: true },
-  post: { kind: 'news', title: '', body: '', excerpt: '', variants: {}, siteId: null, submit: false },
+  post: { kind: 'news', title: '', body: '', excerpt: '', variants: {}, socialTargets: [], siteId: null, submit: false },
   mail: { roles: [], responsibilityIds: [], subject: '', body: '' },
   notify: { roles: [], userIds: [], kind: 'info', title: '', body: '', link: '' },
   warning_draft: { data: {}, responsibilityIds: [] },
@@ -137,9 +137,12 @@ function OutputDialog({ output, kind, cat, onClose }: { output: OutputDef | null
                 <TemplateField id="o-wp-body" label="WordPress: Text" rows={4} value={c.variants?.wordpress?.body ?? ''} onChange={(v) => set({ variants: { ...c.variants, wordpress: { ...c.variants?.wordpress, body: v } } })} fields={fields} max={20000} />
                 <TemplateField id="o-fb-body" label="Facebook: Text" rows={3} value={c.variants?.facebook?.body ?? ''} onChange={(v) => set({ variants: { ...c.variants, facebook: { body: v } } })} fields={fields} max={20000} />
                 <TemplateField id="o-ig-body" label="Instagram: Text" rows={3} value={c.variants?.instagram?.body ?? ''} onChange={(v) => set({ variants: { ...c.variants, instagram: { body: v } } })} fields={fields} max={2200} />
-                <p className="m-0 text-meta text-fg-muted">Soziale Kanäle selbst wählt die Redaktion im Beitrag – Automationen veröffentlichen nie direkt in sozialen Netzwerken.</p>
+                <TemplateField id="o-th-body" label="Threads: Text" rows={2} value={c.variants?.threads?.body ?? ''} onChange={(v) => set({ variants: { ...c.variants, threads: { body: v } } })} fields={fields} max={2000} help="Höchstens 500 Zeichen nach dem Einsetzen, sonst wird gekürzt." />
+                <TemplateField id="o-x-body" label="X: Text" rows={2} value={c.variants?.x?.body ?? ''} onChange={(v) => set({ variants: { ...c.variants, x: { body: v } } })} fields={fields} max={2000} help="Höchstens 280 Zeichen (nach den Zählregeln von X) samt Link, sonst wird gekürzt." />
+                <TemplateField id="o-wa-body" label="WhatsApp-Kanal: Text" rows={2} value={c.variants?.whatsapp?.body ?? ''} onChange={(v) => set({ variants: { ...c.variants, whatsapp: { body: v } } })} fields={fields} max={20000} />
               </div>
             </details>
+            <SocialTargetsField channels={cat.socialChannels ?? []} value={c.socialTargets ?? []} onChange={(v) => set({ socialTargets: v })} />
             <Switch checked={!!c.submit} onChange={(v) => set({ submit: v })} label="Zur Freigabe einreichen" description="Nur mit Text. Sonst bleibt der Beitrag ein Entwurf für die Redaktion." />
           </>
         )}
@@ -290,5 +293,46 @@ export default function Outputs() {
       )}
       {edit && cat.data && <OutputDialog output={edit.output} kind={edit.kind} cat={cat.data} onClose={(saved) => (setEdit(null), saved && refresh())} />}
     </div>
+  );
+}
+
+/** Soziale Kanäle eines Beitragsausgangs vorauswählen (#188, #189) – samt Format; veröffentlicht wird erst nach Freigabe. */
+function SocialTargetsField({ channels, value, onChange }: { channels: { id: string; kind: string; name: string; status: string; manual: boolean }[]; value: { connectionId: string; format: string }[]; onChange: (v: { connectionId: string; format: string }[]) => void }) {
+  const label: Record<string, string> = { facebook: 'Facebook', instagram: 'Instagram', threads: 'Threads', x: 'X', whatsapp: 'WhatsApp-Kanal' };
+  const visible = channels.filter((ch) => ch.status !== 'revoked' || value.some((v) => v.connectionId === ch.id));
+  return (
+    <fieldset className="border border-line rounded-card p-3 flex flex-col gap-2">
+      <legend className="px-1 text-sm font-medium flex items-center gap-1">
+        Soziale Kanäle vorauswählen (optional)
+        <Help title="Soziale Kanäle in Automationen" anchor="ausgaenge">
+          Der Beitragsentwurf bekommt diese Kanäle samt Format (Beitrag, Story oder beides) schon mit. Veröffentlicht wird erst, wenn eine Person den Beitrag freigegeben und „Auf sozialen Kanälen veröffentlichen“ gewählt hat – Automationen posten nie selbst in sozialen Netzwerken. Kanäle ohne Schnittstelle (X im Modus „Teilen von Hand“, WhatsApp-Kanal) erscheinen danach als „Zum Teilen bereit“ samt Benachrichtigung. Storys brauchen ein Bild oder Video, das die Redaktion im Entwurf ergänzt.
+        </Help>
+      </legend>
+      {!visible.length && <p className="m-0 text-sm text-fg-muted">Noch kein sozialer Kanal verbunden (Verwaltung → Verbindungen).</p>}
+      {visible.map((ch) => {
+        const cur = value.find((v) => v.connectionId === ch.id);
+        const story = ch.kind === 'facebook' || ch.kind === 'instagram';
+        return (
+          <div key={ch.id} className="flex flex-wrap items-center gap-2 text-sm">
+            <label className="flex items-center gap-2">
+              <input type="checkbox" checked={!!cur} onChange={(e) => onChange(e.target.checked ? [...value, { connectionId: ch.id, format: 'feed' }] : value.filter((v) => v.connectionId !== ch.id))} />
+              <Chip>{label[ch.kind] ?? ch.kind}</Chip>
+              <span>{ch.name}</span>
+            </label>
+            {ch.manual && <span className="text-meta text-fg-muted">Teilen von Hand</span>}
+            {cur && story && (
+              <>
+                <label htmlFor={`o-fmt-${ch.id}`} className="sr-only">Format für {ch.name}</label>
+                <Select id={`o-fmt-${ch.id}`} className="w-auto ml-auto" value={cur.format} onChange={(e) => onChange(value.map((v) => (v.connectionId === ch.id ? { ...v, format: e.target.value } : v)))}>
+                  <option value="feed">Beitrag</option>
+                  <option value="story">Story</option>
+                  <option value="both">Beitrag und Story</option>
+                </Select>
+              </>
+            )}
+          </div>
+        );
+      })}
+    </fieldset>
   );
 }

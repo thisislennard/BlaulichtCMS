@@ -21,6 +21,7 @@ import { renderPublic } from './media/privacy.js';
 import { refreshDueFeeds } from './routes/rss.js';
 import { deliverWarningSend } from './warnings/mail.js';
 import { runSocialPublication } from './connections/social.js';
+import { refreshThreadsTokens } from './connections/threads.js';
 import { redactAnonymousIps } from './lib/audit.js';
 import { sealAudit, verifyAudit } from './lib/audit-chain.js';
 import { cleanupMediaTokens } from './connections/meta.js';
@@ -226,6 +227,8 @@ async function maintenance(isLeader: boolean) {
   // Feuersoftware Connect: jede aktive Verbindung in ihrem Abstand (60–300 s); geprüft wird alle 10 s
   if (due('feuersoftware', 10_000)) await pollDueFeuersoftware().catch((e) => log('warn', 'feuersoftware', e.message));
   // Automationen: Zeitpläne starten, abgelaufene Freigaben schließen
+  // Threads-Anmeldungen (60 Tage gültig) rechtzeitig verlängern
+  if (due('threads-token', 24 * 60 * 60_000)) await refreshThreadsTokens().catch((e) => log('warn', 'threads', e.message));
   if (due('automations', 30_000)) await automationTick().catch((e) => log('warn', 'automation', e.message));
   if (s['backup.enabled'] && due('backup-check', 10 * 60_000)) {
     const now = new Date(new Date().toLocaleString('en-US', { timeZone: s['general.timezone'] }));

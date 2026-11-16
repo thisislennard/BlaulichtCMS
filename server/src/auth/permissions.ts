@@ -85,7 +85,7 @@ export const PERMISSIONS: PermissionDef[] = [
   /* Veröffentlichung */
   P('publish.website', 'publishing', 'critical', 'Auf Website veröffentlichen', 'Freigegebene Fassungen an eine gekoppelte Website übergeben, Aufträge abbrechen, klären und wiederholen.', ['post.view', 'channel.view']),
   P('publish.unpublish', 'publishing', 'critical', 'Von Website zurückziehen', 'Veröffentlichte Beiträge von der Website zurückziehen.', ['post.view']),
-  P('publish.social', 'publishing', 'critical', 'In sozialen Kanälen veröffentlichen', 'Freigegebene Fassungen auf Facebook und Instagram veröffentlichen oder als Paket exportieren.', ['post.view', 'connection.view']),
+  P('publish.social', 'publishing', 'critical', 'In sozialen Kanälen veröffentlichen', 'Freigegebene Fassungen auf Facebook, Instagram (auch als Story), Threads und X veröffentlichen, Teilen von Hand vorbereiten und als geteilt markieren oder als Paket exportieren.', ['post.view', 'connection.view']),
   P('publish.social_remove', 'publishing', 'critical', 'Aus sozialen Kanälen entfernen', 'Veröffentlichungen in sozialen Kanälen entfernen oder als entfernt bestätigen.', ['post.view']),
   P('channel.view', 'publishing', 'read', 'Websites ansehen', 'Gekoppelte Websites und ihren Zustand sehen.'),
   P('channel.sites', 'publishing', 'critical', 'Websites koppeln und widerrufen', 'Websites mit der BlaulichtCMS Bridge koppeln, Kopplungscodes erzeugen, Schlüssel widerrufen, Plugin laden.', ['channel.view'], true),

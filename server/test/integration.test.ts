@@ -4185,6 +4185,315 @@ describe('Gelöschte Dateien in freigegebenen Fassungen (#167)', () => {
   });
 });
 
+describe('Storys, Threads, X und Teilen von Hand (#188, #189)', () => {
+  // Lokaler Ersatz für Graph API (Facebook/Instagram), Threads-API und X-API – es geht nichts an echte Dienste.
+  let mock: import('node:http').Server;
+  let base = '';
+  const calls: { method: string; path: string; params: URLSearchParams; body: string; headers: Record<string, any> }[] = [];
+  const state = { igContainers: {} as Record<string, string>, xLevel: 'read-write', xSigOk: true, stories: [] as any[] };
+  const X_SECRETS = { apiKey: 'x-api-key-test', apiSecret: 'x-api-secret-test-geheim', accessToken: '123-x-access-token-test', accessTokenSecret: 'x-access-secret-test-geheim' };
+  let fbId = '';
+  let igId = '';
+  let thId = '';
+  let xApiId = '';
+  let xManId = '';
+  let waId = '';
+  let postId = '';
+  // Eigene Adresse für die Verwaltung: Verbindungstests sind je Adresse auf 10 je Minute begrenzt
+  let adm: Client;
+
+  beforeAll(async () => {
+    adm = new Client(app, '10.77.0.1');
+    adm.cookie = admin.cookie;
+    const { oauth1Sign } = await import('../src/connections/x.js');
+    mock = http.createServer((req, res) => {
+      let body = '';
+      req.on('data', (c) => (body += c));
+      req.on('end', () => {
+        const u = new URL(req.url!, 'http://x');
+        const params = new URLSearchParams(req.method === 'GET' || req.method === 'DELETE' ? u.search : body);
+        calls.push({ method: req.method!, path: u.pathname, params, body, headers: req.headers });
+        const json = (code: number, v: any, headers: Record<string, string> = {}) => {
+          res.writeHead(code, { 'content-type': 'application/json', ...headers });
+          res.end(JSON.stringify(v));
+        };
+        const p = u.pathname;
+        // Facebook
+        if (p === '/fb/PAGE2' && req.method === 'GET') return json(200, { id: 'PAGE2', name: 'Story-Seite (fiktiv)' });
+        if (p === '/fb/PAGE2/feed' && req.method === 'POST') return json(200, { id: `PAGE2_${calls.length}` });
+        if (p.startsWith('/fb/PAGE2_') && req.method === 'DELETE') return json(200, { success: true });
+        if (p === '/fb/PAGE2/photos') return json(200, { id: 'PHOTO1' });
+        if (p === '/fb/PAGE2/photo_stories') {
+          state.stories.push({ post_id: 'FBSTORY1', media_id: params.get('photo_id'), creation_time: Math.floor(Date.now() / 1000) });
+          return json(200, { success: true, post_id: 'FBSTORY1' });
+        }
+        if (p === '/fb/PAGE2/stories') return json(200, { data: state.stories });
+        // Instagram
+        if (p === '/ig/me') return json(200, { user_id: 'IG2', username: 'story_konto', account_type: 'BUSINESS' });
+        if (p === '/ig/IG2/content_publishing_limit') return json(200, { data: [{ quota_usage: 0, config: { quota_total: 100 } }] });
+        if (p === '/ig/IG2/media' && req.method === 'POST') {
+          const id = `SC${Object.keys(state.igContainers).length + 1}`;
+          state.igContainers[id] = 'FINISHED';
+          return json(200, { id });
+        }
+        if (p === '/ig/IG2/media_publish') {
+          state.igContainers[params.get('creation_id')!] = 'PUBLISHED';
+          return json(200, { id: `SM${calls.length}` });
+        }
+        if (/^\/ig\/SC\d+$/.test(p)) return json(200, { status_code: state.igContainers[p.slice(4)] ?? 'ERROR' });
+        if (/^\/ig\/SM\d+$/.test(p)) return json(200, { permalink: `https://instagram.example/p/${p.slice(4)}` });
+        // Threads
+        if (p === '/th/oauth/access_token' && req.method === 'POST') return json(200, { access_token: 'TH-KURZ-TOKEN', user_id: 'TH1' });
+        if (p === '/th/access_token') return json(200, { access_token: 'TH-LANG-TOKEN-geheim', token_type: 'bearer', expires_in: 5_184_000 });
+        if (p === '/th/refresh_access_token') return json(200, { access_token: 'TH-VERLAENGERT-geheim', token_type: 'bearer', expires_in: 5_184_000 });
+        if (p === '/th/v1.0/me') return json(200, { id: 'TH1', username: 'threads_test' });
+        if (p === '/th/v1.0/TH1/threads_publishing_limit') return json(200, { data: [{ quota_usage: 0, config: { quota_total: 250 } }] });
+        if (p === '/th/v1.0/TH1/threads' && req.method === 'POST') return json(200, { id: `TC${calls.length}` });
+        if (p === '/th/v1.0/TH1/threads' && req.method === 'GET') return json(200, { data: [] });
+        if (/^\/th\/v1\.0\/TC\d+$/.test(p)) return json(200, { status: 'FINISHED' });
+        if (p === '/th/v1.0/TH1/threads_publish') return json(200, { id: 'TP1' });
+        if (p === '/th/v1.0/TP1') return json(200, { permalink: 'https://threads.example/@threads_test/post/TP1' });
+        // X: Signatur mit den bekannten Testgeheimnissen nachrechnen
+        if (p.startsWith('/x/')) {
+          const h = String(req.headers.authorization ?? '');
+          const kv = Object.fromEntries([...h.replace(/^OAuth /, '').matchAll(/(\w+)="([^"]*)"/g)].map((m) => [m[1], decodeURIComponent(m[2])]));
+          const expected = oauth1Sign(req.method!, `${base}${req.url}`, { consumerKey: X_SECRETS.apiKey, consumerSecret: X_SECRETS.apiSecret, token: X_SECRETS.accessToken, tokenSecret: X_SECRETS.accessTokenSecret }, {}, { nonce: kv.oauth_nonce, timestamp: Number(kv.oauth_timestamp) }).signature;
+          if (kv.oauth_signature !== expected) {
+            state.xSigOk = false;
+            return json(401, { title: 'Unauthorized', detail: 'Signatur falsch (Test)' });
+          }
+          if (p === '/x/2/users/me') return json(200, { data: { id: '42', username: 'x_test', name: 'X Test' } }, { 'x-access-level': state.xLevel });
+          if (p === '/x/2/media/upload') return json(200, { data: { id: 'XMEDIA1', media_key: '3_1' } });
+          if (p === '/x/2/tweets' && req.method === 'POST') return json(201, { data: { id: 'TW1', text: JSON.parse(body).text } });
+          if (p === '/x/2/tweets/TW1' && req.method === 'DELETE') return json(200, { data: { deleted: true } });
+        }
+        json(404, { error: { message: `unbekannt ${p}` } });
+      });
+    });
+    await new Promise<void>((r) => mock.listen(0, '127.0.0.1', r));
+    base = `http://127.0.0.1:${(mock.address() as any).port}`;
+    process.env.BLAULICHTCMS_META_GRAPH_URL = `${base}/fb`;
+    process.env.BLAULICHTCMS_IG_GRAPH_URL = `${base}/ig`;
+    process.env.BLAULICHTCMS_THREADS_GRAPH_URL = `${base}/th/v1.0`;
+    process.env.BLAULICHTCMS_X_API_URL = `${base}/x`;
+  });
+  afterAll(() => {
+    mock?.close();
+    delete process.env.BLAULICHTCMS_THREADS_GRAPH_URL;
+    delete process.env.BLAULICHTCMS_X_API_URL;
+  });
+
+  it('Facebook und Instagram: Test meldet Storys', async () => {
+    fbId = (await adm.post('/connections', { kind: 'facebook', name: 'Story-Seite', config: { appId: '1' } })).json.id;
+    await adm.put(`/connections/${fbId}/secrets`, { pageToken: 'EAAG-story-seitentoken' });
+    await adm.put(`/connections/${fbId}`, { name: 'Story-Seite', config: { pageId: 'PAGE2' } });
+    const t = await adm.post(`/connections/${fbId}/test`);
+    expect(t.json.ok, JSON.stringify(t.json)).toBe(true);
+    expect(t.json.capabilities.stories).toBe(true);
+    expect((await adm.post(`/connections/${fbId}/activate`)).status).toBe(200);
+    igId = (await adm.post('/connections', { kind: 'instagram', name: 'Story-Konto', config: { appId: '1' } })).json.id;
+    await adm.put(`/connections/${igId}/secrets`, { token: 'IGQ-story-token' });
+    const t2 = await adm.post(`/connections/${igId}/test`);
+    expect(t2.json.ok, JSON.stringify(t2.json)).toBe(true);
+    expect(t2.json.capabilities.stories).toBe(true);
+    expect((await adm.post(`/connections/${igId}/activate`)).status).toBe(200);
+  });
+
+  it('Threads: Anmeldung über OAuth, Test ohne Veröffentlichung, Token verschlüsselt', async () => {
+    expect((await editor.post('/connections', { kind: 'threads', name: 'Threads' })).status).toBe(403);
+    thId = (await adm.post('/connections', { kind: 'threads', name: 'Threads-Profil (Test)', config: { appId: '777' } })).json.id;
+    expect((await adm.post(`/connections/${thId}/oauth/start`)).status).toBe(400);
+    await adm.put(`/connections/${thId}/secrets`, { appSecret: 'threads-app-geheimnis' });
+    const start = await adm.post(`/connections/${thId}/oauth/start`);
+    expect(start.status).toBe(200);
+    const url = new URL(start.json.url);
+    expect(url.origin + url.pathname).toBe('https://threads.com/oauth/authorize');
+    expect(url.searchParams.get('scope')).toBe('threads_basic,threads_content_publish');
+    expect(url.searchParams.get('client_id')).toBe('777');
+    const back = await anonymous.raw('GET', `/connections/oauth/callback?state=${encodeURIComponent(url.searchParams.get('state')!)}&code=CODE1`);
+    expect(back.status).toBe(302);
+    expect(decodeURIComponent(String(back.headers.location))).toContain('Mit Threads verbunden');
+    const v = (await adm.get(`/connections/${thId}`)).json;
+    expect(v.secrets_set).toEqual(expect.arrayContaining(['appSecret', 'token']));
+    expect(JSON.stringify(v)).not.toContain('TH-LANG-TOKEN');
+    expect(v.config.userId).toBe('TH1');
+    expect(v.config.tokenExpiresAt).toBeTruthy();
+    expect(v.oauth_redirect).toContain('/api/v1/connections/oauth/callback');
+    const t = await adm.post(`/connections/${thId}/test`);
+    expect(t.json.ok, JSON.stringify(t.json)).toBe(true);
+    expect(t.json.capabilities.link).toBe(true);
+    expect(calls.some((c) => c.path === '/th/v1.0/TH1/threads_publish')).toBe(false);
+    expect((await adm.post(`/connections/${thId}/activate`)).status).toBe(200);
+    // Verlängern der Anmeldung kurz vor Ablauf (Worker, täglich)
+    const { refreshThreadsTokens } = await import('../src/connections/threads.js');
+    await pool.query(`UPDATE connections SET config = config || '{"tokenExpiresAt":"${new Date(Date.now() + 3 * 86_400_000).toISOString()}"}' WHERE id = $1`, [thId]);
+    expect(await refreshThreadsTokens()).toBe(1);
+    const { connectionSecrets } = await import('../src/connections/common.js');
+    expect((await connectionSecrets((await one<any>(`SELECT * FROM connections WHERE id = $1`, [thId]))!)).token).toBe('TH-VERLAENGERT-geheim');
+  });
+
+  it('X: Teilen von Hand ohne Zugangsdaten; X-API mit OAuth 1.0a und Prüfung des Schreibrechts', async () => {
+    xManId = (await adm.post('/connections', { kind: 'x', name: 'X von Hand' })).json.id;
+    const tm = await adm.post(`/connections/${xManId}/test`);
+    expect(tm.json.ok).toBe(true);
+    expect(tm.json.capabilities.manual).toBe(true);
+    expect((await adm.post(`/connections/${xManId}/activate`)).status).toBe(200);
+
+    xApiId = (await adm.post('/connections', { kind: 'x', name: 'X über API', config: { mode: 'api' } })).json.id;
+    expect((await adm.post(`/connections/${xApiId}/test`)).json.ok).toBe(false);
+    expect((await adm.put(`/connections/${xApiId}/secrets`, X_SECRETS)).status).toBe(200);
+    state.xLevel = 'read';
+    const ro = await adm.post(`/connections/${xApiId}/test`);
+    expect(ro.json.ok).toBe(false);
+    expect(ro.json.steps.find((s: any) => s.name === 'Schreibrecht').message).toContain('Read and write');
+    state.xLevel = 'read-write';
+    const t = await adm.post(`/connections/${xApiId}/test`);
+    expect(t.json.ok, JSON.stringify(t.json)).toBe(true);
+    expect(t.json.account.username).toBe('x_test');
+    expect(state.xSigOk).toBe(true);
+    const v = (await adm.get(`/connections/${xApiId}`)).json;
+    expect(JSON.stringify(v)).not.toContain('geheim');
+    expect(v.secrets_set.sort()).toEqual(['accessToken', 'accessTokenSecret', 'apiKey', 'apiSecret']);
+    expect((await adm.post(`/connections/${xApiId}/activate`)).status).toBe(200);
+    // Wechsel der Betriebsart verlangt einen neuen Test
+    const sw = await adm.put(`/connections/${xManId}`, { name: 'X von Hand', config: { mode: 'api' } });
+    expect(sw.json.retest).toBe(true);
+    await adm.put(`/connections/${xManId}`, { name: 'X von Hand', config: { mode: 'manual' } });
+    await adm.post(`/connections/${xManId}/test`);
+    expect((await adm.post(`/connections/${xManId}/activate`)).status).toBe(200);
+  });
+
+  it('WhatsApp-Kanal: nur Teilen von Hand, Kanaladresse geprüft', async () => {
+    expect((await adm.post('/connections', { kind: 'whatsapp', name: 'Kanal', config: { channelUrl: 'https://evil.example/channel/x' } })).status).toBe(400);
+    waId = (await adm.post('/connections', { kind: 'whatsapp', name: 'WhatsApp-Kanal (Test)', config: { channelUrl: 'https://whatsapp.com/channel/0029TestKanal' } })).json.id;
+    const t = await adm.post(`/connections/${waId}/test`);
+    expect(t.json.ok).toBe(true);
+    expect(t.json.steps[0].message).toContain('keine Schnittstelle');
+    expect((await adm.post(`/connections/${waId}/activate`)).status).toBe(200);
+    // Die Redaktion sieht die Kanäle mit Kennzeichen „von Hand“
+    const list = (await editor.get('/connections')).json;
+    expect(list.find((c: any) => c.id === waId).manual).toBe(true);
+    expect(list.find((c: any) => c.id === xApiId).manual).toBe(false);
+  });
+
+  it('Format je Kanal ist Teil der Fassung; Storys nur für Facebook/Instagram', async () => {
+    const { id: mediaId } = await readyPhoto('Story-Bilder', 'story-key-0001');
+    postId = (await editor.post('/posts', { title: 'Brandschutztag (fiktiv)' })).json.id;
+    let d = (await editor.get(`/posts/${postId}`)).json;
+    const targets = [fbId, igId, thId, xApiId, xManId, waId];
+    const bad = await editor.put(`/posts/${postId}/revision`, { baseRevision: d.revision.number, title: d.revision.title, body: 'Wir laden ein.', mediaIds: [mediaId], socialTargets: targets, socialFormats: { [thId]: 'story' } });
+    expect(bad.status).toBe(400);
+    const ok = await editor.put(`/posts/${postId}/revision`, { baseRevision: d.revision.number, title: d.revision.title, body: 'Wir laden ein.', mediaIds: [mediaId], socialTargets: targets, socialFormats: { [fbId]: 'story', [igId]: 'both', [xApiId]: 'feed' }, variants: { x: { body: 'Kurz für X' } } });
+    expect(ok.json.changed).toBe(true);
+    d = (await editor.get(`/posts/${postId}`)).json;
+    expect(d.revision.social_formats).toEqual({ [fbId]: 'story', [igId]: 'both' });
+    // Nur das Format ändern → neue Fassung
+    const fmt = await editor.put(`/posts/${postId}/revision`, { baseRevision: d.revision.number, title: d.revision.title, body: 'Wir laden ein.', mediaIds: [mediaId], socialTargets: targets, socialFormats: { [fbId]: 'story', [igId]: 'story' }, variants: { x: { body: 'Kurz für X' } } });
+    expect(fmt.json.changed).toBe(true);
+    const back = await editor.put(`/posts/${postId}/revision`, { baseRevision: fmt.json.number, title: d.revision.title, body: 'Wir laden ein.', mediaIds: [mediaId], socialTargets: targets, socialFormats: { [fbId]: 'story', [igId]: 'both' }, variants: { x: { body: 'Kurz für X' } } });
+    expect(back.json.changed).toBe(true);
+    d = (await editor.get(`/posts/${postId}`)).json;
+    const check = (await editor.get(`/posts/${postId}/social-check`)).json;
+    expect(check.find((c: any) => c.id === igId).formats).toEqual(['feed', 'story']);
+    expect(check.find((c: any) => c.id === fbId).issues.join(' ')).toContain('9:16');
+    expect(check.find((c: any) => c.id === waId).manual).toBe(true);
+    expect(check.find((c: any) => c.id === waId).text).toContain('*Brandschutztag (fiktiv)*');
+    await editor.post(`/posts/${postId}/submit`, { revision: d.revision.number });
+    expect((await approver.post(`/posts/${postId}/decision`, { revision: d.revision.number, contentHash: d.revision.content_hash, decision: 'approved' })).status).toBe(200);
+  });
+
+  it('Veröffentlichen: Storys, Threads und X über die Schnittstellen, X von Hand und WhatsApp „zum Teilen bereit“', async () => {
+    const { runSocialPublication } = await import('../src/connections/social.js');
+    const d = (await publisher.get(`/posts/${postId}`)).json;
+    const r = await publisher.post(`/posts/${postId}/social`, { revision: d.revision.number, contentHash: d.revision.content_hash });
+    expect(r.status, JSON.stringify(r.json)).toBe(200);
+    expect(r.json.items.length).toBe(7);
+    const ready = r.json.items.filter((x: any) => x.status === 'ready');
+    expect(ready.map((x: any) => x.connection_id).sort()).toEqual([xManId, waId].sort());
+    // Kanäle ohne Schnittstelle landen nie in der Warteschlange
+    expect((await one<any>(`SELECT count(*)::int AS n FROM jobs WHERE kind = 'social.publish' AND payload->>'id' = ANY($1)`, [ready.map((x: any) => x.id)]))!.n).toBe(0);
+    for (const it of r.json.items.filter((x: any) => x.status === 'queued')) await runSocialPublication(it.id);
+    const rows = await many<any>(`SELECT sp.*, c.kind FROM social_publications sp JOIN connections c ON c.id = sp.connection_id WHERE sp.post_id = $1 ORDER BY c.kind, sp.format`, [postId]);
+    for (const row of rows.filter((x) => !['ready'].includes(x.status))) expect(row.status, `${row.kind}/${row.format}: ${row.error}`).toBe('published');
+    // Facebook-Story: Foto unveröffentlicht hochgeladen und als Story veröffentlicht
+    const photo = calls.find((c) => c.path === '/fb/PAGE2/photos')!;
+    expect(photo.params.get('published')).toBe('false');
+    expect(calls.find((c) => c.path === '/fb/PAGE2/photo_stories')!.params.get('photo_id')).toBe('PHOTO1');
+    // Instagram: ein Container als Story (ohne Bildunterschrift), einer als Beitrag
+    const igPosts = calls.filter((c) => c.path === '/ig/IG2/media' && c.method === 'POST' && c.params.get('media_type') === 'STORIES');
+    expect(igPosts.length).toBe(1);
+    expect(igPosts[0].params.get('caption')).toBeNull();
+    // Story-Fassung des Bildes: 1080 × 1920
+    const storyUrl = new URL(photo.params.get('url')!);
+    const img = await anonymous.raw('GET', storyUrl.pathname);
+    expect(img.status).toBe(200);
+    const meta = await sharp(img.rawPayload).metadata();
+    expect([meta.width, meta.height]).toEqual([1080, 1920]);
+    // Threads: Bildbeitrag mit Text
+    const th = calls.find((c) => c.path === '/th/v1.0/TH1/threads' && c.method === 'POST' && c.params.get('media_type') === 'IMAGE')!;
+    expect(th.params.get('text')).toContain('Brandschutztag');
+    expect(rows.find((x) => x.kind === 'threads').remote_url).toContain('threads.example');
+    // X über die API: Bild hochgeladen (base64 im JSON), Beitrag mit Medien-ID, signiert
+    const up = calls.find((c) => c.path === '/x/2/media/upload')!;
+    expect(JSON.parse(up.body).media_category).toBe('tweet_image');
+    const tw = JSON.parse(calls.find((c) => c.path === '/x/2/tweets' && c.method === 'POST')!.body);
+    expect(tw).toEqual({ text: 'Kurz für X', media: { media_ids: ['XMEDIA1'] } });
+    expect(state.xSigOk).toBe(true);
+    expect(rows.find((x) => x.kind === 'x' && x.status === 'published').remote_url).toBe('https://x.com/x_test/status/TW1');
+    // Hinweis „zum Teilen bereit“ an die Veröffentlichung
+    expect(await one(`SELECT 1 FROM notifications WHERE title LIKE 'Zum Teilen bereit (WhatsApp-Kanal (Test))%'`)).not.toBeNull();
+  });
+
+  it('Teilen von Hand: vorbereiteter Text, Öffnen-Adresse, als geteilt markieren (auditiert)', async () => {
+    const items = (await publisher.get(`/posts/${postId}`)).json.social;
+    const xi = items.find((s: any) => s.kind === 'x' && s.status === 'ready');
+    const wi = items.find((s: any) => s.kind === 'whatsapp');
+    expect((await editor.get(`/social-publications/${xi.id}/share`)).status).toBe(403);
+    const xs = (await publisher.get(`/social-publications/${xi.id}/share`)).json;
+    expect(xs.text).toBe('Kurz für X');
+    expect(xs.openUrl).toBe('https://x.com/intent/post?text=Kurz%20f%C3%BCr%20X');
+    expect(xs.files.length).toBe(1);
+    const ws = (await publisher.get(`/social-publications/${wi.id}/share`)).json;
+    expect(ws.openUrl).toBe('https://whatsapp.com/channel/0029TestKanal');
+    expect(ws.text.startsWith('*Brandschutztag (fiktiv)*')).toBe(true);
+    expect((await publisher.post(`/social-publications/${xi.id}/mark-shared`, { url: 'http://unsicher.example' })).status).toBe(400);
+    expect((await publisher.post(`/social-publications/${xi.id}/mark-shared`, { url: 'https://x.com/x_test/status/99' })).status).toBe(200);
+    expect((await publisher.post(`/social-publications/${xi.id}/mark-shared`, {})).status).toBe(400);
+    expect((await publisher.post(`/social-publications/${wi.id}/mark-shared`, {})).status).toBe(200);
+    const after = (await publisher.get(`/posts/${postId}`)).json.social;
+    expect(after.find((s: any) => s.id === xi.id)).toMatchObject({ status: 'published', remote_url: 'https://x.com/x_test/status/99' });
+    expect(after.find((s: any) => s.id === wi.id).shared_at).toBeTruthy();
+    expect((await one<any>(`SELECT count(*)::int AS n FROM audit_events WHERE action = 'social.shared_manually' AND object_id = $1`, [postId]))!.n).toBe(2);
+    // Über die Schnittstelle veröffentlichte Aufträge lassen sich nicht „von Hand teilen“
+    const api = after.find((s: any) => s.kind === 'x' && !s.shared_at);
+    expect((await publisher.get(`/social-publications/${api.id}/share`)).status).toBe(400);
+  });
+
+  it('Zurückziehen: X (API) wird gelöscht, Storys, Threads und von Hand Geteiltes von Hand', async () => {
+    const r = await publisher.post(`/posts/${postId}/social/remove`, { reason: 'Test zurückziehen' });
+    expect(r.status, JSON.stringify(r.json)).toBe(200);
+    const res = r.json.items as any[];
+    expect(res.find((x) => x.kind === 'x' && x.result === 'removed')).toBeTruthy();
+    expect(calls.some((c) => c.method === 'DELETE' && c.path === '/x/2/tweets/TW1')).toBe(true);
+    const manual = res.filter((x) => x.result === 'manual');
+    expect(manual.length).toBe(6);
+    expect(manual.some((x) => /Storys lassen sich/.test(x.message))).toBe(true);
+    expect(manual.some((x) => /Von Hand geteilt/.test(x.message))).toBe(true);
+    expect(manual.some((x) => x.kind === 'threads' && /Threads erlaubt kein Löschen/.test(x.message))).toBe(true);
+  });
+
+  it('Automationen: soziale Kanäle samt Story im Beitragsausgang vorauswählen', async () => {
+    const bad = await adm.post('/automation-outputs', { name: 'Story Threads', kind: 'post', config: { title: 'X', socialTargets: [{ connectionId: thId, format: 'story' }] } });
+    expect(bad.status).toBe(400);
+    const ok = await adm.post('/automation-outputs', { name: 'Beitrag mit Story', kind: 'post', config: { title: 'Einsatz {{stichwort}}', variants: { x: { body: 'Einsatz {{stichwort}}' } }, socialTargets: [{ connectionId: igId, format: 'both' }, { connectionId: waId, format: 'feed' }] } });
+    expect(ok.status, JSON.stringify(ok.json)).toBe(200);
+    expect(ok.json.config.socialTargets).toEqual([{ connectionId: igId, format: 'both' }, { connectionId: waId, format: 'feed' }]);
+    const cat = (await adm.get('/automations/catalog')).json;
+    expect(cat.socialChannels.find((c: any) => c.id === waId).manual).toBe(true);
+    await adm.raw('DELETE', `/automation-outputs/${ok.json.id}`);
+  });
+});
+
 describe('Keine Empfängeradressen im Audit (#185)', () => {
   it('Versand und Zuständigkeiten protokollieren Anzahl, Zuständigkeit und Domains statt Adressen', async () => {
     const rows = await many<any>(`SELECT action, details FROM audit_events WHERE action IN ('warning.send_requested', 'warning.responsibility_created', 'warning.responsibility_updated')`);

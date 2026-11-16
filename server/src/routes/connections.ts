@@ -9,7 +9,7 @@ import { audit, auditThrottled } from '../lib/audit.js';
 import { securityAlert } from '../lib/security-alerts.js';
 import { randomToken, safeEqual, sha256Hex } from '../lib/crypto.js';
 import { AppError, badRequest, conflict, notFound } from '../lib/errors.js';
-import { assertMediaPresent } from '../lib/approval.js';
+import { approvalStillValid, assertMediaPresent } from '../lib/approval.js';
 import { enqueue } from '../jobs/queue.js';
 import { noUrlCredentials, publicBase, URL_CREDENTIALS_MSG } from '../lib/urls.js';
 import { revokeSecret } from '../lib/secrets.js';
@@ -19,7 +19,11 @@ import { sendFileResponse } from './files.js';
 import { publicFileName } from '../media/names.js';
 import { connectionSecrets, connectionUsage, KIND_LABEL, loadConnection, requireRetest, retestRelevantConfig, saveTest, scrub, updateConnectionSecrets, type Connection, type ConnectionKind } from '../connections/common.js';
 import { FE2_ALLOWED_FIELDS, FE2_DEFAULT_MAPPING, handleFe2Event } from '../connections/fe2.js';
-import { checkFormats, connectionTestImage, deleteFacebookPost, facebookAuthorizeUrl, facebookExchange, instagramAuthorizeUrl, instagramExchange, markerFor, mediaForRevision, mediaUrl, socialText, testFacebook, testInstagram } from '../connections/meta.js';
+import { checkFormats, checkStoryFormats, connectionTestImage, deleteFacebookPost, facebookAuthorizeUrl, facebookExchange, instagramAuthorizeUrl, instagramExchange, mediaForRevision, mediaUrl, storyImage, testFacebook, testInstagram } from '../connections/meta.js';
+import { formatsFor, isManualChannel, isSocialKind, markerFor, postLink, shareTarget, SOCIAL_KINDS, socialText, socialTextTooLong, type SocialChannel } from '../connections/channels.js';
+import { checkThreadsFormats, testThreads, threadsAuthorizeUrl, threadsExchange } from '../connections/threads.js';
+import { checkXFormats, deleteXPost, testX, X_SECRET_KEYS } from '../connections/x.js';
+import { notify } from '../lib/notify.js';
 import { FEUERSOFTWARE_DEFAULT_INTERVAL, FEUERSOFTWARE_INTERVALS, pollFeuersoftware, testFeuersoftware } from '../connections/feuersoftware.js';
 import { endBanner, insecureFeed, insecureFeedUrl, REVIEW_CHECKS, refreshWarnfeed, testWarnfeed, warningBannerText } from '../connections/warnfeed.js';
 import { listReceipts, Receipt, RECEIPT_CAP, receiptItems, receiptRaw } from '../connections/receipts.js';
@@ -52,6 +56,7 @@ async function view(c: Connection) {
     deleted_at: c.deleted_at ?? null,
     secrets_set: Object.keys(sec).filter((k) => k !== 'pages' && k !== 'pathToken'),
     insecure_source: c.kind === 'warnfeed' ? insecureFeed(c.config) : undefined,
+    manual: isSocialKind(c.kind) ? isManualChannel(c) : undefined,
     pages: sec.pages ? (JSON.parse(sec.pages) as any[]).map((p) => ({ id: p.id, name: p.name })) : [],
   };
 }
@@ -75,6 +80,11 @@ const configSchema: Record<ConnectionKind, z.ZodType<any>> = {
     autoBanner: z.boolean().default(false),
     bannerSiteId: z.uuid().nullable().default(null),
   }),
+  threads: z.object({ appId: z.string().max(40).default(''), userId: z.string().max(40).optional() }),
+  // X: „Teilen von Hand“ (Standard, ohne Schnittstelle) oder „Über die X-API posten“ (eigene Zugangsdaten, kostenpflichtig)
+  x: z.object({ mode: z.enum(['manual', 'api']).default('manual') }),
+  // WhatsApp-Kanal: nur Teilen von Hand; optional die Einladungsadresse des eigenen Kanals zum schnellen Öffnen
+  whatsapp: z.object({ channelUrl: z.union([z.literal(''), z.string().trim().regex(/^https:\/\/(www\.)?whatsapp\.com\/channel\/[A-Za-z0-9_-]+\/?$/, 'Bitte die Adresse des Kanals im Format https://whatsapp.com/channel/… angeben.')]).default('') }),
   feuersoftware: z.object({
     // 50 Abfragen je Stunde sind dokumentiert – kürzester Abstand 60 s, Standard 120 s
     intervalSeconds: z.union(FEUERSOFTWARE_INTERVALS.map((n) => z.literal(n)) as any).default(FEUERSOFTWARE_DEFAULT_INTERVAL),
@@ -153,7 +163,7 @@ export async function connectionRoutes(app: FastifyInstance) {
     const rows = await many<Connection>(withDeleted ? `SELECT * FROM connections ORDER BY (deleted_at IS NOT NULL OR status = 'revoked'), kind, name` : `SELECT * FROM connections WHERE status <> 'revoked' AND deleted_at IS NULL ORDER BY kind, name`);
     if (full) return Promise.all(rows.map(view));
     // Redaktion sieht nur verfügbare soziale Kanäle (Name, Art, Funktionen)
-    return rows.filter((c) => ['facebook', 'instagram'].includes(c.kind) && ['tested', 'active'].includes(c.status)).map((c) => ({ id: c.id, kind: c.kind, kind_label: KIND_LABEL[c.kind], name: c.name, status: c.status, capabilities: c.capabilities, account: { name: c.account?.name ?? c.account?.username ?? null } }));
+    return rows.filter((c) => isSocialKind(c.kind) && ['tested', 'active'].includes(c.status)).map((c) => ({ id: c.id, kind: c.kind, kind_label: KIND_LABEL[c.kind], name: c.name, status: c.status, capabilities: c.capabilities, manual: isManualChannel(c), account: { name: c.account?.name ?? c.account?.username ?? null } }));
   });
 
   app.get('/connections/:id', { preHandler: manage }, async (req) => {
@@ -166,7 +176,7 @@ export async function connectionRoutes(app: FastifyInstance) {
       usage: await connectionUsage(c.id),
       inbound_url: c.kind === 'fe2' ? `${base}/api/v1/inbound/fe2/${c.id}` : null,
       inbound_url_with_key: c.kind === 'fe2' && c.config?.keyInPath && !c.deleted_at ? await connectionSecrets(c).then((s) => (s.pathToken ? `${base}/api/v1/inbound/fe2/${c.id}/${s.pathToken}` : null)) : null,
-      oauth_redirect: ['facebook', 'instagram'].includes(c.kind) ? `${base}/api/v1/connections/oauth/callback` : null,
+      oauth_redirect: ['facebook', 'instagram', 'threads'].includes(c.kind) ? `${base}/api/v1/connections/oauth/callback` : null,
       allowed_fields: c.kind === 'fe2' ? FE2_ALLOWED_FIELDS : null,
       default_mapping: c.kind === 'fe2' ? FE2_DEFAULT_MAPPING : null,
       review_checks: c.kind === 'warnfeed' ? REVIEW_CHECKS : null,
@@ -176,7 +186,7 @@ export async function connectionRoutes(app: FastifyInstance) {
 
   /** Schritt 1 „Verbinden“: anlegen (Entwurf). FE2 erhält einen Zugangsschlüssel, der nur jetzt angezeigt wird. */
   app.post('/connections', { preHandler: manage }, async (req) => {
-    const b = z.object({ kind: z.enum(['fe2', 'facebook', 'instagram', 'warnfeed', 'feuersoftware']), name: z.string().trim().min(2).max(100), config: z.record(z.string(), z.any()).default({}) }).parse(req.body);
+    const b = z.object({ kind: z.enum(['fe2', 'facebook', 'instagram', 'warnfeed', 'feuersoftware', 'threads', 'x', 'whatsapp']), name: z.string().trim().min(2).max(100), config: z.record(z.string(), z.any()).default({}) }).parse(req.body);
     const config = configSchema[b.kind].parse(b.config);
     if (b.kind === 'warnfeed') assertSecureFeed(config, null);
     const userId = req.auth!.user?.id ?? null;
@@ -231,7 +241,7 @@ export async function connectionRoutes(app: FastifyInstance) {
   app.put('/connections/:id/secrets', { preHandler: manage }, async (req) => {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
     const c = await loadConnection(id);
-    const allowed: Record<ConnectionKind, string[]> = { fe2: [], facebook: ['appSecret', 'pageToken'], instagram: ['appSecret', 'token'], warnfeed: [], feuersoftware: ['apiKey'] };
+    const allowed: Record<ConnectionKind, string[]> = { fe2: [], facebook: ['appSecret', 'pageToken'], instagram: ['appSecret', 'token'], warnfeed: [], feuersoftware: ['apiKey'], threads: ['appSecret', 'token'], x: [...X_SECRET_KEYS], whatsapp: [] };
     const b = z.record(z.string(), z.string().max(2000).nullable()).parse(req.body);
     const patch = Object.fromEntries(Object.entries(b).filter(([k]) => allowed[c.kind].includes(k)));
     if (!Object.keys(patch).length) throw badRequest('Keine gültigen Felder.');
@@ -259,14 +269,14 @@ export async function connectionRoutes(app: FastifyInstance) {
   app.post('/connections/:id/oauth/start', { preHandler: manage }, async (req) => {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
     const c = await loadConnection(id);
-    if (!['facebook', 'instagram'].includes(c.kind)) throw badRequest('Nur für Facebook und Instagram.');
+    if (!['facebook', 'instagram', 'threads'].includes(c.kind)) throw badRequest('Nur für Facebook, Instagram und Threads.');
     const sec = await connectionSecrets(c);
-    if (!c.config.appId || !sec.appSecret) throw badRequest('Bitte zuerst App-ID und App-Geheimnis der Meta-App hinterlegen.');
+    if (!c.config.appId || !sec.appSecret) throw badRequest(c.kind === 'threads' ? 'Bitte zuerst Threads-App-ID und Threads-App-Geheimnis hinterlegen.' : 'Bitte zuerst App-ID und App-Geheimnis der Meta-App hinterlegen.');
     const state = randomToken(24);
     await pool.query(`UPDATE connections SET config = config || $2 WHERE id = $1`, [id, JSON.stringify({ oauthState: { hash: sha256Hex(state), exp: Date.now() + 10 * 60_000, by: req.auth!.user?.id } })]);
     const redirect = `${await publicBase(req)}/api/v1/connections/oauth/callback`;
     const s = `${c.id}.${state}`;
-    return { url: c.kind === 'facebook' ? facebookAuthorizeUrl(c.config.appId, redirect, s) : instagramAuthorizeUrl(c.config.appId, redirect, s) };
+    return { url: c.kind === 'facebook' ? facebookAuthorizeUrl(c.config.appId, redirect, s) : c.kind === 'threads' ? threadsAuthorizeUrl(c.config.appId, redirect, s) : instagramAuthorizeUrl(c.config.appId, redirect, s) };
   });
 
   /**
@@ -299,6 +309,14 @@ export async function connectionRoutes(app: FastifyInstance) {
         await audit(actor, 'connection.oauth', { type: 'connection', id: c.id, label: c.name }, { seiten: r.pages.length });
         await invalidateTest(actor, c, 'Neu angemeldet');
         return back(r.pages.length ? `Angemeldet – bitte eine von ${r.pages.length} Seite(n) wählen.` : 'Angemeldet, aber keine verwaltbare Seite gefunden.');
+      }
+      if (c.kind === 'threads') {
+        const r = await threadsExchange(c.config.appId, sec.appSecret, redirect, q.code);
+        await updateConnectionSecrets(c, { token: r.token }, by.id);
+        await pool.query(`UPDATE connections SET config = config || $2 WHERE id = $1`, [c.id, JSON.stringify({ userId: r.userId, tokenExpiresAt: r.expiresIn ? new Date(Date.now() + r.expiresIn * 1000).toISOString() : null })]);
+        await audit(actor, 'connection.oauth', { type: 'connection', id: c.id, label: c.name });
+        await invalidateTest(actor, c, 'Neu angemeldet');
+        return back('Mit Threads verbunden – jetzt testen.');
       }
       const r = await instagramExchange(c.config.appId, sec.appSecret, redirect, q.code);
       await updateConnectionSecrets(c, { token: r.token }, by.id);
@@ -351,6 +369,17 @@ export async function connectionRoutes(app: FastifyInstance) {
       const url = base.startsWith('https://') || process.env.BLAULICHTCMS_META_GRAPH_URL ? `${base}/api/v1/connection-test-image.jpg?v=${randomToken(8)}` : null;
       r = await testInstagram(c, sec, url);
       if (r.userId) await pool.query(`UPDATE connections SET config = config || $2 WHERE id = $1`, [id, JSON.stringify({ userId: r.userId })]);
+    } else if (c.kind === 'threads') {
+      r = await testThreads(c, sec);
+      if (r.userId) await pool.query(`UPDATE connections SET config = config || $2 WHERE id = $1`, [id, JSON.stringify({ userId: r.userId })]);
+    } else if (c.kind === 'x') {
+      r = await testX(c, sec);
+    } else if (c.kind === 'whatsapp') {
+      r = {
+        steps: [{ name: 'Teilen von Hand', ok: true, message: `WhatsApp bietet keine Schnittstelle zum Veröffentlichen in Kanälen. BlaulichtCMS bereitet Text (mit WhatsApp-Formatierung), Link und Bilder vor; geteilt wird in der WhatsApp-App bzw. in WhatsApp Web und anschließend hier als geteilt markiert.${c.config.channelUrl ? ' Die Kanaladresse ist hinterlegt.' : ''}`, kind: 'publish' }],
+        account: c.config.channelUrl ? { link: c.config.channelUrl } : {},
+        capabilities: { manual: true, text: true, photos: true },
+      };
     } else if (c.kind === 'feuersoftware') {
       r = await testFeuersoftware(c);
     } else {
@@ -557,10 +586,15 @@ export async function connectionRoutes(app: FastifyInstance) {
 
   app.get('/m/:token', { config: { rateLimit: { max: 120, timeWindow: '1 minute' } } }, async (req, reply) => {
     const { token } = z.object({ token: z.string().min(20).max(100) }).parse(req.params);
-    const row = await one<any>(`SELECT m.* FROM media_tokens t JOIN media m ON m.id = t.media_id WHERE t.token_hash = $1 AND t.expires_at > now() AND m.status = 'ready' AND m.deleted_at IS NULL`, [sha256Hex(token)]);
+    const row = await one<any>(`SELECT m.*, t.variant AS token_variant FROM media_tokens t JOIN media m ON m.id = t.media_id WHERE t.token_hash = $1 AND t.expires_at > now() AND m.status = 'ready' AND m.deleted_at IS NULL`, [sha256Hex(token)]);
     const f = row ? publicFileFor(row) : null;
     if (!f || !fs.existsSync(f.path)) throw notFound();
     reply.header('cache-control', 'private, max-age=300');
+    // Story-Fassung eines Bildes (#188): 9:16 ohne Beschnitt, aus der öffentlichen (geschwärzten) Fassung
+    if (row.token_variant === 'story' && row.kind === 'image') {
+      reply.header('content-type', 'image/jpeg').header('x-content-type-options', 'nosniff');
+      return reply.send(await storyImage(await fs.promises.readFile(f.path)));
+    }
     return sendFileResponse(reply, f.path, f.type);
   });
 
@@ -578,10 +612,21 @@ export async function connectionRoutes(app: FastifyInstance) {
     const st = await postState(id);
     if (!st) throw notFound();
     const media = await mediaForRevision(st.current);
-    const targets = st.current.social_targets?.length ? await many<any>(`SELECT id, kind, CASE WHEN deleted_at IS NOT NULL THEN 'Verbindung gelöscht' ELSE name END AS name, status, capabilities FROM connections WHERE id = ANY($1)`, [st.current.social_targets]) : [];
+    const targets = st.current.social_targets?.length ? await many<any>(`SELECT id, kind, config, CASE WHEN deleted_at IS NOT NULL THEN 'Verbindung gelöscht' ELSE name END AS name, status, capabilities FROM connections WHERE id = ANY($1)`, [st.current.social_targets]) : [];
+    const link = await postLink(id);
     return targets.map((t) => {
-      const text = socialText(st.current, t.kind);
-      return { id: t.id, kind: t.kind, name: t.name, status: t.status, text, issues: checkFormats(t.kind, media, text) };
+      const kind = t.kind as SocialChannel;
+      const text = socialText(st.current, kind, link);
+      const formats = formatsFor(kind, (st.current.social_formats ?? {})[t.id]);
+      const tooLong = socialTextTooLong(st.current, kind, link);
+      const issues: string[] = [];
+      if (formats.includes('feed')) {
+        if (kind === 'facebook' || kind === 'instagram') issues.push(...checkFormats(kind, media, text));
+        else if (kind === 'threads') issues.push(...checkThreadsFormats(media, tooLong));
+        else if (kind === 'x') issues.push(...checkXFormats(t, media, tooLong));
+      }
+      if (formats.includes('story')) issues.push(...checkStoryFormats(kind as 'facebook' | 'instagram', media));
+      return { id: t.id, kind: t.kind, name: t.name, status: t.status, text, formats, manual: isManualChannel(t), link, issues };
     });
   });
 
@@ -599,30 +644,82 @@ export async function connectionRoutes(app: FastifyInstance) {
       const targets: string[] = (st.current.social_targets ?? []).filter((t: string) => !b.connectionIds || b.connectionIds.includes(t));
       if (!targets.length) throw badRequest('Für diese Fassung ist kein sozialer Kanal gewählt.');
       const created: any[] = [];
+      const link = await postLink(id, db);
+      const ready: { name: string }[] = [];
       for (const cid of targets) {
         const c = await one<any>(`SELECT * FROM connections WHERE id = $1`, [cid], db);
         if (!c || c.status !== 'active') {
           created.push({ connection_id: cid, skipped: 'Kanal ist nicht aktiv.' });
           continue;
         }
-        // Ein Auftrag je Fassung und Kanal; fehlgeschlagene werden gezielt über „Wiederholen“ angestoßen
-        const exists = await one<any>(`SELECT id, status FROM social_publications WHERE revision_id = $1 AND connection_id = $2 AND status <> 'canceled' ORDER BY created_at DESC LIMIT 1`, [st.current.id, cid], db);
-        if (exists) {
-          created.push({ id: exists.id, connection_id: cid, status: exists.status, duplicate: true, hint: ['failed', 'unknown'].includes(exists.status) ? 'Bitte diesen Kanal gezielt wiederholen.' : undefined });
-          continue;
+        const manual = isManualChannel(c);
+        // Ein Auftrag je Fassung, Kanal und Format (Beitrag/Story); fehlgeschlagene werden gezielt über „Wiederholen“ angestoßen
+        for (const format of formatsFor(c.kind, (st.current.social_formats ?? {})[cid])) {
+          const exists = await one<any>(`SELECT id, status FROM social_publications WHERE revision_id = $1 AND connection_id = $2 AND format = $3 AND status <> 'canceled' ORDER BY created_at DESC LIMIT 1`, [st.current.id, cid, format], db);
+          if (exists) {
+            created.push({ id: exists.id, connection_id: cid, format, status: exists.status, duplicate: true, hint: ['failed', 'unknown'].includes(exists.status) ? 'Bitte diesen Kanal gezielt wiederholen.' : undefined });
+            continue;
+          }
+          const marker = format === 'story' ? `story:${crypto.randomUUID()}` : markerFor(socialText(st.current, c.kind, link), c.kind);
+          // Ohne Schnittstelle: „zum Teilen bereit“ – eine Person teilt von Hand und markiert den Auftrag als geteilt
+          const sp = await one<any>(
+            `INSERT INTO social_publications (post_id, revision_id, approval_id, connection_id, marker, created_by, format, status, link) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id, status`,
+            [id, st.current.id, st.validApproval.id, cid, marker, req.auth!.user?.id ?? null, format, manual ? 'ready' : 'queued', link],
+            db,
+          );
+          if (manual) ready.push({ name: c.name });
+          else await enqueue('social.publish', { id: sp.id }, { dedupKey: `social.publish:${sp.id}`, maxAttempts: 1 }, db);
+          created.push({ id: sp.id, connection_id: cid, format, status: sp.status });
+          await audit(req.auth!.actor, manual ? 'social.share_prepared' : 'social.requested', { type: 'post', id, label: st.current.title }, { kanal: c.name, fassung: b.revision, ...(format === 'story' ? { format: 'Story' } : {}) }, 'ok', db);
         }
-        const marker = markerFor(socialText(st.current, c.kind));
-        const sp = await one<any>(
-          `INSERT INTO social_publications (post_id, revision_id, approval_id, connection_id, marker, created_by) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id, status`,
-          [id, st.current.id, st.validApproval.id, cid, marker, req.auth!.user?.id ?? null],
-          db,
-        );
-        await enqueue('social.publish', { id: sp.id }, { dedupKey: `social.publish:${sp.id}`, maxAttempts: 1 }, db);
-        created.push({ id: sp.id, connection_id: cid, status: sp.status });
-        await audit(req.auth!.actor, 'social.requested', { type: 'post', id, label: st.current.title }, { kanal: c.name, fassung: b.revision }, 'ok', db);
       }
-      return { items: created };
+      return { items: created, ready, title: st.current.title as string };
+    }).then(async (r) => {
+      // Hinweis „zum Teilen bereit“ an alle, die in sozialen Kanälen veröffentlichen dürfen
+      for (const x of r.ready) await notify({ kind: 'info', title: `Zum Teilen bereit (${x.name}): ${r.title}`.slice(0, 200), body: 'Text und Dateien sind vorbereitet – bitte von Hand teilen und anschließend als geteilt markieren.', link: `/beitraege/${id}`, permission: 'publish.social' });
+      return { items: r.items };
     });
+  });
+
+  /**
+   * Teilen von Hand (#189): vorbereiteter Text, Adresse zum Öffnen (X-Beitragsfenster mit eingetragenem Text bzw.
+   * WhatsApp) und die freigegebenen Dateien als zeitlich begrenzte Links.
+   */
+  app.get('/social-publications/:id/share', { preHandler: requireAuth('publish.social') }, async (req) => {
+    const { id } = z.object({ id: z.uuid() }).parse(req.params);
+    const sp = await one<any>(`SELECT sp.*, c.kind, c.config, c.name FROM social_publications sp JOIN connections c ON c.id = sp.connection_id WHERE sp.id = $1`, [id]);
+    if (!sp) throw notFound();
+    if (!['ready', 'published'].includes(sp.status) || !['x', 'whatsapp'].includes(sp.kind) || (sp.status === 'published' && !sp.shared_at)) throw badRequest('Dieser Auftrag ist nicht zum Teilen von Hand vorgesehen.');
+    const rev = await one<any>(`SELECT * FROM post_revisions WHERE id = $1`, [sp.revision_id]);
+    // Aktueller Link zur Website (inzwischen veröffentlicht?) – beim Teilen von Hand gibt es keine Wiedererkennung
+    const link = (await postLink(sp.post_id)) ?? sp.link;
+    const text = socialText(rev, sp.kind, link);
+    const files: any[] = [];
+    for (const m of await mediaForRevision(rev)) {
+      const f = publicFileFor(m);
+      if (f) files.push({ name: publicFileName(m.id, f.ext, { prefix: rev.title || 'beitrag', index: files.length + 1 }), kind: m.kind, url: await mediaUrl(m.id, 24) });
+    }
+    return { kind: sp.kind, name: sp.name, status: sp.status, text, ...shareTarget(sp, text), files, expires_in_hours: 24 };
+  });
+
+  /** Von Hand geteilt: Auftrag als veröffentlicht markieren (optional mit Link zum Beitrag) – auditiert. */
+  app.post('/social-publications/:id/mark-shared', { preHandler: requireAuth('publish.social') }, async (req) => {
+    const { id } = z.object({ id: z.uuid() }).parse(req.params);
+    const b = z.object({ url: z.union([z.literal(''), z.url({ protocol: /^https$/, error: 'Bitte eine https-Adresse angeben.' }).max(500)]).default('') }).parse(req.body ?? {});
+    const userId = req.auth!.user?.id ?? null;
+    const sp = await tx(async (db) => {
+      const row = await one<any>(
+        `UPDATE social_publications sp SET status = 'published', remote_url = NULLIF($2, ''), published_at = now(), shared_at = now(), shared_by = $3, error = NULL, updated_at = now()
+          WHERE sp.id = $1 AND sp.status = 'ready' AND ${approvalStillValid('sp')} RETURNING sp.*`,
+        [id, b.url, userId],
+        db,
+      );
+      if (!row) throw badRequest('Nur Aufträge „zum Teilen bereit“ mit weiterhin gültiger Freigabe lassen sich als geteilt markieren.');
+      const c = await one<any>(`SELECT name FROM connections WHERE id = $1`, [row.connection_id], db);
+      await audit(req.auth!.actor, 'social.shared_manually', { type: 'post', id: row.post_id }, { kanal: c?.name ?? null, link: b.url || null }, 'ok', db);
+      return row;
+    });
+    return { ok: true, id: sp.id };
   });
 
   /** Nur den betroffenen Kanal wiederholen. Bei unbekanntem Ergebnis prüft der Auftrag zuerst, ob es den Beitrag schon gibt. */
@@ -649,7 +746,7 @@ export async function connectionRoutes(app: FastifyInstance) {
     const target = { type: 'post', id, label: st.current.title };
     const canceled = await many<any>(
       `UPDATE social_publications sp SET status = 'canceled', error = 'Zurückgezogen', updated_at = now() FROM connections c
-        WHERE c.id = sp.connection_id AND sp.post_id = $1 AND sp.status IN ('queued','failed') RETURNING sp.id, c.kind, c.name`,
+        WHERE c.id = sp.connection_id AND sp.post_id = $1 AND sp.status IN ('queued','failed','ready') RETURNING sp.id, c.kind, c.name`,
       [id],
     );
     const open = await many<any>(`SELECT sp.id, c.kind, c.name FROM social_publications sp JOIN connections c ON c.id = sp.connection_id WHERE sp.post_id = $1 AND sp.status IN ('publishing','unknown')`, [id]);
@@ -677,26 +774,37 @@ export async function connectionRoutes(app: FastifyInstance) {
         await audit(req.auth!.actor, 'social.removal_manual', target, { kanal: sp.name, grund: reason, link: sp.remote_url });
         items.push({ id: sp.id, kind: sp.kind, name: sp.name, result: 'manual', message: msg, url: sp.remote_url });
       };
-      if (sp.kind !== 'facebook') {
-        await manualStep('Instagram erlaubt kein Löschen über die Schnittstelle. Bitte den Beitrag in Instagram löschen und hier bestätigen.');
+      const c = await one<Connection>(`SELECT * FROM connections WHERE id = $1`, [sp.connection_id]);
+      // Über die Schnittstelle löschbar: Facebook-Beiträge und X-Beiträge (Modus X-API). Storys verschwinden nach 24 h
+      // von selbst, lassen sich über die Story-Schnittstellen aber nicht löschen.
+      const viaApi = sp.format !== 'story' && !sp.shared_at && (sp.kind === 'facebook' || (sp.kind === 'x' && c?.config?.mode === 'api'));
+      const network = ({ facebook: 'Facebook', instagram: 'Instagram', threads: 'Threads', x: 'X', whatsapp: 'WhatsApp' } as Record<string, string>)[sp.kind] ?? sp.kind;
+      if (!viaApi) {
+        await manualStep(
+          sp.shared_at
+            ? `Von Hand geteilt – bitte in ${network} von Hand löschen und hier bestätigen.`
+            : sp.format === 'story'
+              ? `Storys lassen sich über die Schnittstelle nicht löschen (sie verschwinden nach 24 Stunden). Bitte die Story in ${network} löschen und hier bestätigen.`
+              : `${network} erlaubt kein Löschen über die Schnittstelle. Bitte den Beitrag in ${network} löschen und hier bestätigen.`,
+        );
         continue;
       }
-      const c = await one<Connection>(`SELECT * FROM connections WHERE id = $1`, [sp.connection_id]);
       const sec: Record<string, string> = c && c.status !== 'revoked' ? await connectionSecrets(c).catch(() => ({})) : {};
-      if (!sec.pageToken || !sp.remote_id) {
-        await manualStep('Die Verbindung ist nicht mehr verfügbar – bitte in Facebook von Hand löschen und hier bestätigen.');
+      if ((sp.kind === 'facebook' ? !sec.pageToken : !sec.accessToken) || !sp.remote_id) {
+        await manualStep(`Die Verbindung ist nicht mehr verfügbar – bitte in ${network} von Hand löschen und hier bestätigen.`);
         continue;
       }
       try {
-        await deleteFacebookPost(sec, sp.remote_id);
+        if (sp.kind === 'facebook') await deleteFacebookPost(sec, sp.remote_id);
+        else await deleteXPost(sec, sp.remote_id);
         await mark('removed', null);
         await audit(req.auth!.actor, 'social.removed', target, { kanal: sp.name, grund: reason, beitrag: sp.remote_id });
-        items.push({ id: sp.id, kind: sp.kind, name: sp.name, result: 'removed', message: 'Auf Facebook gelöscht.' });
+        items.push({ id: sp.id, kind: sp.kind, name: sp.name, result: 'removed', message: `Auf ${network} gelöscht.` });
       } catch (e: any) {
         const msg = scrub(String(e?.message ?? e), sec).slice(0, 300);
         await mark('failed', msg);
         await audit(req.auth!.actor, 'social.removed', target, { kanal: sp.name, grund: reason, fehler: msg }, 'failed');
-        items.push({ id: sp.id, kind: sp.kind, name: sp.name, result: 'failed', message: `Löschen fehlgeschlagen: ${msg} Bitte erneut versuchen oder in Facebook von Hand löschen und hier bestätigen.`, url: sp.remote_url });
+        items.push({ id: sp.id, kind: sp.kind, name: sp.name, result: 'failed', message: `Löschen fehlgeschlagen: ${msg} Bitte erneut versuchen oder in ${network} von Hand löschen und hier bestätigen.`, url: sp.remote_url });
       }
     }
     return { items };
@@ -731,7 +839,8 @@ export async function connectionRoutes(app: FastifyInstance) {
       if (f) files.push({ name: publicFileName(m.id, f.ext, { prefix: st.current.title || 'beitrag', index: files.length + 1 }), kind: m.kind, url: await mediaUrl(m.id, 24) });
     }
     await audit(req.auth!.actor, 'social.exported', { type: 'post', id, label: st.current.title }, { fassung: st.current.number });
-    return { facebook: socialText(st.current, 'facebook'), instagram: socialText(st.current, 'instagram'), files, expires_in_hours: 24 };
+    const link = await postLink(id);
+    return { ...Object.fromEntries(SOCIAL_KINDS.map((k) => [k, socialText(st.current, k, link)])), files, expires_in_hours: 24 };
   });
 
   /* ------------------------------------------------------------ Amtliche Warnungen */

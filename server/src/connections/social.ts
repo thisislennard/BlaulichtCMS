@@ -4,7 +4,10 @@ import { StepError, toStepError } from '../lib/errors.js';
 import { log } from '../lib/log.js';
 import { notify } from '../lib/notify.js';
 import { connectionSecrets, scrub, type Connection } from './common.js';
-import { findExisting, mediaForRevision, publishFacebook, publishInstagram } from './meta.js';
+import { findExisting, findExistingStory, mediaForRevision, publishFacebook, publishFacebookStory, publishInstagram, publishInstagramStory } from './meta.js';
+import { findExistingThreads, publishThreads } from './threads.js';
+import { findExistingX, publishX } from './x.js';
+import { isManualChannel } from './channels.js';
 import { enqueueFollowUp } from '../jobs/queue.js';
 import { approvalStillValid } from '../lib/approval.js';
 
@@ -19,7 +22,9 @@ export async function runSocialPublication(id: string) {
   const c = await one<Connection>(`SELECT * FROM connections WHERE id = $1`, [sp.connection_id]);
   const rev = await one<any>(`SELECT * FROM post_revisions WHERE id = $1`, [sp.revision_id]);
   if (!c || !rev) return;
-  const label = `${c.name}`;
+  // Kanäle ohne Schnittstelle (Teilen von Hand) laufen nie über die Warteschlange
+  if (isManualChannel(c) || sp.status === 'ready') return;
+  const label = `${c.name}${sp.format === 'story' ? ' (Story)' : ''}`;
   const fail = async (status: 'failed' | 'unknown', e: StepError) => {
     const sec = await connectionSecrets(c).catch(() => ({}));
     const msg = scrub(e.message, sec as any);
@@ -33,7 +38,7 @@ export async function runSocialPublication(id: string) {
   // Unbekannter Ausgang oder unterbrochener Lauf: zuerst nachsehen statt doppelt zu veröffentlichen
   if (sp.status === 'unknown' || sp.status === 'publishing') {
     try {
-      const found = await findExisting(c, sec, sp.marker, new Date(sp.created_at));
+      const found = await lookupExisting(c, sec, sp);
       if (found) {
         await pool.query(`UPDATE social_publications SET status = 'published', remote_id = $2, remote_url = $3, error = NULL, published_at = now(), updated_at = now() WHERE id = $1`, [id, found.id, found.url]);
         await audit({ id: null, name: label, type: 'system' }, 'social.published', { type: 'post', id: sp.post_id }, { kanal: label, nachtraeglich_gefunden: true });
@@ -70,12 +75,23 @@ export async function runSocialPublication(id: string) {
   }
   const media = await mediaForRevision(rev);
   try {
+    const onContainer = async (container: string | null) => {
+      await pool.query(`UPDATE social_publications SET container_id = $2 WHERE id = $1`, [id, container]);
+      sp.container_id = container;
+    };
+    const input = { sp, rev, media };
     const res =
-      c.kind === 'facebook'
-        ? await publishFacebook(c, sec, { sp, rev, media })
-        : await publishInstagram(c, sec, { sp, rev, media }, async (container: string | null) => {
-            await pool.query(`UPDATE social_publications SET container_id = $2 WHERE id = $1`, [id, container]);
-          });
+      sp.format === 'story'
+        ? c.kind === 'facebook'
+          ? await publishFacebookStory(c, sec, input, onContainer)
+          : await publishInstagramStory(c, sec, input, onContainer)
+        : c.kind === 'facebook'
+          ? await publishFacebook(c, sec, input)
+          : c.kind === 'threads'
+            ? await publishThreads(c, sec, input, onContainer)
+            : c.kind === 'x'
+              ? await publishX(c, sec, input)
+              : await publishInstagram(c, sec, input, onContainer);
     await pool.query(`UPDATE social_publications SET status = 'published', remote_id = $2, remote_url = $3, error = NULL, error_class = NULL, published_at = now(), updated_at = now() WHERE id = $1`, [id, res.id, res.url]);
     await audit({ id: null, name: label, type: 'system' }, 'social.published', { type: 'post', id: sp.post_id, label: rev.title }, { kanal: label, url: res.url });
     await notify({ kind: 'success', title: `Veröffentlicht auf ${label}: ${rev.title}`.slice(0, 200), link: `/beitraege/${sp.post_id}`, permission: 'publish.social' });
@@ -85,4 +101,12 @@ export async function runSocialPublication(id: string) {
     const definite = ['auth', 'permission', 'invalid_payload', 'config', 'rate_limit', 'conflict'].includes(err.errorClass);
     await fail(definite ? 'failed' : 'unknown', err);
   }
+}
+
+/** Wiedererkennung je Kanal und Format (vor jedem erneuten Versuch nach unklarem Ausgang). */
+function lookupExisting(c: Connection, sec: Record<string, string>, sp: any) {
+  if (sp.format === 'story') return findExistingStory(c, sec, sp);
+  if (c.kind === 'threads') return findExistingThreads(c, sec, sp.marker, new Date(sp.created_at));
+  if (c.kind === 'x') return findExistingX(c, sec, sp.marker, new Date(sp.created_at));
+  return findExisting(c, sec, sp.marker, new Date(sp.created_at));
 }

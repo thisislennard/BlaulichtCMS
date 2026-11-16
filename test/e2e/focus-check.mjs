@@ -329,6 +329,22 @@ async function freshSetup() {
   const conn = await admin.post('/connections', { kind: 'fe2', name: 'FE2 Test', config: {} }).catch((e) => (console.log('  (Verbindung)', e.message), null));
   const wf = await admin.post('/connections', { kind: 'warnfeed', name: 'Amtliche Warnungen Test', config: {} }).catch((e) => (console.log('  (Warnfeed)', e.message), null));
   const fsc = await admin.post('/connections', { kind: 'feuersoftware', name: 'Feuersoftware Test', config: {} }).catch((e) => (console.log('  (Feuersoftware)', e.message), null));
+  // Soziale Kanäle (#188, #189): Threads (Entwurf), X über die API (Entwurf) und – getestet und aktiv – X von Hand und
+  // WhatsApp-Kanal; der Testbeitrag wählt beide, damit die Kanaltexte im Beitrag erscheinen
+  const thc = await admin.post('/connections', { kind: 'threads', name: 'Threads Test', config: {} }).catch((e) => (console.log('  (Threads)', e.message), null));
+  const xac = await admin.post('/connections', { kind: 'x', name: 'X über API Test', config: { mode: 'api' } }).catch((e) => (console.log('  (X)', e.message), null));
+  const social = [];
+  for (const [kind, name] of [['x', 'X von Hand Test'], ['whatsapp', 'WhatsApp-Kanal Test']]) {
+    try {
+      const c = await admin.post('/connections', { kind, name, config: {} });
+      await admin.post(`/connections/${c.id}/test`);
+      await admin.post(`/connections/${c.id}/activate`);
+      social.push(c.id);
+    } catch (e) {
+      console.log(`  (${name})`, e.message);
+    }
+  }
+  if (social.length) await admin.put(`/posts/${post.id}/revision`, { baseRevision: 1, title: 'Testbeitrag Fokus', body: 'Text', socialTargets: social }).catch((e) => console.log('  (Soziale Kanäle im Beitrag)', e.message));
   // Empfangsprotokoll mit Inhalt: eine fiktive Testmeldung an den FE2-Eingang
   if (conn?.token) {
     await fetch(`${BC}/api/v1/inbound/fe2/${conn.id}`, { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${conn.token}`, 'x-blaulichtcms-test': '1', 'x-blaulichtcms-request': '1' }, body: JSON.stringify({ einsatz: { id: 'FOKUS-1', stichwort: 'F-TEST-1', ort: 'Musterstadt' }, meldung: { alarmtext: 'Fiktiver Text' } }) })
@@ -392,6 +408,9 @@ async function freshSetup() {
     connectionId: conn ? (conn.connection ?? conn).id : null,
     warnfeedId: wf ? (wf.connection ?? wf).id : null,
     feuersoftwareId: fsc?.id ?? null,
+    threadsId: thc?.id ?? null,
+    xApiId: xac?.id ?? null,
+    whatsappId: social[1] ?? null,
     warningId: warn?.id ?? null,
     automationId,
   };
@@ -454,7 +473,7 @@ try {
   let n = 0;
   churn = setInterval(() => editor.post('/posts', { title: `Live-Ereignis ${++n}`, kind: 'news' }).catch(() => {}), 2000);
 
-  const routes = ['/', '/beitraege', `/beitraege/${post.id}`, `/beitraege/${sub.id}`, '/vorlagen', '/freigaben', '/medien', `/medien/${col.collection.id}`, '/medien/dateien', '/medien/papierkorb', '/medien/verwaltung', '/medien/gestaltung', ...(st.linkId ? [`/medien/gestaltung?link=${st.linkId}`] : []), '/quellen', '/banner', '/kanaele', '/warnungen', '/warnungen/pflege', ...(warn ? [`/warnungen/${warn.id}`] : []), '/verbindungen', ...(conn ? [`/verbindungen/${conn.id}`, `/verbindungen/${conn.id}?ansicht=empfangsprotokoll`] : []), ...(st.warnfeedId ? [`/verbindungen/${st.warnfeedId}`, `/verbindungen/${st.warnfeedId}?ansicht=empfangsprotokoll`] : []), ...(st.feuersoftwareId ? [`/verbindungen/${st.feuersoftwareId}`] : []), '/amtliche-warnungen', '/automationen', '/automationen/eingaenge', '/automationen/ausgaenge', ...(st.automationId ? [`/automationen/${st.automationId}`] : []), '/benutzer', '/system', '/protokolle', '/datenschutz-anfragen', '/einstellungen', '/profil', '/hilfe', '/aktivitaeten', '/benachrichtigungen'];
+  const routes = ['/', '/beitraege', `/beitraege/${post.id}`, `/beitraege/${sub.id}`, '/vorlagen', '/freigaben', '/medien', `/medien/${col.collection.id}`, '/medien/dateien', '/medien/papierkorb', '/medien/verwaltung', '/medien/gestaltung', ...(st.linkId ? [`/medien/gestaltung?link=${st.linkId}`] : []), '/quellen', '/banner', '/kanaele', '/warnungen', '/warnungen/pflege', ...(warn ? [`/warnungen/${warn.id}`] : []), '/verbindungen', ...(conn ? [`/verbindungen/${conn.id}`, `/verbindungen/${conn.id}?ansicht=empfangsprotokoll`] : []), ...(st.warnfeedId ? [`/verbindungen/${st.warnfeedId}`, `/verbindungen/${st.warnfeedId}?ansicht=empfangsprotokoll`] : []), ...(st.feuersoftwareId ? [`/verbindungen/${st.feuersoftwareId}`] : []), ...[st.threadsId, st.xApiId, st.whatsappId].filter(Boolean).map((x) => `/verbindungen/${x}`), '/amtliche-warnungen', '/automationen', '/automationen/eingaenge', '/automationen/ausgaenge', ...(st.automationId ? [`/automationen/${st.automationId}`] : []), '/benutzer', '/system', '/protokolle', '/datenschutz-anfragen', '/einstellungen', '/profil', '/hilfe', '/aktivitaeten', '/benachrichtigungen'];
   for (const r of routes) await scanRoute(page, r);
 
   // Löschdialoge (Löschen-Knöpfe klickt der Rundgang bewusst nicht): Warnvorgang mit Begründung, Verbindung

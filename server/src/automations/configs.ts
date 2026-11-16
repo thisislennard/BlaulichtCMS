@@ -35,8 +35,18 @@ const variants = z
     wordpress: z.object({ title: tpl(400), body: tpl(20_000), categories: z.array(z.number().int().positive()).max(20).default([]) }).partial().optional(),
     facebook: z.object({ body: tpl(20_000) }).partial().optional(),
     instagram: z.object({ body: tpl(2_200) }).partial().optional(),
+    threads: z.object({ body: tpl(2_000) }).partial().optional(),
+    x: z.object({ body: tpl(2_000) }).partial().optional(),
+    whatsapp: z.object({ body: tpl(20_000) }).partial().optional(),
   })
   .default({});
+
+/** Vorausgewählte soziale Kanäle samt Format (#188, #189) – veröffentlicht wird erst nach menschlicher Freigabe. */
+const socialTargets = z
+  .array(z.object({ connectionId: z.uuid(), format: z.enum(['feed', 'story', 'both']).default('feed') }))
+  .max(10)
+  .default([])
+  .refine((l) => new Set(l.map((x) => x.connectionId)).size === l.length, 'Jeder Kanal nur einmal.');
 
 // Mitgelieferte und eigene Rollen (Stand der Rollentabelle zum Zeitpunkt der Prüfung)
 const roles = z.array(z.string().max(40).refine((r) => roleExists(r), 'Unbekannte Rolle.')).max(100).default([]);
@@ -62,6 +72,7 @@ export const OUTPUT_CONFIG: Record<OutputKind, z.ZodType<any>> = {
     body: tpl(20_000),
     excerpt: tpl(1_000),
     variants,
+    socialTargets,
     siteId: z.uuid().nullable().default(null),
     submit: z.boolean().default(false),
   }),

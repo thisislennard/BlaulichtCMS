@@ -1,4 +1,3 @@
-import crypto from 'node:crypto';
 import sharp from 'sharp';
 import { many, one, pool } from '../db/pool.js';
 import { httpRequest, classifyStatus, type HttpResponse } from '../lib/http.js';
@@ -8,6 +7,7 @@ import { publicBase } from '../lib/urls.js';
 import { publicFileFor } from '../routes/media.js';
 import type { Connection, TestStep } from './common.js';
 import { scrub } from './common.js';
+import { markerFor, socialText } from './channels.js';
 
 /**
  * Facebook-Seiten (Graph API) und Instagram-Konten (Instagram Login, professionelle Konten).
@@ -105,7 +105,7 @@ export async function instagramExchange(appId: string, appSecret: string, redire
 export async function testFacebook(c: Connection, sec: Record<string, string>) {
   const steps: TestStep[] = [];
   const account: any = {};
-  const caps: any = { text: false, photos: false, video: false };
+  const caps: any = { text: false, photos: false, video: false, stories: false };
   const pageId = c.config.pageId;
   if (!sec.pageToken || !pageId) return { steps: [{ name: 'Seite verbunden', ok: false, message: 'Noch keine Seite gewählt (Verbinden mit Facebook).', kind: 'login' as const }], account, capabilities: caps };
   try {
@@ -133,7 +133,9 @@ export async function testFacebook(c: Connection, sec: Record<string, string>) {
     caps.text = true;
     caps.photos = true;
     caps.video = true;
-    steps.push({ name: 'Veröffentlichungstest', ok: true, message: 'Unveröffentlichter Testbeitrag angelegt und wieder gelöscht – Beiträge mit Text, Fotos und Video sind möglich.', kind: 'publish' });
+    // Storys brauchen dieselben Rechte (pages_manage_posts) – Foto- und Video-Storys über photo_stories/video_stories
+    caps.stories = true;
+    steps.push({ name: 'Veröffentlichungstest', ok: true, message: 'Unveröffentlichter Testbeitrag angelegt und wieder gelöscht – Beiträge mit Text, Fotos und Video sowie Storys sind möglich.', kind: 'publish' });
   } catch (e: any) {
     steps.push({ name: 'Veröffentlichungstest', ok: false, message: `Testbeitrag konnte nicht angelegt werden: ${e.message}`, kind: 'publish' });
   }
@@ -143,7 +145,7 @@ export async function testFacebook(c: Connection, sec: Record<string, string>) {
 export async function testInstagram(c: Connection, sec: Record<string, string>, testImageUrl: string | null) {
   const steps: TestStep[] = [];
   const account: any = {};
-  const caps: any = { image: false, carousel: false, reels: false, text_only: false };
+  const caps: any = { image: false, carousel: false, reels: false, stories: false, text_only: false };
   if (!sec.token) return { steps: [{ name: 'Konto verbunden', ok: false, message: 'Noch nicht mit Instagram verbunden.', kind: 'login' as const }], account, capabilities: caps };
   let userId = c.config.userId as string;
   try {
@@ -175,8 +177,8 @@ export async function testInstagram(c: Connection, sec: Record<string, string>, 
     const cont = await call('POST', `${IG_GRAPH()}/${userId}/media`, { image_url: testImageUrl, caption: 'BlaulichtCMS-Verbindungstest (wird nicht veröffentlicht)', access_token: sec.token }, sec, 'Instagram');
     const status = await waitContainer(cont.id, sec, 6, 2000);
     const ok = status === 'FINISHED';
-    if (ok) Object.assign(caps, { image: true, carousel: true, reels: true });
-    steps.push({ name: 'Veröffentlichungstest', ok, message: ok ? 'Mediencontainer mit Testbild verarbeitet (nicht veröffentlicht) – Bilder, Karussell und Reels möglich. Reine Textbeiträge unterstützt Instagram nicht.' : `Container-Status: ${status}. Meta konnte das Testbild nicht abrufen oder verarbeiten.`, kind: 'publish' });
+    if (ok) Object.assign(caps, { image: true, carousel: true, reels: true, stories: true });
+    steps.push({ name: 'Veröffentlichungstest', ok, message: ok ? 'Mediencontainer mit Testbild verarbeitet (nicht veröffentlicht) – Bilder, Karussell, Reels und Storys möglich. Reine Textbeiträge unterstützt Instagram nicht.' : `Container-Status: ${status}. Meta konnte das Testbild nicht abrufen oder verarbeiten.`, kind: 'publish' });
   } catch (e: any) {
     steps.push({ name: 'Veröffentlichungstest', ok: false, message: `Mediencontainer konnte nicht angelegt werden: ${e.message}`, kind: 'publish' });
   }
@@ -214,24 +216,15 @@ export function connectionTestImage(): Promise<Buffer> {
 /* ------------------------------------------------------------------ Medien-URLs */
 
 /** Zeitlich begrenzte öffentliche HTTPS-Adresse für eine freigegebene Datei (Abruf durch Meta). */
-export async function mediaUrl(mediaId: string, hours = 24): Promise<string> {
+export async function mediaUrl(mediaId: string, hours = 24, variant: 'story' | null = null): Promise<string> {
   const token = randomToken(32);
-  await pool.query(`INSERT INTO media_tokens (token_hash, media_id, expires_at) VALUES ($1,$2, now() + make_interval(hours => $3))`, [sha256Hex(token), mediaId, hours]);
+  await pool.query(`INSERT INTO media_tokens (token_hash, media_id, expires_at, variant) VALUES ($1,$2, now() + make_interval(hours => $3), $4)`, [sha256Hex(token), mediaId, hours, variant]);
   return `${await publicBase()}/api/v1/m/${token}`;
 }
 
 /* ------------------------------------------------------------------ Veröffentlichen */
 
-export function socialText(rev: any, channel: 'facebook' | 'instagram'): string {
-  const v = (rev.variants ?? {})[channel] ?? {};
-  if (v.body?.trim()) return v.body.trim();
-  const base = [rev.title, rev.excerpt?.trim() || rev.body].filter(Boolean).join('\n\n').trim();
-  return channel === 'instagram' ? base.slice(0, 2200) : base.slice(0, 60_000);
-}
-
-export function markerFor(text: string) {
-  return crypto.createHash('sha256').update(text.trim()).digest('hex');
-}
+export { markerFor, socialText } from './channels.js';
 
 /** Gibt es den Beitrag schon? (Unbekanntes Ergebnis zuerst prüfen statt erneut zu veröffentlichen.) */
 export async function findExisting(c: Connection, sec: Record<string, string>, marker: string, since: Date): Promise<{ id: string; url: string | null } | null> {
@@ -341,6 +334,140 @@ export async function publishInstagram(c: Connection, sec: Record<string, string
  */
 export async function deleteFacebookPost(sec: Record<string, string>, remoteId: string) {
   await call('DELETE', `${FB_GRAPH()}/${encodeURIComponent(remoteId)}`, { access_token: sec.pageToken }, sec, 'Facebook');
+}
+
+/* ------------------------------------------------------------------ Storys (#188) */
+
+/**
+ * Storys über die offiziellen Schnittstellen (geprüft am 16.11.2026 auf developers.facebook.com):
+ *  - Instagram: Container mit `media_type=STORIES` und `image_url` bzw. `video_url` (ohne Bildunterschrift – Storys
+ *    haben keine), dann `media_publish`. Bilder JPEG bis 8 MB, empfohlen 9:16; Videos MP4/MOV, 3–60 s, bis 100 MB.
+ *  - Facebook-Seite: Foto unveröffentlicht hochladen (`/{page}/photos`, published=false) und mit
+ *    `/{page}/photo_stories` (photo_id) veröffentlichen; Video über `/{page}/video_stories` (upload_phase start →
+ *    gehostete Datei an die upload_url mit Kopfzeile file_url → finish). Fotos bis 10 MB; Videos 9:16, 3–60 s.
+ * Bilder gehen in einer eigenen Story-Fassung hinaus: 1080 × 1920 ohne Beschnitt, der Rand ist das unscharf vergrößerte
+ * Bild selbst (öffentliche Fassung, also bereits geschwärzt und ohne Metadaten).
+ */
+export async function storyImage(src: Buffer): Promise<Buffer> {
+  const W = 1080;
+  const H = 1920;
+  const bg = await sharp(src).resize(W, H, { fit: 'cover' }).blur(40).modulate({ brightness: 0.7 }).toBuffer();
+  const fg = await sharp(src).resize(W, H, { fit: 'inside' }).toBuffer({ resolveWithObject: true });
+  return sharp(bg)
+    .composite([{ input: fg.data, top: Math.round((H - fg.info.height) / 2), left: Math.round((W - fg.info.width) / 2) }])
+    .jpeg({ quality: 85 })
+    .toBuffer();
+}
+
+const storyMedia = (media: any[]) => media.find((m) => publicFileFor(m)) ?? null;
+
+export async function publishInstagramStory(c: Connection, sec: Record<string, string>, { sp, media }: PublishInput, onContainer: (id: string | null) => Promise<void>) {
+  const user = c.config.userId;
+  const m = storyMedia(media);
+  if (!m) throw new StepError('invalid_payload', 'Eine Instagram-Story braucht ein Bild oder Video.');
+  let container = sp.container_id as string | null;
+  if (container) {
+    const st = await waitContainer(container, sec).catch(() => 'EXPIRED');
+    if (st === 'PUBLISHED') {
+      const found = await findExistingStory(c, sec, sp);
+      if (found) return found;
+      throw new StepError('timeout_unknown', 'Instagram meldet die Story als veröffentlicht, sie wurde aber noch nicht gefunden – bitte in Instagram prüfen.', { sideEffectUnknown: true });
+    }
+    if (st !== 'FINISHED') {
+      container = null;
+      await onContainer(null);
+    }
+  }
+  if (!container) {
+    const p = m.kind === 'video' ? { video_url: await mediaUrl(m.id) } : { image_url: await mediaUrl(m.id, 24, 'story') };
+    container = String((await call('POST', `${IG_GRAPH()}/${user}/media`, { media_type: 'STORIES', ...p, access_token: sec.token }, sec, 'Instagram')).id);
+    await onContainer(container);
+  }
+  const st = await waitContainer(container, sec);
+  if (st !== 'FINISHED') {
+    if (st === 'ERROR' || st === 'EXPIRED') await onContainer(null);
+    throw new StepError('invalid_payload', `Instagram-Story nicht bereit (Status ${st}).`);
+  }
+  const pub = await call('POST', `${IG_GRAPH()}/${user}/media_publish`, { creation_id: container, access_token: sec.token }, sec, 'Instagram');
+  const info = await call('GET', `${IG_GRAPH()}/${pub.id}`, { fields: 'permalink', access_token: sec.token }, sec, 'Instagram').catch(() => ({}));
+  return { id: String(pub.id), url: (info as any).permalink ?? null };
+}
+
+export async function publishFacebookStory(c: Connection, sec: Record<string, string>, { sp, media }: PublishInput, onContainer: (id: string | null) => Promise<void>) {
+  const page = c.config.pageId;
+  const m = storyMedia(media);
+  if (!m) throw new StepError('invalid_payload', 'Eine Facebook-Story braucht ein Bild oder Video.');
+  if (m.kind !== 'video') {
+    // Ein unveröffentlichtes Foto aus einem früheren, gescheiterten Versuch wird weiterverwendet
+    let photoId = sp.container_id as string | null;
+    if (!photoId) {
+      photoId = String((await call('POST', `${FB_GRAPH()}/${page}/photos`, { url: await mediaUrl(m.id, 24, 'story'), published: 'false', access_token: sec.pageToken }, sec, 'Facebook')).id);
+      await onContainer(photoId);
+    }
+    const r = await call('POST', `${FB_GRAPH()}/${page}/photo_stories`, { photo_id: photoId, access_token: sec.pageToken }, sec, 'Facebook');
+    if (!r.post_id) throw new StepError('timeout_unknown', 'Facebook hat keine Story-ID geliefert – bitte auf der Seite prüfen.', { sideEffectUnknown: true });
+    return { id: String(r.post_id), url: null };
+  }
+  const start = await call('POST', `${FB_GRAPH()}/${page}/video_stories`, { upload_phase: 'start', access_token: sec.pageToken }, sec, 'Facebook');
+  const videoId = String(start.video_id ?? '');
+  if (!videoId || !start.upload_url) throw new StepError('invalid_payload', 'Facebook hat keinen Upload für die Video-Story bereitgestellt.');
+  await onContainer(videoId);
+  let up: HttpResponse;
+  try {
+    up = await httpRequest({ method: 'POST', url: String(start.upload_url), headers: { authorization: `OAuth ${sec.pageToken}`, file_url: await mediaUrl(m.id) }, timeoutMs: 120_000, maxResponseBytes: 1024 * 1024, allowPrivateHosts: privateHosts() });
+  } catch (e: any) {
+    if (e instanceof StepError) throw e;
+    throw new StepError('transient', scrub(`Facebook-Upload nicht erreichbar: ${e?.message ?? e}`, sec));
+  }
+  const upErr = classifyStatus(up, 'Facebook-Upload');
+  if (upErr) throw new StepError(upErr.errorClass, scrub(upErr.message, sec));
+  // Abholen der Datei durch Facebook abwarten
+  for (let i = 0; i < 24; i++) {
+    const s = await call('GET', `${FB_GRAPH()}/${videoId}`, { fields: 'status', access_token: sec.pageToken }, sec, 'Facebook');
+    const vs = s.status?.video_status;
+    if (vs === 'error' || vs === 'expired') throw new StepError('invalid_payload', `Facebook konnte das Video nicht verarbeiten (Status ${vs}).`);
+    if (s.status?.uploading_phase?.status === 'complete' || vs === 'ready') break;
+    await new Promise((r) => setTimeout(r, 5000));
+  }
+  const fin = await call('POST', `${FB_GRAPH()}/${page}/video_stories`, { video_id: videoId, upload_phase: 'finish', access_token: sec.pageToken }, sec, 'Facebook');
+  if (!fin.post_id) throw new StepError('timeout_unknown', 'Facebook hat keine Story-ID geliefert – bitte auf der Seite prüfen.', { sideEffectUnknown: true });
+  return { id: String(fin.post_id), url: null };
+}
+
+/**
+ * Gibt es die Story schon? Storys haben keinen Text, an dem sie sich wiedererkennen ließen – maßgeblich ist der
+ * gespeicherte Container (Instagram) bzw. das hochgeladene Foto/Video (Facebook). Ohne ihn wurde nichts veröffentlicht.
+ */
+export async function findExistingStory(c: Connection, sec: Record<string, string>, sp: any): Promise<{ id: string; url: string | null } | null> {
+  if (!sp.container_id) return null;
+  const since = new Date(sp.created_at).getTime() - 120_000;
+  if (c.kind === 'instagram') {
+    const st = await call('GET', `${IG_GRAPH()}/${sp.container_id}`, { fields: 'status_code', access_token: sec.token }, sec, 'Instagram').catch(() => ({ status_code: 'EXPIRED' }));
+    if (st.status_code !== 'PUBLISHED') return null;
+    const r = await call('GET', `${IG_GRAPH()}/${c.config.userId}/stories`, { fields: 'id,permalink,timestamp', access_token: sec.token }, sec, 'Instagram');
+    const hits = (r.data ?? []).filter((s: any) => new Date(s.timestamp ?? 0).getTime() >= since).sort((a: any, b: any) => Date.parse(a.timestamp) - Date.parse(b.timestamp));
+    return hits[0] ? { id: String(hits[0].id), url: hits[0].permalink ?? null } : null;
+  }
+  const r = await call('GET', `${FB_GRAPH()}/${c.config.pageId}/stories`, { since: String(Math.floor(since / 1000)), access_token: sec.pageToken }, sec, 'Facebook');
+  const hit = (r.data ?? []).find((s: any) => String(s.media_id) === String(sp.container_id));
+  return hit ? { id: String(hit.post_id), url: hit.url ?? null } : null;
+}
+
+/** Formatprüfung für Storys (vor der Freigabe sichtbar). */
+export function checkStoryFormats(kind: 'facebook' | 'instagram', media: any[]): string[] {
+  const name = kind === 'facebook' ? 'Facebook-Story' : 'Instagram-Story';
+  const usable = media.filter((m) => m.kind === 'image' || m.kind === 'video');
+  if (!usable.length) return [`${name}: braucht ein Bild oder Video.`];
+  const issues: string[] = [];
+  if (usable.length > 1) issues.push(`${name}: je Story eine Datei – verwendet wird nur die erste („${usable[0].original_name}“).`);
+  const m = usable[0];
+  if (m.kind === 'image' && m.width && m.height && Math.abs(m.width / m.height - 9 / 16) > 0.02) issues.push(`${name}: Das Bild wird auf 9:16 (1080 × 1920) gebracht – ohne Beschnitt, der Rand wird unscharf aus dem Bild gefüllt.`);
+  if (m.kind === 'video') {
+    if (m.mime === 'video/webm') issues.push(`${name}: WebM-Videos werden nicht unterstützt (MP4).`);
+    if (m.width && m.height && Math.abs(m.width / m.height - 9 / 16) > 0.02) issues.push(`${name}: Das Video ist nicht im Hochformat 9:16 – es wird mit Rand oder beschnitten angezeigt.`);
+    issues.push(`${name}: Videos müssen 3 bis 60 Sekunden lang sein.`);
+  }
+  return issues;
 }
 
 /** Prüft je Kanal, ob die Medien der Fassung unterstützt werden (vor der Freigabe sichtbar). */

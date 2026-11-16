@@ -518,21 +518,33 @@ async function runOutput(ctx: Ctx, node: GraphNode, data: Data, prev: StepRow | 
       if (fb) variants.facebook = { body: fb };
       const ig = r(c.variants?.instagram?.body ?? '', 2200);
       if (ig) variants.instagram = { body: ig };
+      for (const k of ['threads', 'x', 'whatsapp'] as const) {
+        const t = r(c.variants?.[k]?.body ?? '', k === 'whatsapp' ? 20_000 : 2000);
+        if (t) variants[k] = { body: t };
+      }
+      // Vorausgewählte soziale Kanäle (#188, #189): nur verfügbare (getestet/aktiv); Storys nur für Facebook/Instagram.
+      // Veröffentlicht wird erst nach Freigabe durch eine Person – Automationen posten nie selbst in sozialen Netzwerken.
+      const wanted = (c.socialTargets ?? []) as { connectionId: string; format: string }[];
+      const avail = wanted.length ? await many<{ id: string; kind: string; name: string }>(`SELECT id, kind, name FROM connections WHERE id = ANY($1::uuid[]) AND deleted_at IS NULL AND status IN ('tested','active') AND kind IN ('facebook','instagram','threads','x','whatsapp')`, [wanted.map((w) => w.connectionId)]) : [];
+      const socialTargets = wanted.filter((w) => avail.some((a) => a.id === w.connectionId)).map((w) => w.connectionId);
+      const socialFormats = Object.fromEntries(wanted.filter((w) => socialTargets.includes(w.connectionId) && ['facebook', 'instagram'].includes(avail.find((a) => a.id === w.connectionId)!.kind) && (w.format === 'story' || w.format === 'both')).map((w) => [w.connectionId, w.format]));
+      const skippedSocial = wanted.length - socialTargets.length;
+      const socialNames = socialTargets.map((id) => { const a = avail.find((x) => x.id === id)!; return socialFormats[id] ? `${a.name} (${socialFormats[id] === 'both' ? 'Beitrag und Story' : 'Story'})` : a.name; });
       let site: { id: string; name: string; status: string } | null = null;
       if (c.siteId) site = await one<any>(`SELECT id, name, status FROM wp_sites WHERE id = $1`, [c.siteId]);
       if (direct && (!site || site.status !== 'active')) throw new PermanentError('Direkt veröffentlichen braucht eine gekoppelte Website als Zielkanal.');
       const siteId = site && site.status !== 'revoked' ? site.id : null;
       const submit = (c.submit || direct) && !!body;
       const what = direct ? `direkt auf „${site!.name}“ veröffentlichen` : submit ? 'als Entwurf anlegen und zur Freigabe einreichen' : 'als Entwurf anlegen';
-      const desc = { art: c.kind, titel: title, text: body.slice(0, 300), zielkanal: site?.name ?? null };
+      const desc = { art: c.kind, titel: title, text: body.slice(0, 300), zielkanal: site?.name ?? null, soziale_kanaele: socialNames, ...(skippedSocial ? { nicht_verfuegbar: skippedSocial } : {}) };
       if (ctx.test) return done({ ports: ['out'], produced: { beitrag_link: '/beitraege', beitrag_titel: title }, info: `Testlauf: würde den Beitrag „${title}“ ${what}.`, log: desc });
       const res = await tx(async (db) => {
         const p = await one<any>(`INSERT INTO posts (kind, title) VALUES ($1,$2) RETURNING id`, [c.kind || 'news', title], db);
-        const rev = { title, body, excerpt, media_ids: [] as string[], cover_id: null, site_id: siteId, variants };
+        const rev = { title, body, excerpt, media_ids: [] as string[], cover_id: null, site_id: siteId, variants, social_targets: socialTargets, social_formats: socialFormats };
         const hash = revisionHash(rev);
         const rv = await one<any>(
-          `INSERT INTO post_revisions (post_id, number, title, body, excerpt, site_id, content_hash, change_note, variants, submitted_at) VALUES ($1,1,$2,$3,$4,$5,$6,$7,$8, CASE WHEN $9 THEN now() END) RETURNING id`,
-          [p.id, title, body, excerpt, siteId, hash, `Automatisch aus der Automation „${ctx.run.automation_name}“`, JSON.stringify(variants), submit],
+          `INSERT INTO post_revisions (post_id, number, title, body, excerpt, site_id, content_hash, change_note, variants, submitted_at, social_targets, social_formats) VALUES ($1,1,$2,$3,$4,$5,$6,$7,$8, CASE WHEN $9 THEN now() END, $10, $11) RETURNING id`,
+          [p.id, title, body, excerpt, siteId, hash, `Automatisch aus der Automation „${ctx.run.automation_name}“`, JSON.stringify(variants), submit, socialTargets, JSON.stringify(socialFormats)],
           db,
         );
         if (direct) {

@@ -19,7 +19,7 @@ export interface ChannelText {
   /** Nur WordPress (#186): Kategorie-IDs der Website; leer = Standardkategorie der Bridge */
   categories?: number[];
 }
-export type Variants = Partial<Record<'wordpress' | 'facebook' | 'instagram', ChannelText>>;
+export type Variants = Partial<Record<'wordpress' | 'facebook' | 'instagram' | 'threads' | 'x' | 'whatsapp', ChannelText>>;
 
 /** Kategorie-IDs geordnet und ohne Doppelte – gleiche Auswahl ergibt dieselbe Prüfsumme. */
 export function wpCategoryList(v: unknown): number[] {
@@ -45,7 +45,7 @@ function cleanVariants(v: Variants | null | undefined): Variants {
  * Prüfsumme einer Fassung: Text, Medien (in Reihenfolge), Titelbild, Zielkanal, Texte je Kanal und Termin.
  * Ohne Kanaltexte und Termin bleibt das Format der ersten Version erhalten (bestehende Freigaben bleiben gültig).
  */
-export function revisionHash(r: { title: string; body: string; excerpt: string; media_ids: string[]; cover_id: string | null; site_id: string | null; variants?: Variants | null; publish_at?: string | Date | null; social_targets?: string[] | null }): string {
+export function revisionHash(r: { title: string; body: string; excerpt: string; media_ids: string[]; cover_id: string | null; site_id: string | null; variants?: Variants | null; publish_at?: string | Date | null; social_targets?: string[] | null; social_formats?: Record<string, string> | null }): string {
   const base: unknown[] = [r.title, r.body, r.excerpt, r.media_ids, r.cover_id ?? null, r.site_id ?? null];
   const v = cleanVariants(r.variants);
   const at = r.publish_at ? new Date(r.publish_at).toISOString() : null;
@@ -53,7 +53,17 @@ export function revisionHash(r: { title: string; body: string; excerpt: string; 
   if (Object.keys(v).length || at || social.length) base.push(v, at);
   // Soziale Zielkanäle sind Teil der Fassung (Änderung → neue Freigabe); ohne sie bleibt das alte Format
   if (social.length) base.push(social);
+  // Formate je Kanal (Story, #188) – nur wenn vom Standard „Beitrag“ abweichend, sonst bleibt das alte Format
+  const formats = cleanFormats(r.social_formats, r.social_targets ?? []);
+  if (Object.keys(formats).length) base.push(Object.fromEntries(Object.entries(formats).sort(([a], [b]) => a.localeCompare(b))));
   return crypto.createHash('sha256').update(JSON.stringify(base)).digest('hex');
+}
+
+/** Formate je Kanal: nur gewählte Kanäle und nur Abweichungen vom Standard „feed“. */
+export function cleanFormats(f: Record<string, string> | null | undefined, targets: string[]): Record<string, 'story' | 'both'> {
+  const out: Record<string, 'story' | 'both'> = {};
+  for (const [k, v] of Object.entries(f ?? {})) if (targets.includes(k) && (v === 'story' || v === 'both')) out[k] = v;
+  return out;
 }
 
 /** Text, der an einen Kanal geht: Kanaltext, sonst Grundtext. */
@@ -149,9 +159,14 @@ const revisionInput = z.object({
       wordpress: z.object({ title: z.string().max(200).optional(), body: z.string().max(50_000).optional(), excerpt: z.string().max(1_000).optional(), categories: z.array(z.number().int().positive()).max(20).optional() }).optional(),
       facebook: z.object({ body: z.string().max(60_000).optional() }).optional(),
       instagram: z.object({ body: z.string().max(2_200).optional() }).optional(),
+      threads: z.object({ body: z.string().max(2_000).optional() }).optional(),
+      x: z.object({ body: z.string().max(2_000).optional() }).optional(),
+      whatsapp: z.object({ body: z.string().max(60_000).optional() }).optional(),
     })
     .default({}),
   socialTargets: z.array(z.uuid()).max(10).default([]),
+  /** Format je Kanal (#188): feed (Standard), story oder both – Storys gibt es für Facebook und Instagram. */
+  socialFormats: z.record(z.uuid(), z.enum(['feed', 'story', 'both'])).default({}),
   publishAt: z.iso.datetime({ offset: true }).nullable().default(null),
   changeNote: z.string().trim().max(300).default(''),
 });
@@ -238,6 +253,7 @@ export async function postRoutes(app: FastifyInstance) {
         site_id: cur.site_id,
         variants: cur.variants ?? {},
         social_targets: cur.social_targets ?? [],
+        social_formats: cur.social_formats ?? {},
         publish_at: cur.publish_at,
         content_hash: cur.content_hash,
         submitted_at: cur.submitted_at,
@@ -269,7 +285,7 @@ export async function postRoutes(app: FastifyInstance) {
       })),
       collections,
       social: await many<any>(
-        `SELECT sp.id, sp.status, sp.remote_url, sp.remote_id, sp.error, sp.error_class, sp.attempts, sp.created_at, sp.published_at, sp.removal_status, sp.removal_error, sp.removed_at, CASE WHEN c.deleted_at IS NOT NULL THEN 'Verbindung gelöscht' ELSE c.name END AS connection_name, c.kind, r.number AS revision_number
+        `SELECT sp.id, sp.status, sp.format, sp.remote_url, sp.remote_id, sp.error, sp.error_class, sp.attempts, sp.created_at, sp.published_at, sp.shared_at, (SELECT name FROM users WHERE id = sp.shared_by) AS shared_by_name, sp.removal_status, sp.removal_error, sp.removed_at, CASE WHEN c.deleted_at IS NOT NULL THEN 'Verbindung gelöscht' ELSE c.name END AS connection_name, c.kind, r.number AS revision_number
            FROM social_publications sp JOIN connections c ON c.id = sp.connection_id JOIN post_revisions r ON r.id = sp.revision_id WHERE sp.post_id = $1 ORDER BY sp.created_at DESC`,
         [id],
       ),
@@ -289,8 +305,10 @@ export async function postRoutes(app: FastifyInstance) {
       if (!site || site.status === 'revoked') throw badRequest('Der gewählte Zielkanal ist nicht verfügbar.');
     }
     if (body.socialTargets.length) {
-      const ok = await many<any>(`SELECT id FROM connections WHERE id = ANY($1) AND kind IN ('facebook','instagram') AND status IN ('tested','active')`, [body.socialTargets]);
+      const ok = await many<any>(`SELECT id, kind FROM connections WHERE id = ANY($1) AND kind IN ('facebook','instagram','threads','x','whatsapp') AND status IN ('tested','active')`, [body.socialTargets]);
       if (ok.length !== new Set(body.socialTargets).size) throw badRequest('Mindestens ein gewählter sozialer Kanal ist nicht verfügbar.');
+      const noStory = ok.filter((c) => !['facebook', 'instagram'].includes(c.kind) && ['story', 'both'].includes(body.socialFormats[c.id]));
+      if (noStory.length) throw badRequest('Storys gibt es nur für Facebook-Seiten und Instagram-Konten.');
     }
     const result = await tx(async (db) => {
       const post = await one<any>('SELECT * FROM posts WHERE id = $1 FOR UPDATE', [id], db);
@@ -301,13 +319,14 @@ export async function postRoutes(app: FastifyInstance) {
       const cur = await one<any>('SELECT * FROM post_revisions WHERE post_id = $1 AND number = $2', [id, post.current_revision], db);
       const variants = cleanVariants(body.variants as Variants);
       const socialTargets = [...new Set(body.socialTargets)];
-      const next = { title: body.title, body: body.body, excerpt: body.excerpt, media_ids: body.mediaIds, cover_id: body.coverId, site_id: body.siteId, variants, publish_at: body.publishAt, social_targets: socialTargets };
+      const socialFormats = cleanFormats(body.socialFormats, socialTargets);
+      const next = { title: body.title, body: body.body, excerpt: body.excerpt, media_ids: body.mediaIds, cover_id: body.coverId, site_id: body.siteId, variants, publish_at: body.publishAt, social_targets: socialTargets, social_formats: socialFormats };
       const hash = revisionHash(next);
       if (hash === cur.content_hash) return { changed: false, number: cur.number };
       const number = cur.number + 1;
       await db.query(
-        `INSERT INTO post_revisions (post_id, number, title, body, excerpt, media_ids, cover_id, site_id, content_hash, change_note, created_by, variants, publish_at, social_targets) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
-        [id, number, body.title, body.body, body.excerpt, body.mediaIds, body.coverId, body.siteId, hash, body.changeNote, userId, JSON.stringify(variants), body.publishAt, socialTargets],
+        `INSERT INTO post_revisions (post_id, number, title, body, excerpt, media_ids, cover_id, site_id, content_hash, change_note, created_by, variants, publish_at, social_targets, social_formats) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
+        [id, number, body.title, body.body, body.excerpt, body.mediaIds, body.coverId, body.siteId, hash, body.changeNote, userId, JSON.stringify(variants), body.publishAt, socialTargets, JSON.stringify(socialFormats)],
       );
       await db.query('UPDATE posts SET current_revision = $2, title = $3, updated_at = now(), updated_by = $4 WHERE id = $1', [id, number, body.title, userId]);
       const hadApproval = await one(`SELECT 1 FROM approvals WHERE revision_id = $1 AND decision = 'approved' AND revoked_at IS NULL`, [cur.id], db);
@@ -428,7 +447,7 @@ export async function postRoutes(app: FastifyInstance) {
       await db.query('UPDATE approvals SET revoked_at = now(), revoked_by = $2 WHERE id = $1', [aid, req.auth!.user?.id ?? null]);
       // Noch nicht ausgeführte oder fehlgeschlagene Aufträge dieser Freigabe abbrechen (sonst später per Wiederholen veröffentlichbar)
       const c1 = await db.query(`UPDATE publications SET status = 'canceled', error = 'Freigabe widerrufen', result_at = now() WHERE approval_id = $1 AND action = 'publish' AND status IN ('queued','failed')`, [aid]);
-      const c2 = await db.query(`UPDATE social_publications SET status = 'canceled', error = 'Freigabe widerrufen', updated_at = now() WHERE approval_id = $1 AND status IN ('queued','failed')`, [aid]);
+      const c2 = await db.query(`UPDATE social_publications SET status = 'canceled', error = 'Freigabe widerrufen', updated_at = now() WHERE approval_id = $1 AND status IN ('queued','failed','ready')`, [aid]);
       await audit(req.auth!.actor, 'post.approval_revoked', { type: 'post', id, label: st.current.title }, { fassung: st.current.number, abgebrochen: (c1.rowCount ?? 0) + (c2.rowCount ?? 0) }, 'ok', db);
       return { canceled: (c1.rowCount ?? 0) + (c2.rowCount ?? 0) };
     });

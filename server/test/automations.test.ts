@@ -109,6 +109,8 @@ async function testAndActivate(id: string) {
 
 let siteId: string;
 let fe2Conn: any;
+let igConn: any;
+let waConn: any;
 let fe2Input: string;
 let postOutput: string;
 let autoFe2: string;
@@ -192,7 +194,11 @@ describe('Automationen: Einrichtung und Rechte', () => {
     fe2Input = i.json.id;
     expect((await admin.post('/automation-outputs', { name: 'Banner ohne Website', kind: 'banner', config: { siteIds: [], title: 'x' } })).status).toBe(400);
     expect((await admin.post('/automation-outputs', { name: 'Fremder Link', kind: 'notify', config: { roles: ['editor'], title: 'Hallo', link: 'https://example.org' } })).status).toBe(400);
-    const o = await admin.post('/automation-outputs', { name: 'Einsatzentwurf', kind: 'post', config: { kind: 'incident', title: 'Einsatz {{stichwort}} in {{ort}}', body: '{{stichwort_text}} – Alarm {{alarmzeit}}', submit: true } });
+    // Soziale Kanäle samt Story vorauswählen (#188, #189); Storys nur für Facebook/Instagram
+    igConn = await one<any>(`INSERT INTO connections (kind, name, status, config) VALUES ('instagram', 'Instagram', 'active', '{}') RETURNING *`);
+    waConn = await one<any>(`INSERT INTO connections (kind, name, status, config) VALUES ('whatsapp', 'WhatsApp-Kanal', 'active', '{}') RETURNING *`);
+    expect((await admin.post('/automation-outputs', { name: 'Story im Kanal', kind: 'post', config: { title: 'x', socialTargets: [{ connectionId: waConn.id, format: 'story' }] } })).status).toBe(400);
+    const o = await admin.post('/automation-outputs', { name: 'Einsatzentwurf', kind: 'post', config: { kind: 'incident', title: 'Einsatz {{stichwort}} in {{ort}}', body: '{{stichwort_text}} – Alarm {{alarmzeit}}', submit: true, socialTargets: [{ connectionId: igConn.id, format: 'story' }, { connectionId: waConn.id, format: 'feed' }] } });
     expect(o.status, JSON.stringify(o.json)).toBe(200);
     postOutput = o.json.id;
     const list = await editor.get('/automation-outputs');
@@ -270,6 +276,11 @@ describe('Automationen: Ereignisse', () => {
     const p = await one<any>(`SELECT p.id, p.kind, r.title, r.body, r.submitted_at FROM posts p JOIN post_revisions r ON r.post_id = p.id WHERE r.title = 'Einsatz B3 in Nord'`);
     expect(p).not.toBeNull();
     expect(p!.kind).toBe('incident');
+    const rv = await one<any>(`SELECT social_targets, social_formats FROM post_revisions WHERE post_id = $1`, [p!.id]);
+    expect(rv.social_targets.sort()).toEqual([igConn.id, waConn.id].sort());
+    expect(rv.social_formats).toEqual({ [igConn.id]: 'story' });
+    // Automationen posten nie selbst in sozialen Netzwerken
+    expect(await one(`SELECT 1 FROM social_publications WHERE post_id = $1`, [p!.id])).toBeNull();
     expect(p!.submitted_at).not.toBeNull();
     expect(await one(`SELECT 1 FROM approvals WHERE post_id = $1`, [p!.id])).toBeNull();
     expect(await one(`SELECT 1 FROM audit_events WHERE action = 'automation.post_created' AND object_id = $1`, [p!.id])).not.toBeNull();

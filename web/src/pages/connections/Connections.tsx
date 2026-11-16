@@ -13,8 +13,11 @@ export const CONN_STATE: Record<string, string> = { draft: 'Eingerichtet – Tes
 export const KINDS = [
   { id: 'fe2', label: 'FE2 – Einsatzentwürfe', icon: 'Siren', text: 'Eingehende Einsätze als interne Beitragsentwürfe. Die Alarmierung bleibt unabhängig.' },
   { id: 'feuersoftware', label: 'Feuersoftware Connect', icon: 'RadioTower', text: 'Einsätze aus Feuersoftware Connect regelmäßig abrufen und als interne Beitragsentwürfe anlegen – wie bei FE2.' },
-  { id: 'facebook', label: 'Facebook-Seite', icon: 'Share2', text: 'Freigegebene Beiträge auf einer Facebook-Seite veröffentlichen.' },
-  { id: 'instagram', label: 'Instagram-Konto', icon: 'Camera', text: 'Freigegebene Beiträge mit Bild oder Video auf einem professionellen Instagram-Konto.' },
+  { id: 'facebook', label: 'Facebook-Seite', icon: 'Share2', text: 'Freigegebene Beiträge und Storys auf einer Facebook-Seite veröffentlichen.' },
+  { id: 'instagram', label: 'Instagram-Konto', icon: 'Camera', text: 'Freigegebene Beiträge und Storys mit Bild oder Video auf einem professionellen Instagram-Konto.' },
+  { id: 'threads', label: 'Threads-Profil', icon: 'AtSign', text: 'Freigegebene Beiträge mit Text, Bild oder Link über die offizielle Threads-Schnittstelle.' },
+  { id: 'x', label: 'X-Konto', icon: 'MessagesSquare', text: 'Teilen von Hand mit vorbereitetem Text oder – mit eigenem, kostenpflichtigem API-Zugang – direkt posten.' },
+  { id: 'whatsapp', label: 'WhatsApp-Kanal', icon: 'MessageCircle', text: 'Teilen von Hand: Text, Link und Bilder vorbereitet, geteilt wird in WhatsApp.' },
   { id: 'warnfeed', label: 'Amtliche Warnungen', icon: 'AlertTriangle', text: 'Warnungen für das eigene Gebiet anzeigen – getrennt vom eigenen Warnentwurf.' },
 ] as const;
 
@@ -53,7 +56,7 @@ export default function Connections() {
       {configure && can('connection.delete') && <Switch checked={showDeleted} onChange={setShowDeleted} label="Gelöschte anzeigen" description="Auch widerrufene und gelöschte Verbindungen – zur Nachvollziehbarkeit, ohne Zugangsdaten." />}
       {q.isLoading && <SkeletonRows rows={4} />}
       {q.error && <ErrorBox title="Verbindungen konnten nicht geladen werden">{(q.error as Error).message}</ErrorBox>}
-      {q.data?.length === 0 && <EmptyState icon="Plug" title="Keine Verbindungen" text={configure ? 'Facebook, Instagram, FE2, Feuersoftware Connect oder amtliche Warnungen lassen sich hier anbinden.' : undefined} />}
+      {q.data?.length === 0 && <EmptyState icon="Plug" title="Keine Verbindungen" text={configure ? 'Facebook, Instagram, Threads, X, WhatsApp-Kanal, FE2, Feuersoftware Connect oder amtliche Warnungen lassen sich hier anbinden.' : undefined} />}
       <div className="grid gap-3 md:grid-cols-2">
         {(q.data ?? []).map((c) => {
           const body = (

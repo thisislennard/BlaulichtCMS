@@ -164,7 +164,7 @@ personenbezogene Daten der hochladenden Personen (Art. 5 Abs. 1 lit. c und e, Ar
 | `/u/<token>` | Upload-Link | Personen mit Link/QR-Code |
 | `/api/v1/public/upload/<token>…` | Upload-Link | Upload-Seite (jeder Dateiteil eine Anfrage) |
 | `/l/<token>` | alter Link aus dem Import (Weiterleitung) | Personen mit altem Link |
-| `/api/v1/m/<token>` | kurzlebige Medienadresse (höchstens 24 Stunden) | Meta beim Veröffentlichen auf Facebook/Instagram |
+| `/api/v1/m/<token>` | kurzlebige Medienadresse (höchstens 24 Stunden) | Meta beim Veröffentlichen auf Facebook/Instagram/Threads; Personen beim Teilen von Hand (Dateien herunterladen) |
 | `/einladung/<token>`, `/api/v1/auth/invite/<token>` | Einladung bzw. Passwort-Link | neue Konten, Passwort zurücksetzen |
 | `/api/v1/inbound/fe2/<id>/<token>` | FE2-Schlüssel – nur mit der Option „Schlüssel in der Adresse“; gilt bis zur Erneuerung | FE2 bei jedem Einsatz |
 

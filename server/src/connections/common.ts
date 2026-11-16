@@ -7,7 +7,7 @@ import { notFound } from '../lib/errors.js';
  * Gemeinsamer Rahmen der optionalen Verbindungen: Verbinden → Testen → Vorschau → Aktivieren.
  * Geheimnisse liegen verschlüsselt in `secrets` (Schlüssel unter /data); die API gibt sie nie zurück.
  */
-export type ConnectionKind = 'fe2' | 'facebook' | 'instagram' | 'warnfeed' | 'feuersoftware';
+export type ConnectionKind = 'fe2' | 'facebook' | 'instagram' | 'warnfeed' | 'feuersoftware' | 'threads' | 'x' | 'whatsapp';
 
 export interface Connection {
   id: string;
@@ -47,6 +47,9 @@ export const KIND_LABEL: Record<ConnectionKind, string> = {
   instagram: 'Instagram-Konto',
   warnfeed: 'Amtliche Warnungen',
   feuersoftware: 'Feuersoftware Connect (Einsatzentwürfe)',
+  threads: 'Threads-Profil',
+  x: 'X-Konto',
+  whatsapp: 'WhatsApp-Kanal (Teilen von Hand)',
 };
 
 /** Verbindung laden; gelöschte nur mit `includeDeleted` (Ansicht), sonst wie nicht vorhanden. */

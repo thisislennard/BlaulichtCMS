@@ -27,6 +27,7 @@ export interface Catalog {
   feeds: { id: string; title: string }[];
   collections: { id: string; title: string }[];
   sites: { id: string; name: string; status: string; categories?: { id: number; name: string; parent?: number }[] }[];
+  socialChannels?: { id: string; kind: string; name: string; status: string; manual: boolean }[];
   responsibilities: { id: string; name: string; area: string }[];
   warningFields: { key: string; label: string; required: boolean }[];
   users: { id: string; name: string }[];

@@ -11,7 +11,7 @@ import { Dialog, UnsavedChangesGuard, useErrorToast, useToast } from '../../comp
 import { useAuth } from '../../lib/auth';
 import { fmtDateTime, fmtRelative, fromLocalInput, toLocalInput } from '../../lib/format';
 import { KIND_LABEL } from './Posts';
-import { SocialStatusCard, SocialTargetsCard } from './SocialPanel';
+import { cleanFormats, SocialStatusCard, SocialTargetsCard } from './SocialPanel';
 import { safeHref } from '../../lib/url';
 import { PrivacyChecklistHint, SENSITIVE_LABELS } from '../media/PrivacyDialog';
 import { WpCategoryPicker } from '../channels/WpCategories';
@@ -19,7 +19,7 @@ import { WpCategoryPicker } from '../channels/WpCategories';
 interface PostDetail {
   post: { id: string; kind: string; created_at: string; created_by_name: string | null; archived: boolean; current_revision: number };
   state: string;
-  revision: { id: string; number: number; title: string; body: string; excerpt: string; media_ids: string[]; cover_id: string | null; site_id: string | null; variants: any; social_targets: string[]; publish_at: string | null; content_hash: string; submitted_at: string | null; created_at: string };
+  revision: { id: string; number: number; title: string; body: string; excerpt: string; media_ids: string[]; cover_id: string | null; site_id: string | null; variants: any; social_targets: string[]; social_formats?: Record<string, string>; publish_at: string | null; content_hash: string; submitted_at: string | null; created_at: string };
   media: MediaItem[];
   /** inzwischen gelöschte Dateien der Fassung (#167) */
   missing_media?: number;
@@ -41,8 +41,12 @@ interface Draft {
   wp: { title: string; body: string; excerpt: string; categories: number[] };
   publishAt: string; // datetime-local, leer = sofort
   social: string[];
+  formats: Record<string, string>;
   fb: string;
   ig: string;
+  th: string;
+  xt: string;
+  wa: string;
 }
 
 const emptyWp = { title: '', body: '', excerpt: '', categories: [] as number[] };
@@ -166,7 +170,7 @@ function PostEditorInner({ id }: { id: string }) {
 
   const d = q.data;
   type Rev = NonNullable<typeof d>['revision'];
-  const fromRev = (r: Rev): Draft => ({ title: r.title, body: r.body, excerpt: r.excerpt, mediaIds: r.media_ids, coverId: r.cover_id, siteId: r.site_id, wp: wpOf(r.variants), publishAt: toLocalInput(r.publish_at), social: r.social_targets ?? [], fb: r.variants?.facebook?.body ?? '', ig: r.variants?.instagram?.body ?? '' });
+  const fromRev = (r: Rev): Draft => ({ title: r.title, body: r.body, excerpt: r.excerpt, mediaIds: r.media_ids, coverId: r.cover_id, siteId: r.site_id, wp: wpOf(r.variants), publishAt: toLocalInput(r.publish_at), social: r.social_targets ?? [], formats: r.social_formats ?? {}, fb: r.variants?.facebook?.body ?? '', ig: r.variants?.instagram?.body ?? '', th: r.variants?.threads?.body ?? '', xt: r.variants?.x?.body ?? '', wa: r.variants?.whatsapp?.body ?? '' });
   const differs = (dr: Draft, r: Rev) =>
     dr.title !== r.title ||
     dr.body !== r.body ||
@@ -177,8 +181,12 @@ function PostEditorInner({ id }: { id: string }) {
     JSON.stringify(dr.siteId ? { ...dr.wp, categories: sortCats(dr.wp.categories) } : NO_WP) !== JSON.stringify(r.site_id ? wpOf(r.variants) : NO_WP) ||
     dr.publishAt !== toLocalInput(r.publish_at) ||
     JSON.stringify([...dr.social].sort()) !== JSON.stringify([...(r.social_targets ?? [])].sort()) ||
+    JSON.stringify(cleanFormats(dr.formats, dr.social)) !== JSON.stringify(cleanFormats(r.social_formats, r.social_targets ?? [])) ||
     dr.fb !== (r.variants?.facebook?.body ?? '') ||
-    dr.ig !== (r.variants?.instagram?.body ?? '');
+    dr.ig !== (r.variants?.instagram?.body ?? '') ||
+    dr.th !== (r.variants?.threads?.body ?? '') ||
+    dr.xt !== (r.variants?.x?.body ?? '') ||
+    dr.wa !== (r.variants?.whatsapp?.body ?? '');
   // Fassung, auf der der Entwurf beruht. Speichert jemand anderes eine neue Fassung, werden ungespeicherte
   // Änderungen nicht überschrieben (#59) – stattdessen Hinweis; Speichern führt dann zum 409-Konflikt.
   const [base, setBase] = useState<Rev | null>(null);
@@ -208,12 +216,13 @@ function PostEditorInner({ id }: { id: string }) {
   const save = async () => {
     setSaving(true);
     try {
-      const { wp, publishAt, social, fb, ig, ...rest } = draft;
+      const { wp, publishAt, social, formats, fb, ig, th, xt, wa, ...rest } = draft;
       const res = await put<any>(`/posts/${id}/revision`, {
         baseRevision: (base ?? r).number,
         ...rest,
-        variants: { ...(rest.siteId ? { wordpress: wp } : {}), ...(fb.trim() ? { facebook: { body: fb } } : {}), ...(ig.trim() ? { instagram: { body: ig } } : {}) },
+        variants: { ...(rest.siteId ? { wordpress: wp } : {}), ...(fb.trim() ? { facebook: { body: fb } } : {}), ...(ig.trim() ? { instagram: { body: ig } } : {}), ...(th.trim() ? { threads: { body: th } } : {}), ...(xt.trim() ? { x: { body: xt } } : {}), ...(wa.trim() ? { whatsapp: { body: wa } } : {}) },
         socialTargets: social,
+        socialFormats: cleanFormats(formats, social),
         publishAt: publishAt ? fromLocalInput(publishAt) : null,
       });
       if (res.changed) toast({ tone: 'success', title: `Fassung ${res.number} gespeichert`, text: res.approvalInvalidated ? 'Die bisherige Freigabe gilt nicht für die neue Fassung.' : undefined });
@@ -442,7 +451,7 @@ function PostEditorInner({ id }: { id: string }) {
             )}
           </Card>
 
-          <SocialTargetsCard draft={{ social: draft.social, fb: draft.fb, ig: draft.ig }} editable={editable} onChange={(x) => setDraft({ ...draft, ...x })} />
+          <SocialTargetsCard draft={{ social: draft.social, formats: draft.formats, fb: draft.fb, ig: draft.ig, th: draft.th, xt: draft.xt, wa: draft.wa }} editable={editable} onChange={(x) => setDraft({ ...draft, ...x })} />
 
           <Card title="Vorschau" subtitle={draft.siteId ? 'So erscheint der Beitrag auf der Website (Darstellung abhängig vom Theme).' : 'Interne Ansicht'}>
             <article className="flex flex-col gap-3 max-w-[680px]">

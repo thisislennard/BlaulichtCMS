@@ -1614,3 +1614,53 @@ describe('Zugangsdaten nie im Klartext (#190)', () => {
     expect(lines[0]).toContain('sichtbar');
   });
 });
+
+describe('Soziale Kanäle: OAuth 1.0a, Zeichenzählung, Texte (#188, #189)', async () => {
+  const { oauth1Sign, oauth1Header, pct } = await import('../src/connections/x.js');
+  const ch = await import('../src/connections/channels.js');
+  it('OAuth-1.0a-Signatur stimmt mit dem bekannten Testvektor der X-Dokumentation überein', () => {
+    // „Creating a signature“ (developer.x.com, früher developer.twitter.com): bekannte Eingaben und Ergebnis
+    const creds = { consumerKey: 'xvz1evFS4wEEPTGEFPHBog', consumerSecret: 'kAcSOqF21Fu85e7zjz7ZN2U4ZRhfV3WpwPAoE3Z7kBw', token: '370773112-GmHxMAgYyLbNEtIKZeRNFsMKPR9EyMZeS9weJAEb', tokenSecret: 'LswwdoUaIvS8ltyTt5jkRh4J50vUPVVHtR2YPi5kE' };
+    const opts = { nonce: 'kYjzVBB8Y0ZFabxSWbWovY3uYSQ2pTgmZeNu2VS4cg', timestamp: 1318622958 };
+    const r = oauth1Sign('POST', 'https://api.twitter.com/1.1/statuses/update.json?include_entities=true', creds, { status: 'Hello Ladies + Gentlemen, a signed OAuth request!' }, opts);
+    expect(r.signature).toBe('hCtSmYh+iHYCEqBWrE7C7hYmtUk=');
+    expect(r.base).toContain('POST&https%3A%2F%2Fapi.twitter.com%2F1.1%2Fstatuses%2Fupdate.json&include_entities%3Dtrue%26oauth_consumer_key');
+    const h = oauth1Header('POST', 'https://api.twitter.com/1.1/statuses/update.json?include_entities=true', creds, { status: 'Hello Ladies + Gentlemen, a signed OAuth request!' }, opts);
+    expect(h).toContain('oauth_signature="hCtSmYh%2BiHYCEqBWrE7C7hYmtUk%3D"');
+    expect(h.startsWith('OAuth oauth_consumer_key="xvz1evFS4wEEPTGEFPHBog"')).toBe(true);
+    expect(pct("a b!*'()")).toBe('a%20b%21%2A%27%28%29');
+  });
+  it('X: Adressen zählen 23, Emojis 2, Kürzen hält den Link vollständig', () => {
+    expect(ch.xLength('Hallo')).toBe(5);
+    expect(ch.xLength('Mehr: https://example.org/eine/sehr/lange/adresse/zum/beitrag')).toBe(6 + 23);
+    expect(ch.xLength('🚒')).toBe(2);
+    expect(ch.xLength('日本')).toBe(4);
+    const long = 'Wort '.repeat(100);
+    const t = ch.socialText({ title: 'Titel', body: long }, 'x', 'https://example.org/beitrag');
+    expect(ch.xLength(t)).toBeLessThanOrEqual(280);
+    expect(t.endsWith('\n\nhttps://example.org/beitrag')).toBe(true);
+    expect(t).toContain('…');
+    // Kurz bleibt unverändert; ein schon enthaltener Link wird nicht doppelt angehängt
+    expect(ch.socialText({ title: 'T', body: 'Text https://example.org/beitrag', variants: { x: { body: 'Kurz https://example.org/beitrag' } } }, 'x', 'https://example.org/beitrag')).toBe('Kurz https://example.org/beitrag');
+  });
+  it('Threads: höchstens 500 Zeichen (Emojis nach UTF-8-Bytes), WhatsApp mit fettem Titel', () => {
+    expect(ch.threadsLength('🚒a')).toBe(5);
+    const t = ch.socialText({ title: 'T', body: 'x'.repeat(800) }, 'threads', null);
+    expect(ch.threadsLength(t)).toBe(500);
+    expect(ch.socialText({ title: 'Brand *Nord*', body: 'Text', excerpt: '' }, 'whatsapp', 'https://example.org/b')).toBe('*Brand Nord*\n\nText\n\nhttps://example.org/b');
+    // Facebook und Instagram wie bisher
+    expect(ch.socialText({ title: 'T', body: 'B', excerpt: 'K' }, 'facebook')).toBe('T\n\nK');
+  });
+  it('Formate, Teilen von Hand, Wiedererkennung', () => {
+    expect(ch.formatsFor('instagram', 'both')).toEqual(['feed', 'story']);
+    expect(ch.formatsFor('facebook', 'story')).toEqual(['story']);
+    expect(ch.formatsFor('x', 'story')).toEqual(['feed']);
+    expect(ch.isManualChannel({ kind: 'x', config: {} })).toBe(true);
+    expect(ch.isManualChannel({ kind: 'x', config: { mode: 'api' } })).toBe(false);
+    expect(ch.isManualChannel({ kind: 'whatsapp', config: {} })).toBe(true);
+    expect(ch.markerFor('Text https://example.org/a', 'x')).toBe(ch.markerFor('Text https://t.co/xyz', 'x'));
+    expect(ch.shareTarget({ kind: 'x', config: {} }, 'A & B').openUrl).toBe('https://x.com/intent/post?text=A%20%26%20B');
+    expect(ch.shareTarget({ kind: 'whatsapp', config: { channelUrl: 'https://whatsapp.com/channel/0029Va' } }, 'x').openUrl).toBe('https://whatsapp.com/channel/0029Va');
+    expect(ch.shareTarget({ kind: 'whatsapp', config: { channelUrl: 'javascript:alert(1)' } }, 'x').openUrl).toBe('https://web.whatsapp.com/');
+  });
+});

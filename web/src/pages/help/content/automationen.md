@@ -28,12 +28,14 @@ Immer verfügbar: `automation`, `lauf`, `jetzt`. Bei FE2 und Feuersoftware gibt 
 | Ausgang | Wirkung | Direktversand möglich |
 |---|---|---|
 | Banner | Banner-Entwurf je gewählter Website, wahlweise zur Freigabe eingereicht. Stil (Schweregrad) fest oder **nach Warnstufe** (1 Hinweis, 2 Warnung, ab 3 Gefahr), Priorität, **Darstellung** (nach Schweregrad wie auf der Website eingestellt, nur Banner, nur Popup oder beides), Dauer oder Ablauf aus `gueltig_bis`, Link nur https | ja |
-| Beitrag | Beitragsentwurf (Art, Titel, Text, Kurzfassung, Texte je Kanal, optional Zielkanal und **WordPress-Kategorie**), wahlweise eingereicht | ja (braucht Zielkanal) |
+| Beitrag | Beitragsentwurf (Art, Titel, Text, Kurzfassung, Texte je Kanal, optional Zielkanal, **WordPress-Kategorie** und vorausgewählte soziale Kanäle samt Format), wahlweise eingereicht | ja (braucht Zielkanal; gilt nur für die Website) |
 | E-Mail | über den eingerichteten Mailserver an **Rollen** (Konten) und/oder **Zuständigkeiten** (externe Adressen) | ja (für Zuständigkeiten) |
 | App-Benachrichtigung | an Rollen oder einzelne Personen, optional mit Link in BlaulichtCMS | – (immer sofort) |
 | Warnentwurf vorbereiten | Warnentwurf mit vorausgefüllten Feldern; Warnstufe, Freigabe und Versand bleiben bei Menschen | nein |
 
 **E-Mails:** An Konten geht die E-Mail sofort (wie eine Benachrichtigung). An Zuständigkeiten nur nach einer Freigabe auf der Seite [Freigaben](/freigaben) oder mit Direktversand. Ist der **Testmodus** des Mailversands an (Warnentwurf → Pflege), geht alles für Zuständigkeiten nur an das Testpostfach. Freie Adressen gibt es nicht. Alle Empfänger stehen in Blindkopie.
+
+**Soziale Kanäle:** Ein Beitragsausgang kann Facebook, Instagram, Threads, X und den WhatsApp-Kanal **vorauswählen** – bei Facebook und Instagram auch als **Story** oder **Beitrag und Story**. Der Entwurf trägt diese Auswahl dann schon; veröffentlicht wird erst, wenn eine Person den Beitrag freigegeben und **Auf sozialen Kanälen veröffentlichen** gewählt hat. Kanäle ohne Schnittstelle (WhatsApp-Kanal, X im Modus „Teilen von Hand“) erscheinen danach als **Zum Teilen bereit** samt Benachrichtigung an alle, die in sozialen Kanälen veröffentlichen dürfen ([Teilen von Hand](/hilfe/verbindungen#teilen-von-hand)). Storys brauchen ein Bild oder Video – das ergänzt die Redaktion im Entwurf.
 
 **Webhooks** (Aufrufe fremder Adressen) gibt es bewusst nicht: Sie würden Daten an beliebige Ziele schicken können. Verbindungen nach außen laufen weiter nur über die geprüften [Verbindungen](/hilfe/verbindungen).
 
@@ -85,7 +87,7 @@ Voraussetzungen und Schutz:
 - Wirksam erst mit einer neu aktivierten Version; die Kennzeichnung **Direktversand** steht in der Liste und im Editor, markierte Knoten tragen **Direkt**.
 - Audit-Einträge und eine **Sicherheitsmeldung** an die Administration bei jeder Änderung.
 - **Entziehen** (auch ohne das Sonderrecht) oder Deaktivieren wirkt sofort – auch für Läufe, die gerade warten.
-- Warnentwürfe werden nie automatisch versendet; soziale Netzwerke bedient keine Automation.
+- Warnentwürfe werden nie automatisch versendet; soziale Netzwerke bedient keine Automation selbst (siehe unten).
 
 Die automatischen Banner amtlicher Warnungen unter [Verbindungen](/hilfe/verbindungen#automatische-banner-und-pruefliste) funktionieren unabhängig davon wie bisher.
 

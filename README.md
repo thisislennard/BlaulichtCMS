@@ -48,7 +48,7 @@ flowchart LR
     B -->|einreichen| F{"Freigabe<br/>genau dieser Fassung"}
     F -->|freigegeben| V["Veröffentlichung"]
     V -->|Bridge holt ab| W["🌐 WordPress"]
-    V --> M["Facebook / Instagram"]
+    V --> M["Facebook / Instagram / Threads / X"]
     W -->|ID + URL| L["✅ bestätigte URL<br/>in BlaulichtCMS"]
 ```
 
@@ -103,7 +103,7 @@ flowchart LR
 - **Beitragsarten:** Nachricht, Einsatzbericht, Veranstaltung, Lage-Info – mit Vorlagen für wiederkehrende Texte.
 - **Fassungen:** Jede Änderung an Text, Medien oder Zielkanal erzeugt eine neue Fassung; Unterschiede sind
   nachvollziehbar.
-- **Texte je Kanal:** eigener Text für Website, Facebook und Instagram, Vorschau je Kanal, geplanter
+- **Texte je Kanal:** eigener Text für Website, Facebook, Instagram, Threads, X und WhatsApp-Kanal, Vorschau je Kanal, geplanter
   Veröffentlichungstermin.
 - **Quellen:** RSS- und Atom-Feeds als Anregung für eigene Beiträge.
 
@@ -125,8 +125,13 @@ flowchart LR
   bzw. Shortcode; abgelaufene Banner verschwinden auch aus zwischengespeicherten Seiten. Farbe und Darstellung je
   Schweregrad (Banner, barrierearmes Popup beim Aufruf der Seite oder beides) stellt die Website ein.
 - **Einsatzübersicht** auf der Website per Shortcode bzw. Block.
-- **Facebook und Instagram:** Veröffentlichung je Kanal mit eigenem Status; Facebook-Beiträge lassen sich wieder
-  löschen, für Instagram gibt es einen geführten Weg.
+- **Facebook und Instagram:** Veröffentlichung je Kanal mit eigenem Status, wahlweise als Beitrag, **Story** oder
+  beides (Bilder automatisch auf 9:16); Facebook-Beiträge lassen sich wieder löschen, für Instagram gibt es einen
+  geführten Weg.
+- **Threads und X:** Threads über die offizielle Threads-API; X wahlweise über die eigene (kostenpflichtige) X-API
+  oder **Teilen von Hand** mit vorbereitetem Text (280 Zeichen) und Beitragsfenster von x.com.
+- **WhatsApp-Kanal:** Teilen von Hand – WhatsApp hat für Kanäle keine Schnittstelle. Text mit WhatsApp-Formatierung,
+  Link und Bilder sind vorbereitet; geteilte Beiträge werden als geteilt markiert.
 - **Zurückziehen:** Beitrag von der Website nehmen – inklusive der übernommenen Bilder in der Mediathek.
 
 ### Warnentwurf und amtliche Warnungen

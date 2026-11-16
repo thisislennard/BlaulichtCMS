@@ -314,6 +314,97 @@ export default function ConnectionDetail() {
                 </>
               )}
 
+              {c.kind === 'threads' && (
+                <>
+                  <Notice>
+                    Benötigt eine Meta-App mit dem Anwendungsfall <strong>Access the Threads API</strong> und den Rechten threads_basic und threads_content_publish. Schritt für Schritt: <Link to="/hilfe/verbindungen#threads">Threads verbinden</Link>.
+                  </Notice>
+                  <FieldWrap label="Weiterleitungsadresse (in der Meta-App eintragen)" labelAction={
+                    <HelpTip title="Weiterleitungsadresse für Threads" more="/hilfe/verbindungen#threads">
+                      <p className="m-0">Diese Adresse muss in der Meta-App <strong>exakt</strong> so eingetragen sein: App-Dashboard → <strong>Anwendungsfälle</strong> → „Access the Threads API“ → <strong>Anpassen</strong> → <strong>Einstellungen</strong> → Weiterleitungs-URIs (Redirect Callback URLs) (<HelpLink href="https://developers.facebook.com/docs/development/create-an-app/threads-use-case">Meta-Doku</HelpLink>).</p>
+                      <p className="m-0 text-fg-muted">Voraussetzung: BlaulichtCMS ist unter seiner öffentlichen HTTPS-Adresse erreichbar.</p>
+                    </HelpTip>
+                  }>
+                    <div className="flex gap-2 items-center"><code className="break-all text-meta">{c.oauth_redirect}</code><CopyButton value={c.oauth_redirect} size="sm" /></div>
+                  </FieldWrap>
+                  <FieldWrap label="Threads-App-ID" htmlFor="th-appid" labelAction={
+                    <HelpTip title="Threads-App-ID finden" more="/hilfe/verbindungen#threads">
+                      <p className="m-0">Eine Meta-App mit Threads-Anwendungsfall hat eine <strong>eigene Threads-App-ID</strong> und ein eigenes Threads-App-Geheimnis. Beide stehen im Anwendungsfall „Access the Threads API“ unter <strong>Einstellungen</strong> – nicht die App-ID oben im Dashboard verwenden (<HelpLink href="https://developers.facebook.com/docs/development/create-an-app/threads-use-case">Meta-Doku</HelpLink>).</p>
+                    </HelpTip>
+                  }><Input id="th-appid" mono value={cfg.appId ?? ''} onChange={(e) => setCfg({ ...cfg, appId: e.target.value })} /></FieldWrap>
+                  <FieldWrap label={c.secrets_set.includes('appSecret') ? 'Threads-App-Geheimnis (gespeichert – nur zum Ersetzen)' : 'Threads-App-Geheimnis'} htmlFor="th-sec" labelAction={
+                    <HelpTip title="Threads-App-Geheimnis" more="/hilfe/verbindungen#threads">
+                      <p className="m-0">Steht neben der Threads-App-ID. BlaulichtCMS speichert es verschlüsselt und zeigt es nie wieder an. Ein neues Geheimnis verlangt einen neuen Test.</p>
+                    </HelpTip>
+                  }>
+                    <Input id="th-sec" type="password" autoComplete="off" value={secret.appSecret ?? ''} onChange={(e) => setSecret({ ...secret, appSecret: e.target.value })} />
+                  </FieldWrap>
+                  <div className="flex flex-wrap gap-2">
+                    <Button disabled={!secret.appSecret} onClick={saveSecrets}>Geheimnis speichern</Button>
+                    <Button variant="primary" icon="ExternalLink" disabled={!cfg.appId || !c.secrets_set.includes('appSecret')} onClick={async () => { if (!(await confirmRetest('Erneut mit Threads verbinden?'))) return; if ((await saveConfig()) === null) return; const r: any = await act(() => post(`/connections/${id}/oauth/start`)); if (r?.url) window.location.href = r.url; }}>
+                      Mit Threads verbinden
+                    </Button>
+                  </div>
+                  {c.config.tokenExpiresAt && <p className="m-0 text-meta text-fg-muted">Anmeldung gültig bis {fmtDateTime(c.config.tokenExpiresAt)} – BlaulichtCMS verlängert sie rechtzeitig selbst.</p>}
+                  {c.secrets_set.length > 0 && <p className="m-0 text-meta text-fg-muted">Gespeichert (verschlüsselt): {c.secrets_set.join(', ')}</p>}
+                </>
+              )}
+
+              {c.kind === 'x' && (
+                <>
+                  <div className="flex items-start gap-1">
+                    <Switch checked={cfg.mode === 'api'} onChange={(v) => setCfg({ ...cfg, mode: v ? 'api' : 'manual' })} label="Über die X-API posten" description="Aus: Teilen von Hand – BlaulichtCMS bereitet Text und Link vor, gepostet wird auf x.com. An: BlaulichtCMS postet selbst mit eigenen Zugangsdaten." />
+                    <HelpTip title="Zwei Wege zu X" more="/hilfe/verbindungen#x">
+                      <p className="m-0"><strong>Teilen von Hand</strong> braucht keine Zugangsdaten und kostet nichts: BlaulichtCMS kürzt den Text auf 280 Zeichen (nach den Zählregeln von X), hängt den Link an und öffnet das Beitragsfenster von x.com mit eingetragenem Text. Danach den Beitrag in BlaulichtCMS als geteilt markieren.</p>
+                      <p className="m-0"><strong>Über die X-API</strong> postet BlaulichtCMS selbst. Dafür ist eine eigene App in der Developer Console von X nötig; das Posten über die X-API ist <strong>kostenpflichtig</strong> (<HelpLink href="https://docs.x.com/x-api/getting-started/pricing">Preise bei X</HelpLink>).</p>
+                    </HelpTip>
+                  </div>
+                  {cfg.mode === 'api' ? (
+                    <>
+                      <Notice tone="warning" title="Kostenpflichtig">
+                        Posten über die X-API kostet Geld: X rechnet nutzungsabhängig über Guthaben in der Developer Console ab; ohne Guthaben lehnt X jeden Beitrag ab. Aktuelle Bedingungen nennt X auf der <a href="https://docs.x.com/x-api/getting-started/pricing" target="_blank" rel="noopener noreferrer">Preisseite der X-API</a>.
+                      </Notice>
+                      <div className="grid sm:grid-cols-2 gap-3">
+                        {([
+                          ['apiKey', 'API Key (Consumer Key)'],
+                          ['apiSecret', 'API Key Secret (Consumer Secret)'],
+                          ['accessToken', 'Access Token'],
+                          ['accessTokenSecret', 'Access Token Secret'],
+                        ] as const).map(([k, label]) => (
+                          <FieldWrap key={k} label={c.secrets_set.includes(k) ? `${label} (gespeichert)` : label} htmlFor={`x-${k}`} labelAction={
+                            <HelpTip title={label} more="/hilfe/verbindungen#x">
+                              <p className="m-0">In der Developer Console von X die eigene App öffnen → <strong>Keys and tokens</strong>. Dort stehen API Key und API Key Secret; Access Token und Access Token Secret für das <strong>eigene Konto</strong> lassen sich dort erzeugen (<HelpLink href="https://docs.x.com/fundamentals/developer-apps">X-Doku</HelpLink>).</p>
+                              <p className="m-0">Vorher unter <strong>User authentication settings</strong> die Berechtigung <strong>Read and write</strong> setzen – nach einer Änderung Access Token und Secret neu erzeugen.</p>
+                            </HelpTip>
+                          }>
+                            <Input id={`x-${k}`} type="password" autoComplete="off" value={secret[k] ?? ''} onChange={(e) => setSecret({ ...secret, [k]: e.target.value })} />
+                          </FieldWrap>
+                        ))}
+                      </div>
+                      <div><Button disabled={!hasSecret} onClick={async () => { if ((await saveConfig()) === null) return; await saveSecrets(); }}>Zugangsdaten speichern</Button></div>
+                      {c.secrets_set.length > 0 && <p className="m-0 text-meta text-fg-muted">Gespeichert (verschlüsselt): {c.secrets_set.join(', ')}</p>}
+                    </>
+                  ) : (
+                    <Notice>Teilen von Hand: Nach der Freigabe erscheint X im Beitrag als „Zum Teilen bereit“ – mit vorbereitetem Text, Kopierknopf und einem Knopf, der das Beitragsfenster von x.com mit eingetragenem Text öffnet. Danach den Beitrag als geteilt markieren.</Notice>
+                  )}
+                </>
+              )}
+
+              {c.kind === 'whatsapp' && (
+                <>
+                  <Notice title="Warum nur von Hand?">
+                    WhatsApp bietet keine Schnittstelle, um in einen WhatsApp-Kanal zu posten – die WhatsApp Business Platform ist für Nachrichten an einzelne Personen gedacht, nicht für Kanäle. BlaulichtCMS bereitet deshalb Text (mit WhatsApp-Formatierung), Link und Bilder vor; gepostet wird in der WhatsApp-App oder in WhatsApp Web. Mehr: <Link to="/hilfe/verbindungen#whatsapp-kanal">WhatsApp-Kanal</Link>.
+                  </Notice>
+                  <FieldWrap label="Adresse des eigenen Kanals (optional)" htmlFor="wa-url" help="Zum schnellen Öffnen beim Teilen, z. B. https://whatsapp.com/channel/…" labelAction={
+                    <HelpTip title="Kanaladresse finden" more="/hilfe/verbindungen#whatsapp-kanal">
+                      <p className="m-0">In WhatsApp unter <strong>Aktuelles</strong> den eigenen Kanal öffnen → Kanalname antippen → <strong>Link kopieren</strong> (je nach App-Version „Kanal-Link“). Ohne Adresse öffnet BlaulichtCMS WhatsApp Web.</p>
+                    </HelpTip>
+                  }>
+                    <Input id="wa-url" type="url" value={cfg.channelUrl ?? ''} onChange={(e) => setCfg({ ...cfg, channelUrl: e.target.value })} />
+                  </FieldWrap>
+                </>
+              )}
+
               {c.kind === 'feuersoftware' && (
                 <>
                   <FieldWrap label={c.secrets_set.includes('apiKey') ? 'API-Key (gespeichert – nur zum Ersetzen)' : 'API-Key'} htmlFor="fs-key" labelAction={
@@ -463,13 +554,13 @@ export default function ConnectionDetail() {
             {Object.keys(c.capabilities ?? {}).length ? (
               <div className="flex flex-wrap gap-2">
                 {Object.entries(c.capabilities).map(([k, v]) => (
-                  <Badge key={k} tone={v ? 'success' : 'neutral'}>{({ text: 'Text', photos: 'Fotos', video: 'Video', image: 'Bild', carousel: 'Karussell', reels: 'Reels', text_only: 'Nur Text', drafts: 'Entwürfe', read: 'Abruf', autoBanner: 'Automatische Banner' } as any)[k] ?? k}: {v ? 'ja' : 'nein'}</Badge>
+                  <Badge key={k} tone={v ? 'success' : 'neutral'}>{({ text: 'Text', photos: 'Fotos', video: 'Video', image: 'Bild', carousel: 'Karussell', reels: 'Reels', stories: 'Storys', link: 'Link', manual: 'Teilen von Hand', text_only: 'Nur Text', drafts: 'Entwürfe', read: 'Abruf', autoBanner: 'Automatische Banner' } as any)[k] ?? k}: {v ? 'ja' : 'nein'}</Badge>
                 ))}
               </div>
             ) : (
               <p className="m-0 text-sm text-fg-muted">Nach einem Test sichtbar.</p>
             )}
-            {Object.keys(c.account ?? {}).length > 0 && <KeyValue className="mt-3" items={Object.entries(c.account).filter(([, v]) => typeof v !== 'object').map(([k, v]) => [({ id: 'ID', name: 'Name', username: 'Benutzername', type: 'Kontoart', link: 'Link' } as any)[k] ?? k, String(v)])} />}
+            {Object.keys(c.account ?? {}).length > 0 && <KeyValue className="mt-3" items={Object.entries(c.account).filter(([, v]) => typeof v !== 'object').map(([k, v]) => [({ id: 'ID', name: 'Name', username: 'Benutzername', type: 'Kontoart', link: 'Link', mode: 'Betriebsart' } as any)[k] ?? k, String(v)])} />}
           </Card>
           {c.kind === 'fe2' && (
             <Card title="Letzte Testmeldung" subtitle="So würde der Entwurf aussehen. Verworfene Felder werden nicht gespeichert.">
@@ -508,7 +599,7 @@ export default function ConnectionDetail() {
               <ul className="m-0 pl-4 text-sm">{c.preview.warnings.map((w: any) => <li key={w.identifier}>{w.headline} <span className="text-fg-muted">({w.areas.join(', ')})</span></li>)}</ul>
             </Card>
           )}
-          {(c.kind === 'facebook' || c.kind === 'instagram') && (
+          {['facebook', 'instagram', 'threads', 'x', 'whatsapp'].includes(c.kind) && (
             <Notice>Die Vorschau je Beitrag (Text und Formatprüfung je Kanal) steht im Beitrag unter „Soziale Kanäle – Status“.</Notice>
           )}
         </div>

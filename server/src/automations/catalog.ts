@@ -153,7 +153,7 @@ export const OUTPUT_KINDS: Record<OutputKind, { label: string; description: stri
   },
   post: {
     label: 'Beitrag',
-    description: 'Beitragsentwurf aus einer Vorlage mit Texten je Kanal, optional zur Freigabe eingereicht.',
+    description: 'Beitragsentwurf aus einer Vorlage mit Texten je Kanal und vorausgewählten sozialen Kanälen (auch als Story oder zum Teilen von Hand), optional zur Freigabe eingereicht.',
     icon: 'FileText',
     directCapable: true,
     produces: [
