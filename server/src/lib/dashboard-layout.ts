@@ -76,7 +76,7 @@ export const DEFAULT_LAYOUT: DashboardLayout = {
   badges: ['badge_approvals', 'badge_unreviewed', 'badge_ready', 'badge_banners', 'badge_uploads', 'badge_connection_errors'],
   columns: [
     { weight: 5, widgets: ['media', 'publications', 'rss'] },
-    { weight: 3, widgets: ['approvals', 'uploads', 'banners', 'sites', 'insights'] },
+    { weight: 3, widgets: ['approvals', 'uploads', 'banners', 'sites'] },
   ],
   mobile: ['approvals', 'ready', 'uploads', 'publications', 'banners'],
 };
