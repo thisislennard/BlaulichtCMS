@@ -48,6 +48,10 @@ Eine **Bildvorlage** ist ein Layout mit festen und ausfüllbaren Teilen – z. B
 
 **Ausfüllen** („Bild erzeugen“ in der Vorlage oder **„Bild aus Vorlage“ im Beitragseditor** unter *Medien*): Texte eintragen, für Bild-Platzhalter ein geprüftes Bild aus den Medien wählen und den **Ausschnitt** mit Zoom und waagerechter/senkrechter Lage festlegen. Die Vorschau aktualisiert sich beim Tippen. Der **Alternativtext** wird aus den Texten vorgeschlagen und lässt sich ändern. „Bild erzeugen“ legt das Bild in voller Größe (PNG) als geprüfte, ausgewählte Datei ab – im Beitragseditor in der Sammlung des Beitrags (sonst in der Sammlung **„Bilder aus Vorlagen“**, die bei Bedarf entsteht) und übernimmt es gleich in den Beitrag. Für Bilder in Platzhaltern wird immer die öffentliche Fassung ohne Standortdaten und mit Unkenntlichmachungen verwendet.
 
+## In Workflows
+
+Der Workflow-Baustein **Bild aus Vorlage erzeugen** füllt eine Bildvorlage automatisch – z. B. ein Story-Bild für einen Termin oder ein Einsatzbild mit Stichwort und Ort – und gibt das Bild an einen Beitrag weiter (auch für Social und Story). Der Testlauf zeigt das Bild nur als Vorschau. Einzelheiten: [Workflows](/hilfe/workflows).
+
 ## Schriften
 
 Mitgeliefert sind freie Schriften unter der **SIL Open Font License**: Barlow, Barlow Condensed und Atkinson Hyperlegible (gut lesbar), jeweils normal und fett. Über „Schriften“ in der Bibliothek lädt die Verwaltung **eigene Schriften** (TrueType .ttf oder OpenType .otf, je Schnitt eine Datei) hoch – nur mit Angabe der **Lizenz** und der Bestätigung, dass die Schrift für Bilder der Organisation verwendet werden darf. Eine Schrift, die eine Bildvorlage verwendet, lässt sich nicht löschen.

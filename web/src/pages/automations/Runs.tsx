@@ -1,3 +1,4 @@
+import { Link } from 'react-router';
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { get, post } from '../../api/client';
@@ -73,6 +74,14 @@ export function RunView({ run }: { run: RunDetail }) {
             </div>
             {s.info && <p className="m-0 text-sm text-fg-muted">{s.info}</p>}
             {s.error && <p className="m-0 text-sm text-err">{s.error}</p>}
+            {run.mode === 'test' && s.output?.log?.vorschau && (
+              <img src={`/api/v1/automation-runs/${run.id}/image-preview/${encodeURIComponent(s.node_id)}`} alt={`Vorschau des Bildes: ${s.output.log.alternativtext ?? s.label}`} className="max-h-72 w-auto self-start rounded-node border border-line" />
+            )}
+            {run.mode !== 'test' && s.output?.produced?.bild_link && (
+              <Link to={s.output.produced.bild_link} className="text-sm self-start">
+                Bild in den Medien öffnen
+              </Link>
+            )}
             {(s.input || s.output?.log || Object.keys(s.output?.produced ?? {}).length > 0) && (
               <details>
                 <summary className="cursor-pointer text-meta text-fg-muted">Daten</summary>

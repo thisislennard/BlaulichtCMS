@@ -34,6 +34,8 @@ export interface Catalog {
   responsibilities: { id: string; name: string; area: string }[];
   warningFields: { key: string; label: string; required: boolean }[];
   users: { id: string; name: string }[];
+  /** Befüllbare Bildvorlagen für „Bild aus Vorlage erzeugen“ (#210) */
+  imageTemplates?: { id: string; title: string; texts: { id: string; label: string; default: string; maxLength: number }[]; images: { id: string; label: string; required: boolean }[] }[];
   /** Vorlagen für neue Workflows (server/src/automations/templates.ts) */
   templates?: WorkflowTemplate[];
 }

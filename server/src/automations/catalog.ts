@@ -17,7 +17,7 @@ export interface FieldDef {
 
 export type InputKind = 'fe2' | 'feuersoftware' | 'warnfeed' | 'rss' | 'upload' | 'schedule' | 'manual' | 'press' | 'calendar';
 export type OutputKind = 'banner' | 'post' | 'mail' | 'notify' | 'warning_draft' | 'incident_entry';
-export type NodeType = 'input' | 'output' | 'condition' | 'switch' | 'template' | 'delay' | 'dedup' | 'approval' | 'merge';
+export type NodeType = 'input' | 'output' | 'condition' | 'switch' | 'template' | 'delay' | 'dedup' | 'approval' | 'merge' | 'image';
 
 export const FIELD_KEY = /^[a-z][a-z0-9_]{0,39}$/;
 
@@ -238,7 +238,15 @@ export const NODE_TYPES: Record<NodeType, { label: string; category: 'input' | '
   dedup: { label: 'Einmal je Vorgang', category: 'process', description: 'Lässt je Schlüssel nur den ersten Lauf im Zeitfenster durch.', icon: 'CopyPlus' },
   approval: { label: 'Freigabe anfordern', category: 'process', description: 'Hält den Lauf an, bis eine Person freigibt oder ablehnt.', icon: 'ShieldCheck' },
   merge: { label: 'Zusammenführen', category: 'process', description: 'Führt Wege wieder zusammen.', icon: 'GitBranch' },
+  image: { label: 'Bild aus Vorlage erzeugen', category: 'process', description: 'Füllt eine befüllbare Bildvorlage mit Feldern und legt das Bild in den Medien ab; Beitrags-Ausgänge danach übernehmen es (auch für Social und Story).', icon: 'ImageUp' },
 };
+
+/** Felder, die „Bild aus Vorlage erzeugen“ liefert (#210). `bilder`: alle bisher im Lauf erzeugten Bilder. */
+export const IMAGE_FIELDS: FieldDef[] = [
+  { key: 'bild_id', label: 'Kennung des erzeugten Bildes', type: 'text', example: '…' },
+  { key: 'bild_link', label: 'Link zum Bild in den Medien', type: 'url', example: '/medien/…' },
+  { key: 'bilder', label: 'Alle erzeugten Bilder dieses Laufs', type: 'text', example: '…' },
+];
 
 /** Grenzen gegen Schleifen und Fluten. */
 export const LIMITS = {

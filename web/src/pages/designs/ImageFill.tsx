@@ -78,7 +78,7 @@ export function useServerPreview(path: string | null, body: unknown, delay = 350
 }
 
 /** Bild aus den Medien wählen (nur geprüfte Bilder). */
-function MediaChooser({ onClose, onPick }: { onClose: () => void; onPick: (m: MediaItem) => void }) {
+export function ImageMediaPicker({ onClose, onPick }: { onClose: () => void; onPick: (m: MediaItem) => void }) {
   const all = useQuery({ queryKey: ['collections', false], queryFn: () => get<any[]>('/collections') });
   const [cid, setCid] = useState('');
   const detail = useQuery({ queryKey: ['collection', cid], queryFn: () => get<any>(`/collections/${cid}`), enabled: !!cid });
@@ -320,7 +320,7 @@ export function ImageFillDialog({ templateId: initial, postId, onClose, onDone }
           </div>
         </div>
       )}
-      {choose && <MediaChooser onClose={() => setChoose(null)} onPick={(m) => setImages({ ...images, [choose]: { mediaId: m.id, focusX: 0.5, focusY: 0.5, zoom: 1, name: m.display_name || m.original_name } })} />}
+      {choose && <ImageMediaPicker onClose={() => setChoose(null)} onPick={(m) => setImages({ ...images, [choose]: { mediaId: m.id, focusX: 0.5, focusY: 0.5, zoom: 1, name: m.display_name || m.original_name } })} />}
     </Dialog>
   );
 }

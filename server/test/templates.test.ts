@@ -11,6 +11,7 @@ import { setSettings } from '../src/lib/settings.js';
 import { templatePaths } from '../src/templates/files.js';
 import { bundledFont } from '../src/templates/fonts.js';
 import { processMedia } from '../src/media/process.js';
+import { executeRun } from '../src/automations/engine.js';
 
 /**
  * Designvorlagen (#208–#210) gegen eine echte PostgreSQL-Datenbank (TEST_DATABASE_URL): Bibliothek mit Kategorien,
@@ -338,5 +339,66 @@ describe('Befüllbare Bildvorlagen (#209)', () => {
     // Dateivorlage lässt sich nicht befüllen
     const files = await editor.post('/design-templates', { title: 'Nur Dateien' });
     expect((await editor.post(`/design-templates/${files.json.id}/generate`, { values: {} })).status).toBe(400);
+  });
+});
+
+describe('Workflows: Bild aus Vorlage erzeugen (#210)', () => {
+  it('Testlauf zeigt eine Vorschau ohne etwas anzulegen; aktiver Lauf legt Bild und Beitrag mit Bild an', async () => {
+    const tpl = await admin.post('/design-templates', { title: 'Story Termin', kind: 'image', width: 1080, height: 1920 });
+    expect(tpl.status).toBe(200);
+    // Katalog nennt die Bildvorlage samt Textfeldern
+    const cat = await admin.get('/automations/catalog');
+    const entry = cat.json.imageTemplates.find((t: any) => t.id === tpl.json.id);
+    expect(entry.texts.map((x: any) => x.id)).toEqual(['titel', 'text']);
+    expect(cat.json.nodeTypes.some((t: any) => t.type === 'image')).toBe(true);
+
+    const input = await admin.post('/automation-inputs', { name: 'Termin von Hand', kind: 'manual', config: { fields: [{ key: 'titel', label: 'Titel', example: 'Übung' }, { key: 'beginn', label: 'Beginn', example: 'Sa., 10 Uhr' }] } });
+    expect(input.status, JSON.stringify(input.json)).toBe(200);
+    const output = await admin.post('/automation-outputs', { name: 'Beitrag Termin', kind: 'post', config: { kind: 'event', title: '{{titel}}', body: 'Beginn: {{beginn}}' } });
+    expect(output.status, JSON.stringify(output.json)).toBe(200);
+    const au = await admin.post('/automations', { name: 'Termin mit Bild', description: '' });
+    const d = await admin.get(`/automations/${au.json.id}`);
+    const graph = {
+      nodes: [
+        { id: 'in', type: 'input', position: { x: 0, y: 0 }, data: { inputId: input.json.id } },
+        { id: 'img', type: 'image', position: { x: 320, y: 0 }, data: { templateId: tpl.json.id, texts: { titel: '{{titel}}', text: 'Beginn: {{beginn}}' }, altText: '{{titel}} – {{beginn}}' } },
+        { id: 'out', type: 'output', position: { x: 640, y: 0 }, data: { outputId: output.json.id } },
+      ],
+      edges: [
+        { id: 'e1', source: 'in', sourceHandle: 'out', target: 'img' },
+        { id: 'e2', source: 'img', sourceHandle: 'out', target: 'out' },
+      ],
+    };
+    const saved = await admin.raw('PUT', `/automations/${au.json.id}`, { name: 'Termin mit Bild', description: '', graph, baseHash: d.json.draft_hash });
+    expect(saved.status, JSON.stringify(saved.json)).toBe(200);
+    const mediaBefore = (await one<any>(`SELECT count(*)::int AS n FROM media`))!.n;
+    const test = await admin.post(`/automations/${au.json.id}/test`, { payload: { titel: 'Großübung', beginn: 'Sa., 10 Uhr' } });
+    expect(test.status, JSON.stringify(test.json)).toBe(200);
+    expect(test.json.status, JSON.stringify(test.json.steps)).toBe('succeeded');
+    const step = test.json.steps.find((s: any) => s.node_id === 'img');
+    expect(step.info).toMatch(/Testlauf: würde ein Bild aus „Story Termin“/);
+    expect(step.output.log).toMatchObject({ vorschau: true, texte: { titel: 'Großübung', text: 'Beginn: Sa., 10 Uhr' } });
+    expect(test.json.steps.find((s: any) => s.node_id === 'out').info).toMatch(/mit dem Bild aus der Vorlage/);
+    const prev = await admin.get(`/automation-runs/${test.json.id}/image-preview/img`);
+    expect(prev.status).toBe(200);
+    expect(prev.headers['content-type']).toBe('image/jpeg');
+    expect((await warnAuthor.get(`/automation-runs/${test.json.id}/image-preview/img`)).status).toBe(403);
+    expect((await one<any>(`SELECT count(*)::int AS n FROM media`))!.n).toBe(mediaBefore);
+
+    // Aktiv: manueller Start → Bild in den Medien, Beitrag mit Bild als Titelbild und Alternativtext
+    expect((await admin.post(`/automations/${au.json.id}/activate`)).status).toBe(200);
+    const run = await admin.post(`/automations/${au.json.id}/run`, { inputNodeId: 'in', payload: { titel: 'Übung Nord', beginn: 'So., 9 Uhr' } });
+    expect(run.status, JSON.stringify(run.json)).toBe(200);
+    expect(await executeRun(run.json.runId)).toBe('succeeded');
+    const detail = await admin.get(`/automation-runs/${run.json.runId}`);
+    const img = detail.json.steps.find((s: any) => s.node_id === 'img');
+    const mediaId = img.output.produced.bild_id;
+    expect(mediaId).toMatch(/^[0-9a-f-]{36}$/);
+    const m = await one<any>(`SELECT status, kind, alt_text, selection, width, height FROM media WHERE id = $1`, [mediaId]);
+    expect(m).toMatchObject({ status: 'ready', kind: 'image', alt_text: 'Übung Nord – So., 9 Uhr', selection: 'selected', width: 1080, height: 1920 });
+    const post = await one<any>(`SELECT r.media_ids, r.cover_id, r.media_alt FROM post_revisions r JOIN posts p ON p.id = r.post_id WHERE p.title = 'Übung Nord'`);
+    expect(post!.media_ids).toEqual([mediaId]);
+    expect(post!.cover_id).toBe(mediaId);
+    expect(post!.media_alt).toEqual({ [mediaId]: 'Übung Nord – So., 9 Uhr' });
   });
 });

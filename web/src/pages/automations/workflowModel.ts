@@ -43,7 +43,7 @@ export interface GuidedModel {
 
 export type FromGraph = { ok: true; model: GuidedModel } | { ok: false; reasons: string[] };
 
-const STEP_LABEL: Record<string, string> = { switch: 'Verzweigung', template: 'Felder setzen', delay: 'Warten', dedup: 'Einmal je Vorgang', approval: 'Freigabe anfordern', merge: 'Zusammenführen' };
+const STEP_LABEL: Record<string, string> = { switch: 'Verzweigung', template: 'Felder setzen', delay: 'Warten', dedup: 'Einmal je Vorgang', approval: 'Freigabe anfordern', merge: 'Zusammenführen', image: 'Bild aus Vorlage erzeugen' };
 
 const key = (source: string, handle: string, target: string) => `${source}|${handle}|${target}`;
 

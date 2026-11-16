@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 import { z } from 'zod';
-import { FIELD_KEY, INPUT_KINDS, LIMITS, NODE_TYPES, OPERATORS, OUTPUT_KINDS, SYSTEM_FIELDS, hasInputPort, outputPorts, type FieldDef, type InputKind, type NodeType, type OutputKind } from './catalog.js';
+import { FIELD_KEY, IMAGE_FIELDS, INPUT_KINDS, LIMITS, NODE_TYPES, OPERATORS, OUTPUT_KINDS, SYSTEM_FIELDS, hasInputPort, outputPorts, type FieldDef, type InputKind, type NodeType, type OutputKind } from './catalog.js';
 import { conditionFields, isGroup, placeholders, type Group } from './logic.js';
 
 /*
@@ -27,6 +27,17 @@ export const NODE_DATA: Record<NodeType, z.ZodType<any>> = {
   dedup: z.object({ fields: z.array(fieldKey).min(1).max(5), windowMinutes: z.number().int().min(1).max(LIMITS.maxDedupMinutes), label }),
   approval: z.object({ title: tpl(200), summary: tpl(1000), timeoutHours: z.number().int().min(1).max(LIMITS.maxApprovalHours), label }),
   merge: z.object({ label }),
+  // Bild aus Vorlage (#210): Textfelder des Layouts (Kennung → Vorlage mit {{platzhaltern}}), feste Bilder je
+  // Platzhalter, Alternativtext, Zielsammlung. templateName nur aus Importen (Bezug nach Name, wird beim Import aufgelöst).
+  image: z.object({
+    templateId: z.uuid().optional(),
+    templateName: z.string().trim().max(150).optional(),
+    texts: z.record(fieldKey, tpl(2000)).refine((t) => Object.keys(t).length <= 30, 'höchstens 30 Textfelder').default({}),
+    images: z.record(fieldKey, z.uuid()).refine((t) => Object.keys(t).length <= 30, 'höchstens 30 Bilder').default({}),
+    altText: tpl(1000),
+    collectionId: z.uuid().nullable().default(null),
+    label,
+  }),
 };
 
 export const graphSchema = z.object({
@@ -206,6 +217,11 @@ export function validateGraph(g: Graph, ctx: { inputs: Map<string, InputRef>; ou
       errors.push({ nodeId: n.id, message: n.type === 'input' ? `${n.data?.label ? `„${n.data.label}“: ` : ''}Auslöser (Eingang) noch nicht gewählt.` : `${n.data?.label ? `„${n.data.label}“: ` : ''}Aktion (Ausgang) noch nicht gewählt.` });
       continue;
     }
+    if (n.type === 'image' && !n.data?.templateId) {
+      open.push(n.id);
+      errors.push({ nodeId: n.id, message: `${n.data?.label ? `„${n.data.label}“: ` : ''}Bildvorlage noch nicht gewählt${n.data?.templateName ? ` (aus dem Import: „${n.data.templateName}“)` : ''}.` });
+      continue;
+    }
     const r = NODE_DATA[n.type as NodeType]?.safeParse(n.data);
     if (!r?.success) {
       const first = r?.error.issues[0];
@@ -302,6 +318,10 @@ export function validateGraph(g: Graph, ctx: { inputs: Map<string, InputRef>; ou
             break;
           case 'approval':
             missing([...placeholders(n.data.title), ...placeholders(n.data.summary)], 'Platzhalter');
+            break;
+          case 'image':
+            missing([...Object.values(n.data.texts as Record<string, string>).flatMap((t) => placeholders(t)), ...placeholders(n.data.altText)], 'Platzhalter');
+            for (const f of IMAGE_FIELDS) produced.add(f.key);
             break;
           case 'output': {
             const o = ctx.outputs.get(n.data.outputId);

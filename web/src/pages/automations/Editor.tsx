@@ -134,6 +134,8 @@ function nodeSummary(t: NodeType, d: any, ctx: Pick<Ctx, 'cat' | 'inputs' | 'out
       return `${(d?.fields ?? []).join(' + ')} · ${d?.windowMinutes ?? '?'} min`;
     case 'approval':
       return `Frist ${d?.timeoutHours ?? '?'} h`;
+    case 'image':
+      return ctx.cat.imageTemplates?.find((t) => t.id === d?.templateId)?.title ?? (d?.templateName ? `„${d.templateName}“ fehlt` : 'Noch keine Bildvorlage gewählt');
     default:
       return '';
   }

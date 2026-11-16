@@ -372,6 +372,9 @@ async function freshSetup() {
   const kw = await admin.post('/warning-keywords', { code: 'F-TEST-1', label: 'Testeinsatz', aliases: ['test'] }).catch((e) => (console.log('  (Stichwort)', e.message), null));
   if (kw) await admin.post(`/warning-keywords/${kw.id}/questions`, { key: 'frage_eins', text: 'Testfrage?' }).catch(() => {});
   const warn = await admin.post('/warnings', { kind: 'initial' }).catch((e) => (console.log('  (Warnung)', e.message), null));
+  // Designvorlagen (#208): eine Vorlage für die Detailseite
+  const designTemplate = await admin.post('/design-templates', { title: 'Fokus-Vorlage', usageNote: 'Nur intern' }).catch((e) => (console.log('  (Designvorlage)', e.message), null));
+  const imageTemplate = await admin.post('/design-templates', { title: 'Fokus-Bildvorlage', kind: 'image', width: 1080, height: 1080 }).catch((e) => (console.log('  (Bildvorlage)', e.message), null));
   // Automationen: Eingang, Ausgang und ein kleiner Ablauf (Editor, Seitenleiste, Listenansicht, Dialoge)
   let automationId = null;
   try {
@@ -388,12 +391,15 @@ async function freshSetup() {
           { id: 'in', type: 'input', position: { x: 0, y: 0 }, data: { inputId: ai.id } },
           { id: 'if', type: 'condition', position: { x: 320, y: 0 }, data: { combinator: 'and', rules: [{ field: 'ort', op: 'eq', value: 'Nord' }] } },
           { id: 'tpl', type: 'template', position: { x: 640, y: 0 }, data: { fields: [{ key: 'text', template: '{{ort}}' }] } },
-          { id: 'out', type: 'output', position: { x: 960, y: 0 }, data: { outputId: ao.id } },
+          // Bild aus Vorlage (#210)
+          { id: 'img', type: 'image', position: { x: 960, y: 0 }, data: { label: 'Fokus-Bild', ...(imageTemplate ? { templateId: imageTemplate.id } : {}), texts: { titel: '{{ort}}' }, images: {}, altText: '', collectionId: null } },
+          { id: 'out', type: 'output', position: { x: 1280, y: 0 }, data: { outputId: ao.id } },
         ],
         edges: [
           { id: 'e1', source: 'in', sourceHandle: 'out', target: 'if' },
           { id: 'e2', source: 'if', sourceHandle: 'true', target: 'tpl' },
-          { id: 'e3', source: 'tpl', sourceHandle: 'out', target: 'out' },
+          { id: 'e3', source: 'tpl', sourceHandle: 'out', target: 'img' },
+          { id: 'e4', source: 'img', sourceHandle: 'out', target: 'out' },
         ],
       },
     });
@@ -401,9 +407,6 @@ async function freshSetup() {
   } catch (e) {
     console.log('  (Automation)', e.message);
   }
-  // Designvorlagen (#208): eine Vorlage für die Detailseite
-  const designTemplate = await admin.post('/design-templates', { title: 'Fokus-Vorlage', usageNote: 'Nur intern' }).catch((e) => (console.log('  (Designvorlage)', e.message), null));
-  const imageTemplate = await admin.post('/design-templates', { title: 'Fokus-Bildvorlage', kind: 'image', width: 1080, height: 1080 }).catch((e) => (console.log('  (Bildvorlage)', e.message), null));
   console.log('✔ Testdaten');
   const st = {
     adminSecret: mfa.secret,
@@ -641,7 +644,7 @@ try {
     // Geführte Ansicht (Standard); der Fokus-Workflow ist verzweigt → Hinweis auf „Erweitert“
     await gotoRoute(page, route);
     await checkFields(page, `${route} › Geführt`, 'main', new Set());
-    for (const label of ['Fokus-Eingang', 'trifft zu', 'Felder setzen', 'Fokus-Hinweis']) {
+    for (const label of ['Fokus-Eingang', 'trifft zu', 'Felder setzen', 'Fokus-Bild', 'Fokus-Hinweis']) {
       await gotoRoute(page, route);
       try {
         await page.getByRole('button', { name: 'Erweitert', exact: true }).click({ timeout: 5000 });

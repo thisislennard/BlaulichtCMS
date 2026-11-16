@@ -129,6 +129,8 @@ flowchart LR
   Zuschnitt, Logo und Flächen im Editor (Maus und Tastatur), Formate für Feed, Story und Link-Vorschau; Ausfüllen mit
   Live-Vorschau, das Bild landet geprüft in den Medien – auch direkt im Beitragseditor („Bild aus Vorlage“).
 - **Schriften:** freie Schriften (SIL OFL) mitgeliefert, eigene TTF/OTF mit Lizenzhinweis hochladbar.
+- **In Workflows:** Baustein „Bild aus Vorlage erzeugen“ mit Platzhaltern; das Bild geht an Beitrag, Social und Story,
+  der Testlauf zeigt eine Vorschau.
 - **Sicher:** Inhalt muss zur Endung passen, SVG wird bereinigt (keine Skripte, keine externen Verweise), optional
   ClamAV-Prüfung.
 

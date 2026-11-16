@@ -12,6 +12,7 @@ import { warningHash } from '../routes/warnings.js';
 import { createEntry, parseLocalDate } from '../incidents/list.js';
 import { classifySmtpError, smtpTransport } from '../warnings/mail.js';
 import { OUTPUT_KINDS, type NodeType } from './catalog.js';
+import { ImageStepError, runImageStep, runImages } from '../templates/workflow.js';
 import { graphHash, inputFields, topoOrder, type Graph, type GraphNode, type InputRef, type OutputRef } from './graph.js';
 import { dedupKey, evaluateGroup, redactForLog, renderTemplate, valueText, type Data, type Group } from './logic.js';
 
@@ -406,6 +407,16 @@ async function runNode(ctx: Ctx, node: GraphNode, data: Data, prev: StepRow | un
     }
     case 'output':
       return runOutput(ctx, node, data, prev, done);
+    case 'image': {
+      // Bild aus Vorlage (#210): Fehler der Vorlage sind dauerhaft, alles andere wird wiederholt
+      try {
+        const r = await runImageStep({ test: ctx.test, runId, nodeId: node.id, automationName: ctx.run.automation_name, actor: ctx.actor, tz: ctx.tz }, node.data, data);
+        return done({ ports: ['out'], produced: r.produced, info: r.info, log: r.log });
+      } catch (e) {
+        if (e instanceof ImageStepError || (e as any)?.statusCode === 400 || (e as any)?.statusCode === 404) throw new PermanentError((e as Error).message);
+        throw e;
+      }
+    }
     default:
       throw new PermanentError(`Unbekannter Knotentyp ${node.type}.`);
   }
@@ -540,14 +551,17 @@ async function runOutput(ctx: Ctx, node: GraphNode, data: Data, prev: StepRow | 
       const submit = (c.submit || direct) && !!body;
       const what = direct ? `direkt auf „${site!.name}“ veröffentlichen` : submit ? 'als Entwurf anlegen und zur Freigabe einreichen' : 'als Entwurf anlegen';
       const desc = { art: c.kind, titel: title, text: body.slice(0, 300), zielkanal: site?.name ?? null, soziale_kanaele: socialNames, ...(skippedSocial ? { nicht_verfuegbar: skippedSocial } : {}) };
-      if (ctx.test) return done({ ports: ['out'], produced: { beitrag_link: '/beitraege', beitrag_titel: title }, info: `Testlauf: würde den Beitrag „${title}“ ${what}.`, log: desc });
+      // Bilder aus „Bild aus Vorlage erzeugen“ davor im Lauf (#210): erstes Bild wird Titelbild
+      const pics = await runImages(data);
+      const withPics = pics.ids.length ? ` mit ${pics.ids.length === 1 ? 'einem Bild' : `${pics.ids.length} Bildern`} aus Vorlage` : String(data.bilder ?? '') === '' && ctx.test && 'bild_id' in data ? ' mit dem Bild aus der Vorlage' : '';
+      if (ctx.test) return done({ ports: ['out'], produced: { beitrag_link: '/beitraege', beitrag_titel: title }, info: `Testlauf: würde den Beitrag „${title}“${withPics} ${what}.`, log: desc });
       const res = await tx(async (db) => {
         const p = await one<any>(`INSERT INTO posts (kind, title) VALUES ($1,$2) RETURNING id`, [c.kind || 'news', title], db);
-        const rev = { title, body, excerpt, media_ids: [] as string[], cover_id: null, site_id: siteId, variants, social_targets: socialTargets, social_formats: socialFormats };
+        const rev = { title, body, excerpt, media_ids: pics.ids, cover_id: pics.ids[0] ?? null, site_id: siteId, variants, social_targets: socialTargets, social_formats: socialFormats, media_alt: pics.alt };
         const hash = revisionHash(rev);
         const rv = await one<any>(
-          `INSERT INTO post_revisions (post_id, number, title, body, excerpt, site_id, content_hash, change_note, variants, submitted_at, social_targets, social_formats) VALUES ($1,1,$2,$3,$4,$5,$6,$7,$8, CASE WHEN $9 THEN now() END, $10, $11) RETURNING id`,
-          [p.id, title, body, excerpt, siteId, hash, `Automatisch aus dem Workflow „${ctx.run.automation_name}“`, JSON.stringify(variants), submit, socialTargets, JSON.stringify(socialFormats)],
+          `INSERT INTO post_revisions (post_id, number, title, body, excerpt, site_id, content_hash, change_note, variants, submitted_at, social_targets, social_formats, media_ids, cover_id, media_alt) VALUES ($1,1,$2,$3,$4,$5,$6,$7,$8, CASE WHEN $9 THEN now() END, $10, $11, $12, $13, $14) RETURNING id`,
+          [p.id, title, body, excerpt, siteId, hash, `Automatisch aus dem Workflow „${ctx.run.automation_name}“`, JSON.stringify(variants), submit, socialTargets, JSON.stringify(socialFormats), pics.ids, pics.ids[0] ?? null, JSON.stringify(pics.alt)],
           db,
         );
         if (direct) {

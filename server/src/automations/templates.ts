@@ -21,6 +21,8 @@ export interface TemplateDef {
   icon: string;
   input?: { kinds: InputKind[]; preset?: SlotPreset };
   rules?: { field: string; op: Operator; value?: string }[];
+  /** Schritt „Bild aus Vorlage erzeugen“ vor den Ausgängen (#210); die Bildvorlage bleibt ein offener Platz */
+  image?: { label: string; texts: Record<string, string>; altText?: string };
   outputs: { kind: OutputKind; preset: SlotPreset }[];
 }
 
@@ -69,6 +71,20 @@ export const TEMPLATES: TemplateDef[] = [
       {
         kind: 'post',
         preset: { name: 'Beitrag „Einsatz“', config: { kind: 'incident', title: '{{stichwort_text}} in {{ort}}', body: 'Alarm um {{alarmzeit}}. Im Einsatz: {{einheiten}}.', submit: false } },
+      },
+    ],
+  },
+  {
+    id: 'date-story-image',
+    title: 'Termin von Hand → Story-Bild + Beitragsentwurf',
+    description: 'Termin (z. B. eine Übung) per Knopf starten: Bild aus einer Bildvorlage mit Titel und Beginn erzeugen und einen Beitragsentwurf mit dem Bild anlegen – als Story und Beitrag vorauswählbar.',
+    icon: 'ImageUp',
+    input: { kinds: ['manual'], preset: { name: 'Termin von Hand', config: { fields: [{ key: 'titel', label: 'Titel', example: 'Übung am Samstag' }, { key: 'beginn', label: 'Beginn', example: 'Sa., 21.11., 10 Uhr' }, { key: 'ort', label: 'Ort', example: 'Feuerwache Nord' }] } } },
+    image: { label: 'Story-Bild', texts: { titel: '{{titel}}', text: '{{beginn}} · {{ort}}' }, altText: '{{titel}} – {{beginn}}, {{ort}}' },
+    outputs: [
+      {
+        kind: 'post',
+        preset: { name: 'Beitrag „Termin“', config: { kind: 'event', title: '{{titel}}', body: '{{titel}}\n\nBeginn: {{beginn}}\nOrt: {{ort}}', submit: false } },
       },
     ],
   },
@@ -128,12 +144,21 @@ export function templateGraph(t: TemplateDef, refs: { inputs: Map<string, InputR
     nodes.push({ id: 'if1', type: 'condition', position: { x: 320, y: 0 }, data: { combinator: 'and', rules: t.rules.map((r) => ({ ...r })) } });
     if (t.input) edges.push({ id: 'e_in1_if1', source: 'in1', sourceHandle: 'out', target: 'if1' });
   }
+  // Bild aus Vorlage: zwischen Bedingung/Eingang und Ausgängen; die Bildvorlage wählt man im Workflow
+  const imgX = t.rules?.length ? 640 : 320;
+  if (t.image) {
+    open++;
+    nodes.push({ id: 'img1', type: 'image', position: { x: imgX, y: 0 }, data: { label: t.image.label, texts: { ...t.image.texts }, images: {}, altText: t.image.altText ?? '', collectionId: null } });
+    if (t.rules?.length) edges.push({ id: 'e_if1_img1', source: 'if1', sourceHandle: 'true', target: 'img1' });
+    else if (t.input) edges.push({ id: 'e_in1_img1', source: 'in1', sourceHandle: 'out', target: 'img1' });
+  }
   t.outputs.forEach((o, i) => {
     const nid = `out${i + 1}`;
     const id = only(refs.outputs.values(), [o.kind], (x) => outputNeeds(x).every((k) => avail.has(k)));
     if (!id) open++;
-    nodes.push({ id: nid, type: 'output', position: { x: t.rules?.length ? 640 : 320, y: i * 170 }, data: id ? { outputId: id } : { want: { kinds: [o.kind], ...o.preset } } });
-    if (t.rules?.length) edges.push({ id: `e_if1_${nid}`, source: 'if1', sourceHandle: 'true', target: nid });
+    nodes.push({ id: nid, type: 'output', position: { x: t.image ? imgX + 320 : imgX, y: i * 170 }, data: id ? { outputId: id } : { want: { kinds: [o.kind], ...o.preset } } });
+    if (t.image) edges.push({ id: `e_img1_${nid}`, source: 'img1', sourceHandle: 'out', target: nid });
+    else if (t.rules?.length) edges.push({ id: `e_if1_${nid}`, source: 'if1', sourceHandle: 'true', target: nid });
     else if (t.input) edges.push({ id: `e_in1_${nid}`, source: 'in1', sourceHandle: 'out', target: nid });
   });
   return { graph: graphSchema.parse({ nodes, edges }), open };

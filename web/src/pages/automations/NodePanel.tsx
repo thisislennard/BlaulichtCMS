@@ -1,13 +1,15 @@
+import { useState } from 'react';
 import { Link } from 'react-router';
 import { Badge, Button, cx, FieldWrap, Input, Notice, Select, Switch } from '../../components/ui/core';
 import { Icon } from '../../components/ui/Icon';
 import { KeywordMeaning } from '../../components/KeywordMeaning';
 import { meaning, useKeywords } from '../../lib/keywords';
+import { ImageMediaPicker } from '../designs/ImageFill';
 import { FieldList, Help, NumberField, SelectField, TemplateField, inputSummary, normKey, outputSummary, type Catalog, type InputDef, type OutputDef } from './shared';
 
 /* Seitenleiste des Editors: Einstellungen des gewählten Knotens. Bedingungen und Vorlagen sind reine Daten. */
 
-export type NodeType = 'input' | 'output' | 'condition' | 'switch' | 'template' | 'delay' | 'dedup' | 'approval' | 'merge';
+export type NodeType = 'input' | 'output' | 'condition' | 'switch' | 'template' | 'delay' | 'dedup' | 'approval' | 'merge' | 'image';
 export interface GNode {
   id: string;
   type: NodeType;
@@ -60,6 +62,8 @@ export function defaultData(type: NodeType, extra: Record<string, any> = {}): an
       return { fields: ['stichwort'], windowMinutes: 60, ...extra };
     case 'approval':
       return { title: 'Freigabe: {{automation}}', summary: '', timeoutHours: 4, ...extra };
+    case 'image':
+      return { texts: {}, images: {}, altText: '', collectionId: null, ...extra };
     default:
       return { ...extra };
   }
@@ -354,6 +358,8 @@ export function NodePanel({
         </>
       )}
 
+      {node.type === 'image' && <ImageStep idp={idp} d={d} set={set} cat={cat} fields={fields} readOnly={readOnly} />}
+
       {node.type === 'merge' && <p className="m-0 text-sm text-fg-muted">Führt Wege zusammen. Weiter geht es, sobald ein eingehender Weg aktiv ist; danach stehen nur Felder zur Verfügung, die auf allen Wegen vorhanden sind.</p>}
 
       {node.type !== 'input' && fields.length > 0 && (
@@ -375,5 +381,84 @@ export function NodePanel({
         </Button>
       )}
     </section>
+  );
+}
+
+/** Einstellungen von „Bild aus Vorlage erzeugen“ (#210): Bildvorlage, Texte mit Platzhaltern, feste Bilder, Ablage. */
+function ImageStep({ idp, d, set, cat, fields, readOnly }: { idp: string; d: any; set: (p: Record<string, any>) => void; cat: Catalog; fields: { key: string; label: string }[]; readOnly: boolean }) {
+  const [pick, setPick] = useState<string | null>(null);
+  const list = cat.imageTemplates ?? [];
+  const tpl = list.find((t) => t.id === d.templateId);
+  const texts: Record<string, string> = d.texts ?? {};
+  const images: Record<string, string> = d.images ?? {};
+  return (
+    <>
+      {d.templateName && !d.templateId && <Notice tone="warning">Aus dem Import: Bildvorlage „{d.templateName}“ gibt es hier nicht – bitte eine Bildvorlage wählen.</Notice>}
+      <SelectField
+        id={`${idp}-tpl`}
+        label="Bildvorlage"
+        value={d.templateId ?? ''}
+        disabled={readOnly}
+        placeholder="Bitte wählen …"
+        onChange={(v) => {
+          const t = list.find((x) => x.id === v);
+          // Vorhandene Texte behalten, für neue Felder leer starten
+          set({ templateId: v || undefined, templateName: undefined, texts: Object.fromEntries((t?.texts ?? []).map((f) => [f.id, texts[f.id] ?? ''])), images: {} });
+        }}
+        options={list.map((t) => ({ value: t.id, label: t.title }))}
+        help={list.length ? 'Befüllbare Bildvorlagen aus Redaktion → Designvorlagen.' : 'Noch keine befüllbare Bildvorlage – unter Redaktion → Designvorlagen anlegen.'}
+      />
+      {tpl && (
+        <fieldset className="m-0 p-0 border-0 flex flex-col gap-3">
+          <legend className="text-sm font-medium mb-1">Texte der Vorlage</legend>
+          {tpl.texts.map((f) => (
+            <TemplateField
+              key={f.id}
+              id={`${idp}-txt-${f.id}`}
+              label={`${f.label} (${f.id})`}
+              rows={2}
+              max={2000}
+              value={texts[f.id] ?? ''}
+              disabled={readOnly}
+              fields={fields}
+              help={f.default ? `Leer: „${f.default}“. Höchstens ${f.maxLength} Zeichen.` : `Höchstens ${f.maxLength} Zeichen.`}
+              onChange={(v) => set({ texts: { ...texts, [f.id]: v } })}
+            />
+          ))}
+          {tpl.images.length > 0 && (
+            <div className="flex flex-col gap-2">
+              <span className="text-sm font-medium">Bilder der Vorlage</span>
+              {tpl.images.map((f) => (
+                <div key={f.id} className="flex flex-wrap items-center gap-2 text-sm">
+                  <span className="flex-1 min-w-0">
+                    {f.label}
+                    {f.required ? ' (Pflicht)' : ''}
+                  </span>
+                  {images[f.id] && <img src={`/api/v1/media/${images[f.id]}/preview`} alt="" className="h-10 w-10 object-cover rounded-chip border border-line" />}
+                  <Button size="sm" disabled={readOnly} onClick={() => setPick(f.id)}>
+                    {images[f.id] ? 'Ändern' : 'Festes Bild wählen'}
+                  </Button>
+                  {images[f.id] && (
+                    <Button size="sm" iconOnly icon="X" aria-label={`Bild für ${f.label} entfernen`} disabled={readOnly} onClick={() => set({ images: Object.fromEntries(Object.entries(images).filter(([k]) => k !== f.id)) })} />
+                  )}
+                </div>
+              ))}
+              <p className="m-0 text-meta text-fg-muted">Ohne festes Bild bleibt der Platzhalter leer (Hintergrund der Vorlage).</p>
+            </div>
+          )}
+          <TemplateField id={`${idp}-alt`} label="Alternativtext" rows={2} max={1000} value={d.altText ?? ''} disabled={readOnly} fields={fields} help="Leer: die Texte der Vorlage." onChange={(v) => set({ altText: v })} />
+          <SelectField
+            id={`${idp}-col`}
+            label="Ablegen in"
+            value={d.collectionId ?? ''}
+            disabled={readOnly}
+            onChange={(v) => set({ collectionId: v || null })}
+            options={[{ value: '', label: 'Automatisch („Bilder aus Vorlagen“)' }, ...cat.collections.map((c) => ({ value: c.id, label: c.title }))]}
+          />
+          <Notice>Ein Beitrags-Ausgang danach übernimmt das Bild (erstes Bild als Titelbild) – damit auch für soziale Kanäle und Storys des Beitrags. Der Testlauf zeigt nur eine Vorschau und legt nichts an.</Notice>
+        </fieldset>
+      )}
+      {pick && <ImageMediaPicker onClose={() => setPick(null)} onPick={(m) => set({ images: { ...images, [pick]: m.id } })} />}
+    </>
   );
 }

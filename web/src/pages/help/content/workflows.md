@@ -17,6 +17,7 @@ Unter [Workflows](/workflows) steht jeder Workflow mit einem Satz, was er tut �
 | Alarm → Banner auf der Website | FE2-Alarm oder Feuersoftware-Einsatz (neuer Einsatz) | – | Banner `Einsatz: {{stichwort_text}}`, Stufe Warnung, 3 Stunden, zur Freigabe |
 | DWD-Warnung → Banner + Beitragsentwurf | Amtliche Warnung (eigenes Gebiet) | `quelle` ist gleich „Deutscher Wetterdienst“ | Banner nach Warnstufe bis `gueltig_bis` und Beitragsentwurf „Lage“ |
 | Alarm mit Stichwort-Kategorie Brand → Beitragsentwurf | FE2-Alarm oder Feuersoftware-Einsatz | `stichwort_kategorie` ist gleich „Brand“ | Beitragsentwurf „Einsatz“ |
+| Termin von Hand → Story-Bild + Beitragsentwurf | Manueller Start mit den Feldern `titel`, `beginn`, `ort` | – | **Bild aus Vorlage erzeugen** (Bildvorlage wählen), danach Beitragsentwurf „Veranstaltung“ mit dem Bild – als Story vorauswählbar |
 | Warnung → Benachrichtigen | Amtliche Warnung (eigenes Gebiet) | – | App-Benachrichtigung an die Rolle Redaktion |
 | Übung im Kalender → Banner „Achtung Übung“ | Kalendereintrag (zu Beginn) | `kategorie` ist gleich „Übung“ | Banner „Achtung Übung“ (Hinweis) bis zum Ende des Termins (`gueltig_bis`), zur Freigabe |
 | Leer beginnen | – | – | – |
@@ -84,6 +85,7 @@ Texte der Ausgänge enthalten `{{feld}}`-Platzhalter, z. B. `Einsatz {{stichwort
 | Einmal je Vorgang | lässt je Schlüssel (z. B. Ort + Stichwort) nur den ersten Lauf im Zeitfenster durch |
 | Freigabe anfordern | hält den Lauf an, bis eine Person mit „Fassungen freigeben“ entscheidet; ohne Entscheidung gilt die Anfrage nach der Frist (höchstens 72 h) als abgelehnt. Ausgänge **freigegeben** und **abgelehnt** |
 | Zusammenführen | führt Wege wieder zusammen |
+| Bild aus Vorlage erzeugen | füllt eine [befüllbare Bildvorlage](/hilfe/designvorlagen): je Textfeld der Vorlage (z. B. `titel`) eine Textvorlage mit Platzhaltern wie `{{stichwort}}`, `{{titel}}` oder `{{beginn}}`, optional feste Bilder für Bild-Platzhalter, Alternativtext und Zielsammlung. Das Bild landet geprüft in den Medien (sonst in „Bilder aus Vorlagen“). Liefert die Felder `bild_id`, `bild_link` und `bilder`. Ein **Beitrags-Ausgang danach** übernimmt alle Bilder des Laufs (das erste als Titelbild, mit Alternativtext) – damit auch für die vorausgewählten sozialen Kanäle und **Storys** des Beitrags. Im **Testlauf** entsteht nur eine Vorschau beim Schritt, nichts in den Medien |
 
 Vergleiche ignorieren Groß- und Kleinschreibung. Nach einem Zusammenführen stehen nur Felder zur Verfügung, die auf allen eingehenden Wegen vorhanden sind.
 
@@ -129,6 +131,7 @@ Workflows lassen sich als JSON-Datei sichern oder auf eine andere BlaulichtCMS-I
 
 - **Exportieren** (Liste der Workflows, Recht *Workflows ansehen*): einen, mehrere oder alle Workflows auswählen (höchstens 50 je Datei). Die Datei enthält Name, Beschreibung und Ablauf. Ein- und Ausgänge stehen darin nur mit **Art und Name** – ohne ihre Einstellungen, ohne Kennungen und ohne Zugangsdaten. Die Markierung **Direkt** wird nie exportiert.
 - **Importieren** (Recht *Workflows verwalten*): Datei wählen (höchstens 1 MB). BlaulichtCMS prüft Format, Version und jeden Schritt und nennt Fehler verständlich, z. B. „keine Exportdatei“ oder „aus einer neueren BlaulichtCMS-Version“. Die **Vorschau** zeigt, was angelegt wird. Je Ein- und Ausgang aus der Datei einen vorhandenen derselben Art wählen – gleichnamige sind vorgeschlagen – oder **Nicht zuordnen** und später im Editor wählen.
+- **Bildvorlagen** im Schritt „Bild aus Vorlage erzeugen“ stehen in der Datei nur mit ihrem **Namen**. Beim Import wird die gleichnamige befüllbare Bildvorlage eingesetzt; fehlt sie, bleibt der Platz offen (mit Hinweis auf den Namen). Feste Bilder und die Zielsammlung werden nicht exportiert.
 - Importierte Workflows sind immer **Entwürfe**: nicht aktiv, nicht getestet, ohne Direktversand. Ist der Name schon vergeben, wird „(Import)“ angehängt. Vor dem Aktivieren im Editor prüfen und testen. Dateien aus Version 0.3.0 (Format `blaulichtcms.automations`) bleiben importierbar; das Format heißt unverändert so.
 
 ## Beispiele

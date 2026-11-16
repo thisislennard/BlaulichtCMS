@@ -13,6 +13,8 @@ import { INPUT_CONFIG, OUTPUT_CONFIG } from '../automations/configs.js';
 import { approvalConflict, buildSnapshot, cancelOpenRuns, createRun, decideApproval, examplePayload, executeRun, loadRefs, snapshotHash, type Snapshot } from '../automations/engine.js';
 import { graphSchema, inputFields, outputNeeds, validateGraph, type Graph } from '../automations/graph.js';
 import { redactForLog } from '../automations/logic.js';
+import { runPreviewPath } from '../templates/workflow.js';
+import { sendFileResponse } from './files.js';
 import { buildExport, mappedGraph, parseTransferFile, suggestions, TRANSFER_MAX_AUTOMATIONS, TRANSFER_MAX_BYTES, TransferError, type TransferFile } from '../automations/transfer.js';
 import { summarizeGraph, type SummaryLabels } from '../automations/summary.js';
 import { templateById, templateGraph, TEMPLATES } from '../automations/templates.js';
@@ -160,6 +162,13 @@ export async function automationRoutes(app: FastifyInstance) {
       responsibilities: await many<any>(`SELECT id, name, area FROM responsibilities WHERE active ORDER BY name`),
       warningFields: ((await one<any>(`SELECT fields FROM warning_templates WHERE status = 'active' ORDER BY created_at DESC, version DESC LIMIT 1`))?.fields ?? []).map((f: any) => ({ key: f.key, label: f.label, required: !!f.required })),
       users: canManage ? await many<any>(`SELECT id, name FROM users WHERE status = 'active' ORDER BY name`) : [],
+      // Befüllbare Bildvorlagen für „Bild aus Vorlage erzeugen“ (#210): Textfelder und Bild-Platzhalter je Vorlage
+      imageTemplates: (await many<any>(`SELECT id, title, layout FROM design_templates WHERE kind = 'image' AND layout IS NOT NULL ORDER BY lower(title)`)).map((t) => ({
+        id: t.id,
+        title: t.title,
+        texts: (t.layout.elements ?? []).filter((e: any) => e.type === 'text').map((e: any) => ({ id: e.id, label: e.label, default: e.default ?? '', maxLength: e.maxLength })),
+        images: (t.layout.elements ?? []).filter((e: any) => e.type === 'image').map((e: any) => ({ id: e.id, label: e.label, required: !!e.required })),
+      })),
     };
   });
 
@@ -279,7 +288,7 @@ export async function automationRoutes(app: FastifyInstance) {
     const rows = await many<any>(`SELECT id, name, description, graph FROM automations WHERE deleted_at IS NULL ${ids.length ? 'AND id = ANY($1::uuid[])' : ''} ORDER BY name`, ids.length ? [ids] : []);
     if (!rows.length) throw notFound('Kein Workflow zum Exportieren gefunden.');
     if (rows.length > TRANSFER_MAX_AUTOMATIONS) throw badRequest(`Höchstens ${TRANSFER_MAX_AUTOMATIONS} Workflows auf einmal exportieren – bitte eine Auswahl treffen.`);
-    const file = buildExport(rows, await loadRefs(), config.version);
+    const file = buildExport(rows, await loadRefs(), config.version, new Date(), new Map((await many<any>(`SELECT id, title FROM design_templates WHERE kind = 'image'`)).map((t) => [t.id, t.title])));
     await audit(req.auth!.actor, 'automation.exported', { type: 'automation', id: rows.length === 1 ? rows[0].id : undefined, label: rows.length === 1 ? rows[0].name : `${rows.length} Workflows` }, { anzahl: rows.length });
     const stamp = new Date().toISOString().slice(0, 10);
     reply.header('content-disposition', `attachment; filename="automationen-${stamp}.json"`);
@@ -356,11 +365,12 @@ export async function automationRoutes(app: FastifyInstance) {
       const t = id ? refs.outputs.get(id) : null;
       if (id && (!t || t.archived || t.kind !== r.kind)) throw badRequest(`Die Zuordnung für den Ausgang „${r.name}“ passt nicht (gelöscht oder andere Art).`);
     }
+    const imageTemplates = new Map((await many<any>(`SELECT id, title FROM design_templates WHERE kind = 'image' ORDER BY created_at`)).reverse().map((t) => [String(t.title).trim().toLocaleLowerCase('de'), t.id as string]));
     const created = await tx(async (db) => {
       const taken = await takenNames();
       const out: { id: string; name: string; open: number }[] = [];
       for (const a of file.automations) {
-        const { graph, open } = mappedGraph(a, file, b.mapping, refs);
+        const { graph, open } = mappedGraph(a, file, b.mapping, refs, imageTemplates);
         const name = uniqueName(a.name, taken);
         const row = await one<{ id: string }>(
           `INSERT INTO automations (name, description, status, graph, graph_hash, created_by, updated_by) VALUES ($1,$2,'draft',$3,$4,$5,$5) RETURNING id`,
@@ -590,6 +600,13 @@ export async function automationRoutes(app: FastifyInstance) {
   }
 
   app.get('/automation-runs/:id', { preHandler: read }, async (req) => runDetail(uuidParam.parse(req.params).id));
+
+  /* Vorschau des Bildes aus einem Testlauf (#210) – wird nie veröffentlicht, nach zwei Tagen gelöscht */
+  app.get('/automation-runs/:id/image-preview/:node', { preHandler: read }, async (req, reply) => {
+    const { id, node } = z.object({ id: z.uuid(), node: z.string().regex(/^[A-Za-z0-9_-]{1,40}$/) }).parse(req.params);
+    if (!(await one(`SELECT 1 FROM automation_runs WHERE id = $1 AND mode = 'test'`, [id]))) throw notFound('Testlauf nicht gefunden.');
+    return sendFileResponse(reply, runPreviewPath(id, node), 'image/jpeg');
+  });
 
   app.post('/automation-runs/:id/cancel', { preHandler: manage }, async (req) => {
     const { id } = uuidParam.parse(req.params);

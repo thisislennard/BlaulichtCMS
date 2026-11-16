@@ -62,7 +62,7 @@ export interface ExportSource {
 }
 
 /** Exportdatei aus Automationen bauen: Ein-/Ausgänge werden zu Bezügen (Art + Name), Direktversand entfällt. */
-export function buildExport(list: ExportSource[], refs: { inputs: Map<string, InputRef>; outputs: Map<string, OutputRef> }, appVersion: string, now = new Date()): TransferFile {
+export function buildExport(list: ExportSource[], refs: { inputs: Map<string, InputRef>; outputs: Map<string, OutputRef> }, appVersion: string, now = new Date(), templates: Map<string, string> = new Map()): TransferFile {
   const inputs = new Map<string, { ref: string; kind: InputKind; name: string }>();
   const outputs = new Map<string, { ref: string; kind: OutputKind; name: string }>();
   const automations = list.map((a) => ({
@@ -88,6 +88,12 @@ export function buildExport(list: ExportSource[], refs: { inputs: Map<string, In
             ref = outputs.get(out.id)!.ref;
           }
           return { id: n.id, type: n.type, position: n.position, data: { ...(ref ? { outputRef: ref } : {}), ...(label ? { label } : {}) } };
+        }
+        if (n.type === 'image') {
+          // Bildvorlage nur als Bezug nach Name (#210); feste Bilder und Zielsammlung gehören zur Installation
+          const { templateId, templateName, images: _images, collectionId: _collection, ...rest } = n.data ?? {};
+          const name = (templateId && templates.get(templateId)) || templateName;
+          return { id: n.id, type: n.type, position: n.position, data: { ...rest, ...(name ? { templateName: name } : {}) } };
         }
         return { id: n.id, type: n.type, position: n.position, data: n.data ?? {} };
       }),
@@ -180,7 +186,7 @@ export interface TransferMapping {
  * nicht gelöscht) oder bleiben offen. Unbekannte Zuordnungen bleiben ebenfalls offen. Daten der übrigen Knoten wurden
  * in parseTransferFile geprüft; hier wird nur über das Schema normalisiert.
  */
-export function mappedGraph(a: TransferFile['automations'][number], file: TransferFile, mapping: TransferMapping, refs: { inputs: Map<string, InputRef>; outputs: Map<string, OutputRef> }): { graph: Graph; open: number } {
+export function mappedGraph(a: TransferFile['automations'][number], file: TransferFile, mapping: TransferMapping, refs: { inputs: Map<string, InputRef>; outputs: Map<string, OutputRef> }, imageTemplates: Map<string, string> = new Map()): { graph: Graph; open: number } {
   const inKind = new Map(file.references.inputs.map((x) => [x.ref, x.kind]));
   const outKind = new Map(file.references.outputs.map((x) => [x.ref, x.kind]));
   let open = 0;
@@ -199,6 +205,13 @@ export function mappedGraph(a: TransferFile['automations'][number], file: Transf
       const ok = target && !target.archived && target.kind === outKind.get(n.data.outputRef);
       if (!ok) open++;
       return { ...n, data: { ...(ok ? { outputId: target!.id } : {}), ...label } };
+    }
+    if (n.type === 'image') {
+      // Bildvorlage nach Name zuordnen (ohne Groß-/Kleinschreibung); sonst offener Platz mit Hinweis auf den Namen
+      const { templateId: _ignored, ...d } = NODE_DATA.image.parse(n.data);
+      const id = d.templateName ? imageTemplates.get(d.templateName.trim().toLocaleLowerCase('de')) : undefined;
+      if (!id) open++;
+      return { ...n, data: id ? { ...d, templateId: id, templateName: undefined } : d };
     }
     return { ...n, data: NODE_DATA[n.type].parse(n.data) };
   });

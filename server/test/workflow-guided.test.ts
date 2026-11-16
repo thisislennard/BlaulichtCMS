@@ -3,6 +3,7 @@ import { activationChecklist, graphToGuided, guidedToGraph, type GuidedGraph } f
 import { graphSchema, validateGraph, type InputRef, type OutputRef } from '../src/automations/graph.js';
 import { summarizeGraph } from '../src/automations/summary.js';
 import { TEMPLATES, templateGraph } from '../src/automations/templates.js';
+import { buildExport, mappedGraph, parseTransferFile } from '../src/automations/transfer.js';
 import { INPUT_KINDS, OUTPUT_KINDS } from '../src/automations/catalog.js';
 import { OUTPUT_CONFIG, INPUT_CONFIG } from '../src/automations/configs.js';
 
@@ -131,12 +132,13 @@ describe('Workflows: Vorlagen', () => {
   it('ohne passende Ein-/Ausgänge bleiben die Plätze offen; Platzhalter der Startwerte gibt es am Platz', () => {
     for (const t of TEMPLATES) {
       const { graph, open } = templateGraph(t, { inputs: new Map(), outputs: new Map() });
-      expect(open).toBe((t.input ? 1 : 0) + t.outputs.length);
+      expect(open).toBe((t.input ? 1 : 0) + t.outputs.length + (t.image ? 1 : 0));
       const v = validateGraph(graph, { inputs: new Map(), outputs: new Map() });
       // Einzige Fehler: offene Plätze – Bedingungsfelder stehen an dieser Stelle zur Verfügung
       expect(v.errors.every((x) => x.nodeId && v.open.includes(x.nodeId)), `${t.id}: ${JSON.stringify(v.errors)}`).toBe(true);
       expect(v.open).toHaveLength(open);
-      expect(graphToGuided(graph).ok).toBe(true);
+      // Mit „Bild aus Vorlage“ nur im erweiterten Editor darstellbar
+      expect(graphToGuided(graph).ok).toBe(!t.image);
     }
   });
 
@@ -180,5 +182,44 @@ describe('Workflows: Zusammenfassung in einem Satz', () => {
       edges: [e('a', 'in', 'w'), e('b', 'w', 'o')],
     });
     expect(summarizeGraph(g, refs)).toMatch(/über einen Zwischenschritt \(Warten\)\.$/);
+  });
+});
+
+describe('Workflows: Bild aus Vorlage (#210)', () => {
+  const TPL = '77777777-7777-4777-8777-777777777777';
+  const MEDIA = '88888888-8888-4888-8888-888888888888';
+  const imageGraph = (data: any) =>
+    graphSchema.parse({
+      nodes: [n('in', 'input', { inputId: IN }), n('img', 'image', data, 0, 170), n('o', 'output', { outputId: OUT2 }, 0, 340)],
+      edges: [e('a', 'in', 'img'), e('b', 'img', 'o')],
+    });
+
+  it('Bildvorlage ist Pflicht (offener Platz); Platzhalter werden geprüft; danach stehen bild_id, bild_link, bilder bereit', () => {
+    const open = validateGraph(imageGraph({ texts: { titel: '{{stichwort_text}}' } }), refs);
+    expect(open.open).toEqual(['img']);
+    expect(open.errors.map((x) => x.message).join(' ')).toMatch(/Bildvorlage noch nicht gewählt/);
+    const bad = validateGraph(imageGraph({ templateId: TPL, texts: { titel: '{{gibt_es_nicht}}' } }), refs);
+    expect(bad.errors.map((x) => x.message).join(' ')).toMatch(/gibt_es_nicht/);
+    const ok = validateGraph(imageGraph({ templateId: TPL, texts: { titel: '{{stichwort_text}} in {{ort}}' }, altText: 'Einsatz in {{ort}}' }), refs);
+    expect(ok.errors).toEqual([]);
+    expect(ok.fields.o).toEqual(expect.arrayContaining(['bild_id', 'bild_link', 'bilder']));
+    // Ungültige Kennung eines Textfeldes
+    expect(validateGraph(imageGraph({ templateId: TPL, texts: { 'Titel!': 'x' } }), refs).ok).toBe(false);
+  });
+
+  it('Export nennt die Bildvorlage nach Name (ohne feste Bilder und Sammlung); Import ordnet nach Name zu oder lässt offen', () => {
+    const g = imageGraph({ templateId: TPL, texts: { titel: '{{stichwort_text}}' }, images: { foto: MEDIA }, collectionId: MEDIA, label: 'Story-Bild' });
+    const file = buildExport([{ name: 'Mit Bild', description: '', graph: g }], refs, '0.5.0', new Date(), new Map([[TPL, 'Story Einsatz']]));
+    const node = file.automations[0].graph.nodes.find((x) => x.type === 'image')!;
+    expect(node.data).toEqual({ texts: { titel: '{{stichwort_text}}' }, label: 'Story-Bild', templateName: 'Story Einsatz' });
+    const parsed = parseTransferFile(JSON.parse(JSON.stringify(file)));
+    const mapping = { inputs: { in1: IN }, outputs: { out1: OUT2 } };
+    const hit = mappedGraph(parsed.automations[0], parsed, mapping, refs, new Map([['story einsatz', TPL]]));
+    expect(hit.open).toBe(0);
+    expect(hit.graph.nodes.find((x) => x.type === 'image')!.data).toMatchObject({ templateId: TPL, texts: { titel: '{{stichwort_text}}' } });
+    expect(validateGraph(hit.graph, refs).errors).toEqual([]);
+    const miss = mappedGraph(parsed.automations[0], parsed, mapping, refs, new Map());
+    expect(miss.open).toBe(1);
+    expect(validateGraph(miss.graph, refs).errors.map((x) => x.message).join(' ')).toMatch(/„Story Einsatz“/);
   });
 });
