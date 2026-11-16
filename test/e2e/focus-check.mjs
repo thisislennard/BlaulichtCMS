@@ -253,9 +253,16 @@ async function scanButtons(page, route, where, tab, reset, seen, done) {
   }
 }
 
-async function scanRoute(page, route, { buttons = true } = {}) {
+async function scanRoute(page, route, opts = {}) {
   if (ONLY && !ONLY.test(route)) return;
   console.log(`▶ ${route}`);
+  const t0 = Date.now();
+  await scanRouteInner(page, route, opts);
+  // Dauer je Ansicht – hilft, die Auswahl für die CI (FOCUS_ONLY) klein zu halten
+  console.log(`  ⏱ ${Math.round((Date.now() - t0) / 1000)} s`);
+}
+
+async function scanRouteInner(page, route, { buttons = true } = {}) {
   await gotoRoute(page, route);
   const seen = new Set();
   await checkFields(page, route, null, seen);

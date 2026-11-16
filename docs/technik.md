@@ -221,7 +221,9 @@ nicht archivierten Beiträge (bei 4 800 Beiträgen ohne Freigaben 46 ms) – Bei
 
 **Automatisiert (bei jedem Push in der CI):** Typprüfung, rund 200 Server-Tests gegen echtes PostgreSQL (inklusive
 Video-Verarbeitung mit ffmpeg), Build, PHP-Lint des Plugins, Probelauf mit Docker Compose (Rollen, Schlüsselwechsel,
-Audit-Kette), Abhängigkeits-, Image- und Secret-Scan. Dazu kommen Abnahmetests über Browser, Container und ein
+Audit-Kette), Abhängigkeits-, Image- und Secret-Scan sowie Browsertests der Kernabläufe mit Playwright/Chromium
+(Einrichtung mit Zwei-Faktor, Beitrag bis zur Freigabe, Workflow aus Vorlage, Rollen, Dashboard, Fokus-Check).
+Wöchentlich prüft ein Workflow alle festgelegten Versionen und meldet Neuerungen in einem Issue. Dazu kommen Abnahmetests über Browser, Container und ein
 Test-WordPress (`test/e2e/`, Foto-Link bis Website, fortsetzbarer Upload, Warnentwurf, fehlgeschlagenes Update mit
 Rückweg, Wiederherstellung, PostgreSQL-Upgrade). Das Update aus der App ist mit dem echten Supervisor durchgespielt
 (Aktivierung, Rückweg bei fehlerhafter Migration und bei Absturz der neuen Version).

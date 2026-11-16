@@ -27,6 +27,9 @@ jobs:
       # Entwicklungswerkzeuge (nicht im Image): ab „kritisch“
       - name: npm audit (alle, ab kritisch)
         run: npm audit --audit-level=critical
+      # Browsertests (Playwright, eigener Lock in test/e2e, nicht im Image): ab „kritisch“
+      - name: npm audit (Browsertests, ab kritisch)
+        run: npm audit --prefix test/e2e --audit-level=critical
 
   image-scan:
     runs-on: ubuntu-latest

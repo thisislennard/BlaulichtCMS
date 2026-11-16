@@ -1,0 +1,10 @@
+{
+  "name": "blaulichtcms-e2e",
+  "private": true,
+  "description": "Browsertests (Playwright) – nur Entwicklung und CI, nicht Teil des Images",
+  "license": "GPL-3.0-or-later",
+  "type": "module",
+  "dependencies": {
+    "playwright": "1.65.1"
+  }
+}

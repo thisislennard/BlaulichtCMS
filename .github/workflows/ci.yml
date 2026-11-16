@@ -56,6 +56,96 @@ jobs:
           TEST_DATABASE_URL: postgresql://blaulichtcms:blaulichtcms@127.0.0.1:5432/blaulichtcms_test
       - run: npm run build
 
+  # Browsertests (#219): Kernabläufe mit Playwright/Chromium gegen gebaute Oberfläche, API und Worker. Playwright hat
+  # einen eigenen Lock in test/e2e (fest Version + Chromium) und ist keine Abhängigkeit des Images.
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:18-alpine@sha256:b6972e1115a4ff8eba5d7f7d19184926d1e16d7d1136ae1e1a7ebf286da0f015
+        env:
+          POSTGRES_USER: blaulichtcms
+          POSTGRES_PASSWORD: blaulichtcms
+          POSTGRES_DB: postgres
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U blaulichtcms" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      PGHOST: 127.0.0.1
+      PGUSER: blaulichtcms
+      PGPASSWORD: blaulichtcms
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 26
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            test/e2e/package-lock.json
+      - run: npm ci
+      - run: npm run build
+      - name: Playwright und Chromium (Version aus test/e2e/package-lock.json)
+        run: |
+          npm ci --prefix test/e2e --no-audit --no-fund
+          cd test/e2e && npx playwright install --with-deps --only-shell chromium
+      - name: Zwei frische Instanzen starten (Kernabläufe, Fokus/Rollen/Dashboard)
+        run: |
+          start() { # name port
+            createdb -E UTF8 -T template0 "bc_$1"
+            mkdir -p "$RUNNER_TEMP/$1"
+            cat > "$RUNNER_TEMP/$1.env" <<EOF
+          DATABASE_URL=postgresql://blaulichtcms:blaulichtcms@127.0.0.1:5432/bc_$1
+          BLAULICHTCMS_MASTER_KEY=$(openssl rand -base64 32)
+          BLAULICHTCMS_DATA_DIR=$RUNNER_TEMP/$1/data
+          COOKIE_SECURE=false
+          HOST=127.0.0.1
+          PORT=$2
+          EOF
+            nohup node --env-file="$RUNNER_TEMP/$1.env" server/dist/api.js > "$RUNNER_TEMP/$1-api.log" 2>&1 &
+            nohup node --env-file="$RUNNER_TEMP/$1.env" server/dist/worker.js > "$RUNNER_TEMP/$1-worker.log" 2>&1 &
+          }
+          start core 7310
+          start focus 7311
+          for port in 7310 7311; do
+            for i in $(seq 1 60); do curl -fsS "http://127.0.0.1:$port/healthz" >/dev/null 2>&1 && break; sleep 1; done
+            curl -fsS "http://127.0.0.1:$port/healthz"; echo
+          done
+      - name: Kernabläufe (Einrichtung mit Zwei-Faktor, Anmeldung, Beitrag → Freigabe, Workflow aus Vorlage)
+        env:
+          BLAULICHTCMS_URL: http://127.0.0.1:7310
+        run: SETUP_TOKEN_FILE="$RUNNER_TEMP/core/data/setup-token.txt" node test/e2e/core-flows.mjs
+      - name: Fokus-Check auf wichtigen Ansichten
+        if: ${{ !cancelled() }}
+        env:
+          BLAULICHTCMS_URL: http://127.0.0.1:7311
+          # Auswahl mit kurzer Laufzeit (≈ 2 min); Sammlungen, Einstellungen und Profil dauern einzeln 1–7 min
+          FOCUS_ONLY: '^/(einrichtung|login|beitraege|freigaben|medien|workflows)?$|^/beitraege/|^/workflows/[0-9a-f-]{36}$'
+        run: SETUP_TOKEN_FILE="$RUNNER_TEMP/focus/data/setup-token.txt" node test/e2e/focus-check.mjs
+      - name: Rollen-Sichtbarkeit
+        if: ${{ !cancelled() }}
+        env:
+          BLAULICHTCMS_URL: http://127.0.0.1:7311
+        run: node test/e2e/roles-smoke.mjs
+      - name: Dashboard Drag-and-drop
+        if: ${{ !cancelled() }}
+        env:
+          BLAULICHTCMS_URL: http://127.0.0.1:7311
+        run: node test/e2e/dashboard-dnd.mjs
+      - name: Protokolle der Instanzen sammeln
+        if: failure()
+        run: cp "$RUNNER_TEMP"/*-api.log "$RUNNER_TEMP"/*-worker.log test/e2e/out/ || true
+      - name: Berichte, Bildschirmfotos und Traces hochladen
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: browsertests
+          path: |
+            test/e2e/out/
+            !test/e2e/out/backup.key
+          retention-days: 14
+
   docker:
     runs-on: ubuntu-latest
     needs: test

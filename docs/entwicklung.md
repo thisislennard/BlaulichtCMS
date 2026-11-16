@@ -7,7 +7,8 @@
 - ffmpeg/ffprobe für Videoprüfung (im Betrieb optional – ohne werden Videos abgewiesen; für die Tests nötig)
 - pdftotext (poppler-utils) für die PDF-Tests
 - Docker für Image-Build, Abnahmetest und WordPress-Testsystem
-- Playwright mit Chromium für den Abnahmetest
+- Playwright mit Chromium für die Browsertests: eigener Lock in `test/e2e` (feste Version, nicht Teil des Images) –
+  `npm ci --prefix test/e2e`, dann `cd test/e2e && npx playwright install chromium`
 
 ## Lokal starten (Hot Reload)
 
@@ -34,6 +35,7 @@ startet PostgreSQL) ist für den Container gedacht, funktioniert aber auch lokal
 |---|---|---|
 | Typprüfung | `npm run typecheck` | Server und Oberfläche |
 | Unit + Integration | `TEST_DATABASE_URL=… npm test` | 90 Tests: Rechte, Krypto, SSRF, Fassungen, Upload, Warnentwürfe, Verbindungen, Import, Sicherheit – braucht ffmpeg und pdftotext |
+| Kernabläufe | `node test/e2e/core-flows.mjs` | Ersteinrichtung mit Zwei-Faktor, Anmeldung mit Code, Beitrag anlegen → einreichen → freigeben (Vier-Augen), Workflow aus Vorlage anlegen und testen (frische Instanz nötig; läuft in der CI) |
 | Fokus-Test | `node test/e2e/focus-check.mjs` | Tippen in alle Textfelder und Dialoge ohne Fokusverlust (laufende Instanz nötig) |
 | Dashboard anpassen | `node test/e2e/dashboard-dnd.mjs` | Verschieben mit Maus, Finger (Touch-Emulation) und Tastatur, Abbrechen, Speichern, Vorlagen (Instanz mit den Testdaten des Fokus-Tests nötig) |
 | Rollen-Kurztest | `node test/e2e/roles-smoke.mjs` | Eingeschränkte eigene Rolle im Browser: nur erlaubte Navigation und Schaltflächen, „Kein Zugriff“, keine abgelehnten Anfragen (nach dem Fokus-Test auf derselben Instanz) |
@@ -93,6 +95,56 @@ Spaltenbreite, Hinzufügen/Löschen von Spalten, Speichern in einem Aufruf, Vorl
 BLAULICHTCMS_URL=http://localhost:7310 node test/e2e/dashboard-dnd.mjs
 DND_SHOTS=/pfad/fuer/bilder BLAULICHTCMS_URL=… node test/e2e/dashboard-dnd.mjs   # zusätzlich Bildschirmfotos (hell, dunkel, Handy)
 ```
+
+## Browsertests in der CI
+
+Der Job `browser` in `.github/workflows/ci.yml` läuft bei jedem Push und Pull Request parallel zu den Server-Tests
+(Ziel unter 10 Minuten, harte Grenze 20). Er baut Server und Oberfläche, installiert Playwright samt Chromium in der
+Version aus `test/e2e/package-lock.json` und startet gegen einen PostgreSQL-18-Dienst **zwei frische Instanzen**
+(API + Worker mit gebauter Oberfläche, je eigene Datenbank und eigenes Datenverzeichnis):
+
+| Instanz | Port | Tests |
+|---|---|---|
+| Kernabläufe | 7310 | `core-flows.mjs` (Einrichtung über die Einrichtungsseite – braucht eine eigene, noch nicht eingerichtete Instanz) |
+| Fokus | 7311 | `focus-check.mjs` mit `FOCUS_ONLY` auf wichtige Ansichten (Einrichtung, Anmeldung mit Zwei-Faktor, Dashboard, Beiträge samt Editor, Freigaben, Medien, Workflows samt Editor; etwa 2 Minuten), danach `roles-smoke.mjs` und `dashboard-dnd.mjs` mit dessen Testdaten |
+
+Schlägt ein Schritt fehl, laufen die übrigen trotzdem; der Job lädt dann `test/e2e/out/` als Artefakt
+`browsertests` hoch (Berichte als JSON, Bildschirmfotos und Playwright-Traces der Kernabläufe, Protokolle von API und
+Worker). Einen Trace ansehen: `cd test/e2e && npx playwright show-trace out/core-<schritt>.zip`.
+
+Lokal genauso (Git Bash unter Windows mit `MSYS_NO_PATHCONV=1`):
+
+```bash
+npm run build && npm ci --prefix test/e2e && (cd test/e2e && npx playwright install chromium)
+node --env-file=<env-datei> server/dist/api.js &      # frische Datenbank, eigenes BLAULICHTCMS_DATA_DIR
+node --env-file=<env-datei> server/dist/worker.js &
+BLAULICHTCMS_URL=http://localhost:7310 SETUP_TOKEN_FILE=<Datenverzeichnis>/setup-token.txt node test/e2e/core-flows.mjs
+```
+
+Neue Kernabläufe gehören in `core-flows.mjs` (je Ablauf ein `run('…')`-Schritt, Auswahl über Rollen und
+Beschriftungen wie ein Mensch, keine CSS-Klassen). Der vollständige Fokus-Check über alle Ansichten bleibt lokal (er gibt je Ansicht die Dauer aus – Sammlungen, Einstellungen
+und Profil brauchen einzeln mehrere Minuten und sind deshalb nicht in der CI-Auswahl).
+
+## Versionsprüfung und bekannte Schwachstellen
+
+Statt Pull Requests von Dependabot prüft der Workflow „Versionsprüfung“ (`.github/workflows/versions.yml`) jeden
+Montag und auf Knopfdruck (*Actions → Versionsprüfung → Run workflow*) alle festgelegten Versionen mit
+`scripts/check-versions.mjs`:
+
+- npm-Pakete von Wurzel, Server und Oberfläche (Version aus `package-lock.json`, auch Hauptversionen) und der
+  Browsertests (`test/e2e`, Playwright – Chromium kommt fest mit der Playwright-Version)
+- Node.js (`node-version` der Workflows; die Hauptversion muss zum Node-Image im `Dockerfile` passen)
+- Container-Images aus `Dockerfile`, `compose.yaml`, `test/wordpress/compose.yaml` und den Workflows – neuer Tag
+  derselben Variante oder neuer Digest desselben Tags; darüber auch die PostgreSQL-Hauptversion
+- GitHub Actions: neue Version samt Commit-SHA, Warnung, wenn die gepinnte SHA nicht zum Tag im Kommentar passt
+
+Gibt es Neues, öffnet bzw. aktualisiert der Lauf genau **ein** Issue „Neue Versionen verfügbar“ (Label `claude`) mit
+einer Tabelle *festgelegt → neu*; ist alles aktuell, schließt er es. Branches oder Pull Requests entstehen nicht.
+Lokal: `node scripts/check-versions.mjs` (mit `GITHUB_TOKEN` gegen das Abfragelimit der GitHub-API).
+
+Bekannte Schwachstellen melden die Dependabot-Warnungen des Repositorys (*Settings → Advanced Security*: „Dependabot
+alerts“ an, „Dependabot security updates“ aus – also ohne Pull Requests) und der Workflow „Sicherheitsprüfung“
+(`npm audit` für Laufzeit, Entwicklung und Browsertests, Trivy-Imagescan, Secret-Scan; bei jedem Push und wöchentlich).
 
 ## Image hinter einem TLS-Proxy bauen
 
