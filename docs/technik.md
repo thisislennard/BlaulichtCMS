@@ -149,6 +149,10 @@ Automatische Gesichtssuche als **Vorschlag** im vorhandenen Werkzeug zum Unkennt
   `ONNXRUNTIME_NODE_INSTALL=skip` (Dockerfile, CI) verhindert, dass das Installationsskript unter Linux x64
   CUDA-/TensorRT-Bibliotheken von NuGet lädt. Neue native Abhängigkeit ⇒ Release mit neuem Image (`MIN_IMAGE_VERSION`).
   Fehlt die Laufzeit (altes Image), meldet die Suche „nicht verfügbar“, alles andere läuft weiter.
+- **Imagegröße** (CI-Docker-Job, linux/amd64, `docker image inspect`): vorher **997 MB**, nachher **1 047 MB** (+50 MB,
+  +5 %); Ebene `node_modules` 77,3 → 126 MB (davon `onnxruntime-node` 47 MB), `server/dist` +0,3 MB (Modell). Auf
+  arm64 kommen rund 27 MB hinzu. Mehr lässt sich ohne eigenen Build von onnxruntime nicht sparen – die Bibliothek ist
+  bereits ohne Symbole, der Großteil sind Rechenkerne für die verschiedenen CPU-Befehlssätze.
 - **Warum nicht** `onnxruntime-web` (WASM; im Image rund 15–25 MB statt 48 MB, aber etwa 2–3× langsamer) oder
   OpenCV.js (`FaceDetectorYN`, langsamer, eigene Bildumwandlung): Beide würden ebenfalls synchron rechnen und bräuchten
   denselben Kindprozess. Die native Laufzeit ist die schnellste und am weitesten verbreitete; der Kindprozess fängt
