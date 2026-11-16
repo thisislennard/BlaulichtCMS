@@ -50,6 +50,8 @@ Unter [Einstellungen → Sicherung](/einstellungen#sicherung) zeigt **„Update 
 
 Im **Wartungsmodus** bleibt Lesen möglich. Websites erhalten keine neuen Aufträge; bereits angezeigte Banner bleiben unverändert.
 
+Ein- und ausschalten lässt sich der Wartungsmodus außerdem im [Systemstatus](/system) (Karte **Wartungsmodus**) – dafür genügt das Recht „Wartungsmodus schalten“, „Updates installieren“ ist nicht nötig.
+
 ## Update am Docker-Host
 
 ```
