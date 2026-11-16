@@ -83,6 +83,7 @@ import { keywordRoutes } from './routes/keywords.js';
 import { designTemplateRoutes } from './routes/design-templates.js';
 import { pressRoutes } from './routes/press.js';
 import { calendarRoutes } from './routes/calendar.js';
+import { pressMailboxRoutes } from './routes/press-mailbox.js';
 import { observeProxy } from './lib/proxy-check.js';
 import { healthStatus, isLocalHealthRequest, publicHealth } from './routes/health.js';
 
@@ -266,6 +267,7 @@ export async function buildApp(): Promise<FastifyInstance> {
       await api.register(keywordRoutes);
       await api.register(pressRoutes);
       await api.register(calendarRoutes);
+      await api.register(pressMailboxRoutes);
     },
     { prefix: '/api/v1' },
   );

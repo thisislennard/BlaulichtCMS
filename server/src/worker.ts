@@ -37,6 +37,7 @@ import { automationTick } from './automations/events.js';
 import { deliverNotification } from './lib/notify-channels.js';
 import { migratePlaintextSecrets } from './lib/secret-audit.js';
 import { checkPressDeadlines } from './press/deadlines.js';
+import { pollPressMailbox } from './press/mailbox.js';
 
 process.env.BLAULICHTCMS_ROLE ??= 'worker';
 
@@ -256,6 +257,8 @@ async function maintenance(isLeader: boolean) {
   if (due('threads-token', 24 * 60 * 60_000)) await refreshThreadsTokens().catch((e) => log('warn', 'threads', e.message));
   if (due('automations', 30_000)) await automationTick().catch((e) => log('warn', 'automation', e.message));
   // Presseanfragen: Erinnerung vor Ablauf der Frist und bei Überschreitung (#204)
+  // Presse-Postfach (#205): im eingestellten Abstand (geprüft alle 30 s)
+  if (due('press-mailbox', 30_000)) await pollPressMailbox().catch((e) => log('warn', 'press', `Presse-Postfach: ${e.message}`));
   if (due('press-deadlines', 60_000)) await checkPressDeadlines().catch((e) => log('warn', 'press', `Fristen: ${e.message}`));
   if (s['backup.enabled'] && due('backup-check', 10 * 60_000)) {
     const now = new Date(new Date().toLocaleString('en-US', { timeZone: s['general.timezone'] }));

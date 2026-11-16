@@ -183,6 +183,10 @@ flowchart LR
   zuständige Person, Frist mit Erinnerung, Verknüpfung mit Einsatz und Beitrag, interne Notizen, vollständiger Verlauf,
   Übersicht mit Filtern und Dashboard-Kachel; Löschfrist Standard 12 Monate nach Erledigung; Workflow-Eingang
   „Neue Presseanfrage“ ohne Kontaktdaten.
+- **Presse-Postfach:** Abruf per IMAP (TLS/STARTTLS) oder Microsoft 365 (Graph, gleiche App-Registrierung wie der
+  Mailversand) – rein lesend, Verbindungstest vor Aktivierung, Passwort verschlüsselt; neue Mails werden Anfragen,
+  Antworten im Mail-Verlauf werden zugeordnet, automatische Antworten/Spam/Newsletter ignoriert, Anhänge mit
+  Größenlimit und Typprüfung, HTML entschärft, Empfangsprotokoll.
 
 ### Verbindungen
 

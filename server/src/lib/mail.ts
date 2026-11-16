@@ -35,6 +35,9 @@ function testBase(): string | null {
 const graphBase = () => (testBase() ? `${testBase()}/graph` : GRAPH);
 const loginBase = () => (testBase() ? `${testBase()}/login` : LOGIN);
 const privateHosts = () => (testBase() ? [new URL(testBase()!).hostname] : []);
+/** Für weitere Graph-Aufrufe mit derselben App-Registrierung (Presse-Postfach #205). */
+export const m365GraphBase = graphBase;
+export const m365PrivateHosts = privateHosts;
 
 export const GUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 

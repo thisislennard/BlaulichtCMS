@@ -51,6 +51,7 @@ const AutomationOutputs = lazy(() => import('./pages/automations/Outputs'));
 const PressRequests = lazy(() => import('./pages/press/PressRequests'));
 const PressRequestPage = lazy(() => import('./pages/press/PressRequest'));
 const CalendarPage = lazy(() => import('./pages/calendar/Calendar'));
+const PressSettings = lazy(() => import('./pages/press/PressSettings'));
 const Help = lazy(() => import('./pages/help/Help'));
 const PrintSheet = lazy(() => import('./pages/print/PrintSheet'));
 const InstallApp = lazy(() => import('./pages/InstallApp'));
@@ -178,6 +179,7 @@ const router = createBrowserRouter(withErrors([
       { path: 'automationen/*', element: <LegacyWorkflowRedirect /> },
       { path: 'automationen', element: <LegacyWorkflowRedirect /> },
       { path: 'presse', element: <Page perm={['press.view']}><PressRequests /></Page> },
+      { path: 'presse/einstellungen', element: <Page perm={['press.mailbox', 'press.snippets']}><PressSettings /></Page> },
       { path: 'presse/:id', element: <Page perm={['press.view']}><PressRequestPage /></Page> },
       { path: 'amtliche-warnungen', element: <Page perm={['official.view']}><OfficialWarnings /></Page> },
       { path: 'benutzer', element: <Page perm={['user.view']}><Users /></Page> },

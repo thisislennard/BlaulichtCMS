@@ -322,6 +322,13 @@ export async function runRetention(opts: { dryRun: boolean; actor?: Actor; setti
     where: `created_at < now() - make_interval(days => $1)`,
   });
   if (!opts.dryRun) await purgeOrphanRaws();
+  // Empfangsprotokoll des Presse-Postfachs (#205): gleiche Frist
+  {
+    const d = Math.max(1, days(s['privacy.receipt_days']));
+    receiptCat.count += opts.dryRun
+      ? (await one<{ n: number }>(`SELECT count(*)::int AS n FROM press_mailbox_log WHERE at < now() - make_interval(days => $1)`, [d]))!.n
+      : ((await pool.query(`DELETE FROM press_mailbox_log WHERE at < now() - make_interval(days => $1)`, [d])).rowCount ?? 0);
+  }
   report.categories.push(receiptCat);
   const linkCat = await simpleCategory(opts.dryRun, {
     key: 'upload_links',

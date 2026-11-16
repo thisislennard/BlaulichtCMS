@@ -34,6 +34,8 @@ const INTERNAL_KEYS = new Set<SettingKey>([
   // E-Mail-Weg, Microsoft 365 und Push: eigene Seite mit Verbindungstest (routes/notify-channels.ts)
   'mail.transport', 'm365.tenant_id', 'm365.client_id', 'm365.sender', 'm365.secret_id', 'm365.save_sent', 'm365.verified',
   'notify.push_enabled', 'notify.mail_enabled', 'push.vapid_public_key', 'push.vapid_secret_id',
+  // Presse-Postfach: eigene Seite mit Verbindungstest (routes/press-mailbox.ts)
+  'press.mailbox', 'press.mailbox_state',
 ]);
 /**
  * Versandeinstellungen werden nur über PUT /warning-settings geändert, das sie gemeinsam prüft (SMTP-Verschlüsselung,

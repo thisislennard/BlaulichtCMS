@@ -254,6 +254,12 @@ export async function pressRoutes(app: FastifyInstance) {
 }
 
 /** Ergänzungen der Detailansicht aus den Teilmodulen (Mails, Anhänge, Antworten). */
-async function pressRequestExtras(_id: string, _req: FastifyRequest): Promise<Record<string, unknown>> {
-  return {};
+async function pressRequestExtras(id: string, _req: FastifyRequest): Promise<Record<string, unknown>> {
+  const messages = await many<any>(
+    `SELECT m.*, u.name AS created_by_name,
+            COALESCE((SELECT json_agg(json_build_object('id', a.id, 'filename', a.filename, 'content_type', a.content_type, 'size', a.size) ORDER BY a.created_at) FROM press_attachments a WHERE a.message_id = m.id), '[]') AS attachments
+       FROM press_messages m LEFT JOIN users u ON u.id = m.created_by WHERE m.request_id = $1 ORDER BY COALESCE(m.received_at, m.created_at), m.created_at`,
+    [id],
+  );
+  return { messages: messages.map(({ external_id, source, ...m }) => m) };
 }

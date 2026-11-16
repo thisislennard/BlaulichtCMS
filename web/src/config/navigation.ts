@@ -41,7 +41,10 @@ export const navigation: NavGroup[] = [
   },
   {
     group: 'nav.press',
-    items: [{ id: 'pressRequests', path: '/presse', label: 'nav.pressRequests', icon: 'MessageSquareQuote', perm: ['press.view'] }],
+    items: [
+      { id: 'pressRequests', path: '/presse', label: 'nav.pressRequests', icon: 'MessageSquareQuote', perm: ['press.view'] },
+      { id: 'pressSettings', path: '/presse/einstellungen', label: 'nav.pressSettings', icon: 'Settings', perm: ['press.mailbox', 'press.snippets'] },
+    ],
   },
   {
     group: 'nav.channels',

@@ -166,6 +166,12 @@ export const DEFAULT_SETTINGS = {
    */
   'press.reminder_hours': 2,
   /**
+   * Presse-Postfach (#205, press/mailbox.ts): Abruf per IMAP oder Microsoft 365 – eigene Seite mit Verbindungstest
+   * (routes/press-mailbox.ts). Passwort verschlüsselt in `secrets`; `press.mailbox_state` merkt sich den Stand des Abrufs.
+   */
+  'press.mailbox': null as null | Record<string, unknown>,
+  'press.mailbox_state': null as null | Record<string, unknown>,
+  /**
    * Automationen (automations/*): globaler Schalter (aus = keine neuen Läufe, offene Läufe werden abgebrochen),
    * Grenze der Läufe je Automation und Minute (Schutz gegen Schleifen und Fluten) und Aufbewahrung der Laufprotokolle.
    */

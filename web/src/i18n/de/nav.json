@@ -43,5 +43,6 @@
   "automationInputs": "Eingänge",
   "automationOutputs": "Ausgänge",
   "press": "Presse",
-  "pressRequests": "Presseanfragen"
+  "pressRequests": "Presseanfragen",
+  "pressSettings": "Postfach & Textbausteine"
 }

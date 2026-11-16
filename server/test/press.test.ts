@@ -8,6 +8,10 @@ import { hashPassword } from '../src/auth/passwords.js';
 import { invalidateRoles } from '../src/auth/roles.js';
 import { checkPressDeadlines, openPressDeadlines } from '../src/press/deadlines.js';
 import { runRetention } from '../src/lib/retention.js';
+import { storeSecret } from '../src/lib/secrets.js';
+import { resetM365TokenCache } from '../src/lib/mail.js';
+import { pollPressMailbox } from '../src/press/mailbox.js';
+import { fakeGraph, fakeImap } from './press-fakes.js';
 
 /**
  * Presseanfragen (#204–#207) gegen eine echte PostgreSQL-Datenbank (TEST_DATABASE_URL). Die Datenbank wird zu Beginn
@@ -235,5 +239,165 @@ describe('Presseanfragen: Grundmodul (#204)', () => {
     expect(runs).toHaveLength(1);
     expect(runs[0].payload).toMatchObject({ thema: 'Per Telefon', eingangsweg: 'Telefon', nummer: expect.stringMatching(/^P-/) });
     expect(JSON.stringify(runs[0].payload)).not.toMatch(/geheim/i);
+  });
+});
+
+const pdfBytes = Buffer.from('%PDF-1.4\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF');
+const exeBytes = Buffer.concat([Buffer.from([0x4d, 0x5a, 0x90, 0x00, 0x03, 0x00, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00, 0xff, 0xff, 0x00, 0x00]), Buffer.alloc(200, 0x78)]);
+const mailNew = (id: string) => `From: =?UTF-8?Q?Paula_M=C3=BCller?= <paula@zeitung.example>
+To: presse@feuerwehr.example
+Subject: =?UTF-8?Q?Gro=C3=9Fbrand_in_der_Halle?=
+Message-ID: <${id}>
+Date: ${new Date().toUTCString()}
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="b1"
+
+--b1
+Content-Type: text/plain; charset=utf-8
+
+Wie viele Kräfte waren im Einsatz?
+--b1
+Content-Type: text/html; charset=utf-8
+
+<p>Wie viele Kräfte?</p><img src="https://tracker.example/p.gif"><script>alert(1)</script>
+--b1
+Content-Type: application/pdf
+Content-Disposition: attachment; filename="Fragen.pdf"
+Content-Transfer-Encoding: base64
+
+${pdfBytes.toString('base64')}
+--b1
+Content-Type: application/octet-stream
+Content-Disposition: attachment; filename="tool.exe"
+Content-Transfer-Encoding: base64
+
+${exeBytes.toString('base64')}
+--b1--
+`;
+const simpleMail = (id: string, headers: string, subject = 'Frage', from = 'redaktion@radio.example') => `From: ${from}
+To: presse@feuerwehr.example
+Subject: ${subject}
+Message-ID: <${id}>
+${headers}
+Content-Type: text/plain; charset=utf-8
+
+Text`;
+
+describe('Presse-Postfach (#205)', () => {
+  let imap: Awaited<ReturnType<typeof fakeImap>>;
+  const cfg = () => ({ mode: 'imap', host: '127.0.0.1', port: imap.port, security: 'tls', user: 'presse', folder: 'INBOX', intervalMinutes: 5, maxAttachmentMb: 1 });
+
+  beforeAll(async () => {
+    process.env.BLAULICHTCMS_IMAP_TEST_PLAIN = '1';
+    imap = await fakeImap({ user: 'presse', password: 'Geheim-123' });
+  });
+  afterAll(async () => {
+    await imap?.close();
+  });
+
+  it('Rechte: nur „Presse-Postfach einrichten“', async () => {
+    expect((await editor.get('/press/mailbox')).status).toBe(403);
+    expect((await editor.post('/press/mailbox/test', cfg())).status).toBe(403);
+    expect((await admin.get('/press/mailbox')).json.config).toMatchObject({ enabled: false, passwordSet: false });
+  });
+
+  it('Verbindungstest vor Aktivierung; Passwort verschlüsselt, nie in der Antwort', async () => {
+    expect((await admin.post('/press/mailbox/test', { ...cfg(), password: 'falsch' })).json).toMatchObject({ ok: false, error: expect.stringContaining('Anmeldung abgelehnt') });
+    expect((await admin.post('/press/mailbox/test', { ...cfg(), security: 'none' })).status).toBe(400);
+    await admin.reauth();
+    // Einschalten ohne erfolgreichen Test: abgelehnt
+    expect((await admin.put('/press/mailbox', { ...cfg(), password: 'Geheim-123', enabled: true })).json.error).toBe('not_verified');
+    const t = await admin.post('/press/mailbox/test', { ...cfg(), password: 'Geheim-123' });
+    expect(t.json).toMatchObject({ ok: true, info: expect.stringContaining('0 Nachrichten') });
+    const saved = await admin.put('/press/mailbox', { ...cfg(), password: 'Geheim-123', enabled: true });
+    expect(saved.status, JSON.stringify(saved.json)).toBe(200);
+    expect(JSON.stringify(saved.json)).not.toContain('Geheim-123');
+    expect(JSON.stringify((await admin.get('/press/mailbox')).json)).not.toContain('Geheim-123');
+    expect(JSON.stringify((await admin.get('/settings')).json)).not.toContain('press.mailbox');
+    const row = await one<any>(`SELECT value FROM settings WHERE key = 'press.mailbox'`);
+    expect(JSON.stringify(row.value)).not.toContain('Geheim-123');
+    // anderes Passwort ⇒ Test gilt nicht mehr
+    expect((await admin.put('/press/mailbox', { ...cfg(), password: 'Anders-456', enabled: true })).json.error).toBe('not_verified');
+  });
+
+  it('Abruf: neue Anfrage mit Anhang, Spam und automatische Antworten ignoriert, rein lesend', async () => {
+    imap.add(mailNew('m1@zeitung.example'));
+    imap.add(simpleMail('auto1@x', 'Auto-Submitted: auto-replied', 'Automatische Antwort: Frage'));
+    imap.add(simpleMail('spam1@x', 'X-Spam-Flag: YES', 'Gewinn!'));
+    imap.add(mailNew('alt@zeitung.example'), new Date(Date.now() - 3 * 86400_000)); // älter als 24 Std.: beim ersten Abruf nicht
+    const r = await admin.post('/press/mailbox/poll');
+    expect(r.json, JSON.stringify(r.json)).toMatchObject({ ran: true, imported: 1 });
+    expect(imap.commands.some((c) => /STORE|COPY|MOVE|EXPUNGE|SELECT|DELETE/i.test(c))).toBe(false);
+    expect(imap.commands.some((c) => /^EXAMINE/.test(c))).toBe(true);
+    const req = await one<any>(`SELECT * FROM press_requests WHERE channel = 'mailbox'`);
+    expect(req).toMatchObject({ topic: 'Großbrand in der Halle', contact_name: 'Paula Müller', contact_email: 'paula@zeitung.example', status: 'new' });
+    expect(req.body).toContain('Kräfte');
+    const d = (await editor.get(`/press/requests/${req.id}`)).json;
+    expect(d.messages).toHaveLength(1);
+    const msg = d.messages[0];
+    expect(msg).toMatchObject({ direction: 'in', from_address: 'paula@zeitung.example', blocked_images: 1 });
+    expect(msg.html_body).not.toMatch(/script|tracker/);
+    expect(msg.attachments).toEqual([expect.objectContaining({ filename: 'Fragen.pdf', content_type: 'application/pdf', size: pdfBytes.length })]);
+    expect(msg.skipped_attachments).toEqual([{ filename: 'tool.exe', reason: expect.stringContaining('exe') }]);
+    const dl = await editor.raw('GET', `/press/attachments/${msg.attachments[0].id}`);
+    expect(dl.status).toBe(200);
+    expect(dl.headers['content-disposition']).toContain('attachment');
+    expect(dl.headers['x-content-type-options']).toBe('nosniff');
+    expect(Buffer.compare(dl.raw, pdfBytes)).toBe(0);
+    expect((await reader.raw('GET', `/press/attachments/${msg.attachments[0].id}`)).status).toBe(403);
+    const logs = (await admin.get('/press/mailbox/log')).json.map((l: any) => l.outcome).sort();
+    expect(logs).toEqual(['auto', 'created', 'spam']);
+  });
+
+  it('Antwort im selben Verlauf wird zugeordnet, Dubletten ignoriert, Status zurück auf „in Bearbeitung“', async () => {
+    const req = await one<any>(`SELECT id, case_no FROM press_requests WHERE channel = 'mailbox'`);
+    await editor.patch(`/press/requests/${req.id}`, { status: 'answered' });
+    imap.add(simpleMail('reply1@zeitung.example', 'In-Reply-To: <m1@zeitung.example>\nReferences: <m1@zeitung.example>', 'Re: Großbrand', 'paula@zeitung.example'));
+    imap.add(mailNew('m1@zeitung.example')); // gleiche Message-ID nochmal
+    imap.add(simpleMail('case1@x', '', `Nachfrage [${req.case_no}]`, 'kollege@zeitung.example'));
+    imap.add(simpleMail('nl@x', 'List-Unsubscribe: <https://x>', 'Newsletter'));
+    expect((await pollPressMailbox({ force: true })).imported).toBe(2);
+    expect((await many<any>(`SELECT id FROM press_messages WHERE request_id = $1`, [req.id])).length).toBe(3);
+    expect((await one<any>(`SELECT status FROM press_requests WHERE id = $1`, [req.id]))!.status).toBe('in_progress');
+    expect((await one<any>(`SELECT count(*)::int AS n FROM press_requests WHERE channel = 'mailbox'`))!.n).toBe(1);
+    const outcomes = (await admin.get('/press/mailbox/log')).json.slice(0, 4).map((l: any) => l.outcome).sort();
+    expect(outcomes).toEqual(['assigned', 'assigned', 'bulk', 'duplicate']);
+    // nichts Neues: kein erneuter Import
+    expect((await pollPressMailbox({ force: true })).imported).toBe(0);
+  });
+
+  it('Fehler beim Abruf: Protokoll und eine Meldung je Störung', async () => {
+    await imap.close();
+    const r1 = await pollPressMailbox({ force: true });
+    expect(r1.error).toMatch(/nicht erreichbar/);
+    await pollPressMailbox({ force: true });
+    expect((await one<any>(`SELECT count(*)::int AS n FROM notifications WHERE title = 'Presse-Postfach: Abruf fehlgeschlagen'`))!.n).toBe(1);
+    expect((await admin.get('/press/mailbox')).json.state).toMatchObject({ lastOk: false });
+    imap = await fakeImap({ user: 'presse', password: 'Geheim-123' });
+  });
+
+  it('Microsoft 365: Abruf über Graph mit derselben App-Registrierung', async () => {
+    const graph = await fakeGraph();
+    process.env.BLAULICHTCMS_M365_TEST_URL = graph.url;
+    resetM365TokenCache();
+    try {
+      const sec = await storeSecret('setting', '00000000-0000-0000-0000-00000000a365', 'client-geheim', null);
+      await setSettings({ 'm365.tenant_id': '11111111-2222-3333-4444-555555555555', 'm365.client_id': '11111111-2222-3333-4444-666666666666', 'm365.sender': 'presse@feuerwehr.example', 'm365.secret_id': sec.id } as any);
+      const m365 = { mode: 'm365', mailbox: 'presse@feuerwehr.example', intervalMinutes: 5, maxAttachmentMb: 5 };
+      graph.add('g1', simpleMail('g1@tv.example', '', 'Drehgenehmigung', 'tv@sender.example'));
+      expect((await admin.post('/press/mailbox/test', m365)).json).toMatchObject({ ok: true, info: expect.stringContaining('1 Nachrichten') });
+      await admin.reauth();
+      expect((await admin.put('/press/mailbox', { ...m365, enabled: true })).status).toBe(200);
+      expect((await pollPressMailbox({ force: true })).imported).toBe(1);
+      expect(await one(`SELECT 1 FROM press_requests WHERE topic = 'Drehgenehmigung' AND contact_email = 'tv@sender.example'`)).not.toBeNull();
+      // erneuter Abruf: gleiche Nachricht nicht doppelt
+      expect((await pollPressMailbox({ force: true })).imported).toBe(0);
+      expect(graph.requests.filter((r) => r.endsWith('$value'))).toHaveLength(1);
+    } finally {
+      delete process.env.BLAULICHTCMS_M365_TEST_URL;
+      await graph.close();
+      await admin.reauth();
+      await admin.put('/press/mailbox', { ...cfg(), enabled: false });
+    }
   });
 });

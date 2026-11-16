@@ -41,5 +41,6 @@
   "automationInputs": "Inputs",
   "automationOutputs": "Outputs",
   "press": "Press",
-  "pressRequests": "Press enquiries"
+  "pressRequests": "Press enquiries",
+  "pressSettings": "Mailbox & snippets"
 }
