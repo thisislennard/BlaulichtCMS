@@ -97,6 +97,8 @@ const RANGES: Record<string, [number, number]> = {
   'privacy.upload_link_days': [0, 3650],
   'privacy.receipt_days': [1, 30],
   'privacy.uploader_months': [0, 120],
+  'privacy.press_request_months': [0, 120],
+  'press.reminder_hours': [0, 72],
   'privacy.automation_run_days': [1, 3650],
   'automations.max_runs_per_minute': [1, 600],
   'media.blocked_days': [0, 3650],
@@ -436,6 +438,7 @@ export default function Settings() {
                 />
                 <FieldGrid>
                   <NumField k="invites.valid_hours" label="Einladungen gültig" unit="Std." min={1} max={720} v={v} set={set} ro={ro("invites.valid_hours")} />
+                  <NumField k="press.reminder_hours" label="Erinnerung vor Frist (Presseanfragen)" help="An die zuständige Person, sonst an alle mit „Presseanfragen bearbeiten“. 0 = nur bei Überschreitung." unit="Std." min={0} max={72} v={v} set={set} ro={ro("press.reminder_hours")} />
                   <NumField k="jobs.concurrency" label="Parallele Hintergrundaufträge" help="1 bis 32 (Medienprüfung, Exporte)." min={1} max={32} v={v} set={set} ro={ro("jobs.concurrency")} />
                   <NumField k="retention.log_days" label={t("admin.settings.retLogs")} unit={t("admin.common.days")} min={1} v={v} set={set} ro={ro("retention.log_days")} />
                   <NumField k="retention.audit_days" label={t("admin.settings.retAudit")} unit={t("admin.common.days")} min={30} v={v} set={set} ro={ro("retention.audit_days")} />
@@ -477,6 +480,7 @@ export default function Settings() {
                   <NumField k="media.blocked_days" label="Gesperrte Dateien löschen nach" help="Dateien mit Prüfbefund liegen so lange in der Quarantäne (erneut prüfen oder trotzdem freigeben möglich), danach werden sie samt Datensatz gelöscht. 0 = nie." unit={t("admin.common.days")} min={0} max={3650} v={v} set={set} ro={ro("media.blocked_days")} />
                   <NumField k="media.security_log_days" label="Sicherheitsereignisse der Upload-Seiten" help="Gekürzter IP-Hash, Link, Ereignis. 0 = unbegrenzt." unit={t("admin.common.days")} min={0} max={3650} v={v} set={set} ro={ro("media.security_log_days")} />
                   <NumField k="privacy.uploader_months" label="Angaben der Hochladenden" help="Name, E-Mail-Adresse, Aufnahmeort und -datum (je Upload-Link abfragbar) danach entfernen; die Dateien bleiben. 0 = nie." unit="Monate" min={0} max={120} v={v} set={set} ro={ro("privacy.uploader_months")} />
+                  <NumField k="privacy.press_request_months" label="Erledigte Presseanfragen" help="Anfrage samt Kontaktdaten, Verlauf, Mails und Anhängen so viele Monate nach der Erledigung löschen. 0 = nie." unit="Monate" min={0} max={120} v={v} set={set} ro={ro("privacy.press_request_months")} />
                   <NumField k="privacy.warning_days" label="Warnvorgänge" help="Nach dem letzten Bearbeitungsschritt des Vorgangs samt Aktualisierungen: Fassungen mit Rückrufkontakt, PDF, Versandnachweise. 0 = nie." unit={t("admin.common.days")} v={v} set={set} ro={ro("privacy.warning_days")} />
                   <NumField k="privacy.fe2_event_days" label="Einsatzmeldungen (FE2, Feuersoftware Connect)" help="Stichwort, Einsatzart, Ort, Zeit, Einheiten. Beiträge und Warnvorgänge daraus bleiben. 0 = nie." unit={t("admin.common.days")} v={v} set={set} ro={ro("privacy.fe2_event_days")} />
                   <NumField k="privacy.automation_run_days" label="Laufprotokolle der Workflows" help="Eingangsdaten, Schritte und Freigaben abgeschlossener Läufe (1 bis 3650 Tage)." unit={t("admin.common.days")} min={1} max={3650} v={v} set={set} ro={ro("privacy.automation_run_days")} />

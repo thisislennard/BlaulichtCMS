@@ -39,5 +39,7 @@
   "automations": "Workflows",
   "automationList": "Alle Workflows",
   "automationInputs": "Eingänge",
-  "automationOutputs": "Ausgänge"
+  "automationOutputs": "Ausgänge",
+  "press": "Presse",
+  "pressRequests": "Presseanfragen"
 }

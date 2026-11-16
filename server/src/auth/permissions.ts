@@ -34,6 +34,7 @@ export const MODULES: ModuleDef[] = [
   { id: 'publishing', label: 'Veröffentlichung' },
   { id: 'banners', label: 'Banner' },
   { id: 'warnings', label: 'Warnentwürfe und amtliche Warnungen' },
+  { id: 'press', label: 'Presse' },
   { id: 'connections', label: 'Verbindungen' },
   { id: 'automations', label: 'Workflows' },
   { id: 'templates', label: 'Designvorlagen' },
@@ -110,6 +111,16 @@ export const PERMISSIONS: PermissionDef[] = [
   P('official.view', 'warnings', 'read', 'Amtliche Warnungen ansehen', 'Amtliche Warnungen aus den eingerichteten Warnfeeds sehen.'),
   P('official.dismiss', 'warnings', 'write', 'Amtliche Warnungen ausblenden', 'Amtliche Warnungen als erledigt ausblenden.', ['official.view']),
 
+  /* Presse (#204–#207) */
+  P('press.view', 'press', 'read', 'Presseanfragen ansehen', 'Presseanfragen mit Kontaktdaten der Anfragenden, Verlauf, Mails und Anhängen ansehen.'),
+  P('press.manage', 'press', 'write', 'Presseanfragen bearbeiten', 'Presseanfragen von Hand erfassen, Status, Zuständigkeit und Frist ändern, mit Einsatz und Beitrag verknüpfen, interne Notizen schreiben und Anfragen löschen.', ['press.view']),
+  P('press.reply', 'press', 'write', 'Presseanfragen beantworten', 'Antworten per E-Mail schreiben und senden (bei eingeschalteter Freigabe: zur Freigabe einreichen).', ['press.view']),
+  P('press.approve', 'press', 'critical', 'Antworten an die Presse freigeben', 'Eingereichte Antworten auf Presseanfragen freigeben oder zurückweisen (nie die eigene).', ['press.view']),
+  P('press.snippets', 'press', 'write', 'Textbausteine verwalten', 'Textbausteine für Antworten auf Presseanfragen anlegen, ändern und löschen.', ['press.view']),
+  P('press.mailbox', 'press', 'critical', 'Presse-Postfach einrichten', 'Abruf des Presse-Postfachs (IMAP oder Microsoft 365) einrichten, testen, schalten und das Empfangsprotokoll ansehen.', ['press.view'], true),
+  P('press.contacts', 'press', 'write', 'Presseverteiler pflegen', 'Kontakte von Redaktionen und Verteilerlisten anlegen, ändern, löschen, importieren und exportieren.'),
+  P('press.release', 'press', 'critical', 'Pressemitteilungen versenden', 'Pressemitteilungen entwerfen und an Verteilerlisten senden; Versandprotokoll ansehen.', ['press.contacts']),
+
   /* Verbindungen */
   P('connection.view', 'connections', 'read', 'Verbindungen ansehen', 'Verfügbare Verbindungen mit Namen, Art und Zustand sehen (ohne Zugangsdaten und Einstellungen).'),
   P('connection.configure', 'connections', 'critical', 'Verbindungen verwalten', 'Verbindungen (FE2, Feuersoftware Connect, soziale Kanäle, amtliche Warnfeeds) einrichten, ändern, testen, aktivieren und widerrufen.', ['connection.view'], true),
@@ -173,9 +184,9 @@ export const LEGACY_PERMISSIONS: Record<string, string[]> = {
   'media.manage': ['media.view', 'media.download_original', 'media.collections', 'media.upload', 'media.links', 'media.review', 'media.organize', 'media.redact', 'media.trash', 'media.design'],
   'media.admin': ['media.view', 'media.admin'],
   'post.read': ['post.view', 'source.view', 'banner.view', 'channel.view', 'official.view'],
-  'post.edit': ['post.view', 'post.create', 'post.edit', 'post.submit', 'post.archive', 'post.templates', 'source.view', 'source.items', 'source.manage', 'channel.view', 'banner.view', 'banner.edit', 'official.view', 'official.dismiss', 'connection.view'],
-  'post.approve': ['post.view', 'banner.view', 'approval.post', 'approval.banner', 'approval.automation'],
-  'post.publish': ['post.view', 'banner.view', 'channel.view', 'connection.view', 'publish.website', 'publish.unpublish', 'publish.social', 'publish.social_remove', 'banner.publish'],
+  'post.edit': ['post.view', 'post.create', 'post.edit', 'post.submit', 'post.archive', 'post.templates', 'source.view', 'source.items', 'source.manage', 'channel.view', 'banner.view', 'banner.edit', 'official.view', 'official.dismiss', 'connection.view', 'press.view', 'press.manage', 'press.reply', 'press.snippets', 'press.contacts'],
+  'post.approve': ['post.view', 'banner.view', 'approval.post', 'approval.banner', 'approval.automation', 'press.view', 'press.approve'],
+  'post.publish': ['post.view', 'banner.view', 'channel.view', 'connection.view', 'publish.website', 'publish.unpublish', 'publish.social', 'publish.social_remove', 'banner.publish', 'press.view', 'press.contacts', 'press.release'],
   'channel.manage': ['channel.view', 'channel.sites', 'channel.updates'],
   'warning.draft': ['warning.view', 'warning.draft', 'warning.delete'],
   'warning.level': ['warning.view', 'warning.level'],
@@ -190,7 +201,7 @@ export const LEGACY_PERMISSIONS: Record<string, string[]> = {
   'user.manage': ['user.view', 'user.invite', 'user.edit', 'user.assign_roles', 'user.lock', 'user.sessions', 'user.delete'],
   'audit.read': ['audit.view'],
   'system.read': ['system.status', 'system.logs', 'settings.view', 'update.view'],
-  'system.manage': ['settings.view', 'settings.general', 'settings.security', 'settings.privacy', 'settings.media', 'settings.editorial', 'settings.system', 'system.status', 'system.maintenance', 'system.retention', 'backup.manage', 'backup.download', 'update.view', 'update.install', 'dashboard.templates', 'warning.settings'],
+  'system.manage': ['settings.view', 'settings.general', 'settings.security', 'settings.privacy', 'settings.media', 'settings.editorial', 'settings.system', 'system.status', 'system.maintenance', 'system.retention', 'backup.manage', 'backup.download', 'update.view', 'update.install', 'dashboard.templates', 'warning.settings', 'press.view', 'press.mailbox'],
   'privacy.manage': ['privacy.manage'],
 };
 
@@ -352,6 +363,7 @@ export function settingPermission(key: string): string {
     case 'media':
       return 'settings.media';
     case 'editorial':
+    case 'press':
       return 'settings.editorial';
     case 'jobs':
     case 'automations':

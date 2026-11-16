@@ -162,6 +162,10 @@ export function inputSummary(i: Pick<InputDef, 'kind' | 'config'>, cat?: Catalog
       return `${c.collectionId ? (cat?.collections.find((x) => x.id === c.collectionId)?.title ?? 'Sammlung') : 'Alle Sammlungen'} · gebündelt je ${c.windowMinutes ?? 30} min`;
     case 'schedule':
       return c.mode === 'interval' ? `alle ${c.minutes} Minuten` : `täglich ${c.time} Uhr${c.weekdays?.length ? ` (${c.weekdays.map((d: number) => WEEKDAYS[d - 1]).join(', ')})` : ''}`;
+    case 'press': {
+      const labels: Record<string, string> = { phone: 'Telefon', mail: 'E-Mail', mailbox: 'Presse-Postfach', in_person: 'Persönlich', other: 'Sonstiges' };
+      return c.channels?.length ? `Eingangsweg: ${c.channels.map((x: string) => labels[x] ?? x).join(', ')}` : 'jeder Eingangsweg';
+    }
     case 'manual':
       return c.fields?.length ? `Felder: ${c.fields.map((f: any) => f.label).join(', ')}` : 'ohne eigene Felder';
     default:

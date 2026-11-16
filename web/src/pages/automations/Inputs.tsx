@@ -19,6 +19,7 @@ const DEFAULTS: Record<string, Record<string, any>> = {
   upload: { collectionId: null, windowMinutes: 30 },
   schedule: { mode: 'daily', time: '07:00', weekdays: [] },
   manual: { fields: [] },
+  press: { channels: [] },
 };
 
 /** Dialog zum Anlegen/Bearbeiten – auch direkt aus dem Workflow (`preset`: Startwerte einer Vorlage; `onClose` liefert die ID). */
@@ -105,6 +106,15 @@ export function InputDialog({ input, kind, cat, onClose, preset }: { input: Inpu
             )}
             <Notice>Verpasste Termine (z. B. während eines Neustarts länger als 10 Minuten) werden nicht nachgeholt.</Notice>
           </>
+        )}
+        {kind === 'press' && (
+          <CheckList
+            legend="Nur bei diesen Eingangswegen (leer = jeder)"
+            columns={2}
+            options={[{ value: 'phone', label: 'Telefon' }, { value: 'mail', label: 'E-Mail (von Hand erfasst)' }, { value: 'mailbox', label: 'Presse-Postfach' }, { value: 'in_person', label: 'Persönlich' }, { value: 'other', label: 'Sonstiges' }]}
+            value={c.channels ?? []}
+            onChange={(v) => set({ channels: v })}
+          />
         )}
         {kind === 'manual' && (
           <div className="flex flex-col gap-3">

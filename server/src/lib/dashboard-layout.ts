@@ -36,6 +36,8 @@ export const WIDGET_DEFS: readonly WidgetDef[] = [
   { id: 'sites', kind: 'panel', permission: 'channel.view' },
   { id: 'banners', kind: 'panel', permission: 'banner.view' },
   { id: 'rss', kind: 'panel', permission: 'source.view' },
+  { id: 'press', kind: 'panel', permission: 'press.view' },
+  { id: 'badge_press', kind: 'badge', permission: 'press.view' },
 ];
 
 const DEF_BY_ID = new Map(WIDGET_DEFS.map((w) => [w.id, w]));

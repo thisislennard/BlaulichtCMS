@@ -67,6 +67,23 @@ export async function dashboardRoutes(app: FastifyInstance) {
           WHERE i.hidden_at IS NULL ORDER BY COALESCE(i.published_at, i.fetched_at) DESC LIMIT 8`,
       );
     }
+    if (perms.has('press.view')) {
+      // Presseanfragen (#204): offene Anfragen nach Frist, ohne Kontaktdaten
+      out.press = {
+        counts: await one<any>(
+          `SELECT count(*) FILTER (WHERE status IN ('new','in_progress'))::int AS open,
+                  count(*) FILTER (WHERE status IN ('new','in_progress') AND due_at < now())::int AS overdue,
+                  count(*) FILTER (WHERE assignee_id = $1 AND status IN ('new','in_progress'))::int AS mine
+             FROM press_requests`,
+          [req.auth!.user?.id ?? null],
+        ),
+        open: await many<any>(
+          `SELECT r.id, r.case_no, r.topic, r.outlet, r.status, r.due_at, u.name AS assignee_name, (r.due_at < now()) AS overdue
+             FROM press_requests r LEFT JOIN users u ON u.id = r.assignee_id
+            WHERE r.status IN ('new','in_progress') ORDER BY r.due_at ASC NULLS LAST, r.created_at DESC LIMIT 8`,
+        ),
+      };
+    }
     if (perms.has('connection.configure')) {
       // Aktive Verbindungen, deren letzter Abruf oder Versand fehlgeschlagen ist (Kennzahl „Verbindungsfehler“)
       out.connectionErrors = (await one<{ n: number }>(`SELECT count(*)::int AS n FROM connections WHERE status = 'active' AND deleted_at IS NULL AND last_error IS NOT NULL`))!.n;

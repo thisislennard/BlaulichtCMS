@@ -21,6 +21,8 @@ export const INPUT_CONFIG: Record<InputKind, z.ZodType<any>> = {
     }),
     z.object({ mode: z.literal('interval'), minutes: z.number().int().min(LIMITS.minIntervalMinutes, `mindestens ${LIMITS.minIntervalMinutes} Minuten`).max(1440) }),
   ]),
+  // Presseanfragen (#204): leer = jeder Eingangsweg
+  press: z.object({ channels: z.array(z.enum(['phone', 'mail', 'mailbox', 'in_person', 'other'])).max(5).default([]) }),
   manual: z.object({
     fields: z
       .array(z.object({ key: z.string().regex(FIELD_KEY, 'Feldnamen: Kleinbuchstaben, Ziffern und _'), label: z.string().trim().min(1).max(80), example: z.string().max(300).default('') }))

@@ -47,6 +47,8 @@ const Automations = lazy(() => import('./pages/automations/Automations'));
 const AutomationEditor = lazy(() => import('./pages/automations/Editor'));
 const AutomationInputs = lazy(() => import('./pages/automations/Inputs'));
 const AutomationOutputs = lazy(() => import('./pages/automations/Outputs'));
+const PressRequests = lazy(() => import('./pages/press/PressRequests'));
+const PressRequestPage = lazy(() => import('./pages/press/PressRequest'));
 const Help = lazy(() => import('./pages/help/Help'));
 const PrintSheet = lazy(() => import('./pages/print/PrintSheet'));
 const InstallApp = lazy(() => import('./pages/InstallApp'));
@@ -171,6 +173,8 @@ const router = createBrowserRouter(withErrors([
       // Frühere Adressen (bis 0.3.0 „Automationen“): Lesezeichen, Benachrichtigungen und Audit-Links bleiben gültig
       { path: 'automationen/*', element: <LegacyWorkflowRedirect /> },
       { path: 'automationen', element: <LegacyWorkflowRedirect /> },
+      { path: 'presse', element: <Page perm={['press.view']}><PressRequests /></Page> },
+      { path: 'presse/:id', element: <Page perm={['press.view']}><PressRequestPage /></Page> },
       { path: 'amtliche-warnungen', element: <Page perm={['official.view']}><OfficialWarnings /></Page> },
       { path: 'benutzer', element: <Page perm={['user.view']}><Users /></Page> },
       { path: 'system', element: <Page perm={['system.status']}><SystemStatus /></Page> },

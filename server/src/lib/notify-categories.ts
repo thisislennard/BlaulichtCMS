@@ -32,10 +32,11 @@ const C = (id: string, label: string, description: string, permissions: string[]
 });
 
 export const NOTIFY_CATEGORIES: NotifyCategory[] = [
-  C('approval', 'Freigabe angefordert', 'Ein Beitrag, Banner, Warnentwurf oder Schritt eines Workflows wartet auf Freigabe.', ['approval.post', 'approval.banner', 'approval.automation', 'warning.approve'], ['push'], { urgency: 'high' }),
+  C('approval', 'Freigabe angefordert', 'Ein Beitrag, Banner, Warnentwurf oder Schritt eines Workflows wartet auf Freigabe.', ['approval.post', 'approval.banner', 'approval.automation', 'warning.approve', 'press.approve'], ['push'], { urgency: 'high' }),
   C('decision', 'Eigene Fassung freigegeben oder zurückgewiesen', 'Eine selbst eingereichte Fassung wurde freigegeben oder zurückgewiesen.', ['post.submit'], ['push']),
   C('incident', 'Einsatz-Eingang (FE2, Feuersoftware Connect)', 'Aus einer Einsatzmeldung wurde ein Beitragsentwurf angelegt oder aktualisiert.', ['post.edit'], ['push'], { urgency: 'high' }),
   C('drafts', 'Neue Entwürfe aus Workflows', 'Ein Workflow hat einen Beitrags- oder Warnentwurf vorbereitet.', ['post.edit', 'warning.draft'], []),
+  C('press', 'Presseanfragen', 'Neue Presseanfrage, eine Anfrage wurde dir zugewiesen, eine Frist läuft bald ab oder ist überschritten, eine Antwort konnte nicht gesendet werden.', ['press.view'], ['push'], { urgency: 'high' }),
   C('media_new', 'Neue Dateien über Foto-Links', 'Über einen Upload-Link sind Fotos oder Videos eingegangen und geprüft (gebündelt je Sammlung, höchstens eine Meldung je Stunde).', ['media.review'], ['push']),
   C('media_link', 'Upload-Links und Kontingente', 'Ein Upload-Link läuft bald ab oder ein Kontingent ist erreicht.', ['media.review'], []),
   C('media_storage', 'Speicherplatz der Medien', 'Der Speicher für Medien unterschreitet die Warnschwelle.', ['media.admin'], ['mail']),
@@ -72,6 +73,11 @@ const BY_PERMISSION: Record<string, string> = {
   'warning.send': 'warning_send',
   'backup.manage': 'system',
   'update.install': 'update',
+  'press.view': 'press',
+  'press.manage': 'press',
+  'press.reply': 'press',
+  'press.approve': 'approval',
+  'press.release': 'press',
 };
 
 export function categoryFor(category: string | null | undefined, permission: string | null | undefined): string | null {

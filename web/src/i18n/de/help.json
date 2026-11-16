@@ -131,6 +131,10 @@
       "title": "Banner auf der Website",
       "summary": "Zeitgesteuerte Hinweise mit Priorität, Ablauf auch ohne Verbindung, Platzierung per Shortcode oder Block."
     },
+    "presse": {
+      "title": "Presseanfragen",
+      "summary": "Anfragen erfassen, Zuständigkeit und Frist, Verlauf, Postfach-Abruf, Antworten per Mail, Presseverteiler."
+    },
     "quellen": {
       "title": "Quellen (RSS/Atom)",
       "summary": "Feeds hinzufügen, Einträge merken oder ausblenden, Themenideen mit Original-Link."

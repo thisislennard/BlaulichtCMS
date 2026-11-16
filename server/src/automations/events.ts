@@ -174,6 +174,16 @@ export async function emitUpload(m: { collectionId: string; linkLabel: string | 
   });
 }
 
+/* ------------------------------------------------------------------ Presseanfragen (#204) */
+
+/** Neue Presseanfrage (von Hand oder aus dem Presse-Postfach) – nur Felder ohne Kontaktdaten der anfragenden Person. */
+export async function emitPressRequest(r: { id: string; channel: string; payload: Data }, db?: pg.PoolClient) {
+  await safely('press', db, async (q) => {
+    const triggers = (await activeTriggers('press', q)).filter((t) => !(t.input.config.channels ?? []).length || (t.input.config.channels as string[]).includes(r.channel));
+    for (const t of triggers) await start(t, `press:${r.id}`, r.payload, q);
+  });
+}
+
 /* ------------------------------------------------------------------ Zeitpläne */
 
 /** Kennzahlen für Zeitplan-Läufe (z. B. tägliche Übersicht der offenen Freigaben). */

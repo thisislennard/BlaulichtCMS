@@ -173,9 +173,9 @@ describe('Feine Rechte und Rollen (0.3.0)', () => {
       media_manager:
         'media.view media.export media.download_original media.collections media.upload media.links media.review media.organize media.redact media.trash media.design post.view source.view channel.view banner.view official.view templates.view templates.manage',
       editor:
-        'media.view media.export media.download_original media.collections media.upload media.links media.review media.organize media.redact media.trash media.design post.view post.create post.edit post.submit post.archive post.templates source.view source.items source.manage channel.view banner.view banner.edit official.view official.dismiss connection.view automation.read templates.view templates.manage',
-      approver: 'media.view media.export post.view source.view approval.post approval.banner approval.automation channel.view banner.view official.view automation.read templates.view audit.view',
-      publisher: 'media.view media.export post.view source.view publish.website publish.unpublish publish.social publish.social_remove channel.view banner.view banner.publish official.view connection.view templates.view',
+        'media.view media.export media.download_original media.collections media.upload media.links media.review media.organize media.redact media.trash media.design post.view post.create post.edit post.submit post.archive post.templates source.view source.items source.manage channel.view banner.view banner.edit official.view official.dismiss press.view press.manage press.reply press.snippets press.contacts connection.view automation.read templates.view templates.manage',
+      approver: 'media.view media.export post.view source.view approval.post approval.banner approval.automation channel.view banner.view official.view press.view press.approve automation.read templates.view audit.view',
+      publisher: 'media.view media.export post.view source.view publish.website publish.unpublish publish.social publish.social_remove channel.view banner.view banner.publish official.view press.view press.contacts press.release connection.view templates.view',
       warning_author: 'warning.view warning.draft warning.delete',
       warning_approver: 'warning.view warning.draft warning.delete warning.level warning.approve',
       warning_sender: 'warning.view warning.send',

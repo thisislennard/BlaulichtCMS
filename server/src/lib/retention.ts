@@ -338,6 +338,17 @@ export async function runRetention(opts: { dryRun: boolean; actor?: Actor; setti
     linkCat.count += q!.n;
   }
   report.categories.push(linkCat);
+  // Erledigte Presseanfragen samt Kontaktdaten, Verlauf, Mails und Anhängen (#204), Frist in Monaten nach Erledigung
+  {
+    const months = days(s['privacy.press_request_months']);
+    const cat: RetentionCategory = { key: 'press_requests', label: 'Erledigte Presseanfragen mit Kontaktdaten, Verlauf, Mails und Anhängen (Monate nach Erledigung)', days: months * 30, count: 0 };
+    if (months > 0) {
+      const where = `status = 'done' AND done_at < now() - make_interval(months => $1)`;
+      if (opts.dryRun) cat.count = (await one<{ n: number }>(`SELECT count(*)::int AS n FROM press_requests WHERE ${where}`, [months]))!.n;
+      else cat.count = (await pool.query(`DELETE FROM press_requests WHERE id IN (SELECT id FROM press_requests WHERE ${where} LIMIT 5000)`, [months])).rowCount ?? 0;
+    }
+    report.categories.push(cat);
+  }
   // Laufprotokolle der Automationen (Eingangsdaten, Schritte, Freigaben) – offene Läufe bleiben
   report.categories.push(
     await simpleCategory(opts.dryRun, {

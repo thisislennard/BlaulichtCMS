@@ -55,6 +55,11 @@ export const DEFAULT_SETTINGS = {
    * entfernen; die Dateien bleiben (wie press_uploader_anonymize_months in LiFeOS). 0 = nie.
    */
   'privacy.uploader_months': 12,
+  /**
+   * Presseanfragen (#204, lib/retention.ts): erledigte Anfragen samt Kontaktdaten, Verlauf, Mails und Anhängen so viele
+   * Monate nach der Erledigung löschen. 0 = nie.
+   */
+  'privacy.press_request_months': 12,
   'privacy.controller': '',
   'privacy.dpo_contact': '',
   'privacy.policy_url': '',
@@ -153,6 +158,11 @@ export const DEFAULT_SETTINGS = {
   'media.allow_animated': false,
 
   'editorial.four_eyes': false,
+  /**
+   * Presseanfragen (#204, press/deadlines.ts): Erinnerung so viele Stunden vor Ablauf der Frist an die zuständige Person
+   * (ohne Zuständigkeit an alle mit „Presseanfragen bearbeiten“). 0 = nur bei Überschreitung.
+   */
+  'press.reminder_hours': 2,
   /**
    * Automationen (automations/*): globaler Schalter (aus = keine neuen Läufe, offene Läufe werden abgebrochen),
    * Grenze der Läufe je Automation und Minute (Schutz gegen Schleifen und Fluten) und Aufbewahrung der Laufprotokolle.
@@ -318,6 +328,8 @@ export const SETTING_RANGES: Record<string, [number, number]> = {
   'privacy.upload_link_days': [0, 3650],
   'privacy.receipt_days': [1, 30],
   'privacy.uploader_months': [0, 120],
+  'privacy.press_request_months': [0, 120],
+  'press.reminder_hours': [0, 72],
   'privacy.automation_run_days': [1, 3650],
   'automations.max_runs_per_minute': [1, 600],
   'media.max_file_mb': [1, 20000],

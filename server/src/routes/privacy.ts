@@ -29,7 +29,7 @@ import { UPLOAD_REF_RE } from './media.js';
  * privacy.upload_ip_retention_days entfernt.
  */
 
-export type HitKind = 'user' | 'media' | 'upload_session' | 'warning' | 'responsibility' | 'fe2_event' | 'post' | 'session' | 'audit';
+export type HitKind = 'user' | 'media' | 'upload_session' | 'warning' | 'responsibility' | 'fe2_event' | 'post' | 'session' | 'audit' | 'press_request';
 export type HitAction = 'delete' | 'pseudonymize';
 
 export interface PrivacyHit {
@@ -155,6 +155,17 @@ export async function privacySearch(term: string): Promise<PrivacyHit[]> {
     hits.push({ kind: 'fe2_event', id: e.id, title: `${e.source === 'feuersoftware' ? 'Feuersoftware-Einsatz' : 'FE2-Meldung'} ${e.keyword ?? ''}`.trim(), at: iso(e.received_at), fields: { einsatz: e.event_key, titel: e.title, felder: e.fields }, actions: ['delete'] });
   }
 
+  // Presseanfragen (#204): Kontaktdaten, Anfragetext, Verlauf und Mails
+  for (const r of await many<any>(
+    `SELECT r.id, r.case_no, r.topic, r.outlet, r.contact_name, r.contact_email, r.contact_phone, r.created_at FROM press_requests r
+      WHERE r.contact_name ILIKE $1 OR r.contact_email ILIKE $1 OR r.contact_phone ILIKE $1 OR r.body ILIKE $1 OR r.topic ILIKE $1
+         OR EXISTS (SELECT 1 FROM press_request_events e WHERE e.request_id = r.id AND e.text ILIKE $1)
+      ORDER BY r.created_at DESC LIMIT ${LIMIT}`,
+    [like],
+  )) {
+    hits.push({ kind: 'press_request', id: r.id, title: `Presseanfrage ${r.case_no}`, at: iso(r.created_at), fields: { thema: r.topic, medium: r.outlet, name: r.contact_name, email: r.contact_email, telefon: r.contact_phone }, actions: ['delete'], note: 'Löschen entfernt die Anfrage samt Verlauf, Mails und Anhängen.', link: `/presse/${r.id}` });
+  }
+
   for (const p of await many<any>(
     `SELECT p.id, p.title, p.updated_at FROM posts p JOIN post_revisions r ON r.post_id = p.id AND r.number = p.current_revision
       WHERE r.title ILIKE $1 OR r.body ILIKE $1 OR r.excerpt ILIKE $1 OR r.variants::text ILIKE $1 ORDER BY p.updated_at DESC LIMIT ${LIMIT}`,
@@ -230,7 +241,7 @@ export async function privacyRoutes(app: FastifyInstance) {
 
   /* Löschen bzw. Pseudonymisieren je Treffer */
   app.post('/privacy/action', { preHandler: perm, config: { rateLimit: { max: 60, timeWindow: '1 minute' } } }, async (req) => {
-    const b = z.object({ kind: z.enum(['media', 'upload_session', 'warning', 'fe2_event']), id: z.uuid(), action: z.enum(['delete', 'pseudonymize']) }).parse(req.body);
+    const b = z.object({ kind: z.enum(['media', 'upload_session', 'warning', 'fe2_event', 'press_request']), id: z.uuid(), action: z.enum(['delete', 'pseudonymize']) }).parse(req.body);
     const actor = req.auth!.actor;
     const details = { grund: 'Betroffenenanfrage', art: b.kind };
     if (b.kind === 'media') {
@@ -268,11 +279,14 @@ export async function privacyRoutes(app: FastifyInstance) {
       const ids = await deleteWarningTrees([w.root]);
       await audit(actor, 'privacy.deleted', { type: 'warning', id: w.root, label: w.case_no }, { ...details, vorgaenge: ids.length });
       return { ok: true, deleted: ids.length };
+    } else if (b.kind === 'press_request') {
+      const r = await pool.query(`DELETE FROM press_requests WHERE id = $1`, [b.id]);
+      if (!r.rowCount) throw notFound();
     } else {
       const r = await pool.query(`DELETE FROM fe2_events WHERE id = $1`, [b.id]);
       if (!r.rowCount) throw notFound();
     }
-    await audit(actor, 'privacy.deleted', { type: b.kind, id: b.id, label: b.kind === 'fe2_event' ? 'Einsatzmeldung' : 'Upload' }, details);
+    await audit(actor, 'privacy.deleted', { type: b.kind, id: b.id, label: b.kind === 'fe2_event' ? 'Einsatzmeldung' : b.kind === 'press_request' ? 'Presseanfrage' : 'Upload' }, details);
     return { ok: true };
   });
 }

@@ -48,6 +48,8 @@ function inputPhrase(n: GraphNode, inputs: Map<string, InputRef>): string {
     case 'schedule':
       if (!inp) return 'der Zeitplan fällig ist';
       return c.mode === 'interval' ? `alle ${c.minutes} Minuten der Zeitplan „${inp.name}“ fällig ist` : `es ${c.time} Uhr ist${Array.isArray(c.weekdays) && c.weekdays.length ? ` (${c.weekdays.map((d: number) => WEEKDAYS[d - 1]).join(', ')})` : ''}`;
+    case 'press':
+      return `eine neue Presseanfrage${via} eingeht`;
     case 'manual':
       return `jemand den Workflow${inp ? ` über „${inp.name}“` : ''} von Hand startet`;
     default:

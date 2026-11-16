@@ -15,7 +15,7 @@ export interface FieldDef {
   options?: string[];
 }
 
-export type InputKind = 'fe2' | 'feuersoftware' | 'warnfeed' | 'rss' | 'upload' | 'schedule' | 'manual';
+export type InputKind = 'fe2' | 'feuersoftware' | 'warnfeed' | 'rss' | 'upload' | 'schedule' | 'manual' | 'press';
 export type OutputKind = 'banner' | 'post' | 'mail' | 'notify' | 'warning_draft';
 export type NodeType = 'input' | 'output' | 'condition' | 'switch' | 'template' | 'delay' | 'dedup' | 'approval' | 'merge';
 
@@ -134,6 +134,20 @@ export const INPUT_KINDS: Record<InputKind, { label: string; description: string
       { key: 'offene_banner', label: 'Banner zur Freigabe', type: 'number', example: '1' },
       { key: 'offene_warnentwuerfe', label: 'Warnentwürfe zur Freigabe', type: 'number', example: '0' },
       { key: 'offene_automationsfreigaben', label: 'Offene Freigaben aus Workflows', type: 'number', example: '0' },
+    ],
+  },
+  press: {
+    label: 'Neue Presseanfrage',
+    description: 'Eine Presseanfrage wurde von Hand erfasst oder ist über das Presse-Postfach eingegangen (ohne Kontaktdaten der anfragenden Person).',
+    icon: 'MessageSquareQuote',
+    fields: [
+      { key: 'nummer', label: 'Vorgangsnummer', type: 'text', example: 'P-2026-0007' },
+      { key: 'thema', label: 'Thema', type: 'text', example: 'Brand in der Lagerhalle' },
+      { key: 'medium', label: 'Medium/Redaktion', type: 'text', example: 'Musterstädter Zeitung' },
+      { key: 'eingangsweg', label: 'Eingangsweg', type: 'choice', example: 'Telefon', options: ['Telefon', 'E-Mail', 'Presse-Postfach', 'Persönlich', 'Sonstiges'] },
+      { key: 'frist', label: 'Frist', type: 'datetime', example: '2026-11-16T15:00:00.000Z' },
+      { key: 'zustaendig', label: 'Zuständige Person', type: 'text', example: 'Alex Beispiel' },
+      { key: 'anfrage_link', label: 'Link zur Anfrage', type: 'url', example: '/presse/…' },
     ],
   },
   manual: {

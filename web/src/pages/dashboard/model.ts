@@ -50,6 +50,7 @@ export const PANEL_TITLES: Record<string, string> = {
   sites: 'Websites',
   banners: 'Aktive Banner',
   rss: 'Quellen (RSS)',
+  press: 'Presseanfragen',
 };
 
 export const BADGE_TITLES: Record<string, string> = {
@@ -59,6 +60,7 @@ export const BADGE_TITLES: Record<string, string> = {
   badge_banners: 'Aktive Banner',
   badge_uploads: 'Uploads in 24 Std.',
   badge_connection_errors: 'Verbindungsfehler',
+  badge_press: 'Offene Presseanfragen',
 };
 
 export const isBadge = (id: string) => id in BADGE_TITLES;

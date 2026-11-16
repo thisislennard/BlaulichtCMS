@@ -151,6 +151,19 @@ Alle Rechte, nach Bereichen. Die Tabelle entspricht dem Rollen-Editor; „Setzt 
 | Amtliche Warnungen ansehen | lesen | Amtliche Warnungen aus den eingerichteten Warnfeeds sehen. | – |
 | Amtliche Warnungen ausblenden | ändern | Amtliche Warnungen als erledigt ausblenden. | Amtliche Warnungen ansehen |
 
+**Presse**
+
+| Recht | Stufe | Erlaubt | Setzt voraus |
+| --- | --- | --- | --- |
+| Presseanfragen ansehen | lesen | Presseanfragen mit Kontaktdaten der Anfragenden, Verlauf, Mails und Anhängen ansehen. | – |
+| Presseanfragen bearbeiten | ändern | Presseanfragen von Hand erfassen, Status, Zuständigkeit und Frist ändern, mit Einsatz und Beitrag verknüpfen, interne Notizen schreiben und Anfragen löschen. | Presseanfragen ansehen |
+| Presseanfragen beantworten | ändern | Antworten per E-Mail schreiben und senden (bei eingeschalteter Freigabe: zur Freigabe einreichen). | Presseanfragen ansehen |
+| Antworten an die Presse freigeben | kritisch | Eingereichte Antworten auf Presseanfragen freigeben oder zurückweisen (nie die eigene). | Presseanfragen ansehen |
+| Textbausteine verwalten | ändern | Textbausteine für Antworten auf Presseanfragen anlegen, ändern und löschen. | Presseanfragen ansehen |
+| Presse-Postfach einrichten | kritisch | Abruf des Presse-Postfachs (IMAP oder Microsoft 365) einrichten, testen, schalten und das Empfangsprotokoll ansehen. | Presseanfragen ansehen |
+| Presseverteiler pflegen | ändern | Kontakte von Redaktionen und Verteilerlisten anlegen, ändern, löschen, importieren und exportieren. | – |
+| Pressemitteilungen versenden | kritisch | Pressemitteilungen entwerfen und an Verteilerlisten senden; Versandprotokoll ansehen. | Presseverteiler pflegen |
+
 **Verbindungen**
 
 | Recht | Stufe | Erlaubt | Setzt voraus |

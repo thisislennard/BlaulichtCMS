@@ -177,7 +177,7 @@ describe('Automationen: Einrichtung und Rechte', () => {
     expect((await editor.post('/automations', { name: 'Nicht erlaubt' })).status).toBe(403);
     expect((await editor.post('/automation-inputs', { name: 'X', kind: 'manual', config: {} })).status).toBe(403);
     const cat = await admin.get('/automations/catalog');
-    expect(cat.json.inputKinds.map((k: any) => k.kind)).toEqual(['fe2', 'feuersoftware', 'warnfeed', 'rss', 'upload', 'schedule', 'manual']);
+    expect(cat.json.inputKinds.map((k: any) => k.kind)).toEqual(['fe2', 'feuersoftware', 'warnfeed', 'rss', 'upload', 'schedule', 'press', 'manual']);
     expect(cat.json.outputKinds.find((k: any) => k.kind === 'warning_draft').directCapable).toBe(false);
     expect((await editor.get('/automations/catalog')).json.users).toEqual([]);
   });

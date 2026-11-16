@@ -39,6 +39,10 @@ export const navigation: NavGroup[] = [
     ],
   },
   {
+    group: 'nav.press',
+    items: [{ id: 'pressRequests', path: '/presse', label: 'nav.pressRequests', icon: 'MessageSquareQuote', perm: ['press.view'] }],
+  },
+  {
     group: 'nav.channels',
     items: [
       { id: 'banners', path: '/banner', label: 'nav.banners', icon: 'Megaphone', perm: ['banner.view'] },

@@ -163,6 +163,13 @@ flowchart LR
 - **Amtliche Warnungen:** Warn-App-Schnittstelle des Bundes (NINA, gefiltert nach Regionalschlüssel) oder CAP-Feeds,
   auf Wunsch als Banner auf der Website mit Quellenvermerk.
 
+### Presse
+
+- **Presseanfragen:** von Hand erfassen (z. B. nach einem Anruf), Status neu → in Bearbeitung → beantwortet → erledigt,
+  zuständige Person, Frist mit Erinnerung, Verknüpfung mit Einsatz und Beitrag, interne Notizen, vollständiger Verlauf,
+  Übersicht mit Filtern und Dashboard-Kachel; Löschfrist Standard 12 Monate nach Erledigung; Workflow-Eingang
+  „Neue Presseanfrage“ ohne Kontaktdaten.
+
 ### Verbindungen
 
 - **FE2 und Feuersoftware Connect:** Einsätze erzeugen je Einsatz einen internen Beitragsentwurf (nur freigegebene
@@ -185,7 +192,7 @@ flowchart LR
   steht in der Liste und im Editor als ein Satz („Wenn ein neuer Alarm … eingeht, erscheint nach Freigabe auf der
   Website ein Banner …“); eine Checkliste zeigt vor dem Aktivieren, was noch fehlt.
 - **Erweitert – visueller Editor:** Eingänge (FE2-Alarm, Feuersoftware-Einsatz, amtliche Warnung, RSS-Eintrag, neue Uploads,
-  Zeitplan, manueller Start), Verarbeitung (Bedingung, Verzweigung, Felder setzen, Warten, Einmal je Vorgang, Freigabe
+  Zeitplan, neue Presseanfrage, manueller Start), Verarbeitung (Bedingung, Verzweigung, Felder setzen, Warten, Einmal je Vorgang, Freigabe
   anfordern, Zusammenführen) und Ausgänge (Banner, Beitrag, E-Mail, App-Benachrichtigung, Warnentwurf vorbereiten)
   auf einer Fläche verbinden – mit Palette, Minikarte, automatischer Anordnung, Rückgängig und einer Listenansicht für
   Tastatur und Handy.

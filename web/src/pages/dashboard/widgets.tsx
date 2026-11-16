@@ -127,6 +127,26 @@ export function WidgetBody({ id, d }: { id: string; d: any }) {
           ))}
         </List>
       );
+    case 'press':
+      return !d.press?.open?.length ? (
+        <EmptyState icon="MessageSquareQuote" title="Keine offene Presseanfrage" />
+      ) : (
+        <List>
+          {d.press.open.map((r: any) => (
+            <li key={r.id} className="py-2.5 flex flex-col">
+              <Link to={`/presse/${r.id}`} className="font-medium truncate">
+                {r.topic}
+              </Link>
+              <span className={cx('text-meta', r.overdue ? 'text-err' : 'text-fg-muted')}>
+                {r.case_no}
+                {r.outlet ? ` · ${r.outlet}` : ''}
+                {r.due_at ? ` · ${r.overdue ? 'Frist überschritten' : 'Frist'} ${fmtDateTime(r.due_at)}` : ''}
+                {r.assignee_name ? ` · ${r.assignee_name}` : ' · niemand zuständig'}
+              </span>
+            </li>
+          ))}
+        </List>
+      );
     case 'rss':
       return !d.rss?.length ? (
         <EmptyState icon="Newspaper" title="Keine Einträge" text="Quellen lassen sich unter „Quellen“ hinzufügen." />
@@ -269,7 +289,7 @@ function FlowBoard({ d }: { d: any }) {
   );
 }
 
-const LINKS: Record<string, [string, string]> = { approvals: ['/freigaben', 'Alle'], sites: ['/kanaele', 'Verwalten'], banners: ['/banner', 'Alle'], rss: ['/quellen', 'Alle'], uploads: ['/medien', 'Alle'] };
+const LINKS: Record<string, [string, string]> = { approvals: ['/freigaben', 'Alle'], sites: ['/kanaele', 'Verwalten'], banners: ['/banner', 'Alle'], rss: ['/quellen', 'Alle'], uploads: ['/medien', 'Alle'], press: ['/presse', 'Alle'] };
 
 /** Eine Kachel in einer Spalte. Der Redaktionsfluss bringt seine eigene Überschrift mit, alles andere ist eine Karte. */
 export function PanelTile({ id, d }: { id: string; d: any }) {
@@ -339,6 +359,13 @@ export function useBadgeInfo(d: any): (id: string) => BadgeInfo {
         v = plain(d.media?.last_24h);
         to = '/medien';
         hint = 'neue Dateien';
+        break;
+      case 'badge_press':
+        v = plain(d.press?.counts?.open);
+        to = '/presse';
+        error = (d.press?.counts?.overdue ?? 0) > 0;
+        hot = (d.press?.counts?.mine ?? 0) > 0;
+        hint = error ? `${d.press.counts.overdue} mit überschrittener Frist` : hot ? `${d.press.counts.mine} davon dir zugewiesen` : 'neu oder in Bearbeitung';
         break;
       case 'badge_connection_errors':
         v = plain(d.connectionErrors);

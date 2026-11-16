@@ -47,6 +47,7 @@ Ein Eingang hört auf eine vorhandene Quelle. Zugangsdaten, Tests und Gebietsfil
 | RSS-Eintrag | neuem Eintrag beim regelmäßigen Abruf (eine Quelle oder alle) | `titel`, `link`, `zusammenfassung`, `quelle` |
 | Neue Uploads | geprüften Dateien über einen Upload-Link, gebündelt je Zeitfenster | `sammlung`, `sammlung_link`, `anzahl` |
 | Zeitplan | täglich zu einer Uhrzeit (optional nur an Wochentagen) oder alle N Minuten (mind. 15) | `zeitpunkt`, `offene_beitraege`, `offene_beitraege_liste`, `offene_banner`, `offene_warnentwuerfe` |
+| Neue Presseanfrage | Anfrage von Hand erfasst oder aus dem Presse-Postfach (wahlweise nur bestimmte Eingangswege) | `nummer`, `thema`, `medium`, `eingangsweg`, `frist`, `zustaendig`, `anfrage_link` – ohne Kontaktdaten |
 | Manueller Start | Knopf „Jetzt starten“ im Workflow | eigene Felder, `gestartet_von` |
 
 Immer verfügbar: `automation` (Name des Workflows), `lauf`, `jetzt`. Bei FE2 und Feuersoftware gibt es nur die Felder der Allowlist – Straße, Meldende, Patientendaten kommen nie in einen Workflow. Bei Uploads werden keine Angaben der Hochladenden übergeben. Verpasste Zeitplan-Termine (Ausfall länger als 10 Minuten) werden nicht nachgeholt; das erste Einlesen einer neuen RSS-Quelle startet keine Läufe.

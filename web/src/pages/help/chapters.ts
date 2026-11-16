@@ -40,6 +40,7 @@ export const GROUPS: ChapterGroup[] = [
     ['qr-codes', 'QrCode'],
     ['dashboard', 'LayoutDashboard'],
     ['quellen', 'Newspaper'],
+    ['presse', 'MessageSquareQuote'],
   ]),
   G('warnings', [
     ['warnentwurf', 'Siren'],
