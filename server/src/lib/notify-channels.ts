@@ -97,14 +97,32 @@ async function pushTo(sub: SubRow, payload: Record<string, unknown>, keys: Vapid
   return r;
 }
 
+/** Freigabe-Ansicht eines Beitrags (#216): `/freigabe/beitrag/<id>?fassung=<n>` */
+const REVIEW_LINK = /^\/freigabe\/beitrag\/([0-9a-f-]{36})(?:\?fassung=\d+)?$/;
+
+/**
+ * Inhalt einer Push-Mitteilung. Freigabe-Anfragen (#216) bekommen je Beitrag ein eigenes Kennzeichen (eine neue
+ * Fassung ersetzt die alte Mitteilung) und – wo der Browser es kann (Chrome, Edge, Android) – Aktionsknöpfe. Beide
+ * Knöpfe öffnen nur die Freigabe-Ansicht (Ablehnen mit vorbereiteter Begründung); freigegeben wird nie ohne Vorschau.
+ */
 export function pushPayload(n: { title: string; body?: string; link?: string | null; kind?: string }, category: string, s: Settings) {
+  const link = n.link && n.link.startsWith('/') ? n.link : '/benachrichtigungen';
+  const review = category === 'approval' ? REVIEW_LINK.exec(link) : null;
   return {
     title: n.title.slice(0, 200),
     body: String(n.body ?? '').slice(0, 500),
-    link: n.link && n.link.startsWith('/') ? n.link : '/benachrichtigungen',
-    tag: `blaulichtcms-${category}`,
+    link,
+    tag: review ? `blaulichtcms-freigabe-${review[1]}` : `blaulichtcms-${category}`,
     kind: n.kind ?? 'info',
     app: String(s['general.instance_name'] || 'BlaulichtCMS'),
+    ...(review
+      ? {
+          actions: [
+            { action: 'review', title: 'Prüfen und freigeben' },
+            { action: 'reject', title: 'Ablehnen …' },
+          ],
+        }
+      : {}),
   };
 }
 

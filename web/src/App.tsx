@@ -20,6 +20,7 @@ const Notifications = lazy(() => import('./pages/Notifications'));
 const Profile = lazy(() => import('./pages/Profile'));
 const Posts = lazy(() => import('./pages/posts/Posts'));
 const PostEditor = lazy(() => import('./pages/posts/PostEditor'));
+const ReviewView = lazy(() => import('./pages/posts/ReviewView'));
 const Templates = lazy(() => import('./pages/posts/Templates'));
 const Banners = lazy(() => import('./pages/banners/Banners'));
 const IncidentList = lazy(() => import('./pages/incidents/IncidentList'));
@@ -152,6 +153,8 @@ const router = createBrowserRouter(withErrors([
       { path: 'benachrichtigungen', element: <Page><Notifications /></Page> },
       { path: 'beitraege', element: <Page perm={['post.view']}><Posts key="alle" /></Page> },
       { path: 'beitraege/:id', element: <Page perm={['post.view']}><PostEditor /></Page> },
+      // Freigabe-Ansicht (#216): Ziel der Push-Mitteilung „Freigabe erbeten“
+      { path: 'freigabe/beitrag/:id', element: <Page perm={['approval.post']}><ReviewView /></Page> },
       { path: 'vorlagen', element: <Page perm={['post.view']}><Templates /></Page> },
       { path: 'freigaben', element: <Page perm={['post.view']}><Posts key="freigaben" mode="approvals" /></Page> },
       { path: 'medien', element: <Page perm={['media.view']}><Collections /></Page> },

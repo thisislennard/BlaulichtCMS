@@ -13,6 +13,9 @@ import { ALT_MAX, altCheck, cleanMediaAlt } from '../lib/accessibility.js';
 
 export const POST_KINDS = ['news', 'incident', 'event', 'situation'] as const;
 
+/** Adresse der Freigabe-Ansicht einer Fassung (#216) – Ziel der Benachrichtigung „Freigabe erbeten“. */
+export const reviewLink = (postId: string, revision: number) => `/freigabe/beitrag/${postId}?fassung=${revision}`;
+
 export interface ChannelText {
   title?: string;
   body?: string;
@@ -145,6 +148,26 @@ export const POST_STATE_SQL = `
     LEFT JOIN LATERAL (SELECT decision, decided_at, content_hash FROM approvals WHERE revision_id = r.id AND revoked_at IS NULL ORDER BY decided_at DESC LIMIT 1) a ON true
     LEFT JOIN LATERAL (SELECT status, remote_url, run_at FROM publications WHERE revision_id = r.id AND action = 'publish' ORDER BY created_at DESC LIMIT 1) pb ON true
     LEFT JOIN LATERAL (SELECT status, action FROM publications WHERE post_id = p.id ORDER BY created_at DESC LIMIT 1) lp ON true`;
+
+/**
+ * Vier-Augen-Prinzip (#169, wie bei Warnentwürfen #153): Wer bis zu dieser Fassung Inhalte geschrieben (Text,
+ * Kanaltexte, Medien, Titelbild) oder die Fassung eingereicht hat, darf sie nicht freigeben. Nur Termin, Zielkanal
+ * oder soziale Kanäle zu ändern zählt nicht als Schreiben. Gemeinsam genutzt von der Entscheidung und der
+ * Freigabe-Ansicht (#216), damit beide dieselbe Regel anwenden.
+ */
+export async function fourEyesBlocked(postId: string, number: number, submittedBy: string | null, userId: string, db: Queryable = pool): Promise<boolean> {
+  if (submittedBy === userId) return true;
+  const own = await one<any>(
+    `SELECT 1 FROM post_revisions r LEFT JOIN post_revisions p ON p.post_id = r.post_id AND p.number = r.number - 1
+      WHERE r.post_id = $1 AND r.number <= $2 AND r.created_by = $3
+        AND (p.id IS NULL OR r.title IS DISTINCT FROM p.title OR r.body IS DISTINCT FROM p.body OR r.excerpt IS DISTINCT FROM p.excerpt
+             OR r.media_ids IS DISTINCT FROM p.media_ids OR r.cover_id IS DISTINCT FROM p.cover_id OR r.variants IS DISTINCT FROM p.variants)
+      LIMIT 1`,
+    [postId, number, userId],
+    db,
+  );
+  return !!own;
+}
 
 async function loadMedia(ids: string[]) {
   if (!ids.length) return [];
@@ -384,14 +407,105 @@ export async function postRoutes(app: FastifyInstance) {
     if (!st.current.body.trim()) throw badRequest('Bitte zuerst einen Text schreiben.');
     await pool.query('UPDATE post_revisions SET submitted_at = now(), submitted_by = $2 WHERE id = $1', [st.current.id, req.auth!.user?.id ?? null]);
     await audit(req.auth!.actor, 'post.submitted', { type: 'post', id, label: st.current.title }, { fassung: revision });
-    await notify({ kind: 'info', title: `Freigabe erbeten: ${st.current.title}`.slice(0, 200), body: `Fassung ${revision}`, link: `/beitraege/${id}`, permission: 'approval.post' });
+    // Link auf die kompakte Freigabe-Ansicht (#216); Push-Mitteilungen bekommen dort Aktionsknöpfe (lib/notify-channels.ts)
+    const by = req.auth!.user?.name;
+    await notify({ kind: 'info', title: `Freigabe erbeten: ${st.current.title}`.slice(0, 200), body: `Fassung ${revision}${by ? ` · eingereicht von ${by}` : ''}`, link: reviewLink(id, revision), permission: 'approval.post' });
     return { ok: true };
+  });
+
+  /**
+   * Freigabe-Ansicht (#216): alles, was zum Entscheiden über eine eingereichte Fassung nötig ist, kompakt für das
+   * Handy – Vorschau je Kanal, Medien, Änderungen zur letzten freigegebenen (sonst vorigen) Fassung und der Stand der
+   * Anfrage (offen, entschieden, überholt, zurückgezogen). Entschieden wird weiterhin über POST /posts/:id/decision mit
+   * allen Regeln (Prüfsumme, Vier-Augen, Datenschutz-Prüfung, Sitzung mit Zwei-Faktor).
+   */
+  app.get('/posts/:id/review', { preHandler: requireAuth('approval.post') }, async (req) => {
+    const { id } = z.object({ id: z.uuid() }).parse(req.params);
+    const { fassung } = z.object({ fassung: z.coerce.number().int().min(1).max(100_000).optional() }).parse(req.query);
+    const post = await one<any>(`SELECT id, kind, archived_at FROM posts WHERE id = $1`, [id]);
+    if (!post) throw notFound('Beitrag nicht gefunden.');
+    const st = (await postState(id))!;
+    const cur = st.current;
+    const requested = fassung ?? cur.number;
+    const reqRev = requested === cur.number ? cur : await one<any>(`SELECT * FROM post_revisions WHERE post_id = $1 AND number = $2`, [id, requested]);
+    if (!reqRev) throw notFound('Diese Fassung gibt es nicht.');
+    const lastDecision = await one<any>(
+      `SELECT a.decision, a.note, a.decided_at, a.revoked_at, u.name AS decided_by_name FROM approvals a LEFT JOIN users u ON u.id = a.decided_by
+        WHERE a.revision_id = $1 ORDER BY a.decided_at DESC LIMIT 1`,
+      [reqRev.id],
+    );
+    // Stand der Anfrage für genau die angefragte Fassung
+    let request: 'pending' | 'approved' | 'rejected' | 'superseded' | 'withdrawn' | 'revoked';
+    if (requested !== cur.number) request = 'superseded';
+    else if (st.validApproval || ['scheduled', 'publishing', 'published', 'failed', 'unknown', 'deactivated'].includes(st.state)) request = 'approved';
+    else if (st.state === 'rejected') request = 'rejected';
+    else if (cur.submitted_at) request = 'pending';
+    else if (lastDecision?.decision === 'approved' && lastDecision.revoked_at) request = 'revoked';
+    else request = 'withdrawn';
+    const userId = req.auth!.user?.id ?? null;
+    const s = await getSettings();
+    const blocked = request === 'pending' && !!userId && !!s['editorial.four_eyes'] && (await fourEyesBlocked(id, cur.number, cur.submitted_by ?? null, userId));
+    // Vergleichsstand: letzte freigegebene frühere Fassung, sonst die vorige
+    const base =
+      (await one<any>(
+        `SELECT r.* FROM post_revisions r WHERE r.post_id = $1 AND r.number < $2
+            AND EXISTS (SELECT 1 FROM approvals a WHERE a.revision_id = r.id AND a.decision = 'approved')
+          ORDER BY r.number DESC LIMIT 1`,
+        [id, reqRev.number],
+      )) ?? (reqRev.number > 1 ? await one<any>(`SELECT * FROM post_revisions WHERE post_id = $1 AND number = $2`, [id, reqRev.number - 1]) : null);
+    const baseApproved = base ? !!(await one(`SELECT 1 FROM approvals WHERE revision_id = $1 AND decision = 'approved'`, [base.id])) : false;
+    const names = await many<{ id: string; name: string }>(`SELECT id, name FROM users WHERE id = ANY($1::uuid[])`, [[reqRev.submitted_by, reqRev.created_by].filter(Boolean)]);
+    const nameOf = (uid: string | null) => names.find((n) => n.id === uid)?.name ?? null;
+    const targets = (reqRev.social_targets ?? []) as string[];
+    const connections = targets.length
+      ? await many<any>(`SELECT id, kind, CASE WHEN deleted_at IS NOT NULL THEN 'Verbindung gelöscht' ELSE name END AS name FROM connections WHERE id = ANY($1::uuid[])`, [targets])
+      : [];
+    const site = reqRev.site_id ? await one<any>(`SELECT name, site_url FROM wp_sites WHERE id = $1`, [reqRev.site_id]) : null;
+    const pick = (r: any) => ({
+      number: r.number as number,
+      title: r.title as string,
+      body: r.body as string,
+      excerpt: r.excerpt as string,
+      variants: cleanVariants(r.variants),
+      media_ids: (r.media_ids ?? []) as string[],
+      cover_id: r.cover_id as string | null,
+      site_id: r.site_id as string | null,
+      social_targets: (r.social_targets ?? []) as string[],
+      publish_at: r.publish_at,
+    });
+    return {
+      post: { id, kind: post.kind, archived: !!post.archived_at, current_revision: cur.number },
+      state: st.state,
+      request,
+      revision: {
+        ...pick(reqRev),
+        id: reqRev.id,
+        content_hash: reqRev.content_hash,
+        social_formats: reqRev.social_formats ?? {},
+        change_note: reqRev.change_note,
+        created_at: reqRev.created_at,
+        created_by_name: nameOf(reqRev.created_by),
+        submitted_at: reqRev.submitted_at,
+        submitted_by_name: nameOf(reqRev.submitted_by),
+      },
+      base: base ? { ...pick(base), approved: baseApproved } : null,
+      decision: lastDecision ? { decision: lastDecision.decision, note: lastDecision.note, decided_at: lastDecision.decided_at, decided_by_name: lastDecision.decided_by_name, revoked: !!lastDecision.revoked_at } : null,
+      media: await loadMedia([...new Set([...(reqRev.media_ids ?? []), ...(reqRev.cover_id ? [reqRev.cover_id] : [])])]),
+      missing_media: await missingMediaCount(reqRev),
+      /** Barrierefreiheit (#217): Bilder ohne Alternativtext – Hinweis bzw. Sperre im Freigabe-Dialog wie im Beitrag */
+      accessibility: await altCheck(reqRev),
+      site,
+      connections,
+      schedule_passed: !!reqRev.publish_at && new Date(reqRev.publish_at) < new Date() && request === 'pending',
+      four_eyes_blocked: blocked,
+      can_decide: request === 'pending' && !post.archived_at,
+    };
   });
 
   /** Freigabe bzw. Zurückweisung einer konkreten Fassung (Prüfsumme muss passen). */
   app.post('/posts/:id/decision', { preHandler: requireAuth('approval.post') }, async (req) => {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
-    const body = z.object({ revision: z.number().int().min(1), contentHash: z.string().length(64), decision: z.enum(['approved', 'rejected']), note: z.string().trim().max(500).default(''), privacyChecked: z.boolean().default(false) }).parse(req.body);
+    const body = z.object({ revision: z.number().int().min(1), contentHash: z.string().length(64), decision: z.enum(['approved', 'rejected']), note: z.string().trim().max(500).default(''), privacyChecked: z.boolean().default(false), via: z.enum(['editor', 'review', 'push']).default('editor') }).parse(req.body);
     const s = await getSettings();
     const userId = req.auth!.user?.id ?? null;
     const res = await tx(async (db) => {
@@ -408,20 +522,9 @@ export async function postRoutes(app: FastifyInstance) {
         const alt = await altCheck(st.current, db);
         if (alt.required && alt.missing.length) throw new AppError(400, 'alt_text_required', `${alt.missing.length === 1 ? 'Ein Bild hat' : `${alt.missing.length} Bilder haben`} noch keinen Alternativtext. Bitte im Beitrag unter „Medien“ ergänzen, speichern und erneut einreichen.`, { missing: alt.missing });
       }
-      // Vier-Augen-Prinzip (#169, wie bei Warnentwürfen #153): Wer bis zu dieser Fassung Inhalte geschrieben (Text,
-      // Kanaltexte, Medien, Titelbild) oder die Fassung eingereicht hat, darf sie nicht freigeben. Nur Termin, Zielkanal
-      // oder soziale Kanäle zu ändern zählt nicht als Schreiben.
-      if (s['editorial.four_eyes'] && body.decision === 'approved' && userId) {
-        const own = await one<any>(
-          `SELECT 1 FROM post_revisions r LEFT JOIN post_revisions p ON p.post_id = r.post_id AND p.number = r.number - 1
-            WHERE r.post_id = $1 AND r.number <= $2 AND r.created_by = $3
-              AND (p.id IS NULL OR r.title IS DISTINCT FROM p.title OR r.body IS DISTINCT FROM p.body OR r.excerpt IS DISTINCT FROM p.excerpt
-                   OR r.media_ids IS DISTINCT FROM p.media_ids OR r.cover_id IS DISTINCT FROM p.cover_id OR r.variants IS DISTINCT FROM p.variants)
-            LIMIT 1`,
-          [id, st.current.number, userId],
-          db,
-        );
-        if (own || st.current.submitted_by === userId) throw forbidden('Vier-Augen-Prinzip: Wer am Beitrag geschrieben oder die Fassung eingereicht hat, kann sie nicht selbst freigeben.');
+      // Vier-Augen-Prinzip (#169): siehe fourEyesBlocked
+      if (s['editorial.four_eyes'] && body.decision === 'approved' && userId && (await fourEyesBlocked(id, st.current.number, st.current.submitted_by ?? null, userId, db))) {
+        throw forbidden('Vier-Augen-Prinzip: Wer am Beitrag geschrieben oder die Fassung eingereicht hat, kann sie nicht selbst freigeben.');
       }
       // Markierte Medien (erkennbare Personen, Verletzte/Gesundheitsdaten, Kennzeichen, sensibel): Freigabe nur mit
       // ausdrücklich bestätigter Datenschutz-Prüfung (#118, Art. 9 DSGVO, KUG)
@@ -435,7 +538,7 @@ export async function postRoutes(app: FastifyInstance) {
         db,
       );
       if (body.decision === 'rejected') await db.query('UPDATE post_revisions SET submitted_at = NULL WHERE id = $1', [st.current.id]);
-      await audit(req.auth!.actor, body.decision === 'approved' ? 'post.approved' : 'post.rejected', { type: 'post', id, label: st.current.title }, { fassung: body.revision, pruefsumme: body.contentHash.slice(0, 12), ...(flagged!.n > 0 && body.decision === 'approved' ? { datenschutz_geprueft: true, markierte_medien: flagged!.n } : {}) }, 'ok', db);
+      await audit(req.auth!.actor, body.decision === 'approved' ? 'post.approved' : 'post.rejected', { type: 'post', id, label: st.current.title }, { fassung: body.revision, pruefsumme: body.contentHash.slice(0, 12), ...(body.via !== 'editor' ? { ansicht: body.via === 'push' ? 'Freigabe-Ansicht (aus Push-Mitteilung)' : 'Freigabe-Ansicht' } : {}), ...(flagged!.n > 0 && body.decision === 'approved' ? { datenschutz_geprueft: true, markierte_medien: flagged!.n } : {}) }, 'ok', db);
       return { a, title: st.current.title, author: st.current.submitted_by ?? st.current.created_by };
     });
     if (res.author) {

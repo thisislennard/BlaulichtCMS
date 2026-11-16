@@ -486,6 +486,8 @@ try {
   churn = setInterval(() => editor.post('/posts', { title: `Live-Ereignis ${++n}`, kind: 'news' }).catch(() => {}), 2000);
 
   const routes = ['/', '/beitraege', `/beitraege/${post.id}`, `/beitraege/${sub.id}`, '/vorlagen', '/kalender', '/freigaben', '/medien', `/medien/${col.collection.id}`, '/medien/dateien', '/medien/papierkorb', '/medien/verwaltung', '/medien/gestaltung', ...(st.linkId ? [`/medien/gestaltung?link=${st.linkId}`] : []), '/designvorlagen', ...(st.designTemplateId ? [`/designvorlagen/${st.designTemplateId}`] : []), ...(st.imageTemplateId ? [`/designvorlagen/${st.imageTemplateId}`, `/designvorlagen/${st.imageTemplateId}/editor`] : []), '/quellen', '/banner', '/kanaele', '/warnungen', '/warnungen/pflege', ...(warn ? [`/warnungen/${warn.id}`] : []), '/verbindungen', ...(conn ? [`/verbindungen/${conn.id}`, `/verbindungen/${conn.id}?ansicht=empfangsprotokoll`] : []), ...(st.warnfeedId ? [`/verbindungen/${st.warnfeedId}`, `/verbindungen/${st.warnfeedId}?ansicht=empfangsprotokoll`] : []), ...(st.feuersoftwareId ? [`/verbindungen/${st.feuersoftwareId}`] : []), ...[st.threadsId, st.xApiId, st.whatsappId].filter(Boolean).map((x) => `/verbindungen/${x}`), '/amtliche-warnungen', '/workflows', '/workflows/eingaenge', '/workflows/ausgaenge', ...(st.automationId ? [`/workflows/${st.automationId}`] : []), '/benutzer', '/system', '/protokolle', '/datenschutz-anfragen', '/einstellungen', '/profil', '/hilfe', '/aktivitaeten', '/benachrichtigungen'];
+  // Freigabe-Ansicht aus der Push-Mitteilung (#216)
+  routes.splice(4, 0, `/freigabe/beitrag/${sub.id}?fassung=2`);
   for (const r of routes) await scanRoute(page, r);
 
   // Löschdialoge (Löschen-Knöpfe klickt der Rundgang bewusst nicht): Warnvorgang mit Begründung, Verbindung
@@ -695,6 +697,7 @@ try {
   mp.on('dialog', (d) => d.accept().catch(() => {}));
   seenGlobal.clear();
   for (const r of [`/beitraege/${post.id}`, '/profil', `/medien/${col.collection.id}`, '/medien/gestaltung', ...(warn ? [`/warnungen/${warn.id}`] : []), ...(conn ? [`/verbindungen/${conn.id}?ansicht=empfangsprotokoll`] : []), ...(st.automationId ? [`/workflows/${st.automationId}`] : [])]) await scanRoute(mp, r, { buttons: false });
+  await scanRoute(mp, `/freigabe/beitrag/${sub.id}?fassung=2`, { buttons: false });
 
   const uniqueFields = new Set(tested.map((t) => `${t.where}|${t.field}`)).size;
   const where = new Set(tested.map((t) => t.where)).size;

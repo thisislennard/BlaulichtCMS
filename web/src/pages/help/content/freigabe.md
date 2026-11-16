@@ -11,6 +11,35 @@ Eine Freigabe bezieht sich auf eine konkrete Fassung mit ihrer **Prüfsumme** ü
 | 3 | Veröffentlichung | **Auf … veröffentlichen** (nur mit Zielkanal) |
 | 4 | Website | Holt den Auftrag ab und meldet Adresse und WordPress-ID zurück |
 
+## Freigabe unterwegs: aus der Push-Mitteilung
+
+Wird eine Fassung eingereicht, bekommen alle mit dem Recht „Beiträge freigeben“ die Benachrichtigung **Freigabe
+erbeten** – in der Glocke und, wenn eingeschaltet, als Push-Mitteilung auf Handy oder Computer (Mein Konto →
+Benachrichtigungen, Art „Freigabe angefordert“).
+
+Antippen öffnet die **Freigabe-Ansicht** – kompakt und für das Handy gemacht:
+
+- **Vorschau je Kanal:** Grundtext, Website und jeder gewählte soziale Kanal mit seinem eigenen Text,
+- **Bilder und Videos** der Fassung (antippen = groß), Titelbild und markierte Dateien sind gekennzeichnet,
+- **Änderungen** zur zuletzt freigegebenen Fassung (sonst zur vorigen): entfernte Wörter durchgestrichen, neue
+  hervorgehoben, dazu geänderte Dateien, Kanäle und Termin.
+
+Unten stehen **Freigeben** und **Ablehnen**. Es gelten dieselben Regeln wie im Beitrag: Die Entscheidung gilt genau für
+diese Fassung (Prüfsumme), Ablehnen braucht eine Begründung, bei markierten Medien ist die Datenschutz-Prüfung nötig,
+und wer am Beitrag geschrieben oder ihn eingereicht hat, kann ihn nicht selbst freigeben (Vier-Augen-Prinzip – die
+Ansicht weist darauf hin). Angemeldet wird wie immer, bei Bedarf mit Zwei-Faktor-Code.
+
+**Knöpfe in der Mitteilung:** In Chrome und Edge (auch auf Android) hat die Mitteilung die Knöpfe **Prüfen und
+freigeben** und **Ablehnen …**. Beide öffnen nur die Freigabe-Ansicht – „Ablehnen …“ gleich mit dem Begründungsfeld.
+Freigegeben wird nie direkt aus der Mitteilung, sondern immer erst nach Blick auf die Vorschau. Auf iPhone und iPad
+(und in Safari am Mac) zeigen Mitteilungen keine Knöpfe; dort öffnet das Antippen die Freigabe-Ansicht.
+
+**Überholt oder schon entschieden:** Gibt es inzwischen eine neuere Fassung, zeigt die Ansicht „Diese Anfrage ist
+überholt“ mit einem Knopf zur aktuellen Fassung. Hat schon jemand entschieden, steht dort wer, wann und mit welcher
+Begründung; die Knöpfe entfallen. Eine neue Fassung desselben Beitrags ersetzt die ältere Mitteilung auf dem Gerät. Ist
+der Termin einer eingereichten Fassung schon verstrichen, weist die Ansicht darauf hin. Im Audit steht bei Entscheidungen
+aus der Freigabe-Ansicht, ob sie aus einer Push-Mitteilung kam.
+
 ## Datenschutz-Prüfung bei markierten Medien
 
 Sind Medien der Fassung in der Sichtung markiert (**Personen erkennbar**, **Verletzte / Gesundheit**, **Kennzeichen / Adressen**, **Sonstiger sensibler Inhalt**), lässt sich die Fassung nur freigeben, wenn im Freigabe-Dialog alle Prüfpunkte bestätigt sind:

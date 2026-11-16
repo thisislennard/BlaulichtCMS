@@ -134,6 +134,7 @@ flowchart LR
 ### Freigeben
 
 - **Freigabe genau einer Fassung** (Prüfsumme) – ändert sich danach etwas, ist eine neue Freigabe nötig.
+- **Freigabe unterwegs:** die Push-Mitteilung „Freigabe erbeten“ öffnet eine kompakte Freigabe-Ansicht fürs Handy (Vorschau je Kanal, Bilder, Änderungen zur letzten Fassung) mit Freigeben/Ablehnen unter denselben Regeln; in Chrome/Edge/Android mit Knöpfen in der Mitteilung, die nur die Ansicht öffnen – nie ohne Vorschau.
 - **Vier-Augen-Prinzip** wählbar für Beiträge, Banner und Warnentwürfe: wer geschrieben oder eingereicht hat, gibt
   nicht selbst frei.
 - **Intern freigeben** ohne Veröffentlichung, z. B. für Pressemitteilungen oder als Vorlage.

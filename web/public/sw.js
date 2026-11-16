@@ -69,6 +69,12 @@ self.addEventListener('push', (e) => {
     d = { title: 'BlaulichtCMS', body: e.data ? e.data.text() : '' };
   }
   const link = typeof d.link === 'string' && d.link.startsWith('/') && !d.link.startsWith('//') ? d.link : '/benachrichtigungen';
+  // Aktionsknöpfe (#216, Freigabe-Anfragen): nur wo der Browser sie kann (Chrome, Edge, Android; iOS nicht). Sie öffnen
+  // ausschließlich die Freigabe-Ansicht mit Vorschau – entschieden wird immer dort, nie direkt aus der Mitteilung.
+  const canActions = typeof Notification !== 'undefined' && (Notification.maxActions || 0) > 0;
+  const actions = canActions && Array.isArray(d.actions) && link.startsWith('/freigabe/')
+    ? d.actions.filter((a) => a && (a.action === 'review' || a.action === 'reject')).slice(0, 2).map((a) => ({ action: a.action, title: String(a.title || '').slice(0, 40) }))
+    : [];
   // Punkt am App-Symbol (Taskleiste/Dock), bis die geöffnete App die genaue Zahl setzt – nur wo unterstützt (#197)
   try {
     self.navigator.setAppBadge?.().catch(() => {});
@@ -84,13 +90,21 @@ self.addEventListener('push', (e) => {
       badge: '/icon-192.png',
       lang: 'de',
       data: { link },
+      ...(actions.length ? { actions } : {}),
     }),
   );
 });
 
 self.addEventListener('notificationclick', (e) => {
   e.notification.close();
-  const target = new URL((e.notification.data && e.notification.data.link) || '/', self.location.origin).href;
+  const url = new URL((e.notification.data && e.notification.data.link) || '/', self.location.origin);
+  // Nur eigene Adressen; Freigabe-Anfragen öffnen die Freigabe-Ansicht (Ablehnen: mit geöffnetem Begründungsfeld)
+  if (url.origin !== self.location.origin) return;
+  if (url.pathname.startsWith('/freigabe/')) {
+    url.searchParams.set('quelle', 'push');
+    if (e.action === 'reject') url.searchParams.set('aktion', 'ablehnen');
+  }
+  const target = url.href;
   // Vorhandenes Fenster bevorzugen (installierte App am Desktop: kein zweites Fenster), das aktive bzw. sichtbare zuerst.
   e.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(async (list) => {
