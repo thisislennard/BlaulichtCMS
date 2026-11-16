@@ -7,6 +7,7 @@ import { many, one, pool } from '../src/db/pool.js';
 import { migrate, migrationFiles } from '../src/db/migrate.js';
 import { buildApp } from '../src/app.js';
 import { config } from '../src/config.js';
+import { mediaPaths } from '../src/media/storage.js';
 import { getSettings, setSettings } from '../src/lib/settings.js';
 import { hashPassword } from '../src/auth/passwords.js';
 import { PUBLIC_ROUTES } from '../src/auth/route-access.js';
@@ -538,5 +539,40 @@ describe('Rollen und feine Rechte', () => {
     // Sammelaktion: Löschen mit „Medien löschen“, Sichten nicht
     expect((await client.post('/media/bulk', { ids: ['00000000-0000-4000-8000-000000000000'], action: 'selection', selection: 'selected' })).status).toBe(403);
     expect((await client.post('/media/bulk', { ids: ['00000000-0000-4000-8000-000000000000'], action: 'delete' })).status).toBe(200);
+  });
+
+  it('„Beiträge ansehen“ ohne „Medien ansehen“: Vorschau und öffentliche Fassung nur für Medien eines Beitrags, nie Originale', async () => {
+    const col = await admin.post('/collections', { title: 'Beitragsbilder', createLink: false });
+    expect(col.status, JSON.stringify(col.json)).toBe(200);
+    const addMedia = async () => {
+      const m = await one<any>(
+        `INSERT INTO media (collection_id, original_name, size_bytes, sha256, status, kind, has_preview, has_public, processed_at)
+         VALUES ($1, 'bild.jpg', 10, md5(random()::text) || md5(random()::text), 'ready', 'image', true, true, now()) RETURNING id`,
+        [col.json.collection.id],
+      );
+      for (const f of [mediaPaths.preview(m!.id), mediaPaths.publicFile(m!.id, 'jpg'), mediaPaths.original(m!.id)]) {
+        fs.mkdirSync(path.dirname(f), { recursive: true });
+        fs.writeFileSync(f, 'x');
+      }
+      return m!.id as string;
+    };
+    const used = await addMedia();
+    const other = await addMedia();
+    const p = await admin.post('/posts', { title: 'Mit Bild', kind: 'news' });
+    expect(p.status, JSON.stringify(p.json)).toBe(200);
+    await pool.query(`UPDATE post_revisions SET media_ids = $2 WHERE post_id = $1`, [p.json.id, [used]]);
+    const r = await admin.post('/roles', { label: 'Beitragsbilder ansehen', permissions: ['post.view'] });
+    expect(r.status, JSON.stringify(r.json)).toBe(200);
+    const { client } = await mkUser('beitraege-lesen@example.org', [r.json.id]);
+    const pv = await client.get(`/media/${used}/preview`);
+    expect(pv.status, JSON.stringify(pv.json)).toBe(200);
+    expect((await client.get(`/media/${used}/public`)).status).toBe(200);
+    expect((await client.get(`/media/${used}/original`)).status).toBe(403);
+    expect((await client.get(`/media/${other}/preview`)).status).toBe(403);
+    expect((await client.get(`/media/${used}/details`)).status).toBe(403);
+    // Ohne beide Rechte: gesperrt
+    const none = await admin.post('/roles', { label: 'Ohne Medienrechte', permissions: [] });
+    const { client: c2 } = await mkUser('gar-nichts@example.org', [none.json.id]);
+    expect((await c2.get(`/media/${used}/preview`)).status).toBe(403);
   });
 });

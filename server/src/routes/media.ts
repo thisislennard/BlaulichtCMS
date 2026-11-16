@@ -1014,12 +1014,21 @@ export async function mediaRoutes(app: FastifyInstance) {
   });
 
   /* Dateien ausliefern – nur geprüfte Medien, nur mit Recht */
-  app.get('/media/:id/:variant', { preHandler: requireAuth('media.view') }, async (req, reply) => {
+  app.get('/media/:id/:variant', { preHandler: requireAnyAuth('media.view', 'post.view') }, async (req, reply) => {
     const { id, variant } = z.object({ id: z.uuid(), variant: z.enum(['preview', 'original', 'public']) }).parse(req.params);
+    const perms = req.auth!.permissions;
+    // Ohne „Medien ansehen“ (nur „Beiträge ansehen“): Vorschau und öffentliche Fassung, und nur für Dateien, die in
+    // einer Fassung eines Beitrags stecken (Bilder im Beitragseditor). Originale und der Papierkorb bleiben gesperrt.
+    const viaPost = !perms.has('media.view');
+    if (viaPost && variant === 'original') throw forbidden();
     // Vorschau einer Datei im Papierkorb nur mit „Medien verwalten“ (Übersicht des Papierkorbs)
-    const trashPreview = variant === 'preview' && req.auth!.permissions.has('media.trash');
+    const trashPreview = !viaPost && variant === 'preview' && perms.has('media.trash');
     const m = await one<any>(`SELECT * FROM media WHERE id = $1 AND (deleted_at IS NULL OR $2) AND status = 'ready'`, [id, trashPreview]);
     if (!m) throw notFound('Datei nicht gefunden oder noch nicht geprüft.');
+    if (viaPost) {
+      const used = await one<{ x: number }>(`SELECT 1 AS x FROM post_revisions WHERE $1 = ANY(media_ids) OR cover_id = $1 LIMIT 1`, [id]);
+      if (!used) throw forbidden();
+    }
     if (variant === 'original' && !req.auth!.permissions.has('media.download_original')) throw forbidden(ORIGINALS_FORBIDDEN);
     if (variant === 'preview') {
       if (!m.has_preview) throw notFound('Keine Vorschau vorhanden.');
