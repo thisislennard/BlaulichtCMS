@@ -49,6 +49,7 @@ const AutomationInputs = lazy(() => import('./pages/automations/Inputs'));
 const AutomationOutputs = lazy(() => import('./pages/automations/Outputs'));
 const PressRequests = lazy(() => import('./pages/press/PressRequests'));
 const PressRequestPage = lazy(() => import('./pages/press/PressRequest'));
+const CalendarPage = lazy(() => import('./pages/calendar/Calendar'));
 const Help = lazy(() => import('./pages/help/Help'));
 const PrintSheet = lazy(() => import('./pages/print/PrintSheet'));
 const InstallApp = lazy(() => import('./pages/InstallApp'));
@@ -158,6 +159,7 @@ const router = createBrowserRouter(withErrors([
       { path: 'medien/:id', element: <Page perm={['media.view']}><CollectionDetail /></Page> },
       { path: 'designvorlagen', element: <Page perm={['templates.view']}><DesignTemplates /></Page> },
       { path: 'designvorlagen/:id', element: <Page perm={['templates.view']}><DesignTemplateDetail /></Page> },
+      { path: 'kalender', element: <Page perm={['calendar.view']}><CalendarPage /></Page> },
       { path: 'quellen', element: <Page perm={['source.view']}><Sources /></Page> },
       { path: 'banner', element: <Page perm={['banner.view']}><Banners /></Page> },
       { path: 'kanaele', element: <Page perm={['channel.view']}><Sites /></Page> },

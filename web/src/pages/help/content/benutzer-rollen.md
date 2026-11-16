@@ -135,6 +135,13 @@ Alle Rechte, nach Bereichen. Die Tabelle entspricht dem Rollen-Editor; „Setzt 
 | Banner bearbeiten | ändern | Banner anlegen, ändern und zur Freigabe einreichen; aus einer amtlichen Warnung einen Bannerentwurf anlegen. | Banner ansehen, Websites ansehen |
 | Banner veröffentlichen | kritisch | Freigegebene Banner auf der Website schalten und beenden. | Banner ansehen |
 
+**Kalender**
+
+| Recht | Stufe | Erlaubt | Setzt voraus |
+| --- | --- | --- | --- |
+| Kalender ansehen | lesen | Termine, Kategorien und eingelesene Kalender ansehen; geplante Beiträge erscheinen zusätzlich mit „Beiträge ansehen“. | – |
+| Termine verwalten | ändern | Eigene Termine und Serien anlegen, ändern und löschen; Kategorien mit Farben verwalten. | Kalender ansehen |
+
 **Warnentwürfe und amtliche Warnungen**
 
 | Recht | Stufe | Erlaubt | Setzt voraus |

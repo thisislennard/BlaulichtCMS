@@ -36,6 +36,7 @@ export const GROUPS: ChapterGroup[] = [
     ['sichtung', 'CheckSquare'],
     ['designvorlagen', 'Palette'],
     ['beitraege', 'FileText'],
+    ['kalender', 'CalendarDays'],
     ['freigabe', 'ShieldCheck'],
     ['qr-codes', 'QrCode'],
     ['dashboard', 'LayoutDashboard'],

@@ -260,6 +260,14 @@
     "updates": {
       "settings_changed": "Update-Einstellungen geändert",
       "checked": "Auf Updates geprüft"
+    },
+    "calendar": {
+      "category_created": "Kalender-Kategorie angelegt",
+      "category_updated": "Kalender-Kategorie geändert",
+      "category_deleted": "Kalender-Kategorie gelöscht",
+      "event_created": "Termin angelegt",
+      "event_updated": "Termin geändert",
+      "event_deleted": "Termin gelöscht"
     }
   },
   "sentences": {
@@ -496,6 +504,14 @@
     "updates": {
       "settings_changed": "hat die Update-Einstellungen geändert",
       "checked": "hat auf Updates geprüft"
+    },
+    "calendar": {
+      "category_created": "hat die Kalender-Kategorie „{o}“ angelegt",
+      "category_updated": "hat die Kalender-Kategorie „{o}“ geändert",
+      "category_deleted": "hat die Kalender-Kategorie „{o}“ gelöscht",
+      "event_created": "hat den Termin „{o}“ angelegt",
+      "event_updated": "hat den Termin „{o}“ geändert",
+      "event_deleted": "hat den Termin „{o}“ gelöscht"
     }
   },
   "notifications": {

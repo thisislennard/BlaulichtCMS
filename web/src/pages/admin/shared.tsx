@@ -364,7 +364,7 @@ export function auditArea(
   ev: Pick<AuditEvent, "action" | "object_type">,
 ): string {
   const p = ev.action.split(".")[0];
-  if (["post", "publication", "template", "rss", "design_template"].includes(p)) return "editorial";
+  if (["post", "publication", "template", "rss", "design_template", "calendar"].includes(p)) return "editorial";
   if (["collection", "upload_link", "media"].includes(p)) return "media";
   if (["site", "bridge", "banner", "connection", "social", "automation"].includes(p)) return "channels";
   if (p === "warning") return "warnings";

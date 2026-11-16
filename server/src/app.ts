@@ -81,6 +81,7 @@ import { notifyChannelRoutes } from './routes/notify-channels.js';
 import { keywordRoutes } from './routes/keywords.js';
 import { designTemplateRoutes } from './routes/design-templates.js';
 import { pressRoutes } from './routes/press.js';
+import { calendarRoutes } from './routes/calendar.js';
 import { observeProxy } from './lib/proxy-check.js';
 import { healthStatus, isLocalHealthRequest, publicHealth } from './routes/health.js';
 
@@ -262,6 +263,7 @@ export async function buildApp(): Promise<FastifyInstance> {
       await api.register(notifyChannelRoutes);
       await api.register(keywordRoutes);
       await api.register(pressRoutes);
+      await api.register(calendarRoutes);
     },
     { prefix: '/api/v1' },
   );

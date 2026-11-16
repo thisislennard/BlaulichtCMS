@@ -106,6 +106,9 @@ flowchart LR
 - **Texte je Kanal:** eigener Text für Website, Facebook, Instagram, Threads, X, Mastodon, Bluesky und WhatsApp-Kanal, Vorschau je Kanal und Zeichenzähler, geplanter
   Veröffentlichungstermin.
 - **Quellen:** RSS- und Atom-Feeds als Anregung für eigene Beiträge.
+- **Kalender:** eigene Termine und Serien (täglich, wöchentlich, monatlich auch „jeden 1. Samstag“, jährlich; Ende nach
+  Datum oder Anzahl, einzelne Termine ändern oder auslassen), Kategorien mit Farben, Ansichten Monat, Woche und Liste
+  (am Handy Liste), Filter nach Kategorie und Quelle; Zeitzone Europe/Berlin inklusive Sommer-/Winterzeit.
 
 ### Designvorlagen
 

@@ -108,6 +108,19 @@ Download-Zähler, Versionen, Suche/Filter, Löschen samt Dateien, Audit).
 
 ---
 
+## Kalender
+
+Termine liegen in `calendar_events` (Migration 110), Kategorien in `calendar_categories`. Serien speichern eine RRULE
+nach RFC 5545 (`server/src/calendar/recurrence.ts`, eigene Umsetzung ohne Fremdbibliothek: FREQ DAILY/WEEKLY/MONTHLY/
+YEARLY, INTERVAL, COUNT, UNTIL, BYDAY mit Ordnungszahl, BYMONTHDAY, BYMONTH, BYSETPOS). Wiederholungen werden in
+Ortszeit der Zeitzone `tz` gebildet und erst dann in UTC umgerechnet (Intl, IANA-Zeitzonen) – Sommer-/Winterzeit
+verschiebt Serien nicht. Ausgelassene Termine stehen in `exdates`, geänderte Einzeltermine als eigene Zeile mit
+`series_id` und `recurrence_id`. `until_at` (Ende des letzten Termins, NULL = unbegrenzt) begrenzt die Abfrage nach
+Zeitraum; aufgelöst wird beim Lesen (`server/src/calendar/store.ts`, höchstens 400 Tage je Abfrage). Weitere Module
+können Einträge über `registerCalendarProvider` beisteuern.
+
+---
+
 ## Sicherheit
 
 | Bereich | Umsetzung |

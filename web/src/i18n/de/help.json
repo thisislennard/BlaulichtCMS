@@ -135,6 +135,10 @@
       "title": "Presseanfragen",
       "summary": "Anfragen erfassen, Zuständigkeit und Frist, Verlauf, Postfach-Abruf, Antworten per Mail, Presseverteiler."
     },
+    "kalender": {
+      "title": "Kalender",
+      "summary": "Termine und Serien, Kategorien mit Farben, Ansichten Monat, Woche und Liste."
+    },
     "quellen": {
       "title": "Quellen (RSS/Atom)",
       "summary": "Feeds hinzufügen, Einträge merken oder ausblenden, Themenideen mit Original-Link."

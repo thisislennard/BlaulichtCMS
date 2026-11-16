@@ -33,6 +33,7 @@ export const MODULES: ModuleDef[] = [
   { id: 'approval', label: 'Freigabe' },
   { id: 'publishing', label: 'Veröffentlichung' },
   { id: 'banners', label: 'Banner' },
+  { id: 'calendar', label: 'Kalender' },
   { id: 'warnings', label: 'Warnentwürfe und amtliche Warnungen' },
   { id: 'press', label: 'Presse' },
   { id: 'connections', label: 'Verbindungen' },
@@ -97,6 +98,10 @@ export const PERMISSIONS: PermissionDef[] = [
   P('banner.view', 'banners', 'read', 'Banner ansehen', 'Banner und ihren Stand ansehen.'),
   P('banner.edit', 'banners', 'write', 'Banner bearbeiten', 'Banner anlegen, ändern und zur Freigabe einreichen; aus einer amtlichen Warnung einen Bannerentwurf anlegen.', ['banner.view', 'channel.view']),
   P('banner.publish', 'banners', 'critical', 'Banner veröffentlichen', 'Freigegebene Banner auf der Website schalten und beenden.', ['banner.view']),
+
+  /* Kalender (#200) */
+  P('calendar.view', 'calendar', 'read', 'Kalender ansehen', 'Termine, Kategorien und eingelesene Kalender ansehen; geplante Beiträge erscheinen zusätzlich mit „Beiträge ansehen“.'),
+  P('calendar.manage', 'calendar', 'write', 'Termine verwalten', 'Eigene Termine und Serien anlegen, ändern und löschen; Kategorien mit Farben verwalten.', ['calendar.view']),
 
   /* Warnentwürfe */
   P('warning.view', 'warnings', 'read', 'Warnvorgänge ansehen', 'Warnvorgänge, Fassungen, PDF, Stichwörter und Zuständigkeiten ansehen.'),
@@ -258,11 +263,11 @@ export const LEGACY_ROLE_PERMISSIONS: Record<string, string[]> = {
  * bekommen (die Sammelbezeichnungen bleiben davon unberührt). Angepasste Rollen erhalten sie nicht automatisch.
  */
 export const ROLE_DEFAULT_ADDITIONS: Record<string, string[]> = {
-  media_manager: ['templates.view', 'templates.manage'],
-  editor: ['templates.view', 'templates.manage'],
-  approver: ['templates.view'],
-  publisher: ['templates.view'],
-  viewer: ['templates.view'],
+  media_manager: ['templates.view', 'templates.manage', 'calendar.view'],
+  editor: ['templates.view', 'templates.manage', 'calendar.view', 'calendar.manage'],
+  approver: ['templates.view', 'calendar.view'],
+  publisher: ['templates.view', 'calendar.view'],
+  viewer: ['templates.view', 'calendar.view'],
 };
 
 const sys = (id: string, label: string, description: string): RoleDef => ({

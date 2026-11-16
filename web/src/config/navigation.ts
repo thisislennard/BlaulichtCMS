@@ -31,6 +31,7 @@ export const navigation: NavGroup[] = [
     group: 'nav.editorial',
     items: [
       { id: 'posts', path: '/beitraege', label: 'nav.posts', icon: 'FileText', perm: ['post.view'] },
+      { id: 'calendar', path: '/kalender', label: 'nav.calendar', icon: 'CalendarDays', perm: ['calendar.view'] },
       { id: 'approvals', path: '/freigaben', label: 'nav.approvals', icon: 'ListChecks', perm: ['approval.post', 'publish.website'], badge: 'approvals' },
       { id: 'media', path: '/medien', label: 'nav.media', icon: 'Images', perm: ['media.view'] },
       { id: 'designTemplates', path: '/designvorlagen', label: 'nav.designTemplates', icon: 'Palette', perm: ['templates.view'] },
