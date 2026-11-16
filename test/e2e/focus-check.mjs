@@ -320,6 +320,9 @@ async function freshSetup() {
     const r = await fetch(`${BC}/api/v1/public/upload/${token}`, { method: 'POST', body: fd, headers: { 'x-blaulichtcms-request': '1' } });
     if (!r.ok) console.log('  (Upload)', r.status, await r.text());
   }
+  // Medien wie LiFeOS: Ordner (Ordnerleiste, Ordnerdialoge) und ein zweiter Link mit erweiterten Optionen
+  await admin.post(`/collections/${col.collection.id}/folders`, { name: 'Einsatz' }).catch((e) => console.log('  (Ordner)', e.message));
+  const optLink = await admin.post(`/collections/${col.collection.id}/links`, { label: 'Mit Optionen', fields: { name: 'optional', email: 'optional' }, consentRequired: true, consentText: 'Ich habe die Aufnahmen selbst gemacht.' }).catch((e) => (console.log('  (Link)', e.message), null));
   await admin.post('/templates', { name: 'Testvorlage', kind: 'news', title: 'Vorlagentitel', body: 'Vorlagentext' });
   rss = await rssServer();
   await admin.post('/rss/feeds', { url: `http://127.0.0.1:${rss.address().port}/feed.xml`, title: 'Testquelle' }).catch((e) => console.log('  (RSS)', e.message));
@@ -349,6 +352,8 @@ async function freshSetup() {
     postId: post.id,
     subId: sub.id,
     collectionId: col.collection.id,
+    linkId: col.link.id,
+    optToken: optLink?.url ? optLink.url.split('/u/')[1] : null,
     connectionId: conn ? (conn.connection ?? conn).id : null,
     warnfeedId: wf ? (wf.connection ?? wf).id : null,
     feuersoftwareId: fsc?.id ?? null,
@@ -387,6 +392,8 @@ try {
   const pp = await pub.newPage();
   pp.on('dialog', (d) => d.accept().catch(() => {}));
   await scanRoute(pp, `/u/${token}`);
+  // Upload-Seite mit abgefragten Angaben und Bestätigung (Medien wie LiFeOS)
+  if (st.optToken) await scanRoute(pp, `/u/${st.optToken}`);
   await scanRoute(pp, `/einladung/${openInviteToken}`, { buttons: false });
   // 2FA-Seite: Anmeldung mit Passwort, dann Code-Seite
   await gotoRoute(pp, '/login');
@@ -411,7 +418,7 @@ try {
   let n = 0;
   churn = setInterval(() => editor.post('/posts', { title: `Live-Ereignis ${++n}`, kind: 'news' }).catch(() => {}), 2000);
 
-  const routes = ['/', '/beitraege', `/beitraege/${post.id}`, `/beitraege/${sub.id}`, '/vorlagen', '/freigaben', '/medien', `/medien/${col.collection.id}`, '/quellen', '/banner', '/kanaele', '/warnungen', '/warnungen/pflege', ...(warn ? [`/warnungen/${warn.id}`] : []), '/verbindungen', ...(conn ? [`/verbindungen/${conn.id}`] : []), ...(st.warnfeedId ? [`/verbindungen/${st.warnfeedId}`] : []), ...(st.feuersoftwareId ? [`/verbindungen/${st.feuersoftwareId}`] : []), '/amtliche-warnungen', '/benutzer', '/system', '/protokolle', '/datenschutz-anfragen', '/einstellungen', '/profil', '/hilfe', '/aktivitaeten', '/benachrichtigungen'];
+  const routes = ['/', '/beitraege', `/beitraege/${post.id}`, `/beitraege/${sub.id}`, '/vorlagen', '/freigaben', '/medien', `/medien/${col.collection.id}`, '/medien/dateien', '/medien/papierkorb', '/medien/verwaltung', '/medien/gestaltung', ...(st.linkId ? [`/medien/gestaltung?link=${st.linkId}`] : []), '/quellen', '/banner', '/kanaele', '/warnungen', '/warnungen/pflege', ...(warn ? [`/warnungen/${warn.id}`] : []), '/verbindungen', ...(conn ? [`/verbindungen/${conn.id}`] : []), ...(st.warnfeedId ? [`/verbindungen/${st.warnfeedId}`] : []), ...(st.feuersoftwareId ? [`/verbindungen/${st.feuersoftwareId}`] : []), '/amtliche-warnungen', '/benutzer', '/system', '/protokolle', '/datenschutz-anfragen', '/einstellungen', '/profil', '/hilfe', '/aktivitaeten', '/benachrichtigungen'];
   for (const r of routes) await scanRoute(page, r);
 
   // Löschdialoge (Löschen-Knöpfe klickt der Rundgang bewusst nicht): Warnvorgang mit Begründung, Verbindung
@@ -449,6 +456,30 @@ try {
     await closeDialogs(page, '/benachrichtigungen');
   }
 
+  // Medien wie LiFeOS: Dialoge der Sammlung gezielt öffnen (Link mit erweiterten Optionen, Ordner, Details, Schlagworte)
+  if (!ONLY || ONLY.test('medien-dialoge')) {
+    const route = `/medien/${col.collection.id}`;
+    const dialogs = [
+      ['Neuer Upload-Link (erweitert)', async () => (await page.getByRole('button', { name: 'Neuer Link' }).click(), await sleep(300), await page.getByRole('button', { name: /Erweitert/ }).click())],
+      ['Neuer Ordner', async () => page.getByRole('button', { name: 'Neuer Ordner' }).click()],
+      ['Details einer Datei', async () => (await page.getByRole('tab', { name: /Alle/ }).click(), await sleep(300), await page.getByRole('button', { name: /^Aktionen für .*\.jpg$/ }).first().click(), await page.getByRole('menuitem', { name: 'Details' }).click())],
+      ['Schlagworte einer Datei', async () => (await page.getByRole('tab', { name: /Alle/ }).click(), await sleep(300), await page.getByRole('button', { name: /^Aktionen für .*\.jpg$/ }).first().click(), await page.getByRole('menuitem', { name: 'Schlagworte' }).click())],
+      ['Upload-Link bearbeiten (erweitert)', async () => (await page.getByRole('button', { name: /^Aktionen für Mit Optionen/ }).click(), await page.getByRole('menuitem', { name: 'Bearbeiten' }).click(), await sleep(300), await page.getByRole('button', { name: /Erweitert/ }).click())],
+    ];
+    for (const [name, open] of dialogs) {
+      await gotoRoute(page, route);
+      try {
+        await open();
+        await page.locator('[role=dialog]').first().waitFor({ timeout: 5000 });
+        await sleep(400);
+        await checkFields(page, `${route} › Dialog „${name}“`, '[role=dialog]', new Set());
+      } catch (e) {
+        failures.push({ where: `${route} › ${name}`, field: '-', problem: `Dialog nicht geöffnet: ${String(e.message).split('\n')[0]}` });
+      }
+      await closeDialogs(page, route);
+    }
+  }
+
   // Befehlspalette (Strg+K)
   await gotoRoute(page, '/');
   await page.keyboard.press('Control+k');
@@ -462,7 +493,7 @@ try {
   const mp = await mob.newPage();
   mp.on('dialog', (d) => d.accept().catch(() => {}));
   seenGlobal.clear();
-  for (const r of [`/beitraege/${post.id}`, '/profil', ...(warn ? [`/warnungen/${warn.id}`] : [])]) await scanRoute(mp, r, { buttons: false });
+  for (const r of [`/beitraege/${post.id}`, '/profil', `/medien/${col.collection.id}`, '/medien/gestaltung', ...(warn ? [`/warnungen/${warn.id}`] : [])]) await scanRoute(mp, r, { buttons: false });
 
   const uniqueFields = new Set(tested.map((t) => `${t.where}|${t.field}`)).size;
   const where = new Set(tested.map((t) => t.where)).size;
