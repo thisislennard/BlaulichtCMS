@@ -123,6 +123,7 @@ export function mediaPayload(m: any) {
     display_name: m.display_name ?? '',
     description: m.description ?? '',
     internal_note: m.internal_note ?? '',
+    alt_text: m.alt_text ?? '',
     duplicate_of: m.duplicate_of ?? null,
     folder_id: m.folder_id ?? null,
     tags: m.tags ?? [],
@@ -798,12 +799,12 @@ export async function mediaRoutes(app: FastifyInstance) {
   app.patch('/media/:id', { preHandler: requireAuth('media.organize') }, async (req) => {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
     const body = z
-      .object({ displayName: z.string().trim().max(200).optional(), description: z.string().trim().max(2000).optional(), internalNote: z.string().trim().max(2000).optional() })
+      .object({ displayName: z.string().trim().max(200).optional(), description: z.string().trim().max(2000).optional(), internalNote: z.string().trim().max(2000).optional(), altText: z.string().max(1000).optional() })
       .parse(req.body ?? {});
     const m = await one<any>(
-      `UPDATE media SET display_name = COALESCE($2, display_name), description = COALESCE($3, description), internal_note = COALESCE($4, internal_note)
+      `UPDATE media SET display_name = COALESCE($2, display_name), description = COALESCE($3, description), internal_note = COALESCE($4, internal_note), alt_text = COALESCE($5, alt_text)
         WHERE id = $1 AND deleted_at IS NULL RETURNING *`,
-      [id, body.displayName ?? null, body.description ?? null, body.internalNote ?? null],
+      [id, body.displayName ?? null, body.description ?? null, body.internalNote ?? null, body.altText === undefined ? null : body.altText.replace(/\s+/g, ' ').trim()],
     );
     if (!m) throw notFound('Datei nicht gefunden.');
     await audit(req.auth!.actor, 'media.updated', { type: 'media', id, label: m.original_name }, { felder: Object.keys(body) });

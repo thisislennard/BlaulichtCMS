@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { HelpTip } from '../../components/ui/HelpTip';
 import { Link } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import { get, patch } from '../../api/client';
@@ -30,12 +31,12 @@ export function MediaDetailsDialog({ mediaId, manage, onClose, onSaved }: { medi
   const toastError = useErrorToast();
   const { can } = useAuth();
   const q = useQuery({ queryKey: ['media-details', mediaId], queryFn: () => get<Details>(`/media/${mediaId}/details`) });
-  const [form, setForm] = useState<{ displayName: string; description: string; internalNote: string } | null>(null);
+  const [form, setForm] = useState<{ displayName: string; description: string; internalNote: string; altText: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const d = q.data;
   const m = d?.media;
-  const f = form ?? (m ? { displayName: m.display_name ?? '', description: m.description ?? '', internalNote: m.internal_note ?? '' } : null);
-  const dirty = !!(m && f && (f.displayName !== (m.display_name ?? '') || f.description !== (m.description ?? '') || f.internalNote !== (m.internal_note ?? '')));
+  const f = form ?? (m ? { displayName: m.display_name ?? '', description: m.description ?? '', internalNote: m.internal_note ?? '', altText: m.alt_text ?? '' } : null);
+  const dirty = !!(m && f && (f.displayName !== (m.display_name ?? '') || f.description !== (m.description ?? '') || f.internalNote !== (m.internal_note ?? '') || f.altText !== (m.alt_text ?? '')));
   const row = (k: string, v: React.ReactNode) => (
     <>
       <dt className="text-fg-muted">{k}</dt>
@@ -91,6 +92,15 @@ export function MediaDetailsDialog({ mediaId, manage, onClose, onSaved }: { medi
                 <FieldWrap label="Anzeigename" htmlFor="md-name" help="Nur intern. Der öffentliche Dateiname bleibt neutral.">
                   <Input id="md-name" value={f.displayName} maxLength={200} placeholder={m.original_name} onChange={(e) => setForm({ ...f, displayName: e.target.value })} />
                 </FieldWrap>
+                {m.kind === 'image' && (
+                  <FieldWrap label="Alternativtext" htmlFor="md-alt" help={`Beschreibt das Bild für Menschen, die es nicht sehen (Screenreader). Öffentlich – wird für Website und soziale Kanäle vorgeschlagen. ${f.altText.length} / 1000`} labelAction={
+                    <HelpTip title="Guter Alternativtext" more="/hilfe/beitraege#alternativtext">
+                      <p className="m-0">Kurz sagen, was zu sehen ist und warum es wichtig ist – z. B. „Löschfahrzeug vor dem Gerätehaus, Einsatzkräfte rollen Schläuche aus“. Nicht „Bild von …“ und keine Namen von Personen.</p>
+                    </HelpTip>
+                  }>
+                    <Textarea id="md-alt" rows={2} maxLength={1000} value={f.altText} onChange={(e) => setForm({ ...f, altText: e.target.value })} />
+                  </FieldWrap>
+                )}
                 <FieldWrap label="Beschreibung" htmlFor="md-desc">
                   <Textarea id="md-desc" rows={3} maxLength={2000} value={f.description} onChange={(e) => setForm({ ...f, description: e.target.value })} />
                 </FieldWrap>
@@ -99,8 +109,9 @@ export function MediaDetailsDialog({ mediaId, manage, onClose, onSaved }: { medi
                 </FieldWrap>
               </>
             ) : (
-              (m.description || m.internal_note) && (
+              (m.description || m.internal_note || m.alt_text) && (
                 <dl className="m-0 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm">
+                  {m.alt_text ? row('Alternativtext', m.alt_text) : null}
                   {m.description ? row('Beschreibung', <span className="whitespace-pre-line">{m.description}</span>) : null}
                   {m.internal_note ? row('Interne Notiz', <span className="whitespace-pre-line">{m.internal_note}</span>) : null}
                 </dl>

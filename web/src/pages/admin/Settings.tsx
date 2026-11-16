@@ -436,6 +436,13 @@ export default function Settings() {
                   label="Vier-Augen-Prinzip"
                   description="Wer am Inhalt geschrieben oder die Fassung eingereicht hat, darf sie nicht selbst freigeben. Gilt für Beiträge, Banner und Warnentwürfe."
                 />
+                <Switch
+                  checked={!!v["editorial.alt_text_required"]}
+                  disabled={ro("editorial.alt_text_required")}
+                  onChange={(x) => set("editorial.alt_text_required", x)}
+                  label="Alternativtext ist Pflicht"
+                  description="An: Ohne Alternativtext je Bild lässt sich ein Beitrag für Website oder soziale Kanäle nicht freigeben. Aus: Die Freigabe zeigt nur eine Warnung."
+                />
                 <FieldGrid>
                   <NumField k="invites.valid_hours" label="Einladungen gültig" unit="Std." min={1} max={720} v={v} set={set} ro={ro("invites.valid_hours")} />
                   <NumField k="press.reminder_hours" label="Erinnerung vor Frist (Presseanfragen)" help="An die zuständige Person, sonst an alle mit „Presseanfragen bearbeiten“. 0 = nur bei Überschreitung." unit="Std." min={0} max={72} v={v} set={set} ro={ro("press.reminder_hours")} />

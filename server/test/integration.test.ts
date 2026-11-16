@@ -4635,6 +4635,8 @@ describe('Mastodon und Bluesky (#215)', () => {
   it('Beitrag mit Inhaltswarnung, Zeichenzählung und Veröffentlichung nach Freigabe', async () => {
     const { runSocialPublication } = await import('../src/connections/social.js');
     const { id: mediaId } = await readyPhoto('Mastodon-Bluesky-Bilder', 'md-bs-key-0001');
+    // Alternativtext aus der Medienverwaltung (#217) geht an Mastodon (description) und Bluesky (alt)
+    expect((await admin.patch(`/media/${mediaId}`, { altText: 'Drehleiter vor dem Gerätehaus' })).json.alt_text).toBe('Drehleiter vor dem Gerätehaus');
     postId = (await editor.post('/posts', { title: 'Tag der offenen Tür (fiktiv)' })).json.id;
     let d = (await editor.get(`/posts/${postId}`)).json;
     const long = 'Wir laden herzlich ein. '.repeat(30);
@@ -4662,6 +4664,7 @@ describe('Mastodon und Bluesky (#215)', () => {
     // Mastodon: Bild hochgeladen (202 → Abfrage bis fertig), Sichtbarkeit, Inhaltswarnung, Sprache, Idempotency-Key
     const status = st.statuses[0];
     expect(status.form['media_ids[]']).toEqual(['MEDIA1']);
+    expect(calls.find((c) => c.path === '/api/v2/media' && c.body.includes('Drehleiter vor dem Ger'))).toBeTruthy();
     expect(status.form.visibility).toEqual(['unlisted']);
     expect(status.form.spoiler_text).toEqual(['Hinweis: Übung mit Rauch']);
     expect(status.form.language).toEqual(['de']);
@@ -4673,7 +4676,7 @@ describe('Mastodon und Bluesky (#215)', () => {
     const rec = st.records[0].value;
     expect(rec.$type).toBe('app.bsky.feed.post');
     expect(rec.embed.$type).toBe('app.bsky.embed.images');
-    expect(rec.embed.images[0]).toHaveProperty('alt');
+    expect(rec.embed.images[0].alt).toBe('Drehleiter vor dem Gerätehaus');
     expect(rec.embed.images[0].aspectRatio.width).toBeGreaterThan(0);
     expect(rec.langs).toEqual(['de']);
     expect(rows.find((x) => x.kind === 'bluesky').remote_url).toBe('https://bsky.app/profile/feuerwehr.bsky.social/post/3k1');
@@ -4708,6 +4711,86 @@ describe('Mastodon und Bluesky (#215)', () => {
     const cat = (await adm.get('/automations/catalog')).json;
     expect(cat.socialChannels.map((c: any) => c.kind)).toEqual(expect.arrayContaining(['mastodon', 'bluesky']));
     await adm.raw('DELETE', `/automation-outputs/${ok.json.id}`);
+  });
+});
+
+describe('Barrierefreiheit: Alternativtext je Bild (#217)', () => {
+  let siteKey = '';
+  let siteId2 = '';
+  let pid = '';
+  let img1 = '';
+  let img2 = '';
+  const auth = () => ({ authorization: `Bearer ${siteKey}` });
+  // Eigene Adresse für die Bridge (Kopplung und Abruf sind je Adresse begrenzt)
+  let br: Client;
+  beforeAll(() => {
+    br = new Client(app, '10.77.0.3');
+  });
+  const cur = async () => (await editor.get(`/posts/${pid}`)).json;
+
+  it('Alternativtext ist Teil der Fassung und landet in der Medienverwaltung', async () => {
+    const s = await admin.post('/sites', { name: 'Barrierefreie Testwebsite' });
+    siteId2 = s.json.site.id;
+    const pair = await br.post('/bridge/pair', { code: s.json.pairingCode, site_url: 'https://barrierefrei.example.org' });
+    expect(pair.status, JSON.stringify(pair.json)).toBe(200);
+    siteKey = pair.json.key;
+    img1 = (await readyPhoto('Alt-Bilder 1', 'alt-key-0001')).id;
+    img2 = (await readyPhoto('Alt-Bilder 2', 'alt-key-0002')).id;
+    pid = (await editor.post('/posts', { title: 'Rauchmelder-Aktion (fiktiv)' })).json.id;
+    let d = await cur();
+    const base = { title: d.revision.title, body: 'Wir verteilen Rauchmelder.', mediaIds: [img1], coverId: img1, siteId: siteId2 };
+    const r1 = await editor.put(`/posts/${pid}/revision`, { baseRevision: d.revision.number, ...base });
+    d = await cur();
+    expect(d.accessibility).toEqual({ applies: true, missing: [img1], required: false });
+    const hashWithout = d.revision.content_hash;
+    // Alternativtext ergänzen → neue Fassung (Prüfsumme ändert sich), Medienverwaltung übernimmt ihn
+    const r2 = await editor.put(`/posts/${pid}/revision`, { baseRevision: r1.json.number, ...base, mediaAlt: { [img1]: '  Zwei Einsatzkräfte  zeigen einen Rauchmelder ', [img2]: 'nicht in der Fassung' } });
+    expect(r2.json.changed).toBe(true);
+    d = await cur();
+    expect(d.revision.content_hash).not.toBe(hashWithout);
+    expect(d.revision.media_alt).toEqual({ [img1]: 'Zwei Einsatzkräfte zeigen einen Rauchmelder' });
+    expect(d.accessibility.missing).toEqual([]);
+    expect(d.media[0].alt_text).toBe('Zwei Einsatzkräfte zeigen einen Rauchmelder');
+    // Gleicher Text erneut gespeichert → keine neue Fassung
+    expect((await editor.put(`/posts/${pid}/revision`, { baseRevision: d.revision.number, ...base, mediaAlt: { [img1]: 'Zwei Einsatzkräfte zeigen einen Rauchmelder' } })).json.changed).toBe(false);
+    // Ein vorhandener Text in der Medienverwaltung wird nicht überschrieben
+    await editor.put(`/posts/${pid}/revision`, { baseRevision: d.revision.number, ...base, mediaAlt: { [img1]: 'Anderer Text nur für diese Fassung' } });
+    expect((await one<any>(`SELECT alt_text FROM media WHERE id = $1`, [img1]))!.alt_text).toBe('Zwei Einsatzkräfte zeigen einen Rauchmelder');
+  });
+
+  it('Freigabe: Pflicht blockiert ohne Alternativtext, sonst Warnung; Bridge erhält den Text der Fassung', async () => {
+    let d = await cur();
+    await editor.put(`/posts/${pid}/revision`, { baseRevision: d.revision.number, title: d.revision.title, body: 'Wir verteilen Rauchmelder.', mediaIds: [img1, img2], coverId: img1, siteId: siteId2, mediaAlt: d.revision.media_alt });
+    d = await cur();
+    expect(d.accessibility.missing).toEqual([img2]);
+    await editor.post(`/posts/${pid}/submit`, { revision: d.revision.number });
+    expect((await admin.patch('/settings', { 'editorial.alt_text_required': true })).status).toBe(200);
+    expect((await cur()).accessibility.required).toBe(true);
+    const blocked = await approver.post(`/posts/${pid}/decision`, { revision: d.revision.number, contentHash: d.revision.content_hash, decision: 'approved' });
+    expect(blocked.status).toBe(400);
+    expect(blocked.json.error).toBe('alt_text_required');
+    // Zurückweisen geht immer
+    await admin.patch('/settings', { 'editorial.alt_text_required': false });
+    const ok = await approver.post(`/posts/${pid}/decision`, { revision: d.revision.number, contentHash: d.revision.content_hash, decision: 'approved' });
+    expect(ok.status, JSON.stringify(ok.json)).toBe(200);
+    await publisher.post(`/posts/${pid}/publish`, { revision: d.revision.number, contentHash: d.revision.content_hash });
+    const jr = await br.get('/bridge/jobs', auth());
+    expect(jr.status, JSON.stringify(jr.json)).toBe(200);
+    const jobs = jr.json.jobs;
+    expect(jobs).toHaveLength(1);
+    // Bild 1: Text der Fassung (nicht der aus der Medienverwaltung); Bild 2 ohne Text: wie bisher der Titel
+    expect(jobs[0].media.map((m: any) => m.alt)).toEqual(['Anderer Text nur für diese Fassung', 'Rauchmelder-Aktion (fiktiv) – Bild 2']);
+    await br.post(`/bridge/jobs/${jobs[0].id}/result`, { status: 'published', remote_id: 99, url: 'https://barrierefrei.example.org/rauchmelder/' }, auth());
+  });
+
+  it('Medienverwaltung: Alternativtext nur mit „Medien ordnen“ änderbar; Beiträge ohne Ziel brauchen keinen', async () => {
+    expect((await publisher.patch(`/media/${img2}`, { altText: 'x' })).status).toBe(403);
+    expect((await admin.patch(`/media/${img2}`, { altText: 'Rauchmelder an der Zimmerdecke' })).status).toBe(200);
+    const p2 = (await editor.post('/posts', { title: 'Intern (fiktiv)' })).json.id;
+    const d = (await editor.get(`/posts/${p2}`)).json;
+    await editor.put(`/posts/${p2}/revision`, { baseRevision: d.revision.number, title: d.revision.title, body: 'Nur intern.', mediaIds: [img2] });
+    const a = (await editor.get(`/posts/${p2}`)).json.accessibility;
+    expect(a.applies).toBe(false);
   });
 });
 

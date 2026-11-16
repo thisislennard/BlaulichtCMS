@@ -30,6 +30,7 @@ import { FEUERSOFTWARE_DEFAULT_INTERVAL, FEUERSOFTWARE_INTERVALS, pollFeuersoftw
 import { endBanner, insecureFeed, insecureFeedUrl, REVIEW_CHECKS, refreshWarnfeed, testWarnfeed, warningBannerText } from '../connections/warnfeed.js';
 import { listReceipts, Receipt, RECEIPT_CAP, receiptItems, receiptRaw } from '../connections/receipts.js';
 import { getSettings } from '../lib/settings.js';
+import { kindSupportsAlt } from '../lib/accessibility.js';
 
 /** Öffentliche Sicht auf eine Verbindung – nie mit Geheimnissen. */
 async function view(c: Connection) {
@@ -676,6 +677,9 @@ export async function connectionRoutes(app: FastifyInstance) {
         else if (kind === 'bluesky') issues.push(...checkBlueskyFormats(media, tooLong));
       }
       if (formats.includes('story')) issues.push(...checkStoryFormats(kind as 'facebook' | 'instagram', media));
+      // Barrierefreiheit (#217): Bilder ohne Alternativtext bei Kanälen, die ihn übernehmen
+      const noAlt = media.filter((m: any) => m.kind === 'image' && !m.alt).length;
+      if (noAlt && formats.includes('feed') && kindSupportsAlt(kind, t.config)) issues.push(`${noAlt === 1 ? 'Ein Bild hat' : `${noAlt} Bilder haben`} keinen Alternativtext – Menschen mit Screenreader erfahren nicht, was zu sehen ist.`);
       return { id: t.id, kind: t.kind, name: t.name, status: t.status, text, formats, manual: isManualChannel(t), link, issues };
     });
   });

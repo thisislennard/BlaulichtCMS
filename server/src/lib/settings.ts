@@ -158,6 +158,8 @@ export const DEFAULT_SETTINGS = {
   'media.allow_animated': false,
 
   'editorial.four_eyes': false,
+  /** Barrierefreiheit (#217): Freigabe ohne Alternativtext je Bild blockieren (true) oder nur warnen (false). */
+  'editorial.alt_text_required': false,
   /**
    * Presseanfragen (#204, press/deadlines.ts): Erinnerung so viele Stunden vor Ablauf der Frist an die zuständige Person
    * (ohne Zuständigkeit an alle mit „Presseanfragen bearbeiten“). 0 = nur bei Überschreitung.

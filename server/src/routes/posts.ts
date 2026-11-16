@@ -9,6 +9,7 @@ import { notify } from '../lib/notify.js';
 import { getSettings } from '../lib/settings.js';
 import { createCollection, createUploadLink, freshLinkUrl, uploadLinkUrl } from './media.js';
 import { approvalStillValid, assertMediaPresent, missingMediaCount } from '../lib/approval.js';
+import { ALT_MAX, altCheck, cleanMediaAlt } from '../lib/accessibility.js';
 
 export const POST_KINDS = ['news', 'incident', 'event', 'situation'] as const;
 
@@ -48,7 +49,7 @@ function cleanVariants(v: Variants | null | undefined): Variants {
  * Prüfsumme einer Fassung: Text, Medien (in Reihenfolge), Titelbild, Zielkanal, Texte je Kanal und Termin.
  * Ohne Kanaltexte und Termin bleibt das Format der ersten Version erhalten (bestehende Freigaben bleiben gültig).
  */
-export function revisionHash(r: { title: string; body: string; excerpt: string; media_ids: string[]; cover_id: string | null; site_id: string | null; variants?: Variants | null; publish_at?: string | Date | null; social_targets?: string[] | null; social_formats?: Record<string, string> | null }): string {
+export function revisionHash(r: { title: string; body: string; excerpt: string; media_ids: string[]; cover_id: string | null; site_id: string | null; variants?: Variants | null; publish_at?: string | Date | null; social_targets?: string[] | null; social_formats?: Record<string, string> | null; media_alt?: Record<string, string> | null }): string {
   const base: unknown[] = [r.title, r.body, r.excerpt, r.media_ids, r.cover_id ?? null, r.site_id ?? null];
   const v = cleanVariants(r.variants);
   const at = r.publish_at ? new Date(r.publish_at).toISOString() : null;
@@ -59,6 +60,9 @@ export function revisionHash(r: { title: string; body: string; excerpt: string; 
   // Formate je Kanal (Story, #188) – nur wenn vom Standard „Beitrag“ abweichend, sonst bleibt das alte Format
   const formats = cleanFormats(r.social_formats, r.social_targets ?? []);
   if (Object.keys(formats).length) base.push(Object.fromEntries(Object.entries(formats).sort(([a], [b]) => a.localeCompare(b))));
+  // Alternativtexte je Bild (#217) – nur wenn vorhanden, sonst bleibt das alte Format
+  const alt = cleanMediaAlt(r.media_alt, r.media_ids ?? []);
+  if (Object.keys(alt).length) base.push({ alt });
   return crypto.createHash('sha256').update(JSON.stringify(base)).digest('hex');
 }
 
@@ -144,7 +148,7 @@ export const POST_STATE_SQL = `
 
 async function loadMedia(ids: string[]) {
   if (!ids.length) return [];
-  const rows = await many<any>(`SELECT id, original_name, kind, mime, width, height, has_preview, has_public, status, deleted_at, sensitive_flags, (jsonb_array_length(redactions) > 0 OR crop IS NOT NULL) AS redacted, strip_audio, public_rev FROM media WHERE id = ANY($1)`, [ids]);
+  const rows = await many<any>(`SELECT id, original_name, kind, mime, width, height, has_preview, has_public, status, deleted_at, sensitive_flags, (jsonb_array_length(redactions) > 0 OR crop IS NOT NULL) AS redacted, strip_audio, public_rev, alt_text FROM media WHERE id = ANY($1)`, [ids]);
   const byId = new Map(rows.map((r) => [r.id, r]));
   return ids.map((id) => byId.get(id)).filter(Boolean);
 }
@@ -172,6 +176,8 @@ const revisionInput = z.object({
   socialTargets: z.array(z.uuid()).max(10).default([]),
   /** Format je Kanal (#188): feed (Standard), story oder both – Storys gibt es für Facebook und Instagram. */
   socialFormats: z.record(z.uuid(), z.enum(['feed', 'story', 'both'])).default({}),
+  /** Alternativtext je Bild (#217) – Teil der Fassung */
+  mediaAlt: z.record(z.uuid(), z.string().max(ALT_MAX * 2)).default({}),
   publishAt: z.iso.datetime({ offset: true }).nullable().default(null),
   changeNote: z.string().trim().max(300).default(''),
 });
@@ -259,6 +265,7 @@ export async function postRoutes(app: FastifyInstance) {
         variants: cur.variants ?? {},
         social_targets: cur.social_targets ?? [],
         social_formats: cur.social_formats ?? {},
+        media_alt: cur.media_alt ?? {},
         publish_at: cur.publish_at,
         content_hash: cur.content_hash,
         submitted_at: cur.submitted_at,
@@ -268,6 +275,8 @@ export async function postRoutes(app: FastifyInstance) {
       media: await loadMedia(cur.media_ids),
       /** Inzwischen gelöschte Dateien der Fassung (#167): Veröffentlichen ist dann gesperrt. */
       missing_media: await missingMediaCount(cur),
+      /** Barrierefreiheit (#217): Bilder ohne Alternativtext und ob die Freigabe dann blockiert ist */
+      accessibility: await altCheck(cur),
       approval: st.validApproval ? { decided_by_name: st.validApproval.decided_by_name, decided_at: st.validApproval.decided_at, note: st.validApproval.note } : null,
       lastDecision: st.approval ? { decision: st.approval.decision, note: st.approval.note, decided_by_name: st.approval.decided_by_name, decided_at: st.approval.decided_at } : null,
       revisions,
@@ -325,14 +334,18 @@ export async function postRoutes(app: FastifyInstance) {
       const variants = cleanVariants(body.variants as Variants);
       const socialTargets = [...new Set(body.socialTargets)];
       const socialFormats = cleanFormats(body.socialFormats, socialTargets);
-      const next = { title: body.title, body: body.body, excerpt: body.excerpt, media_ids: body.mediaIds, cover_id: body.coverId, site_id: body.siteId, variants, publish_at: body.publishAt, social_targets: socialTargets, social_formats: socialFormats };
+      // Alternativtexte nur für Bilder der Fassung
+      const mediaAlt = cleanMediaAlt(body.mediaAlt, media.filter((m: any) => m.kind === 'image').map((m: any) => m.id));
+      const next = { title: body.title, body: body.body, excerpt: body.excerpt, media_ids: body.mediaIds, cover_id: body.coverId, site_id: body.siteId, variants, publish_at: body.publishAt, social_targets: socialTargets, social_formats: socialFormats, media_alt: mediaAlt };
       const hash = revisionHash(next);
       if (hash === cur.content_hash) return { changed: false, number: cur.number };
       const number = cur.number + 1;
       await db.query(
-        `INSERT INTO post_revisions (post_id, number, title, body, excerpt, media_ids, cover_id, site_id, content_hash, change_note, created_by, variants, publish_at, social_targets, social_formats) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
-        [id, number, body.title, body.body, body.excerpt, body.mediaIds, body.coverId, body.siteId, hash, body.changeNote, userId, JSON.stringify(variants), body.publishAt, socialTargets, JSON.stringify(socialFormats)],
+        `INSERT INTO post_revisions (post_id, number, title, body, excerpt, media_ids, cover_id, site_id, content_hash, change_note, created_by, variants, publish_at, social_targets, social_formats, media_alt) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`,
+        [id, number, body.title, body.body, body.excerpt, body.mediaIds, body.coverId, body.siteId, hash, body.changeNote, userId, JSON.stringify(variants), body.publishAt, socialTargets, JSON.stringify(socialFormats), JSON.stringify(mediaAlt)],
       );
+      // Wiederverwenden (#217): Alternativtexte landen in der Medienverwaltung, wo dort noch keiner steht
+      for (const [mid, text] of Object.entries(mediaAlt)) await db.query(`UPDATE media SET alt_text = $2 WHERE id = $1 AND alt_text = ''`, [mid, text]);
       await db.query('UPDATE posts SET current_revision = $2, title = $3, updated_at = now(), updated_by = $4 WHERE id = $1', [id, number, body.title, userId]);
       const hadApproval = await one(`SELECT 1 FROM approvals WHERE revision_id = $1 AND decision = 'approved' AND revoked_at IS NULL`, [cur.id], db);
       await audit(req.auth!.actor, 'post.revised', { type: 'post', id, label: body.title }, { fassung: number, freigabe_entfaellt: !!hadApproval }, 'ok', db);
@@ -390,6 +403,11 @@ export async function postRoutes(app: FastifyInstance) {
       if (!st.current.submitted_at) throw conflict('Diese Fassung wurde noch nicht zur Freigabe eingereicht.');
       if (body.decision === 'rejected' && !body.note) throw badRequest('Bitte kurz begründen, warum die Fassung zurückgewiesen wird.');
       if (body.decision === 'approved') await assertMediaPresent(st.current, db);
+      // Barrierefreiheit (#217): ohne Alternativtext je Bild nur, wenn die Einstellung das zulässt (sonst Warnung im Dialog)
+      if (body.decision === 'approved') {
+        const alt = await altCheck(st.current, db);
+        if (alt.required && alt.missing.length) throw new AppError(400, 'alt_text_required', `${alt.missing.length === 1 ? 'Ein Bild hat' : `${alt.missing.length} Bilder haben`} noch keinen Alternativtext. Bitte im Beitrag unter „Medien“ ergänzen, speichern und erneut einreichen.`, { missing: alt.missing });
+      }
       // Vier-Augen-Prinzip (#169, wie bei Warnentwürfen #153): Wer bis zu dieser Fassung Inhalte geschrieben (Text,
       // Kanaltexte, Medien, Titelbild) oder die Fassung eingereicht hat, darf sie nicht freigeben. Nur Termin, Zielkanal
       // oder soziale Kanäle zu ändern zählt nicht als Schreiben.

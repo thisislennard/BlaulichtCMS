@@ -65,6 +65,8 @@ export interface MediaItem {
   display_name?: string;
   description?: string;
   internal_note?: string;
+  /** Alternativtext für Website und soziale Kanäle (#217), wiederverwendbar */
+  alt_text?: string;
   /** gleiche Prüfsumme wie diese ältere Datei */
   duplicate_of?: string | null;
   folder_id?: string | null;

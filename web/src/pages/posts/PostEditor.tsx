@@ -15,14 +15,18 @@ import { cleanFormats, SocialStatusCard, SocialTargetsCard } from './SocialPanel
 import { safeHref } from '../../lib/url';
 import { PrivacyChecklistHint, SENSITIVE_LABELS } from '../media/PrivacyDialog';
 import { WpCategoryPicker } from '../channels/WpCategories';
+import { HelpTip } from '../../components/ui/HelpTip';
+import { ReadabilityPanel } from './Readability';
 
 interface PostDetail {
   post: { id: string; kind: string; created_at: string; created_by_name: string | null; archived: boolean; current_revision: number };
   state: string;
-  revision: { id: string; number: number; title: string; body: string; excerpt: string; media_ids: string[]; cover_id: string | null; site_id: string | null; variants: any; social_targets: string[]; social_formats?: Record<string, string>; publish_at: string | null; content_hash: string; submitted_at: string | null; created_at: string };
+  revision: { id: string; number: number; title: string; body: string; excerpt: string; media_ids: string[]; cover_id: string | null; site_id: string | null; variants: any; social_targets: string[]; social_formats?: Record<string, string>; media_alt?: Record<string, string>; publish_at: string | null; content_hash: string; submitted_at: string | null; created_at: string };
   media: MediaItem[];
   /** inzwischen gelöschte Dateien der Fassung (#167) */
   missing_media?: number;
+  /** Barrierefreiheit (#217): Bilder ohne Alternativtext */
+  accessibility?: { applies: boolean; missing: string[]; required: boolean };
   approval: { decided_by_name: string; decided_at: string; note: string } | null;
   lastDecision: { decision: string; note: string; decided_by_name: string; decided_at: string } | null;
   revisions: { id: string; number: number; title: string; change_note: string; created_at: string; created_by_name: string | null; decision: string | null }[];
@@ -50,7 +54,12 @@ interface Draft {
   md: string;
   mdCw: string;
   bs: string;
+  /** Alternativtext je Bild (#217); fehlt ein Eintrag, gilt der Text aus der Medienverwaltung */
+  mediaAlt: Record<string, string>;
 }
+
+/** Alternativtexte zum Vergleichen und Speichern: nur Dateien der Fassung, getrimmt, ohne leere. */
+const cleanAlt = (a: Record<string, string> | undefined, ids: string[]) => Object.fromEntries([...ids].sort().map((id) => [id, (a?.[id] ?? '').replace(/\s+/g, ' ').trim()]).filter(([, v]) => v));
 
 const emptyWp = { title: '', body: '', excerpt: '', categories: [] as number[] };
 /** Kategorien geordnet – gleiche Auswahl in anderer Reihenfolge ist keine Änderung (#186). */
@@ -173,7 +182,7 @@ function PostEditorInner({ id }: { id: string }) {
 
   const d = q.data;
   type Rev = NonNullable<typeof d>['revision'];
-  const fromRev = (r: Rev): Draft => ({ title: r.title, body: r.body, excerpt: r.excerpt, mediaIds: r.media_ids, coverId: r.cover_id, siteId: r.site_id, wp: wpOf(r.variants), publishAt: toLocalInput(r.publish_at), social: r.social_targets ?? [], formats: r.social_formats ?? {}, fb: r.variants?.facebook?.body ?? '', ig: r.variants?.instagram?.body ?? '', th: r.variants?.threads?.body ?? '', xt: r.variants?.x?.body ?? '', wa: r.variants?.whatsapp?.body ?? '', md: r.variants?.mastodon?.body ?? '', mdCw: r.variants?.mastodon?.cw ?? '', bs: r.variants?.bluesky?.body ?? '' });
+  const fromRev = (r: Rev): Draft => ({ title: r.title, body: r.body, excerpt: r.excerpt, mediaIds: r.media_ids, coverId: r.cover_id, siteId: r.site_id, wp: wpOf(r.variants), publishAt: toLocalInput(r.publish_at), social: r.social_targets ?? [], formats: r.social_formats ?? {}, fb: r.variants?.facebook?.body ?? '', ig: r.variants?.instagram?.body ?? '', th: r.variants?.threads?.body ?? '', xt: r.variants?.x?.body ?? '', wa: r.variants?.whatsapp?.body ?? '', md: r.variants?.mastodon?.body ?? '', mdCw: r.variants?.mastodon?.cw ?? '', bs: r.variants?.bluesky?.body ?? '', mediaAlt: r.media_alt ?? {} });
   const differs = (dr: Draft, r: Rev) =>
     dr.title !== r.title ||
     dr.body !== r.body ||
@@ -192,7 +201,8 @@ function PostEditorInner({ id }: { id: string }) {
     dr.wa !== (r.variants?.whatsapp?.body ?? '') ||
     dr.md !== (r.variants?.mastodon?.body ?? '') ||
     dr.mdCw !== (r.variants?.mastodon?.cw ?? '') ||
-    dr.bs !== (r.variants?.bluesky?.body ?? '');
+    dr.bs !== (r.variants?.bluesky?.body ?? '') ||
+    JSON.stringify(cleanAlt(dr.mediaAlt, dr.mediaIds)) !== JSON.stringify(cleanAlt(r.media_alt, r.media_ids));
   // Fassung, auf der der Entwurf beruht. Speichert jemand anderes eine neue Fassung, werden ungespeicherte
   // Änderungen nicht überschrieben (#59) – stattdessen Hinweis; Speichern führt dann zum 409-Konflikt.
   const [base, setBase] = useState<Rev | null>(null);
@@ -222,13 +232,15 @@ function PostEditorInner({ id }: { id: string }) {
   const save = async () => {
     setSaving(true);
     try {
-      const { wp, publishAt, social, formats, fb, ig, th, xt, wa, md, mdCw, bs, ...rest } = draft;
+      const { wp, publishAt, social, formats, fb, ig, th, xt, wa, md, mdCw, bs, mediaAlt, ...rest } = draft;
       const res = await put<any>(`/posts/${id}/revision`, {
         baseRevision: (base ?? r).number,
         ...rest,
         variants: { ...(rest.siteId ? { wordpress: wp } : {}), ...(fb.trim() ? { facebook: { body: fb } } : {}), ...(ig.trim() ? { instagram: { body: ig } } : {}), ...(th.trim() ? { threads: { body: th } } : {}), ...(xt.trim() ? { x: { body: xt } } : {}), ...(wa.trim() ? { whatsapp: { body: wa } } : {}), ...(md.trim() || mdCw.trim() ? { mastodon: { ...(md.trim() ? { body: md } : {}), ...(mdCw.trim() ? { cw: mdCw } : {}) } } : {}), ...(bs.trim() ? { bluesky: { body: bs } } : {}) },
         socialTargets: social,
         socialFormats: cleanFormats(formats, social),
+        // Alternativtext je Bild: eigener Text, sonst der aus der Medienverwaltung – beides wird Teil der Fassung
+        mediaAlt: cleanAlt(Object.fromEntries(rest.mediaIds.filter((x) => mediaCache[x]?.kind === 'image').map((x) => [x, mediaAlt[x] ?? mediaCache[x]?.alt_text ?? ''])), rest.mediaIds),
         publishAt: publishAt ? fromLocalInput(publishAt) : null,
       });
       if (res.changed) toast({ tone: 'success', title: `Fassung ${res.number} gespeichert`, text: res.approvalInvalidated ? 'Die bisherige Freigabe gilt nicht für die neue Fassung.' : undefined });
@@ -333,6 +345,7 @@ function PostEditorInner({ id }: { id: string }) {
               <FieldWrap label="Text" help="Absätze durch eine Leerzeile trennen. Die Website übernimmt den Text als einfache Absätze." htmlFor="e-body">
                 <Textarea id="e-body" rows={12} value={draft.body} disabled={!editable} onChange={(e) => setDraft({ ...draft, body: e.target.value })} maxLength={50000} />
               </FieldWrap>
+              <ReadabilityPanel text={draft.body} />
               <FieldWrap label="Kurzfassung (optional)" htmlFor="e-excerpt">
                 <Textarea id="e-excerpt" rows={2} value={draft.excerpt} disabled={!editable} onChange={(e) => setDraft({ ...draft, excerpt: e.target.value })} maxLength={1000} />
               </FieldWrap>
@@ -384,6 +397,18 @@ function PostEditorInner({ id }: { id: string }) {
                       className={cx('border rounded-card overflow-hidden', draft.coverId === mid ? 'border-primary' : 'border-line', dragIdx === i && 'opacity-50', editable && 'cursor-grab')}
                     >
                       {m?.has_preview ? <img decoding="async" src={`/api/v1/media/${mid}/preview`} alt={m.original_name} className="w-full aspect-[4/3] object-cover" /> : <div className="aspect-[4/3] bg-raised flex items-center justify-center"><Icon name="Film" /></div>}
+                      {m?.kind === 'image' && (
+                        <div className="px-2 pt-2">
+                          <FieldWrap label="Alternativtext" required={!!d!.accessibility?.required && !!d!.accessibility?.applies} htmlFor={`alt-${mid}`} labelAction={i === 0 ? (
+                            <HelpTip title="Alternativtext" more="/hilfe/beitraege#alternativtext">
+                              <p className="m-0">Beschreibt das Bild für Menschen, die es nicht sehen – Screenreader lesen ihn vor. Website, Facebook, Instagram, Threads, X (über die API), Mastodon und Bluesky übernehmen ihn.</p>
+                              <p className="m-0">Kurz und sachlich: was zu sehen ist und warum es wichtig ist. Nicht „Bild von …“, keine Namen von Personen.</p>
+                            </HelpTip>
+                          ) : undefined}>
+                            <Textarea id={`alt-${mid}`} rows={2} maxLength={1000} disabled={!editable} value={draft.mediaAlt[mid] ?? m.alt_text ?? ''} placeholder="Was ist zu sehen?" onChange={(e) => setDraft({ ...draft, mediaAlt: { ...draft.mediaAlt, [mid]: e.target.value } })} className={cx(!(draft.mediaAlt[mid] ?? m.alt_text ?? '').trim() && 'border-warn')} />
+                          </FieldWrap>
+                        </div>
+                      )}
                       <div className="p-2 flex items-center gap-1 flex-wrap text-sm">
                         {!!m?.sensitive_flags?.length && (
                           <Badge tone="warning" title={m.sensitive_flags.map((f) => SENSITIVE_LABELS[f]).join(', ')}>
@@ -657,6 +682,8 @@ function PostEditorInner({ id }: { id: string }) {
           hash={r.content_hash}
           postId={id}
           flagged={r.media_ids.map((mid) => mediaCache[mid]).filter((m): m is MediaItem => !!m?.sensitive_flags?.length)}
+          altMissing={d!.accessibility?.applies ? (d!.accessibility.missing ?? []).length : 0}
+          altRequired={!!d!.accessibility?.required}
           onClose={() => (setDecision(null), refresh())}
         />
       )}
@@ -764,7 +791,7 @@ const PRIVACY_CHECKS = [
   'Kennzeichen, Adressen und Namen sind unkenntlich, soweit sie Personen zuordenbar machen; bei Videos Ton geprüft.',
 ];
 
-function DecisionDialog({ decision, revision, hash, postId, flagged, onClose }: { decision: 'approved' | 'rejected'; revision: number; hash: string; postId: string; flagged: MediaItem[]; onClose: () => void }) {
+function DecisionDialog({ decision, revision, hash, postId, flagged, altMissing = 0, altRequired = false, onClose }: { decision: 'approved' | 'rejected'; revision: number; hash: string; postId: string; flagged: MediaItem[]; altMissing?: number; altRequired?: boolean; onClose: () => void }) {
   const toastError = useErrorToast();
   const toast = useToast();
   const [note, setNote] = useState('');
@@ -782,7 +809,7 @@ function DecisionDialog({ decision, revision, hash, postId, flagged, onClose }: 
           <Button
             variant={decision === 'approved' ? 'primary' : 'danger'}
             loading={busy}
-            disabled={(decision === 'rejected' && !note.trim()) || (needsCheck && checks.some((c) => !c))}
+            disabled={(decision === 'rejected' && !note.trim()) || (needsCheck && checks.some((c) => !c)) || (decision === 'approved' && altRequired && altMissing > 0)}
             onClick={async () => {
               setBusy(true);
               try {
@@ -817,6 +844,12 @@ function DecisionDialog({ decision, revision, hash, postId, flagged, onClose }: 
               </label>
             ))}
           </fieldset>
+        )}
+        {decision === 'approved' && altMissing > 0 && (
+          <Notice tone={altRequired ? 'error' : 'warning'} title="Barrierefreiheit">
+            {altMissing === 1 ? 'Ein Bild hat' : `${altMissing} Bilder haben`} keinen Alternativtext. Menschen mit Screenreader erfahren dann nicht, was zu sehen ist.{' '}
+            {altRequired ? 'Alternativtexte sind Pflicht (Einstellungen → Redaktion): bitte zurückweisen oder ergänzen lassen.' : 'Freigeben ist trotzdem möglich.'}
+          </Notice>
         )}
         {decision === 'approved' && !needsCheck && <PrivacyChecklistHint />}
         <FieldWrap label={decision === 'approved' ? 'Anmerkung (optional)' : 'Begründung'} required={decision === 'rejected'} htmlFor="dec-note">

@@ -7,7 +7,7 @@ import { publicFileFor } from '../routes/media.js';
 import type { Connection, TestStep } from './common.js';
 import { connectionSecrets, scrub, updateConnectionSecrets } from './common.js';
 import { markerFor, socialText, THREADS_MAX } from './channels.js';
-import { mediaUrl } from './meta.js';
+import { altParam, mediaUrl } from './meta.js';
 
 /**
  * Threads (#189) über die offizielle Threads-API (Meta). Geprüft am 16.11.2026 auf developers.facebook.com/docs/threads:
@@ -171,7 +171,7 @@ export async function publishThreads(c: Connection, sec: Record<string, string>,
   }
   if (!container) {
     const mk = async (m: any, child: boolean) => {
-      const p = m.kind === 'video' ? { media_type: 'VIDEO', video_url: await mediaUrl(m.id) } : { media_type: 'IMAGE', image_url: await mediaUrl(m.id) };
+      const p = m.kind === 'video' ? { media_type: 'VIDEO', video_url: await mediaUrl(m.id) } : { media_type: 'IMAGE', image_url: await mediaUrl(m.id), alt_text: altParam(m) };
       return (await call('POST', `${TH_GRAPH()}/${user}/threads`, { ...p, ...(child ? { is_carousel_item: 'true' } : { text }), access_token: sec.token }, sec)).id as string;
     };
     if (!items.length) {

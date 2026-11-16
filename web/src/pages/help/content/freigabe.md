@@ -25,6 +25,10 @@ Mit eingeschaltetem **Vier-Augen-Prinzip** (Einstellungen → Redaktion) darf ni
 
 **Freigabe zurückziehen** bricht noch nicht abgeholte Aufträge ab. Hat die Website den Auftrag schon abgeholt, lehnt BlaulichtCMS den Widerruf ab, bis das Ergebnis vorliegt – danach den Beitrag bei Bedarf zurückziehen. Widerruf und Abholung laufen nie gleichzeitig. Meldet eine Website trotzdem eine Veröffentlichung zu einer widerrufenen Freigabe, beauftragt BlaulichtCMS sofort den Rückzug und meldet das.
 
+## Alternativtext und Barrierefreiheit
+
+Hat ein Bild der Fassung keinen Alternativtext und geht der Beitrag an die Website oder einen sozialen Kanal, der ihn übernimmt, zeigt der Freigabe-Dialog eine Warnung. Mit **Einstellungen → Redaktion → Alternativtext ist Pflicht** ist die Freigabe dann gesperrt, bis die Texte ergänzt sind (neue Fassung). Zurückweisen geht immer. Mehr: [Alternativtext](/hilfe/beitraege#alternativtext).
+
 ## Status
 
 | Status | Bedeutung |

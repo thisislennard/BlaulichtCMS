@@ -8,6 +8,7 @@ import { publicFileFor } from '../routes/media.js';
 import type { Connection, TestStep } from './common.js';
 import { scrub } from './common.js';
 import { markerFor, socialText } from './channels.js';
+import { effectiveAlt } from '../lib/accessibility.js';
 
 /**
  * Facebook-Seiten (Graph API) und Instagram-Konten (Instagram Login, professionelle Konten).
@@ -255,11 +256,11 @@ export async function publishFacebook(c: Connection, sec: Record<string, string>
     const r = await call('POST', `${FB_GRAPH()}/${page}/videos`, { file_url: await mediaUrl(videos[0].id), description: message, access_token: sec.pageToken }, sec, 'Facebook');
     id = r.id;
   } else if (images.length === 1) {
-    const r = await call('POST', `${FB_GRAPH()}/${page}/photos`, { url: await mediaUrl(images[0].id), caption: message, access_token: sec.pageToken }, sec, 'Facebook');
+    const r = await call('POST', `${FB_GRAPH()}/${page}/photos`, { url: await mediaUrl(images[0].id), caption: message, alt_text_custom: altParam(images[0]), access_token: sec.pageToken }, sec, 'Facebook');
     id = r.post_id ?? r.id;
   } else if (images.length > 1) {
     const ids: string[] = [];
-    for (const m of images) ids.push((await call('POST', `${FB_GRAPH()}/${page}/photos`, { url: await mediaUrl(m.id), published: 'false', access_token: sec.pageToken }, sec, 'Facebook')).id);
+    for (const m of images) ids.push((await call('POST', `${FB_GRAPH()}/${page}/photos`, { url: await mediaUrl(m.id), published: 'false', alt_text_custom: altParam(m), access_token: sec.pageToken }, sec, 'Facebook')).id);
     const params: Record<string, string> = { message, access_token: sec.pageToken };
     ids.forEach((x, i) => (params[`attached_media[${i}]`] = JSON.stringify({ media_fbid: x })));
     id = (await call('POST', `${FB_GRAPH()}/${page}/feed`, params, sec, 'Facebook')).id;
@@ -303,12 +304,12 @@ export async function publishInstagram(c: Connection, sec: Record<string, string
   if (!container) {
     if (items.length === 1) {
       const m = items[0];
-      const p = m.kind === 'video' ? { media_type: 'REELS', video_url: await mediaUrl(m.id) } : { image_url: await mediaUrl(m.id) };
+      const p = m.kind === 'video' ? { media_type: 'REELS', video_url: await mediaUrl(m.id) } : { image_url: await mediaUrl(m.id), alt_text: altParam(m) };
       container = (await call('POST', `${IG_GRAPH()}/${user}/media`, { ...p, caption, access_token: sec.token }, sec, 'Instagram')).id;
     } else {
       const children: string[] = [];
       for (const m of items) {
-        const p = m.kind === 'video' ? { media_type: 'VIDEO', video_url: await mediaUrl(m.id) } : { image_url: await mediaUrl(m.id) };
+        const p = m.kind === 'video' ? { media_type: 'VIDEO', video_url: await mediaUrl(m.id) } : { image_url: await mediaUrl(m.id), alt_text: altParam(m) };
         const child = (await call('POST', `${IG_GRAPH()}/${user}/media`, { ...p, is_carousel_item: 'true', access_token: sec.token }, sec, 'Instagram')).id;
         const st = await waitContainer(child, sec);
         if (st !== 'FINISHED') throw new StepError('invalid_payload', `Instagram konnte eine Datei nicht verarbeiten (Status ${st}).`);
@@ -496,11 +497,15 @@ export async function cleanupMediaTokens() {
   await pool.query(`DELETE FROM media_tokens WHERE expires_at < now()`);
 }
 
+/** Medien einer Fassung in Reihenfolge, je Datei mit dem wirksamen Alternativtext (`alt`, #217). */
 export async function mediaForRevision(rev: any) {
   if (!rev.media_ids?.length) return [];
   const rows = await many<any>(`SELECT * FROM media WHERE id = ANY($1) AND status = 'ready' AND deleted_at IS NULL`, [rev.media_ids]);
-  return rev.media_ids.map((id: string) => rows.find((r) => r.id === id)).filter(Boolean);
+  return rev.media_ids.map((id: string) => rows.find((r) => r.id === id)).filter(Boolean).map((m: any) => ({ ...m, alt: m.kind === 'image' ? effectiveAlt(rev, m) : '' }));
 }
+
+/** Alternativtext für Meta, Threads und X (je höchstens 1.000 Zeichen); leer = nicht senden. */
+export const altParam = (m: any) => (m?.kind === 'image' && String(m.alt ?? '').trim() ? String(m.alt).trim().slice(0, 1000) : undefined);
 
 export async function connectionForPublish(id: string) {
   return one<any>(`SELECT * FROM connections WHERE id = $1`, [id]);

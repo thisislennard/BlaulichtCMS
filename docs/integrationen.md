@@ -49,7 +49,7 @@ BlaulichtCMS hinter einem TLS-Proxy mit eigener Test-CA.
 | Abruf über **Host-Cron** (`wp blaulichtcms-bridge poll`) | ✅ |
 | Abruf über **WP-Cron** (nur Seitenaufrufe, kein CLI) | ✅ |
 | Beitrag mit Titelbild und Bildern, Kurzfassung, Absätze | ✅ Rückmeldung von ID und Permalink, URL in BlaulichtCMS |
-| Bilder in der Mediathek | ✅ **neu in 0.5.1:** Titel und Alternativtext aus dem Beitragstitel statt Datei-Kennung |
+| Bilder in der Mediathek | ✅ **neu in 0.5.1:** Titel und Alternativtext aus dem Beitragstitel statt Datei-Kennung; seit #217 schickt BlaulichtCMS im Feld `alt` je Bild den Alternativtext der Fassung bzw. der Medienverwaltung (ohne ihn wie bisher den Titel) |
 | Banner (Gefahr + Hinweis) automatisch am Seitenanfang | ✅ **neu in 0.5.1:** bei gleicher Priorität Gefahr vor Hinweis |
 | Bannerende mit **Seitencache** (WP Super Cache) | ✅ veraltete Seite aus dem Cache: Banner im Browser ausgeblendet; Termin zum Bannerende leert den Cache, danach frische Seite ohne Banner |
 | Einsatzübersicht (Shortcode `[blaulichtcms_einsaetze]` und Block) | ✅ zeigt den veröffentlichten Einsatzbericht |

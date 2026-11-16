@@ -87,6 +87,19 @@ Notbremse, Löschfrist, Export → Import und abgelehnte Dateien).
 
 ---
 
+## Barrierefreiheit (#217)
+
+- Alternativtext je Bild: `media.alt_text` (Medienverwaltung, wiederverwendbar) und `post_revisions.media_alt`
+  (Teil der Fassung, nur nicht leere Einträge zählen zur Prüfsumme – ältere Fassungen behalten ihre Prüfsumme).
+  Wirksam ist der Text der Fassung, sonst der aus der Medienverwaltung (`server/src/lib/accessibility.ts`).
+  Übergabe: Bridge (`alt`), Facebook (`alt_text_custom`), Instagram-Bildbeiträge und Threads (`alt_text`), X
+  (`POST /2/media/metadata`), Mastodon (`description`), Bluesky (`alt`). Einstellung `editorial.alt_text_required`:
+  Freigabe blockiert (Fehler `alt_text_required`) oder nur Warnung.
+- Lesbarkeit: `web/src/lib/readability.ts` (Flesch-Amstad, erste Wiener Sachtextformel, Silbennäherung für das
+  Deutsche, Hinweise), im Browser gerechnet; Tests in `server/test/readability.test.ts`.
+
+---
+
 ## Designvorlagen
 
 Interne Vorlagen-Bibliothek (#208) unter `/designvorlagen`. Server: `server/src/routes/design-templates.ts`,

@@ -162,7 +162,11 @@ async function uploadImage(sec: Record<string, string>, m: any): Promise<string 
   // X nimmt Bilder bis 5 MB – größere verkleinern (öffentliche Fassung ist ohnehin JPEG ohne Metadaten)
   if (buf.length > 5 * 1024 * 1024) buf = await sharp(buf).resize({ width: 2048, height: 2048, fit: 'inside', withoutEnlargement: true }).jpeg({ quality: 82 }).toBuffer();
   const { json } = await call('POST', '/2/media/upload', sec, { media: buf.toString('base64'), media_category: 'tweet_image' });
-  return json.data?.id ?? null;
+  const id = json.data?.id ?? null;
+  // Alternativtext (#217): POST /2/media/metadata, höchstens 1.000 Zeichen. Scheitert das, geht das Bild ohne ihn hinaus.
+  const alt = String(m.alt ?? '').trim().slice(0, 1000);
+  if (id && alt) await call('POST', '/2/media/metadata', sec, { id: String(id), metadata: { alt_text: { text: alt } } }).catch(() => null);
+  return id;
 }
 
 export async function publishX(c: Connection, sec: Record<string, string>, { sp, rev, media }: { sp: any; rev: any; media: any[] }) {

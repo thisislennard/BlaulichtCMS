@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import { effectiveAlt } from '../lib/accessibility.js';
 import path from 'node:path';
 import AdmZip from 'adm-zip';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
@@ -255,9 +256,9 @@ function jobPayload(p: any, media: any[], base: string, author: { key: string; n
     media: media.map((m, i) => ({
       id: bridgeMediaKey(m),
       kind: m.kind,
-      // Barrierefreiheit: Alternativtext und Titel in der Mediathek statt Datei-UUID. Bewusst nicht die Notiz
-      // der hochladenden Person – die kann Namen enthalten und ist nur für die Redaktion bestimmt.
-      alt: media.length > 1 ? `${text.title} – Bild ${i + 1}` : text.title,
+      // Barrierefreiheit (#217): Alternativtext aus der Fassung bzw. der Medienverwaltung; ohne ihn wie bisher der Titel.
+      // Bewusst nie die Notiz der hochladenden Person – die kann Namen enthalten und ist nur für die Redaktion bestimmt.
+      alt: (m.kind === 'image' && effectiveAlt(p, m)) || (media.length > 1 ? `${text.title} – Bild ${i + 1}` : text.title),
       mime: publicFileFor(m)?.type ?? m.mime,
       filename: `${m.id}.${publicFileFor(m)?.ext ?? 'bin'}`,
       // Pfad relativ zur BlaulichtCMS-Adresse, die die Bridge selbst verwendet (robust hinter Proxys und in Testnetzen)
@@ -522,7 +523,7 @@ export async function bridgeRoutes(app: FastifyInstance) {
     for (const r of rows) {
       const p = await one<any>(
         `SELECT pb.id, pb.post_id, pb.action, po.kind, po.created_by AS author_id, u.name AS author_name,
-                rv.number, rv.title, rv.body, rv.excerpt, rv.variants, rv.media_ids, rv.cover_id, rv.content_hash
+                rv.number, rv.title, rv.body, rv.excerpt, rv.variants, rv.media_ids, rv.cover_id, rv.content_hash, rv.media_alt
            FROM publications pb JOIN post_revisions rv ON rv.id = pb.revision_id JOIN posts po ON po.id = pb.post_id
            LEFT JOIN users u ON u.id = po.created_by
           WHERE pb.id = $1`,

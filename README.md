@@ -105,6 +105,9 @@ flowchart LR
   nachvollziehbar.
 - **Texte je Kanal:** eigener Text für Website, Facebook, Instagram, Threads, X, Mastodon, Bluesky und WhatsApp-Kanal, Vorschau je Kanal und Zeichenzähler, geplanter
   Veröffentlichungstermin.
+- **Barrierefreiheit:** Alternativtext je Bild (in der Medienverwaltung hinterlegt und wiederverwendet, an Website
+  und soziale Kanäle übergeben), Freigabe mit Warnung oder Pflicht; Lesbarkeitshinweis im Editor mit
+  Flesch-Amstad und Wiener Sachtextformel, langen Sätzen, Abkürzungen, Linktexten wie „hier“ und Hashtags – ohne KI.
 - **Quellen:** RSS- und Atom-Feeds als Anregung für eigene Beiträge.
 - **Kalender:** eigene Termine und Serien (täglich, wöchentlich, monatlich auch „jeden 1. Samstag“, jährlich; Ende nach
   Datum oder Anzahl, einzelne Termine ändern oder auslassen), Kategorien mit Farben, Ansichten Monat, Woche und Liste
