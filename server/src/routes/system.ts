@@ -45,6 +45,7 @@ const INTERNAL_KEYS = new Set<SettingKey>([
 const DEDICATED_KEYS = new Set<string>(['smtp.host', 'smtp.port', 'smtp.security', 'smtp.user', 'smtp.from', 'warnings.test_mode', 'warnings.test_recipient']);
 
 const ageH = (d: Date | string | null | undefined) => (d ? (Date.now() - new Date(d).getTime()) / 3_600_000 : Infinity);
+const ago = (h: number) => (h < 1 ? `vor ${Math.max(1, Math.round(h * 60))} Min.` : h < 48 ? `vor ${Math.round(h)} Std.` : `vor ${Math.round(h / 24)} Tagen`);
 
 /** Karten „Sicherung außer Haus“ und „Probe-Wiederherstellung“ im Systemstatus (#212). */
 export function backupServices(b: Awaited<ReturnType<typeof backupHealth>>) {
@@ -60,7 +61,7 @@ export function backupServices(b: Awaited<ReturnType<typeof backupHealth>>) {
       detail: failedLater
         ? `Fehlgeschlagen: ${String(o.last_error ?? '').slice(0, 160)}`
         : o.last_ok_at
-          ? `zuletzt erfolgreich vor ${age < 1 ? 'unter 1' : Math.round(age)} Std.${o.pending ? ` · ${o.pending} ausstehend` : ''}`
+          ? `zuletzt erfolgreich ${ago(age)}${o.pending ? ` · ${o.pending} ausstehend` : ''}`
           : o.pending
             ? `${o.pending} Übertragung(en) ausstehend`
             : 'noch keine Sicherung übertragen',
@@ -80,7 +81,7 @@ export function backupServices(b: Awaited<ReturnType<typeof backupHealth>>) {
           ? `Fehlgeschlagen: ${String(d.error ?? '').slice(0, 160)}`
           : ['queued', 'running'].includes(d.status)
             ? 'läuft gerade'
-            : `bestanden vor ${Math.max(1, Math.round(ageH(d.finished_at)))} Std. (${d.source === 'offsite' ? 'Kopie außer Haus' : 'lokale Sicherung'})`,
+            : `bestanden ${ago(ageH(d.finished_at))} (${d.source === 'offsite' ? 'Kopie außer Haus' : 'lokale Sicherung'})`,
       ms: null,
     });
   }

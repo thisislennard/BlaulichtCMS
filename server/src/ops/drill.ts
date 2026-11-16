@@ -200,7 +200,7 @@ export async function runDrill(drillId: string) {
         const live = await one<{ hash: string }>(`SELECT hash FROM audit_events WHERE chain_seq = $1`, [v.last.seq]);
         audit.matchesLive = live ? live.hash === v.last.hash : null;
       }
-      checks.push({ step: 'Audit-Kette', ok: v.ok, detail: v.ok ? `${v.checked} Einträge in Ordnung` : (v.problems[0]?.text ?? 'Auffälligkeiten') });
+      checks.push({ step: 'Audit-Kette', ok: v.ok, detail: v.ok ? `${v.checked} versiegelte Einträge in Ordnung${v.unsealed ? `, ${v.unsealed} noch nicht versiegelt` : ''}` : (v.problems[0]?.text ?? 'Auffälligkeiten') });
       if (audit.matchesLive === false) checks.push({ step: 'Audit-Kette passt zum laufenden Protokoll', ok: false, detail: 'Ende der Kette weicht vom laufenden Protokoll ab' });
       else if (audit.matchesLive) checks.push({ step: 'Audit-Kette passt zum laufenden Protokoll', ok: true });
     } else {
