@@ -234,7 +234,7 @@ docker compose exec blaulichtcms node server/dist/cli.js audit-verify   # Exit-C
 ```
 
 Gemeldet werden nachträglich geänderte Einträge, falsche Verweise und Lücken zwischen jüngeren Einträgen (mittendrin
-gelöscht). Der Worker prüft einmal am Tag und benachrichtigt bei Auffälligkeiten alle mit „System verwalten“.
+gelöscht). Der Worker prüft einmal am Tag und benachrichtigt bei Auffälligkeiten alle mit „Sicherheitseinstellungen ändern“.
 
 **Grenzen.** Ein Angreifer mit Root-Zugriff auf den Container (Master-Schlüssel und Datenbank-Superuser) kann Trigger
 abschalten und neu versiegeln; auch das Abschneiden der jüngsten Einträge erkennt die Kette allein nicht. Dagegen hilft
@@ -275,7 +275,7 @@ ist nicht vorgesehen. Den Zugriff auf „Audit lesen“ auf wenige Personen besc
 
 | Was | Wer | Wie oft |
 |---|---|---|
-| Sicherheitsmeldungen (Glocke, ggf. E-Mail) | Administration (Recht „System verwalten“ bzw. „Benutzer verwalten“) | sofort bei Eingang |
+| Sicherheitsmeldungen (Glocke, ggf. E-Mail) | Administration (je Meldung die Rechte „Sicherheitseinstellungen ändern“, „Konten sperren und entsperren“, „Rollen zuweisen“ oder „Rollen verwalten“) | sofort bei Eingang |
 | Audit-Protokoll, Filter „Fehlgeschlagen“ und „Verweigert“ | Administration | wöchentlich |
 | Audit-Integrität (Systemstatus → Audit-Integrität) | Administration | monatlich; der Worker prüft täglich und meldet Auffälligkeiten |
 | Systemprotokoll, Stufe „Fehler“ | Betrieb | wöchentlich und nach Updates |
@@ -430,7 +430,7 @@ Jede Sicherung wird nach dem Schreiben automatisch geprüft:
 | Volume-Sicherung, Wiederherstellungstest | echte Wiederherstellung in ein Wegwerf-Volume und Start einer Wegwerf-Instanz **ohne Netzwerk** (keine Mails, keine Veröffentlichungen); bestanden bei `/healthz` bereit und Selbsttest in Ordnung; danach wird alles entfernt | sonntags (`BLAULICHTCMS_RESTORE_TEST=woechentlich`, Standard), `taeglich` oder `aus` |
 | Datenbanksicherung im Volume | entschlüsseln (Auth-Tag) und `pg_restore --list` | nach jeder Sicherung; besteht sie die Prüfung nicht, gilt sie als fehlgeschlagen und wird entfernt |
 
-Fehlschläge erscheinen in BlaulichtCMS als Benachrichtigung für alle mit „System verwalten“ und im Systemprotokoll
+Fehlschläge erscheinen in BlaulichtCMS als Benachrichtigung für alle mit „Sicherungen erstellen“ und im Systemprotokoll
 (Quelle `backup`); `backup-cron.sh` endet zusätzlich mit Fehlercode (Protokoll `/var/log/blaulichtcms-backup.log`, für eine
 Mail `MAILTO=` in `/etc/cron.d/blaulichtcms` eintragen und die Ausgabeumleitung entfernen). Von Hand:
 
@@ -614,10 +614,10 @@ Für normale Releases muss niemand an den Host. Unter **Einstellungen → Update
   angezeigt; ändert sich der Host der API-Adresse, wird er verworfen und muss neu eingegeben werden.
 - **Prüfung:** automatisch im eingestellten Abstand (1–168 Stunden, Standard 6) und über **„Jetzt prüfen“**. Abgefragt
   wird `GET /repos/<besitzer>/<name>/releases/latest`; ohne Release meldet GitHub 404 („noch kein Release“). Bei einer
-  neuen Version erhält „System verwalten“ einmal je Version eine Benachrichtigung; der Systemstatus zeigt
+  neuen Version erhält „Updates einstellen und installieren“ einmal je Version eine Benachrichtigung; der Systemstatus zeigt
   „Update verfügbar: Version X“. Installiert wird **nie automatisch**. Die Prüfung sendet außer der Versionsangabe im
   User-Agent keine Daten; wer keinen Abruf nach außen möchte, schaltet „Automatisch prüfen“ aus.
-- **Installation** (Recht „System verwalten“, Passwortbestätigung, auditiert, Sicherheitsmeldung):
+- **Installation** (Recht „Updates einstellen und installieren“, Passwortbestätigung, auditiert, Sicherheitsmeldung):
   1. ZIP, `.sha256` und `.sig` über die Asset-API laden (Größen- und Zeitgrenzen, SSRF-Schutz). Die Weiterleitung zum
      Dateispeicher von GitHub wird ohne `Authorization` und nur über HTTPS verfolgt.
   2. Prüfsumme und **Ed25519-Signatur** gegen den öffentlichen Schlüssel der **laufenden** Version

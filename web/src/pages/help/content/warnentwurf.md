@@ -62,7 +62,7 @@ Oben im Vorgang steht **Löschen**. Der Dialog nennt vorher, welche Vorgänge be
 |---|---|
 | nie freigegeben | wer alle betroffenen Vorgänge angelegt hat, oder wer Warnentwürfe freigeben darf |
 | freigegeben, aber nicht versandt | wer Warnentwürfe freigeben darf |
-| versandt (auch ein fehlgeschlagener Versuch) | nur die Administration („System verwalten“), mit **Pflicht-Begründung** |
+| versandt (auch ein fehlgeschlagener Versuch) | nur mit dem Recht „Versandte Warnvorgänge löschen“ (mitgeliefert: Administration), mit **Pflicht-Begründung** |
 
 - Gelöscht werden Fassungen, Freigaben, PDF-Dateien, Versandnachweise und der Rückrufkontakt. Das Audit-Protokoll hält nur fest: „Vorgang W-… gelöscht“ mit Person, Stand und Begründung – keine Inhalte.
 - Läuft gerade ein Versand, ist Löschen gesperrt, bis das Ergebnis feststeht.

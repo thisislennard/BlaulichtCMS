@@ -41,6 +41,7 @@ import { QrDialog, ShareActions } from "../../components/share";
 import { fmtDateTime, fmtRelative } from "../../lib/format";
 import { AuditTable } from "./AuditTable";
 import { LoadError, type AuditEvent } from "./shared";
+import { RolesTab, type RoleDef, type RolesResponse } from "./Roles";
 
 interface UserRow {
   id: string;
@@ -68,39 +69,12 @@ interface ServiceAccount {
   last_used_at: string | null;
   created_at: string;
 }
-interface RoleDef {
-  id: string;
-  label: string;
-  description: string;
-  permissions: string[];
-}
-interface PermissionDef {
-  id: string;
-  module: string;
-  label: string;
-  level: "read" | "write" | "critical";
-  description: string;
-}
-interface RolesResponse {
-  roles: RoleDef[];
-  modules: { id: string; label: string }[];
-  permissions: PermissionDef[];
-  matrix: {
-    module: string;
-    label: string;
-    cells: {
-      role: string;
-      level: "full" | "edit" | "read" | "none";
-      permissions: string[];
-    }[];
-  }[];
-}
-
 type Tab = "users" | "roles" | "activity";
 
 export default function Users() {
   const { can, me } = useAuth();
-  const [tab, setTab] = useState<Tab>("users");
+  // Sicherheitsmeldungen zu Rollen verlinken direkt auf den Reiter (/benutzer?tab=rollen)
+  const [tab, setTab] = useState<Tab>(() => (new URLSearchParams(window.location.search).get("tab") === "rollen" ? "roles" : "users"));
   const [inviteOpen, setInviteOpen] = useState(false);
   const users = useQuery({
     queryKey: ["users"],
@@ -110,14 +84,14 @@ export default function Users() {
   const roles = useQuery({
     queryKey: ["roles"],
     queryFn: () => get<RolesResponse>("/roles"),
-    staleTime: 300_000,
+    staleTime: 30_000,
   });
   const settings = useQuery({
     queryKey: ["settings"],
     queryFn: () => get<{ settings: Record<string, any> }>("/settings"),
-    enabled: can("system.read") || can("system.manage"),
+    enabled: can("settings.view"),
   });
-  const manage = can("user.manage");
+  const mayInvite = can("user.invite");
 
   const s = settings.data?.settings;
   const mfaText = s
@@ -159,7 +133,7 @@ export default function Users() {
         actions={
           <>
             <AppLinkButton />
-            {manage && (
+            {mayInvite && (
               <Button
                 variant="primary"
                 icon="Users"
@@ -210,7 +184,7 @@ export default function Users() {
             <UserTable
               data={users.data}
               roles={roles.data.roles}
-              manage={manage}
+              mayInvite={mayInvite}
               meId={me?.user.id ?? ""}
               onInvite={() => setInviteOpen(true)}
             />
@@ -221,10 +195,10 @@ export default function Users() {
           ) : !roles.data ? (
             <SkeletonRows rows={6} />
           ) : (
-            <RolesTab data={roles.data} users={users.data?.users ?? []} />
+            <RolesTab data={roles.data} />
           ))}
         {tab === "activity" &&
-          (can("audit.read") ? (
+          (can("audit.view") ? (
             <UserActivity />
           ) : (
             <Notice tone="warning">{t("admin.users.noAudit")}</Notice>
@@ -250,8 +224,10 @@ function RoleChecks({
   return (
     <div className="flex flex-col gap-0.5">
       {roles.map((r) => {
-        const reason = disabled?.(r.id) ?? null;
         const checked = value.includes(r.id);
+        // Rollen mit Rechten, die man selbst nicht hat, lassen sich weder vergeben noch entziehen
+        if (!r.assignable && !checked) return null;
+        const reason = !r.assignable ? "Enthält Rechte, die du selbst nicht hast – nicht änderbar." : (disabled?.(r.id) ?? null);
         const off = reason !== null;
         return (
           <label
@@ -299,7 +275,7 @@ function InviteForm({
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
   const [sel, setSel] = useState<string[]>(
-    ["editor"].filter((r) => roles.some((x) => x.id === r)),
+    ["editor"].filter((r) => roles.some((x) => x.id === r && x.assignable)),
   );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -545,19 +521,22 @@ function LinkResult({
 function UserTable({
   data,
   roles,
-  manage,
+  mayInvite,
   meId,
   onInvite,
 }: {
   data: { users: UserRow[]; serviceAccounts: ServiceAccount[] };
   roles: RoleDef[];
-  manage: boolean;
+  mayInvite: boolean;
   meId: string;
   onInvite: () => void;
 }) {
   const qc = useQueryClient();
+  const { can } = useAuth();
   const toast = useToast();
   const onError = useErrorToast();
+  /** Konto mit Rechten, die man selbst nicht hat: nicht übernehmen, sperren oder löschen (prüft auch der Server) */
+  const above = (u: UserRow) => u.roles.some((id) => roles.find((x) => x.id === id)?.assignable === false);
   const [linkInfo, setLinkInfo] = useState<{
     name: string;
     link: string;
@@ -746,7 +725,7 @@ function UserTable({
                       user={u}
                       roles={roles}
                       roleLabel={roleLabel}
-                      manage={manage && u.status !== "disabled"}
+                      manage={can("user.assign_roles") && u.status !== "disabled"}
                       isMe={isMe}
                       activeAdmins={activeAdmins}
                       onSaved={refresh}
@@ -812,12 +791,9 @@ function UserTable({
                     )}
                   </Td>
                   <Td align="right">
-                    {manage && (
-                      <Menu
-                        size="sm"
-                        label={t("admin.users.actionsFor", { name: u.name })}
-                        items={[
-                          u.status !== "disabled" && {
+                    {(() => {
+                      const items = [
+                          can("user.invite") && !above(u) && u.status !== "disabled" && {
                             label: t(
                               u.status === "invited"
                                 ? "admin.users.newInviteLink"
@@ -826,12 +802,12 @@ function UserTable({
                             icon: "Link2",
                             onClick: () => makeLink(u),
                           },
-                          !!u.invite_expires_at && {
+                          can("user.invite") && !!u.invite_expires_at && {
                             label: "Offenen Link widerrufen",
                             icon: "Ban",
                             onClick: () => revokeLink(u),
                           },
-                          !!u.locked_until && {
+                          can("user.lock") && !!u.locked_until && {
                             label: "Sperre aufheben",
                             icon: "LockOpen",
                             onClick: async () => {
@@ -844,43 +820,44 @@ function UserTable({
                               }
                             },
                           },
-                          u.status !== "disabled" && {
+                          can("user.edit") && u.status !== "disabled" && {
                             label: "Umbenennen",
                             icon: "Pencil",
                             onClick: () => (setRenaming(u), setNewName(u.name)),
                           },
                           // Eigene Sitzungen beendet man unter „Mein Konto“
-                          !isMe && (u.active_sessions > 0 || u.trusted_devices > 0) && {
+                          can("user.sessions") && !isMe && (u.active_sessions > 0 || u.trusted_devices > 0) && {
                             label: "Auf allen Geräten abmelden",
                             icon: "LogOut",
                             onClick: () => endSessions(u),
                           },
                           // Eigene 2FA nicht hier zurücksetzen (würde abmelden) – dafür gibt es „Mein Konto“
-                          u.totp_enabled && !isMe && {
+                          can("user.lock") && !above(u) && u.totp_enabled && !isMe && {
                             label: t("admin.users.reset2fa"),
                             icon: "ShieldCheck",
                             onClick: () => setResetting(u),
                           },
-                          u.status === "active" && {
+                          can("user.lock") && !above(u) && u.status === "active" && {
                             label: t("admin.users.disable"),
                             icon: "PowerOff",
                             onClick: () => setStatus(u, "disabled"),
                             disabled: isMe,
                           },
-                          u.status === "disabled" && {
+                          can("user.lock") && u.status === "disabled" && {
                             label: t("admin.users.enable"),
                             icon: "Power",
                             onClick: () => setStatus(u, "active"),
                           },
-                          !isMe && {
+                          can("user.delete") && !above(u) && !isMe && {
                             label: t("admin.users.delete"),
                             icon: "Trash2",
                             danger: true,
                             onClick: () => setDeleting(u),
                           },
-                        ]}
-                      />
-                    )}
+                      ];
+                      // Ohne erlaubte Aktion kein Menü
+                      return items.some(Boolean) ? <Menu size="sm" label={t("admin.users.actionsFor", { name: u.name })} items={items as any} /> : null;
+                    })()}
                   </Td>
                 </tr>
               );
@@ -942,7 +919,7 @@ function UserTable({
             title={t("admin.users.empty")}
             text={t("admin.users.emptyText")}
             action={
-              manage && (
+              mayInvite && (
                 <Button icon="Plus" onClick={onInvite}>
                   {t("admin.users.invite")}
                 </Button>
@@ -1126,147 +1103,7 @@ function RoleButton({
 
 /* ------------------------------------------- Rollen ------------------------------------------- */
 
-const LEVEL_STYLE: Record<string, string> = {
-  full: "bg-fg text-card",
-  edit: "bg-raised text-fg border border-line",
-  read: "bg-raised text-fg-muted",
-  none: "text-fg-muted",
-};
-
-function RolesTab({ data, users }: { data: RolesResponse; users: UserRow[] }) {
-  const permLabel = useMemo(
-    () => Object.fromEntries(data.permissions.map((p) => [p.id, p])),
-    [data.permissions],
-  );
-  return (
-    <div className="flex flex-col gap-5">
-      <p className="m-0 text-sm text-fg-muted">{t("admin.users.rolesHint")}</p>
-      <div className="grid gap-3 grid-cols-[repeat(auto-fill,minmax(min(300px,100%),1fr))]">
-        {data.roles.map((r) => {
-          const members = users.filter(
-            (u) => u.roles.includes(r.id) && u.status !== "disabled",
-          ).length;
-          const critical = r.permissions.filter(
-            (p) => permLabel[p]?.level === "critical",
-          );
-          return (
-            <Card
-              key={r.id}
-              title={r.label}
-              subtitle={
-                members === 1
-                  ? t("admin.users.membersOne")
-                  : t("admin.users.membersCount", { n: members })
-              }
-            >
-              <p className="m-0 text-sm text-fg-muted">{r.description}</p>
-              <ul
-                className="list-none m-0 mt-3 p-0 flex flex-wrap gap-1.5"
-                aria-label={t("admin.users.roles")}
-              >
-                {r.permissions.map((p) => {
-                  const def = permLabel[p];
-                  const crit = def?.level === "critical";
-                  return (
-                    <li key={p} title={def?.description}>
-                      <span
-                        className={cx(
-                          "inline-flex items-center gap-1 h-[22px] px-2 rounded-chip text-meta whitespace-nowrap",
-                          crit
-                            ? "bg-warn-soft text-warn font-medium"
-                            : "bg-raised text-fg-muted",
-                        )}
-                      >
-                        {crit && <Icon name="AlertTriangle" size={11} />}
-                        {def?.label ?? p}
-                        {crit && (
-                          <span className="sr-only">
-                            {" "}
-                            ({t("admin.users.critical")})
-                          </span>
-                        )}
-                      </span>
-                    </li>
-                  );
-                })}
-              </ul>
-
-            </Card>
-          );
-        })}
-      </div>
-
-      <Card
-        title={t("admin.users.matrix")}
-        subtitle={t("admin.users.matrixHint")}
-      >
-        <div className="overflow-x-auto relative">
-          <table className="w-full border-collapse text-sm min-w-[720px]">
-            <thead>
-              <tr>
-                <th
-                  scope="col"
-                  className="text-left text-[11px] font-semibold text-fg-muted pb-2 border-b border-line pr-2"
-                >
-                  {t("admin.users.module")}
-                </th>
-                {data.roles.map((r) => (
-                  <th
-                    key={r.id}
-                    scope="col"
-                    className="text-center text-[11px] font-semibold text-fg-muted pb-2 border-b border-line px-1"
-                  >
-                    {r.label}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {data.matrix.map((m) => (
-                <tr key={m.module}>
-                  <th
-                    scope="row"
-                    className="text-left font-normal py-2 border-b border-line pr-2 whitespace-nowrap"
-                  >
-                    {m.label}
-                  </th>
-                  {m.cells.map((c) => {
-                    const list = c.permissions
-                      .map((p) => permLabel[p]?.label ?? p)
-                      .join(", ");
-                    const tip = list || t("admin.users.noRights");
-                    return (
-                      <td
-                        key={c.role}
-                        className="text-center py-2 border-b border-line px-1"
-                      >
-                        <span
-                          title={tip}
-                          className={cx(
-                            "inline-flex items-center justify-center min-w-[64px] h-[22px] px-1.5 rounded-chip text-[11px] font-medium",
-                            LEVEL_STYLE[c.level],
-                          )}
-                        >
-                          {t(`admin.users.level.${c.level}`)}
-                          <span className="sr-only">: {tip}</span>
-                        </span>
-                      </td>
-                    );
-                  })}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        <div className="flex gap-3 flex-wrap mt-3 text-[11px] text-fg-muted">
-          <span>{t("admin.users.legend.full")}</span>
-          <span>{t("admin.users.legend.edit")}</span>
-          <span>{t("admin.users.legend.read")}</span>
-        </div>
-      </Card>
-    </div>
-  );
-}
+/* Rollen und Rechte: siehe Roles.tsx */
 
 /* ---------------------------------------- Aktivität ------------------------------------------ */
 

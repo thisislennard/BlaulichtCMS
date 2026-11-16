@@ -181,7 +181,7 @@ export default function DesignEditor() {
     setDirty(false);
   }, [q.data, linkId]);
   const meta: Meta | undefined = q.data;
-  const canSave = linkId ? can('media.manage') : can('media.admin');
+  const canSave = linkId ? can('media.design') : can('media.admin');
   const update = (d: UploadDesign) => (setDesign(d), setDirty(true));
   const info: LinkInfo = useMemo(
     () => ({
@@ -260,7 +260,7 @@ export default function DesignEditor() {
           Zurück zur Sammlung
         </Button>
       )}
-      {!canSave && <Notice>Ansehen ist möglich; die Standardgestaltung ändert, wer „Medien administrieren“ hat. Einzelne Links lassen sich mit „Medien verwalten“ gestalten.</Notice>}
+      {!canSave && <Notice>Ansehen ist möglich; die Standardgestaltung ändert, wer „Medien administrieren“ hat. Einzelne Links lassen sich mit „Upload-Seite gestalten“ gestalten.</Notice>}
       {linkId && !own && <Notice>Dieser Link nutzt die Standardgestaltung. Änderungen hier werden als eigene Gestaltung des Links gespeichert.</Notice>}
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] items-start">
         <div className="flex flex-col gap-4 min-w-0">

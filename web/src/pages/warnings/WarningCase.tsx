@@ -331,7 +331,7 @@ function WarningCaseInner({ id }: { id: string }) {
         actions={
           <div className="flex items-center gap-2 flex-wrap">
             <StatusBadge status={d.state} labels={WARN_STATE} />
-            {(can('warning.draft') || can('warning.approve') || can('system.manage')) && (
+            {can('warning.delete') && (
               <Button size="sm" variant="ghost" icon="Trash2" onClick={() => setDeleting(true)}>
                 Löschen
               </Button>

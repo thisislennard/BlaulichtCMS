@@ -56,7 +56,7 @@ export const PERMISSIONS: PermissionDef[] = [
   P('media.view', 'media', 'read', 'Medien ansehen', 'Sammlungen, Ordner und geprüfte Medien ansehen, durchsuchen und einzeln in der öffentlichen Fassung (ohne Standort) laden.'),
   P('media.export', 'media', 'read', 'Medien exportieren (ZIP)', 'Sammeldownloads der öffentlichen Fassungen als ZIP erstellen und laden.', ['media.view']),
   P('media.download_original', 'media', 'write', 'Originale herunterladen', 'Originaldateien mit möglichen Standortdaten einzeln oder als Sammeldownload laden; Sammeldownloads anderer Personen laden.', ['media.view']),
-  P('media.collections', 'media', 'write', 'Sammlungen anlegen und bearbeiten', 'Sammlungen anlegen, umbenennen, beschreiben und Fristen ändern; aus einem Beitrag eine Sammlung anlegen.', ['media.view']),
+  P('media.collections', 'media', 'write', 'Sammlungen anlegen und bearbeiten', 'Sammlungen anlegen, umbenennen, beschreiben und Fristen ändern. Für „Fotos und Videos sammeln“ im Beitrag zusätzlich „Upload-Links verwalten“.', ['media.view']),
   P('media.upload', 'media', 'write', 'Dateien hochladen', 'Eigene Dateien direkt in eine Sammlung hochladen.', ['media.view']),
   P('media.links', 'media', 'write', 'Upload-Links verwalten', 'Upload-Links erstellen, pausieren, verlängern, erneuern und widerrufen; Optionen je Link ändern.', ['media.view']),
   P('media.review', 'media', 'write', 'Medien sichten und auswählen', 'Sichtungsstand setzen (ausgewählt, zurückgestellt, übersprungen); Namen der Einsendenden und Einwilligungen sehen.', ['media.view']),
@@ -93,7 +93,7 @@ export const PERMISSIONS: PermissionDef[] = [
 
   /* Banner */
   P('banner.view', 'banners', 'read', 'Banner ansehen', 'Banner und ihren Stand ansehen.'),
-  P('banner.edit', 'banners', 'write', 'Banner bearbeiten', 'Banner anlegen, ändern und zur Freigabe einreichen; aus einer amtlichen Warnung einen Bannerentwurf anlegen.', ['banner.view']),
+  P('banner.edit', 'banners', 'write', 'Banner bearbeiten', 'Banner anlegen, ändern und zur Freigabe einreichen; aus einer amtlichen Warnung einen Bannerentwurf anlegen.', ['banner.view', 'channel.view']),
   P('banner.publish', 'banners', 'critical', 'Banner veröffentlichen', 'Freigegebene Banner auf der Website schalten und beenden.', ['banner.view']),
 
   /* Warnentwürfe */
@@ -151,7 +151,7 @@ export const PERMISSIONS: PermissionDef[] = [
   P('settings.privacy', 'settings', 'critical', 'Datenschutzeinstellungen ändern', 'Löschfristen, Aufbewahrung der Protokolle, Angaben zu Verantwortlichen und Datenschutzhinweise.', ['settings.view'], true),
   P('settings.media', 'settings', 'write', 'Medieneinstellungen ändern', 'Dateigrößen, erlaubte Dateitypen, Vorgaben für Upload-Links, Prüftiefe und Speichergrenzen.', ['settings.view'], true),
   P('settings.editorial', 'settings', 'critical', 'Redaktionseinstellungen ändern', 'Vier-Augen-Prinzip und weitere Vorgaben für Redaktion und Freigabe.', ['settings.view'], true),
-  P('settings.system', 'settings', 'write', 'Systemeinstellungen ändern', 'Parallele Aufträge und weitere technische Einstellungen.', ['settings.view'], true),
+  P('settings.system', 'settings', 'write', 'Systemeinstellungen ändern', 'Parallele Aufträge, Ausführung der Automationen und weitere technische Einstellungen.', ['settings.view'], true),
 ];
 
 export const PERMISSION_IDS = PERMISSIONS.map((p) => p.id);
@@ -167,7 +167,7 @@ export const LEGACY_PERMISSIONS: Record<string, string[]> = {
   'media.manage': ['media.view', 'media.download_original', 'media.collections', 'media.upload', 'media.links', 'media.review', 'media.organize', 'media.redact', 'media.trash', 'media.design'],
   'media.admin': ['media.view', 'media.admin'],
   'post.read': ['post.view', 'source.view', 'banner.view', 'channel.view', 'official.view'],
-  'post.edit': ['post.view', 'post.create', 'post.edit', 'post.submit', 'post.archive', 'post.templates', 'source.view', 'source.items', 'source.manage', 'banner.view', 'banner.edit', 'official.view', 'official.dismiss', 'connection.view'],
+  'post.edit': ['post.view', 'post.create', 'post.edit', 'post.submit', 'post.archive', 'post.templates', 'source.view', 'source.items', 'source.manage', 'channel.view', 'banner.view', 'banner.edit', 'official.view', 'official.dismiss', 'connection.view'],
   'post.approve': ['post.view', 'banner.view', 'approval.post', 'approval.banner', 'approval.automation'],
   'post.publish': ['post.view', 'banner.view', 'channel.view', 'connection.view', 'publish.website', 'publish.unpublish', 'publish.social', 'publish.social_remove', 'banner.publish'],
   'channel.manage': ['channel.view', 'channel.sites', 'channel.updates'],
@@ -330,6 +330,7 @@ export function settingPermission(key: string): string {
     case 'editorial':
       return 'settings.editorial';
     case 'jobs':
+    case 'automations':
       return 'settings.system';
     case 'backup':
       return 'backup.manage';

@@ -36,6 +36,7 @@ startet PostgreSQL) ist für den Container gedacht, funktioniert aber auch lokal
 | Unit + Integration | `TEST_DATABASE_URL=… npm test` | 90 Tests: Rechte, Krypto, SSRF, Fassungen, Upload, Warnentwürfe, Verbindungen, Import, Sicherheit – braucht ffmpeg und pdftotext |
 | Fokus-Test | `node test/e2e/focus-check.mjs` | Tippen in alle Textfelder und Dialoge ohne Fokusverlust (laufende Instanz nötig) |
 | Dashboard anpassen | `node test/e2e/dashboard-dnd.mjs` | Verschieben mit Maus, Finger (Touch-Emulation) und Tastatur, Abbrechen, Speichern, Vorlagen (Instanz mit den Testdaten des Fokus-Tests nötig) |
+| Rollen-Kurztest | `node test/e2e/roles-smoke.mjs` | Eingeschränkte eigene Rolle im Browser: nur erlaubte Navigation und Schaltflächen, „Kein Zugriff“, keine abgelehnten Anfragen (nach dem Fokus-Test auf derselben Instanz) |
 | Abnahme M1 | `node test/e2e/m1-flow.mjs` | 34 Schritte über Container, Browser (Desktop + Handy) und WordPress inkl. Sicherung/Wiederherstellung |
 
 > [!WARNING]
@@ -102,6 +103,11 @@ docker build --secret id=build_ca,src=/pfad/proxy-ca.pem --build-arg HTTPS_PROXY
 ## Konventionen
 
 - Texte in der Oberfläche auf Deutsch, neutral formuliert, ohne organisationsspezifische Namen.
-- Neue Rechte in `server/src/auth/permissions.ts` registrieren; jede Route prüft serverseitig.
+- Neue Rechte in `server/src/auth/permissions.ts` registrieren (Bereich, Stufe, Beschreibung, Voraussetzungen) und
+  danach `node scripts/rechte-tabelle.mjs` ausführen (Tabelle in der Hilfe). Jede Route unter `/api/v1` nennt genau
+  ein Recht per `requireAuth('…')` – oder `requireAnyAuth(…)`, wenn der Handler je Aktion prüft – oder steht in
+  `PUBLIC_ROUTES` (`server/src/auth/route-access.ts`); sonst scheitert `server/test/roles.test.ts`.
+- In der Oberfläche jede Schaltfläche, jeden Reiter und jede Abfrage mit `can('…')` an das Recht der Route binden:
+  Was man nicht darf, wird nicht angezeigt. `test/e2e/roles-smoke.mjs` prüft das mit einer eingeschränkten Rolle.
 - Migrationen additiv; eine neue Datei je Änderung (`server/migrations/NNN_name.sql`).
 - Audit-Einträge ohne Tokens oder vertrauliche Inhalte.

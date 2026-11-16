@@ -47,7 +47,7 @@ Beim Anlegen und unter **Bearbeiten** öffnet „Erweitert“ weitere Einstellun
 
 - **Grenzen** (0 = unbegrenzt): Uploads je Link (ein Upload = ein Vorgang mit eigener Vorgangsnummer), Dateien je Upload, maximale Dateigröße, Gesamtgröße. **Link schließen, wenn eine Grenze erreicht ist** (Standard bei neuen Links): Die Upload-Seite zeigt dann „Dieser Link funktioniert nicht (mehr)“, die Liste „Kontingent erreicht“. Ohne diese Option bleibt die Seite erreichbar und weist weitere Dateien mit Hinweis ab. Die Dateien je Link und das Kontingent der Sammlung gelten immer zusätzlich.
 - **Erlaubte Dateitypen:** Auswahl aus den global erlaubten Typen (Einstellungen → Medien). Andere Dateien weist die Prüfung mit Grund ab.
-- **Abgefragte Angaben:** Name, E-Mail-Adresse, Hinweis, Aufnahmeort, Aufnahmedatum – je **nicht abfragen**, **freiwillig** oder **Pflicht**. Die Angaben sieht nur, wer „Medien verwalten“ hat (Details der Datei). Nur abfragen, was wirklich gebraucht wird.
+- **Abgefragte Angaben:** Name, E-Mail-Adresse, Hinweis, Aufnahmeort, Aufnahmedatum – je **nicht abfragen**, **freiwillig** oder **Pflicht**. Die Angaben sieht nur, wer „Medien sichten und auswählen“ hat (Details der Datei). Nur abfragen, was wirklich gebraucht wird.
 - **Bestätigung vor dem Upload:** Pflicht-Kästchen mit eigenem Text (z. B. „Ich habe die Aufnahmen selbst gemacht …“); der Zeitpunkt wird je Datei gespeichert.
 - **Passwort** (mindestens 10 Zeichen): Wer den Link öffnet, gibt es zuerst ein; die Freigabe gilt 12 Stunden in diesem Browser. Ein neues Passwort beendet alle bisherigen Freigaben. Fehlversuche werden protokolliert und gebremst.
 
@@ -75,7 +75,7 @@ Unter [Medien → Gestaltung](/medien/gestaltung) lässt sich die Upload-Seite w
 
 Die Glocke meldet zu Medien:
 
-- **Neue Dateien:** Sind über einen Upload-Link Dateien eingegangen und geprüft, bekommt die Person, die den Link angelegt hat, einen Hinweis (sonst alle mit „Medien verwalten“). Weitere Dateien derselben Sammlung innerhalb einer Stunde zählen im selben Eintrag hoch („3 neue Dateien in …“), statt die Glocke zu fluten.
+- **Neue Dateien:** Sind über einen Upload-Link Dateien eingegangen und geprüft, bekommt die Person, die den Link angelegt hat, einen Hinweis (sonst alle mit „Medien sichten und auswählen“). Weitere Dateien derselben Sammlung innerhalb einer Stunde zählen im selben Eintrag hoch („3 neue Dateien in …“), statt die Glocke zu fluten.
 - **Upload-Links:** Ein Link läuft bald ab (höchstens 24 Stunden vorher, bei kurzen Links nach drei Vierteln der Gültigkeit; nach dem Verlängern erneut) oder das Kontingent von Link bzw. Sammlung ist erreicht.
 - **Speicherplatz:** Unterschreitet der freie Speicher die Warnschwelle (Einstellungen → Medien, Standard 10 GB), erfahren es alle mit „Medien administrieren“ – höchstens alle 12 Stunden.
 

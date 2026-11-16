@@ -103,7 +103,7 @@ export default function Posts({ mode }: { mode?: 'approvals' }) {
         title={mode === 'approvals' ? 'Freigaben' : 'Beiträge'}
         subtitle={mode === 'approvals' ? 'Fassungen, die auf Freigabe oder Veröffentlichung warten.' : 'Jede Änderung erzeugt eine neue Fassung. Freigaben gelten genau für eine Fassung.'}
         actions={
-          can('post.edit') && (
+          can('post.create') && (
             <Button variant="primary" icon="Plus" onClick={() => setCreate(true)}>
               Neuer Beitrag
             </Button>
@@ -124,7 +124,7 @@ export default function Posts({ mode }: { mode?: 'approvals' }) {
       />
       {q.isLoading && <SkeletonRows rows={5} />}
       {q.error && <ErrorBox title="Beiträge konnten nicht geladen werden">{(q.error as Error).message}</ErrorBox>}
-      {q.data && rows.length === 0 && <EmptyState icon="FileText" title="Keine Beiträge" text={filter === 'all' ? 'Lege den ersten Beitrag an.' : 'In dieser Ansicht gibt es gerade nichts.'} />}
+      {q.data && rows.length === 0 && <EmptyState icon="FileText" title="Keine Beiträge" text={filter === 'all' ? (can('post.create') ? 'Lege den ersten Beitrag an.' : undefined) : 'In dieser Ansicht gibt es gerade nichts.'} />}
       {rows.length > 0 && (
         <Table>
           <thead>

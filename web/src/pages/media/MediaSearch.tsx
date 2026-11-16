@@ -31,7 +31,8 @@ const EMPTY: Filters = { q: '', kind: '', selection: '', status: 'ready', tag: '
 export default function MediaSearch() {
   const { can } = useAuth();
   const navigate = useNavigate();
-  const manage = can('media.manage');
+  const may = { review: can('media.review'), organize: can('media.organize'), trash: can('media.trash'), originals: can('media.download_original'), export: can('media.export') };
+  const canMark = may.review || may.organize || may.trash || may.export;
   const qc = useQueryClient();
   const ask = useConfirm();
   const toast = useToast();
@@ -81,11 +82,11 @@ export default function MediaSearch() {
     { label: 'Groß anzeigen', icon: 'Maximize2', onClick: () => setLightbox(items.indexOf(m)) },
     { label: 'Details', icon: 'Info', onClick: () => setDetails(m.id) },
     { label: 'Zur Sammlung', icon: 'FolderOpen', onClick: () => navigate(`/medien/${m.collection_id}${m.folder_id ? `?ordner=${m.folder_id}` : ''}`) },
-    manage && m.status === 'ready' ? { label: 'Original herunterladen', icon: 'Download', onClick: () => window.open(`/api/v1/media/${m.id}/original`, '_blank') } : null,
+    may.originals && m.status === 'ready' ? { label: 'Original herunterladen', icon: 'Download', onClick: () => window.open(`/api/v1/media/${m.id}/original`, '_blank') } : null,
     m.has_public && m.status === 'ready' ? { label: 'Öffentliche Fassung herunterladen', icon: 'Download', onClick: () => window.open(`/api/v1/media/${m.id}/public?v=${m.public_rev ?? 0}`, '_blank') } : null,
-    manage ? { label: 'Schlagworte', icon: 'Tags', onClick: () => setTagging({ ids: [m.id], current: m.tags ?? [] }) } : null,
-    manage ? { label: 'Verschieben', icon: 'FolderInput', onClick: () => setMoveCopy({ mode: 'move', ids: [m.id] }) } : null,
-    manage && m.status === 'ready' ? { label: 'Kopieren', icon: 'CopyPlus', onClick: () => setMoveCopy({ mode: 'copy', ids: [m.id] }) } : null,
+    may.organize ? { label: 'Schlagworte', icon: 'Tags', onClick: () => setTagging({ ids: [m.id], current: m.tags ?? [] }) } : null,
+    may.organize ? { label: 'Verschieben', icon: 'FolderInput', onClick: () => setMoveCopy({ mode: 'move', ids: [m.id] }) } : null,
+    may.organize && m.status === 'ready' ? { label: 'Kopieren', icon: 'CopyPlus', onClick: () => setMoveCopy({ mode: 'copy', ids: [m.id] }) } : null,
   ];
   return (
     <div className="flex flex-col gap-5">
@@ -164,20 +165,24 @@ export default function MediaSearch() {
         </div>
         <ViewControls view={prefs.view} setView={prefs.setView} perPage={prefs.perPage} setPerPage={(n) => (prefs.setPerPage(n), setPage(1))} />
       </div>
-      {marked.size > 0 && (
+      {canMark && marked.size > 0 && (
         <div role="region" aria-label="Sammelaktionen" className="sticky top-2 z-10 flex flex-wrap items-center gap-2 p-2.5 rounded-card border border-line-strong bg-card shadow-float">
           <span className="font-mono text-sm px-1">{marked.size} markiert</span>
-          {manage && (
+          {may.review && (
             <>
               <Button size="sm" icon="Check" onClick={() => void bulkSelection('selected')}>Auswählen</Button>
               <Button size="sm" icon="Pause" onClick={() => void bulkSelection('on_hold')}>Zurückstellen</Button>
+            </>
+          )}
+          {may.organize && (
+            <>
               <Button size="sm" icon="Tags" onClick={() => setTagging({ ids: [...marked] })}>Schlagworte</Button>
               <Button size="sm" icon="FolderInput" onClick={() => setMoveCopy({ mode: 'move', ids: [...marked] })}>Verschieben</Button>
               <Button size="sm" icon="CopyPlus" onClick={() => setMoveCopy({ mode: 'copy', ids: [...marked] })}>Kopieren</Button>
             </>
           )}
-          <Button size="sm" icon="Download" onClick={() => setZip(true)}>ZIP</Button>
-          {manage && (
+          {may.export && <Button size="sm" icon="Download" onClick={() => setZip(true)}>ZIP</Button>}
+          {may.trash && (
             <Button
               size="sm"
               variant="danger"
@@ -204,12 +209,12 @@ export default function MediaSearch() {
       {q.data && items.length === 0 && <EmptyState icon="Search" title="Keine Treffer" text="Filter anpassen oder zurücksetzen." />}
       {items.length > 0 &&
         (prefs.view === 'list' ? (
-          <MediaList items={items} marked={marked} onMark={mark} onOpen={setLightbox} menu={menuFor} extraColumn={{ label: 'Sammlung', render: (m) => <Link to={`/medien/${m.collection_id}`}>{m.collection_title}</Link> }} />
+          <MediaList items={items} marked={canMark ? marked : undefined} onMark={canMark ? mark : undefined} onOpen={setLightbox} menu={menuFor} extraColumn={{ label: 'Sammlung', render: (m) => <Link to={`/medien/${m.collection_id}`}>{m.collection_title}</Link> }} />
         ) : (
           <ul className="m-0 p-0 list-none grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
             {items.map((m, i) => (
               <li key={m.id} className={cx('relative border rounded-card overflow-hidden bg-card flex flex-col', marked.has(m.id) ? 'border-primary-solid shadow-selected' : 'border-line')}>
-                <MarkBox checked={marked.has(m.id)} onChange={(v) => mark(m.id, v)} label={`${mediaName(m)} markieren`} className="absolute top-1 left-1 z-[1] bg-card/90" />
+                {canMark && <MarkBox checked={marked.has(m.id)} onChange={(v) => mark(m.id, v)} label={`${mediaName(m)} markieren`} className="absolute top-1 left-1 z-[1] bg-card/90" />}
                 <button type="button" className="block p-0 border-0 bg-transparent" onClick={() => setLightbox(i)} aria-label={`${mediaName(m)} groß anzeigen`}>
                   <MediaThumb m={m} className="aspect-square" />
                 </button>
@@ -234,10 +239,10 @@ export default function MediaSearch() {
         ))}
       <Pager page={page} pages={q.data?.pages ?? 1} total={q.data?.total ?? 0} onPage={setPage} />
       {lightbox !== null && items.length > 0 && <Lightbox items={items} start={lightbox} onClose={() => setLightbox(null)} onDetails={(m) => (setLightbox(null), setDetails(m.id))} />}
-      {details && <MediaDetailsDialog mediaId={details} manage={manage} onClose={() => setDetails(null)} onSaved={refresh} />}
+      {details && <MediaDetailsDialog mediaId={details} manage={may.organize} onClose={() => setDetails(null)} onSaved={refresh} />}
       {moveCopy && <MoveCopyDialog mode={moveCopy.mode} ids={moveCopy.ids} onClose={() => setMoveCopy(null)} onDone={() => (setMoveCopy(null), setMarked(new Set()), refresh())} />}
       {tagging && <TagsDialog ids={tagging.ids} current={tagging.current} onClose={() => setTagging(null)} onDone={() => (setTagging(null), refresh(), qc.invalidateQueries({ queryKey: ['media-tags'] }))} />}
-      {zip && <CrossExportDialog ids={[...marked]} originals={manage} onClose={() => setZip(false)} />}
+      {zip && <CrossExportDialog ids={[...marked]} originals={may.originals} onClose={() => setZip(false)} />}
     </div>
   );
 }

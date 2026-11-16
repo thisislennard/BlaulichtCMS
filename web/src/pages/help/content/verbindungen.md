@@ -53,7 +53,7 @@ Beides steht in der Verbindung unter Schritt **Aktivieren** und braucht das Rech
 - **Löschen** entfernt eine Verbindung, die **nie verwendet** wurde, endgültig samt Zugangsdaten.
 - Wurde sie verwendet – Veröffentlichungen auf einem sozialen Kanal, Zielkanal in einer Beitragsfassung, Einsatzmeldungen aus FE2 oder Feuersoftware Connect, amtliche Warnungen –, wird sie stattdessen **widerrufen, ihre Zugangsdaten werden gelöscht** und sie verschwindet aus den Listen. Der Veröffentlichungsverlauf und andere Bezüge bleiben erhalten und zeigen „Verbindung gelöscht“. Abrufe, der FE2-Eingang und Veröffentlichungen ignorieren sie.
 - Der Bestätigungsdialog nennt vorher, welcher der beiden Fälle eintritt.
-- Die Administration (Recht „System verwalten“) kann unter Verbindungen mit **Gelöschte anzeigen** auch widerrufene und gelöschte Verbindungen einsehen.
+- Wer „Verbindungen löschen“ hat, kann unter Verbindungen mit **Gelöschte anzeigen** auch widerrufene und gelöschte Verbindungen einsehen.
 
 ## Facebook-Seite und Instagram-Konto
 

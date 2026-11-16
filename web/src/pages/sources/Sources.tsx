@@ -169,7 +169,8 @@ export default function Sources() {
   const feeds = useQuery({ queryKey: ['rss', 'feeds'], queryFn: () => get<any[]>('/rss/feeds') });
   const items = useQuery({ queryKey: ['rss', 'items', filter], queryFn: () => get<any[]>(`/rss/items?filter=${filter}`) });
   const refresh = () => qc.invalidateQueries({ queryKey: ['rss'] });
-  const edit = can('post.edit');
+  const manage = can('source.manage');
+  const mayItems = can('source.items');
   const itemAction = async (id: string, action: string) => {
     // Merken/Ausblenden sofort zeigen, Server bestätigt im Hintergrund
     qc.setQueryData<any[]>(['rss', 'items', filter], (old) => (old ?? []).filter((i) => !(action === 'hide' && filter !== 'hidden' && i.id === id) && !(action === 'unhide' && filter === 'hidden' && i.id === id)).map((i) => (i.id === id ? { ...i, starred_at: action === 'star' ? new Date().toISOString() : action === 'unstar' ? null : i.starred_at } : i)));
@@ -181,7 +182,7 @@ export default function Sources() {
       <PageHeader
         title="Quellen"
         subtitle="RSS- und Atom-Feeds als Anregung für Themen. Einträge merken, ausblenden oder als Themenidee übernehmen."
-        actions={edit && <Button variant="primary" icon="Plus" onClick={() => setAdding(true)}>Quelle hinzufügen</Button>}
+        actions={manage && <Button variant="primary" icon="Plus" onClick={() => setAdding(true)}>Quelle hinzufügen</Button>}
       />
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_320px] items-start">
         <div className="flex flex-col gap-4 min-w-0">
@@ -201,7 +202,7 @@ export default function Sources() {
                       {i.title} <Icon name="ExternalLink" size={12} className="inline" />
                     </a>
                     {i.summary && <p className="m-0 text-sm text-fg-muted line-clamp-3">{i.summary}</p>}
-                    {edit && (
+                    {mayItems && (
                       <div className="flex flex-wrap gap-2">
                         <Button size="sm" icon="Sparkles" aria-pressed={!!i.starred_at} onClick={() => itemAction(i.id, i.starred_at ? 'unstar' : 'star')}>
                           {i.starred_at ? 'Gemerkt' : 'Merken'}
@@ -210,9 +211,11 @@ export default function Sources() {
                           {i.hidden_at ? 'Einblenden' : 'Ausblenden'}
                         </Button>
                         {i.idea_post_id ? (
-                          <Button size="sm" icon="FileText" onClick={() => nav(`/beitraege/${i.idea_post_id}`)}>
-                            Zur Themenidee
-                          </Button>
+                          can('post.view') && (
+                            <Button size="sm" icon="FileText" onClick={() => nav(`/beitraege/${i.idea_post_id}`)}>
+                              Zur Themenidee
+                            </Button>
+                          )
                         ) : (
                           <Button
                             size="sm"
@@ -220,7 +223,8 @@ export default function Sources() {
                             onClick={async () => {
                               try {
                                 const r = await post<any>(`/rss/items/${i.id}/idea`);
-                                nav(`/beitraege/${r.postId}`);
+                                if (can('post.view')) nav(`/beitraege/${r.postId}`);
+                                else refresh();
                               } catch (e) {
                                 toastError(e);
                               }
@@ -248,7 +252,7 @@ export default function Sources() {
                   {f.item_count} Einträge · {f.last_success_at ? `aktualisiert ${fmtRelative(f.last_success_at)}` : 'noch nicht abgerufen'} · alle {f.interval_min} Min.
                 </span>
                 {f.last_error && <span className="text-meta text-err">{f.last_error}</span>}
-                {edit && (
+                {manage && (
                   <span className="flex gap-2">
                     <Button size="sm" icon="RefreshCw" onClick={async () => (await post(`/rss/feeds/${f.id}/refresh`).catch(toastError), refresh())}>
                       Abrufen

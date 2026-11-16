@@ -121,14 +121,14 @@ export function FolderBar({ collectionId, folders, current, onOpen, manage, coun
                 <span className="ml-auto font-mono text-meta text-fg-muted">{counts[f.id] ?? 0}</span>
                 {f.archived_at && <span className="text-meta text-fg-muted">archiviert</span>}
               </button>
-              {manage && (
+              {(manage || onTrash) && (
                 <Menu
                   size="sm"
                   label={`Aktionen für Ordner ${f.name}`}
                   items={[
-                    { label: 'Umbenennen', icon: 'Pencil', onClick: () => setNaming({ folder: f, parent: f.parent_id }) },
-                    { label: 'Verschieben', icon: 'FolderInput', onClick: () => setMoving(f) },
-                    { label: f.archived_at ? 'Wiederherstellen' : 'Archivieren', icon: 'Archive', onClick: () => void patch(`/folders/${f.id}`, { archived: !f.archived_at }).then(onChanged, toastError) },
+                    manage ? { label: 'Umbenennen', icon: 'Pencil', onClick: () => setNaming({ folder: f, parent: f.parent_id }) } : null,
+                    manage ? { label: 'Verschieben', icon: 'FolderInput', onClick: () => setMoving(f) } : null,
+                    manage ? { label: f.archived_at ? 'Wiederherstellen' : 'Archivieren', icon: 'Archive', onClick: () => void patch(`/folders/${f.id}`, { archived: !f.archived_at }).then(onChanged, toastError) } : null,
                     onTrash
                       ? {
                           label: 'In den Papierkorb',

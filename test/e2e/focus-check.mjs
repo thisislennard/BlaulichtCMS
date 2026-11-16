@@ -539,6 +539,30 @@ try {
     await page.getByRole('button', { name: 'Abbrechen', exact: true }).click({ timeout: 3000 }).catch(() => {});
   }
 
+  // Rollen-Editor (Benutzer und Rollen → Rollen): Neue Rolle, Rechte bearbeiten, Kopie, Prüfschritt
+  if (!ONLY || ONLY.test('rollen-dialoge')) {
+    const route = '/benutzer?tab=rollen';
+    const menu = async (item) => (await page.getByRole('button', { name: 'Aktionen für Rolle Redaktion' }).click(), await page.getByRole('menuitem', { name: item }).click());
+    const dialogs = [
+      ['Neue Rolle', async () => page.getByRole('button', { name: 'Neue Rolle' }).click()],
+      ['Rolle bearbeiten', async () => menu('Rechte bearbeiten')],
+      ['Rolle kopieren', async () => menu('Als Kopie anlegen')],
+      ['Rolle: Änderung prüfen', async () => (await menu('Als Kopie anlegen'), await page.locator('[role=dialog]').first().waitFor({ timeout: 5000 }), await page.getByRole('button', { name: /^Weiter: Änderung prüfen/ }).click())],
+    ];
+    for (const [name, open] of dialogs) {
+      await gotoRoute(page, route);
+      try {
+        await open();
+        await page.locator('[role=dialog]').first().waitFor({ timeout: 5000 });
+        await sleep(400);
+        await checkFields(page, `${route} › Dialog „${name}“`, '[role=dialog]', new Set());
+      } catch (e) {
+        failures.push({ where: `${route} › ${name}`, field: '-', problem: `Dialog nicht geöffnet: ${String(e.message).split('\n')[0]}` });
+      }
+      await closeDialogs(page, route);
+    }
+  }
+
   // Befehlspalette (Strg+K)
   await gotoRoute(page, '/');
   await page.keyboard.press('Control+k');

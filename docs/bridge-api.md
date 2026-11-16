@@ -5,7 +5,7 @@ offenen Eingang. Quellcode: `wordpress-plugin/blaulichtcms-bridge/`, Server: `se
 
 ## Kopplung
 
-1. In BlaulichtCMS legt eine Person mit dem Recht „Kanäle verwalten“ eine Website an. BlaulichtCMS erzeugt einen
+1. In BlaulichtCMS legt eine Person mit dem Recht „Websites koppeln und widerrufen“ eine Website an. BlaulichtCMS erzeugt einen
    **Kopplungscode** (8 Zeichen, angezeigt als `XXXX-XXXX`, 30 Minuten gültig, einmalig). Gespeichert wird nur die Prüfsumme.
 2. Die Bridge sendet den Code:
 

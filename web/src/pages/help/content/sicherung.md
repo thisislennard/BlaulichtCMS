@@ -27,7 +27,7 @@ Unter **Einstellungen → Sicherung** erstellt BlaulichtCMS täglich eine versch
 Jede Sicherung wird nach dem Schreiben geprüft: Die Datenbanksicherung wird entschlüsselt und ihr Inhaltsverzeichnis
 gelesen, die tägliche Volume-Sicherung wird vollständig entschlüsselt und gelesen. Einmal pro Woche spielt der
 Docker-Host die Sicherung zusätzlich in eine Wegwerf-Instanz ohne Netzwerk ein und prüft, ob sie startet. Schlägt
-etwas fehl, erhalten alle mit „System verwalten“ eine Benachrichtigung. Vierteljährlich sollte der Betrieb die
+etwas fehl, erhalten alle mit „Sicherungen erstellen“ eine Benachrichtigung. Vierteljährlich sollte der Betrieb die
 Wiederherstellung auf einem anderen Rechner üben (`docs/betrieb.md`).
 
 ## Vollständige Sicherung außerhalb des Volumes (von Hand)

@@ -6,6 +6,7 @@ import { get, post, put } from "../../api/client";
 import { Badge, Button, ErrorBox, FieldWrap, Input, Notice, Switch, Table, Td, Th, cx } from "../../components/ui/core";
 import { useConfirm, useToast } from "../../components/ui/overlays";
 import { Icon } from "../../components/ui/Icon";
+import { useAuth } from "../../lib/auth";
 import { fmtDateTime, fmtRelative } from "../../lib/format";
 import { Markdown } from "../help/Markdown";
 import { FieldGrid, LoadError, SectionCard } from "./shared";
@@ -69,13 +70,14 @@ export function useUpdatesInfo(enabled = true) {
 
 /** Hinweis „Update verfügbar“ (Systemstatus). */
 export function UpdateAvailableNotice() {
-  const q = useUpdatesInfo();
+  const { can } = useAuth();
+  const q = useUpdatesInfo(can("update.view"));
   const d = q.data;
   if (!d?.available || !d.latest) return null;
   return (
     <Notice tone="info" icon="Download" title={`Update verfügbar: Version ${d.latest.version}`}>
       <p className="m-0">
-        Installiert ist {d.current}. <Link to="/einstellungen#updates">Zu den Updates</Link>
+        Installiert ist {d.current}. {can("settings.view") && <Link to="/einstellungen#updates">Zu den Updates</Link>}
       </p>
     </Notice>
   );

@@ -17,7 +17,7 @@ interface TrashData {
   media: (MediaItem & { deleted_at: string; deleted_by_name: string | null; purge_at: string | null })[];
 }
 
-/** Papierkorb (wie LiFeOS): Wiederherstellen mit „Medien verwalten“, endgültig löschen mit „Medien administrieren“. */
+/** Papierkorb (wie LiFeOS): Wiederherstellen mit „Medien löschen (Papierkorb)“, endgültig löschen mit „Medien administrieren“. */
 export default function Trash() {
   const { can } = useAuth();
   const admin = can('media.admin');

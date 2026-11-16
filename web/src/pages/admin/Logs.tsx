@@ -48,9 +48,10 @@ type Tab = "system" | "audit";
 export default function Logs() {
   const { can } = useAuth();
   const [params, setParams] = useSearchParams();
-  const canAudit = can("audit.read");
+  const canAudit = can("audit.view");
+  const canSystem = can("system.logs");
   const tab: Tab =
-    params.get("tab") === "audit" && canAudit ? "audit" : "system";
+    canAudit && (params.get("tab") === "audit" || !canSystem) ? "audit" : "system";
   return (
     <div className="flex flex-col gap-5">
       <PageHeader
@@ -64,7 +65,9 @@ export default function Logs() {
           setParams(v === "audit" ? { tab: "audit" } : {}, { replace: true })
         }
         tabs={[
-          { value: "system" as Tab, label: t("admin.logs.tabs.system") },
+          ...(canSystem
+            ? [{ value: "system" as Tab, label: t("admin.logs.tabs.system") }]
+            : []),
           ...(canAudit
             ? [{ value: "audit" as Tab, label: t("admin.logs.tabs.audit") }]
             : []),

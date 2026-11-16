@@ -4,7 +4,7 @@ Die **BlaulichtCMS Bridge** ist ein WordPress-Plugin. Sie holt freigegebene Beit
 
 - WordPress ab 6.4 mit PHP ab 8.1 und ein Konto mit dem Recht, Plugins zu installieren (Administrator).
 - Die Website muss BlaulichtCMS **per HTTPS erreichen** können (ausgehende Verbindung). Einen Eingang in WordPress braucht es nicht.
-- In BlaulichtCMS das Recht „Kanäle verwalten“.
+- In BlaulichtCMS das Recht „Websites koppeln und widerrufen“.
 
 ## Koppeln in vier Schritten
 

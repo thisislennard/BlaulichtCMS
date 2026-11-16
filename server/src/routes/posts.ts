@@ -591,6 +591,8 @@ export async function postRoutes(app: FastifyInstance) {
   app.post('/posts/:id/collect', { preHandler: requireAuth('media.collections') }, async (req) => {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
     const body = z.object({ days: z.number().int().min(1).max(3650).optional() }).parse(req.body ?? {});
+    // Die Sammlung entsteht samt Upload-Link
+    if (!req.auth!.permissions.has('media.links')) throw forbidden('Zum Erstellen des Upload-Links fehlt das Recht „Upload-Links verwalten“.');
     const post = await one<any>('SELECT p.id, r.title FROM posts p JOIN post_revisions r ON r.post_id = p.id AND r.number = p.current_revision WHERE p.id = $1', [id]);
     if (!post) throw notFound();
     const userId = req.auth!.user?.id ?? null;

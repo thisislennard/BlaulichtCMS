@@ -87,7 +87,7 @@ export default function WarningConfig() {
           { value: 'regeln', label: 'Regeln', count: c.rules.filter((r: any) => r.status === 'approved').length },
           { value: 'zustaendigkeiten', label: 'Zuständigkeiten', count: c.responsibilities.length },
           { value: 'vorlagen', label: 'Vorlagen' },
-          ...(can('system.manage') ? [{ value: 'versand' as Tab, label: 'E-Mail-Versand' }] : []),
+          ...(can('warning.settings') ? [{ value: 'versand' as Tab, label: 'E-Mail-Versand' }] : []),
         ]}
       />
 
@@ -266,7 +266,7 @@ export default function WarningConfig() {
         </div>
       )}
 
-      {tab === 'versand' && can('system.manage') && (
+      {tab === 'versand' && can('warning.settings') && (
         <Card title="E-Mail-Versand (SMTP)" subtitle="Zugangsdaten werden verschlüsselt gespeichert und nie wieder angezeigt.">
           <div className="flex flex-col gap-4">
             <Switch

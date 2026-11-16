@@ -96,7 +96,7 @@ flowchart LR
 - **Unkenntlich machen:** Bereiche verpixeln, weichzeichnen oder abdecken, Bilder zuschneiden, Videos ohne Ton
   veröffentlichen – das Original bleibt unverändert.
 - **Herunterladen:** einzelne Dateien oder als ZIP (ausgewählte, markierte, ein Ordner oder sammlungsübergreifend) mit
-  Ordnerstruktur und optional `metadaten.csv`; Originale nur mit dem Recht „Medien verwalten“.
+  Ordnerstruktur und optional `metadaten.csv`; Originale nur mit dem Recht „Originale herunterladen“.
 
 ### Beiträge schreiben
 
@@ -168,6 +168,9 @@ flowchart LR
 
 - **Rollen:** Administration, Medienverwaltung, Redaktion, Freigabe, Veröffentlichung, Warnentwurf, Warnfreigabe,
   Warnversand, Lesezugriff – kombinierbar, Rechte werden bei jeder Aktion serverseitig geprüft.
+- **Eigene Rollen und feine Rechte:** Rollen selbst anlegen, kopieren und anpassen; über 70 Rechte je Funktion
+  (ansehen, anlegen, freigeben, veröffentlichen, löschen …) in zehn Bereichen. Was jemand nicht darf, wird nicht
+  angezeigt. Vergabe nur innerhalb der eigenen Rechte, Vorschau der Änderung vor dem Speichern, sofort wirksam.
 - **Anmeldung:** Einladung per Link, Zwei-Faktor-Anmeldung mit Wiederherstellungscodes, erneute Bestätigung für
   kritische Aktionen, Schutz vor gezieltem Aussperren.
 - **Nachvollziehbar:** Aktivitätsprotokoll mit Hash-Kette gegen nachträgliche Änderungen, optional an Syslog;

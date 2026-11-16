@@ -78,11 +78,12 @@ const SERVICE_ICON: Record<string, string> = {
   disk: "HardDrive",
 };
 
-export function useSystemStatus(refetchInterval: number | false = 15_000) {
+export function useSystemStatus(refetchInterval: number | false = 15_000, enabled = true) {
   return useQuery({
     queryKey: ["system-status"],
     queryFn: () => get<SystemStatusData>("/system/status"),
     refetchInterval,
+    enabled,
   });
 }
 
@@ -110,7 +111,7 @@ function AuditIntegrityCard() {
     enabled: false,
     retry: false,
   });
-  if (!can("audit.read") && !can("system.manage")) return null;
+  if (!can("audit.view")) return null;
   const v = q.data;
   return (
     <Card
@@ -163,6 +164,7 @@ function AuditIntegrityCard() {
 }
 
 export default function SystemStatus() {
+  const { can, canAny } = useAuth();
   const q = useSystemStatus();
   const d = q.data;
   return (
@@ -311,14 +313,16 @@ export default function SystemStatus() {
         <Card
           title={t("admin.system.queue")}
           action={
-            <LinkButton
-              to="/protokolle"
-              size="sm"
-              variant="ghost"
-              icon="ScrollText"
-            >
-              {t("admin.system.showLogs")}
-            </LinkButton>
+            canAny("system.logs", "audit.view") && (
+              <LinkButton
+                to="/protokolle"
+                size="sm"
+                variant="ghost"
+                icon="ScrollText"
+              >
+                {t("admin.system.showLogs")}
+              </LinkButton>
+            )
           }
         >
           {!d ? (
@@ -447,9 +451,11 @@ export default function SystemStatus() {
             title="Keine Website gekoppelt"
             text="Der interne Redaktionsablauf funktioniert auch ohne Website."
             action={
-              <LinkButton to="/kanaele" icon="Plus">
-                Website koppeln
-              </LinkButton>
+              can("channel.sites") && (
+                <LinkButton to="/kanaele" icon="Plus">
+                  Website koppeln
+                </LinkButton>
+              )
             }
           />
         ) : (
@@ -466,9 +472,13 @@ export default function SystemStatus() {
               {d.sites.map((c) => (
                 <tr key={c.id} className="hover:bg-raised transition-colors duration-fast">
                   <Td className="pl-5">
-                    <Link to="/kanaele" className="font-medium">
-                      {c.name}
-                    </Link>
+                    {can("channel.view") ? (
+                      <Link to="/kanaele" className="font-medium">
+                        {c.name}
+                      </Link>
+                    ) : (
+                      <span className="font-medium">{c.name}</span>
+                    )}
                     <span className="block text-meta text-fg-muted font-mono">{c.site_url ?? "–"}</span>
                   </Td>
                   <Td>

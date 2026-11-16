@@ -260,7 +260,7 @@ export function UploadLinksCard({ collection, links, folders = [], onChanged }: 
   const toast = useToast();
   const toastError = useErrorToast();
   const navigate = useNavigate();
-  const { me } = useAuth();
+  const { me, can } = useAuth();
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<UploadLink | null>(null);
   const [deadline, setDeadline] = useState<UploadLink | null>(null);
@@ -289,7 +289,7 @@ export function UploadLinksCard({ collection, links, folders = [], onChanged }: 
     >
       {me?.instance.privacy?.incomplete && (
         <Notice tone="warning" className="mb-2" title="Datenschutzangaben fehlen">
-          Die Upload-Seite nennt noch keine verantwortliche Stelle bzw. keine Datenschutzerklärung (Art. 13 DSGVO). Bitte unter <Link to="/einstellungen#datenschutz">Einstellungen → Datenschutz</Link> eintragen.
+          Die Upload-Seite nennt noch keine verantwortliche Stelle bzw. keine Datenschutzerklärung (Art. 13 DSGVO). Bitte unter {can('settings.view') ? <Link to="/einstellungen#datenschutz">Einstellungen → Datenschutz</Link> : 'Einstellungen → Datenschutz'} eintragen.
         </Notice>
       )}
       {links.length === 0 && <p className="m-0 text-sm text-fg-muted">Noch kein Upload-Link.</p>}
@@ -313,7 +313,7 @@ export function UploadLinksCard({ collection, links, folders = [], onChanged }: 
                     label={`Aktionen für ${l.label || 'Upload-Link'}`}
                     items={[
                       { label: 'Bearbeiten', icon: 'Pencil', onClick: () => setEditing(l) },
-                      { label: 'Gestaltung der Seite', icon: 'Palette', onClick: () => navigate(`/medien/gestaltung?link=${l.id}`) },
+                      can('media.design') ? { label: 'Gestaltung der Seite', icon: 'Palette', onClick: () => navigate(`/medien/gestaltung?link=${l.id}`) } : null,
                       l.state === 'paused'
                         ? { label: 'Fortsetzen', icon: 'Play', onClick: () => act(() => post(`/upload-links/${l.id}/resume`), 'Link fortgesetzt') }
                         : l.state === 'active'

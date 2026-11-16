@@ -9,8 +9,8 @@ export function MediaNav() {
   const items = [
     { to: '/medien', label: 'Sammlungen', icon: 'Images', end: true, show: true },
     { to: '/medien/dateien', label: 'Alle Dateien', icon: 'Search', end: false, show: true },
-    { to: '/medien/gestaltung', label: 'Gestaltung', icon: 'Palette', end: false, show: can('media.manage') },
-    { to: '/medien/papierkorb', label: 'Papierkorb', icon: 'Trash2', end: false, show: can('media.manage') },
+    { to: '/medien/gestaltung', label: 'Gestaltung', icon: 'Palette', end: false, show: can('media.design') },
+    { to: '/medien/papierkorb', label: 'Papierkorb', icon: 'Trash2', end: false, show: can('media.trash') },
     { to: '/medien/verwaltung', label: 'Verwaltung', icon: 'ShieldCheck', end: false, show: can('media.admin') },
   ].filter((i) => i.show);
   return (

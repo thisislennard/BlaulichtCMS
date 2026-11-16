@@ -14,12 +14,13 @@ import { DEFAULT_VALIDITY, ValidityPicker, validityPayload, type Validity } from
 export function NewCollectionDialog({ open, onClose, postId, defaultTitle }: { open: boolean; onClose: () => void; postId?: string; defaultTitle?: string }) {
   const nav = useNavigate();
   const toastError = useErrorToast();
+  const mayLinks = useAuth().can('media.links');
   const [title, setTitle] = useState(defaultTitle ?? '');
   const [purpose, setPurpose] = useState('');
   const [note, setNote] = useState('');
   const [validity, setValidity] = useState<Validity>(DEFAULT_VALIDITY);
   const [eventDate, setEventDate] = useState('');
-  const [createLink, setCreateLink] = useState(true);
+  const [createLink, setCreateLink] = useState(mayLinks);
   const [busy, setBusy] = useState(false);
   return (
     <Dialog
@@ -66,7 +67,7 @@ export function NewCollectionDialog({ open, onClose, postId, defaultTitle }: { o
         <FieldWrap label="Veranstaltungsdatum (optional)" htmlFor="c-date">
           <Input id="c-date" type="date" value={eventDate} onChange={(e) => setEventDate(e.target.value)} className="max-w-[200px]" />
         </FieldWrap>
-        <Switch checked={createLink} onChange={setCreateLink} label="Upload-Link gleich erstellen" description="Personen ohne Konto können damit Fotos und Videos in diese Sammlung hochladen." />
+        {mayLinks && <Switch checked={createLink} onChange={setCreateLink} label="Upload-Link gleich erstellen" description="Personen ohne Konto können damit Fotos und Videos in diese Sammlung hochladen." />}
         {createLink && <ValidityPicker value={validity} onChange={setValidity} idPrefix="c" />}
       </div>
     </Dialog>
@@ -96,7 +97,7 @@ export default function Collections() {
         title="Medien"
         subtitle="Sammlungen mit Fotos und Videos. Neue Uploads landen zuerst in der Prüfung."
         actions={
-          can('media.manage') && (
+          can('media.collections') && (
             <Button variant="primary" icon="Plus" onClick={() => setCreate(true)}>
               Neue Sammlung
             </Button>
@@ -125,7 +126,7 @@ export default function Collections() {
           icon="Images"
           title={term || status !== 'active' ? 'Keine passende Sammlung' : 'Noch keine Sammlung'}
           text={term || status !== 'active' ? 'Suche oder Filter anpassen.' : 'Lege eine Sammlung an oder nutze im Beitrag „Fotos und Videos sammeln“.'}
-          action={!term && status === 'active' && can('media.manage') && <Button variant="primary" icon="Plus" onClick={() => setCreate(true)}>Neue Sammlung</Button>}
+          action={!term && status === 'active' && can('media.collections') && <Button variant="primary" icon="Plus" onClick={() => setCreate(true)}>Neue Sammlung</Button>}
         />
       )}
       {list && list.length > 0 && (

@@ -18,6 +18,8 @@ export interface LayoutResponse {
   source: 'personal' | 'role' | 'shared' | 'default';
   widgets: string[];
   templates?: string[];
+  /** Rollen für gemeinsame Vorlagen (mitgelieferte und eigene), nur mit „Dashboard-Vorlagen speichern“ */
+  templateRoles?: { id: string; label: string }[];
 }
 
 /** Arbeitskopie im Bearbeitungsmodus: Spalten tragen einen festen Schlüssel, damit sie sich verschieben lassen. */

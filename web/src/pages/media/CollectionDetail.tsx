@@ -67,7 +67,19 @@ export default function CollectionDetail() {
   });
   usePageMeta({ title: q.data?.collection.title });
   const refresh = () => qc.invalidateQueries({ queryKey: ['collection', id] });
-  const manage = can('media.manage');
+  // Jede Aktion hängt an genau dem Recht, das der Server dafür verlangt
+  const may = {
+    upload: can('media.upload'),
+    links: can('media.links'),
+    review: can('media.review'),
+    organize: can('media.organize'),
+    redact: can('media.redact'),
+    trash: can('media.trash'),
+    collections: can('media.collections'),
+    originals: can('media.download_original'),
+    export: can('media.export'),
+  };
+  const canMark = may.review || may.organize || may.trash || may.export;
   const [privacyItem, setPrivacyItem] = useState<MediaItem | null>(null);
   const setFilter = (f: Filter) => (setFilterState(f), setPage(1));
   const mediaAdmin = can('media.admin');
@@ -172,39 +184,82 @@ export default function CollectionDetail() {
   const menuFor = (m: MediaItem): MenuItems => [
     { label: 'Groß anzeigen', icon: 'Maximize2', onClick: () => setLightbox(pageItems.indexOf(m)) },
     { label: 'Details', icon: 'Info', onClick: () => setDetails(m.id) },
-    // Originale können Standortdaten enthalten – nur mit „Medien verwalten“
-    manage && m.status === 'ready' ? { label: 'Original herunterladen', icon: 'Download', onClick: () => window.open(`/api/v1/media/${m.id}/original`, '_blank') } : null,
+    // Originale können Standortdaten enthalten – nur mit „Originale herunterladen“
+    may.originals && m.status === 'ready' ? { label: 'Original herunterladen', icon: 'Download', onClick: () => window.open(`/api/v1/media/${m.id}/original`, '_blank') } : null,
     m.has_public && m.status === 'ready' ? { label: 'Öffentliche Fassung herunterladen', icon: 'Download', onClick: () => window.open(`/api/v1/media/${m.id}/public?v=${m.public_rev ?? 0}`, '_blank') } : null,
-    manage && m.status === 'ready' ? { label: 'Datenschutz und Unkenntlichmachen', icon: 'EyeOff', onClick: () => setPrivacyItem(m) } : null,
-    manage ? { label: 'Schlagworte', icon: 'Tags', onClick: () => setTagging({ ids: [m.id], current: m.tags ?? [] }) } : null,
-    manage ? { label: 'Verschieben', icon: 'FolderInput', onClick: () => setMoveCopy({ mode: 'move', ids: [m.id] }) } : null,
-    manage && m.status === 'ready' ? { label: 'Kopieren', icon: 'CopyPlus', onClick: () => setMoveCopy({ mode: 'copy', ids: [m.id] }) } : null,
-    manage && m.status === 'ready' && m.has_preview ? { label: 'Als Titelbild', icon: 'Star', onClick: () => void patch(`/collections/${id}`, { coverMediaId: m.id }).then(() => (toast({ tone: 'success', title: 'Titelbild gesetzt' }), refresh()), toastError) } : null,
-    manage && m.status === 'ready' && m.selection !== 'on_hold' ? { label: 'Zurückstellen', icon: 'Pause', onClick: () => setSelection([m.id], 'on_hold').catch(toastError) } : null,
-    manage && m.status === 'ready' && m.selection !== 'pending' ? { label: 'Auswahl zurücksetzen', icon: 'Undo2', onClick: () => setSelection([m.id], 'pending').catch(toastError) } : null,
-    manage && m.status === 'ready' ? { label: 'Nach vorne', icon: 'ArrowUp', onClick: () => reorder(m.id, null, -1) } : null,
-    manage && m.status === 'ready' ? { label: 'Nach hinten', icon: 'ArrowDown', onClick: () => reorder(m.id, null, 1) } : null,
-    manage ? { label: 'In den Papierkorb', icon: 'Trash2', danger: true, onClick: () => void deleteOne(m) } : null,
+    may.redact && m.status === 'ready' ? { label: 'Datenschutz und Unkenntlichmachen', icon: 'EyeOff', onClick: () => setPrivacyItem(m) } : null,
+    may.organize ? { label: 'Schlagworte', icon: 'Tags', onClick: () => setTagging({ ids: [m.id], current: m.tags ?? [] }) } : null,
+    may.organize ? { label: 'Verschieben', icon: 'FolderInput', onClick: () => setMoveCopy({ mode: 'move', ids: [m.id] }) } : null,
+    may.organize && m.status === 'ready' ? { label: 'Kopieren', icon: 'CopyPlus', onClick: () => setMoveCopy({ mode: 'copy', ids: [m.id] }) } : null,
+    may.collections && m.status === 'ready' && m.has_preview ? { label: 'Als Titelbild', icon: 'Star', onClick: () => void patch(`/collections/${id}`, { coverMediaId: m.id }).then(() => (toast({ tone: 'success', title: 'Titelbild gesetzt' }), refresh()), toastError) } : null,
+    may.review && m.status === 'ready' && m.selection !== 'on_hold' ? { label: 'Zurückstellen', icon: 'Pause', onClick: () => setSelection([m.id], 'on_hold').catch(toastError) } : null,
+    may.review && m.status === 'ready' && m.selection !== 'pending' ? { label: 'Auswahl zurücksetzen', icon: 'Undo2', onClick: () => setSelection([m.id], 'pending').catch(toastError) } : null,
+    may.organize && m.status === 'ready' ? { label: 'Nach vorne', icon: 'ArrowUp', onClick: () => reorder(m.id, null, -1) } : null,
+    may.organize && m.status === 'ready' ? { label: 'Nach hinten', icon: 'ArrowDown', onClick: () => reorder(m.id, null, 1) } : null,
+    may.trash ? { label: 'In den Papierkorb', icon: 'Trash2', danger: true, onClick: () => void deleteOne(m) } : null,
   ];
 
   if (q.isLoading) return <SkeletonRows rows={6} />;
   if (q.error) return <ErrorBox title="Sammlung konnte nicht geladen werden">{(q.error as Error).message}</ErrorBox>;
   const c = q.data!.collection;
-  const canDrag = manage && filter !== 'problems' && prefs.view === 'grid';
+  const canDrag = may.organize && filter !== 'problems' && prefs.view === 'grid';
   if (c.deleted_at)
     return (
       <div className="flex flex-col gap-5">
         <PageHeader title={c.title} subtitle="Diese Sammlung liegt im Papierkorb." />
         <Notice tone="warning" title="Im Papierkorb">
           Upload-Links dieser Sammlung funktionieren nicht. Nach Ablauf der Frist wird sie endgültig gelöscht.
-          <div className="mt-2">
-            <Button size="sm" icon="Undo2" onClick={() => void post('/trash/restore', { type: 'collection', id }).then(refresh, toastError)}>
-              Wiederherstellen
-            </Button>
-          </div>
+          {may.trash && (
+            <div className="mt-2">
+              <Button size="sm" icon="Undo2" onClick={() => void post('/trash/restore', { type: 'collection', id }).then(refresh, toastError)}>
+                Wiederherstellen
+              </Button>
+            </div>
+          )}
         </Notice>
       </div>
     );
+
+  const headerMenu: MenuItems = [
+    may.collections ? { label: 'Bearbeiten', icon: 'Pencil', onClick: () => setEditing(true) } : null,
+    may.export ? { label: 'Sammeldownload (ZIP)', icon: 'Download', onClick: () => setExporting({}) } : null,
+    may.collections && can('post.view') ? { label: 'Beitrag zuordnen', icon: 'FileText', onClick: () => setAssign(true) } : null,
+    may.collections
+      ? {
+          label: c.archived_at ? 'Wiederherstellen' : 'Archivieren',
+          icon: 'Archive',
+          onClick: async () => {
+            await patch(`/collections/${id}`, { archived: !c.archived_at }).catch(toastError);
+            refresh();
+          },
+        }
+      : null,
+    may.trash
+      ? {
+          label: 'In den Papierkorb',
+          icon: 'Trash2',
+          danger: true,
+          onClick: async () => {
+            if (
+              !(await ask({
+                title: 'Sammlung in den Papierkorb?',
+                text: `„${c.title}“ kommt mit allen Dateien in den Papierkorb. Ihre Upload-Links funktionieren dort nicht mehr; nach dem Wiederherstellen gelten sie wieder. Nach Ablauf der Frist wird alles endgültig gelöscht. Dateien, die ein laufender Beitrag verwendet, verhindern das.`,
+                confirmLabel: 'In den Papierkorb',
+              }))
+            )
+              return;
+            try {
+              await del<{ media: number }>(`/collections/${id}`);
+              toast({ tone: 'success', title: 'Sammlung im Papierkorb', text: 'Unter Medien → Papierkorb lässt sie sich wiederherstellen.' });
+              qc.removeQueries({ queryKey: ['collection', id] });
+              navigate('/medien');
+            } catch (e) {
+              toastError(e);
+            }
+          },
+        }
+      : null,
+  ];
 
   return (
     <div className="flex flex-col gap-5">
@@ -224,59 +279,24 @@ export default function CollectionDetail() {
           </span>
         }
         actions={
-          manage && (
+          (may.upload || may.review || headerMenu.some(Boolean)) && (
             <>
-              <Button icon="Upload" onClick={() => fileRef.current?.click()} disabled={!!c.archived_at}>
-                Hochladen
-              </Button>
-              {lists.all.length > 0 && (
+              {may.upload && (
+                <Button icon="Upload" onClick={() => fileRef.current?.click()} disabled={!!c.archived_at}>
+                  Hochladen
+                </Button>
+              )}
+              {may.review && lists.all.length > 0 && (
                 <Button variant={lists.pending.length ? 'primary' : 'secondary'} icon="CheckSquare" onClick={() => setReview(true)}>
                   {lists.pending.length ? `${lists.pending.length} sichten` : 'Sichten'}
                 </Button>
               )}
-              <Menu
-                items={[
-                  { label: 'Bearbeiten', icon: 'Pencil', onClick: () => setEditing(true) },
-                  { label: 'Sammeldownload (ZIP)', icon: 'Download', onClick: () => setExporting({}) },
-                  { label: 'Beitrag zuordnen', icon: 'FileText', onClick: () => setAssign(true) },
-                  {
-                    label: c.archived_at ? 'Wiederherstellen' : 'Archivieren',
-                    icon: 'Archive',
-                    onClick: async () => {
-                      await patch(`/collections/${id}`, { archived: !c.archived_at }).catch(toastError);
-                      refresh();
-                    },
-                  },
-                  {
-                    label: 'In den Papierkorb',
-                    icon: 'Trash2',
-                    danger: true,
-                    onClick: async () => {
-                      if (
-                        !(await ask({
-                          title: 'Sammlung in den Papierkorb?',
-                          text: `„${c.title}“ kommt mit allen Dateien in den Papierkorb. Ihre Upload-Links funktionieren dort nicht mehr; nach dem Wiederherstellen gelten sie wieder. Nach Ablauf der Frist wird alles endgültig gelöscht. Dateien, die ein laufender Beitrag verwendet, verhindern das.`,
-                          confirmLabel: 'In den Papierkorb',
-                        }))
-                      )
-                        return;
-                      try {
-                        await del<{ media: number }>(`/collections/${id}`);
-                        toast({ tone: 'success', title: 'Sammlung im Papierkorb', text: 'Unter Medien → Papierkorb lässt sie sich wiederherstellen.' });
-                        qc.removeQueries({ queryKey: ['collection', id] });
-                        navigate('/medien');
-                      } catch (e) {
-                        toastError(e);
-                      }
-                    },
-                  },
-                ]}
-              />
+              {headerMenu.some(Boolean) && <Menu items={headerMenu} />}
             </>
           )
         }
       />
-      <input
+      {may.upload && <input
         ref={fileRef}
         type="file"
         multiple
@@ -301,7 +321,7 @@ export default function CollectionDetail() {
           toast({ tone: failed ? 'warning' : 'success', title: `${files.length - failed} Datei(en) hochgeladen`, text: 'Sie werden jetzt geprüft.' });
           refresh();
         }}
-      />
+      />}
       {upload && (
         <Notice title="Upload läuft">
           {upload.map((u) => (
@@ -312,23 +332,26 @@ export default function CollectionDetail() {
         </Notice>
       )}
 
-      {manage && <UploadLinksCard collection={c} links={q.data!.links} folders={folders} onChanged={refresh} />}
+      {may.links && <UploadLinksCard collection={c} links={q.data!.links} folders={folders} onChanged={refresh} />}
 
       <FolderBar
         collectionId={id}
         folders={folders}
         current={folder}
         onOpen={openFolder}
-        manage={manage}
+        manage={may.organize}
         counts={folderCounts}
         deep={deep}
         setDeep={setDeep}
         onChanged={refresh}
-        onTrash={(f) =>
-          void del(`/folders/${f.id}`).then(
-            () => (toast({ tone: 'success', title: 'Ordner im Papierkorb' }), folder && (folder === f.id || descendantIds(folders, f.id).includes(folder)) && openFolder(f.parent_id), refresh()),
-            toastError,
-          )
+        onTrash={
+          may.trash
+            ? (f) =>
+                void del(`/folders/${f.id}`).then(
+                  () => (toast({ tone: 'success', title: 'Ordner im Papierkorb' }), folder && (folder === f.id || descendantIds(folders, f.id).includes(folder)) && openFolder(f.parent_id), refresh()),
+                  toastError,
+                )
+            : undefined
         }
       />
 
@@ -347,7 +370,7 @@ export default function CollectionDetail() {
       {current.length > 0 && (
         <div className="flex flex-wrap items-center gap-3 justify-between">
           <div className="flex items-center gap-2 text-sm">
-            {manage && (
+            {canMark && (
               <label className="inline-flex items-center gap-2 cursor-pointer">
                 <input type="checkbox" className="w-4 h-4 accent-[var(--bc-primary-solid)]" checked={allOnPage} onChange={(e) => setMarked((s) => {
                   const n = new Set(s);
@@ -374,35 +397,45 @@ export default function CollectionDetail() {
           </div>
         </div>
       )}
-      {manage && marked.size > 0 && (
+      {canMark && marked.size > 0 && (
         <div role="region" aria-label="Sammelaktionen" className="sticky top-2 z-10 flex flex-wrap items-center gap-2 p-2.5 rounded-card border border-line-strong bg-card shadow-float">
           <span className="font-mono text-sm px-1">{marked.size} markiert</span>
-          <Button size="sm" icon="Check" onClick={() => void bulk({ action: 'selection', selection: 'selected' })}>Auswählen</Button>
-          <Button size="sm" icon="SkipForward" onClick={() => void bulk({ action: 'selection', selection: 'skipped' })}>Überspringen</Button>
-          <Button size="sm" icon="Pause" onClick={() => void bulk({ action: 'selection', selection: 'on_hold' })}>Zurückstellen</Button>
-          <Button size="sm" icon="Undo2" onClick={() => void bulk({ action: 'selection', selection: 'pending' })}>Zurücksetzen</Button>
-          <Button size="sm" icon="Tags" onClick={() => setTagging({ ids: [...marked] })}>Schlagworte</Button>
-          <Button size="sm" icon="FolderInput" onClick={() => setMoveCopy({ mode: 'move', ids: [...marked] })}>Verschieben</Button>
-          <Button size="sm" icon="CopyPlus" onClick={() => setMoveCopy({ mode: 'copy', ids: [...marked] })}>Kopieren</Button>
-          <Button size="sm" icon="Download" onClick={() => setExporting({ ids: [...marked] })}>ZIP</Button>
-          <Button
-            size="sm"
-            variant="danger"
-            icon="Trash2"
-            onClick={async () => {
-              if (!(await ask({ title: `${marked.size} Datei(en) in den Papierkorb?`, text: 'Die markierten Dateien kommen in den Papierkorb und lassen sich dort wiederherstellen. Dateien in laufenden Beiträgen verhindern die Aktion.', confirmLabel: 'In den Papierkorb' }))) return;
-              await bulk({ action: 'delete' });
-            }}
-          >
-            Papierkorb
-          </Button>
+          {may.review && (
+            <>
+              <Button size="sm" icon="Check" onClick={() => void bulk({ action: 'selection', selection: 'selected' })}>Auswählen</Button>
+              <Button size="sm" icon="SkipForward" onClick={() => void bulk({ action: 'selection', selection: 'skipped' })}>Überspringen</Button>
+              <Button size="sm" icon="Pause" onClick={() => void bulk({ action: 'selection', selection: 'on_hold' })}>Zurückstellen</Button>
+              <Button size="sm" icon="Undo2" onClick={() => void bulk({ action: 'selection', selection: 'pending' })}>Zurücksetzen</Button>
+            </>
+          )}
+          {may.organize && (
+            <>
+              <Button size="sm" icon="Tags" onClick={() => setTagging({ ids: [...marked] })}>Schlagworte</Button>
+              <Button size="sm" icon="FolderInput" onClick={() => setMoveCopy({ mode: 'move', ids: [...marked] })}>Verschieben</Button>
+              <Button size="sm" icon="CopyPlus" onClick={() => setMoveCopy({ mode: 'copy', ids: [...marked] })}>Kopieren</Button>
+            </>
+          )}
+          {may.export && <Button size="sm" icon="Download" onClick={() => setExporting({ ids: [...marked] })}>ZIP</Button>}
+          {may.trash && (
+            <Button
+              size="sm"
+              variant="danger"
+              icon="Trash2"
+              onClick={async () => {
+                if (!(await ask({ title: `${marked.size} Datei(en) in den Papierkorb?`, text: 'Die markierten Dateien kommen in den Papierkorb und lassen sich dort wiederherstellen. Dateien in laufenden Beiträgen verhindern die Aktion.', confirmLabel: 'In den Papierkorb' }))) return;
+                await bulk({ action: 'delete' });
+              }}
+            >
+              Papierkorb
+            </Button>
+          )}
           <Button size="sm" variant="ghost" icon="X" onClick={() => setMarked(new Set())}>Markierung aufheben</Button>
         </div>
       )}
       {current.length === 0 ? (
-        <EmptyState icon="Images" title={filter === 'pending' ? 'Nichts zu sichten' : 'Keine Dateien'} text={filter === 'pending' && media.length === 0 ? 'Teile den Upload-Link oder lade selbst Dateien hoch.' : undefined} />
+        <EmptyState icon="Images" title={filter === 'pending' ? 'Nichts zu sichten' : 'Keine Dateien'} text={filter === 'pending' && media.length === 0 && (may.upload || may.links) ? 'Teile den Upload-Link oder lade selbst Dateien hoch.' : undefined} />
       ) : prefs.view === 'list' ? (
-        <MediaList items={pageItems} marked={manage ? marked : undefined} onMark={manage ? mark : undefined} onOpen={setLightbox} menu={menuFor} />
+        <MediaList items={pageItems} marked={canMark ? marked : undefined} onMark={canMark ? mark : undefined} onOpen={setLightbox} menu={menuFor} />
       ) : (
         <ul className="m-0 p-0 list-none grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
           {pageItems.map((m, i) => (
@@ -415,7 +448,7 @@ export default function CollectionDetail() {
               onDragEnd={() => setDragId(null)}
               className={cx('relative border rounded-card overflow-hidden bg-card flex flex-col', marked.has(m.id) ? 'border-primary-solid shadow-selected' : m.selection === 'selected' ? 'border-ok' : 'border-line', dragId === m.id && 'opacity-50', canDrag && 'cursor-grab')}
             >
-              {manage && <MarkBox checked={marked.has(m.id)} onChange={(v) => mark(m.id, v)} label={`${mediaName(m)} markieren`} className="absolute top-1 left-1 z-[1] bg-card/90" />}
+              {canMark && <MarkBox checked={marked.has(m.id)} onChange={(v) => mark(m.id, v)} label={`${mediaName(m)} markieren`} className="absolute top-1 left-1 z-[1] bg-card/90" />}
               <button type="button" className="block p-0 border-0 bg-transparent" onClick={() => setLightbox(i)} aria-label={`${mediaName(m)} groß anzeigen`}>
                 <MediaThumb m={m} className="aspect-square" />
               </button>
@@ -449,7 +482,7 @@ export default function CollectionDetail() {
                 )}
                 <div className="flex items-center gap-1 flex-wrap">
                   {m.status === 'ready' && m.selection !== 'pending' && <StatusBadge status={m.selection!} />}
-                  {manage && m.status === 'ready' && (
+                  {may.review && m.status === 'ready' && (
                     <>
                       {m.selection !== 'selected' && (
                         <Button size="sm" icon="Check" aria-label={`${mediaName(m)} auswählen`} onClick={() => setSelection([m.id], 'selected').catch(toastError)}>
@@ -481,10 +514,10 @@ export default function CollectionDetail() {
         />
       )}
       {lightbox !== null && pageItems.length > 0 && <Lightbox items={pageItems} start={lightbox} onClose={() => setLightbox(null)} onDetails={(m) => (setLightbox(null), setDetails(m.id))} />}
-      {details && <MediaDetailsDialog mediaId={details} manage={manage} onClose={() => setDetails(null)} onSaved={refresh} />}
+      {details && <MediaDetailsDialog mediaId={details} manage={may.organize} onClose={() => setDetails(null)} onSaved={refresh} />}
       {privacyItem && <PrivacyDialog m={privacyItem} onClose={() => setPrivacyItem(null)} onSaved={() => refresh()} />}
       {blockedActions.dialog}
-      {exporting && <ExportDialog collectionId={id} selectedCount={lists.selected.length} ids={exporting.ids} folders={folders} currentFolder={folder} originals={manage} onClose={() => setExporting(null)} />}
+      {exporting && <ExportDialog collectionId={id} selectedCount={lists.selected.length} ids={exporting.ids} folders={folders} currentFolder={folder} originals={may.originals} onClose={() => setExporting(null)} />}
       {moveCopy && <MoveCopyDialog mode={moveCopy.mode} ids={moveCopy.ids} defaultCollection={id} onClose={() => setMoveCopy(null)} onDone={() => (setMoveCopy(null), setMarked(new Set()), refresh())} />}
       {tagging && <TagsDialog ids={tagging.ids} current={tagging.current} onClose={() => setTagging(null)} onDone={() => (setTagging(null), refresh(), qc.invalidateQueries({ queryKey: ['media-tags'] }))} />}
       {assign && <AssignPostDialog collectionId={id} current={c.post_id} onClose={() => (setAssign(false), refresh())} />}
@@ -552,7 +585,7 @@ function ExportDialog({ collectionId, selectedCount, ids, folders, currentFolder
               <span className="block text-meta text-fg-muted">Dateiname, Anzeigename, Beschreibung, Schlagworte, Ordner, Eingang, Größe, Prüfsumme, Sichtung, Markierungen. Angaben zu Hochladenden nur bei Originalen.</span>
             </span>
           </label>
-          <FieldWrap label="Fassung" htmlFor="ex-var" help={originals ? 'Öffentliche Fassungen enthalten keine Standort- und Kameradaten. Originale sind nur für den internen Gebrauch.' : 'Öffentliche Fassungen enthalten keine Standort- und Kameradaten. Originale dürfen nur Personen mit „Medien verwalten“ herunterladen.'}>
+          <FieldWrap label="Fassung" htmlFor="ex-var" help={originals ? 'Öffentliche Fassungen enthalten keine Standort- und Kameradaten. Originale sind nur für den internen Gebrauch.' : 'Öffentliche Fassungen enthalten keine Standort- und Kameradaten. Originale dürfen nur Personen mit dem Recht „Originale herunterladen“ laden.'}>
             <Select id="ex-var" value={variant} onChange={(e) => setVariant(e.target.value as any)}>
               <option value="public">Öffentliche Fassung (empfohlen)</option>
               <option value="original" disabled={!originals}>Originale</option>

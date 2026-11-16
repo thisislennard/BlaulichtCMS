@@ -44,12 +44,12 @@ export default function ConnectionDetail() {
   const { id = '' } = useParams();
   const [params, setParams] = useSearchParams();
   const qc = useQueryClient();
-  const { me } = useAuth();
+  const { can } = useAuth();
   const nav = useNavigate();
   const toast = useToast();
   const toastError = useErrorToast();
   const q = useQuery({ queryKey: ['connection', id], queryFn: () => get<any>(`/connections/${id}`) });
-  const sites = useQuery({ queryKey: ['sites'], queryFn: () => get<any[]>('/sites') });
+  const sites = useQuery({ queryKey: ['sites'], queryFn: () => get<any[]>('/sites'), enabled: can('channel.view') });
   const c = q.data;
   // Empfangsprotokoll als eigene Ansicht neben den Schritten, direkt aufrufbar über ?ansicht=empfangsprotokoll
   const [step, setStepState] = useState<Step | 'empfang'>(() => (params.get('ansicht') === 'empfangsprotokoll' ? 'empfang' : 'verbinden'));
@@ -172,7 +172,7 @@ export default function ConnectionDetail() {
               </li>
             );
           })}
-          {RECEIPT_KINDS.includes(c.kind) && (
+          {RECEIPT_KINDS.includes(c.kind) && can('connection.log') && (
             <li className="pl-2 ml-1 border-l border-line">
               <button type="button" onClick={() => setStep('empfang')} aria-current={step === 'empfang' ? 'page' : undefined} className={cx('flex items-center gap-2 h-9 px-3 rounded-full border text-sm font-medium', step === 'empfang' ? 'bg-primary text-on-primary border-primary' : 'bg-card border-line hover:bg-raised')}>
                 <Icon name="ScrollText" size={14} />
@@ -417,8 +417,8 @@ export default function ConnectionDetail() {
           {c.private_target && (
             <Card title="Internes Ziel">
               <div className="flex flex-col gap-2 text-sm">
-                <p className="m-0">Die Adresse zeigt auf <code>{c.private_target}</code>. Interne Ziele (privates Netz) sind gesperrt, bis die Plattform-Administration sie ausdrücklich freigibt.</p>
-                {c.private_approved_at ? <Badge tone="success">Freigegeben {fmtDateTime(c.private_approved_at)}</Badge> : me?.user && <div><Button size="sm" icon="ShieldCheck" onClick={async () => (await ask({ title: 'Internes Ziel freigeben?', text: `BlaulichtCMS darf danach „${c.private_target}“ im eigenen Netz abrufen. Nur freigeben, wenn das Ziel bekannt und vertrauenswürdig ist.`, confirmLabel: 'Freigeben', danger: false })) && act(() => post(`/connections/${id}/approve-private`, { host: c.private_target }), 'Internes Ziel freigegeben')}>Internes Ziel freigeben</Button></div>}
+                <p className="m-0">Die Adresse zeigt auf <code>{c.private_target}</code>. Interne Ziele (privates Netz) sind gesperrt, bis jemand mit dem Recht „Interne Zieladressen erlauben“ sie ausdrücklich freigibt.</p>
+                {c.private_approved_at ? <Badge tone="success">Freigegeben {fmtDateTime(c.private_approved_at)}</Badge> : can('connection.private_targets') && <div><Button size="sm" icon="ShieldCheck" onClick={async () => (await ask({ title: 'Internes Ziel freigeben?', text: `BlaulichtCMS darf danach „${c.private_target}“ im eigenen Netz abrufen. Nur freigeben, wenn das Ziel bekannt und vertrauenswürdig ist.`, confirmLabel: 'Freigeben', danger: false })) && act(() => post(`/connections/${id}/approve-private`, { host: c.private_target }), 'Internes Ziel freigegeben')}>Internes Ziel freigeben</Button></div>}
               </div>
             </Card>
           )}
@@ -447,7 +447,7 @@ export default function ConnectionDetail() {
             ) : (
               <p className="m-0 text-sm text-fg-muted">Noch nicht getestet.</p>
             )}
-            {RECEIPT_KINDS.includes(c.kind) && (
+            {RECEIPT_KINDS.includes(c.kind) && can('connection.log') && (
               <p className="m-0 text-meta text-fg-muted">
                 Was genau angekommen ist – jede Meldung mit Entscheidung, Grund und Rohdaten – zeigt das{' '}
                 <button type="button" className="underline hover:text-fg" onClick={() => setStep('empfang')}>Empfangsprotokoll</button>.
@@ -524,7 +524,7 @@ export default function ConnectionDetail() {
                 {c.status === 'active' && <Button icon="PowerOff" onClick={() => act(() => post(`/connections/${id}/disable`), 'Angehalten')}>Anhalten</Button>}
                 {(c.kind === 'warnfeed' || c.kind === 'feuersoftware') && c.status === 'active' && <Button icon="RefreshCw" loading={busy} onClick={() => act(() => post(`/connections/${id}/refresh`), 'Abgerufen')}>Jetzt abrufen</Button>}
                 {!revoked && <Button variant="danger" icon="Ban" onClick={async () => (await ask({ title: 'Verbindung widerrufen?', text: 'Die gespeicherten Zugangsdaten werden gelöscht. Für eine neue Anbindung ist eine neue Verbindung nötig.', confirmLabel: 'Widerrufen' })) && act(() => post(`/connections/${id}/revoke`), 'Widerrufen')}>Widerrufen</Button>}
-                {!deleted && <Button variant="danger" icon="Trash2" disabled={busy} onClick={remove}>Löschen</Button>}
+                {!deleted && can('connection.delete') && <Button variant="danger" icon="Trash2" disabled={busy} onClick={remove}>Löschen</Button>}
               </div>
             </div>
           </Card>
@@ -564,7 +564,7 @@ export default function ConnectionDetail() {
         </div>
       )}
 
-      {step === 'empfang' && <ReceiptLog id={id} kind={c.kind} />}
+      {step === 'empfang' && can('connection.log') && <ReceiptLog id={id} kind={c.kind} />}
     </div>
   );
 }

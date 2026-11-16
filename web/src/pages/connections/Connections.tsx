@@ -22,6 +22,7 @@ export default function Connections() {
   const nav = useNavigate();
   const toastError = useErrorToast();
   const { can } = useAuth();
+  const configure = can('connection.configure');
   const [showDeleted, setShowDeleted] = useState(false);
   const q = useQuery({ queryKey: ['connections', showDeleted], queryFn: () => get<any[]>(`/connections${showDeleted ? '?deleted=1' : ''}`) });
   const [create, setCreate] = useState<{ kind: string; name: string } | null>(null);
@@ -42,19 +43,21 @@ export default function Connections() {
         title="Verbindungen"
         subtitle="Optional: Jede Verbindung durchläuft Verbinden → Testen → Vorschau → Aktivieren. BlaulichtCMS funktioniert auch ganz ohne."
         actions={
-          <Button variant="primary" icon="Plus" onClick={() => setCreate({ kind: 'fe2', name: '' })}>
-            Neue Verbindung
-          </Button>
+          configure && (
+            <Button variant="primary" icon="Plus" onClick={() => setCreate({ kind: 'fe2', name: '' })}>
+              Neue Verbindung
+            </Button>
+          )
         }
       />
-      {can('system.manage') && <Switch checked={showDeleted} onChange={setShowDeleted} label="Gelöschte anzeigen" description="Auch widerrufene und gelöschte Verbindungen – zur Nachvollziehbarkeit, ohne Zugangsdaten." />}
+      {configure && can('connection.delete') && <Switch checked={showDeleted} onChange={setShowDeleted} label="Gelöschte anzeigen" description="Auch widerrufene und gelöschte Verbindungen – zur Nachvollziehbarkeit, ohne Zugangsdaten." />}
       {q.isLoading && <SkeletonRows rows={4} />}
       {q.error && <ErrorBox title="Verbindungen konnten nicht geladen werden">{(q.error as Error).message}</ErrorBox>}
-      {q.data?.length === 0 && <EmptyState icon="Plug" title="Keine Verbindungen" text="Facebook, Instagram, FE2, Feuersoftware Connect oder amtliche Warnungen lassen sich hier anbinden." />}
+      {q.data?.length === 0 && <EmptyState icon="Plug" title="Keine Verbindungen" text={configure ? 'Facebook, Instagram, FE2, Feuersoftware Connect oder amtliche Warnungen lassen sich hier anbinden.' : undefined} />}
       <div className="grid gap-3 md:grid-cols-2">
-        {(q.data ?? []).map((c) => (
-          <Card key={c.id}>
-            <button type="button" className="w-full text-left flex flex-col gap-2" onClick={() => nav(`/verbindungen/${c.id}`)}>
+        {(q.data ?? []).map((c) => {
+          const body = (
+            <>
               <div className="flex items-center gap-2 flex-wrap">
                 <Icon name={KINDS.find((k) => k.id === c.kind)?.icon ?? 'Plug'} size={16} />
                 <strong>{c.name}</strong>
@@ -67,9 +70,21 @@ export default function Connections() {
               </div>
               {c.account?.name || c.account?.username ? <div className="text-sm text-fg-muted">{c.account.name ?? `@${c.account.username}`}</div> : null}
               {c.last_error && <div className="text-sm text-err">{c.last_error}</div>}
-            </button>
-          </Card>
-        ))}
+            </>
+          );
+          // Die Detailseite setzt „Verbindungen verwalten“ voraus – ohne das Recht bleibt die Karte reine Anzeige
+          return (
+            <Card key={c.id}>
+              {configure ? (
+                <button type="button" className="w-full text-left flex flex-col gap-2" onClick={() => nav(`/verbindungen/${c.id}`)}>
+                  {body}
+                </button>
+              ) : (
+                <div className="flex flex-col gap-2">{body}</div>
+              )}
+            </Card>
+          );
+        })}
       </div>
 
       {create && (
@@ -127,17 +142,18 @@ export default function Connections() {
 
 export function OfficialWarnings() {
   const q = useQuery({ queryKey: ['official-warnings'], queryFn: () => get<any[]>('/official-warnings') });
-  const sites = useQuery({ queryKey: ['sites'], queryFn: () => get<any[]>('/sites') });
+  const { can } = useAuth();
+  const mayBanner = can('banner.edit') && can('channel.view');
+  const sites = useQuery({ queryKey: ['sites'], queryFn: () => get<any[]>('/sites'), enabled: mayBanner });
   const toastError = useErrorToast();
   const toast = useToast();
   const ask = useConfirm();
   const qc = useQueryClient();
-  const { can } = useAuth();
   const nav = useNavigate();
   const [site, setSite] = useState('');
   const active = (sites.data ?? []).filter((s) => s.status === 'active');
-  // „Was ist angekommen?“ – Empfangsprotokoll der Warnfeeds (nur mit „Verbindungen verwalten“)
-  const feedsQ = useQuery({ queryKey: ['connections', false], queryFn: () => get<any[]>('/connections'), enabled: can('connection.manage') });
+  // „Was ist angekommen?“ – Empfangsprotokoll der Warnfeeds (nur mit „Empfangsprotokoll ansehen“)
+  const feedsQ = useQuery({ queryKey: ['connections', false], queryFn: () => get<any[]>('/connections'), enabled: can('connection.configure') && can('connection.log') });
   const feeds = (feedsQ.data ?? []).filter((c) => c.kind === 'warnfeed');
   return (
     <div className="flex flex-col gap-5">
@@ -159,7 +175,7 @@ export function OfficialWarnings() {
       <Notice>
         Ohne fachlich geprüfte Freigabe für automatische Banner verlinkt die Website auf die Originalquelle, z. B. <a href="https://warnung.bund.de" target="_blank" rel="noreferrer">warnung.bund.de</a>. Ein Banner-Entwurf durchläuft die normale Freigabe.
       </Notice>
-      {active.length > 0 && (
+      {mayBanner && active.length > 0 && (
         <FieldWrap label="Website für Banner-Entwürfe" htmlFor="ow-site" className="max-w-sm">
           <Select id="ow-site" value={site} onChange={(e) => setSite(e.target.value)}>
             <option value="">– wählen –</option>
@@ -191,7 +207,7 @@ export function OfficialWarnings() {
                     Originalquelle
                   </a>
                 )}
-                {!w.cancelled && !w.superseded && w.in_area && site && (
+                {mayBanner && !w.cancelled && !w.superseded && w.in_area && site && (
                   <Button size="sm" icon="Megaphone" onClick={async () => {
                     try {
                       await post(`/official-warnings/${w.id}/banner-draft`, { siteId: site });
@@ -203,7 +219,7 @@ export function OfficialWarnings() {
                     Banner-Entwurf mit Link
                   </Button>
                 )}
-                {can('post.edit') && (
+                {can('official.dismiss') && (
                   <Button size="sm" variant="ghost" icon="EyeOff" onClick={async () => {
                     const ok = await ask({
                       title: 'Amtliche Warnung ausblenden?',

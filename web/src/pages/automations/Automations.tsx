@@ -97,7 +97,7 @@ export default function Automations() {
           Ereignisse und Zeitpläne starten keine Läufe. Einschalten unter <Link to="/einstellungen#redaktion">Einstellungen → Redaktion</Link>.
         </Notice>
       )}
-      {(can('post.approve') || manage) && <AutomationApprovals compact />}
+      {(can('approval.automation') || manage) && <AutomationApprovals compact />}
       {q.isLoading && <SkeletonRows rows={5} />}
       {q.error && <ErrorBox title="Automationen konnten nicht geladen werden">{(q.error as Error).message}</ErrorBox>}
       {q.data && q.data.length === 0 && (

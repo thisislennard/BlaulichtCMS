@@ -16,7 +16,7 @@ import { BadgeTile, PanelTile } from './dashboard/widgets';
 const loadEditor = () => import('./dashboard/Editor');
 const DashboardEditor = lazy(loadEditor);
 
-/** Eingebaute Rollen als Rückfall, falls die Rollenliste nicht abrufbar ist (Recht „Benutzer ansehen“ fehlt). */
+/** Mitgelieferte Rollen als Rückfall; im Regelfall liefert der Server die Rollen (auch eigene) mit dem Layout. */
 const BUILTIN_ROLES = [
   { id: 'platform_admin', label: 'Administration' },
   { id: 'editor', label: 'Redaktion' },
@@ -102,7 +102,7 @@ export default function Dashboard() {
   const toastError = useErrorToast();
   const live = useLive();
   const isMobile = useIsMobile();
-  const canTemplates = can('system.manage');
+  const canTemplates = can('dashboard.templates');
   const q = useQuery({ queryKey: ['dashboard'], queryFn: () => get<any>('/dashboard'), refetchInterval: live === 'live' ? 120_000 : 15_000, refetchOnWindowFocus: true });
   const lq = useQuery({ queryKey: ['dashboard-layout'], queryFn: () => get<LayoutResponse>('/dashboard/layout') });
   const [newPost, setNewPost] = useState(false);
@@ -111,15 +111,15 @@ export default function Dashboard() {
   const [draft, setDraft] = useState<EditLayout | null>(null);
   const [busy, setBusy] = useState(false);
   const editing = !!draft;
-  const rq = useQuery({ queryKey: ['roles'], queryFn: () => get<{ roles: { id: string; label: string }[] }>('/roles'), enabled: editing && canTemplates && can('user.read'), staleTime: 60_000 });
+  const rq = useQuery({ queryKey: ['roles'], queryFn: () => get<{ roles: { id: string; label: string }[] }>('/roles'), enabled: editing && canTemplates && can('user.view') && !lq.data?.templateRoles, staleTime: 60_000 });
   const first = me?.user.name.split(' ')[0];
 
   // Schnellzugriffe der installierten App: /?aktion=beitrag bzw. /?aktion=medien
   const [sp, setSp] = useSearchParams();
   useEffect(() => {
     const a = sp.get('aktion');
-    if (a === 'beitrag' && can('post.edit')) setNewPost(true);
-    if (a === 'medien' && can('media.manage')) setNewCollection(true);
+    if (a === 'beitrag' && can('post.create')) setNewPost(true);
+    if (a === 'medien' && can('media.collections')) setNewCollection(true);
     if (a) setSp({}, { replace: true });
   }, [sp, setSp, can]);
 
@@ -156,19 +156,19 @@ export default function Dashboard() {
         title={greeting(first)}
         subtitle={
           <span>
-            {q.data ? summary(d, can('post.approve')) : me?.instance.organization}
+            {q.data ? summary(d, can('approval.post')) : me?.instance.organization}
             {d.confirmedAt && <span className="font-mono text-[12px] text-fg-muted"> · Stand {fmtTime(d.confirmedAt, true)}</span>}
           </span>
         }
         actions={
           !editing ? (
             <>
-              {can('media.manage') && (
+              {can('media.collections') && (
                 <Button icon="Camera" onClick={() => setNewCollection(true)}>
                   Medien sammeln
                 </Button>
               )}
-              {can('post.edit') && (
+              {can('post.create') && (
                 <Button variant="primary" icon="Plus" onClick={() => setNewPost(true)}>
                   Neuer Beitrag
                 </Button>
@@ -208,7 +208,7 @@ export default function Dashboard() {
             onChange={(fn) => setDraft((l) => (l ? fn(l) : l))}
             available={available}
             d={d}
-            templates={canTemplates ? { roles: rq.data?.roles ?? BUILTIN_ROLES, existing: lq.data?.templates ?? [], busy, onSave: (t) => saveTemplate(t, fromEdit(draft)), onRemove: (t) => saveTemplate(t, null) } : undefined}
+            templates={canTemplates ? { roles: lq.data?.templateRoles ?? rq.data?.roles ?? BUILTIN_ROLES, existing: lq.data?.templates ?? [], busy, onSave: (t) => saveTemplate(t, fromEdit(draft)), onRemove: (t) => saveTemplate(t, null) } : undefined}
           />
         </Suspense>
       ) : (

@@ -26,7 +26,8 @@ const SOCIAL_LABELS = { queued: 'Wartet', publishing: 'Wird veröffentlicht', pu
 const REMOVAL_RESULT: Record<string, string> = { removed: 'Entfernt', manual: 'Von Hand löschen', failed: 'Löschen fehlgeschlagen', canceled: 'Abgebrochen', pending: 'Noch offen' };
 
 export function useSocialTargets() {
-  return useQuery({ queryKey: ['social-targets'], queryFn: () => get<SocialTarget[]>('/connections').then((l) => l.filter((c) => ['facebook', 'instagram'].includes(c.kind))) });
+  const { can } = useAuth();
+  return useQuery({ queryKey: ['social-targets'], queryFn: () => get<SocialTarget[]>('/connections').then((l) => l.filter((c) => ['facebook', 'instagram'].includes(c.kind))), enabled: can('connection.view') });
 }
 
 /** Auswahl der sozialen Kanäle und eigene Texte – Teil der Fassung. */
@@ -34,10 +35,12 @@ export function SocialTargetsCard({ draft, onChange, editable }: { draft: Social
   const { can } = useAuth();
   const targets = useSocialTargets();
   const list = targets.data ?? [];
+  // Ohne „Verbindungen ansehen“ ist die Kanalliste nicht abrufbar – dann gibt es hier nichts zu wählen
+  if (!can('connection.view') && !draft.social.length) return null;
   if (!list.length && !draft.social.length)
     return (
       <Card title="Soziale Kanäle">
-        <p className="m-0 text-sm text-fg-muted">Keine Facebook-Seite oder kein Instagram-Konto verbunden. {can('connection.manage') && <Link to="/verbindungen">Verbindung einrichten</Link>}</p>
+        <p className="m-0 text-sm text-fg-muted">Keine Facebook-Seite oder kein Instagram-Konto verbunden. {can('connection.configure') && <Link to="/verbindungen">Verbindung einrichten</Link>}</p>
       </Card>
     );
   const hasFb = draft.social.some((id) => list.find((t) => t.id === id)?.kind === 'facebook');
@@ -100,7 +103,7 @@ export function SocialStatusCard({ postId, revision, hash, approved, targets, it
             </ul>
           </Notice>
         ))}
-        {approved && targets.length > 0 && can('post.publish') && !dirty && (
+        {approved && targets.length > 0 && can('publish.social') && !dirty && (
           <div className="flex flex-wrap gap-2">
             <Button variant="primary" icon="Share2" onClick={() => act(() => post(`/posts/${postId}/social`, { revision, contentHash: hash }), 'Veröffentlichung auf sozialen Kanälen beauftragt')}>
               Auf sozialen Kanälen veröffentlichen
@@ -110,7 +113,7 @@ export function SocialStatusCard({ postId, revision, hash, approved, targets, it
             </Button>
           </div>
         )}
-        {removable && can('post.publish') && (
+        {removable && can('publish.social_remove') && (
           <div>
             <Button size="sm" icon="Ban" onClick={() => setRemoving(true)}>
               Von sozialen Kanälen entfernen
@@ -147,7 +150,7 @@ export function SocialStatusCard({ postId, revision, hash, approved, targets, it
                             Beitrag in {KIND[s.kind as 'facebook']} öffnen
                           </a>
                         )}
-                        {can('post.publish') && (
+                        {can('publish.social_remove') && (
                           <Button size="sm" icon="Check" onClick={() => act(() => post(`/social-publications/${s.id}/confirm-removed`), 'Löschung bestätigt')}>
                             Gelöscht – bestätigen
                           </Button>
@@ -160,7 +163,7 @@ export function SocialStatusCard({ postId, revision, hash, approved, targets, it
                 <div className="text-meta text-fg-muted">
                   {fmtDateTime(s.created_at)} · {s.attempts} Versuch(e){s.published_at ? ` · veröffentlicht ${fmtDateTime(s.published_at)}` : ''}
                 </div>
-                {['failed', 'unknown'].includes(s.status) && can('post.publish') && (
+                {['failed', 'unknown'].includes(s.status) && can('publish.social') && (
                   <div>
                     <Button size="sm" icon="RefreshCw" onClick={() => act(() => post(`/social-publications/${s.id}/retry`), 'Nur dieser Kanal wird erneut versucht')}>
                       {s.status === 'unknown' ? 'Prüfen und ggf. erneut versuchen' : 'Nur diesen Kanal erneut versuchen'}

@@ -213,9 +213,9 @@ function FlowBoard({ d }: { d: any }) {
           </FlowColumn>
         )}
         {d.media && (
-          <FlowColumn title="Sichtung" count={d.media.unreviewed} hot={can('media.manage')}>
+          <FlowColumn title="Sichtung" count={d.media.unreviewed} hot={can('media.review')}>
             {d.media.unreviewed > 0 ? (
-              <FlowCard to="/medien" title={`${d.media.unreviewed} ${d.media.unreviewed === 1 ? 'Datei' : 'Dateien'} offen`} meta={d.media.quarantine ? `${d.media.quarantine} in Prüfung` : 'geprüft, ohne Standort'} hot={can('media.manage')} cta={can('media.manage') ? 'Sichten' : undefined} />
+              <FlowCard to="/medien" title={`${d.media.unreviewed} ${d.media.unreviewed === 1 ? 'Datei' : 'Dateien'} offen`} meta={d.media.quarantine ? `${d.media.quarantine} in Prüfung` : 'geprüft, ohne Standort'} hot={can('media.review')} cta={can('media.review') ? 'Sichten' : undefined} />
             ) : (
               <p className="m-0 px-0.5 text-meta text-fg-muted">Alles gesichtet.</p>
             )}
@@ -230,8 +230,8 @@ function FlowBoard({ d }: { d: any }) {
                 title={p.title}
                 meta={`F${p.number} · eingereicht ${fmtTime(p.submitted_at)}`}
                 sub={p.submitted_by_name ? `von ${p.submitted_by_name}` : undefined}
-                hot={can('post.approve')}
-                cta={can('post.approve') ? 'Prüfen' : undefined}
+                hot={can('approval.post')}
+                cta={can('approval.post') ? 'Prüfen' : undefined}
               />
             ))}
             <More to="/freigaben" n={approvals.length - MAX} />
@@ -316,13 +316,13 @@ export function useBadgeInfo(d: any): (id: string) => BadgeInfo {
       case 'badge_approvals':
         v = capped(d.pendingApprovals, 20);
         to = '/freigaben';
-        hot = can('post.approve') && (v[0] ?? 0) > 0;
+        hot = can('approval.post') && (v[0] ?? 0) > 0;
         hint = 'warten auf Freigabe';
         break;
       case 'badge_unreviewed':
         v = plain(d.media?.unreviewed);
         to = '/medien';
-        hot = can('media.manage') && (v[0] ?? 0) > 0;
+        hot = can('media.review') && (v[0] ?? 0) > 0;
         hint = 'geprüft, noch nicht gesichtet';
         break;
       case 'badge_ready':

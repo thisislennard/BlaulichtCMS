@@ -99,7 +99,7 @@ function PasswordCard() {
   const settings = useQuery({
     queryKey: ["settings"],
     queryFn: () => get<{ settings: Record<string, any> }>("/settings"),
-    enabled: can("system.read") || can("system.manage"),
+    enabled: can("settings.view"),
     retry: false,
   });
   const min =

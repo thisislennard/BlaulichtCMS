@@ -5,6 +5,7 @@ import { get, patch } from '../../api/client';
 import type { MediaItem } from '../../api/types';
 import { Button, ErrorBox, FieldWrap, Input, SkeletonRows, StatusBadge, Textarea } from '../../components/ui/core';
 import { Dialog, useErrorToast, useToast } from '../../components/ui/overlays';
+import { useAuth } from '../../lib/auth';
 import { fmtBytes, fmtDateTime } from '../../lib/format';
 import { MediaThumb, mediaName } from './gallery';
 import { SENSITIVE_LABELS } from './PrivacyDialog';
@@ -27,6 +28,7 @@ interface Details {
 export function MediaDetailsDialog({ mediaId, manage, onClose, onSaved }: { mediaId: string; manage: boolean; onClose: () => void; onSaved: () => void }) {
   const toast = useToast();
   const toastError = useErrorToast();
+  const { can } = useAuth();
   const q = useQuery({ queryKey: ['media-details', mediaId], queryFn: () => get<Details>(`/media/${mediaId}/details`) });
   const [form, setForm] = useState<{ displayName: string; description: string; internalNote: string } | null>(null);
   const [busy, setBusy] = useState(false);
@@ -149,7 +151,7 @@ export function MediaDetailsDialog({ mediaId, manage, onClose, onSaved }: { medi
                 <ul className="m-0 pl-4">
                   {d.posts.map((p) => (
                     <li key={p.id}>
-                      <Link to={`/beitraege/${p.id}`}>{p.title}</Link>
+                      {can('post.view') ? <Link to={`/beitraege/${p.id}`}>{p.title}</Link> : p.title}
                       {p.current ? '' : ' (frühere Fassung)'}
                     </li>
                   ))}

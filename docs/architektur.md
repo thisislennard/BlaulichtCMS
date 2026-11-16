@@ -146,7 +146,7 @@ Laufzeit-Abhängigkeiten), lehnt die laufende Version es ab und verweist auf den
   (aus dem Image) migriert, startet, prüft und kehrt bei jedem Fehler mit zurückgespielter Sicherung zur vorigen
   Version zurück. Der Zeiger auf ein Release gilt nur, solange es neuer als das Image ist – `install.sh` bleibt immer
   der Weg zurück auf einen bekannten Stand.
-- **Bestätigung und Nachvollziehbarkeit.** Recht „System verwalten“, frische Passwortbestätigung, Audit (Quelle,
+- **Bestätigung und Nachvollziehbarkeit.** Recht „Updates einstellen und installieren“, frische Passwortbestätigung, Audit (Quelle,
   Prüfsumme, Sicherung, Ergebnis), Sicherheitsmeldung bei Start, Einstellungsänderung und Rückweg, Update-Protokoll.
 
 **Restrisiko:** Gelangt der private Signaturschlüssel (GitHub-Secret oder Tresor) oder ein GitHub-Konto mit
@@ -160,8 +160,33 @@ In-App-Update erweitert die Rechte nicht, macht aber `/data` zu einem Ort, an de
 
 ### E10 – Rollen
 
-`platform_admin` (Anzeige „Administration“), `media_manager`, `editor`, `approver`, `publisher`, `warning_author`,
-`warning_approver`, `warning_sender`, `viewer`. Rechte sind einzeln registriert, Rollen kombinierbar.
+Rollen liegen in der Tabelle `roles` (seit 0.3.0): neun mitgelieferte Rollen – `platform_admin` (Anzeige
+„Administration“), `media_manager`, `editor`, `approver`, `publisher`, `warning_author`, `warning_approver`,
+`warning_sender`, `viewer` – und beliebig viele eigene. Rechte sind fein je Funktion registriert
+(`server/src/auth/permissions.ts`, über 70 Rechte in zehn Bereichen, mit Voraussetzungen wie „Ändern setzt Ansehen
+voraus“), Rollen kombinierbar.
+
+- **Vorgaben statt Kopien.** Mitgelieferte Rollen speichern `permissions = NULL` und folgen der Vorgabe des Programms;
+  erst eine Änderung speichert die Rechte ausdrücklich („Auf Standard zurücksetzen“ stellt `NULL` wieder her). So
+  kommen Rechte künftiger Versionen bei unveränderten Rollen von selbst an.
+- **Administration ist fest.** `platform_admin` hat immer alle Rechte, auch künftige, und ist weder änderbar noch
+  löschbar; mindestens ein aktives Konto mit dieser Rolle bleibt. Eine eigene Rolle mit allen Rechten ersetzt sie nicht.
+- **Keine Rechte in der Sitzung.** Jede Anfrage rechnet die Rechte aus den Rollen des Kontos und dem Rollenstand im
+  Arbeitsspeicher (`auth/roles.ts`). Der ändernde Prozess lädt sofort neu, andere Prozesse über NOTIFY bzw. nach
+  höchstens 3 Sekunden. Änderungen gelten damit ab der nächsten Anfrage, ohne neue Anmeldung.
+- **Keine Rechteausweitung.** Rollen zuweisen, entziehen, anlegen und ändern kann man nur innerhalb der eigenen
+  Rechte; Konten mit mehr Rechten lassen sich nicht übernehmen (Passwort-Link, Zwei-Faktor zurücksetzen), sperren
+  oder löschen. Rollenpflege verlangt eine frische Passwortbestätigung und ist per API-Schlüssel nicht möglich.
+- **Zugriffsangabe je Route.** `requireAuth('recht')` ist zugleich die Deklaration; `app.routeAccess` listet alle
+  Routen. Tests schlagen fehl, wenn eine Route weder ein Recht nennt noch in `PUBLIC_ROUTES` steht, und prüfen für
+  jede Route 401 ohne Anmeldung, 403 ohne Rechte und 403 mit allen Rechten außer dem genannten.
+- **Alte Bezeichnungen.** Die groben Rechte bis 0.2 (`media.manage`, `system.manage` …) bleiben als
+  Sammelbezeichnungen gültig (`LEGACY_PERMISSIONS`): Sie gelten nur, wenn alle enthaltenen feinen Rechte vorhanden
+  sind. Alte Benachrichtigungen und Prüfungen funktionieren weiter, ohne mehr zu erlauben.
+- **Zwei-Faktor-Pflicht über Rechte.** `security.require_2fa_admins` gilt für Konten mit Verwaltungsrechten (im
+  Katalog markiert), `security.require_2fa_media` für „Originale herunterladen“. Erhält eine Rolle solche Rechte,
+  werden ihre Konten ohne zweiten Faktor abgemeldet und richten ihn bei der nächsten Anmeldung ein.
+
 Vier-Augen-Prinzip optional (Einstellung `editorial.four_eyes`) für Beiträge, Banner und Warnentwürfe: nicht durch die
 einreichende Person (`post_revisions.submitted_by`, `banners.submitted_by`, `warning_revisions.submitted_by`) und nicht
 durch Personen, die bis zur geprüften Fassung Inhalte geschrieben haben (Beiträge: Text, Kanaltexte, Medien, Titelbild –

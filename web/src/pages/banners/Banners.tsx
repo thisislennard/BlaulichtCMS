@@ -150,7 +150,7 @@ export default function Banners() {
   const qc = useQueryClient();
   const toastError = useErrorToast();
   const q = useQuery({ queryKey: ['banners'], queryFn: () => get<Banner[]>('/banners'), refetchInterval: 20_000 });
-  const sites = useQuery({ queryKey: ['sites'], queryFn: () => get<Site[]>('/sites') });
+  const sites = useQuery({ queryKey: ['sites'], queryFn: () => get<Site[]>('/sites'), enabled: can('channel.view') });
   const [edit, setEdit] = useState<Banner | null | undefined>(undefined);
   const refresh = () => qc.invalidateQueries({ queryKey: ['banners'] });
   const act = async (fn: () => Promise<unknown>) => {
@@ -167,7 +167,7 @@ export default function Banners() {
       <PageHeader
         title="Banner"
         subtitle="Zeitgesteuerte Hinweise auf der Website – mehrere gleichzeitig, sortiert nach Priorität."
-        actions={can('post.edit') && <Button variant="primary" icon="Plus" disabled={!activeSites.length} onClick={() => setEdit(null)}>Neues Banner</Button>}
+        actions={can('banner.edit') && can('channel.view') && <Button variant="primary" icon="Plus" disabled={!activeSites.length} onClick={() => setEdit(null)}>Neues Banner</Button>}
       />
       {!activeSites.length && sites.data && <Notice>Für Banner muss zuerst eine Website gekoppelt sein (Kanäle → Websites).</Notice>}
       {q.isLoading && <SkeletonRows rows={4} />}
@@ -187,27 +187,27 @@ export default function Banners() {
               {b.approved_by_name && <div className="text-meta text-fg-muted">Freigegeben von {b.approved_by_name}, {fmtDateTime(b.approved_at)}</div>}
               {b.error && <div className="text-sm text-err">{b.error}</div>}
               <div className="flex flex-wrap gap-2">
-                {!['ended', 'expired'].includes(b.state) && can('post.edit') && (
+                {!['ended', 'expired'].includes(b.state) && can('banner.edit') && (
                   <Button size="sm" icon="Pencil" onClick={() => setEdit(b)}>
                     Bearbeiten
                   </Button>
                 )}
-                {b.state === 'draft' && can('post.edit') && (
+                {b.state === 'draft' && can('banner.edit') && (
                   <Button size="sm" icon="Send" onClick={() => act(() => post(`/banners/${b.id}/submit`))}>
                     Zur Freigabe einreichen
                   </Button>
                 )}
-                {b.state === 'in_review' && can('post.approve') && (
+                {b.state === 'in_review' && can('approval.banner') && (
                   <Button size="sm" icon="Check" onClick={() => act(() => post(`/banners/${b.id}/approve`, { contentHash: b.content_hash }))}>
                     Freigeben
                   </Button>
                 )}
-                {['approved', 'failed'].includes(b.state) && can('post.publish') && (
+                {['approved', 'failed'].includes(b.state) && can('banner.publish') && (
                   <Button size="sm" variant="primary" icon="Globe" onClick={() => act(() => post(`/banners/${b.id}/publish`, { contentHash: b.content_hash }))}>
                     Auf Website veröffentlichen
                   </Button>
                 )}
-                {!['ended', 'expired'].includes(b.state) && can('post.publish') && (
+                {!['ended', 'expired'].includes(b.state) && can('banner.publish') && (
                   <Button size="sm" variant="danger" icon="CircleStop" onClick={async () => (await ask({ title: "Banner jetzt beenden?", text: `„${b.title}“ verschwindet beim nächsten Abruf der Bridge von der Website.`, confirmLabel: "Beenden" })) && act(() => post(`/banners/${b.id}/end`))}>
                     Jetzt beenden
                   </Button>

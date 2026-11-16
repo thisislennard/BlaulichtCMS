@@ -118,13 +118,37 @@ const RANGES: Record<string, [number, number]> = {
   'updates.check_hours': [1, 168],
 };
 
+/** Recht je Einstellung, abgeleitet aus dem Schlüssel – Spiegel von settingPermission() im Server. */
+function settingPermission(key: string): string {
+  switch (key.split(".")[0]) {
+    case "general":
+      return "settings.general";
+    case "privacy":
+    case "retention":
+      return "settings.privacy";
+    case "media":
+      return "settings.media";
+    case "editorial":
+      return "settings.editorial";
+    case "jobs":
+    case "automations":
+      return "settings.system";
+    case "backup":
+      return "backup.manage";
+    default:
+      return "settings.security";
+  }
+}
+
 function same(a: unknown, b: unknown) {
   return JSON.stringify(a) === JSON.stringify(b);
 }
 
 export default function Settings() {
-  const { can } = useAuth();
-  const manage = can("system.manage");
+  const { can, canAny } = useAuth();
+  const canChange = canAny("settings.general", "settings.security", "settings.privacy", "settings.media", "settings.editorial", "settings.system", "backup.manage");
+  // Abschnitte, deren Inhalt ein eigenes Leserecht braucht, erscheinen nur mit diesem Recht
+  const sections = SECTIONS.filter((s) => (s === "betrieb" ? can("system.status") : s === "updates" ? can("update.view") : true));
   const qc = useQueryClient();
   const toast = useToast();
   const q = useQuery({
@@ -218,7 +242,8 @@ export default function Settings() {
   }, [ready]);
 
   const v = draft ?? {};
-  const ro = !manage;
+  // Jedes Feld ist nur mit dem Recht für genau diese Einstellung änderbar
+  const ro = (k: string) => !can(settingPermission(k));
 
   return (
     <div className="flex flex-col gap-5">
@@ -233,7 +258,7 @@ export default function Settings() {
           aria-label={t("admin.settings.nav")}
           className="xl:sticky xl:top-4 xl:w-[220px] shrink-0 flex xl:flex-col gap-0.5 overflow-x-auto -mx-1 px-1 pb-1 xl:pb-0"
         >
-          {SECTIONS.map((s) => (
+          {sections.map((s) => (
             <a
               key={s}
               href={`#${s}`}
@@ -265,7 +290,7 @@ export default function Settings() {
         </nav>
 
         <div className="flex-1 min-w-0 max-w-[860px] flex flex-col gap-[18px]">
-          {ro && (
+          {!canChange && (
             <Notice icon="Lock">
               {t("admin.common.readOnly")}
             </Notice>
@@ -289,7 +314,7 @@ export default function Settings() {
                     label={t("admin.settings.instanceName")}
                     v={v}
                     set={set}
-                    ro={ro}
+                    ro={ro("general.instance_name")}
                   />
                   <TextField
                     k="general.organization"
@@ -297,7 +322,7 @@ export default function Settings() {
                     help="Erscheint auf Upload-Seiten, Aushängen und in der Seitenleiste."
                     v={v}
                     set={set}
-                    ro={ro}
+                    ro={ro("general.organization")}
                   />
                   <TextField
                     k="general.sender_name"
@@ -305,7 +330,7 @@ export default function Settings() {
                     help="Für E-Mails und Veröffentlichungen."
                     v={v}
                     set={set}
-                    ro={ro}
+                    ro={ro("general.sender_name")}
                   />
                   <TextField
                     k="general.public_url"
@@ -313,7 +338,7 @@ export default function Settings() {
                     help={`Steht in Einladungen, Upload-Links und QR-Codes. Bereits gedruckte Codes zeigen weiter auf die alte Adresse.${q.data?.env.publicUrl ? ` Umgebung: ${q.data.env.publicUrl}` : ""}`}
                     v={v}
                     set={set}
-                    ro={ro}
+                    ro={ro("general.public_url")}
                   />
                   <FieldWrap
                     label={t("admin.settings.timezone")}
@@ -321,7 +346,7 @@ export default function Settings() {
                   >
                     <Select
                       id="s-tz"
-                      disabled={ro}
+                      disabled={ro("general.timezone")}
                       value={v["general.timezone"]}
                       onChange={(e) => set("general.timezone", e.target.value)}
                     >
@@ -338,7 +363,7 @@ export default function Settings() {
                   >
                     <Select
                       id="s-lang"
-                      disabled={ro}
+                      disabled={ro("general.language")}
                       value={v["general.language"]}
                       onChange={(e) => set("general.language", e.target.value)}
                     >
@@ -371,27 +396,27 @@ export default function Settings() {
               >
                 <Switch
                   checked={!!v["editorial.four_eyes"]}
-                  disabled={ro}
+                  disabled={ro("editorial.four_eyes")}
                   onChange={(x) => set("editorial.four_eyes", x)}
                   label="Vier-Augen-Prinzip"
                   description="Wer am Inhalt geschrieben oder die Fassung eingereicht hat, darf sie nicht selbst freigeben. Gilt für Beiträge, Banner und Warnentwürfe."
                 />
                 <FieldGrid>
-                  <NumField k="invites.valid_hours" label="Einladungen gültig" unit="Std." min={1} max={720} v={v} set={set} ro={ro} />
-                  <NumField k="jobs.concurrency" label="Parallele Hintergrundaufträge" help="1 bis 32 (Medienprüfung, Exporte)." min={1} max={32} v={v} set={set} ro={ro} />
-                  <NumField k="retention.log_days" label={t("admin.settings.retLogs")} unit={t("admin.common.days")} min={1} v={v} set={set} ro={ro} />
-                  <NumField k="retention.audit_days" label={t("admin.settings.retAudit")} unit={t("admin.common.days")} min={30} v={v} set={set} ro={ro} />
-                  <NumField k="privacy.upload_ip_retention_days" label="IP-Adressen ohne Konto" help="Öffentliche Uploads und Anmeldeversuche unbekannter Konten: IP danach im Audit entfernt (1 bis 365 Tage)." unit={t("admin.common.days")} v={v} set={set} ro={ro} />
+                  <NumField k="invites.valid_hours" label="Einladungen gültig" unit="Std." min={1} max={720} v={v} set={set} ro={ro("invites.valid_hours")} />
+                  <NumField k="jobs.concurrency" label="Parallele Hintergrundaufträge" help="1 bis 32 (Medienprüfung, Exporte)." min={1} max={32} v={v} set={set} ro={ro("jobs.concurrency")} />
+                  <NumField k="retention.log_days" label={t("admin.settings.retLogs")} unit={t("admin.common.days")} min={1} v={v} set={set} ro={ro("retention.log_days")} />
+                  <NumField k="retention.audit_days" label={t("admin.settings.retAudit")} unit={t("admin.common.days")} min={30} v={v} set={set} ro={ro("retention.audit_days")} />
+                  <NumField k="privacy.upload_ip_retention_days" label="IP-Adressen ohne Konto" help="Öffentliche Uploads und Anmeldeversuche unbekannter Konten: IP danach im Audit entfernt (1 bis 365 Tage)." unit={t("admin.common.days")} v={v} set={set} ro={ro("privacy.upload_ip_retention_days")} />
                 </FieldGrid>
                 <Switch
                   checked={!!v["automations.enabled"]}
-                  disabled={ro}
+                  disabled={ro("automations.enabled")}
                   onChange={(x) => set("automations.enabled", x)}
                   label="Automationen ausführen"
                   description="Globaler Schalter für alle Automationen. Aus: Ereignisse und Zeitpläne starten keine Läufe mehr, offene Läufe werden abgebrochen. Die Abläufe selbst bleiben erhalten."
                 />
                 <FieldGrid>
-                  <NumField k="automations.max_runs_per_minute" label="Läufe je Automation und Minute höchstens" help="Schutz gegen Schleifen und Fluten: darüber werden Ereignisse verworfen und die Verwaltung benachrichtigt (1 bis 600)." min={1} max={600} v={v} set={set} ro={ro} />
+                  <NumField k="automations.max_runs_per_minute" label="Läufe je Automation und Minute höchstens" help="Schutz gegen Schleifen und Fluten: darüber werden Ereignisse verworfen und die Verwaltung benachrichtigt (1 bis 600)." min={1} max={600} v={v} set={set} ro={ro("automations.max_runs_per_minute")} />
                 </FieldGrid>
               </SectionCard>
 
@@ -408,26 +433,26 @@ export default function Settings() {
                   </Notice>
                 )}
                 <FieldGrid>
-                  <TextField k="privacy.controller" label="Verantwortliche Stelle" help="Name und Anschrift, z. B. „Gemeinde Musterstadt, Hauptstraße 1, 12345 Musterstadt“." max={400} v={v} set={set} ro={ro} />
-                  <TextField k="privacy.dpo_contact" label="Datenschutzbeauftragte/r (Kontakt)" help="E-Mail-Adresse oder Anschrift; leer lassen, wenn keine Benennung besteht." max={300} v={v} set={set} ro={ro} />
-                  <TextField k="privacy.policy_url" label="Datenschutzerklärung (Adresse)" help="Vollständige Adresse mit https://. Wird auf Upload-Seite und Aushang verlinkt." max={500} v={v} set={set} ro={ro} />
+                  <TextField k="privacy.controller" label="Verantwortliche Stelle" help="Name und Anschrift, z. B. „Gemeinde Musterstadt, Hauptstraße 1, 12345 Musterstadt“." max={400} v={v} set={set} ro={ro("privacy.controller")} />
+                  <TextField k="privacy.dpo_contact" label="Datenschutzbeauftragte/r (Kontakt)" help="E-Mail-Adresse oder Anschrift; leer lassen, wenn keine Benennung besteht." max={300} v={v} set={set} ro={ro("privacy.dpo_contact")} />
+                  <TextField k="privacy.policy_url" label="Datenschutzerklärung (Adresse)" help="Vollständige Adresse mit https://. Wird auf Upload-Seite und Aushang verlinkt." max={500} v={v} set={set} ro={ro("privacy.policy_url")} />
                 </FieldGrid>
                 <FieldGrid>
-                  <NumField k="privacy.collection_retention_days" label="Abgeschlossene Sammlungen löschen nach" help="Archivierte Sammlungen bzw. Sammlungen ohne aktiven Link, gerechnet ab der letzten Aktivität. Dateien in laufenden Beiträgen bleiben. 0 = nie." unit={t("admin.common.days")} v={v} set={set} ro={ro} />
-                  <NumField k="privacy.deleted_media_days" label="Papierkorb leeren nach" help="Gelöschte Dateien, Ordner und Sammlungen bleiben so lange im Papierkorb wiederherstellbar; danach werden Dateien und Datensätze endgültig entfernt. Gilt auch für Datensätze abgewiesener Dateien. 0 = nie automatisch." unit={t("admin.common.days")} v={v} set={set} ro={ro} />
-                  <NumField k="privacy.upload_link_days" label="Abgelaufene Upload-Links" help="Abgelaufene oder widerrufene Links (Token, Bezeichnung) und Weiterleitungen aus dem Import. 0 = nie." unit={t("admin.common.days")} v={v} set={set} ro={ro} />
-                  <NumField k="media.blocked_days" label="Gesperrte Dateien löschen nach" help="Dateien mit Prüfbefund liegen so lange in der Quarantäne (erneut prüfen oder trotzdem freigeben möglich), danach werden sie samt Datensatz gelöscht. 0 = nie." unit={t("admin.common.days")} min={0} max={3650} v={v} set={set} ro={ro} />
-                  <NumField k="media.security_log_days" label="Sicherheitsereignisse der Upload-Seiten" help="Gekürzter IP-Hash, Link, Ereignis. 0 = unbegrenzt." unit={t("admin.common.days")} min={0} max={3650} v={v} set={set} ro={ro} />
-                  <NumField k="privacy.uploader_months" label="Angaben der Hochladenden" help="Name, E-Mail-Adresse, Aufnahmeort und -datum (je Upload-Link abfragbar) danach entfernen; die Dateien bleiben. 0 = nie." unit="Monate" min={0} max={120} v={v} set={set} ro={ro} />
-                  <NumField k="privacy.warning_days" label="Warnvorgänge" help="Nach dem letzten Bearbeitungsschritt des Vorgangs samt Aktualisierungen: Fassungen mit Rückrufkontakt, PDF, Versandnachweise. 0 = nie." unit={t("admin.common.days")} v={v} set={set} ro={ro} />
-                  <NumField k="privacy.fe2_event_days" label="Einsatzmeldungen (FE2, Feuersoftware Connect)" help="Stichwort, Einsatzart, Ort, Zeit, Einheiten. Beiträge und Warnvorgänge daraus bleiben. 0 = nie." unit={t("admin.common.days")} v={v} set={set} ro={ro} />
-                  <NumField k="privacy.automation_run_days" label="Laufprotokolle der Automationen" help="Eingangsdaten, Schritte und Freigaben abgeschlossener Läufe (1 bis 3650 Tage)." unit={t("admin.common.days")} min={1} max={3650} v={v} set={set} ro={ro} />
-                  <NumField k="privacy.official_warning_days" label="Amtliche Warnungen" help="Gerechnet ab dem Ablauf der Warnung, frühestens ab dem letzten Abruf, in dem die Quelle sie noch geliefert hat. 0 = nie." unit={t("admin.common.days")} v={v} set={set} ro={ro} />
-                  <NumField k="privacy.receipt_days" label="Empfangsprotokoll der Verbindungen" help="Abrufe und eingehende Meldungen von amtlichen Warnungen, FE2 und Feuersoftware Connect samt Entscheidung und Rohdaten (Einsatzdaten nur geschwärzt). Höchstens 500 Einträge je Verbindung. 1–30 Tage." unit={t("admin.common.days")} min={1} max={30} v={v} set={set} ro={ro} />
+                  <NumField k="privacy.collection_retention_days" label="Abgeschlossene Sammlungen löschen nach" help="Archivierte Sammlungen bzw. Sammlungen ohne aktiven Link, gerechnet ab der letzten Aktivität. Dateien in laufenden Beiträgen bleiben. 0 = nie." unit={t("admin.common.days")} v={v} set={set} ro={ro("privacy.collection_retention_days")} />
+                  <NumField k="privacy.deleted_media_days" label="Papierkorb leeren nach" help="Gelöschte Dateien, Ordner und Sammlungen bleiben so lange im Papierkorb wiederherstellbar; danach werden Dateien und Datensätze endgültig entfernt. Gilt auch für Datensätze abgewiesener Dateien. 0 = nie automatisch." unit={t("admin.common.days")} v={v} set={set} ro={ro("privacy.deleted_media_days")} />
+                  <NumField k="privacy.upload_link_days" label="Abgelaufene Upload-Links" help="Abgelaufene oder widerrufene Links (Token, Bezeichnung) und Weiterleitungen aus dem Import. 0 = nie." unit={t("admin.common.days")} v={v} set={set} ro={ro("privacy.upload_link_days")} />
+                  <NumField k="media.blocked_days" label="Gesperrte Dateien löschen nach" help="Dateien mit Prüfbefund liegen so lange in der Quarantäne (erneut prüfen oder trotzdem freigeben möglich), danach werden sie samt Datensatz gelöscht. 0 = nie." unit={t("admin.common.days")} min={0} max={3650} v={v} set={set} ro={ro("media.blocked_days")} />
+                  <NumField k="media.security_log_days" label="Sicherheitsereignisse der Upload-Seiten" help="Gekürzter IP-Hash, Link, Ereignis. 0 = unbegrenzt." unit={t("admin.common.days")} min={0} max={3650} v={v} set={set} ro={ro("media.security_log_days")} />
+                  <NumField k="privacy.uploader_months" label="Angaben der Hochladenden" help="Name, E-Mail-Adresse, Aufnahmeort und -datum (je Upload-Link abfragbar) danach entfernen; die Dateien bleiben. 0 = nie." unit="Monate" min={0} max={120} v={v} set={set} ro={ro("privacy.uploader_months")} />
+                  <NumField k="privacy.warning_days" label="Warnvorgänge" help="Nach dem letzten Bearbeitungsschritt des Vorgangs samt Aktualisierungen: Fassungen mit Rückrufkontakt, PDF, Versandnachweise. 0 = nie." unit={t("admin.common.days")} v={v} set={set} ro={ro("privacy.warning_days")} />
+                  <NumField k="privacy.fe2_event_days" label="Einsatzmeldungen (FE2, Feuersoftware Connect)" help="Stichwort, Einsatzart, Ort, Zeit, Einheiten. Beiträge und Warnvorgänge daraus bleiben. 0 = nie." unit={t("admin.common.days")} v={v} set={set} ro={ro("privacy.fe2_event_days")} />
+                  <NumField k="privacy.automation_run_days" label="Laufprotokolle der Automationen" help="Eingangsdaten, Schritte und Freigaben abgeschlossener Läufe (1 bis 3650 Tage)." unit={t("admin.common.days")} min={1} max={3650} v={v} set={set} ro={ro("privacy.automation_run_days")} />
+                  <NumField k="privacy.official_warning_days" label="Amtliche Warnungen" help="Gerechnet ab dem Ablauf der Warnung, frühestens ab dem letzten Abruf, in dem die Quelle sie noch geliefert hat. 0 = nie." unit={t("admin.common.days")} v={v} set={set} ro={ro("privacy.official_warning_days")} />
+                  <NumField k="privacy.receipt_days" label="Empfangsprotokoll der Verbindungen" help="Abrufe und eingehende Meldungen von amtlichen Warnungen, FE2 und Feuersoftware Connect samt Entscheidung und Rohdaten (Einsatzdaten nur geschwärzt). Höchstens 500 Einträge je Verbindung. 1–30 Tage." unit={t("admin.common.days")} min={1} max={30} v={v} set={set} ro={ro("privacy.receipt_days")} />
                 </FieldGrid>
-                <RetentionPreview manage={manage} dirty={dirty} />
+                <RetentionPreview manage={can("system.retention")} dirty={dirty} />
                 <FieldWrap label="Eigener Hinweis (optional)" htmlFor="s-privacy-upload_notice" help="Erscheint zusätzlich im Abschnitt „Datenschutz“ der Upload-Seite, z. B. Rechtsgrundlage oder Ansprechperson. Höchstens 2000 Zeichen.">
-                  <Textarea id="s-privacy-upload_notice" rows={4} maxLength={2000} disabled={ro} value={v["privacy.upload_notice"] ?? ""} onChange={(e) => set("privacy.upload_notice", e.target.value)} />
+                  <Textarea id="s-privacy-upload_notice" rows={4} maxLength={2000} disabled={ro("privacy.upload_notice")} value={v["privacy.upload_notice"] ?? ""} onChange={(e) => set("privacy.upload_notice", e.target.value)} />
                 </FieldWrap>
                 <p className="m-0 text-sm text-fg-muted">
                   Die Upload-Seite nennt immer: Zweck, mögliche Veröffentlichung auf Website und in sozialen Medien (Meta, auch USA), was erfasst wird (Dateien, Hinweis, Dateiname, IP-Adresse zur Missbrauchsabwehr), die Speicherdauer und die Rechte der Betroffenen. Hinweise und Vorlagen: Hilfe → Sicherheit bzw. <code>docs/datenschutz.md</code>.
@@ -442,44 +467,44 @@ export default function Settings() {
                 bodyClassName="flex flex-col gap-5"
               >
                 <FieldGrid>
-                  <NumField k="media.max_file_mb" label="Maximale Dateigröße" unit="MB" min={1} max={20000} v={v} set={set} ro={ro} />
-                  <NumField k="media.link_max_files" label="Dateien je Upload-Link" min={1} max={1000} v={v} set={set} ro={ro} />
-                  <NumField k="media.link_default_days" label="Upload-Link gültig (Standard)" unit={t("admin.common.days")} min={1} max={90} v={v} set={set} ro={ro} />
-                  <NumField k="media.link_max_days" label="Upload-Link höchstens gültig" help="Gilt auch für „Verlängern“ und „Bis Termin“." unit={t("admin.common.days")} min={1} max={365} v={v} set={set} ro={ro} />
-                  <NumField k="media.collection_max_files" label="Dateien je Sammlung" min={1} max={100000} v={v} set={set} ro={ro} />
-                  <NumField k="media.collection_max_gb" label="Speicher je Sammlung" unit="GB" min={1} max={10000} v={v} set={set} ro={ro} />
-                  <NumField k="media.min_free_gb" label="Mindestens frei halten" help="Darunter werden Uploads gesperrt und der Healthcheck meldet einen Fehler." unit="GB" min={1} max={10000} v={v} set={set} ro={ro} />
-                  <NumField k="media.export_hours" label="ZIP-Downloads verfügbar" help="Danach wird das ZIP gelöscht." unit="Stunden" min={1} max={336} v={v} set={set} ro={ro} />
-                  <NumField k="media.export_max_gb" label="Max. Größe eines ZIP" unit="GB" min={1} max={500} v={v} set={set} ro={ro} />
-                  <NumField k="media.storage_warn_gb" label="Speicherwarnung unter" help="Benachrichtigung an „Medien administrieren“ (höchstens alle 12 Stunden). 0 = aus." unit="GB" min={0} max={100000} v={v} set={set} ro={ro} />
+                  <NumField k="media.max_file_mb" label="Maximale Dateigröße" unit="MB" min={1} max={20000} v={v} set={set} ro={ro("media.max_file_mb")} />
+                  <NumField k="media.link_max_files" label="Dateien je Upload-Link" min={1} max={1000} v={v} set={set} ro={ro("media.link_max_files")} />
+                  <NumField k="media.link_default_days" label="Upload-Link gültig (Standard)" unit={t("admin.common.days")} min={1} max={90} v={v} set={set} ro={ro("media.link_default_days")} />
+                  <NumField k="media.link_max_days" label="Upload-Link höchstens gültig" help="Gilt auch für „Verlängern“ und „Bis Termin“." unit={t("admin.common.days")} min={1} max={365} v={v} set={set} ro={ro("media.link_max_days")} />
+                  <NumField k="media.collection_max_files" label="Dateien je Sammlung" min={1} max={100000} v={v} set={set} ro={ro("media.collection_max_files")} />
+                  <NumField k="media.collection_max_gb" label="Speicher je Sammlung" unit="GB" min={1} max={10000} v={v} set={set} ro={ro("media.collection_max_gb")} />
+                  <NumField k="media.min_free_gb" label="Mindestens frei halten" help="Darunter werden Uploads gesperrt und der Healthcheck meldet einen Fehler." unit="GB" min={1} max={10000} v={v} set={set} ro={ro("media.min_free_gb")} />
+                  <NumField k="media.export_hours" label="ZIP-Downloads verfügbar" help="Danach wird das ZIP gelöscht." unit="Stunden" min={1} max={336} v={v} set={set} ro={ro("media.export_hours")} />
+                  <NumField k="media.export_max_gb" label="Max. Größe eines ZIP" unit="GB" min={1} max={500} v={v} set={set} ro={ro("media.export_max_gb")} />
+                  <NumField k="media.storage_warn_gb" label="Speicherwarnung unter" help="Benachrichtigung an „Medien administrieren“ (höchstens alle 12 Stunden). 0 = aus." unit="GB" min={0} max={100000} v={v} set={set} ro={ro("media.storage_warn_gb")} />
                 </FieldGrid>
                 <Switch
                   checked={!!v["media.strip_location"]}
-                  disabled={ro}
+                  disabled={ro("media.strip_location")}
                   onChange={(x) => set("media.strip_location", x)}
                   label="Standortdaten auch aus Originalen entfernen"
                   description="Nach der Prüfung werden GPS-Angaben, Seriennummern, Personen- und XMP/IPTC-Angaben verlustfrei aus dem Original entfernt (Bilddaten bleiben unverändert, Videos werden ohne Metadaten und Datenspuren umverpackt). Ältere Originale bereinigt der Hintergrunddienst nach und nach. Entfernte Angaben lassen sich nicht wiederherstellen."
                 />
-                <AllowedTypesField value={v["media.allowed_types"]} ro={ro} onChange={(x) => set("media.allowed_types", x)} />
+                <AllowedTypesField value={v["media.allowed_types"]} ro={ro("media.allowed_types")} onChange={(x) => set("media.allowed_types", x)} />
                 <div className="flex flex-col gap-3">
                   <span className="text-sm font-medium">Inhaltsprüfung</span>
                   <FieldGrid>
-                    <NumField k="media.max_image_mp" label="Max. Bildauflösung" help="Größere Bilder werden gesperrt (Schutz vor Dekompressionsbomben)." unit="Megapixel" min={1} max={500} v={v} set={set} ro={ro} />
-                    <NumField k="media.max_video_minutes" label="Max. Videodauer" unit="Minuten" min={1} max={600} v={v} set={set} ro={ro} />
-                    <NumField k="media.max_video_edge" label="Max. Videoauflösung (längere Kante)" unit="Pixel" min={320} max={8192} v={v} set={set} ro={ro} />
-                    <NumField k="media.full_decode_seconds" label="Videos Bild für Bild prüfen bis" help="Längere Videos: dieser Anfang Bild für Bild, danach alle Schlüsselbilder." unit="Sekunden" min={10} max={36000} v={v} set={set} ro={ro} />
-                    <NumField k="media.check_timeout_s" label="Zeitlimit je Prüfung/Umwandlung" unit="Sekunden" min={60} max={14400} v={v} set={set} ro={ro} />
+                    <NumField k="media.max_image_mp" label="Max. Bildauflösung" help="Größere Bilder werden gesperrt (Schutz vor Dekompressionsbomben)." unit="Megapixel" min={1} max={500} v={v} set={set} ro={ro("media.max_image_mp")} />
+                    <NumField k="media.max_video_minutes" label="Max. Videodauer" unit="Minuten" min={1} max={600} v={v} set={set} ro={ro("media.max_video_minutes")} />
+                    <NumField k="media.max_video_edge" label="Max. Videoauflösung (längere Kante)" unit="Pixel" min={320} max={8192} v={v} set={set} ro={ro("media.max_video_edge")} />
+                    <NumField k="media.full_decode_seconds" label="Videos Bild für Bild prüfen bis" help="Längere Videos: dieser Anfang Bild für Bild, danach alle Schlüsselbilder." unit="Sekunden" min={10} max={36000} v={v} set={set} ro={ro("media.full_decode_seconds")} />
+                    <NumField k="media.check_timeout_s" label="Zeitlimit je Prüfung/Umwandlung" unit="Sekunden" min={60} max={14400} v={v} set={set} ro={ro("media.check_timeout_s")} />
                   </FieldGrid>
                   <Switch
                     checked={!!v["media.video_full_decode"]}
-                    disabled={ro}
+                    disabled={ro("media.video_full_decode")}
                     onChange={(x) => set("media.video_full_decode", x)}
                     label="Videos zur Prüfung dekodieren (empfohlen)"
                     description="Findet beschädigte oder manipulierte Videos, bevor jemand sie öffnet. Fällt ein Video nur hier auf, kann „Medien administrieren“ es nach eigener Prüfung trotzdem freigeben."
                   />
                   <Switch
                     checked={!!v["media.allow_animated"]}
-                    disabled={ro}
+                    disabled={ro("media.allow_animated")}
                     onChange={(x) => set("media.allow_animated", x)}
                     label="Animierte Bilder (GIF, WebP, PNG, AVIF) zulassen"
                     description="Vorschau und öffentliche Fassung zeigen das erste Bild. Aus: animierte Bilder werden gesperrt."
@@ -487,27 +512,27 @@ export default function Settings() {
                 </div>
                 <Switch
                   checked={!!v["media.notices"]}
-                  disabled={ro}
+                  disabled={ro("media.notices")}
                   onChange={(x) => set("media.notices", x)}
                   label="Benachrichtigungen zu Medien"
                   description="Neue Dateien über Upload-Links (gebündelt je Sammlung), Link läuft bald ab, Kontingent erreicht, Speicher knapp. Jede Person kann einzelne Arten unter „Mein Konto“ abschalten."
                 />
                 <Switch
                   checked={!!v["media.camera_buttons"]}
-                  disabled={ro}
+                  disabled={ro("media.camera_buttons")}
                   onChange={(x) => set("media.camera_buttons", x)}
                   label="Knöpfe „Foto aufnehmen“ und „Video aufnehmen“ auf dem Handy anzeigen"
                   description="Auf Touch-Geräten öffnen sie direkt die Kamera. Der große Knopf „Bilder oder Videos auswählen“ (Galerie) ist immer da."
                 />
                 <Switch
                   checked={!!v["media.link_show_once"]}
-                  disabled={ro}
+                  disabled={ro("media.link_show_once")}
                   onChange={(x) => set("media.link_show_once", x)}
                   label="Upload-Links nur einmal anzeigen"
                   description="Neue Links und QR-Codes erscheinen nur direkt nach dem Anlegen bzw. „Neu erzeugen“; gespeichert wird nur eine Prüfsumme. Aus: Link, QR-Code und Aushang lassen sich jederzeit erneut abrufen (verschlüsselt gespeichert). Gilt für neu angelegte und neu erzeugte Links."
                 />
                 <FieldWrap label="Text nach erfolgreichem Upload (optional)" htmlFor="s-media-done_text" help="Leer = „Die Dateien sind angekommen und werden geprüft, bevor sie verwendet werden.“ Die Vorgangsnummer erscheint immer darunter.">
-                  <Textarea id="s-media-done_text" rows={2} maxLength={1000} disabled={ro} value={v["media.done_text"] ?? ""} onChange={(e) => set("media.done_text", e.target.value)} />
+                  <Textarea id="s-media-done_text" rows={2} maxLength={1000} disabled={ro("media.done_text")} value={v["media.done_text"] ?? ""} onChange={(e) => set("media.done_text", e.target.value)} />
                 </FieldWrap>
                 <div className="flex items-start gap-2.5 p-3 rounded-node bg-raised text-sm">
                   <Icon name="ShieldCheck" size={16} className="mt-0.5 text-fg-muted shrink-0" />
@@ -515,7 +540,7 @@ export default function Settings() {
                 </div>
               </SectionCard>
 
-              <OpsSection />
+              {can("system.status") && <OpsSection />}
 
               {/* Sicherheit */}
               <SectionCard
@@ -527,21 +552,21 @@ export default function Settings() {
                 <div className="flex flex-col gap-2">
                   <Switch
                     checked={!!v["security.require_2fa_admins"]}
-                    disabled={ro || !!v["security.require_2fa_all"]}
+                    disabled={ro("security.require_2fa_admins") || !!v["security.require_2fa_all"]}
                     onChange={(x) => set("security.require_2fa_admins", x)}
                     label={t("admin.settings.req2faAdmins")}
                     description={t("admin.settings.req2faAdminsDesc")}
                   />
                   <Switch
                     checked={!!v["security.require_2fa_media"]}
-                    disabled={ro || !!v["security.require_2fa_all"]}
+                    disabled={ro("security.require_2fa_media") || !!v["security.require_2fa_all"]}
                     onChange={(x) => set("security.require_2fa_media", x)}
                     label={t("admin.settings.req2faMedia")}
                     description={t("admin.settings.req2faMediaDesc")}
                   />
                   <Switch
                     checked={!!v["security.require_2fa_all"]}
-                    disabled={ro}
+                    disabled={ro("security.require_2fa_all")}
                     onChange={(x) => set("security.require_2fa_all", x)}
                     label={t("admin.settings.req2faAll")}
                     description={t("admin.settings.req2faAllDesc")}
@@ -556,7 +581,7 @@ export default function Settings() {
                     min={5}
                     v={v}
                     set={set}
-                    ro={ro}
+                    ro={ro("security.session_idle_minutes")}
                   />
                   <NumField
                     k="security.session_max_hours"
@@ -565,7 +590,7 @@ export default function Settings() {
                     min={1}
                     v={v}
                     set={set}
-                    ro={ro}
+                    ro={ro("security.session_max_hours")}
                   />
                   <NumField
                     k="security.lockout_attempts"
@@ -574,7 +599,7 @@ export default function Settings() {
                     min={1}
                     v={v}
                     set={set}
-                    ro={ro}
+                    ro={ro("security.lockout_attempts")}
                   />
                   <NumField
                     k="security.lockout_minutes"
@@ -583,7 +608,7 @@ export default function Settings() {
                     min={1}
                     v={v}
                     set={set}
-                    ro={ro}
+                    ro={ro("security.lockout_minutes")}
                   />
                   <NumField
                     k="security.password_min_length"
@@ -594,7 +619,7 @@ export default function Settings() {
                     max={128}
                     v={v}
                     set={set}
-                    ro={ro}
+                    ro={ro("security.password_min_length")}
                   />
                 </FieldGrid>
                 <div className="flex flex-col gap-2">
@@ -606,14 +631,14 @@ export default function Settings() {
                   </p>
                   <Switch
                     checked={!!v["security.remember_enabled"]}
-                    disabled={ro}
+                    disabled={ro("security.remember_enabled")}
                     onChange={(x) => set("security.remember_enabled", x)}
                     label="„Angemeldet bleiben“ erlauben"
                     description="Ankreuzfeld auf der Anmeldeseite (in der installierten App vorbelegt). Keine Abmeldung bei Leerlauf; die Sitzung endet erst nach der unten eingestellten Zeit ohne Nutzung."
                   />
                   <Switch
                     checked={!!v["security.mfa_remember_enabled"]}
-                    disabled={ro}
+                    disabled={ro("security.mfa_remember_enabled")}
                     onChange={(x) => set("security.mfa_remember_enabled", x)}
                     label="Zwei-Faktor auf einem Gerät merken erlauben"
                     description="Nach einem Code aus der Authenticator-App fragt die Anmeldung auf diesem Gerät eine Zeit lang nur das Passwort ab. Wiederherstellungscodes merken kein Gerät."
@@ -627,7 +652,7 @@ export default function Settings() {
                     unit={t("admin.common.days")}
                     v={v}
                     set={set}
-                    ro={ro || !v["security.remember_enabled"]}
+                    ro={ro("security.remember_days") || !v["security.remember_enabled"]}
                   />
                   <NumField
                     k="security.mfa_remember_days"
@@ -636,7 +661,7 @@ export default function Settings() {
                     unit={t("admin.common.days")}
                     v={v}
                     set={set}
-                    ro={ro || !v["security.mfa_remember_enabled"]}
+                    ro={ro("security.mfa_remember_days") || !v["security.mfa_remember_enabled"]}
                   />
                 </FieldGrid>
                 <div className="flex flex-col gap-2">
@@ -648,29 +673,29 @@ export default function Settings() {
                   </p>
                   <Switch
                     checked={!!v["security.alert_inapp"]}
-                    disabled={ro}
+                    disabled={ro("security.alert_inapp")}
                     onChange={(x) => set("security.alert_inapp", x)}
                     label="Benachrichtigung an die Administration"
-                    description="In BlaulichtCMS an alle mit „System verwalten“ (Konten- und Rechteereignisse an „Benutzer verwalten“)."
+                    description="In BlaulichtCMS an alle mit „Sicherheitseinstellungen ändern“ (Konten- und Rechteereignisse an die Rechte der Benutzerverwaltung)."
                   />
                   <Switch
                     checked={!!v["security.alert_mail_admins"]}
-                    disabled={ro}
+                    disabled={ro("security.alert_mail_admins")}
                     onChange={(x) => set("security.alert_mail_admins", x)}
                     label="Zusätzlich per E-Mail an die Administration"
                     description="Nur wenn der E-Mail-Versand eingerichtet ist."
                   />
                   <Switch
                     checked={!!v["security.alert_mail_user"]}
-                    disabled={ro}
+                    disabled={ro("security.alert_mail_user")}
                     onChange={(x) => set("security.alert_mail_user", x)}
                     label="Betroffene Person per E-Mail informieren"
                     description="Bei Passwortänderung, Zwei-Faktor-Änderungen, Wiederherstellungscode und Sperre (in BlaulichtCMS immer). Nur mit eingerichtetem E-Mail-Versand."
                   />
                 </div>
                 <FieldGrid className="grid-cols-[repeat(auto-fit,minmax(min(200px,100%),1fr))]">
-                  <NumField k="security.alert_failed_logins" label="Meldung ab Fehlversuchen" help="Über alle Konten in 15 Minuten; 0 = aus." unit="in 15 Min." v={v} set={set} ro={ro} />
-                  <NumField k="security.alert_downloads" label="Meldung ab Downloads" help="Originale oder Exportdateien einer Person pro Stunde; 0 = aus." unit="pro Std." v={v} set={set} ro={ro} />
+                  <NumField k="security.alert_failed_logins" label="Meldung ab Fehlversuchen" help="Über alle Konten in 15 Minuten; 0 = aus." unit="in 15 Min." v={v} set={set} ro={ro("security.alert_failed_logins")} />
+                  <NumField k="security.alert_downloads" label="Meldung ab Downloads" help="Originale oder Exportdateien einer Person pro Stunde; 0 = aus." unit="pro Std." v={v} set={set} ro={ro("security.alert_downloads")} />
                 </FieldGrid>
               </SectionCard>
 
@@ -683,7 +708,7 @@ export default function Settings() {
               >
                 <Switch
                   checked={!!v["backup.enabled"]}
-                  disabled={ro}
+                  disabled={ro("backup.enabled")}
                   onChange={(x) => set("backup.enabled", x)}
                   label={t("admin.settings.backupAuto")}
                   description={t("admin.settings.backupAutoDesc")}
@@ -695,7 +720,7 @@ export default function Settings() {
                   >
                     <Select
                       id="s-bhour"
-                      disabled={ro || !v["backup.enabled"]}
+                      disabled={ro("backup.hour") || !v["backup.enabled"]}
                       value={String(v["backup.hour"])}
                       onChange={(e) =>
                         set("backup.hour", Number(e.target.value))
@@ -716,7 +741,7 @@ export default function Settings() {
                     max={365}
                     v={v}
                     set={set}
-                    ro={ro}
+                    ro={ro("backup.keep")}
                   />
                 </FieldGrid>
                 <Notice
@@ -733,8 +758,8 @@ export default function Settings() {
                     {t("admin.settings.restoreHelp")}
                   </Link>
                 </Notice>
-                {manage && <UpdatePreflight />}
-                {manage ? (
+                {can("update.install") && <UpdatePreflight />}
+                {can("backup.manage") ? (
                   <BackupList />
                 ) : (
                   <p className="m-0 text-sm text-fg-muted">
@@ -743,7 +768,7 @@ export default function Settings() {
                 )}
               </SectionCard>
 
-              <UpdatesSection manage={manage} />
+              {can("update.view") && <UpdatesSection manage={can("update.install")} />}
 
               <AboutSection dataDir={q.data?.env.dataDir} trustedProxies={q.data?.env.trustedProxies} />
             </>
@@ -776,7 +801,7 @@ export default function Settings() {
                 variant="primary"
                 icon="Save"
                 loading={saving}
-                disabled={ro || invalidNumbers || emptyName}
+                disabled={invalidNumbers || emptyName}
                 onClick={save}
               >
                 {t("admin.common.save")}
@@ -945,6 +970,7 @@ function RetentionPreview({ manage, dirty }: { manage: boolean; dirty: boolean }
   const [report, setReport] = useState<RetentionReport | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { can } = useAuth();
   const load = async () => {
     setBusy(true);
     setError(null);
@@ -1012,7 +1038,7 @@ function RetentionPreview({ manage, dirty }: { manage: boolean; dirty: boolean }
             <ul className="m-0 pl-5 text-sm flex flex-col gap-1">
               {report.collections.map((c) => (
                 <li key={c.id}>
-                  <Link to={`/medien/${c.id}`}>{c.title}</Link> – letzte Aktivität {fmtDateTime(c.last_activity)}, {fmtNumber(c.media)} Datei(en)
+                  {can("media.view") ? <Link to={`/medien/${c.id}`}>{c.title}</Link> : c.title} – letzte Aktivität {fmtDateTime(c.last_activity)}, {fmtNumber(c.media)} Datei(en)
                   {c.kept > 0 && <span className="text-fg-muted">; {fmtNumber(c.kept)} bleiben (verwendet in {c.used_in.map((x) => `„${x}“`).join(", ")})</span>}
                 </li>
               ))}
@@ -1134,6 +1160,7 @@ function OpsSection() {
 /** Update vorbereiten: Vorabprüfung und Wartungsmodus. Der Imagewechsel selbst passiert am Docker-Host. */
 function UpdatePreflight() {
   const ask = useConfirm();
+  const mayMaintenance = useAuth().can("system.maintenance");
   const q = useQuery({ queryKey: ["update-preflight"], queryFn: () => get<any>("/system/update-preflight"), refetchInterval: 10_000 });
   const toast = useToast();
   const d = q.data;
@@ -1166,7 +1193,7 @@ function UpdatePreflight() {
         ))}
       </ul>
       <div className="flex flex-wrap gap-2">
-        {on ? (
+        {!mayMaintenance ? null : on ? (
           <Button onClick={() => toggle(false)}>Wartungsmodus beenden</Button>
         ) : (
           <Button icon="Hourglass" onClick={async () => (await ask({ title: "Wartungsmodus einschalten?", text: "Schreibende Vorgänge und neue Aufträge pausieren, bis der Wartungsmodus wieder aus ist.", confirmLabel: "Einschalten" })) && toggle(true)}>
@@ -1182,6 +1209,7 @@ function UpdatePreflight() {
 }
 
 function BackupList() {
+  const mayDownload = useAuth().can("backup.download");
   const qc = useQueryClient();
   const toast = useToast();
   const q = useQuery({
@@ -1333,7 +1361,7 @@ function BackupList() {
                       : t("admin.settings.backupTrigger.schedule")}
                   </Td>
                   <Td align="right">
-                    {b.status === "ok" && (
+                    {b.status === "ok" && mayDownload && (
                       <Button
                         size="sm"
                         iconOnly
@@ -1356,8 +1384,8 @@ function BackupList() {
 }
 
 function AboutSection({ dataDir, trustedProxies }: { dataDir?: string; trustedProxies?: string[] }) {
-  const { me, isPlatformAdmin } = useAuth();
-  const status = useSystemStatus(false);
+  const { me, can } = useAuth();
+  const status = useSystemStatus(false, can("system.status"));
   return (
     <SectionCard
       id="ueber"
@@ -1387,7 +1415,7 @@ function AboutSection({ dataDir, trustedProxies }: { dataDir?: string; trustedPr
         <LinkButton to="/hilfe" icon="BookOpen">
           {t("admin.settings.openHelp")}
         </LinkButton>
-        {isPlatformAdmin && (
+        {can("update.view") && (
           <LinkButton to="/hilfe/updates" icon="Download">
             {t("admin.settings.openUpdates")}
           </LinkButton>

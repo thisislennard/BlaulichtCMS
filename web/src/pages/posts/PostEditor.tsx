@@ -149,7 +149,7 @@ function PostEditorInner({ id }: { id: string }) {
     queryFn: () => get<PostDetail>(`/posts/${id}`),
     refetchInterval: (query) => (['publishing', 'unknown'].includes(query.state.data?.state ?? '') ? 5000 : false),
   });
-  const sites = useQuery({ queryKey: ['sites'], queryFn: () => get<Site[]>('/sites') });
+  const sites = useQuery({ queryKey: ['sites'], queryFn: () => get<Site[]>('/sites'), enabled: can('channel.view') });
   const [draft, setDraft] = useState<Draft | null>(null);
   const [mediaCache, setMediaCache] = useState<Record<string, MediaItem>>({});
   const [picker, setPicker] = useState(false);
@@ -256,7 +256,7 @@ function PostEditorInner({ id }: { id: string }) {
         }
         actions={
           <>
-            {can('media.manage') && (
+            {can('media.collections') && (
               <Button
                 icon="Camera"
                 onClick={async () => {
@@ -334,7 +334,7 @@ function PostEditorInner({ id }: { id: string }) {
             title="Medien"
             subtitle="Öffentlich verwendet wird eine geprüfte Fassung ohne Standortdaten."
             action={
-              editable && (
+              editable && can('media.view') && (
                 <Button size="sm" icon="Plus" onClick={() => setPicker(true)}>
                   Medien übernehmen
                 </Button>
@@ -404,6 +404,8 @@ function PostEditorInner({ id }: { id: string }) {
             <FieldWrap label="Veröffentlichen auf" help="Ohne Zielkanal bleibt der Beitrag intern. Eine Änderung des Zielkanals verlangt eine neue Freigabe." htmlFor="e-site">
               <Select id="e-site" value={draft.siteId ?? ''} disabled={!editable} onChange={(e) => setDraft({ ...draft, siteId: e.target.value || null })}>
                 <option value="">Nur intern (keine Veröffentlichung)</option>
+                {/* Ohne „Websites ansehen“ fehlt die Liste – den gespeicherten Zielkanal trotzdem zeigen */}
+                {!can('channel.view') && draft.siteId && <option value={draft.siteId}>WordPress</option>}
                 {activeSites.map((s) => (
                   <option key={s.id} value={s.id}>
                     WordPress: {s.name}
@@ -411,7 +413,7 @@ function PostEditorInner({ id }: { id: string }) {
                 ))}
               </Select>
             </FieldWrap>
-            {activeSites.length === 0 && <p className="m-0 mt-2 text-sm text-fg-muted">Noch keine Website gekoppelt. {can('channel.manage') && <Link to="/kanaele">Website koppeln</Link>}</p>}
+            {sites.data && activeSites.length === 0 && <p className="m-0 mt-2 text-sm text-fg-muted">Noch keine Website gekoppelt. {can('channel.sites') && <Link to="/kanaele">Website koppeln</Link>}</p>}
             {draft.siteId && (
               <div className="flex flex-col gap-4 mt-4">
                 <FieldWrap label="Termin (optional)" help="Leer = sofort nach dem Veröffentlichen. Der Termin ist Teil der freigegebenen Fassung." htmlFor="e-at">
@@ -457,7 +459,7 @@ function PostEditorInner({ id }: { id: string }) {
                 <Rev n={r.number} className="text-fg-muted" />
               </div>
               {dirty && <Notice>Erst speichern – Freigaben beziehen sich immer auf eine gespeicherte Fassung.</Notice>}
-              {d!.state === 'draft' && editable && !dirty && (
+              {d!.state === 'draft' && can('post.submit') && !dirty && (
                 <Button variant="primary" icon="Send" onClick={() => act(() => post(`/posts/${id}/submit`, { revision: r.number }), 'Zur Freigabe eingereicht')}>
                   Zur Freigabe einreichen
                 </Button>
@@ -467,7 +469,7 @@ function PostEditorInner({ id }: { id: string }) {
                   {d!.lastDecision.note}
                 </Notice>
               )}
-              {d!.state === 'rejected' && editable && !dirty && (
+              {d!.state === 'rejected' && can('post.submit') && !dirty && (
                 <Button icon="Send" onClick={() => act(() => post(`/posts/${id}/submit`, { revision: r.number }), 'Erneut eingereicht')}>
                   Unverändert erneut einreichen
                 </Button>
@@ -475,7 +477,7 @@ function PostEditorInner({ id }: { id: string }) {
               {d!.state === 'in_review' && (
                 <>
                   <p className="m-0 text-fg-muted">Eingereicht {fmtRelative(r.submitted_at)}.</p>
-                  {can('post.approve') && !dirty && (
+                  {can('approval.post') && !dirty && (
                     <div className="grid grid-cols-2 gap-2">
                       <Button icon="X" onClick={() => setDecision('rejected')}>
                         Zurückweisen
@@ -499,19 +501,19 @@ function PostEditorInner({ id }: { id: string }) {
                 </div>
               )}
               {d!.state === 'approved' && !r.site_id && !(r.social_targets ?? []).length && <Notice tone="success">Intern freigegeben. Für eine Veröffentlichung einen Zielkanal wählen und erneut freigeben lassen.</Notice>}
-              {d!.state === 'approved' && r.site_id && can('post.publish') && !dirty && (
+              {d!.state === 'approved' && r.site_id && can('publish.website') && !dirty && (
                 <Button variant="primary" icon="Globe" onClick={() => act(() => post(`/posts/${id}/publish`, { revision: r.number, contentHash: r.content_hash }), 'Veröffentlichung beauftragt')}>
                   Auf {site?.name ?? 'Website'} veröffentlichen
                 </Button>
               )}
               {d!.state === 'scheduled' && d!.publications[0] && <Notice>Geplant für {fmtDateTime(d!.publications[0].run_at)}. Vorher holt die Website den Auftrag nicht ab.</Notice>}
               {d!.state === 'deactivated' && <Notice tone="warning">Von der Website zurückgezogen. Für eine erneute Veröffentlichung eine neue Fassung freigeben lassen.</Notice>}
-              {['published', 'failed', 'unknown'].includes(d!.state) && can('post.publish') && d!.publications.some((p) => p.action === 'publish' && p.status === 'published') && (
+              {['published', 'failed', 'unknown'].includes(d!.state) && can('publish.unpublish') && d!.publications.some((p) => p.action === 'publish' && p.status === 'published') && (
                 <Button size="sm" icon="Ban" onClick={() => setUnpublishing(true)}>
                   Von der Website zurückziehen
                 </Button>
               )}
-              {d!.approval && can('post.approve') && !['publishing', 'published', 'scheduled'].includes(d!.state) && (
+              {d!.approval && can('approval.post') && !['publishing', 'published', 'scheduled'].includes(d!.state) && (
                 <Button size="sm" variant="ghost" onClick={() => act(() => post(`/posts/${id}/approval/revoke`), 'Freigabe zurückgezogen')}>
                   Freigabe zurückziehen
                 </Button>
@@ -550,17 +552,17 @@ function PostEditorInner({ id }: { id: string }) {
                     {p.status === 'unknown' && p.site_active !== false && <div className="text-warn">Die Website hat noch kein Ergebnis gemeldet. Die Bridge prüft beim nächsten Abruf, ob der Beitrag bereits existiert.</div>}
                     {p.error && <div className="text-err">{p.error}</div>}
                     <div className="flex gap-2">
-                      {p.status === 'failed' && can('post.publish') && (
+                      {p.status === 'failed' && can('publish.website') && (
                         <Button size="sm" icon="RefreshCw" onClick={() => act(() => post(`/publications/${p.id}/retry`), 'Erneut beauftragt')}>
                           Erneut versuchen
                         </Button>
                       )}
-                      {p.status === 'queued' && can('post.publish') && (
+                      {p.status === 'queued' && can('publish.website') && (
                         <Button size="sm" onClick={() => act(() => post(`/publications/${p.id}/cancel`), 'Auftrag abgebrochen')}>
                           Abbrechen
                         </Button>
                       )}
-                      {['sent', 'unknown'].includes(p.status) && p.site_active === false && can('post.publish') && (
+                      {['sent', 'unknown'].includes(p.status) && p.site_active === false && can('publish.website') && (
                         <Button size="sm" icon="CircleCheck" onClick={() => setResolving(p)}>
                           Ergebnis von Hand festhalten
                         </Button>
@@ -577,7 +579,7 @@ function PostEditorInner({ id }: { id: string }) {
               <ul className="m-0 p-0 list-none flex flex-col gap-2 text-sm">
                 {d!.collections.map((c) => (
                   <li key={c.id}>
-                    <Link to={`/medien/${c.id}`}>{c.title}</Link>
+                    {can('media.view') ? <Link to={`/medien/${c.id}`}>{c.title}</Link> : c.title}
                     <span className="text-fg-muted">
                       {' '}
                       · {c.media_count} Dateien · {c.selected_count} ausgewählt

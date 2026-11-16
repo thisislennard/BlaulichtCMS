@@ -23,7 +23,7 @@ interface Approval {
 /** Offene Freigaben aus Automationen („Freigabe anfordern“, E-Mail an externe Empfänger) – auf der Seite Freigaben. */
 export function AutomationApprovals({ compact }: { compact?: boolean }) {
   const { canAny, can } = useAuth();
-  const q = useQuery({ queryKey: ['automation-approvals'], queryFn: () => get<Approval[]>('/automation-approvals'), enabled: canAny('post.approve', 'automation.manage'), refetchInterval: 20_000 });
+  const q = useQuery({ queryKey: ['automation-approvals'], queryFn: () => get<Approval[]>('/automation-approvals'), enabled: canAny('approval.automation', 'automation.manage'), refetchInterval: 20_000 });
   const [open, setOpen] = useState<Approval | null>(null);
   if (!q.data?.length) return null;
   return (
@@ -102,7 +102,7 @@ function DecisionDialog({ a, onClose }: { a: Approval; onClose: () => void }) {
           Aus der Automation „{a.automation_name}“ · angefordert {fmtDateTime(a.created_at)} · Lauf <span className="font-mono">{a.run_id.slice(0, 8)}</span>
         </p>
         {a.summary ? <pre className="m-0 whitespace-pre-wrap font-sans text-sm bg-raised rounded-node p-3 max-h-[320px] overflow-auto">{a.summary}</pre> : <p className="m-0 text-sm text-fg-muted">Keine weiteren Angaben.</p>}
-        {!a.can_decide && <p className="m-0 text-sm text-fg-muted">Entscheiden kann eine Person mit dem Recht „Fassungen freigeben“, die die Automation nicht zuletzt geändert oder aktiviert hat (Vier-Augen-Prinzip, falls eingeschaltet).</p>}
+        {!a.can_decide && <p className="m-0 text-sm text-fg-muted">Entscheiden kann eine Person mit dem Recht „Freigaben in Automationen erteilen“, die die Automation nicht zuletzt geändert oder aktiviert hat (Vier-Augen-Prinzip, falls eingeschaltet).</p>}
         {a.can_decide && (
           <FieldWrap label="Notiz" htmlFor="ap-note" help="Beim Ablehnen Pflicht.">
             <Textarea id="ap-note" rows={2} maxLength={500} value={note} onChange={(e) => setNote(e.target.value)} />

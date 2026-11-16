@@ -28,6 +28,8 @@ const MAP: Record<string, string[][]> = {
   connections: [['connections'], ['connection'], ['social-targets']],
   official_warnings: [['official-warnings'], ['dashboard']],
   fe2_events: [['fe2-events'], ['posts']],
+  // Rollen geändert: eigene Rechte, Navigation und Rollenliste sofort neu laden
+  roles: [['me'], ['roles'], ['users']],
 };
 
 export function LiveProvider({ children, enabled }: { children: ReactNode; enabled: boolean }) {

@@ -24,7 +24,7 @@ Unter [Mein Konto](/profil) → **Angemeldete Geräte** siehst du alle Sitzungen
 
 ## Zwei-Faktor-Anmeldung
 
-Für Administratoren und Rollen mit „Medien verwalten“ (Medienverwaltung, Redaktion) ist ein zweiter Faktor Pflicht (einstellbar unter Einstellungen → Sicherheit; für Warnentwurf und Benutzerverwaltung empfohlen, dann „Zwei-Faktor für alle“). Du brauchst eine Authenticator-App (z. B. Aegis, 2FAS, Google oder Microsoft Authenticator):
+Für Konten mit Verwaltungsrechten (mitgeliefert: Administration) und für Rollen mit „Originale herunterladen“ (mitgeliefert: Medienverwaltung, Redaktion) ist ein zweiter Faktor Pflicht (einstellbar unter Einstellungen → Sicherheit; für Warnentwurf und Benutzerverwaltung empfohlen, dann „Zwei-Faktor für alle“). Du brauchst eine Authenticator-App (z. B. Aegis, 2FAS, Google oder Microsoft Authenticator):
 
 1. QR-Code scannen.
 2. Den 6-stelligen Code eingeben.

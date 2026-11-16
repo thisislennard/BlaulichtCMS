@@ -1,10 +1,12 @@
-Rechte werden immer **auf dem Server** geprüft – bei jeder Seite, jeder API-Anfrage und jedem Dateizugriff. Rollen lassen sich kombinieren.
+Rechte werden immer **auf dem Server** geprüft – bei jeder Seite, jeder API-Anfrage und jedem Dateizugriff. Rollen lassen sich kombinieren; es gilt die Summe der Rechte. **Was eine Person nicht darf, wird ihr auch nicht angezeigt:** Menüpunkte, Reiter, Schaltflächen und Kacheln ohne Recht fehlen einfach. Wer eine Adresse ohne Recht direkt aufruft, sieht „Kein Zugriff“.
 
 ## Rollen
 
+Mitgeliefert sind neun Rollen. Sie decken die übliche Aufgabenteilung ab:
+
 | Rolle | Darf |
 |---|---|
-| Administration | Alles, inklusive Konten, Rechte, Websites, Einstellungen, Sicherungen |
+| Administration | Alles, inklusive Konten, Rollen, Websites, Einstellungen, Sicherungen. Hat immer alle Rechte und lässt sich nicht ändern. |
 | Medienverwaltung | Sammlungen und Upload-Links pflegen, sichten, auswählen, herunterladen |
 | Redaktion | Beiträge schreiben, Medien übernehmen, zur Freigabe einreichen (inkl. Medienverwaltung) |
 | Freigabe | Fassungen freigeben oder zurückweisen, Aktivitäten lesen |
@@ -14,29 +16,63 @@ Rechte werden immer **auf dem Server** geprüft – bei jeder Seite, jeder API-A
 | Warnversand | Freigegebene Warnentwürfe versenden, unklare Zustellungen prüfen, Eingang bestätigen |
 | Lesezugriff | Beiträge, Medien und Status ansehen |
 
-Das Recht **„Datenschutzanfragen bearbeiten“** (Suche über alle personenbezogenen Daten, Auskunft, Löschung je Treffer) hat standardmäßig nur die Administration – siehe [Sicherheit](/hilfe/sicherheit).
+Welche Rechte eine Rolle genau hat, zeigt [Benutzer und Rollen](/benutzer?tab=rollen) → Reiter **Rollen** → Menü der Rolle → **Rechte ansehen** bzw. **Rechte bearbeiten**.
 
-Bei Medien gibt es drei Stufen: **„Medien sichten“** (ansehen, öffentliche Fassungen laden), **„Medien verwalten“** (Sammlungen, Ordner, Upload-Links, Sichtung, Verschieben, Papierkorb, Originale) und **„Medien administrieren“**. Das dritte Recht hat standardmäßig nur die Administration: Papierkorb endgültig leeren, gesperrte Dateien erneut prüfen oder trotzdem freigeben, Sicherheitsereignisse der Upload-Seiten, Speicherübersicht und fehlgeschlagene Medienaufträge.
+Entwurf, Bestätigung der Warnstufe, Freigabe und Versand von Warnentwürfen sind bewusst **getrennte** Rechte. Regeln und Lagefragen gibt immer eine **andere** Person fachlich frei.
 
-Entwurf, Bestätigung der Warnstufe, Freigabe und Versand von Warnentwürfen sind bewusst **getrennte** Rechte. Stichwörter, Regeln, Vorlagen und Zuständigkeiten pflegt die Administration (Recht „Stichwörter und Regeln pflegen“); Regeln und Lagefragen gibt immer eine **andere** Person fachlich frei.
+## Rollen anlegen
+
+Reichen die mitgelieferten Rollen nicht, legst du eigene an. Dafür brauchst du das Recht **„Rollen verwalten“** (mitgeliefert: nur Administration).
+
+1. [Benutzer und Rollen](/benutzer?tab=rollen) → Reiter **Rollen** → **Neue Rolle** – oder im Menü einer vorhandenen Rolle **Als Kopie anlegen**, um von deren Rechten auszugehen.
+2. Namen und Beschreibung eintragen und die Rechte ankreuzen. Die Rechte sind nach Bereichen geordnet; die Suche filtert nach Stichworten („Upload-Link“, „freigeben“). **Alle im Bereich** wählt einen ganzen Bereich.
+3. **Weiter: Änderung prüfen** zeigt, was die Rolle erhält und verliert – kritische Rechte sind hervorgehoben. Erst **Speichern** bzw. **Rolle anlegen** übernimmt die Änderung.
+4. Die Rolle unter **Benutzer** den gewünschten Konten zuweisen (Spalte Rollen).
+
+Dazu gilt:
+
+- **Stufen:** Jedes Recht trägt eine Stufe – *lesen* (nur ansehen), *ändern* oder *kritisch* (z. B. freigeben, veröffentlichen, Konten und Einstellungen).
+- **Voraussetzungen:** Manche Rechte setzen andere voraus, etwa „Beiträge bearbeiten“ → „Beiträge ansehen“. Sie werden automatisch mit angekreuzt; wählst du die Voraussetzung ab, entfallen die abhängigen Rechte.
+- **Sofort wirksam:** Änderungen an einer Rolle gelten für alle Konten mit dieser Rolle ab der nächsten Aktion – ohne neue Anmeldung.
+- **Nur eigene Rechte:** Du kannst nur Rechte vergeben oder entziehen, die du selbst hast, und nur Rollen zuweisen, deren Rechte du vollständig hast. Konten mit mehr Rechten kannst du nicht sperren, löschen oder per Passwort-Link übernehmen.
+- **Mitgelieferte Rollen** lassen sich in ihren Rechten ändern (Kennzeichen **Angepasst**) und mit **Auf Standard zurücksetzen** wiederherstellen, aber nicht umbenennen oder löschen. Unveränderte Rollen erhalten Rechte neuer Versionen automatisch, angepasste und eigene Rollen nicht – nach einem Update bitte prüfen.
+- **Löschen:** Eigene Rollen lassen sich löschen. Haben noch Konten die Rolle, wählst du eine Ersatzrolle; niemand bleibt ohne Rolle zurück.
+- **Bestätigung und Protokoll:** Jede Änderung an Rollen verlangt dein Passwort (siehe unten), steht mit altem und neuem Stand in den [Aktivitäten](/aktivitaeten) und wird bei kritischen Rechten zusätzlich gemeldet. Per API-Schlüssel lassen sich Rollen nicht ändern.
+- **Zwei-Faktor-Pflicht:** Die Einstellungen zur Zwei-Faktor-Pflicht richten sich nach den Rechten: Die Pflicht „für Administration“ gilt für alle Konten mit Verwaltungsrechten (Konten, Rollen, Einstellungen, Sicherungen, Updates, Verbindungen, Kopplung von Websites, Datenschutzanfragen), die Pflicht „für Medienverwaltung“ für „Originale herunterladen“. Erhält eine Rolle solche Rechte, werden ihre Konten ohne zweiten Faktor abgemeldet und richten ihn bei der nächsten Anmeldung ein.
+
+## Beispiele
+
+| Aufgabe | Rolle anlegen mit |
+|---|---|
+| Fotos vor Ort sichten, ohne Originale und ohne Löschen | Medien ansehen, Medien sichten und auswählen |
+| Pressefotos verpixeln und ordnen | Medien ansehen, Medien ordnen, Medien unkenntlich machen |
+| Praktikum: Beiträge schreiben, aber nicht einreichen | Beiträge ansehen, Beiträge anlegen, Beiträge bearbeiten, Medien ansehen |
+| Social Media: nur in sozialen Kanälen veröffentlichen | Beiträge ansehen, In sozialen Kanälen veröffentlichen, Aus sozialen Kanälen entfernen |
+| Banner pflegen und schalten | Banner ansehen, Banner bearbeiten, Banner veröffentlichen, Websites ansehen |
+| Konten betreuen, ohne Systemzugriff | Benutzer ansehen, Benutzer einladen, Konten sperren und entsperren, Sitzungen beenden |
+| Revision: alles nachvollziehen, nichts ändern | Audit-Protokoll ansehen, Systemprotokoll ansehen, Einstellungen ansehen, Benutzer ansehen |
+
+Rollen lassen sich kombinieren: Die Rolle „Banner“ zusätzlich zur Rolle „Redaktion“ ergibt beide Aufgaben, ohne eine dritte Rolle zu pflegen.
 
 ## Einladen
 
-1. [Benutzer und Rollen](/benutzer) → **Einladen**.
-2. E-Mail-Adresse und Rollen wählen.
+1. [Benutzer und Rollen](/benutzer) → **Einladen** (Recht „Benutzer einladen“).
+2. E-Mail-Adresse und Rollen wählen. Angeboten werden die Rollen, deren Rechte du selbst vollständig hast.
 3. Den persönlichen Link sicher weitergeben. Er ist einmalig, befristet und lässt sich über das Menü der Person **widerrufen**.
 
 ## Rollen ändern oder Konten sperren
 
-Änderungen wirken sofort; offene Sitzungen der Person werden beendet (bei Änderungen am eigenen Konto bleibt die aktuelle Sitzung bestehen). Über das Menü der Zeile lässt sich eine Person auch **umbenennen**.
+Rollen eines Kontos änderst du in der Spalte **Rollen** (Recht „Rollen zuweisen“). Änderungen wirken sofort; offene Sitzungen der Person werden beendet (bei Änderungen am eigenen Konto bleibt die aktuelle Sitzung bestehen). Über das Menü der Zeile lässt sich eine Person auch **umbenennen**, auf allen Geräten abmelden, sperren oder löschen – je nachdem, welche Rechte du hast.
 
 **Gesperrte Konten:** Nach mehreren Fehlversuchen bei Passwort oder Code wird ein Konto für unbekannte Geräte vorübergehend gesperrt (bekannte Geräte der Person sind ausgenommen). Die Liste zeigt dann **Gesperrt** mit Ende der Sperre; **Sperre aufheben** im Menü der Zeile entsperrt sofort, auch für einzelne Geräte.
 
-**Erneute Bestätigung:** Besonders kritische Aktionen verlangen dein Passwort (und bei eingerichteter Zwei-Faktor-Anmeldung einen aktuellen Code), wenn deine letzte Bestätigung länger als 10 Minuten her ist: Administrationsrechte vergeben oder ein Konto mit Administration einladen, Zwei-Faktor einer Person zurücksetzen, einen Passwort-Link für ein Konto mit Administration erzeugen und Sicherheitseinstellungen ändern. Eine Bestätigung gilt danach 10 Minuten für mehrere Aktionen. Per API-Schlüssel sind diese Aktionen nicht möglich. Die betroffene Person bzw. die Administration wird benachrichtigt.
+**Erneute Bestätigung:** Besonders kritische Aktionen verlangen dein Passwort (und bei eingerichteter Zwei-Faktor-Anmeldung einen aktuellen Code), wenn deine letzte Bestätigung länger als 10 Minuten her ist: Rollen anlegen, ändern, zurücksetzen oder löschen, Verwaltungsrechte vergeben oder ein Konto mit Verwaltungsrechten einladen, Zwei-Faktor einer Person zurücksetzen, einen Passwort-Link für ein Konto mit Verwaltungsrechten erzeugen und Sicherheitseinstellungen ändern. Eine Bestätigung gilt danach 10 Minuten für mehrere Aktionen. Per API-Schlüssel sind diese Aktionen nicht möglich. Die betroffene Person bzw. die Administration wird benachrichtigt.
 
- Es bleibt immer mindestens ein aktives Konto mit Administration. Jede Rollenänderung steht mit Person und Zeitpunkt in den [Aktivitäten](/aktivitaeten).
+Es bleibt immer mindestens ein aktives Konto mit der Rolle Administration – eine eigene Rolle mit allen Rechten ersetzt sie nicht. Jede Rollenänderung steht mit Person und Zeitpunkt in den [Aktivitäten](/aktivitaeten).
 
 ## Rechte im Überblick
+
+Alle Rechte, nach Bereichen. Die Tabelle entspricht dem Rollen-Editor; „Setzt voraus“ nennt die Rechte, die automatisch mit vergeben werden.
 
 <!-- rechte:start -->
 
@@ -47,7 +83,7 @@ Entwurf, Bestätigung der Warnstufe, Freigabe und Versand von Warnentwürfen sin
 | Medien ansehen | lesen | Sammlungen, Ordner und geprüfte Medien ansehen, durchsuchen und einzeln in der öffentlichen Fassung (ohne Standort) laden. | – |
 | Medien exportieren (ZIP) | lesen | Sammeldownloads der öffentlichen Fassungen als ZIP erstellen und laden. | Medien ansehen |
 | Originale herunterladen | ändern | Originaldateien mit möglichen Standortdaten einzeln oder als Sammeldownload laden; Sammeldownloads anderer Personen laden. | Medien ansehen |
-| Sammlungen anlegen und bearbeiten | ändern | Sammlungen anlegen, umbenennen, beschreiben und Fristen ändern; aus einem Beitrag eine Sammlung anlegen. | Medien ansehen |
+| Sammlungen anlegen und bearbeiten | ändern | Sammlungen anlegen, umbenennen, beschreiben und Fristen ändern. Für „Fotos und Videos sammeln“ im Beitrag zusätzlich „Upload-Links verwalten“. | Medien ansehen |
 | Dateien hochladen | ändern | Eigene Dateien direkt in eine Sammlung hochladen. | Medien ansehen |
 | Upload-Links verwalten | ändern | Upload-Links erstellen, pausieren, verlängern, erneuern und widerrufen; Optionen je Link ändern. | Medien ansehen |
 | Medien sichten und auswählen | ändern | Sichtungsstand setzen (ausgewählt, zurückgestellt, übersprungen); Namen der Einsendenden und Einwilligungen sehen. | Medien ansehen |
@@ -96,7 +132,7 @@ Entwurf, Bestätigung der Warnstufe, Freigabe und Versand von Warnentwürfen sin
 | Recht | Stufe | Erlaubt | Setzt voraus |
 | --- | --- | --- | --- |
 | Banner ansehen | lesen | Banner und ihren Stand ansehen. | – |
-| Banner bearbeiten | ändern | Banner anlegen, ändern und zur Freigabe einreichen; aus einer amtlichen Warnung einen Bannerentwurf anlegen. | Banner ansehen |
+| Banner bearbeiten | ändern | Banner anlegen, ändern und zur Freigabe einreichen; aus einer amtlichen Warnung einen Bannerentwurf anlegen. | Banner ansehen, Websites ansehen |
 | Banner veröffentlichen | kritisch | Freigegebene Banner auf der Website schalten und beenden. | Banner ansehen |
 
 **Warnentwürfe und amtliche Warnungen**
@@ -172,6 +208,10 @@ Entwurf, Bestätigung der Warnstufe, Freigabe und Versand von Warnentwürfen sin
 | Datenschutzeinstellungen ändern | kritisch | Löschfristen, Aufbewahrung der Protokolle, Angaben zu Verantwortlichen und Datenschutzhinweise. | Einstellungen ansehen |
 | Medieneinstellungen ändern | ändern | Dateigrößen, erlaubte Dateitypen, Vorgaben für Upload-Links, Prüftiefe und Speichergrenzen. | Einstellungen ansehen |
 | Redaktionseinstellungen ändern | kritisch | Vier-Augen-Prinzip und weitere Vorgaben für Redaktion und Freigabe. | Einstellungen ansehen |
-| Systemeinstellungen ändern | ändern | Parallele Aufträge und weitere technische Einstellungen. | Einstellungen ansehen |
+| Systemeinstellungen ändern | ändern | Parallele Aufträge, Ausführung der Automationen und weitere technische Einstellungen. | Einstellungen ansehen |
 
 <!-- rechte:ende -->
+
+## Nach dem Update auf 0.3.0
+
+Bis Version 0.2 gab es rund 20 grobe Rechte (z. B. „Medien verwalten“). Sie wurden in die feinen Rechte oben aufgeteilt. Alle mitgelieferten Rollen behalten genau ihre bisherigen Möglichkeiten, bestehende Konten müssen nichts tun. Neu und nur bei der Administration: „Rollen verwalten“, „Interne Zieladressen erlauben“ und „Versandte Warnvorgänge löschen“.

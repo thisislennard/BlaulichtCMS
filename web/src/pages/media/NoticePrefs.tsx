@@ -11,11 +11,11 @@ export function MediaNoticePrefs() {
   const { me, can, setPreferences } = useAuth();
   const qc = useQueryClient();
   const toastError = useErrorToast();
-  if (!me || !can('media.read')) return null;
+  if (!me || !can('media.view')) return null;
   const muted = new Set<Category>((me.user.preferences.mutedNotifications ?? []) as Category[]);
   const items: { key: Category; label: string; description: string; show: boolean }[] = [
-    { key: 'media_new', label: 'Neue Dateien', description: 'Über einen Upload-Link sind Fotos oder Videos eingegangen und geprüft (gebündelt je Sammlung).', show: can('media.manage') },
-    { key: 'media_link', label: 'Upload-Links', description: 'Ein Link läuft bald ab oder das Kontingent von Link oder Sammlung ist erreicht.', show: can('media.manage') },
+    { key: 'media_new', label: 'Neue Dateien', description: 'Über einen Upload-Link sind Fotos oder Videos eingegangen und geprüft (gebündelt je Sammlung).', show: can('media.review') },
+    { key: 'media_link', label: 'Upload-Links', description: 'Ein Link läuft bald ab oder das Kontingent von Link oder Sammlung ist erreicht.', show: can('media.review') },
     { key: 'media_storage', label: 'Speicherplatz', description: 'Der Speicher für Medien unterschreitet die Warnschwelle.', show: can('media.admin') },
   ];
   const visible = items.filter((i) => i.show);

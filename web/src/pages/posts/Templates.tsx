@@ -96,7 +96,7 @@ export default function Templates() {
       <PageHeader
         title="Vorlagen"
         subtitle="Redaktionelle Vorlagen für wiederkehrende Beiträge, z. B. Einsatzberichte oder Veranstaltungshinweise."
-        actions={can('post.edit') && <Button variant="primary" icon="Plus" onClick={() => setEdit(null)}>Neue Vorlage</Button>}
+        actions={can('post.templates') && <Button variant="primary" icon="Plus" onClick={() => setEdit(null)}>Neue Vorlage</Button>}
       />
       {q.isLoading && <SkeletonRows rows={4} />}
       {q.error && <ErrorBox title="Vorlagen konnten nicht geladen werden">{(q.error as Error).message}</ErrorBox>}
@@ -118,7 +118,7 @@ export default function Templates() {
                 <Td>{KIND_LABEL[t.kind]}</Td>
                 <Td className="hidden md:table-cell">{fmtRelative(t.updated_at)}</Td>
                 <Td align="right">
-                  {can('post.edit') && (
+                  {can('post.templates') && (
                     <span className="inline-flex gap-2">
                       <Button size="sm" icon="Pencil" onClick={() => setEdit(t)}>
                         Bearbeiten

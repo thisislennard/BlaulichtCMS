@@ -4,6 +4,7 @@ import type { MediaItem } from '../../api/types';
 import { Button, FieldWrap, Input, Textarea } from '../../components/ui/core';
 import { Icon } from '../../components/ui/Icon';
 import { Dialog, useErrorToast } from '../../components/ui/overlays';
+import { useAuth } from '../../lib/auth';
 import { MediaInfo, MediaThumb } from './gallery';
 import { SENSITIVE_LABELS, SENSITIVE_ORDER } from './PrivacyDialog';
 
@@ -16,6 +17,7 @@ type Start = 'open' | 'all' | 'selected' | 'on_hold';
  */
 export function ReviewDialog({ ready, onClose, onDecide, onChanged }: { ready: MediaItem[]; onClose: () => void; onDecide: (m: MediaItem, s: Decision) => Promise<void>; onChanged: () => void }) {
   const toastError = useErrorToast();
+  const { can } = useAuth();
   const counts = {
     open: ready.filter((m) => m.selection === 'pending').length,
     all: ready.length,
@@ -139,35 +141,39 @@ export function ReviewDialog({ ready, onClose, onDecide, onChanged }: { ready: M
             )}
           </div>
           <MediaInfo m={m} />
-          <div>
-            <Button size="sm" variant="ghost" icon={editInfo ? 'ChevronDown' : 'ChevronRight'} aria-expanded={editInfo} onClick={() => setEditInfo((v) => !v)}>
-              Infos bearbeiten
-            </Button>
-            {editInfo && (
-              <div className="grid gap-3 sm:grid-cols-2 mt-2" key={m.id}>
-                <FieldWrap label="Anzeigename" htmlFor="rv-name">
-                  <Input id="rv-name" defaultValue={m.display_name ?? ''} placeholder={m.original_name} maxLength={200} onBlur={(e) => void saveInfo('displayName', e.target.value)} />
-                </FieldWrap>
-                <FieldWrap label="Beschreibung" htmlFor="rv-desc">
-                  <Textarea id="rv-desc" rows={2} defaultValue={m.description ?? ''} maxLength={2000} onBlur={(e) => void saveInfo('description', e.target.value)} />
-                </FieldWrap>
-              </div>
-            )}
-          </div>
-          <div className="flex flex-col gap-2">
-            <span className="text-label uppercase text-fg-muted">Hinweise zur Datei</span>
-            <div className="flex flex-wrap gap-2">
-              {SENSITIVE_ORDER.map((f) => {
-                const on = (m.sensitive_flags ?? []).includes(f);
-                return (
-                  <Button key={f} size="sm" variant={on ? 'primary' : 'secondary'} icon={on ? 'CheckSquare' : 'Square'} aria-pressed={on} onClick={() => void toggleFlag(f)}>
-                    {SENSITIVE_LABELS[f]}
-                  </Button>
-                );
-              })}
+          {can('media.organize') && (
+            <div>
+              <Button size="sm" variant="ghost" icon={editInfo ? 'ChevronDown' : 'ChevronRight'} aria-expanded={editInfo} onClick={() => setEditInfo((v) => !v)}>
+                Infos bearbeiten
+              </Button>
+              {editInfo && (
+                <div className="grid gap-3 sm:grid-cols-2 mt-2" key={m.id}>
+                  <FieldWrap label="Anzeigename" htmlFor="rv-name">
+                    <Input id="rv-name" defaultValue={m.display_name ?? ''} placeholder={m.original_name} maxLength={200} onBlur={(e) => void saveInfo('displayName', e.target.value)} />
+                  </FieldWrap>
+                  <FieldWrap label="Beschreibung" htmlFor="rv-desc">
+                    <Textarea id="rv-desc" rows={2} defaultValue={m.description ?? ''} maxLength={2000} onBlur={(e) => void saveInfo('description', e.target.value)} />
+                  </FieldWrap>
+                </div>
+              )}
             </div>
-            <p className="m-0 text-meta text-fg-muted">Erkennbare Personen, Verletzte oder Kennzeichen? Markieren – unkenntlich machen lässt sich die Datei danach über ihr Menü („Datenschutz und Unkenntlichmachen“).</p>
-          </div>
+          )}
+          {can('media.redact') && (
+            <div className="flex flex-col gap-2">
+              <span className="text-label uppercase text-fg-muted">Hinweise zur Datei</span>
+              <div className="flex flex-wrap gap-2">
+                {SENSITIVE_ORDER.map((f) => {
+                  const on = (m.sensitive_flags ?? []).includes(f);
+                  return (
+                    <Button key={f} size="sm" variant={on ? 'primary' : 'secondary'} icon={on ? 'CheckSquare' : 'Square'} aria-pressed={on} onClick={() => void toggleFlag(f)}>
+                      {SENSITIVE_LABELS[f]}
+                    </Button>
+                  );
+                })}
+              </div>
+              <p className="m-0 text-meta text-fg-muted">Erkennbare Personen, Verletzte oder Kennzeichen? Markieren – unkenntlich machen lässt sich die Datei danach über ihr Menü („Datenschutz und Unkenntlichmachen“).</p>
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-3">
             <Button size="md" icon="SkipForward" className="!h-12" onClick={() => decide('skipped')}>
               Überspringen

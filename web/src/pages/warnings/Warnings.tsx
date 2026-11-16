@@ -38,7 +38,7 @@ export function LevelBadge({ level, kind }: { level?: number | null; kind: strin
 }
 
 export default function Warnings() {
-  const { can } = useAuth();
+  const { can, canAny } = useAuth();
   const nav = useNavigate();
   const toastError = useErrorToast();
   const q = useQuery({ queryKey: ['warnings'], queryFn: () => get<Row[]>('/warnings') });
@@ -57,7 +57,7 @@ export default function Warnings() {
         subtitle="Vorbereitung und Übergabe an die zuständige Stelle. Die amtliche Auslösung erfolgt dort."
         actions={
           <>
-            {can('warning.rules') || can('warning.approve') ? <LinkButton to="/warnungen/pflege" icon="Settings">Stichwörter &amp; Regeln</LinkButton> : null}
+            {canAny('warning.rules', 'warning.approve', 'warning.settings') ? <LinkButton to="/warnungen/pflege" icon="Settings">Stichwörter &amp; Regeln</LinkButton> : null}
             {can('warning.draft') && (
               <Button variant="primary" icon="Plus" onClick={create}>
                 Neue Erstmeldung
@@ -71,7 +71,7 @@ export default function Warnings() {
       </Notice>
       {q.isLoading && <SkeletonRows rows={4} />}
       {q.error && <ErrorBox title="Warnentwürfe konnten nicht geladen werden">{(q.error as Error).message}</ErrorBox>}
-      {q.data?.length === 0 && <EmptyState icon="Siren" title="Noch keine Warnentwürfe" text="Eine Erstmeldung anlegen; Aktualisierung und Entwarnung entstehen aus einem bestehenden Vorgang." />}
+      {q.data?.length === 0 && <EmptyState icon="Siren" title="Noch keine Warnentwürfe" text={can('warning.draft') ? 'Eine Erstmeldung anlegen; Aktualisierung und Entwarnung entstehen aus einem bestehenden Vorgang.' : undefined} />}
       <div className="flex flex-col gap-3">
         {(q.data ?? []).map((w) => (
           <Card key={w.id}>

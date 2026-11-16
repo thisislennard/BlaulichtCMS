@@ -33,9 +33,9 @@ export function usePageMeta(m: PageMeta) {
 function useCounts() {
   const { me, can } = useAuth();
   const notif = useQuery({ queryKey: ['notifications'], queryFn: () => get('/notifications'), enabled: !!me, refetchInterval: 30_000 });
-  const status = useQuery({ queryKey: ['system-status-mini'], queryFn: () => get('/system/status'), enabled: can('system.read'), refetchInterval: 30_000 });
-  const dash = useQuery({ queryKey: ['dashboard'], queryFn: () => get<any>('/dashboard'), enabled: can('post.approve') || can('post.publish'), refetchInterval: 30_000 });
-  const approvals = (can('post.approve') ? (dash.data?.pendingApprovals?.length ?? 0) : 0) + (can('post.publish') ? (dash.data?.readyToPublish?.length ?? 0) : 0);
+  const status = useQuery({ queryKey: ['system-status-mini'], queryFn: () => get('/system/status'), enabled: can('system.status'), refetchInterval: 30_000 });
+  const dash = useQuery({ queryKey: ['dashboard'], queryFn: () => get<any>('/dashboard'), enabled: can('post.view') && (can('approval.post') || can('publish.website')), refetchInterval: 30_000 });
+  const approvals = (can('approval.post') ? (dash.data?.pendingApprovals?.length ?? 0) : 0) + (can('publish.website') ? (dash.data?.readyToPublish?.length ?? 0) : 0);
   return { notif: notif.data, status: status.data, approvals };
 }
 
@@ -289,7 +289,7 @@ function StatusStrip({ crumb, title }: { crumb: string; title: string }) {
         )}
       </nav>
       {status && (
-        <Link to={can('system.read') ? '/system' : '/'} className="hidden sm:inline-flex items-center gap-2 !text-fg whitespace-nowrap">
+        <Link to={can('system.status') ? '/system' : '/'} className="hidden sm:inline-flex items-center gap-2 !text-fg whitespace-nowrap">
           {dot(problems ? 'bg-warn' : 'bg-ok')}
           <span className="text-fg-muted">DIENSTE</span>
           {problems ? `${problems} ${problems === 1 ? 'Hinweis' : 'Hinweise'}` : 'alle laufen'}
@@ -417,7 +417,7 @@ export function RequirePerm({ perm, children }: { perm: string[]; children: Reac
       <div className="py-20 text-center flex flex-col items-center gap-3">
         <Icon name="Lock" size={28} className="text-fg-muted" />
         <h2 className="m-0 text-title font-semibold">Kein Zugriff</h2>
-        <p className="m-0 text-fg-muted">Für diesen Bereich fehlt dir die Berechtigung. Wende dich an eine Person mit Admin-Rechten.</p>
+        <p className="m-0 text-fg-muted">Für diesen Bereich fehlt dir die Berechtigung. Wende dich an eine Person, die Rollen zuweisen darf.</p>
       </div>
     );
   }

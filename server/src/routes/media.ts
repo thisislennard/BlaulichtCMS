@@ -553,6 +553,7 @@ export async function mediaRoutes(app: FastifyInstance) {
         linkExpiresAt: z.iso.datetime({ offset: true }).optional(),
       })
       .parse(req.body);
+    if (body.createLink && !req.auth!.permissions.has('media.links')) throw forbidden('Zum Erstellen des Upload-Links fehlt das Recht „Upload-Links verwalten“.');
     if (body.postId && !(await one('SELECT 1 FROM posts WHERE id = $1', [body.postId]))) throw notFound('Beitrag nicht gefunden.');
     const userId = req.auth!.user?.id ?? null;
     const { c, l } = await tx(async (db) => {

@@ -69,7 +69,7 @@ export default function Sites() {
   const { can } = useAuth();
   const qc = useQueryClient();
   const toastError = useErrorToast();
-  const manage = can('channel.manage');
+  const manage = can('channel.sites');
   const q = useQuery({ queryKey: ['sites'], queryFn: () => get<Site[]>('/sites'), refetchInterval: 15_000 });
   const [name, setName] = useState('');
   const [adding, setAdding] = useState(false);
@@ -181,7 +181,7 @@ export default function Sites() {
         </Dialog>
       )}
       {pairing && <PairingDialog pairing={pairing} onClose={() => (setPairing(null), refresh())} />}
-      {manage && <BridgeUpdates />}
+      {can('channel.updates') && <BridgeUpdates />}
     </div>
   );
 }
