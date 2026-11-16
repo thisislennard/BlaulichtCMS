@@ -169,6 +169,13 @@ Alle Rechte, nach Bereichen. Die Tabelle entspricht dem Rollen-Editor; „Setzt 
 | Workflows verwalten | ändern | Eingänge, Ausgänge und Workflows anlegen, bearbeiten, testen, aktivieren und deaktivieren. Ausgänge legen nur Entwürfe und Benachrichtigungen an; Freigaben bleiben bei den Menschen. | Workflows ansehen |
 | Workflows direkt veröffentlichen lassen | kritisch | Einem Workflow erlauben, markierte Ausgänge ohne menschliche Freigabe zu veröffentlichen bzw. zu versenden (mit Passwortbestätigung, Audit und Sicherheitsmeldung). | Workflows verwalten |
 
+**Designvorlagen**
+
+| Recht | Stufe | Erlaubt | Setzt voraus |
+| --- | --- | --- | --- |
+| Designvorlagen ansehen | lesen | Interne Vorlagen-Bibliothek durchsuchen, Vorlagen mit Nutzungshinweisen ansehen und ihre Dateien (auch ältere Versionen) herunterladen. | – |
+| Designvorlagen verwalten | ändern | Vorlagen und Kategorien anlegen, ändern und löschen, neue Versionen und Dateien hochladen, Bildvorlagen im Editor gestalten und eigene Schriften hochladen. | Designvorlagen ansehen |
+
 **Benutzer und Rollen**
 
 | Recht | Stufe | Erlaubt | Setzt voraus |

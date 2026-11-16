@@ -12,7 +12,7 @@ import { getSettings, setSettings } from '../src/lib/settings.js';
 import { hashPassword } from '../src/auth/passwords.js';
 import { PUBLIC_ROUTES } from '../src/auth/route-access.js';
 import { invalidateRoles, reloadRoles } from '../src/auth/roles.js';
-import { LEGACY_PERMISSIONS, PERMISSION_IDS, PERMISSIONS, finePermissionsFor, permissionsFor, withRequirements } from '../src/auth/permissions.js';
+import { LEGACY_PERMISSIONS, PERMISSION_IDS, PERMISSIONS, ROLE_DEFAULT_ADDITIONS, finePermissionsFor, permissionsFor, withRequirements } from '../src/auth/permissions.js';
 
 /**
  * Rollen und feine Rechte gegen eine echte PostgreSQL-Datenbank (TEST_DATABASE_URL): Übernahme des Stands 0.2.3,
@@ -125,7 +125,8 @@ describe('Update von 0.2.3: Rollen und Rechte bleiben erhalten', () => {
         continue;
       }
       const oldCoarse = [...new Set((u.roles as string[]).flatMap((r) => OLD_ROLES[r]))];
-      expect(fine, u.email).toEqual([...new Set(oldCoarse.flatMap((c) => LEGACY_PERMISSIONS[c]))].sort());
+      const added = withRequirements((u.roles as string[]).flatMap((r) => ROLE_DEFAULT_ADDITIONS[r] ?? []));
+      expect(fine, u.email).toEqual([...new Set([...oldCoarse.flatMap((c) => LEGACY_PERMISSIONS[c]), ...added])].sort());
       // Sammelbezeichnungen: genau die bisherigen groben Rechte
       const eff = permissionsFor(u.roles);
       expect(Object.keys(LEGACY_PERMISSIONS).filter((c) => eff.has(c)).sort(), u.email).toEqual(oldCoarse.sort());

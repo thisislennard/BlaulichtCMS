@@ -29,6 +29,8 @@ const MediaSearch = lazy(() => import('./pages/media/MediaSearch'));
 const Trash = lazy(() => import('./pages/media/Trash'));
 const MediaAdmin = lazy(() => import('./pages/media/MediaAdmin'));
 const DesignEditor = lazy(() => import('./pages/media/DesignEditor'));
+const DesignTemplates = lazy(() => import('./pages/designs/DesignTemplates'));
+const DesignTemplateDetail = lazy(() => import('./pages/designs/DesignTemplateDetail'));
 const Sites = lazy(() => import('./pages/channels/Sites'));
 const Users = lazy(() => import('./pages/admin/Users'));
 const SystemStatus = lazy(() => import('./pages/admin/SystemStatus'));
@@ -152,6 +154,8 @@ const router = createBrowserRouter(withErrors([
       { path: 'medien/verwaltung', element: <Page perm={['media.admin']}><MediaAdmin /></Page> },
       { path: 'medien/gestaltung', element: <Page perm={['media.design']}><DesignEditor /></Page> },
       { path: 'medien/:id', element: <Page perm={['media.view']}><CollectionDetail /></Page> },
+      { path: 'designvorlagen', element: <Page perm={['templates.view']}><DesignTemplates /></Page> },
+      { path: 'designvorlagen/:id', element: <Page perm={['templates.view']}><DesignTemplateDetail /></Page> },
       { path: 'quellen', element: <Page perm={['source.view']}><Sources /></Page> },
       { path: 'banner', element: <Page perm={['banner.view']}><Banners /></Page> },
       { path: 'kanaele', element: <Page perm={['channel.view']}><Sites /></Page> },

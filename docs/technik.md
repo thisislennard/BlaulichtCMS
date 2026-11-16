@@ -86,6 +86,27 @@ Notbremse, Löschfrist, Export → Import und abgelehnte Dateien).
 
 ---
 
+## Designvorlagen
+
+Interne Vorlagen-Bibliothek (#208) unter `/designvorlagen`. Server: `server/src/routes/design-templates.ts`,
+`server/src/templates/files.ts` (Formate, Inhaltsprüfung, SVG-Bereinigung), Migration `130_design_templates.sql`.
+
+| Teil | Umsetzung |
+|---|---|
+| Daten | `design_templates` (Titel, Beschreibung, Nutzungshinweis, Kategorie, Schlagworte, Art, Vorschaubild, aktuelle Version, Download-Zähler), `design_template_versions`, `design_template_files`, `template_categories` |
+| Ablage | private Medienablage `/data/media/templates/files/<aa>/<id>` und `…/previews/<vorlage>.webp`; ausgeliefert nur über `GET /api/v1/design-templates/files/:id` (attachment, nosniff; SVG zusätzlich mit `Content-Security-Policy: sandbox`) |
+| Formate | Endung legt das Format fest, die Signatur am Dateianfang muss passen (PNG, JPEG, WebP, GIF, TIFF, SVG, PDF/AI, EPS, PSD, InDesign, Affinity, GIMP, ZIP-basierte Formate, Schriften, Text); ZIP-Formate werden nie entpackt |
+| SVG | Bereinigung mit `fast-xml-parser` (vorhandene Abhängigkeit): DOCTYPE/Entitäten und Verarbeitungsanweisungen → abgelehnt; nur bekannte SVG-Elemente, keine `on*`-Attribute, `href` nur `#…` bzw. eingebettete Rasterbilder, CSS ohne `@import`/externe `url()` |
+| Versionen | neue Version = leere Version mit Nummer +1; Dateien nur in der aktuellen Version änderbar, ältere bleiben abrufbar |
+| Prüfung | ClamAV (falls `CLAMAV_HOST`) direkt beim Upload; nicht erreichbar → 503, Fund → 400 + Audit `design_template.malware_found` |
+| Grenzen | 200 MB je Datei, 10 MB je SVG, 20 Dateien je Version, Vorschaubild höchstens 900 px (WebP) |
+| Rechte | `templates.view` (lesen, herunterladen), `templates.manage` (pflegen); Vorgaben für mitgelieferte Rollen über `ROLE_DEFAULT_ADDITIONS` in `auth/permissions.ts` |
+
+Tests: `server/test/templates.test.ts` (gegen PostgreSQL: Rechte, Kategorien, Formatprüfung, SVG-Bereinigung,
+Download-Zähler, Versionen, Suche/Filter, Löschen samt Dateien, Audit).
+
+---
+
 ## Sicherheit
 
 | Bereich | Umsetzung |

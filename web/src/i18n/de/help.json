@@ -63,6 +63,10 @@
       "title": "Foto-Link: Fotos und Videos sammeln",
       "summary": "Upload-Links erzeugen, Grenzen, Ablauf und Widerruf, Quarantäne."
     },
+    "designvorlagen": {
+      "title": "Designvorlagen",
+      "summary": "Interne Bibliothek: Kategorien, Formate, Versionen, Nutzungshinweise, befüllbare Bildvorlagen."
+    },
     "sichtung": {
       "title": "Medien sichten",
       "summary": "Datei für Datei auswählen oder überspringen – mit Maus, Tastatur oder Wischen."

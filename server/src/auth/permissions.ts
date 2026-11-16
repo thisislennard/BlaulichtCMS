@@ -36,6 +36,7 @@ export const MODULES: ModuleDef[] = [
   { id: 'warnings', label: 'Warnentwürfe und amtliche Warnungen' },
   { id: 'connections', label: 'Verbindungen' },
   { id: 'automations', label: 'Workflows' },
+  { id: 'templates', label: 'Designvorlagen' },
   { id: 'users', label: 'Benutzer und Rollen' },
   { id: 'system', label: 'System und Protokolle' },
   { id: 'settings', label: 'Einstellungen' },
@@ -120,6 +121,10 @@ export const PERMISSIONS: PermissionDef[] = [
   P('automation.read', 'automations', 'read', 'Workflows ansehen', 'Workflows, Eingänge, Ausgänge und Laufprotokolle ansehen.'),
   P('automation.manage', 'automations', 'write', 'Workflows verwalten', 'Eingänge, Ausgänge und Workflows anlegen, bearbeiten, testen, aktivieren und deaktivieren. Ausgänge legen nur Entwürfe und Benachrichtigungen an; Freigaben bleiben bei den Menschen.', ['automation.read'], true),
   P('automation.publish', 'automations', 'critical', 'Workflows direkt veröffentlichen lassen', 'Einem Workflow erlauben, markierte Ausgänge ohne menschliche Freigabe zu veröffentlichen bzw. zu versenden (mit Passwortbestätigung, Audit und Sicherheitsmeldung).', ['automation.manage'], true),
+
+  /* Designvorlagen (#208–#210) */
+  P('templates.view', 'templates', 'read', 'Designvorlagen ansehen', 'Interne Vorlagen-Bibliothek durchsuchen, Vorlagen mit Nutzungshinweisen ansehen und ihre Dateien (auch ältere Versionen) herunterladen.'),
+  P('templates.manage', 'templates', 'write', 'Designvorlagen verwalten', 'Vorlagen und Kategorien anlegen, ändern und löschen, neue Versionen und Dateien hochladen, Bildvorlagen im Editor gestalten und eigene Schriften hochladen.', ['templates.view']),
 
   /* Benutzer und Rollen */
   P('user.view', 'users', 'read', 'Benutzer ansehen', 'Benutzerliste, Rollen und deren Rechte ansehen.'),
@@ -237,7 +242,24 @@ export const LEGACY_ROLE_PERMISSIONS: Record<string, string[]> = {
   viewer: ['media.read', 'post.read'],
 };
 
-const sys = (id: string, label: string, description: string): RoleDef => ({ id, label, description, permissions: id === ADMIN_ROLE ? [...PERMISSION_IDS] : expandLegacy(LEGACY_ROLE_PERMISSIONS[id]) });
+/**
+ * Rechte, die es erst nach Version 0.2 gibt und die mitgelieferte Rollen ohne eigene Anpassung zusätzlich als Vorgabe
+ * bekommen (die Sammelbezeichnungen bleiben davon unberührt). Angepasste Rollen erhalten sie nicht automatisch.
+ */
+export const ROLE_DEFAULT_ADDITIONS: Record<string, string[]> = {
+  media_manager: ['templates.view', 'templates.manage'],
+  editor: ['templates.view', 'templates.manage'],
+  approver: ['templates.view'],
+  publisher: ['templates.view'],
+  viewer: ['templates.view'],
+};
+
+const sys = (id: string, label: string, description: string): RoleDef => ({
+  id,
+  label,
+  description,
+  permissions: id === ADMIN_ROLE ? [...PERMISSION_IDS] : withRequirements([...expandLegacy(LEGACY_ROLE_PERMISSIONS[id]), ...(ROLE_DEFAULT_ADDITIONS[id] ?? [])]),
+});
 
 /** Mitgelieferte Rollen mit ihren Vorgaben. „Administration“ hat immer alle Rechte, auch künftige. */
 export const SYSTEM_ROLES: RoleDef[] = [

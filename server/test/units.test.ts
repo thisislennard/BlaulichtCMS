@@ -133,9 +133,11 @@ describe('Feine Rechte und Rollen (0.3.0)', () => {
       // abgeschlossen: Voraussetzungen der Teile gehören zur selben alten Bezeichnung
       expect(P.withRequirements(parts).sort(), old).toEqual([...parts].sort());
     }
-    // Neue Rechte ohne Vorgänger: nur für die Administration (alle Rechte) oder eigene Rollen
+    // Neue Rechte ohne Vorgänger: nur für die Administration (alle Rechte), eigene Rollen oder als ausdrückliche Vorgabe
+    // mitgelieferter Rollen (ROLE_DEFAULT_ADDITIONS)
     const mapped = new Set(Object.values(P.LEGACY_PERMISSIONS).flat());
-    expect(ids.filter((p) => !mapped.has(p)).sort()).toEqual(['connection.private_targets', 'role.manage', 'settings.mail', 'warning.delete_sent']);
+    expect(ids.filter((p) => !mapped.has(p)).sort()).toEqual(['connection.private_targets', 'role.manage', 'settings.mail', 'templates.manage', 'templates.view', 'warning.delete_sent']);
+    for (const [role, extra] of Object.entries(P.ROLE_DEFAULT_ADDITIONS)) for (const p of extra) expect(mapped.has(p), `${role}: ${p}`).toBe(false);
   });
 
   it('bestehende Rollen behalten genau ihre bisherigen Rechte (alt gegen neu)', () => {
@@ -145,8 +147,8 @@ describe('Feine Rechte und Rollen (0.3.0)', () => {
       if (role === 'platform_admin') {
         expect([...fine].sort()).toEqual([...ids].sort());
       } else {
-        // feine Rechte = Vereinigung der Zuordnungen der alten groben Rechte, nicht mehr und nicht weniger
-        const expected = new Set(old.flatMap((o) => P.LEGACY_PERMISSIONS[o]));
+        // feine Rechte = Vereinigung der Zuordnungen der alten groben Rechte (plus ausdrücklich neue Vorgaben), nicht mehr und nicht weniger
+        const expected = new Set([...old.flatMap((o) => P.LEGACY_PERMISSIONS[o]), ...P.withRequirements(P.ROLE_DEFAULT_ADDITIONS[role] ?? [])]);
         expect([...fine].sort(), role).toEqual([...expected].sort());
       }
       // und umgekehrt: als Sammelbezeichnung gelten genau die alten groben Rechte
@@ -158,7 +160,7 @@ describe('Feine Rechte und Rollen (0.3.0)', () => {
       for (const b of Object.keys(OLD_ROLES)) {
         if (a === 'platform_admin' || b === 'platform_admin') continue;
         const combo = P.finePermissionsFor([a, b]);
-        const expected = new Set([...OLD_ROLES[a], ...OLD_ROLES[b]].flatMap((o) => P.LEGACY_PERMISSIONS[o]));
+        const expected = new Set([...[...OLD_ROLES[a], ...OLD_ROLES[b]].flatMap((o) => P.LEGACY_PERMISSIONS[o]), ...P.withRequirements([...(P.ROLE_DEFAULT_ADDITIONS[a] ?? []), ...(P.ROLE_DEFAULT_ADDITIONS[b] ?? [])])]);
         expect([...combo].sort(), `${a}+${b}`).toEqual([...expected].sort());
       }
     }
@@ -169,15 +171,15 @@ describe('Feine Rechte und Rollen (0.3.0)', () => {
     const snap = Object.fromEntries(P.SYSTEM_ROLES.filter((r) => r.id !== 'platform_admin').map((r) => [r.id, r.permissions.join(' ')]));
     expect(snap).toEqual({
       media_manager:
-        'media.view media.export media.download_original media.collections media.upload media.links media.review media.organize media.redact media.trash media.design post.view source.view channel.view banner.view official.view',
+        'media.view media.export media.download_original media.collections media.upload media.links media.review media.organize media.redact media.trash media.design post.view source.view channel.view banner.view official.view templates.view templates.manage',
       editor:
-        'media.view media.export media.download_original media.collections media.upload media.links media.review media.organize media.redact media.trash media.design post.view post.create post.edit post.submit post.archive post.templates source.view source.items source.manage channel.view banner.view banner.edit official.view official.dismiss connection.view automation.read',
-      approver: 'media.view media.export post.view source.view approval.post approval.banner approval.automation channel.view banner.view official.view automation.read audit.view',
-      publisher: 'media.view media.export post.view source.view publish.website publish.unpublish publish.social publish.social_remove channel.view banner.view banner.publish official.view connection.view',
+        'media.view media.export media.download_original media.collections media.upload media.links media.review media.organize media.redact media.trash media.design post.view post.create post.edit post.submit post.archive post.templates source.view source.items source.manage channel.view banner.view banner.edit official.view official.dismiss connection.view automation.read templates.view templates.manage',
+      approver: 'media.view media.export post.view source.view approval.post approval.banner approval.automation channel.view banner.view official.view automation.read templates.view audit.view',
+      publisher: 'media.view media.export post.view source.view publish.website publish.unpublish publish.social publish.social_remove channel.view banner.view banner.publish official.view connection.view templates.view',
       warning_author: 'warning.view warning.draft warning.delete',
       warning_approver: 'warning.view warning.draft warning.delete warning.level warning.approve',
       warning_sender: 'warning.view warning.send',
-      viewer: 'media.view media.export post.view source.view channel.view banner.view official.view',
+      viewer: 'media.view media.export post.view source.view channel.view banner.view official.view templates.view',
     });
     expect(P.SYSTEM_ROLES.find((r) => r.id === 'platform_admin')!.permissions).toEqual(ids);
   });

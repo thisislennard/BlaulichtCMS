@@ -148,6 +148,20 @@
       "reviewed": "Verbindung geprüft",
       "retest_required": "Neuer Test nötig"
     },
+    "design_template": {
+      "created": "Designvorlage angelegt",
+      "updated": "Designvorlage geändert",
+      "deleted": "Designvorlage gelöscht",
+      "version_created": "Neue Version einer Designvorlage",
+      "file_uploaded": "Datei zu einer Designvorlage hochgeladen",
+      "file_deleted": "Datei aus einer Designvorlage entfernt",
+      "preview_uploaded": "Vorschaubild hochgeladen",
+      "preview_reset": "Vorschaubild zurückgesetzt",
+      "malware_found": "Schadsoftware in einer Vorlagen-Datei",
+      "category_created": "Vorlagen-Kategorie angelegt",
+      "category_updated": "Vorlagen-Kategorie geändert",
+      "category_deleted": "Vorlagen-Kategorie gelöscht"
+    },
     "dashboard": {
       "shared_saved": "Gemeinsames Dashboard gespeichert"
     },
@@ -369,6 +383,20 @@
       "private_target_approved": "hat ein internes Ziel für die Verbindung „{o}“ freigegeben",
       "reviewed": "hat die Verbindung „{o}“ als geprüft markiert",
       "retest_required": "hat die Verbindung „{o}“ geändert – sie muss neu getestet werden"
+    },
+    "design_template": {
+      "created": "hat die Designvorlage „{o}“ angelegt",
+      "updated": "hat die Designvorlage „{o}“ geändert",
+      "deleted": "hat die Designvorlage „{o}“ gelöscht",
+      "version_created": "hat eine neue Version der Designvorlage „{o}“ angelegt",
+      "file_uploaded": "hat eine Datei zur Designvorlage „{o}“ hochgeladen",
+      "file_deleted": "hat eine Datei aus der Designvorlage „{o}“ entfernt",
+      "preview_uploaded": "hat ein Vorschaubild für „{o}“ hochgeladen",
+      "preview_reset": "hat das Vorschaubild von „{o}“ zurückgesetzt",
+      "malware_found": "hat eine Datei mit Schadsoftware hochzuladen versucht ({o})",
+      "category_created": "hat die Vorlagen-Kategorie „{o}“ angelegt",
+      "category_updated": "hat die Vorlagen-Kategorie „{o}“ geändert",
+      "category_deleted": "hat die Vorlagen-Kategorie „{o}“ gelöscht"
     },
     "dashboard": {
       "shared_saved": "hat das gemeinsame Dashboard gespeichert"

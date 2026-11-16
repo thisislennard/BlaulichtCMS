@@ -107,6 +107,15 @@ flowchart LR
   Veröffentlichungstermin.
 - **Quellen:** RSS- und Atom-Feeds als Anregung für eigene Beiträge.
 
+### Designvorlagen
+
+- **Interne Bibliothek:** Logos, Layouts und Vorlagen mit Kategorien, Vorschaubild, Schlagworten, Suche und Filtern –
+  nur für angemeldete Personen.
+- **Mehrere Formate und Versionen:** PNG, SVG, PDF und offene Dateien je Vorlage; neue Versionen hochladen, ältere bleiben
+  abrufbar. Nutzungshinweis je Vorlage und Download-Zähler.
+- **Sicher:** Inhalt muss zur Endung passen, SVG wird bereinigt (keine Skripte, keine externen Verweise), optional
+  ClamAV-Prüfung.
+
 ### Freigeben
 
 - **Freigabe genau einer Fassung** (Prüfsumme) – ändert sich danach etwas, ist eine neue Freigabe nötig.

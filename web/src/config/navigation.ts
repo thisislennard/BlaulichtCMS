@@ -33,6 +33,7 @@ export const navigation: NavGroup[] = [
       { id: 'posts', path: '/beitraege', label: 'nav.posts', icon: 'FileText', perm: ['post.view'] },
       { id: 'approvals', path: '/freigaben', label: 'nav.approvals', icon: 'ListChecks', perm: ['approval.post', 'publish.website'], badge: 'approvals' },
       { id: 'media', path: '/medien', label: 'nav.media', icon: 'Images', perm: ['media.view'] },
+      { id: 'designTemplates', path: '/designvorlagen', label: 'nav.designTemplates', icon: 'Palette', perm: ['templates.view'] },
       { id: 'sources', path: '/quellen', label: 'nav.sources', icon: 'Newspaper', perm: ['source.view'] },
       { id: 'templates', path: '/vorlagen', label: 'nav.templates', icon: 'LayoutTemplate', perm: ['post.templates'] },
     ],

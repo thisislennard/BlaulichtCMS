@@ -79,6 +79,7 @@ import { automationRoutes } from './routes/automations.js';
 import { legalRoutes } from './routes/legal.js';
 import { notifyChannelRoutes } from './routes/notify-channels.js';
 import { keywordRoutes } from './routes/keywords.js';
+import { designTemplateRoutes } from './routes/design-templates.js';
 import { observeProxy } from './lib/proxy-check.js';
 import { healthStatus, isLocalHealthRequest, publicHealth } from './routes/health.js';
 
@@ -244,6 +245,7 @@ export async function buildApp(): Promise<FastifyInstance> {
       await api.register(mediaTrashRoutes);
       await api.register(mediaAdminRoutes);
       await api.register(mediaDesignRoutes);
+      await api.register(designTemplateRoutes);
       await api.register(postRoutes);
       await api.register(bridgeRoutes);
       await api.register(uploadRoutes);

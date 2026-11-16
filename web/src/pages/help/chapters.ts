@@ -34,6 +34,7 @@ export const GROUPS: ChapterGroup[] = [
   G('work', [
     ['foto-link', 'Camera'],
     ['sichtung', 'CheckSquare'],
+    ['designvorlagen', 'Palette'],
     ['beitraege', 'FileText'],
     ['freigabe', 'ShieldCheck'],
     ['qr-codes', 'QrCode'],
