@@ -51,6 +51,7 @@ export const PANEL_TITLES: Record<string, string> = {
   banners: 'Aktive Banner',
   rss: 'Quellen (RSS)',
   press: 'Presseanfragen',
+  insights: 'Reichweite (7 Tage)',
 };
 
 export const BADGE_TITLES: Record<string, string> = {

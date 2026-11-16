@@ -25,7 +25,7 @@ const STEP_KIND: Record<string, string> = { login: 'Anmeldung', publish: 'Veröf
  * Wie der Server (connections/common.ts, retestRelevantConfig): Name, Abrufintervall, „Beitragsentwürfe anlegen“ und
  * die Banner-Schalter verlangen keinen neuen Test, alles andere schon.
  */
-const RETEST_EXEMPT = ['name', 'intervalMinutes', 'intervalSeconds', 'createDrafts', 'autoBanner', 'bannerSiteId', 'review', 'oauthState', 'tokenExpiresAt'];
+const RETEST_EXEMPT = ['name', 'intervalMinutes', 'intervalSeconds', 'createDrafts', 'autoBanner', 'bannerSiteId', 'review', 'oauthState', 'tokenExpiresAt', 'clientId', 'appInstance', 'appRedirect', 'insights'];
 function relevantConfig(cfg: Record<string, any>) {
   const out: Record<string, unknown> = {};
   for (const k of Object.keys(cfg ?? {}).sort()) {
@@ -595,9 +595,21 @@ export default function ConnectionDetail() {
                   <FieldWrap label="Abrufintervall (Minuten)" htmlFor="wf-int"><Input id="wf-int" type="number" min={2} max={120} value={cfg.intervalMinutes ?? 5} onChange={(e) => setCfg({ ...cfg, intervalMinutes: Number(e.target.value) })} className="max-w-[120px]" /></FieldWrap>
                 </>
               )}
+              {['facebook', 'instagram', 'threads', 'mastodon', 'bluesky'].includes(c.kind) && (
+                <div className="flex items-start gap-1">
+                  <Switch checked={cfg.insights !== false} onChange={(v) => setCfg({ ...cfg, insights: v })} label="Reichweite abrufen" description="Aufrufe und Interaktionen veröffentlichter Beiträge 1 Stunde, 24 Stunden und 7 Tage nach der Veröffentlichung – nur Summen, keine Personen." />
+                  <HelpTip title="Reichweite" more="/hilfe/verbindungen#reichweite">
+                    <p className="m-0">{c.kind === 'facebook' ? 'Reaktionen, Kommentare und geteilte Beiträge gehen mit den vorhandenen Rechten. Aufrufe, Erreichte und Klicks brauchen zusätzlich read_insights – beim erneuten Verbinden fragt BlaulichtCMS es mit an.' : c.kind === 'instagram' ? 'Gefällt mir und Kommentare gehen mit den vorhandenen Rechten. Aufrufe, Reichweite, Geteilt und Gespeichert brauchen instagram_business_manage_insights – beim erneuten Verbinden fragt BlaulichtCMS es mit an.' : c.kind === 'threads' ? 'Braucht das Recht threads_manage_insights – beim erneuten Verbinden fragt BlaulichtCMS es mit an.' : c.kind === 'mastodon' ? 'Boosts, Favoriten und Antworten aus der Mastodon-API.' : 'Gefällt mir, Reposts, Antworten und Zitate aus der öffentlichen Bluesky-Schnittstelle.'}</p>
+                    <p className="m-0 text-fg-muted">Der Schalter lässt sich ohne neuen Test ändern.</p>
+                  </HelpTip>
+                </div>
+              )}
+              {c.kind === 'x' && cfg.mode === 'api' && (
+                <Switch checked={cfg.insights === true} onChange={(v) => setCfg({ ...cfg, insights: v })} label="Reichweite abrufen (kostet Guthaben)" description="Aufrufe, Gefällt mir, Antworten, Reposts, Zitate und Lesezeichen nach 1 Stunde, 24 Stunden und 7 Tagen. Jeder Abruf wird von X über das Guthaben abgerechnet. Standard aus." />
+              )}
               <div className="flex flex-col gap-1.5 items-start">
                 <Button variant="primary" icon="Save" disabled={busy} onClick={saveConfig}>Einstellungen speichern</Button>
-                <p className="m-0 text-meta text-fg-muted">Geänderte Einstellungen oder Zugangsdaten verlangen einen neuen Test; eine aktive Verbindung hält bis dahin an. Nur der Name{c.kind === 'warnfeed' ? ' und das Abrufintervall' : c.kind === 'fe2' ? ' und „Beitragsentwürfe anlegen“' : c.kind === 'feuersoftware' ? ', der Abrufabstand und „Beitragsentwürfe anlegen“' : ''} lassen sich ohne neuen Test ändern.</p>
+                <p className="m-0 text-meta text-fg-muted">Geänderte Einstellungen oder Zugangsdaten verlangen einen neuen Test; eine aktive Verbindung hält bis dahin an. Nur der Name{c.kind === 'warnfeed' ? ' und das Abrufintervall' : c.kind === 'fe2' ? ' und „Beitragsentwürfe anlegen“' : c.kind === 'feuersoftware' ? ', der Abrufabstand und „Beitragsentwürfe anlegen“' : ['facebook', 'instagram', 'threads', 'x', 'mastodon', 'bluesky'].includes(c.kind) ? ' und „Reichweite abrufen“' : ''} lassen sich ohne neuen Test ändern.</p>
               </div>
             </div>
           </Card>

@@ -1,4 +1,4 @@
-Das Dashboard zeigt, was gerade wichtig ist. Oben steht eine Reihe **Kennzahlen** (zum Beispiel offene Freigaben, ungesichtete Dateien, aktive Banner, Verbindungsfehler), darunter die **Kacheln** in Spalten: Redaktionsfluss, der **bestätigte** Stand der Veröffentlichungen, neue Uploads, Banner, Websites und Quellen. Ein Klick auf eine Kennzahl führt zur passenden Seite.
+Das Dashboard zeigt, was gerade wichtig ist. Oben steht eine Reihe **Kennzahlen** (zum Beispiel offene Freigaben, ungesichtete Dateien, aktive Banner, Verbindungsfehler), darunter die **Kacheln** in Spalten: Redaktionsfluss, der **bestätigte** Stand der Veröffentlichungen, neue Uploads, Banner, Websites, Quellen und die [Reichweite](/hilfe/verbindungen#reichweite) der Social-Posts der letzten 7 Tage. Ein Klick auf eine Kennzahl führt zur passenden Seite.
 
 Angezeigt wird nur, wofür das eigene Konto die Berechtigung hat. Die Kennzahl „Verbindungsfehler“ sieht zum Beispiel nur, wer Verbindungen verwalten darf.
 

@@ -147,6 +147,37 @@ export function WidgetBody({ id, d }: { id: string; d: any }) {
           ))}
         </List>
       );
+    case 'insights':
+      return !d.insights?.publications ? (
+        <EmptyState icon="ChartColumn" title="Keine Social-Posts in den letzten 7 Tagen" />
+      ) : (
+        <div className="flex flex-col gap-3 text-sm">
+          <div className="grid grid-cols-3 gap-2">
+            {[
+              ['Beiträge', d.insights.publications],
+              ['Aufrufe', d.insights.totals?.views],
+              ['Interaktionen', d.insights.interactions],
+            ].map(([label, v]) => (
+              <div key={label as string} className="flex flex-col">
+                <span className="text-meta text-fg-muted">{label}</span>
+                <span className="font-mono tabular text-title">{typeof v === 'number' ? new Intl.NumberFormat('de-DE').format(v) : '–'}</span>
+              </div>
+            ))}
+          </div>
+          {d.insights.top?.length > 0 && (
+            <List>
+              {d.insights.top.map((t: any) => (
+                <li key={t.post_id} className="py-2 flex items-baseline gap-2">
+                  <Link to={`/beitraege/${t.post_id}`} className="font-medium flex-1 truncate">
+                    {t.title}
+                  </Link>
+                  <span className="text-meta text-fg-muted font-mono tabular">{new Intl.NumberFormat('de-DE').format(t.interactions)} Interaktionen</span>
+                </li>
+              ))}
+            </List>
+          )}
+        </div>
+      );
     case 'rss':
       return !d.rss?.length ? (
         <EmptyState icon="Newspaper" title="Keine Einträge" text="Quellen lassen sich unter „Quellen“ hinzufügen." />
@@ -289,7 +320,7 @@ function FlowBoard({ d }: { d: any }) {
   );
 }
 
-const LINKS: Record<string, [string, string]> = { approvals: ['/freigaben', 'Alle'], sites: ['/kanaele', 'Verwalten'], banners: ['/banner', 'Alle'], rss: ['/quellen', 'Alle'], uploads: ['/medien', 'Alle'], press: ['/presse', 'Alle'] };
+const LINKS: Record<string, [string, string]> = { approvals: ['/freigaben', 'Alle'], sites: ['/kanaele', 'Verwalten'], banners: ['/banner', 'Alle'], rss: ['/quellen', 'Alle'], uploads: ['/medien', 'Alle'], press: ['/presse', 'Alle'], insights: ['/reichweite', 'Übersicht'] };
 
 /** Eine Kachel in einer Spalte. Der Redaktionsfluss bringt seine eigene Überschrift mit, alles andere ist eine Karte. */
 export function PanelTile({ id, d }: { id: string; d: any }) {

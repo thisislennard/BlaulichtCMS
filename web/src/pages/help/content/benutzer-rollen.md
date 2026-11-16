@@ -123,6 +123,7 @@ Alle Rechte, nach Bereichen. Die Tabelle entspricht dem Rollen-Editor; „Setzt 
 | Auf Website veröffentlichen | kritisch | Freigegebene Fassungen an eine gekoppelte Website übergeben, Aufträge abbrechen, klären und wiederholen. | Beiträge ansehen, Websites ansehen |
 | Von Website zurückziehen | kritisch | Veröffentlichte Beiträge von der Website zurückziehen. | Beiträge ansehen |
 | In sozialen Kanälen veröffentlichen | kritisch | Freigegebene Fassungen auf Facebook, Instagram (auch als Story), Threads, X, Mastodon und Bluesky veröffentlichen, Teilen von Hand vorbereiten und als geteilt markieren oder als Paket exportieren. | Beiträge ansehen, Verbindungen ansehen |
+| Reichweite ansehen | lesen | Aufrufe und Interaktionen veröffentlichter Social-Posts sehen (nur zusammengefasste Zahlen, keine Personen): je Beitrag, Übersicht und Dashboard-Kachel. | Beiträge ansehen |
 | Aus sozialen Kanälen entfernen | kritisch | Veröffentlichungen in sozialen Kanälen entfernen oder als entfernt bestätigen. | Beiträge ansehen |
 | Websites ansehen | lesen | Gekoppelte Websites und ihren Zustand sehen. | – |
 | Websites koppeln und widerrufen | kritisch | Websites mit der BlaulichtCMS Bridge koppeln, Kopplungscodes erzeugen, Schlüssel widerrufen, Plugin laden. | Websites ansehen |

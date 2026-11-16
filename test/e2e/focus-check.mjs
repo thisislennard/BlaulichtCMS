@@ -340,6 +340,9 @@ async function freshSetup() {
   // WhatsApp-Kanal; der Testbeitrag wählt beide, damit die Kanaltexte im Beitrag erscheinen
   const thc = await admin.post('/connections', { kind: 'threads', name: 'Threads Test', config: {} }).catch((e) => (console.log('  (Threads)', e.message), null));
   const xac = await admin.post('/connections', { kind: 'x', name: 'X über API Test', config: { mode: 'api' } }).catch((e) => (console.log('  (X)', e.message), null));
+  // Mastodon und Bluesky (#215) als Entwurf
+  const mdc = await admin.post('/connections', { kind: 'mastodon', name: 'Mastodon Test', config: { instance: 'https://social.example' } }).catch((e) => (console.log('  (Mastodon)', e.message), null));
+  const bsc = await admin.post('/connections', { kind: 'bluesky', name: 'Bluesky Test', config: { identifier: 'test.bsky.social' } }).catch((e) => (console.log('  (Bluesky)', e.message), null));
   const social = [];
   for (const [kind, name] of [['x', 'X von Hand Test'], ['whatsapp', 'WhatsApp-Kanal Test']]) {
     try {
@@ -423,6 +426,8 @@ async function freshSetup() {
     feuersoftwareId: fsc?.id ?? null,
     threadsId: thc?.id ?? null,
     xApiId: xac?.id ?? null,
+    mastodonId: mdc?.id ?? null,
+    blueskyId: bsc?.id ?? null,
     whatsappId: social[1] ?? null,
     warningId: warn?.id ?? null,
     automationId,
@@ -488,7 +493,7 @@ try {
   let n = 0;
   churn = setInterval(() => editor.post('/posts', { title: `Live-Ereignis ${++n}`, kind: 'news' }).catch(() => {}), 2000);
 
-  const routes = ['/', '/beitraege', `/beitraege/${post.id}`, `/beitraege/${sub.id}`, '/vorlagen', '/kalender', '/freigaben', '/medien', `/medien/${col.collection.id}`, '/medien/dateien', '/medien/papierkorb', '/medien/verwaltung', '/medien/gestaltung', ...(st.linkId ? [`/medien/gestaltung?link=${st.linkId}`] : []), '/designvorlagen', ...(st.designTemplateId ? [`/designvorlagen/${st.designTemplateId}`] : []), ...(st.imageTemplateId ? [`/designvorlagen/${st.imageTemplateId}`, `/designvorlagen/${st.imageTemplateId}/editor`] : []), '/quellen', '/presse', '/presse/verteiler', '/presse/mitteilungen', '/presse/einstellungen', '/banner', '/kanaele', '/warnungen', '/warnungen/pflege', ...(warn ? [`/warnungen/${warn.id}`] : []), '/verbindungen', ...(conn ? [`/verbindungen/${conn.id}`, `/verbindungen/${conn.id}?ansicht=empfangsprotokoll`] : []), ...(st.warnfeedId ? [`/verbindungen/${st.warnfeedId}`, `/verbindungen/${st.warnfeedId}?ansicht=empfangsprotokoll`] : []), ...(st.feuersoftwareId ? [`/verbindungen/${st.feuersoftwareId}`] : []), ...[st.threadsId, st.xApiId, st.whatsappId].filter(Boolean).map((x) => `/verbindungen/${x}`), '/amtliche-warnungen', '/workflows', '/workflows/eingaenge', '/workflows/ausgaenge', ...(st.automationId ? [`/workflows/${st.automationId}`] : []), '/benutzer', '/system', '/protokolle', '/datenschutz-anfragen', '/einstellungen', '/profil', '/hilfe', '/aktivitaeten', '/benachrichtigungen'];
+  const routes = ['/', '/beitraege', `/beitraege/${post.id}`, `/beitraege/${sub.id}`, '/vorlagen', '/kalender', '/freigaben', '/medien', `/medien/${col.collection.id}`, '/medien/dateien', '/medien/papierkorb', '/medien/verwaltung', '/medien/gestaltung', ...(st.linkId ? [`/medien/gestaltung?link=${st.linkId}`] : []), '/designvorlagen', ...(st.designTemplateId ? [`/designvorlagen/${st.designTemplateId}`] : []), ...(st.imageTemplateId ? [`/designvorlagen/${st.imageTemplateId}`, `/designvorlagen/${st.imageTemplateId}/editor`] : []), '/quellen', '/presse', '/presse/verteiler', '/presse/mitteilungen', '/presse/einstellungen', '/banner', '/kanaele', '/warnungen', '/warnungen/pflege', ...(warn ? [`/warnungen/${warn.id}`] : []), '/verbindungen', ...(conn ? [`/verbindungen/${conn.id}`, `/verbindungen/${conn.id}?ansicht=empfangsprotokoll`] : []), ...(st.warnfeedId ? [`/verbindungen/${st.warnfeedId}`, `/verbindungen/${st.warnfeedId}?ansicht=empfangsprotokoll`] : []), ...(st.feuersoftwareId ? [`/verbindungen/${st.feuersoftwareId}`] : []), ...[st.threadsId, st.xApiId, st.whatsappId, st.mastodonId, st.blueskyId].filter(Boolean).map((x) => `/verbindungen/${x}`), '/amtliche-warnungen', '/reichweite', '/workflows', '/workflows/eingaenge', '/workflows/ausgaenge', ...(st.automationId ? [`/workflows/${st.automationId}`] : []), '/benutzer', '/system', '/protokolle', '/datenschutz-anfragen', '/einstellungen', '/profil', '/hilfe', '/aktivitaeten', '/benachrichtigungen'];
   // Freigabe-Ansicht aus der Push-Mitteilung (#216)
   routes.splice(4, 0, `/freigabe/beitrag/${sub.id}?fassung=2`);
   for (const r of routes) await scanRoute(page, r);

@@ -136,7 +136,7 @@ describe('Feine Rechte und Rollen (0.3.0)', () => {
     // Neue Rechte ohne Vorgänger: nur für die Administration (alle Rechte), eigene Rollen oder als ausdrückliche Vorgabe
     // mitgelieferter Rollen (ROLE_DEFAULT_ADDITIONS)
     const mapped = new Set(Object.values(P.LEGACY_PERMISSIONS).flat());
-    expect(ids.filter((p) => !mapped.has(p)).sort()).toEqual(['calendar.manage', 'calendar.sources', 'calendar.subscribe', 'calendar.view', 'connection.private_targets', 'role.manage', 'settings.mail', 'templates.manage', 'templates.use', 'templates.view', 'warning.delete_sent']);
+    expect(ids.filter((p) => !mapped.has(p)).sort()).toEqual(['calendar.manage', 'calendar.sources', 'calendar.subscribe', 'calendar.view', 'connection.private_targets', 'insights.view', 'role.manage', 'settings.mail', 'templates.manage', 'templates.use', 'templates.view', 'warning.delete_sent']);
     for (const [role, extra] of Object.entries(P.ROLE_DEFAULT_ADDITIONS)) for (const p of extra) expect(mapped.has(p), `${role}: ${p}`).toBe(false);
   });
 
@@ -173,13 +173,13 @@ describe('Feine Rechte und Rollen (0.3.0)', () => {
       media_manager:
         'media.view media.export media.download_original media.collections media.upload media.links media.review media.organize media.redact media.trash media.design post.view source.view channel.view banner.view calendar.view calendar.subscribe incident.view official.view templates.view templates.use templates.manage',
       editor:
-        'media.view media.export media.download_original media.collections media.upload media.links media.review media.organize media.redact media.trash media.design post.view post.create post.edit post.submit post.archive post.templates source.view source.items source.manage channel.view banner.view banner.edit calendar.view calendar.manage calendar.sources calendar.subscribe incident.view incident.edit official.view official.dismiss press.view press.manage press.reply press.snippets press.contacts connection.view automation.read templates.view templates.use templates.manage',
-      approver: 'media.view media.export post.view source.view approval.post approval.banner approval.incident approval.automation channel.view banner.view calendar.view calendar.subscribe incident.view official.view press.view press.approve automation.read templates.view audit.view',
-      publisher: 'media.view media.export post.view source.view publish.website publish.unpublish publish.social publish.social_remove channel.view banner.view banner.publish calendar.view calendar.subscribe incident.view incident.publish official.view press.view press.contacts press.release connection.view templates.view',
+        'media.view media.export media.download_original media.collections media.upload media.links media.review media.organize media.redact media.trash media.design post.view post.create post.edit post.submit post.archive post.templates source.view source.items source.manage insights.view channel.view banner.view banner.edit calendar.view calendar.manage calendar.sources calendar.subscribe incident.view incident.edit official.view official.dismiss press.view press.manage press.reply press.snippets press.contacts connection.view automation.read templates.view templates.use templates.manage',
+      approver: 'media.view media.export post.view source.view approval.post approval.banner approval.incident approval.automation insights.view channel.view banner.view calendar.view calendar.subscribe incident.view official.view press.view press.approve automation.read templates.view audit.view',
+      publisher: 'media.view media.export post.view source.view publish.website publish.unpublish publish.social insights.view publish.social_remove channel.view banner.view banner.publish calendar.view calendar.subscribe incident.view incident.publish official.view press.view press.contacts press.release connection.view templates.view',
       warning_author: 'warning.view warning.draft warning.delete',
       warning_approver: 'warning.view warning.draft warning.delete warning.level warning.approve',
       warning_sender: 'warning.view warning.send',
-      viewer: 'media.view media.export post.view source.view channel.view banner.view calendar.view calendar.subscribe incident.view official.view templates.view',
+      viewer: 'media.view media.export post.view source.view insights.view channel.view banner.view calendar.view calendar.subscribe incident.view official.view templates.view',
     });
     expect(P.SYSTEM_ROLES.find((r) => r.id === 'platform_admin')!.permissions).toEqual(ids);
   });
@@ -1712,6 +1712,25 @@ describe('Mastodon und Bluesky: Zählung, Facetten, Instanz (#215)', async () =>
     expect(f[1].features[0]).toEqual({ $type: 'app.bsky.richtext.facet#tag', tag: 'Feuerwehr' });
     expect(bs.normalizeService('')).toBe('https://bsky.social');
     expect(bs.normalizeService('http://pds.example')).toBeNull();
+  });
+});
+
+describe('Reichweite: Stufen und Kennzahlen (#218)', async () => {
+  const ins = await import('../src/connections/insights.js');
+  it('Stufen nach 1 h, 24 h, 7 Tagen; nur bekannte, nicht negative Zahlen; X nur ausdrücklich', () => {
+    const now = Date.parse('2026-11-16T12:00:00Z');
+    expect(ins.stageFor(new Date(now - 59 * 60_000), now)).toBe(0);
+    expect(ins.stageFor(new Date(now - 61 * 60_000), now)).toBe(1);
+    expect(ins.stageFor(new Date(now - 25 * 3600_000), now)).toBe(2);
+    expect(ins.stageFor(new Date(now - 7 * 86_400_000), now)).toBe(3);
+    expect(ins.cleanMetrics({ likes: 3.4, views: -1, follower_names: ['x'], replies: null, shares: 2 })).toEqual({ likes: 3, shares: 2 });
+    expect(ins.interactions({ views: 1000, reach: 900, clicks: 5, likes: 3, replies: 1, reposts: 2, quotes: 1, shares: 4, saves: 1 })).toBe(12);
+    expect(ins.insightsEnabled({ kind: 'x', config: { mode: 'api' } })).toBe(false);
+    expect(ins.insightsEnabled({ kind: 'x', config: { mode: 'api', insights: true } })).toBe(true);
+    expect(ins.insightsEnabled({ kind: 'x', config: { mode: 'manual', insights: true } })).toBe(false);
+    expect(ins.insightsEnabled({ kind: 'mastodon', config: {} })).toBe(true);
+    expect(ins.insightsEnabled({ kind: 'facebook', config: { insights: false } })).toBe(false);
+    expect(ins.insightsEnabled({ kind: 'whatsapp', config: {} })).toBe(false);
   });
 });
 

@@ -55,6 +55,7 @@ export const navigation: NavGroup[] = [
       { id: 'banners', path: '/banner', label: 'nav.banners', icon: 'Megaphone', perm: ['banner.view'] },
       { id: 'sites', path: '/kanaele', label: 'nav.sites', icon: 'Globe', perm: ['channel.view'] },
       { id: 'connections', path: '/verbindungen', label: 'nav.connections', icon: 'Plug', perm: ['connection.configure'] },
+      { id: 'insights', path: '/reichweite', label: 'nav.insights', icon: 'ChartColumn', perm: ['insights.view'] },
     ],
   },
   {

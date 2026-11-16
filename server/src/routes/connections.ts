@@ -71,8 +71,8 @@ const configSchema: Record<ConnectionKind, z.ZodType<any>> = {
     // Schlüssel in der Adresse (für Absender ohne eigene Kopfzeile); Standard aus
     keyInPath: z.boolean().default(false),
   }),
-  facebook: z.object({ appId: z.string().max(40).default(''), pageId: z.string().max(40).optional() }),
-  instagram: z.object({ appId: z.string().max(40).default(''), userId: z.string().max(40).optional() }),
+  facebook: z.object({ appId: z.string().max(40).default(''), pageId: z.string().max(40).optional(), insights: z.boolean().optional() }),
+  instagram: z.object({ appId: z.string().max(40).default(''), userId: z.string().max(40).optional(), insights: z.boolean().optional() }),
   warnfeed: z.object({
     format: z.enum(['nina', 'cap']).default('nina'),
     ars: z.string().max(12).default(''),
@@ -83,15 +83,16 @@ const configSchema: Record<ConnectionKind, z.ZodType<any>> = {
     autoBanner: z.boolean().default(false),
     bannerSiteId: z.uuid().nullable().default(null),
   }),
-  threads: z.object({ appId: z.string().max(40).default(''), userId: z.string().max(40).optional() }),
+  threads: z.object({ appId: z.string().max(40).default(''), userId: z.string().max(40).optional(), insights: z.boolean().optional() }),
   // X: „Teilen von Hand“ (Standard, ohne Schnittstelle) oder „Über die X-API posten“ (eigene Zugangsdaten, kostenpflichtig)
-  x: z.object({ mode: z.enum(['manual', 'api']).default('manual') }),
+  x: z.object({ mode: z.enum(['manual', 'api']).default('manual'), insights: z.boolean().optional() }),
   // WhatsApp-Kanal: nur Teilen von Hand; optional die Einladungsadresse des eigenen Kanals zum schnellen Öffnen
   // Mastodon (#215): frei wählbare Instanz; die App-Registrierung (clientId) legt BlaulichtCMS beim Verbinden selbst an
   mastodon: z.object({
     instance: z.union([z.literal(''), z.string().trim().max(200).refine((v) => !!normalizeInstance(v), 'Bitte die Adresse der Instanz als https-Adresse ohne Pfad angeben, z. B. https://social.bund.de.')]).default('').transform((v) => (v ? normalizeInstance(v)! : '')),
     visibility: z.enum(MASTODON_VISIBILITY).default('public'),
     language: z.string().regex(/^[a-z]{2}$/).default('de'),
+    insights: z.boolean().optional(),
     clientId: z.string().max(200).optional(),
     appInstance: z.string().max(200).optional(),
     appRedirect: z.string().max(500).optional(),
@@ -101,6 +102,7 @@ const configSchema: Record<ConnectionKind, z.ZodType<any>> = {
     identifier: z.string().trim().max(253).regex(/^@?[A-Za-z0-9._:@+-]*$/, 'Bitte das Handle angeben, z. B. feuerwehr-musterstadt.bsky.social.').default('').transform((v) => v.replace(/^@/, '')),
     service: z.union([z.literal(''), z.string().trim().max(200).refine((v) => !!normalizeService(v), 'Bitte eine https-Adresse ohne Pfad angeben oder leer lassen.')]).default(''),
     language: z.string().regex(/^[a-z]{2}$/).default('de'),
+    insights: z.boolean().optional(),
   }),
   whatsapp: z.object({ channelUrl: z.union([z.literal(''), z.string().trim().regex(/^https:\/\/(www\.)?whatsapp\.com\/channel\/[A-Za-z0-9_-]+\/?$/, 'Bitte die Adresse des Kanals im Format https://whatsapp.com/channel/… angeben.')]).default('') }),
   feuersoftware: z.object({

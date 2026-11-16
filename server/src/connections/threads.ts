@@ -24,6 +24,8 @@ export const TH_GRAPH = () => (process.env.BLAULICHTCMS_THREADS_GRAPH_URL ?? `ht
 const TH_ROOT = () => TH_GRAPH().replace(/\/v[\d.]+$/, '');
 export const TH_DIALOG = () => (process.env.BLAULICHTCMS_THREADS_DIALOG_URL ?? 'https://threads.com/oauth/authorize').replace(/\/$/, '');
 export const TH_SCOPES = ['threads_basic', 'threads_content_publish'];
+/** Für die Reichweite (#218) zusätzlich angefragt, aber nicht Voraussetzung. */
+export const TH_INSIGHT_SCOPES = ['threads_manage_insights'];
 const privateHosts = () => (process.env.BLAULICHTCMS_THREADS_GRAPH_URL ? [new URL(process.env.BLAULICHTCMS_THREADS_GRAPH_URL).hostname] : []);
 
 async function call(method: string, url: string, params: Record<string, string | undefined> = {}, secrets: Record<string, string> = {}): Promise<any> {
@@ -57,7 +59,7 @@ async function call(method: string, url: string, params: Record<string, string |
 /* ------------------------------------------------------------------ OAuth */
 
 export function threadsAuthorizeUrl(appId: string, redirectUri: string, state: string) {
-  return `${TH_DIALOG()}?${new URLSearchParams({ client_id: appId, redirect_uri: redirectUri, scope: TH_SCOPES.join(','), response_type: 'code', state })}`;
+  return `${TH_DIALOG()}?${new URLSearchParams({ client_id: appId, redirect_uri: redirectUri, scope: [...TH_SCOPES, ...TH_INSIGHT_SCOPES].join(','), response_type: 'code', state })}`;
 }
 
 export async function threadsExchange(appId: string, appSecret: string, redirectUri: string, code: string) {
@@ -212,4 +214,18 @@ export function checkThreadsFormats(media: any[], tooLong: boolean): string[] {
   if (media.some((m) => m.kind === 'video' && m.mime === 'video/webm')) issues.push('Threads: WebM-Videos werden nicht unterstützt (MP4 oder MOV).');
   if (tooLong) issues.push(`Threads: Text auf ${THREADS_MAX} Zeichen gekürzt – ein eigener, kürzerer Text für Threads ist besser.`);
   return issues;
+}
+
+/**
+ * Reichweite (#218): GET /{media}/insights mit views, likes, replies, reposts, quotes, shares (Recht
+ * threads_manage_insights; geprüft am 16.11.2026). Nur Zahlen, keine Personen.
+ */
+export async function threadsMetrics(sec: Record<string, string>, mediaId: string) {
+  const i = await call('GET', `${TH_GRAPH()}/${encodeURIComponent(mediaId)}/insights`, { metric: 'views,likes,replies,reposts,quotes,shares', access_token: sec.token }, sec);
+  const v = (name: string) => {
+    const x = (i.data ?? []).find((d: any) => d.name === name);
+    const val = x?.values?.[0]?.value ?? x?.total_value?.value;
+    return typeof val === 'number' ? val : null;
+  };
+  return { views: v('views'), likes: v('likes'), replies: v('replies'), reposts: v('reposts'), quotes: v('quotes'), shares: v('shares') };
 }

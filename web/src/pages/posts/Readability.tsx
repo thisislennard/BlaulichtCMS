@@ -12,7 +12,7 @@ export function ReadabilityPanel({ text }: { text: string }) {
   const deferred = useDeferredValue(text);
   const s = useMemo(() => scores(deferred), [deferred]);
   const list = useMemo(() => hints(deferred), [deferred]);
-  if (!deferred.trim() || !s) return null;
+  if (!deferred.trim() || !s || s.words < 5) return null;
   const tone = s.flesch >= 60 ? 'success' : s.flesch >= 30 ? 'warning' : 'error';
   return (
     <details className="border border-line rounded-card p-3 text-sm">

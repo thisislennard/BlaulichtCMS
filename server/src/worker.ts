@@ -23,6 +23,7 @@ import { refreshDueFeeds } from './routes/rss.js';
 import { deliverWarningSend } from './warnings/mail.js';
 import { runSocialPublication } from './connections/social.js';
 import { refreshThreadsTokens } from './connections/threads.js';
+import { runDueInsights } from './connections/insights.js';
 import { redactAnonymousIps } from './lib/audit.js';
 import { sealAudit, verifyAudit } from './lib/audit-chain.js';
 import { cleanupMediaTokens } from './connections/meta.js';
@@ -279,6 +280,8 @@ async function maintenance(isLeader: boolean) {
   // Automationen: Zeitpläne starten, abgelaufene Freigaben schließen
   // Threads-Anmeldungen (60 Tage gültig) rechtzeitig verlängern
   if (due('threads-token', 24 * 60 * 60_000)) await refreshThreadsTokens().catch((e) => log('warn', 'threads', e.message));
+  // Reichweite der Social-Posts (#218): nach 1 h, 24 h und 7 Tagen; läuft im Hintergrund und nie doppelt
+  if (due('social-insights', 15 * 60_000)) void runDueInsights().catch((e) => log('warn', 'insights', e.message));
   if (due('automations', 30_000)) await automationTick().catch((e) => log('warn', 'automation', e.message));
   // Workflow-Eingang „Kalendereintrag“ (#203): Beginn, Ende oder X vorher
   if (due('calendar-triggers', 30_000)) await calendarTriggerTick().catch((e) => log('warn', 'automation', `Kalender-Auslöser: ${e.message}`));

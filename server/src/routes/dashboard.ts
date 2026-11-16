@@ -9,6 +9,7 @@ import { getSettings, setSettings } from '../lib/settings.js';
 import { activeRoles, roleExists } from '../auth/permissions.js';
 import { POST_STATE_SQL } from './posts.js';
 import { availableWidgets, layoutIssues, normalizeLayout, resolveLayout } from '../lib/dashboard-layout.js';
+import { insightsOverview } from './insights.js';
 
 export async function dashboardRoutes(app: FastifyInstance) {
   /** Erstes Dashboard: offene Freigaben, bestätigter Veröffentlichungsstand, Medieneingang, Kanäle. */
@@ -83,6 +84,11 @@ export async function dashboardRoutes(app: FastifyInstance) {
             WHERE r.status IN ('new','in_progress') ORDER BY r.due_at ASC NULLS LAST, r.created_at DESC LIMIT 8`,
         ),
       };
+    }
+    if (perms.has('insights.view')) {
+      // Reichweite der letzten 7 Tage (#218): Summen und die drei Beiträge mit den meisten Interaktionen
+      const o = await insightsOverview(7, null, 3);
+      out.insights = { days: o.days, publications: o.publications, measured: o.measured, totals: o.totals, interactions: o.interactions, top: o.top.map((t) => ({ post_id: t.post_id, title: t.title, interactions: t.interactions, views: t.views, kinds: [...new Set(t.channels.map((c) => c.kind))] })) };
     }
     if (perms.has('connection.configure')) {
       // Aktive Verbindungen, deren letzter Abruf oder Versand fehlgeschlagen ist (Kennzahl „Verbindungsfehler“)

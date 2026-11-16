@@ -34,6 +34,12 @@ export const IG_DIALOG = () => (process.env.BLAULICHTCMS_IG_DIALOG_URL ?? 'https
 
 export const FB_SCOPES = ['pages_show_list', 'pages_manage_posts', 'pages_read_engagement'];
 export const IG_SCOPES = ['instagram_business_basic', 'instagram_business_content_publish'];
+/**
+ * Zusätzlich angefragt für die Reichweite (#218), aber nicht Voraussetzung: ohne sie veröffentlicht BlaulichtCMS
+ * trotzdem und zeigt nur die Zahlen, die ohne dieses Recht lesbar sind.
+ */
+export const FB_INSIGHT_SCOPES = ['read_insights'];
+export const IG_INSIGHT_SCOPES = ['instagram_business_manage_insights'];
 
 /** Ausdrücklich per Umgebungsvariable gesetzte Endpunkte (z. B. Testdienst) dürfen privat sein. */
 function privateHosts(): string[] {
@@ -74,10 +80,10 @@ async function call(method: string, url: string, params: Record<string, string |
 /* ------------------------------------------------------------------ OAuth */
 
 export function facebookAuthorizeUrl(appId: string, redirectUri: string, state: string) {
-  return `${FB_DIALOG()}?${new URLSearchParams({ client_id: appId, redirect_uri: redirectUri, state, scope: FB_SCOPES.join(','), response_type: 'code' })}`;
+  return `${FB_DIALOG()}?${new URLSearchParams({ client_id: appId, redirect_uri: redirectUri, state, scope: [...FB_SCOPES, ...FB_INSIGHT_SCOPES].join(','), response_type: 'code' })}`;
 }
 export function instagramAuthorizeUrl(appId: string, redirectUri: string, state: string) {
-  return `${IG_DIALOG()}?${new URLSearchParams({ client_id: appId, redirect_uri: redirectUri, state, scope: IG_SCOPES.join(','), response_type: 'code' })}`;
+  return `${IG_DIALOG()}?${new URLSearchParams({ client_id: appId, redirect_uri: redirectUri, state, scope: [...IG_SCOPES, ...IG_INSIGHT_SCOPES].join(','), response_type: 'code' })}`;
 }
 
 /** Code → langlebiger Benutzer-Token → Seiten mit Seiten-Tokens. */
@@ -124,7 +130,9 @@ export async function testFacebook(c: Connection, sec: Record<string, string>) {
     const granted = (perms.data ?? []).filter((p: any) => p.status === 'granted').map((p: any) => p.permission);
     account.permissions = granted;
     const missing = FB_SCOPES.filter((s) => !granted.includes(s));
-    steps.push({ name: 'Berechtigungen', ok: !sec.userToken || missing.length === 0, message: !sec.userToken ? 'Seiten-Token manuell hinterlegt – Berechtigungen nicht abfragbar.' : missing.length ? `Es fehlen: ${missing.join(', ')}` : `Erteilt: ${FB_SCOPES.join(', ')}`, kind: 'read' });
+    const insights = FB_INSIGHT_SCOPES.every((s) => granted.includes(s));
+    caps.insights = !!sec.userToken && insights;
+    steps.push({ name: 'Berechtigungen', ok: !sec.userToken || missing.length === 0, message: !sec.userToken ? 'Seiten-Token manuell hinterlegt – Berechtigungen nicht abfragbar.' : missing.length ? `Es fehlen: ${missing.join(', ')}` : `Erteilt: ${FB_SCOPES.join(', ')}${insights ? ', read_insights (Reichweite)' : ' – ohne read_insights zeigt die Reichweite nur Reaktionen, Kommentare und geteilte Beiträge'}`, kind: 'read' });
   } catch (e: any) {
     steps.push({ name: 'Berechtigungen', ok: false, message: e.message, kind: 'read' });
   }
@@ -509,4 +517,43 @@ export const altParam = (m: any) => (m?.kind === 'image' && String(m.alt ?? '').
 
 export async function connectionForPublish(id: string) {
   return one<any>(`SELECT * FROM connections WHERE id = $1`, [id]);
+}
+
+/* ------------------------------------------------------------------ Reichweite (#218) */
+
+const n = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+const insightValue = (data: any[], name: string) => n(data.find((x: any) => x.name === name)?.values?.[0]?.value ?? data.find((x: any) => x.name === name)?.total_value?.value);
+
+/**
+ * Facebook-Beitrag: Reaktionen, Kommentare und geteilte Beiträge (Recht pages_read_engagement) sowie – mit
+ * read_insights – Aufrufe (post_media_view), erreichte Personen (post_total_media_view_unique) und Klicks
+ * (post_clicks). Geprüft am 16.11.2026 (Graph API, Page Post Insights; post_impressions* entfallen nach v25).
+ */
+export async function facebookMetrics(sec: Record<string, string>, postId: string) {
+  const p = await call('GET', `${FB_GRAPH()}/${encodeURIComponent(postId)}`, { fields: 'shares,comments.summary(true).limit(0),reactions.summary(true).limit(0)', access_token: sec.pageToken }, sec, 'Facebook');
+  const out: Record<string, number | null> = { likes: n(p.reactions?.summary?.total_count), replies: n(p.comments?.summary?.total_count), shares: n(p.shares?.count) ?? 0 };
+  try {
+    const i = await call('GET', `${FB_GRAPH()}/${encodeURIComponent(postId)}/insights`, { metric: 'post_media_view,post_total_media_view_unique,post_clicks', access_token: sec.pageToken }, sec, 'Facebook');
+    Object.assign(out, { views: insightValue(i.data ?? [], 'post_media_view'), reach: insightValue(i.data ?? [], 'post_total_media_view_unique'), clicks: insightValue(i.data ?? [], 'post_clicks') });
+  } catch {
+    /* ohne read_insights bzw. Seite unter 100 „Gefällt mir“: nur die Interaktionen */
+  }
+  return out;
+}
+
+/**
+ * Instagram-Beitrag: Gefällt mir und Kommentare (instagram_business_basic) sowie – mit
+ * instagram_business_manage_insights – Aufrufe, Reichweite, geteilt und gespeichert (GET /{media}/insights).
+ * Meta liefert die Werte mit bis zu 48 Stunden Verzögerung.
+ */
+export async function instagramMetrics(sec: Record<string, string>, mediaId: string) {
+  const p = await call('GET', `${IG_GRAPH()}/${encodeURIComponent(mediaId)}`, { fields: 'like_count,comments_count', access_token: sec.token }, sec, 'Instagram');
+  const out: Record<string, number | null> = { likes: n(p.like_count), replies: n(p.comments_count) };
+  try {
+    const i = await call('GET', `${IG_GRAPH()}/${encodeURIComponent(mediaId)}/insights`, { metric: 'views,reach,shares,saved', access_token: sec.token }, sec, 'Instagram');
+    Object.assign(out, { views: insightValue(i.data ?? [], 'views'), reach: insightValue(i.data ?? [], 'reach'), shares: insightValue(i.data ?? [], 'shares'), saves: insightValue(i.data ?? [], 'saved') });
+  } catch {
+    /* ohne instagram_business_manage_insights: nur Gefällt mir und Kommentare */
+  }
+  return out;
 }

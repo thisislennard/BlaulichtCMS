@@ -322,9 +322,10 @@ export async function postRoutes(app: FastifyInstance) {
       })),
       collections,
       social: await many<any>(
-        `SELECT sp.id, sp.status, sp.format, sp.remote_url, sp.remote_id, sp.error, sp.error_class, sp.attempts, sp.created_at, sp.published_at, sp.shared_at, (SELECT name FROM users WHERE id = sp.shared_by) AS shared_by_name, sp.removal_status, sp.removal_error, sp.removed_at, CASE WHEN c.deleted_at IS NOT NULL THEN 'Verbindung gelöscht' ELSE c.name END AS connection_name, c.kind, r.number AS revision_number
+        `SELECT sp.id, sp.status, sp.format, sp.remote_url, sp.remote_id, sp.error, sp.error_class, sp.attempts, sp.created_at, sp.published_at, sp.shared_at,
+                CASE WHEN $2 THEN sp.insights END AS insights, CASE WHEN $2 THEN sp.insights_at END AS insights_at, CASE WHEN $2 THEN sp.insights_error END AS insights_error, CASE WHEN $2 THEN sp.insights_stage END AS insights_stage, (SELECT name FROM users WHERE id = sp.shared_by) AS shared_by_name, sp.removal_status, sp.removal_error, sp.removed_at, CASE WHEN c.deleted_at IS NOT NULL THEN 'Verbindung gelöscht' ELSE c.name END AS connection_name, c.kind, r.number AS revision_number
            FROM social_publications sp JOIN connections c ON c.id = sp.connection_id JOIN post_revisions r ON r.id = sp.revision_id WHERE sp.post_id = $1 ORDER BY sp.created_at DESC`,
-        [id],
+        [id, req.auth!.permissions.has('insights.view')],
       ),
     };
   });

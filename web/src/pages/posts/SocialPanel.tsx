@@ -9,6 +9,7 @@ import { useAuth } from '../../lib/auth';
 import { fmtDateTime } from '../../lib/format';
 import { blueskyLength, mastodonLength, SOCIAL_KINDS, SOCIAL_LABEL, STORY_KINDS, threadsLength, xLength, type SocialKind } from '../../lib/social';
 import { safeHref } from '../../lib/url';
+import { MetricLine } from './Insights';
 
 export interface SocialTarget {
   id: string;
@@ -227,6 +228,20 @@ export function SocialStatusCard({ postId, revision, hash, approved, targets, it
                   <a href={safeHref(s.remote_url)} target="_blank" rel="noopener noreferrer" className="break-all">
                     {s.remote_url}
                   </a>
+                )}
+                {s.status === 'published' && !s.shared_at && s.format !== 'story' && can('insights.view') && (
+                  <div className="text-meta">
+                    {s.insights ? (
+                      <>
+                        <MetricLine m={s.insights} />
+                        <span className="text-fg-muted">Stand {fmtDateTime(s.insights_at)}{s.insights_stage >= 3 ? ' (letzter Abruf)' : ''}</span>
+                      </>
+                    ) : s.insights_error ? (
+                      <span className="text-warn">Reichweite: {s.insights_error}</span>
+                    ) : (
+                      <span className="text-fg-muted">Reichweite: erster Abruf eine Stunde nach der Veröffentlichung.</span>
+                    )}
+                  </div>
                 )}
                 {s.status === 'ready' && can('publish.social') && (
                   <div>

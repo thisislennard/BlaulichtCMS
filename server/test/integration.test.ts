@@ -4308,7 +4308,8 @@ describe('Storys, Threads, X und Teilen von Hand (#188, #189)', () => {
     expect(start.status).toBe(200);
     const url = new URL(start.json.url);
     expect(url.origin + url.pathname).toBe('https://threads.com/oauth/authorize');
-    expect(url.searchParams.get('scope')).toBe('threads_basic,threads_content_publish');
+    // threads_manage_insights für die Reichweite (#218) wird mit angefragt, ist aber keine Voraussetzung
+    expect(url.searchParams.get('scope')).toBe('threads_basic,threads_content_publish,threads_manage_insights');
     expect(url.searchParams.get('client_id')).toBe('777');
     const back = await anonymous.raw('GET', `/connections/oauth/callback?state=${encodeURIComponent(url.searchParams.get('state')!)}&code=CODE1`);
     expect(back.status).toBe(302);
@@ -4548,7 +4549,10 @@ describe('Mastodon und Bluesky (#215)', () => {
         if (p === '/api/v1/media/MEDIA1' && req.method === 'DELETE') return json(200, {});
         if (p === '/api/v1/accounts/MDA1/statuses') return json(200, st.statuses.slice().reverse());
         if (/^\/api\/v1\/statuses\/MS\d+$/.test(p) && req.method === 'DELETE') return json(200, {});
-        if (/^\/api\/v1\/statuses\/MS\d+$/.test(p)) return json(200, st.statuses.find((s) => p.endsWith(s.id)));
+        if (/^\/api\/v1\/statuses\/MS\d+$/.test(p)) {
+          const found = st.statuses.find((s) => p.endsWith(`/${s.id}`));
+          return found ? json(200, found) : json(404, { error: 'Record not found' });
+        }
         // Bluesky
         if (p === '/xrpc/com.atproto.server.createSession') {
           const b = JSON.parse(body.toString() || '{}');
@@ -4693,6 +4697,83 @@ describe('Mastodon und Bluesky (#215)', () => {
     expect(after.find((x) => x.kind === 'bluesky').remote_id).toBe('at://did:plc:test123/app.bsky.feed.post/3k1');
     expect(st.statuses.length).toBe(1);
     expect(st.records.length).toBe(1);
+  });
+
+  it('Reichweite (#218): Abruf nach 1 h, 24 h und 7 Tagen, nur Zahlen, Übersicht, Dashboard und Rechte', async () => {
+    const { runDueInsights, stageFor } = await import('../src/connections/insights.js');
+    expect(stageFor(new Date(Date.now() - 30 * 60_000))).toBe(0);
+    expect(stageFor(new Date(Date.now() - 2 * 3600_000))).toBe(1);
+    expect(stageFor(new Date(Date.now() - 8 * 86_400_000))).toBe(3);
+    // Frisch veröffentlicht: noch nichts fällig
+    await runDueInsights();
+    expect((await many<any>(`SELECT insights_stage FROM social_publications WHERE post_id = $1`, [postId])).every((r) => r.insights_stage === 0)).toBe(true);
+    // Nach zwei Stunden: Stufe 1 für beide Kanäle
+    await pool.query(`UPDATE social_publications SET published_at = now() - interval '2 hours' WHERE post_id = $1`, [postId]);
+    const r1 = await runDueInsights();
+    expect(r1.fetched, JSON.stringify(r1)).toBe(2);
+    let rows = await many<any>(`SELECT sp.*, c.kind FROM social_publications sp JOIN connections c ON c.id = sp.connection_id WHERE sp.post_id = $1`, [postId]);
+    expect(rows.find((x) => x.kind === 'mastodon')).toMatchObject({ insights_stage: 1, insights: { reposts: 3, likes: 7, replies: 1 } });
+    expect(rows.find((x) => x.kind === 'bluesky')).toMatchObject({ insights_stage: 1, insights: { likes: 5, reposts: 2, replies: 1, quotes: 0 } });
+    // Bluesky-Zahlen kommen ohne Anmeldung von der öffentlichen Schnittstelle
+    const gp = calls.filter((c) => c.path === '/xrpc/app.bsky.feed.getPosts');
+    expect(gp.length).toBe(1);
+    expect(gp[0].headers.authorization).toBeUndefined();
+    // Gleicher Lauf erneut: nichts doppelt
+    expect((await runDueInsights()).fetched).toBe(0);
+    // Verspätet nach 8 Tagen: direkt letzte Stufe, danach keine Abrufe mehr
+    await pool.query(`UPDATE social_publications SET published_at = now() - interval '8 days' WHERE post_id = $1`, [postId]);
+    expect((await runDueInsights()).fetched).toBe(2);
+    rows = await many<any>(`SELECT insights_stage FROM social_publications WHERE post_id = $1`, [postId]);
+    expect(rows.every((r) => r.insights_stage === 3)).toBe(true);
+    expect((await runDueInsights()).fetched).toBe(0);
+    expect((await one<any>(`SELECT count(*)::int AS n FROM social_insights si JOIN social_publications sp ON sp.id = si.publication_id WHERE sp.post_id = $1`, [postId]))!.n).toBe(4);
+    // Je Beitrag samt Verlauf; nur Zahlen, keine Personen
+    const per = (await editor.get(`/posts/${postId}/insights`)).json.items;
+    expect(per.find((x: any) => x.kind === 'mastodon').history.map((h: any) => h.stage)).toEqual([1, 3]);
+    expect(per.find((x: any) => x.kind === 'mastodon').interactions).toBe(11);
+    expect(Object.keys(per[0].insights).every((k) => ['views', 'reach', 'likes', 'replies', 'reposts', 'quotes', 'shares', 'saves', 'clicks'].includes(k))).toBe(true);
+    // Übersicht (Zeitraum, Kanal, Top-Beiträge)
+    await pool.query(`UPDATE social_publications SET published_at = now() - interval '3 days' WHERE post_id = $1`, [postId]);
+    const o = (await publisher.get('/insights?days=7')).json;
+    expect(o.channels.map((c: any) => c.kind).sort()).toEqual(expect.arrayContaining(['bluesky', 'mastodon']));
+    expect(o.top[0]).toMatchObject({ post_id: postId, interactions: 19 });
+    expect((await publisher.get('/insights?days=7&kind=bluesky')).json.channels.map((c: any) => c.kind)).toEqual(['bluesky']);
+    // Dashboard-Kachel
+    const dash = (await editor.get('/dashboard')).json;
+    expect(dash.insights.top.some((t: any) => t.post_id === postId)).toBe(true);
+    expect((await editor.get('/dashboard/layout')).json.widgets).toContain('insights');
+    // Im Beitrag: Zahlen je Kanal nur mit „Reichweite ansehen“
+    expect((await editor.get(`/posts/${postId}`)).json.social.find((x: any) => x.kind === 'mastodon').insights.likes).toBe(7);
+    // Eigene Adresse: Einladungen annehmen ist je Adresse begrenzt
+    const inv = await admin.post('/users/invite', { email: 'nur-beitraege@example.org', roles: ['media_manager'] });
+    const noRight = new Client(app, '10.77.0.4');
+    expect((await noRight.post(`/auth/invite/${inv.json.link.split('/einladung/')[1]}`, { name: 'Alex', password: 'Alex-Zugang-sicher-2026' })).json.next).toBe('done');
+    expect((await noRight.get('/insights')).status).toBe(403);
+    expect((await noRight.get(`/posts/${postId}/insights`)).status).toBe(403);
+    expect((await noRight.get(`/posts/${postId}`)).json.social[0].insights).toBeNull();
+    expect((await noRight.get('/dashboard')).json.insights).toBeUndefined();
+  });
+
+  it('Reichweite: ausgeschalteter Abruf zählt nur die Stufe weiter, Fehler je Beitrag werden festgehalten', async () => {
+    const { runDueInsights } = await import('../src/connections/insights.js');
+    // Abruf ausschalten verlangt keinen neuen Test
+    const sw = await adm.put(`/connections/${bsId}`, { name: 'Bluesky (Test)', config: { insights: false } });
+    expect(sw.json.retest).toBe(false);
+    await pool.query(`UPDATE social_publications SET insights_stage = 0, published_at = now() - interval '2 hours' WHERE post_id = $1`, [postId]);
+    const before = calls.filter((c) => c.path === '/xrpc/app.bsky.feed.getPosts').length;
+    await runDueInsights();
+    expect(calls.filter((c) => c.path === '/xrpc/app.bsky.feed.getPosts').length).toBe(before);
+    const b = await one<any>(`SELECT sp.insights_stage FROM social_publications sp JOIN connections c ON c.id = sp.connection_id WHERE sp.post_id = $1 AND c.kind = 'bluesky'`, [postId]);
+    expect(b.insights_stage).toBe(1);
+    await adm.put(`/connections/${bsId}`, { name: 'Bluesky (Test)', config: { insights: true } });
+    // Mastodon-Beitrag inzwischen gelöscht: Fehler je Beitrag, Stufe zählt weiter (kein Dauerabruf)
+    st.statuses.length = 0;
+    await pool.query(`UPDATE social_publications SET published_at = now() - interval '25 hours' WHERE post_id = $1`, [postId]);
+    await runDueInsights();
+    const m = await one<any>(`SELECT sp.insights_stage, sp.insights_error, sp.insights FROM social_publications sp JOIN connections c ON c.id = sp.connection_id WHERE sp.post_id = $1 AND c.kind = 'mastodon'`, [postId]);
+    expect(m.insights_stage).toBe(2);
+    expect(m.insights_error).toBeTruthy();
+    expect(m.insights.likes).toBe(7);
   });
 
   it('Zurückziehen: Mastodon und Bluesky über die Schnittstelle gelöscht', async () => {

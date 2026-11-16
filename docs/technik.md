@@ -87,6 +87,15 @@ Notbremse, Löschfrist, Export → Import und abgelehnte Dateien).
 
 ---
 
+## Reichweite (#218)
+
+Worker-Aufgabe alle 15 Minuten (`server/src/connections/insights.ts`, läuft nie doppelt): fällig sind veröffentlichte
+Beiträge (nicht Storys, nicht von Hand geteilt, nicht entfernt) 1 h, 24 h und 7 Tage nach der Veröffentlichung
+(`social_publications.insights_stage` 0–3); höchstens 25 je Kanal und 150 je Lauf. Letzter Stand in
+`social_publications.insights`, Verlauf in `social_insights` (Migration 147). Zeitweise Störungen (Netz, 429, 5xx)
+werden beim nächsten Lauf wiederholt, Fehler je Beitrag (gelöscht, Recht fehlt) festgehalten. Nur Summen, keine
+Personen. Routen `GET /insights`, `GET /posts/:id/insights` (Recht `insights.view`), Dashboard-Kachel `insights`.
+
 ## Barrierefreiheit (#217)
 
 - Alternativtext je Bild: `media.alt_text` (Medienverwaltung, wiederverwendbar) und `post_revisions.media_alt`

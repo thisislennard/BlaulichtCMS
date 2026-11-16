@@ -206,3 +206,22 @@ export function checkXFormats(c: Pick<Connection, 'config'>, media: any[], tooLo
   if (tooLong) issues.push(`X: Text auf ${X_MAX} Zeichen gekürzt – ein eigener, kürzerer Text für X ist besser.`);
   return issues;
 }
+
+/**
+ * Reichweite (#218): GET /2/tweets?ids=…&tweet.fields=public_metrics (bis 100 je Abruf) – Aufrufe, Gefällt mir,
+ * Antworten, Reposts, Zitate, Lesezeichen. Jeder Abruf kostet bei X Guthaben; deshalb nur, wenn in der Verbindung
+ * ausdrücklich eingeschaltet.
+ */
+export async function xMetrics(sec: Record<string, string>, ids: string[]) {
+  const out = new Map<string, Record<string, number | null>>();
+  for (let i = 0; i < ids.length; i += 100) {
+    const part = ids.slice(i, i + 100).map(encodeURIComponent).join(',');
+    const { json } = await call('GET', `/2/tweets?ids=${part}&tweet.fields=public_metrics`, sec);
+    for (const t of json.data ?? []) {
+      const m = t.public_metrics ?? {};
+      const num = (v: unknown) => (typeof v === 'number' ? v : null);
+      out.set(String(t.id), { views: num(m.impression_count), likes: num(m.like_count), replies: num(m.reply_count), reposts: num(m.retweet_count), quotes: num(m.quote_count), saves: num(m.bookmark_count) });
+    }
+  }
+  return out;
+}

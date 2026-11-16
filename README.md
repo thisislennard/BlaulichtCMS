@@ -168,6 +168,9 @@ flowchart LR
   App-Passwort und Link-Vorschaukarte. Bilder mit Alternativtext, Löschen über die Schnittstelle.
 - **WhatsApp-Kanal:** Teilen von Hand – WhatsApp hat für Kanäle keine Schnittstelle. Text mit WhatsApp-Formatierung,
   Link und Bilder sind vorbereitet; geteilte Beiträge werden als geteilt markiert.
+- **Reichweite:** Aufrufe und Interaktionen der Social-Posts über die offiziellen Statistik-Schnittstellen
+  (Facebook, Instagram, Threads, X nach Wahl, Mastodon, Bluesky) – nach 1 Stunde, 24 Stunden und 7 Tagen, je Beitrag,
+  als Übersicht mit Top-Beiträgen und als Dashboard-Kachel; nur Summen, keine Personen.
 - **Zurückziehen:** Beitrag von der Website nehmen – inklusive der übernommenen Bilder in der Mediathek.
 
 ### Warnentwurf und amtliche Warnungen

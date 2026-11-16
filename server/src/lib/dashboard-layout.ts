@@ -36,6 +36,7 @@ export const WIDGET_DEFS: readonly WidgetDef[] = [
   { id: 'sites', kind: 'panel', permission: 'channel.view' },
   { id: 'banners', kind: 'panel', permission: 'banner.view' },
   { id: 'rss', kind: 'panel', permission: 'source.view' },
+  { id: 'insights', kind: 'panel', permission: 'insights.view' },
   { id: 'press', kind: 'panel', permission: 'press.view' },
   { id: 'badge_press', kind: 'badge', permission: 'press.view' },
 ];
@@ -75,7 +76,7 @@ export const DEFAULT_LAYOUT: DashboardLayout = {
   badges: ['badge_approvals', 'badge_unreviewed', 'badge_ready', 'badge_banners', 'badge_uploads', 'badge_connection_errors'],
   columns: [
     { weight: 5, widgets: ['media', 'publications', 'rss'] },
-    { weight: 3, widgets: ['approvals', 'uploads', 'banners', 'sites'] },
+    { weight: 3, widgets: ['approvals', 'uploads', 'banners', 'sites', 'insights'] },
   ],
   mobile: ['approvals', 'ready', 'uploads', 'publications', 'banners'],
 };

@@ -112,7 +112,7 @@ export async function updateConnectionSecrets(c: Connection, patch: Record<strin
  * eigene Voraussetzungen: dokumentierte fachliche Prüfung, gekoppelte Website, HTTPS-Quelle). Alles andere – Quelle,
  * Gebiet, Feldzuordnung, App-ID, Seite, Konto – und jede Änderung der Zugangsdaten verlangt einen neuen Test.
  */
-export const RETEST_EXEMPT_KEYS = ['intervalMinutes', 'intervalSeconds', 'createDrafts', 'autoBanner', 'bannerSiteId', 'review', 'oauthState', 'tokenExpiresAt', 'clientId', 'appInstance', 'appRedirect'] as const;
+export const RETEST_EXEMPT_KEYS = ['intervalMinutes', 'intervalSeconds', 'createDrafts', 'autoBanner', 'bannerSiteId', 'review', 'oauthState', 'tokenExpiresAt', 'clientId', 'appInstance', 'appRedirect', 'insights'] as const;
 
 /** Vergleichsform einer Konfiguration für die Frage „neuer Test nötig?“ (leere Zuordnungen = Standard). */
 export function retestRelevantConfig(cfg: Record<string, any> | null | undefined): string {

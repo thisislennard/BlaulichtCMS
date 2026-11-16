@@ -248,6 +248,25 @@ WhatsApp bietet **keine Schnittstelle**, um in einen WhatsApp-Kanal zu posten. D
 - Der vorbereitete Text nutzt die WhatsApp-Formatierung: Titel **fett** (`*Titel*`), darunter Kurzfassung bzw. Text und der Link zur Website. Ein eigener Text für den WhatsApp-Kanal im Beitrag ersetzt das.
 - **Testen** prüft nur die Einstellungen (es gibt nichts anzumelden); danach **Aktivieren**.
 
+## Reichweite
+
+BlaulichtCMS ruft die **Aufrufe und Interaktionen** veröffentlichter Social-Posts über die offiziellen Statistik-Schnittstellen ab – **1 Stunde, 24 Stunden und 7 Tage** nach der Veröffentlichung, danach nicht mehr. Die Zahlen stehen im Beitrag unter **Soziale Kanäle – Status**, in der Übersicht **Reichweite** (Zeitraum, Kanal, Top-Beiträge) und als Dashboard-Kachel „Reichweite (7 Tage)“. Sehen darf sie, wer das Recht **Reichweite ansehen** hat (Vorgabe für Redaktion, Freigabe, Veröffentlichung und Lesezugriff).
+
+Gespeichert werden **nur zusammengefasste Zahlen** je Beitrag – nie, wer reagiert, kommentiert oder geteilt hat.
+
+| Kanal | Zahlen | Voraussetzung |
+|---|---|---|
+| Facebook | Reaktionen, Kommentare, geteilt; mit `read_insights` auch Aufrufe, Erreichte und Klicks | `read_insights` fragt BlaulichtCMS beim (erneuten) Verbinden mit an; Seiten-Statistiken gibt es laut Meta erst ab 100 „Gefällt mir“ |
+| Instagram | Gefällt mir, Kommentare; mit `instagram_business_manage_insights` auch Aufrufe, Reichweite, geteilt, gespeichert | Recht beim (erneuten) Verbinden; Meta liefert die Werte mit bis zu 48 Stunden Verzögerung |
+| Threads | Aufrufe, Gefällt mir, Antworten, Reposts, Zitate, geteilt | Recht `threads_manage_insights` beim (erneuten) Verbinden |
+| X | Aufrufe, Gefällt mir, Antworten, Reposts, Zitate, Lesezeichen | nur „Über die X-API posten“ und ausdrücklich eingeschaltet – **jeder Abruf kostet Guthaben** |
+| Mastodon | Boosts, Favoriten, Antworten | keine weitere |
+| Bluesky | Gefällt mir, Reposts, Antworten, Zitate | keine (öffentliche Schnittstelle, ohne Anmeldung) |
+
+Ältere Verbindungen haben die Statistik-Rechte noch nicht: Dann zeigt BlaulichtCMS die Zahlen, die ohne sie lesbar sind (Facebook, Instagram) bzw. einen Hinweis im Beitrag (Threads); **erneut verbinden** und testen ergänzt das Recht. Je Verbindung lässt sich der Abruf mit **Reichweite abrufen** ausschalten (ohne neuen Test). Nicht gezählt werden Storys (verschwinden nach 24 Stunden), von Hand Geteiltes (WhatsApp-Kanal, X von Hand) und entfernte Beiträge.
+
+**Website:** Aufrufe der WordPress-Seite zeigt BlaulichtCMS nicht. WordPress selbst zählt keine Aufrufe, und die Bridge baut bewusst keine Zählung ein – das ginge nur mit einem Statistik-Dienst bzw. -Plugin auf der Website, dessen Einsatz die Website selbst datenschutzrechtlich bewerten muss.
+
 ## Teilen von Hand
 
 Für Kanäle ohne Schnittstelle (WhatsApp-Kanal, X im Modus „Teilen von Hand“) gilt dieselbe Freigabe wie für alle anderen Kanäle. Nach **Auf sozialen Kanälen veröffentlichen** steht der Kanal im Beitrag als **Zum Teilen bereit**, und alle mit dem Recht „In sozialen Kanälen veröffentlichen“ bekommen eine Benachrichtigung.
