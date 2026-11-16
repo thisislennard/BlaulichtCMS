@@ -7,6 +7,8 @@ import '@fontsource/ibm-plex-sans/600.css';
 import '@fontsource/ibm-plex-mono/400.css';
 import '@fontsource/ibm-plex-mono/500.css';
 import './index.css';
+// Installationsangebot des Browsers früh abfangen (kommt oft vor dem ersten Rendern)
+import './lib/pwa';
 import { App } from './App';
 import { AuthProvider, ThemeSync } from './lib/auth';
 import { ConfirmProvider, ToastProvider } from './components/ui/overlays';
@@ -32,6 +34,11 @@ const queryClient = new QueryClient({
 // Service Worker für die installierbare App (nur Oberfläche, keine API-Daten)
 if ('serviceWorker' in navigator && import.meta.env.PROD) {
   window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {}));
+  // Klick auf eine Mitteilung bei einem Fenster, das der Service Worker nicht selbst umleiten kann (sw.js)
+  navigator.serviceWorker.addEventListener('message', (e) => {
+    const link = e.data?.type === 'bc-open' ? e.data.link : null;
+    if (typeof link === 'string' && link.startsWith('/') && !link.startsWith('//')) window.location.assign(link);
+  });
 }
 
 createRoot(document.getElementById('root')!).render(

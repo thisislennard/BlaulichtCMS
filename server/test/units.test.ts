@@ -1714,3 +1714,35 @@ describe('Leistung (#192)', () => {
     resetProxyObservation();
   });
 });
+
+describe('Web-App-Manifest (#197)', () => {
+  const pub = path.join(__dirname, '../../web/public');
+  const m = JSON.parse(fs.readFileSync(path.join(pub, 'manifest.webmanifest'), 'utf8'));
+  const pngSize = (file: string) => {
+    const b = fs.readFileSync(path.join(pub, file));
+    expect(b.subarray(1, 4).toString()).toBe('PNG');
+    return `${b.readUInt32BE(16)}x${b.readUInt32BE(20)}`;
+  };
+  it('ist am Desktop und auf Mobilgeräten installierbar', () => {
+    expect(m).toMatchObject({ id: '/', start_url: '/', scope: '/', display: 'standalone', name: 'BlaulichtCMS' });
+    expect(m.icons.some((i: any) => i.sizes === '192x192' && i.purpose !== 'maskable')).toBe(true);
+    expect(m.icons.some((i: any) => i.sizes === '512x512' && i.purpose !== 'maskable')).toBe(true);
+    expect(m.icons.some((i: any) => i.purpose === 'maskable')).toBe(true);
+    for (const i of m.icons) expect(pngSize(i.src.slice(1))).toBe(i.sizes);
+  });
+  it('hat Screenshots für den ausführlichen Installationsdialog (breit und schmal) in passender Größe', () => {
+    for (const f of ['wide', 'narrow']) expect(m.screenshots.some((s: any) => s.form_factor === f)).toBe(true);
+    for (const s of m.screenshots) {
+      const size = pngSize(s.src.slice(1));
+      expect(size).toBe(s.sizes);
+      const [w, h] = size.split('x').map(Number);
+      expect(Math.min(w, h)).toBeGreaterThanOrEqual(320);
+      expect(Math.max(w, h)).toBeLessThanOrEqual(3840);
+      expect(Math.max(w, h) / Math.min(w, h)).toBeLessThanOrEqual(2.3);
+      expect(s.form_factor === 'wide' ? w > h : h > w).toBe(true);
+    }
+  });
+  it('Schnellzugriffe zeigen nur auf eigene Pfade', () => {
+    for (const s of m.shortcuts) expect(s.url).toMatch(/^\/(?!\/)/);
+  });
+});

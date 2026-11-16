@@ -35,6 +35,15 @@ Neue Dateien über Foto-Links werden gebündelt: höchstens eine Push-Nachricht 
 
 Auf iPhone und iPad funktioniert Push nur in der **installierten App** (Safari → Teilen → „Zum Home-Bildschirm“, ab iOS 16.4). Danach die App öffnen und dort Push einschalten.
 
+### Am Computer
+
+Push funktioniert auch am Computer – im Browser (Chrome, Edge, Firefox, Safari am Mac) oder besser in der **installierten App** ([App installieren](/hilfe/app#am-computer)): eigenes Fenster, Mitteilungen des Betriebssystems und die Zahl ungelesener Benachrichtigungen am App-Symbol. Push in der installierten App einmal **in der App selbst** einschalten. Ein Klick auf die Mitteilung holt ein offenes BlaulichtCMS-Fenster nach vorn und öffnet dort die verlinkte Seite.
+
+- **Im Browser** kommen Mitteilungen, solange der Browser läuft – der BlaulichtCMS-Tab muss nicht offen sein. Ist der Browser ganz geschlossen, werden sie beim nächsten Start nachgeliefert, sofern der Push-Dienst sie noch bereithält.
+- **Firefox** kann BlaulichtCMS am Computer nicht als App installieren; Push im Browser funktioniert dort trotzdem.
+- **Windows:** Unter **Einstellungen → System → Benachrichtigungen** müssen Benachrichtigungen insgesamt und für den Browser bzw. die App „BlaulichtCMS“ eingeschaltet sein. **Nicht stören** (auch automatisch, z. B. außerhalb der Arbeitszeit oder beim Präsentieren) hält Mitteilungen zurück; dort lässt sich BlaulichtCMS als Ausnahme mit Priorität zulassen ([Microsoft-Support](https://support.microsoft.com/de-de/help/4028678/windows-10-change-notification-settings)).
+- **macOS:** Unter **Systemeinstellungen → Mitteilungen** den Browser bzw. die Web-App „BlaulichtCMS“ wählen und Mitteilungen erlauben; ein aktiver **Fokus** (z. B. „Nicht stören“) hält sie zurück ([Apple-Support](https://support.apple.com/de-de/104996)).
+
 ### Push kommt nicht an
 
 - **Im Browser blockiert:** In den Website-Einstellungen des Browsers Mitteilungen für die BlaulichtCMS-Adresse erlauben, dann erneut einschalten.

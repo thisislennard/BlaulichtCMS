@@ -191,7 +191,7 @@ flowchart LR
   amtliche Warnungen, Verbindungsfehler, fehlgeschlagene Automationen, Updates …) – nur Arten, für die das Konto Rechte
   hat. Push an Browser und installierte App (Web Push, ohne Fremddienst); E-Mail über SMTP oder Microsoft 365
   (Microsoft Graph als Anwendung, aktivierbar erst nach bestandener Testmail).
-- **App fürs Handy:** installierbar (PWA) mit Schnellzugriffen auf Neuer Beitrag, Medien sammeln und Freigaben.
+- **App für Handy und Computer:** installierbar (PWA) auf Android, iPhone/iPad und am Computer (Chrome, Edge, Safari am Mac – „Zum Dock hinzufügen“), mit eigenem Fenster, Push-Mitteilungen des Betriebssystems, Zähler ungelesener Benachrichtigungen am App-Symbol und Schnellzugriffen auf Neuer Beitrag, Medien sammeln und Freigaben; „App installieren“ im Benutzermenü.
 - **Schnell bedienbar:** Suche und Schnellaktionen mit `Strg` + `K`, vollständig per Tastatur nutzbar, heller und
   dunkler Modus, Design „Leitstand“ für draußen und nachts.
 - **Hilfe-Center:** 26 Kapitel mit Volltextsuche direkt in der App.

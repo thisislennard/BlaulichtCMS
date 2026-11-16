@@ -6,6 +6,8 @@ import { useErrorToast, useToast } from '../components/ui/overlays';
 import { HelpTip } from '../components/ui/HelpTip';
 import { Icon } from '../components/ui/Icon';
 import { fmtRelative } from '../lib/format';
+import { usePwaInstall } from '../lib/pwa';
+import { Link } from 'react-router';
 import { LoadError, SectionCard } from './admin/shared';
 
 type Channel = 'push' | 'mail';
@@ -49,6 +51,7 @@ export function NotifyPrefsCard() {
   const [thisHash, setThisHash] = useState<string | null>(null);
   const [permission, setPermission] = useState<NotificationPermission | 'unsupported'>(pushSupported() ? Notification.permission : 'unsupported');
   const refresh = () => qc.invalidateQueries({ queryKey: ['notify-prefs'] });
+  const { installed } = usePwaInstall();
 
   // Abo dieses Browsers erkennen (Kennwert der Adresse, die Adresse selbst gibt der Server nie aus)
   useEffect(() => {
@@ -165,6 +168,14 @@ export function NotifyPrefsCard() {
             <Button size="sm" variant="primary" icon="Bell" loading={busy === 'enable'} onClick={enablePush}>Push einschalten</Button>
             {permission === 'denied' && <span className="text-meta text-err">Im Browser blockiert – bitte in den Website-Einstellungen erlauben.</span>}
           </div>
+        )}
+        {!installed && (
+          <p className="m-0 text-meta text-fg-muted flex items-center gap-1.5">
+            <Icon name="Monitor" size={14} className="shrink-0" />
+            <span>
+              Benachrichtigungen auch am Desktop: <Link to="/app#desktop">App installieren</Link> – eigenes Fenster, Mitteilungen des Betriebssystems und Zähler am App-Symbol.
+            </span>
+          </p>
         )}
       </div>
 

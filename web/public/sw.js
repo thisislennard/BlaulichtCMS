@@ -1,7 +1,7 @@
 /* BlaulichtCMS Service Worker: hält nur die App-Oberfläche offline bereit.
    API-Aufrufe, Uploads und Medien werden nie zwischengespeichert – Freigaben und
    Veröffentlichungen bestätigt ausschließlich der Server. */
-const CACHE = 'blaulichtcms-shell-v3';
+const CACHE = 'blaulichtcms-shell-v4';
 const MAX_ASSETS = 150;
 // Nur vollständige, eigene Antworten speichern – keine 502/404-Seiten als Offline-Oberfläche (#88)
 const cacheable = (res) => res && res.ok && res.type === 'basic';
@@ -69,6 +69,12 @@ self.addEventListener('push', (e) => {
     d = { title: 'BlaulichtCMS', body: e.data ? e.data.text() : '' };
   }
   const link = typeof d.link === 'string' && d.link.startsWith('/') && !d.link.startsWith('//') ? d.link : '/benachrichtigungen';
+  // Punkt am App-Symbol (Taskleiste/Dock), bis die geöffnete App die genaue Zahl setzt – nur wo unterstützt (#197)
+  try {
+    self.navigator.setAppBadge?.().catch(() => {});
+  } catch {
+    /* nicht unterstützt */
+  }
   e.waitUntil(
     self.registration.showNotification(String(d.title || d.app || 'BlaulichtCMS').slice(0, 200), {
       body: String(d.body || '').slice(0, 500),
@@ -85,14 +91,17 @@ self.addEventListener('push', (e) => {
 self.addEventListener('notificationclick', (e) => {
   e.notification.close();
   const target = new URL((e.notification.data && e.notification.data.link) || '/', self.location.origin).href;
+  // Vorhandenes Fenster bevorzugen (installierte App am Desktop: kein zweites Fenster), das aktive bzw. sichtbare zuerst.
   e.waitUntil(
-    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
-      for (const c of list) {
-        if (new URL(c.url).origin === self.location.origin && 'focus' in c) {
-          return c.focus().then((w) => (w && 'navigate' in w ? w.navigate(target) : undefined));
-        }
-      }
-      return self.clients.openWindow(target);
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(async (list) => {
+      const own = list.filter((c) => new URL(c.url).origin === self.location.origin);
+      own.sort((a, b) => Number(b.focused) - Number(a.focused) || Number(b.visibilityState === 'visible') - Number(a.visibilityState === 'visible'));
+      const c = own[0];
+      if (!c) return self.clients.openWindow(target);
+      const w = (await c.focus().catch(() => null)) || c;
+      if (w.url === target) return;
+      // navigate() geht nur bei gesteuerten Fenstern; sonst wechselt die Seite selbst (Nachricht an main.tsx)
+      await w.navigate(target).catch(() => w.postMessage({ type: 'bc-open', link: new URL(target).pathname + new URL(target).search + new URL(target).hash }));
     }),
   );
 });

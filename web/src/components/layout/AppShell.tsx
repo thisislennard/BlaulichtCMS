@@ -11,6 +11,7 @@ import { Icon } from '../ui/Icon';
 import { Popover } from '../ui/overlays';
 import { CommandPalette } from './CommandPalette';
 import { useLive } from '../../lib/live';
+import { usePwaInstall } from '../../lib/pwa';
 import { LegalLinks } from '../legal/LegalLinks';
 import { FeedbackView } from '../feedback/Feedback';
 
@@ -185,6 +186,12 @@ function NotificationsButton() {
   const ref = useRef<HTMLButtonElement>(null);
   const navigate = useNavigate();
   const unread = notif?.unread ?? 0;
+  // Zahl ungelesener Benachrichtigungen am App-Symbol (Taskleiste/Dock), nur wo der Browser das kann (#197)
+  useEffect(() => {
+    if (!notif) return;
+    const n = navigator as Navigator & { setAppBadge?: (n?: number) => Promise<void>; clearAppBadge?: () => Promise<void> };
+    (unread > 0 ? n.setAppBadge?.(unread) : n.clearAppBadge?.())?.catch(() => {});
+  }, [notif, unread]);
   return (
     <>
       <button ref={ref} type="button" onClick={() => setOpen((o) => !o)} aria-label={`Benachrichtigungen${unread ? `, ${unread} neu` : ''}`} aria-expanded={open} className="relative w-9 h-9 rounded-control border border-line bg-transparent inline-flex items-center justify-center text-fg-muted hover:text-fg hover:bg-raised">
@@ -237,6 +244,7 @@ function UserMenu() {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLButtonElement>(null);
   const navigate = useNavigate();
+  const pwa = usePwaInstall();
   if (!me) return null;
   return (
     <>
@@ -258,6 +266,20 @@ function UserMenu() {
               <Icon name={i.icon} size={15} /> {i.label}
             </button>
           ))}
+          {!pwa.installed && (
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false);
+                // Chrome/Edge: Installationsdialog direkt; sonst Anleitung für diesen Browser
+                if (pwa.canPrompt) void pwa.promptInstall();
+                else navigate('/app');
+              }}
+              className="w-full flex items-center gap-2.5 h-9 px-2.5 rounded-chip text-sm hover:bg-raised"
+            >
+              <Icon name="Download" size={15} /> App installieren
+            </button>
+          )}
           <button type="button" onClick={() => logout().then(() => navigate('/login'))} className="w-full flex items-center gap-2.5 h-9 px-2.5 rounded-chip text-sm hover:bg-raised text-err">
             <Icon name="LogOut" size={15} /> {t('nav.logout')}
           </button>

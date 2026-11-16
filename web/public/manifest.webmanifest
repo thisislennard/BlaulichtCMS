@@ -1,21 +1,29 @@
 {
+  "id": "/",
   "name": "BlaulichtCMS",
   "short_name": "BlaulichtCMS",
   "description": "Öffentlichkeitsarbeit und Krisenkommunikation",
   "lang": "de",
+  "dir": "ltr",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
+  "orientation": "any",
   "background_color": "#F6F7F9",
   "theme_color": "#F6F7F9",
+  "categories": ["productivity", "news"],
   "icons": [
-    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
-    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
     { "src": "/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
   ],
+  "screenshots": [
+    { "src": "/screenshot-wide.png", "sizes": "1280x800", "type": "image/png", "form_factor": "wide", "label": "Übersicht am Computer" },
+    { "src": "/screenshot-narrow.png", "sizes": "780x1688", "type": "image/png", "form_factor": "narrow", "label": "Übersicht am Handy" }
+  ],
   "shortcuts": [
-    { "name": "Neuer Beitrag", "url": "/?aktion=beitrag", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] },
-    { "name": "Medien sammeln", "url": "/?aktion=medien", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] },
-    { "name": "Offene Freigaben", "url": "/freigaben", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] }
+    { "name": "Neuer Beitrag", "url": "/?aktion=beitrag", "icons": [{ "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" }] },
+    { "name": "Medien sammeln", "url": "/?aktion=medien", "icons": [{ "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" }] },
+    { "name": "Offene Freigaben", "url": "/freigaben", "icons": [{ "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" }] }
   ]
 }
