@@ -18,8 +18,10 @@ export interface ChannelText {
   excerpt?: string;
   /** Nur WordPress (#186): Kategorie-IDs der Website; leer = Standardkategorie der Bridge */
   categories?: number[];
+  /** Nur Mastodon (#215): Inhaltswarnung (spoiler_text), optional */
+  cw?: string;
 }
-export type Variants = Partial<Record<'wordpress' | 'facebook' | 'instagram' | 'threads' | 'x' | 'whatsapp', ChannelText>>;
+export type Variants = Partial<Record<'wordpress' | 'facebook' | 'instagram' | 'threads' | 'x' | 'whatsapp' | 'mastodon' | 'bluesky', ChannelText>>;
 
 /** Kategorie-IDs geordnet und ohne Doppelte – gleiche Auswahl ergibt dieselbe Prüfsumme. */
 export function wpCategoryList(v: unknown): number[] {
@@ -34,6 +36,7 @@ function cleanVariants(v: Variants | null | undefined): Variants {
     if (t?.title?.trim()) c.title = t.title;
     if (t?.body?.trim()) c.body = t.body;
     if (t?.excerpt?.trim()) c.excerpt = t.excerpt;
+    if (k === 'mastodon' && t?.cw?.trim()) c.cw = t.cw;
     const cats = wpCategoryList(t?.categories);
     if (k === 'wordpress' && cats.length) c.categories = cats;
     if (Object.keys(c).length) (out as any)[k] = c;
@@ -67,7 +70,7 @@ export function cleanFormats(f: Record<string, string> | null | undefined, targe
 }
 
 /** Text, der an einen Kanal geht: Kanaltext, sonst Grundtext. */
-export function textFor(rev: { title: string; body: string; excerpt: string; variants?: Variants | null }, channel: 'wordpress'): Required<Omit<ChannelText, 'categories'>> {
+export function textFor(rev: { title: string; body: string; excerpt: string; variants?: Variants | null }, channel: 'wordpress'): Required<Omit<ChannelText, 'categories' | 'cw'>> {
   const v = (rev.variants ?? {})[channel] ?? {};
   return { title: v.title?.trim() ? v.title : rev.title, body: v.body?.trim() ? v.body : rev.body, excerpt: v.excerpt?.trim() ? v.excerpt : rev.excerpt };
 }
@@ -162,6 +165,8 @@ const revisionInput = z.object({
       threads: z.object({ body: z.string().max(2_000).optional() }).optional(),
       x: z.object({ body: z.string().max(2_000).optional() }).optional(),
       whatsapp: z.object({ body: z.string().max(60_000).optional() }).optional(),
+      mastodon: z.object({ body: z.string().max(5_000).optional(), cw: z.string().max(500).optional() }).optional(),
+      bluesky: z.object({ body: z.string().max(2_000).optional() }).optional(),
     })
     .default({}),
   socialTargets: z.array(z.uuid()).max(10).default([]),
@@ -305,7 +310,7 @@ export async function postRoutes(app: FastifyInstance) {
       if (!site || site.status === 'revoked') throw badRequest('Der gewählte Zielkanal ist nicht verfügbar.');
     }
     if (body.socialTargets.length) {
-      const ok = await many<any>(`SELECT id, kind FROM connections WHERE id = ANY($1) AND kind IN ('facebook','instagram','threads','x','whatsapp') AND status IN ('tested','active')`, [body.socialTargets]);
+      const ok = await many<any>(`SELECT id, kind FROM connections WHERE id = ANY($1) AND kind IN ('facebook','instagram','threads','x','whatsapp','mastodon','bluesky') AND status IN ('tested','active')`, [body.socialTargets]);
       if (ok.length !== new Set(body.socialTargets).size) throw badRequest('Mindestens ein gewählter sozialer Kanal ist nicht verfügbar.');
       const noStory = ok.filter((c) => !['facebook', 'instagram'].includes(c.kind) && ['story', 'both'].includes(body.socialFormats[c.id]));
       if (noStory.length) throw badRequest('Storys gibt es nur für Facebook-Seiten und Instagram-Konten.');

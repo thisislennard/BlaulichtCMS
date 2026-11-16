@@ -153,6 +153,10 @@ import {
   Bug,
   CloudOff,
   AtSign,
+  Cloud,
+  ChartColumn,
+  TrendingUp,
+  Accessibility,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -167,7 +171,7 @@ const MAP: Record<string, LucideIcon> = {
   Images, QrCode, Printer, Camera, ImageOff, Video, CheckSquare, SkipForward, Smartphone, Unlink, Link, ArrowUp, ArrowDown, Ban, CircleCheck,
   CircleDashed, Film, UploadCloud, Share2, Image, Sun, Moon, Square, Crop, ShieldAlert, CircleHelp,
   Pause, MessageCircle, Folder, FolderPlus, FolderInput, Tag, Tags, LayoutGrid, List, Star, ListFilter, ChartPie, ShieldX, Palette, Type, Monitor, GripVertical, FileDown, Files, CheckCheck, CopyPlus, SeparatorHorizontal, ImageUp, PanelTop,
-  FileUp, TimerOff, WifiOff, ServerOff, Wrench, FileQuestionMark, LogIn, Bug, CloudOff, AtSign,
+  FileUp, TimerOff, WifiOff, ServerOff, Wrench, FileQuestionMark, LogIn, Bug, CloudOff, AtSign, Cloud, ChartColumn, TrendingUp, Accessibility,
 };
 
 export function Icon({ name, size = 16, className, strokeWidth = 1.9 }: { name: string; size?: number; className?: string; strokeWidth?: number }) {

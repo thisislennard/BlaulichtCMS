@@ -7,7 +7,7 @@ import { HelpTip } from '../../components/ui/HelpTip';
 import { CopyButton, Dialog, useErrorToast, useToast } from '../../components/ui/overlays';
 import { useAuth } from '../../lib/auth';
 import { fmtDateTime } from '../../lib/format';
-import { SOCIAL_KINDS, SOCIAL_LABEL, STORY_KINDS, threadsLength, xLength, type SocialKind } from '../../lib/social';
+import { blueskyLength, mastodonLength, SOCIAL_KINDS, SOCIAL_LABEL, STORY_KINDS, threadsLength, xLength, type SocialKind } from '../../lib/social';
 import { safeHref } from '../../lib/url';
 
 export interface SocialTarget {
@@ -16,7 +16,7 @@ export interface SocialTarget {
   name: string;
   status: string;
   manual?: boolean;
-  capabilities: Record<string, boolean>;
+  capabilities: Record<string, any>;
 }
 export interface SocialDraft {
   social: string[];
@@ -27,6 +27,10 @@ export interface SocialDraft {
   th: string;
   xt: string;
   wa: string;
+  /** Mastodon: eigener Text und Inhaltswarnung */
+  md: string;
+  mdCw: string;
+  bs: string;
 }
 
 const KIND = SOCIAL_LABEL;
@@ -69,6 +73,8 @@ export function SocialTargetsCard({ draft, onChange, editable }: { draft: Social
   const fmt = (id: string) => draft.formats[id] ?? 'feed';
   // Eigener Text für Facebook/Instagram nur, wenn dort ein Beitrag (nicht nur eine Story) geplant ist – Storys haben keinen Text
   const feedOf = (k: SocialKind) => chosen(k).some((id) => fmt(id) !== 'story');
+  // Höchstlänge der Mastodon-Instanz(en) laut letztem Test – bei mehreren gilt die kleinste
+  const mastodonMax = Math.min(...chosen('mastodon').map((id) => Number(list.find((t) => t.id === id)?.capabilities?.max_characters) || 500), 500 * 100);
   return (
     <Card title="Soziale Kanäle" subtitle="Jeder Kanal hat eigenen Status. Eine Änderung der Auswahl oder des Formats verlangt eine neue Freigabe.">
       <div className="flex flex-col gap-3">
@@ -118,6 +124,25 @@ export function SocialTargetsCard({ draft, onChange, editable }: { draft: Social
         {chosen('x').length > 0 && (
           <FieldWrap label="Eigener Text für X (optional)" help={<>Höchstens 280 Zeichen nach den Zählregeln von X (jede Adresse zählt 23, Emojis 2) – inklusive des angehängten Links zur Website, sonst wird gekürzt. <Counter n={xLength(draft.xt)} max={280} /></>} htmlFor="s-x">
             <Textarea id="s-x" rows={3} disabled={!editable} value={draft.xt} onChange={(e) => onChange({ ...draft, xt: e.target.value })} maxLength={2000} />
+          </FieldWrap>
+        )}
+        {chosen('mastodon').length > 0 && (
+          <>
+            <FieldWrap label="Eigener Text für Mastodon (optional)" help={<>Höchstens {mastodonMax} Zeichen (Grenze der Instanz, die Inhaltswarnung zählt mit; jede Adresse zählt 23), sonst wird gekürzt. Der Link zur Website wird angehängt. <Counter n={mastodonLength(draft.md) + mastodonLength(draft.mdCw)} max={mastodonMax} /></>} htmlFor="s-md">
+              <Textarea id="s-md" rows={3} disabled={!editable} value={draft.md} onChange={(e) => onChange({ ...draft, md: e.target.value })} maxLength={5000} />
+            </FieldWrap>
+            <FieldWrap label="Inhaltswarnung für Mastodon (optional)" htmlFor="s-mdcw" help="Steht vor dem Beitrag; der Text ist erst nach einem Klick sichtbar – z. B. „Einsatz mit Verletzten“." labelAction={
+              <HelpTip title="Inhaltswarnung" more="/hilfe/verbindungen#mastodon">
+                <p className="m-0">Auf Mastodon ist es üblich, belastende Inhalte hinter einer kurzen Warnung zu verbergen. Leer lassen, wenn der Beitrag ohne Warnung erscheinen soll.</p>
+              </HelpTip>
+            }>
+              <Input id="s-mdcw" disabled={!editable} value={draft.mdCw} onChange={(e) => onChange({ ...draft, mdCw: e.target.value })} maxLength={500} />
+            </FieldWrap>
+          </>
+        )}
+        {chosen('bluesky').length > 0 && (
+          <FieldWrap label="Eigener Text für Bluesky (optional)" help={<>Höchstens 300 Zeichen inklusive des angehängten Links zur Website, sonst wird gekürzt. Ohne Bilder zeigt Bluesky den Link als Vorschaukarte. <Counter n={blueskyLength(draft.bs)} max={300} /></>} htmlFor="s-bs">
+            <Textarea id="s-bs" rows={3} disabled={!editable} value={draft.bs} onChange={(e) => onChange({ ...draft, bs: e.target.value })} maxLength={2000} />
           </FieldWrap>
         )}
         {chosen('whatsapp').length > 0 && (
@@ -419,7 +444,7 @@ function RemoveDialog({ postId, onClose }: { postId: string; onClose: () => void
         </ul>
       ) : (
         <div className="flex flex-col gap-3 text-sm">
-          <p className="m-0">Facebook-Beiträge und X-Beiträge (über die X-API gepostet) löscht BlaulichtCMS über die Schnittstelle. Instagram, Threads, Storys und von Hand Geteiltes lassen sich so nicht löschen: Dort von Hand löschen (Link folgt, wenn bekannt) und anschließend hier bestätigen. Noch nicht ausgeführte Aufträge werden abgebrochen. Alle Schritte werden protokolliert.</p>
+          <p className="m-0">Beiträge auf Facebook, Mastodon, Bluesky und X (über die X-API gepostet) löscht BlaulichtCMS über die Schnittstelle. Instagram, Threads, Storys und von Hand Geteiltes lassen sich so nicht löschen: Dort von Hand löschen (Link folgt, wenn bekannt) und anschließend hier bestätigen. Noch nicht ausgeführte Aufträge werden abgebrochen. Alle Schritte werden protokolliert.</p>
           <FieldWrap label="Grund" required htmlFor="sr-reason">
             <Textarea id="sr-reason" rows={2} value={reason} onChange={(e) => setReason(e.target.value)} maxLength={300} />
           </FieldWrap>

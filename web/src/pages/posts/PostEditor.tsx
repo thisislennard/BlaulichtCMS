@@ -47,6 +47,9 @@ interface Draft {
   th: string;
   xt: string;
   wa: string;
+  md: string;
+  mdCw: string;
+  bs: string;
 }
 
 const emptyWp = { title: '', body: '', excerpt: '', categories: [] as number[] };
@@ -170,7 +173,7 @@ function PostEditorInner({ id }: { id: string }) {
 
   const d = q.data;
   type Rev = NonNullable<typeof d>['revision'];
-  const fromRev = (r: Rev): Draft => ({ title: r.title, body: r.body, excerpt: r.excerpt, mediaIds: r.media_ids, coverId: r.cover_id, siteId: r.site_id, wp: wpOf(r.variants), publishAt: toLocalInput(r.publish_at), social: r.social_targets ?? [], formats: r.social_formats ?? {}, fb: r.variants?.facebook?.body ?? '', ig: r.variants?.instagram?.body ?? '', th: r.variants?.threads?.body ?? '', xt: r.variants?.x?.body ?? '', wa: r.variants?.whatsapp?.body ?? '' });
+  const fromRev = (r: Rev): Draft => ({ title: r.title, body: r.body, excerpt: r.excerpt, mediaIds: r.media_ids, coverId: r.cover_id, siteId: r.site_id, wp: wpOf(r.variants), publishAt: toLocalInput(r.publish_at), social: r.social_targets ?? [], formats: r.social_formats ?? {}, fb: r.variants?.facebook?.body ?? '', ig: r.variants?.instagram?.body ?? '', th: r.variants?.threads?.body ?? '', xt: r.variants?.x?.body ?? '', wa: r.variants?.whatsapp?.body ?? '', md: r.variants?.mastodon?.body ?? '', mdCw: r.variants?.mastodon?.cw ?? '', bs: r.variants?.bluesky?.body ?? '' });
   const differs = (dr: Draft, r: Rev) =>
     dr.title !== r.title ||
     dr.body !== r.body ||
@@ -186,7 +189,10 @@ function PostEditorInner({ id }: { id: string }) {
     dr.ig !== (r.variants?.instagram?.body ?? '') ||
     dr.th !== (r.variants?.threads?.body ?? '') ||
     dr.xt !== (r.variants?.x?.body ?? '') ||
-    dr.wa !== (r.variants?.whatsapp?.body ?? '');
+    dr.wa !== (r.variants?.whatsapp?.body ?? '') ||
+    dr.md !== (r.variants?.mastodon?.body ?? '') ||
+    dr.mdCw !== (r.variants?.mastodon?.cw ?? '') ||
+    dr.bs !== (r.variants?.bluesky?.body ?? '');
   // Fassung, auf der der Entwurf beruht. Speichert jemand anderes eine neue Fassung, werden ungespeicherte
   // Änderungen nicht überschrieben (#59) – stattdessen Hinweis; Speichern führt dann zum 409-Konflikt.
   const [base, setBase] = useState<Rev | null>(null);
@@ -216,11 +222,11 @@ function PostEditorInner({ id }: { id: string }) {
   const save = async () => {
     setSaving(true);
     try {
-      const { wp, publishAt, social, formats, fb, ig, th, xt, wa, ...rest } = draft;
+      const { wp, publishAt, social, formats, fb, ig, th, xt, wa, md, mdCw, bs, ...rest } = draft;
       const res = await put<any>(`/posts/${id}/revision`, {
         baseRevision: (base ?? r).number,
         ...rest,
-        variants: { ...(rest.siteId ? { wordpress: wp } : {}), ...(fb.trim() ? { facebook: { body: fb } } : {}), ...(ig.trim() ? { instagram: { body: ig } } : {}), ...(th.trim() ? { threads: { body: th } } : {}), ...(xt.trim() ? { x: { body: xt } } : {}), ...(wa.trim() ? { whatsapp: { body: wa } } : {}) },
+        variants: { ...(rest.siteId ? { wordpress: wp } : {}), ...(fb.trim() ? { facebook: { body: fb } } : {}), ...(ig.trim() ? { instagram: { body: ig } } : {}), ...(th.trim() ? { threads: { body: th } } : {}), ...(xt.trim() ? { x: { body: xt } } : {}), ...(wa.trim() ? { whatsapp: { body: wa } } : {}), ...(md.trim() || mdCw.trim() ? { mastodon: { ...(md.trim() ? { body: md } : {}), ...(mdCw.trim() ? { cw: mdCw } : {}) } } : {}), ...(bs.trim() ? { bluesky: { body: bs } } : {}) },
         socialTargets: social,
         socialFormats: cleanFormats(formats, social),
         publishAt: publishAt ? fromLocalInput(publishAt) : null,
@@ -451,7 +457,7 @@ function PostEditorInner({ id }: { id: string }) {
             )}
           </Card>
 
-          <SocialTargetsCard draft={{ social: draft.social, formats: draft.formats, fb: draft.fb, ig: draft.ig, th: draft.th, xt: draft.xt, wa: draft.wa }} editable={editable} onChange={(x) => setDraft({ ...draft, ...x })} />
+          <SocialTargetsCard draft={{ social: draft.social, formats: draft.formats, fb: draft.fb, ig: draft.ig, th: draft.th, xt: draft.xt, wa: draft.wa, md: draft.md, mdCw: draft.mdCw, bs: draft.bs }} editable={editable} onChange={(x) => setDraft({ ...draft, ...x })} />
 
           <Card title="Vorschau" subtitle={draft.siteId ? 'So erscheint der Beitrag auf der Website (Darstellung abhängig vom Theme).' : 'Interne Ansicht'}>
             <article className="flex flex-col gap-3 max-w-[680px]">

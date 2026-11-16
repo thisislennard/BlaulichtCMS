@@ -406,6 +406,97 @@ export default function ConnectionDetail() {
                 </>
               )}
 
+              {c.kind === 'mastodon' && (
+                <>
+                  <Notice>
+                    Mastodon ist kostenlos und dezentral: Jede Instanz (z. B. social.bund.de für Behörden) hat ihre eigene Adresse und eigene Regeln. BlaulichtCMS registriert sich beim Verbinden selbst als App auf der Instanz. Schritt für Schritt: <Link to="/hilfe/verbindungen#mastodon">Mastodon verbinden</Link>.
+                  </Notice>
+                  <FieldWrap label="Adresse der Instanz" htmlFor="md-inst" help="Nur die Adresse ohne Pfad, z. B. https://social.bund.de." labelAction={
+                    <HelpTip title="Instanz-Adresse" more="/hilfe/verbindungen#mastodon">
+                      <p className="m-0">Die Adresse des Servers, auf dem das Konto liegt – sie steht im Profil hinter dem Benutzernamen: <code className="font-mono">@feuerwehr@social.example</code> → <code className="font-mono">https://social.example</code>.</p>
+                      <p className="m-0">Ändert sich die Instanz, ist eine neue Anmeldung und ein neuer Test nötig.</p>
+                    </HelpTip>
+                  }>
+                    <Input id="md-inst" type="url" value={cfg.instance ?? ''} onChange={(e) => setCfg({ ...cfg, instance: e.target.value })} placeholder="https://social.bund.de" />
+                  </FieldWrap>
+                  <div className="grid sm:grid-cols-2 gap-3">
+                    <FieldWrap label="Sichtbarkeit der Beiträge" htmlFor="md-vis" labelAction={
+                      <HelpTip title="Sichtbarkeit" more="/hilfe/verbindungen#mastodon">
+                        <p className="m-0"><strong>Öffentlich</strong>: in Zeitleisten und Suche. <strong>Nicht gelistet</strong>: öffentlich lesbar, aber nicht in den öffentlichen Zeitleisten. <strong>Nur Folgende</strong>: nur für Personen, die dem Konto folgen.</p>
+                      </HelpTip>
+                    }>
+                      <Select id="md-vis" value={cfg.visibility ?? 'public'} onChange={(e) => setCfg({ ...cfg, visibility: e.target.value })}>
+                        <option value="public">Öffentlich</option>
+                        <option value="unlisted">Nicht gelistet</option>
+                        <option value="private">Nur Folgende</option>
+                      </Select>
+                    </FieldWrap>
+                    <FieldWrap label="Sprache der Beiträge" htmlFor="md-lang" help="Zweistelliger Sprachcode, Standard de.">
+                      <Input id="md-lang" mono maxLength={2} value={cfg.language ?? 'de'} onChange={(e) => setCfg({ ...cfg, language: e.target.value.toLowerCase() })} className="max-w-[100px]" />
+                    </FieldWrap>
+                  </div>
+                  <FieldWrap label="Weiterleitungsadresse (trägt BlaulichtCMS selbst ein)">
+                    <div className="flex gap-2 items-center"><code className="break-all text-meta">{c.oauth_redirect}</code><CopyButton value={c.oauth_redirect} size="sm" /></div>
+                  </FieldWrap>
+                  <div className="flex flex-wrap gap-2">
+                    <Button variant="primary" icon="ExternalLink" disabled={!cfg.instance} onClick={async () => { if (!(await confirmRetest('Erneut mit Mastodon verbinden?'))) return; if ((await saveConfig()) === null) return; const r: any = await act(() => post(`/connections/${id}/oauth/start`)); if (r?.url) window.location.href = r.url; }}>
+                      Mit Mastodon verbinden
+                    </Button>
+                  </div>
+                  <details className="border border-line rounded-card p-3">
+                    <summary className="cursor-pointer text-sm">Alternativ: Zugangstoken hinterlegen</summary>
+                    <div className="flex flex-col gap-3 mt-3">
+                      <FieldWrap label={c.secrets_set.includes('token') ? 'Zugangstoken (gespeichert – nur zum Ersetzen)' : 'Zugangstoken'} htmlFor="md-tok" labelAction={
+                        <HelpTip title="Zugangstoken erzeugen" more="/hilfe/verbindungen#mastodon">
+                          <p className="m-0">In Mastodon unter <strong>Einstellungen → Entwicklung → Neue Anwendung</strong> eine Anwendung anlegen, die Rechte <code className="font-mono">read:accounts read:statuses write:statuses write:media</code> wählen und den <strong>Zugangstoken</strong> kopieren (<HelpLink href="https://docs.joinmastodon.org/client/token/">Mastodon-Doku</HelpLink>).</p>
+                          <p className="m-0">BlaulichtCMS speichert ihn verschlüsselt und zeigt ihn nie wieder an.</p>
+                        </HelpTip>
+                      }>
+                        <Input id="md-tok" type="password" autoComplete="off" value={secret.token ?? ''} onChange={(e) => setSecret({ ...secret, token: e.target.value })} />
+                      </FieldWrap>
+                      <div><Button disabled={!secret.token?.trim()} onClick={async () => { if ((await saveConfig()) === null) return; await saveSecrets(); }}>Zugangstoken speichern</Button></div>
+                    </div>
+                  </details>
+                  {c.secrets_set.length > 0 && <p className="m-0 text-meta text-fg-muted">Gespeichert (verschlüsselt): {c.secrets_set.join(', ')}</p>}
+                </>
+              )}
+
+              {c.kind === 'bluesky' && (
+                <>
+                  <Notice>
+                    Bluesky ist kostenlos. BlaulichtCMS meldet sich mit einem <strong>App-Passwort</strong> an – nie mit dem Kontopasswort. Schritt für Schritt: <Link to="/hilfe/verbindungen#bluesky">Bluesky verbinden</Link>.
+                  </Notice>
+                  <FieldWrap label="Handle" htmlFor="bs-id" help="z. B. feuerwehr-musterstadt.bsky.social oder die eigene Domain." labelAction={
+                    <HelpTip title="Handle" more="/hilfe/verbindungen#bluesky">
+                      <p className="m-0">Der Benutzername des Kontos ohne @, wie er im Profil steht – z. B. <code className="font-mono">feuerwehr-musterstadt.bsky.social</code>.</p>
+                    </HelpTip>
+                  }>
+                    <Input id="bs-id" mono value={cfg.identifier ?? ''} onChange={(e) => setCfg({ ...cfg, identifier: e.target.value })} />
+                  </FieldWrap>
+                  <FieldWrap label={c.secrets_set.includes('appPassword') ? 'App-Passwort (gespeichert – nur zum Ersetzen)' : 'App-Passwort'} htmlFor="bs-pw" labelAction={
+                    <HelpTip title="App-Passwort anlegen" more="/hilfe/verbindungen#bluesky">
+                      <p className="m-0">In Bluesky unter <strong>Einstellungen → Datenschutz und Sicherheit → App-Passwörter</strong> ein neues App-Passwort anlegen (Name z. B. „BlaulichtCMS“, ohne Zugriff auf Direktnachrichten) und hier eintragen.</p>
+                      <p className="m-0">Ein App-Passwort lässt sich jederzeit einzeln widerrufen. BlaulichtCMS speichert es verschlüsselt und zeigt es nie wieder an.</p>
+                    </HelpTip>
+                  }>
+                    <Input id="bs-pw" type="password" autoComplete="off" value={secret.appPassword ?? ''} onChange={(e) => setSecret({ ...secret, appPassword: e.target.value })} />
+                  </FieldWrap>
+                  <details className="border border-line rounded-card p-3">
+                    <summary className="cursor-pointer text-sm">Eigener Server (nur bei selbst betriebenem PDS)</summary>
+                    <div className="flex flex-col gap-3 mt-3">
+                      <FieldWrap label="Server-Adresse (PDS)" htmlFor="bs-svc" help="Leer = bsky.social. Nur ändern, wenn das Konto auf einem eigenen Server liegt.">
+                        <Input id="bs-svc" type="url" value={cfg.service ?? ''} placeholder="https://bsky.social" onChange={(e) => setCfg({ ...cfg, service: e.target.value })} />
+                      </FieldWrap>
+                      <FieldWrap label="Sprache der Beiträge" htmlFor="bs-lang" help="Zweistelliger Sprachcode, Standard de.">
+                        <Input id="bs-lang" mono maxLength={2} value={cfg.language ?? 'de'} onChange={(e) => setCfg({ ...cfg, language: e.target.value.toLowerCase() })} className="max-w-[100px]" />
+                      </FieldWrap>
+                    </div>
+                  </details>
+                  <div><Button disabled={!cfg.identifier?.trim()} onClick={async () => { if ((await saveConfig()) === null) return; if (hasSecret) await saveSecrets(); }}>Zugangsdaten speichern</Button></div>
+                  {c.secrets_set.length > 0 && <p className="m-0 text-meta text-fg-muted">Gespeichert (verschlüsselt): {c.secrets_set.filter((k: string) => k === 'appPassword').map(() => 'App-Passwort').join(', ')}</p>}
+                </>
+              )}
+
               {c.kind === 'feuersoftware' && (
                 <>
                   <FieldWrap label={c.secrets_set.includes('apiKey') ? 'API-Key (gespeichert – nur zum Ersetzen)' : 'API-Key'} htmlFor="fs-key" labelAction={
@@ -558,14 +649,14 @@ export default function ConnectionDetail() {
           <Card title="Verfügbare Funktionen" subtitle="Wie sie der letzte Test tatsächlich vorgefunden hat.">
             {Object.keys(c.capabilities ?? {}).length ? (
               <div className="flex flex-wrap gap-2">
-                {Object.entries(c.capabilities).map(([k, v]) => (
-                  <Badge key={k} tone={v ? 'success' : 'neutral'}>{({ text: 'Text', photos: 'Fotos', video: 'Video', image: 'Bild', carousel: 'Karussell', reels: 'Reels', stories: 'Storys', link: 'Link', manual: 'Teilen von Hand', text_only: 'Nur Text', drafts: 'Entwürfe', read: 'Abruf', autoBanner: 'Automatische Banner' } as any)[k] ?? k}: {v ? 'ja' : 'nein'}</Badge>
+                {Object.entries(c.capabilities).filter(([, v]) => typeof v === 'boolean').map(([k, v]) => (
+                  <Badge key={k} tone={v ? 'success' : 'neutral'}>{({ text: 'Text', photos: 'Fotos', video: 'Video', image: 'Bild', carousel: 'Karussell', reels: 'Reels', stories: 'Storys', link: 'Link', manual: 'Teilen von Hand', text_only: 'Nur Text', drafts: 'Entwürfe', read: 'Abruf', autoBanner: 'Automatische Banner', alt_text: 'Alternativtext', content_warning: 'Inhaltswarnung', link_card: 'Link-Vorschaukarte', insights: 'Reichweite' } as any)[k] ?? k}: {v ? 'ja' : 'nein'}</Badge>
                 ))}
               </div>
             ) : (
               <p className="m-0 text-sm text-fg-muted">Nach einem Test sichtbar.</p>
             )}
-            {Object.keys(c.account ?? {}).length > 0 && <KeyValue className="mt-3" items={Object.entries(c.account).filter(([, v]) => typeof v !== 'object').map(([k, v]) => [({ id: 'ID', name: 'Name', username: 'Benutzername', type: 'Kontoart', link: 'Link', mode: 'Betriebsart' } as any)[k] ?? k, String(v)])} />}
+            {Object.keys(c.account ?? {}).length > 0 && <KeyValue className="mt-3" items={Object.entries(c.account).filter(([, v]) => typeof v !== 'object').map(([k, v]) => [({ id: 'ID', name: 'Name', username: 'Benutzername', type: 'Kontoart', link: 'Link', mode: 'Betriebsart', instance: 'Instanz', version: 'Version' } as any)[k] ?? k, String(v)])} />}
           </Card>
           {c.kind === 'fe2' && (
             <Card title="Letzte Testmeldung" subtitle="So würde der Entwurf aussehen. Verworfene Felder werden nicht gespeichert.">
@@ -605,7 +696,7 @@ export default function ConnectionDetail() {
               <ul className="m-0 pl-4 text-sm">{c.preview.warnings.map((w: any) => <li key={w.identifier}>{w.headline} <span className="text-fg-muted">({w.areas.join(', ')})</span></li>)}</ul>
             </Card>
           )}
-          {['facebook', 'instagram', 'threads', 'x', 'whatsapp'].includes(c.kind) && (
+          {['facebook', 'instagram', 'threads', 'x', 'whatsapp', 'mastodon', 'bluesky'].includes(c.kind) && (
             <Notice>Die Vorschau je Beitrag (Text und Formatprüfung je Kanal) steht im Beitrag unter „Soziale Kanäle – Status“.</Notice>
           )}
         </div>

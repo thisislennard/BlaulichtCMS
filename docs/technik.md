@@ -49,6 +49,7 @@ Alle Verbindungen sind optional und laufen unter *Kanäle → Verbindungen* nach
 | Amtliche Warnungen | Warn-App-Schnittstelle des Bundes (Kreis-ARS) oder CAP, Banner mit Quellenvermerk | echte Schnittstelle |
 | Facebook / Instagram | Veröffentlichung und Zurückziehen je Kanal mit eigenem Status (Graph API v27.0), auch als Story | gegen nachgebildete Graph API |
 | Threads / X | Threads-API (OAuth, Token-Verlängerung); X über die X-API (OAuth 1.0a) oder Teilen von Hand | gegen nachgebildete Schnittstellen |
+| Mastodon / Bluesky | Mastodon-API der gewählten Instanz (App-Registrierung, OAuth oder Zugangstoken); Bluesky über das AT Protocol mit App-Passwort – beides reines HTTP/JSON ohne zusätzliche Abhängigkeit | gegen nachgebildete Schnittstellen |
 | WhatsApp-Kanal | Teilen von Hand (keine Schnittstelle bei WhatsApp) | – |
 | E-Mail (Warnentwurf) | PDF-Versand an die zuständige Stelle, STARTTLS/TLS | Mailserver mit TLS |
 | Medienimport | einmalige Übernahme von Medien und gültigen Upload-Links aus einem Altsystem (Austauschformat; Exportskript für LiFeOS) | mit fiktiven Daten |
@@ -206,7 +207,7 @@ Ergebnisse je Verbindung: [docs/integrationen.md](integrationen.md).
 **Noch nicht geprüft bzw. vor dem Echtbetrieb zu klären:**
 
 - Betrieb auf einem Zielhost mit echten Datenmengen (Wiederherstellung, PostgreSQL-Upgrade, Last), externer Penetrationstest
-- Meta-App mit App-Prüfung (Facebook/Instagram/Threads, auch Storys), X-App mit Guthaben, FE2-Meldungen einer echten Instanz
+- Meta-App mit App-Prüfung (Facebook/Instagram/Threads, auch Storys), X-App mit Guthaben, Mastodon-Konto auf einer echten Instanz, Bluesky-Testkonto, FE2-Meldungen einer echten Instanz
 - Push an echte Push-Dienste (FCM, Mozilla, Apple, WNS) und Versand über einen echten Microsoft-365-Mandanten: in den
   Tests gegen Stellvertreter geprüft (Verschlüsselung gegen RFC 8291, Anmeldung und `sendMail` wie dokumentiert)
 - Warnentwurf: Die mitgelieferte Vorlage ist ein **nicht abgestimmtes Beispiel**, Warnstufen-Regeln gibt es ab Werk

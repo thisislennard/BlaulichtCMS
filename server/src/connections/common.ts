@@ -7,7 +7,7 @@ import { notFound } from '../lib/errors.js';
  * Gemeinsamer Rahmen der optionalen Verbindungen: Verbinden → Testen → Vorschau → Aktivieren.
  * Geheimnisse liegen verschlüsselt in `secrets` (Schlüssel unter /data); die API gibt sie nie zurück.
  */
-export type ConnectionKind = 'fe2' | 'facebook' | 'instagram' | 'warnfeed' | 'feuersoftware' | 'threads' | 'x' | 'whatsapp';
+export type ConnectionKind = 'fe2' | 'facebook' | 'instagram' | 'warnfeed' | 'feuersoftware' | 'threads' | 'x' | 'whatsapp' | 'mastodon' | 'bluesky';
 
 export interface Connection {
   id: string;
@@ -50,6 +50,8 @@ export const KIND_LABEL: Record<ConnectionKind, string> = {
   threads: 'Threads-Profil',
   x: 'X-Konto',
   whatsapp: 'WhatsApp-Kanal (Teilen von Hand)',
+  mastodon: 'Mastodon-Konto',
+  bluesky: 'Bluesky-Konto',
 };
 
 /** Verbindung laden; gelöschte nur mit `includeDeleted` (Ansicht), sonst wie nicht vorhanden. */
@@ -110,7 +112,7 @@ export async function updateConnectionSecrets(c: Connection, patch: Record<strin
  * eigene Voraussetzungen: dokumentierte fachliche Prüfung, gekoppelte Website, HTTPS-Quelle). Alles andere – Quelle,
  * Gebiet, Feldzuordnung, App-ID, Seite, Konto – und jede Änderung der Zugangsdaten verlangt einen neuen Test.
  */
-export const RETEST_EXEMPT_KEYS = ['intervalMinutes', 'intervalSeconds', 'createDrafts', 'autoBanner', 'bannerSiteId', 'review', 'oauthState', 'tokenExpiresAt'] as const;
+export const RETEST_EXEMPT_KEYS = ['intervalMinutes', 'intervalSeconds', 'createDrafts', 'autoBanner', 'bannerSiteId', 'review', 'oauthState', 'tokenExpiresAt', 'clientId', 'appInstance', 'appRedirect'] as const;
 
 /** Vergleichsform einer Konfiguration für die Frage „neuer Test nötig?“ (leere Zuordnungen = Standard). */
 export function retestRelevantConfig(cfg: Record<string, any> | null | undefined): string {

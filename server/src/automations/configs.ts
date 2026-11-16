@@ -38,6 +38,8 @@ const variants = z
     threads: z.object({ body: tpl(2_000) }).partial().optional(),
     x: z.object({ body: tpl(2_000) }).partial().optional(),
     whatsapp: z.object({ body: tpl(20_000) }).partial().optional(),
+    mastodon: z.object({ body: tpl(5_000), cw: tpl(500) }).partial().optional(),
+    bluesky: z.object({ body: tpl(2_000) }).partial().optional(),
   })
   .default({});
 

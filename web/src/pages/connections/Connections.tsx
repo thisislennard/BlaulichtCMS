@@ -17,6 +17,8 @@ export const KINDS = [
   { id: 'instagram', label: 'Instagram-Konto', icon: 'Camera', text: 'Freigegebene Beiträge und Storys mit Bild oder Video auf einem professionellen Instagram-Konto.' },
   { id: 'threads', label: 'Threads-Profil', icon: 'AtSign', text: 'Freigegebene Beiträge mit Text, Bild oder Link über die offizielle Threads-Schnittstelle.' },
   { id: 'x', label: 'X-Konto', icon: 'MessagesSquare', text: 'Teilen von Hand mit vorbereitetem Text oder – mit eigenem, kostenpflichtigem API-Zugang – direkt posten.' },
+  { id: 'mastodon', label: 'Mastodon-Konto', icon: 'AtSign', text: 'Freigegebene Beiträge mit Text, Bildern samt Alternativtext und Link auf einer frei wählbaren Mastodon-Instanz (z. B. social.bund.de).' },
+  { id: 'bluesky', label: 'Bluesky-Konto', icon: 'Cloud', text: 'Freigegebene Beiträge mit Text, bis zu 4 Bildern samt Alternativtext und Link-Vorschaukarte – mit App-Passwort.' },
   { id: 'whatsapp', label: 'WhatsApp-Kanal', icon: 'MessageCircle', text: 'Teilen von Hand: Text, Link und Bilder vorbereitet, geteilt wird in WhatsApp.' },
   { id: 'warnfeed', label: 'Amtliche Warnungen', icon: 'AlertTriangle', text: 'Warnungen für das eigene Gebiet anzeigen – getrennt vom eigenen Warnentwurf.' },
 ] as const;

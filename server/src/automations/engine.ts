@@ -518,14 +518,16 @@ async function runOutput(ctx: Ctx, node: GraphNode, data: Data, prev: StepRow | 
       if (fb) variants.facebook = { body: fb };
       const ig = r(c.variants?.instagram?.body ?? '', 2200);
       if (ig) variants.instagram = { body: ig };
-      for (const k of ['threads', 'x', 'whatsapp'] as const) {
-        const t = r(c.variants?.[k]?.body ?? '', k === 'whatsapp' ? 20_000 : 2000);
+      for (const k of ['threads', 'x', 'whatsapp', 'mastodon', 'bluesky'] as const) {
+        const t = r(c.variants?.[k]?.body ?? '', k === 'whatsapp' ? 20_000 : k === 'mastodon' ? 5000 : 2000);
         if (t) variants[k] = { body: t };
       }
+      const cw = r(c.variants?.mastodon?.cw ?? '', 500);
+      if (cw) variants.mastodon = { ...(variants.mastodon ?? {}), cw };
       // Vorausgewählte soziale Kanäle (#188, #189): nur verfügbare (getestet/aktiv); Storys nur für Facebook/Instagram.
       // Veröffentlicht wird erst nach Freigabe durch eine Person – Automationen posten nie selbst in sozialen Netzwerken.
       const wanted = (c.socialTargets ?? []) as { connectionId: string; format: string }[];
-      const avail = wanted.length ? await many<{ id: string; kind: string; name: string }>(`SELECT id, kind, name FROM connections WHERE id = ANY($1::uuid[]) AND deleted_at IS NULL AND status IN ('tested','active') AND kind IN ('facebook','instagram','threads','x','whatsapp')`, [wanted.map((w) => w.connectionId)]) : [];
+      const avail = wanted.length ? await many<{ id: string; kind: string; name: string }>(`SELECT id, kind, name FROM connections WHERE id = ANY($1::uuid[]) AND deleted_at IS NULL AND status IN ('tested','active') AND kind IN ('facebook','instagram','threads','x','whatsapp','mastodon','bluesky')`, [wanted.map((w) => w.connectionId)]) : [];
       const socialTargets = wanted.filter((w) => avail.some((a) => a.id === w.connectionId)).map((w) => w.connectionId);
       const socialFormats = Object.fromEntries(wanted.filter((w) => socialTargets.includes(w.connectionId) && ['facebook', 'instagram'].includes(avail.find((a) => a.id === w.connectionId)!.kind) && (w.format === 'story' || w.format === 'both')).map((w) => [w.connectionId, w.format]));
       const skippedSocial = wanted.length - socialTargets.length;

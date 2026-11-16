@@ -142,6 +142,9 @@ export function OutputDialog({ output, kind, cat, onClose, preset }: { output: O
                 <TemplateField id="o-th-body" label="Threads: Text" rows={2} value={c.variants?.threads?.body ?? ''} onChange={(v) => set({ variants: { ...c.variants, threads: { body: v } } })} fields={fields} max={2000} help="Höchstens 500 Zeichen nach dem Einsetzen, sonst wird gekürzt." />
                 <TemplateField id="o-x-body" label="X: Text" rows={2} value={c.variants?.x?.body ?? ''} onChange={(v) => set({ variants: { ...c.variants, x: { body: v } } })} fields={fields} max={2000} help="Höchstens 280 Zeichen (nach den Zählregeln von X) samt Link, sonst wird gekürzt." />
                 <TemplateField id="o-wa-body" label="WhatsApp-Kanal: Text" rows={2} value={c.variants?.whatsapp?.body ?? ''} onChange={(v) => set({ variants: { ...c.variants, whatsapp: { body: v } } })} fields={fields} max={20000} />
+                <TemplateField id="o-md-body" label="Mastodon: Text" rows={2} value={c.variants?.mastodon?.body ?? ''} onChange={(v) => set({ variants: { ...c.variants, mastodon: { ...c.variants?.mastodon, body: v } } })} fields={fields} max={5000} help="Höchstens so viele Zeichen, wie die Instanz erlaubt (meist 500) samt Link, sonst wird gekürzt." />
+                <TemplateField id="o-md-cw" label="Mastodon: Inhaltswarnung" value={c.variants?.mastodon?.cw ?? ''} onChange={(v) => set({ variants: { ...c.variants, mastodon: { ...c.variants?.mastodon, cw: v } } })} fields={fields} max={500} />
+                <TemplateField id="o-bs-body" label="Bluesky: Text" rows={2} value={c.variants?.bluesky?.body ?? ''} onChange={(v) => set({ variants: { ...c.variants, bluesky: { body: v } } })} fields={fields} max={2000} help="Höchstens 300 Zeichen samt Link, sonst wird gekürzt." />
               </div>
             </details>
             <SocialTargetsField channels={cat.socialChannels ?? []} value={c.socialTargets ?? []} onChange={(v) => set({ socialTargets: v })} />
@@ -300,7 +303,7 @@ export default function Outputs() {
 
 /** Soziale Kanäle eines Beitragsausgangs vorauswählen (#188, #189) – samt Format; veröffentlicht wird erst nach Freigabe. */
 function SocialTargetsField({ channels, value, onChange }: { channels: { id: string; kind: string; name: string; status: string; manual: boolean }[]; value: { connectionId: string; format: string }[]; onChange: (v: { connectionId: string; format: string }[]) => void }) {
-  const label: Record<string, string> = { facebook: 'Facebook', instagram: 'Instagram', threads: 'Threads', x: 'X', whatsapp: 'WhatsApp-Kanal' };
+  const label: Record<string, string> = { facebook: 'Facebook', instagram: 'Instagram', threads: 'Threads', x: 'X', whatsapp: 'WhatsApp-Kanal', mastodon: 'Mastodon', bluesky: 'Bluesky' };
   const visible = channels.filter((ch) => ch.status !== 'revoked' || value.some((v) => v.connectionId === ch.id));
   return (
     <fieldset className="border border-line rounded-card p-3 flex flex-col gap-2">

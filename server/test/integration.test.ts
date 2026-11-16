@@ -4494,6 +4494,223 @@ describe('Storys, Threads, X und Teilen von Hand (#188, #189)', () => {
   });
 });
 
+describe('Mastodon und Bluesky (#215)', () => {
+  // Lokaler Stellvertreter für eine Mastodon-Instanz (/api, /oauth) und einen Bluesky-Server (/xrpc) – nichts geht an echte Dienste.
+  let mock: import('node:http').Server;
+  let base = '';
+  const calls: { method: string; path: string; body: Buffer; headers: Record<string, any>; query: URLSearchParams }[] = [];
+  const st = { statuses: [] as any[], records: [] as any[], scheduledDeleted: 0, idem: new Map<string, string>(), mediaPending: true };
+  let mdId = '';
+  let bsId = '';
+  let postId = '';
+  let adm: Client;
+
+  beforeAll(async () => {
+    adm = new Client(app, '10.77.0.2');
+    adm.cookie = admin.cookie;
+    mock = http.createServer((req, res) => {
+      const chunks: Buffer[] = [];
+      req.on('data', (c) => chunks.push(c));
+      req.on('end', () => {
+        const body = Buffer.concat(chunks);
+        const u = new URL(req.url!, 'http://x');
+        calls.push({ method: req.method!, path: u.pathname, body, headers: req.headers, query: u.searchParams });
+        const json = (code: number, v: any) => {
+          res.writeHead(code, { 'content-type': 'application/json' });
+          res.end(JSON.stringify(v));
+        };
+        const p = u.pathname;
+        const form = new URLSearchParams(String(req.headers['content-type'] ?? '').startsWith('application/x-www-form-urlencoded') ? body.toString() : '');
+        const authed = req.headers.authorization === 'Bearer MD-TOKEN-geheim';
+        // Mastodon
+        if (p === '/api/v1/apps' && req.method === 'POST') return json(200, { client_id: 'MDCLIENT', client_secret: 'md-client-secret-geheim', scopes: form.get('scopes')?.split(' ') });
+        if (p === '/oauth/token' && req.method === 'POST') return form.get('code') === 'MDCODE' && form.get('client_secret') === 'md-client-secret-geheim' ? json(200, { access_token: 'MD-TOKEN-geheim', token_type: 'Bearer' }) : json(400, { error: 'invalid_grant' });
+        if (p === '/api/v2/instance') return json(200, { domain: 'social.example', version: '4.5.0', configuration: { statuses: { max_characters: 500, max_media_attachments: 4, characters_reserved_per_url: 23 }, media_attachments: { description_limit: 1500 } } });
+        if (p.startsWith('/api/') && !authed) return json(401, { error: 'The access token is invalid' });
+        if (p === '/api/v1/accounts/verify_credentials') return json(200, { id: 'MDA1', acct: 'feuerwehr', username: 'feuerwehr', display_name: 'Feuerwehr (fiktiv)', url: 'https://social.example/@feuerwehr' });
+        if (p === '/api/v1/apps/verify_credentials') return json(200, { name: 'BlaulichtCMS', scopes: ['read:accounts', 'read:statuses', 'write:statuses', 'write:media'] });
+        if (p === '/api/v1/statuses' && req.method === 'POST') {
+          if (form.get('scheduled_at')) return json(200, { id: 'SCH1', scheduled_at: form.get('scheduled_at'), params: { text: form.get('status') } });
+          const key = String(req.headers['idempotency-key'] ?? '');
+          const known = st.idem.get(key);
+          if (known) return json(200, st.statuses.find((s) => s.id === known));
+          const s = { id: `MS${st.statuses.length + 1}`, url: `https://social.example/@feuerwehr/MS${st.statuses.length + 1}`, created_at: new Date().toISOString(), content: `<p>${(form.get('status') ?? '').replace(/&/g, '&amp;').replace(/\n\n/g, '</p><p>').replace(/\n/g, '<br>')}</p>`, form: Object.fromEntries([...form.keys()].map((k) => [k, form.getAll(k)])), reblogs_count: 3, favourites_count: 7, replies_count: 1 };
+          st.statuses.push(s);
+          st.idem.set(key, s.id);
+          return json(200, s);
+        }
+        if (p === '/api/v1/scheduled_statuses/SCH1' && req.method === 'DELETE') {
+          st.scheduledDeleted++;
+          return json(200, {});
+        }
+        if (p === '/api/v2/media' && req.method === 'POST') return json(st.mediaPending ? 202 : 200, { id: 'MEDIA1', url: st.mediaPending ? null : 'https://social.example/m/1' });
+        if (p === '/api/v1/media/MEDIA1' && req.method === 'GET') return json(200, { id: 'MEDIA1', url: 'https://social.example/m/1' });
+        if (p === '/api/v1/media/MEDIA1' && req.method === 'DELETE') return json(200, {});
+        if (p === '/api/v1/accounts/MDA1/statuses') return json(200, st.statuses.slice().reverse());
+        if (/^\/api\/v1\/statuses\/MS\d+$/.test(p) && req.method === 'DELETE') return json(200, {});
+        if (/^\/api\/v1\/statuses\/MS\d+$/.test(p)) return json(200, st.statuses.find((s) => p.endsWith(s.id)));
+        // Bluesky
+        if (p === '/xrpc/com.atproto.server.createSession') {
+          const b = JSON.parse(body.toString() || '{}');
+          if (b.password !== 'abcd-efgh-ijkl-mnop') return json(401, { error: 'AuthenticationRequired', message: 'Invalid identifier or password' });
+          return json(200, { accessJwt: 'BS-JWT-geheim', refreshJwt: 'BS-REFRESH', did: 'did:plc:test123', handle: 'feuerwehr.bsky.social', active: true });
+        }
+        if (p.startsWith('/xrpc/com.atproto.repo.') && req.headers.authorization !== 'Bearer BS-JWT-geheim') return json(401, { error: 'AuthenticationRequired' });
+        if (p === '/xrpc/com.atproto.repo.uploadBlob') return json(200, { blob: { $type: 'blob', ref: { $link: `bafkrei${calls.length}` }, mimeType: req.headers['content-type'], size: body.length } });
+        if (p === '/xrpc/com.atproto.repo.createRecord') {
+          const b = JSON.parse(body.toString());
+          const uri = `at://did:plc:test123/app.bsky.feed.post/3k${st.records.length + 1}`;
+          st.records.push({ uri, cid: 'bafy', value: b.record });
+          return json(200, { uri, cid: 'bafy' });
+        }
+        if (p === '/xrpc/com.atproto.repo.listRecords') return json(200, { records: st.records.slice().reverse() });
+        if (p === '/xrpc/com.atproto.repo.deleteRecord') return json(200, {});
+        if (p === '/xrpc/app.bsky.feed.getPosts') return json(200, { posts: u.searchParams.getAll('uris').map((uri) => ({ uri, likeCount: 5, repostCount: 2, replyCount: 1, quoteCount: 0 })) });
+        json(404, { error: `unbekannt ${p}` });
+      });
+    });
+    await new Promise<void>((r) => mock.listen(0, '127.0.0.1', r));
+    base = `http://127.0.0.1:${(mock.address() as any).port}`;
+    process.env.BLAULICHTCMS_MASTODON_TEST_HOSTS = '127.0.0.1';
+    process.env.BLAULICHTCMS_BSKY_TEST_SERVICE = base;
+    process.env.BLAULICHTCMS_BSKY_APPVIEW_URL = base;
+  });
+  afterAll(() => {
+    mock?.close();
+    delete process.env.BLAULICHTCMS_MASTODON_TEST_HOSTS;
+    delete process.env.BLAULICHTCMS_BSKY_TEST_SERVICE;
+    delete process.env.BLAULICHTCMS_BSKY_APPVIEW_URL;
+  });
+
+  it('Mastodon: Instanz frei wählbar (nur https), App-Registrierung und OAuth, Test ohne öffentlichen Beitrag', async () => {
+    expect((await adm.post('/connections', { kind: 'mastodon', name: 'Mastodon', config: { instance: 'http://social.example' } })).status).toBe(400);
+    expect((await adm.post('/connections', { kind: 'mastodon', name: 'Mastodon', config: { instance: 'https://social.example/@feuerwehr' } })).status).toBe(400);
+    mdId = (await adm.post('/connections', { kind: 'mastodon', name: 'Mastodon (Test)', config: { instance: base, visibility: 'unlisted' } })).json.id;
+    expect((await adm.post(`/connections/${mdId}/test`)).json.ok).toBe(false);
+    const start = await adm.post(`/connections/${mdId}/oauth/start`);
+    expect(start.status, JSON.stringify(start.json)).toBe(200);
+    const url = new URL(start.json.url);
+    expect(url.origin + url.pathname).toBe(`${base}/oauth/authorize`);
+    expect(url.searchParams.get('client_id')).toBe('MDCLIENT');
+    expect(url.searchParams.get('scope')).toBe('read:accounts read:statuses write:statuses write:media');
+    const reg = calls.find((c) => c.path === '/api/v1/apps')!;
+    expect(new URLSearchParams(reg.body.toString()).get('redirect_uris')).toContain('/api/v1/connections/oauth/callback');
+    // Zweites Verbinden registriert nicht erneut
+    const again = new URL((await adm.post(`/connections/${mdId}/oauth/start`)).json.url);
+    expect(calls.filter((c) => c.path === '/api/v1/apps').length).toBe(1);
+    // Nur die letzte begonnene Anmeldung gilt
+    expect(decodeURIComponent(String((await anonymous.raw('GET', `/connections/oauth/callback?state=${encodeURIComponent(url.searchParams.get('state')!)}&code=MDCODE`)).headers.location))).toContain('ungültig');
+    const back = await anonymous.raw('GET', `/connections/oauth/callback?state=${encodeURIComponent(again.searchParams.get('state')!)}&code=MDCODE`);
+    expect(decodeURIComponent(String(back.headers.location))).toContain('Mit Mastodon verbunden');
+    const v = (await adm.get(`/connections/${mdId}`)).json;
+    expect(v.secrets_set.sort()).toEqual(['clientSecret', 'token']);
+    expect(JSON.stringify(v)).not.toContain('geheim');
+    const t = await adm.post(`/connections/${mdId}/test`);
+    expect(t.json.ok, JSON.stringify(t.json)).toBe(true);
+    expect(t.json.capabilities).toMatchObject({ text: true, image: true, alt_text: true, max_characters: 500 });
+    // Geplanter Testbeitrag wurde sofort gelöscht, nie ein echter Beitrag
+    expect(st.scheduledDeleted).toBe(1);
+    expect(st.statuses.length).toBe(0);
+    expect((await adm.post(`/connections/${mdId}/activate`)).status).toBe(200);
+    // Zugangstoken statt OAuth ist ebenfalls möglich; nur das Feld „token“ ist erlaubt
+    expect((await adm.put(`/connections/${mdId}/secrets`, { clientSecret: 'x' })).status).toBe(400);
+  });
+
+  it('Bluesky: App-Passwort, Test lädt nur ein Testbild hoch', async () => {
+    bsId = (await adm.post('/connections', { kind: 'bluesky', name: 'Bluesky (Test)', config: { identifier: '@feuerwehr.bsky.social', service: base } })).json.id;
+    expect((await adm.get(`/connections/${bsId}`)).json.config.identifier).toBe('feuerwehr.bsky.social');
+    await adm.put(`/connections/${bsId}/secrets`, { appPassword: 'falsch-falsch' });
+    const bad = await adm.post(`/connections/${bsId}/test`);
+    expect(bad.json.ok).toBe(false);
+    expect(bad.json.steps[0].message).toContain('App-Passwort');
+    await adm.put(`/connections/${bsId}/secrets`, { appPassword: 'abcd-efgh-ijkl-mnop' });
+    const t = await adm.post(`/connections/${bsId}/test`);
+    expect(t.json.ok, JSON.stringify(t.json)).toBe(true);
+    expect(t.json.account.username).toBe('feuerwehr.bsky.social');
+    expect(st.records.length).toBe(0);
+    expect(JSON.stringify((await adm.get(`/connections/${bsId}`)).json)).not.toContain('abcd-efgh');
+    expect((await adm.post(`/connections/${bsId}/activate`)).status).toBe(200);
+  });
+
+  it('Beitrag mit Inhaltswarnung, Zeichenzählung und Veröffentlichung nach Freigabe', async () => {
+    const { runSocialPublication } = await import('../src/connections/social.js');
+    const { id: mediaId } = await readyPhoto('Mastodon-Bluesky-Bilder', 'md-bs-key-0001');
+    postId = (await editor.post('/posts', { title: 'Tag der offenen Tür (fiktiv)' })).json.id;
+    let d = (await editor.get(`/posts/${postId}`)).json;
+    const long = 'Wir laden herzlich ein. '.repeat(30);
+    const save = await editor.put(`/posts/${postId}/revision`, { baseRevision: d.revision.number, title: d.revision.title, body: long, mediaIds: [mediaId], socialTargets: [mdId, bsId], variants: { mastodon: { cw: 'Hinweis: Übung mit Rauch' } } });
+    expect(save.json.changed, JSON.stringify(save.json)).toBe(true);
+    d = (await editor.get(`/posts/${postId}`)).json;
+    expect(d.revision.variants.mastodon).toEqual({ cw: 'Hinweis: Übung mit Rauch' });
+    const check = (await editor.get(`/posts/${postId}/social-check`)).json;
+    const md = check.find((c: any) => c.id === mdId);
+    const bs = check.find((c: any) => c.id === bsId);
+    expect(md.issues.join(' ')).toContain('gekürzt');
+    expect(bs.issues.join(' ')).toContain('300 Zeichen');
+    const { mastodonLength, blueskyLength } = await import('../src/connections/channels.js');
+    expect(mastodonLength(md.text) + mastodonLength('Hinweis: Übung mit Rauch')).toBeLessThanOrEqual(500);
+    expect(blueskyLength(bs.text)).toBeLessThanOrEqual(300);
+    await editor.post(`/posts/${postId}/submit`, { revision: d.revision.number });
+    // Vor der Freigabe wird nichts veröffentlicht
+    expect((await publisher.post(`/posts/${postId}/social`, { revision: d.revision.number, contentHash: d.revision.content_hash })).status).toBe(409);
+    expect((await approver.post(`/posts/${postId}/decision`, { revision: d.revision.number, contentHash: d.revision.content_hash, decision: 'approved' })).status).toBe(200);
+    const r = await publisher.post(`/posts/${postId}/social`, { revision: d.revision.number, contentHash: d.revision.content_hash });
+    expect(r.status, JSON.stringify(r.json)).toBe(200);
+    for (const it of r.json.items) await runSocialPublication(it.id);
+    const rows = await many<any>(`SELECT sp.*, c.kind FROM social_publications sp JOIN connections c ON c.id = sp.connection_id WHERE sp.post_id = $1`, [postId]);
+    for (const row of rows) expect(row.status, `${row.kind}: ${row.error}`).toBe('published');
+    // Mastodon: Bild hochgeladen (202 → Abfrage bis fertig), Sichtbarkeit, Inhaltswarnung, Sprache, Idempotency-Key
+    const status = st.statuses[0];
+    expect(status.form['media_ids[]']).toEqual(['MEDIA1']);
+    expect(status.form.visibility).toEqual(['unlisted']);
+    expect(status.form.spoiler_text).toEqual(['Hinweis: Übung mit Rauch']);
+    expect(status.form.language).toEqual(['de']);
+    expect(calls.some((c) => c.path === '/api/v1/media/MEDIA1' && c.method === 'GET')).toBe(true);
+    const sp = rows.find((x) => x.kind === 'mastodon');
+    expect(calls.find((c) => c.path === '/api/v1/statuses' && c.method === 'POST' && !new URLSearchParams(c.body.toString()).get('scheduled_at'))!.headers['idempotency-key']).toBe(`blaulichtcms-${sp.id}`);
+    expect(sp.remote_url).toBe('https://social.example/@feuerwehr/MS1');
+    // Bluesky: Bild als Blob, Beitrag mit Bild-Embed (alt ist Pflichtfeld), Sprache
+    const rec = st.records[0].value;
+    expect(rec.$type).toBe('app.bsky.feed.post');
+    expect(rec.embed.$type).toBe('app.bsky.embed.images');
+    expect(rec.embed.images[0]).toHaveProperty('alt');
+    expect(rec.embed.images[0].aspectRatio.width).toBeGreaterThan(0);
+    expect(rec.langs).toEqual(['de']);
+    expect(rows.find((x) => x.kind === 'bluesky').remote_url).toBe('https://bsky.app/profile/feuerwehr.bsky.social/post/3k1');
+  });
+
+  it('Unklarer Ausgang: Wiedererkennung statt doppeltem Beitrag', async () => {
+    const { runSocialPublication } = await import('../src/connections/social.js');
+    const rows = await many<any>(`SELECT sp.*, c.kind FROM social_publications sp JOIN connections c ON c.id = sp.connection_id WHERE sp.post_id = $1`, [postId]);
+    await pool.query(`UPDATE social_publications SET status = 'unknown', remote_id = NULL, remote_url = NULL WHERE post_id = $1`, [postId]);
+    for (const row of rows) await runSocialPublication(row.id);
+    const after = await many<any>(`SELECT sp.*, c.kind FROM social_publications sp JOIN connections c ON c.id = sp.connection_id WHERE sp.post_id = $1`, [postId]);
+    for (const row of after) expect(row.status, `${row.kind}: ${row.error}`).toBe('published');
+    expect(after.find((x) => x.kind === 'mastodon').remote_id).toBe('MS1');
+    expect(after.find((x) => x.kind === 'bluesky').remote_id).toBe('at://did:plc:test123/app.bsky.feed.post/3k1');
+    expect(st.statuses.length).toBe(1);
+    expect(st.records.length).toBe(1);
+  });
+
+  it('Zurückziehen: Mastodon und Bluesky über die Schnittstelle gelöscht', async () => {
+    const r = await publisher.post(`/posts/${postId}/social/remove`, { reason: 'Test zurückziehen' });
+    expect(r.status, JSON.stringify(r.json)).toBe(200);
+    expect(r.json.items.map((x: any) => `${x.kind}:${x.result}`).sort()).toEqual(['bluesky:removed', 'mastodon:removed']);
+    expect(calls.some((c) => c.method === 'DELETE' && c.path === '/api/v1/statuses/MS1')).toBe(true);
+    const del = calls.find((c) => c.path === '/xrpc/com.atproto.repo.deleteRecord')!;
+    expect(JSON.parse(del.body.toString())).toEqual({ repo: 'did:plc:test123', collection: 'app.bsky.feed.post', rkey: '3k1' });
+  });
+
+  it('Workflow-Ausgang „Beitrag“: Mastodon und Bluesky vorauswählbar, eigene Texte', async () => {
+    const ok = await adm.post('/automation-outputs', { name: 'Beitrag Mastodon/Bluesky', kind: 'post', config: { title: 'Einsatz {{stichwort}}', variants: { mastodon: { body: 'Einsatz {{stichwort}}', cw: 'Einsatz' }, bluesky: { body: 'Einsatz {{stichwort}}' } }, socialTargets: [{ connectionId: mdId, format: 'feed' }, { connectionId: bsId, format: 'feed' }] } });
+    expect(ok.status, JSON.stringify(ok.json)).toBe(200);
+    expect((await adm.post('/automation-outputs', { name: 'Story Mastodon', kind: 'post', config: { title: 'X', socialTargets: [{ connectionId: mdId, format: 'story' }] } })).status).toBe(400);
+    const cat = (await adm.get('/automations/catalog')).json;
+    expect(cat.socialChannels.map((c: any) => c.kind)).toEqual(expect.arrayContaining(['mastodon', 'bluesky']));
+    await adm.raw('DELETE', `/automation-outputs/${ok.json.id}`);
+  });
+});
+
 describe('Keine Empfängeradressen im Audit (#185)', () => {
   it('Versand und Zuständigkeiten protokollieren Anzahl, Zuständigkeit und Domains statt Adressen', async () => {
     const rows = await many<any>(`SELECT action, details FROM audit_events WHERE action IN ('warning.send_requested', 'warning.responsibility_created', 'warning.responsibility_updated')`);

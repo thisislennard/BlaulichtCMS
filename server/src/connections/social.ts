@@ -7,6 +7,8 @@ import { connectionSecrets, scrub, type Connection } from './common.js';
 import { findExisting, findExistingStory, mediaForRevision, publishFacebook, publishFacebookStory, publishInstagram, publishInstagramStory } from './meta.js';
 import { findExistingThreads, publishThreads } from './threads.js';
 import { findExistingX, publishX } from './x.js';
+import { findExistingMastodon, publishMastodon } from './mastodon.js';
+import { findExistingBluesky, publishBluesky } from './bluesky.js';
 import { isManualChannel } from './channels.js';
 import { enqueueFollowUp } from '../jobs/queue.js';
 import { approvalStillValid } from '../lib/approval.js';
@@ -91,7 +93,11 @@ export async function runSocialPublication(id: string) {
             ? await publishThreads(c, sec, input, onContainer)
             : c.kind === 'x'
               ? await publishX(c, sec, input)
-              : await publishInstagram(c, sec, input, onContainer);
+              : c.kind === 'mastodon'
+                ? await publishMastodon(c, sec, input)
+                : c.kind === 'bluesky'
+                  ? await publishBluesky(c, sec, input)
+                  : await publishInstagram(c, sec, input, onContainer);
     await pool.query(`UPDATE social_publications SET status = 'published', remote_id = $2, remote_url = $3, error = NULL, error_class = NULL, published_at = now(), updated_at = now() WHERE id = $1`, [id, res.id, res.url]);
     await audit({ id: null, name: label, type: 'system' }, 'social.published', { type: 'post', id: sp.post_id, label: rev.title }, { kanal: label, url: res.url });
     await notify({ kind: 'success', title: `Veröffentlicht auf ${label}: ${rev.title}`.slice(0, 200), link: `/beitraege/${sp.post_id}`, permission: 'publish.social' });
@@ -108,5 +114,7 @@ function lookupExisting(c: Connection, sec: Record<string, string>, sp: any) {
   if (sp.format === 'story') return findExistingStory(c, sec, sp);
   if (c.kind === 'threads') return findExistingThreads(c, sec, sp.marker, new Date(sp.created_at));
   if (c.kind === 'x') return findExistingX(c, sec, sp.marker, new Date(sp.created_at));
+  if (c.kind === 'mastodon') return findExistingMastodon(c, sec, sp.marker, new Date(sp.created_at));
+  if (c.kind === 'bluesky') return findExistingBluesky(c, sec, sp.marker, new Date(sp.created_at));
   return findExisting(c, sec, sp.marker, new Date(sp.created_at));
 }

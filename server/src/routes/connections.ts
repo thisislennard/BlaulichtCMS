@@ -20,9 +20,11 @@ import { publicFileName } from '../media/names.js';
 import { connectionSecrets, connectionUsage, KIND_LABEL, loadConnection, requireRetest, retestRelevantConfig, saveTest, scrub, updateConnectionSecrets, type Connection, type ConnectionKind } from '../connections/common.js';
 import { FE2_ALLOWED_FIELDS, FE2_DEFAULT_MAPPING, handleFe2Event } from '../connections/fe2.js';
 import { checkFormats, checkStoryFormats, connectionTestImage, deleteFacebookPost, facebookAuthorizeUrl, facebookExchange, instagramAuthorizeUrl, instagramExchange, mediaForRevision, mediaUrl, storyImage, testFacebook, testInstagram } from '../connections/meta.js';
-import { formatsFor, isManualChannel, isSocialKind, markerFor, postLink, shareTarget, SOCIAL_KINDS, socialText, socialTextTooLong, type SocialChannel } from '../connections/channels.js';
+import { formatsFor, isManualChannel, isSocialKind, limitsFor, markerFor, postLink, shareTarget, SOCIAL_KINDS, socialText, socialTextTooLong, type SocialChannel } from '../connections/channels.js';
 import { checkThreadsFormats, testThreads, threadsAuthorizeUrl, threadsExchange } from '../connections/threads.js';
 import { checkXFormats, deleteXPost, testX, X_SECRET_KEYS } from '../connections/x.js';
+import { checkMastodonFormats, deleteMastodonPost, mastodonAuthorizeUrl, mastodonExchange, MASTODON_VISIBILITY, normalizeInstance, registerMastodonApp, testMastodon } from '../connections/mastodon.js';
+import { checkBlueskyFormats, deleteBlueskyPost, normalizeService, testBluesky } from '../connections/bluesky.js';
 import { notify } from '../lib/notify.js';
 import { FEUERSOFTWARE_DEFAULT_INTERVAL, FEUERSOFTWARE_INTERVALS, pollFeuersoftware, testFeuersoftware } from '../connections/feuersoftware.js';
 import { endBanner, insecureFeed, insecureFeedUrl, REVIEW_CHECKS, refreshWarnfeed, testWarnfeed, warningBannerText } from '../connections/warnfeed.js';
@@ -84,6 +86,21 @@ const configSchema: Record<ConnectionKind, z.ZodType<any>> = {
   // X: „Teilen von Hand“ (Standard, ohne Schnittstelle) oder „Über die X-API posten“ (eigene Zugangsdaten, kostenpflichtig)
   x: z.object({ mode: z.enum(['manual', 'api']).default('manual') }),
   // WhatsApp-Kanal: nur Teilen von Hand; optional die Einladungsadresse des eigenen Kanals zum schnellen Öffnen
+  // Mastodon (#215): frei wählbare Instanz; die App-Registrierung (clientId) legt BlaulichtCMS beim Verbinden selbst an
+  mastodon: z.object({
+    instance: z.union([z.literal(''), z.string().trim().max(200).refine((v) => !!normalizeInstance(v), 'Bitte die Adresse der Instanz als https-Adresse ohne Pfad angeben, z. B. https://social.bund.de.')]).default('').transform((v) => (v ? normalizeInstance(v)! : '')),
+    visibility: z.enum(MASTODON_VISIBILITY).default('public'),
+    language: z.string().regex(/^[a-z]{2}$/).default('de'),
+    clientId: z.string().max(200).optional(),
+    appInstance: z.string().max(200).optional(),
+    appRedirect: z.string().max(500).optional(),
+  }),
+  // Bluesky (#215): Handle und App-Passwort; Server (PDS) nur bei eigenem Server
+  bluesky: z.object({
+    identifier: z.string().trim().max(253).regex(/^@?[A-Za-z0-9._:@+-]*$/, 'Bitte das Handle angeben, z. B. feuerwehr-musterstadt.bsky.social.').default('').transform((v) => v.replace(/^@/, '')),
+    service: z.union([z.literal(''), z.string().trim().max(200).refine((v) => !!normalizeService(v), 'Bitte eine https-Adresse ohne Pfad angeben oder leer lassen.')]).default(''),
+    language: z.string().regex(/^[a-z]{2}$/).default('de'),
+  }),
   whatsapp: z.object({ channelUrl: z.union([z.literal(''), z.string().trim().regex(/^https:\/\/(www\.)?whatsapp\.com\/channel\/[A-Za-z0-9_-]+\/?$/, 'Bitte die Adresse des Kanals im Format https://whatsapp.com/channel/… angeben.')]).default('') }),
   feuersoftware: z.object({
     // 50 Abfragen je Stunde sind dokumentiert – kürzester Abstand 60 s, Standard 120 s
@@ -176,7 +193,7 @@ export async function connectionRoutes(app: FastifyInstance) {
       usage: await connectionUsage(c.id),
       inbound_url: c.kind === 'fe2' ? `${base}/api/v1/inbound/fe2/${c.id}` : null,
       inbound_url_with_key: c.kind === 'fe2' && c.config?.keyInPath && !c.deleted_at ? await connectionSecrets(c).then((s) => (s.pathToken ? `${base}/api/v1/inbound/fe2/${c.id}/${s.pathToken}` : null)) : null,
-      oauth_redirect: ['facebook', 'instagram', 'threads'].includes(c.kind) ? `${base}/api/v1/connections/oauth/callback` : null,
+      oauth_redirect: ['facebook', 'instagram', 'threads', 'mastodon'].includes(c.kind) ? `${base}/api/v1/connections/oauth/callback` : null,
       allowed_fields: c.kind === 'fe2' ? FE2_ALLOWED_FIELDS : null,
       default_mapping: c.kind === 'fe2' ? FE2_DEFAULT_MAPPING : null,
       review_checks: c.kind === 'warnfeed' ? REVIEW_CHECKS : null,
@@ -186,7 +203,7 @@ export async function connectionRoutes(app: FastifyInstance) {
 
   /** Schritt 1 „Verbinden“: anlegen (Entwurf). FE2 erhält einen Zugangsschlüssel, der nur jetzt angezeigt wird. */
   app.post('/connections', { preHandler: manage }, async (req) => {
-    const b = z.object({ kind: z.enum(['fe2', 'facebook', 'instagram', 'warnfeed', 'feuersoftware', 'threads', 'x', 'whatsapp']), name: z.string().trim().min(2).max(100), config: z.record(z.string(), z.any()).default({}) }).parse(req.body);
+    const b = z.object({ kind: z.enum(['fe2', 'facebook', 'instagram', 'warnfeed', 'feuersoftware', 'threads', 'x', 'whatsapp', 'mastodon', 'bluesky']), name: z.string().trim().min(2).max(100), config: z.record(z.string(), z.any()).default({}) }).parse(req.body);
     const config = configSchema[b.kind].parse(b.config);
     if (b.kind === 'warnfeed') assertSecureFeed(config, null);
     const userId = req.auth!.user?.id ?? null;
@@ -241,7 +258,7 @@ export async function connectionRoutes(app: FastifyInstance) {
   app.put('/connections/:id/secrets', { preHandler: manage }, async (req) => {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
     const c = await loadConnection(id);
-    const allowed: Record<ConnectionKind, string[]> = { fe2: [], facebook: ['appSecret', 'pageToken'], instagram: ['appSecret', 'token'], warnfeed: [], feuersoftware: ['apiKey'], threads: ['appSecret', 'token'], x: [...X_SECRET_KEYS], whatsapp: [] };
+    const allowed: Record<ConnectionKind, string[]> = { fe2: [], facebook: ['appSecret', 'pageToken'], instagram: ['appSecret', 'token'], warnfeed: [], feuersoftware: ['apiKey'], threads: ['appSecret', 'token'], x: [...X_SECRET_KEYS], whatsapp: [], mastodon: ['token'], bluesky: ['appPassword'] };
     const b = z.record(z.string(), z.string().max(2000).nullable()).parse(req.body);
     const patch = Object.fromEntries(Object.entries(b).filter(([k]) => allowed[c.kind].includes(k)));
     if (!Object.keys(patch).length) throw badRequest('Keine gültigen Felder.');
@@ -269,8 +286,28 @@ export async function connectionRoutes(app: FastifyInstance) {
   app.post('/connections/:id/oauth/start', { preHandler: manage }, async (req) => {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
     const c = await loadConnection(id);
-    if (!['facebook', 'instagram', 'threads'].includes(c.kind)) throw badRequest('Nur für Facebook, Instagram und Threads.');
+    if (!['facebook', 'instagram', 'threads', 'mastodon'].includes(c.kind)) throw badRequest('Nur für Facebook, Instagram, Threads und Mastodon.');
     const sec = await connectionSecrets(c);
+    if (c.kind === 'mastodon') {
+      // App auf der Instanz registrieren – neu, wenn sich Instanz oder Weiterleitungsadresse geändert haben
+      const redirect = `${await publicBase(req)}/api/v1/connections/oauth/callback`;
+      if (!normalizeInstance(c.config.instance ?? '')) throw badRequest('Bitte zuerst die Adresse der Mastodon-Instanz speichern.');
+      let clientId = c.config.clientId as string | undefined;
+      if (!clientId || !sec.clientSecret || c.config.appInstance !== c.config.instance || c.config.appRedirect !== redirect) {
+        try {
+          const app = await registerMastodonApp(c, redirect, await publicBase(req));
+          clientId = app.clientId;
+          await updateConnectionSecrets(c, { clientSecret: app.clientSecret }, req.auth!.user?.id ?? null);
+          await pool.query(`UPDATE connections SET config = config || $2 WHERE id = $1`, [id, JSON.stringify({ clientId, appInstance: c.config.instance, appRedirect: redirect })]);
+          await audit(req.auth!.actor, 'connection.app_registered', { type: 'connection', id, label: c.name }, { instanz: c.config.instance });
+        } catch (e: any) {
+          throw new AppError(502, 'upstream', `App-Registrierung auf der Instanz fehlgeschlagen: ${e?.message ?? e}`);
+        }
+      }
+      const state = randomToken(24);
+      await pool.query(`UPDATE connections SET config = config || $2 WHERE id = $1`, [id, JSON.stringify({ oauthState: { hash: sha256Hex(state), exp: Date.now() + 10 * 60_000, by: req.auth!.user?.id } })]);
+      return { url: mastodonAuthorizeUrl(c, clientId!, redirect, `${c.id}.${state}`) };
+    }
     if (!c.config.appId || !sec.appSecret) throw badRequest(c.kind === 'threads' ? 'Bitte zuerst Threads-App-ID und Threads-App-Geheimnis hinterlegen.' : 'Bitte zuerst App-ID und App-Geheimnis der Meta-App hinterlegen.');
     const state = randomToken(24);
     await pool.query(`UPDATE connections SET config = config || $2 WHERE id = $1`, [id, JSON.stringify({ oauthState: { hash: sha256Hex(state), exp: Date.now() + 10 * 60_000, by: req.auth!.user?.id } })]);
@@ -309,6 +346,13 @@ export async function connectionRoutes(app: FastifyInstance) {
         await audit(actor, 'connection.oauth', { type: 'connection', id: c.id, label: c.name }, { seiten: r.pages.length });
         await invalidateTest(actor, c, 'Neu angemeldet');
         return back(r.pages.length ? `Angemeldet – bitte eine von ${r.pages.length} Seite(n) wählen.` : 'Angemeldet, aber keine verwaltbare Seite gefunden.');
+      }
+      if (c.kind === 'mastodon') {
+        const token = await mastodonExchange(c, String(c.config.clientId ?? ''), sec.clientSecret ?? '', redirect, q.code);
+        await updateConnectionSecrets(c, { token }, by.id);
+        await audit(actor, 'connection.oauth', { type: 'connection', id: c.id, label: c.name });
+        await invalidateTest(actor, c, 'Neu angemeldet');
+        return back('Mit Mastodon verbunden – jetzt testen.');
       }
       if (c.kind === 'threads') {
         const r = await threadsExchange(c.config.appId, sec.appSecret, redirect, q.code);
@@ -374,6 +418,10 @@ export async function connectionRoutes(app: FastifyInstance) {
       if (r.userId) await pool.query(`UPDATE connections SET config = config || $2 WHERE id = $1`, [id, JSON.stringify({ userId: r.userId })]);
     } else if (c.kind === 'x') {
       r = await testX(c, sec);
+    } else if (c.kind === 'mastodon') {
+      r = await testMastodon(c, sec);
+    } else if (c.kind === 'bluesky') {
+      r = await testBluesky(c, sec);
     } else if (c.kind === 'whatsapp') {
       r = {
         steps: [{ name: 'Teilen von Hand', ok: true, message: `WhatsApp bietet keine Schnittstelle zum Veröffentlichen in Kanälen. BlaulichtCMS bereitet Text (mit WhatsApp-Formatierung), Link und Bilder vor; geteilt wird in der WhatsApp-App bzw. in WhatsApp Web und anschließend hier als geteilt markiert.${c.config.channelUrl ? ' Die Kanaladresse ist hinterlegt.' : ''}`, kind: 'publish' }],
@@ -616,14 +664,16 @@ export async function connectionRoutes(app: FastifyInstance) {
     const link = await postLink(id);
     return targets.map((t) => {
       const kind = t.kind as SocialChannel;
-      const text = socialText(st.current, kind, link);
+      const text = socialText(st.current, kind, link, limitsFor(t));
       const formats = formatsFor(kind, (st.current.social_formats ?? {})[t.id]);
-      const tooLong = socialTextTooLong(st.current, kind, link);
+      const tooLong = socialTextTooLong(st.current, kind, link, limitsFor(t));
       const issues: string[] = [];
       if (formats.includes('feed')) {
         if (kind === 'facebook' || kind === 'instagram') issues.push(...checkFormats(kind, media, text));
         else if (kind === 'threads') issues.push(...checkThreadsFormats(media, tooLong));
         else if (kind === 'x') issues.push(...checkXFormats(t, media, tooLong));
+        else if (kind === 'mastodon') issues.push(...checkMastodonFormats(t, media, tooLong));
+        else if (kind === 'bluesky') issues.push(...checkBlueskyFormats(media, tooLong));
       }
       if (formats.includes('story')) issues.push(...checkStoryFormats(kind as 'facebook' | 'instagram', media));
       return { id: t.id, kind: t.kind, name: t.name, status: t.status, text, formats, manual: isManualChannel(t), link, issues };
@@ -660,7 +710,7 @@ export async function connectionRoutes(app: FastifyInstance) {
             created.push({ id: exists.id, connection_id: cid, format, status: exists.status, duplicate: true, hint: ['failed', 'unknown'].includes(exists.status) ? 'Bitte diesen Kanal gezielt wiederholen.' : undefined });
             continue;
           }
-          const marker = format === 'story' ? `story:${crypto.randomUUID()}` : markerFor(socialText(st.current, c.kind, link), c.kind);
+          const marker = format === 'story' ? `story:${crypto.randomUUID()}` : markerFor(socialText(st.current, c.kind, link, limitsFor(c)), c.kind);
           // Ohne Schnittstelle: „zum Teilen bereit“ – eine Person teilt von Hand und markiert den Auftrag als geteilt
           const sp = await one<any>(
             `INSERT INTO social_publications (post_id, revision_id, approval_id, connection_id, marker, created_by, format, status, link) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id, status`,
@@ -777,8 +827,8 @@ export async function connectionRoutes(app: FastifyInstance) {
       const c = await one<Connection>(`SELECT * FROM connections WHERE id = $1`, [sp.connection_id]);
       // Über die Schnittstelle löschbar: Facebook-Beiträge und X-Beiträge (Modus X-API). Storys verschwinden nach 24 h
       // von selbst, lassen sich über die Story-Schnittstellen aber nicht löschen.
-      const viaApi = sp.format !== 'story' && !sp.shared_at && (sp.kind === 'facebook' || (sp.kind === 'x' && c?.config?.mode === 'api'));
-      const network = ({ facebook: 'Facebook', instagram: 'Instagram', threads: 'Threads', x: 'X', whatsapp: 'WhatsApp' } as Record<string, string>)[sp.kind] ?? sp.kind;
+      const viaApi = sp.format !== 'story' && !sp.shared_at && (['facebook', 'mastodon', 'bluesky'].includes(sp.kind) || (sp.kind === 'x' && c?.config?.mode === 'api'));
+      const network = ({ facebook: 'Facebook', instagram: 'Instagram', threads: 'Threads', x: 'X', whatsapp: 'WhatsApp', mastodon: 'Mastodon', bluesky: 'Bluesky' } as Record<string, string>)[sp.kind] ?? sp.kind;
       if (!viaApi) {
         await manualStep(
           sp.shared_at
@@ -790,12 +840,15 @@ export async function connectionRoutes(app: FastifyInstance) {
         continue;
       }
       const sec: Record<string, string> = c && c.status !== 'revoked' ? await connectionSecrets(c).catch(() => ({})) : {};
-      if ((sp.kind === 'facebook' ? !sec.pageToken : !sec.accessToken) || !sp.remote_id) {
+      const credKey = ({ facebook: 'pageToken', x: 'accessToken', mastodon: 'token', bluesky: 'appPassword' } as Record<string, string>)[sp.kind];
+      if (!sec[credKey] || !sp.remote_id) {
         await manualStep(`Die Verbindung ist nicht mehr verfügbar – bitte in ${network} von Hand löschen und hier bestätigen.`);
         continue;
       }
       try {
         if (sp.kind === 'facebook') await deleteFacebookPost(sec, sp.remote_id);
+        else if (sp.kind === 'mastodon') await deleteMastodonPost(c!, sec, sp.remote_id);
+        else if (sp.kind === 'bluesky') await deleteBlueskyPost(c!, sec, sp.remote_id);
         else await deleteXPost(sec, sp.remote_id);
         await mark('removed', null);
         await audit(req.auth!.actor, 'social.removed', target, { kanal: sp.name, grund: reason, beitrag: sp.remote_id });

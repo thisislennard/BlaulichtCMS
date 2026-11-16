@@ -1,7 +1,7 @@
 /** Soziale Kanäle in der Oberfläche – Zählregeln wie auf dem Server (server/src/connections/channels.ts). */
-export type SocialKind = 'facebook' | 'instagram' | 'threads' | 'x' | 'whatsapp';
-export const SOCIAL_KINDS: SocialKind[] = ['facebook', 'instagram', 'threads', 'x', 'whatsapp'];
-export const SOCIAL_LABEL: Record<SocialKind, string> = { facebook: 'Facebook', instagram: 'Instagram', threads: 'Threads', x: 'X', whatsapp: 'WhatsApp-Kanal' };
+export type SocialKind = 'facebook' | 'instagram' | 'threads' | 'x' | 'whatsapp' | 'mastodon' | 'bluesky';
+export const SOCIAL_KINDS: SocialKind[] = ['facebook', 'instagram', 'threads', 'x', 'whatsapp', 'mastodon', 'bluesky'];
+export const SOCIAL_LABEL: Record<SocialKind, string> = { facebook: 'Facebook', instagram: 'Instagram', threads: 'Threads', x: 'X', whatsapp: 'WhatsApp-Kanal', mastodon: 'Mastodon', bluesky: 'Bluesky' };
 export const STORY_KINDS: SocialKind[] = ['facebook', 'instagram'];
 export const FORMAT_LABEL: Record<string, string> = { feed: 'Beitrag', story: 'Story', both: 'Beitrag und Story' };
 
@@ -35,4 +35,19 @@ export function threadsLength(text: string): number {
   let n = 0;
   for (const g of graphemes(text)) n += PICTO.test(g) ? new TextEncoder().encode(g).length : [...g].length;
   return n;
+}
+
+/** Länge für Mastodon: Grapheme, jede Adresse zählt 23 Zeichen (Höchstlänge legt die Instanz fest, meist 500). */
+export function mastodonLength(text: string): number {
+  let n = 0;
+  const rest = text.replace(URL_RE, () => {
+    n += 23;
+    return '';
+  });
+  return n + graphemes(rest).length;
+}
+
+/** Länge für Bluesky: Grapheme (höchstens 300); Adressen zählen voll. */
+export function blueskyLength(text: string): number {
+  return graphemes(text).length;
 }

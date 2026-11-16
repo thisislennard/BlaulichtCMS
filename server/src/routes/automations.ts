@@ -69,7 +69,7 @@ async function checkOutputRefs(kind: OutputKind, cfg: any) {
   }
   if (kind === 'post' && cfg.siteId && !(await one(`SELECT 1 FROM wp_sites WHERE id = $1 AND status <> 'revoked'`, [cfg.siteId]))) throw badRequest('Der gewählte Zielkanal ist nicht verfügbar.');
   if (kind === 'post' && cfg.socialTargets?.length) {
-    const rows = await many<{ id: string; kind: string }>(`SELECT id, kind FROM connections WHERE id = ANY($1::uuid[]) AND deleted_at IS NULL AND status <> 'revoked' AND kind IN ('facebook','instagram','threads','x','whatsapp')`, [cfg.socialTargets.map((t: any) => t.connectionId)]);
+    const rows = await many<{ id: string; kind: string }>(`SELECT id, kind FROM connections WHERE id = ANY($1::uuid[]) AND deleted_at IS NULL AND status <> 'revoked' AND kind IN ('facebook','instagram','threads','x','whatsapp','mastodon','bluesky')`, [cfg.socialTargets.map((t: any) => t.connectionId)]);
     if (rows.length !== cfg.socialTargets.length) throw badRequest('Mindestens ein gewählter sozialer Kanal ist nicht verfügbar.');
     if (cfg.socialTargets.some((t: any) => t.format !== 'feed' && !['facebook', 'instagram'].includes(rows.find((r) => r.id === t.connectionId)!.kind))) throw badRequest('Storys gibt es nur für Facebook-Seiten und Instagram-Konten.');
   }
@@ -147,7 +147,7 @@ export async function automationRoutes(app: FastifyInstance) {
       collections: await many<any>(`SELECT id, title FROM collections WHERE deleted_at IS NULL AND archived_at IS NULL ORDER BY created_at DESC LIMIT 200`),
       // Kategorien der Website, wie die Bridge sie meldet (#186) – Auswahl im Beitrags-Ausgang
       sites: await many<any>(`SELECT id, name, status, COALESCE(bridge_report->'categories', '[]'::jsonb) AS categories FROM wp_sites WHERE status <> 'revoked' ORDER BY name`),
-      socialChannels: (await many<any>(`SELECT id, kind, name, status, config FROM connections WHERE deleted_at IS NULL AND status <> 'revoked' AND kind IN ('facebook','instagram','threads','x','whatsapp') ORDER BY kind, name`)).map((c) => ({ id: c.id, kind: c.kind, name: c.name, status: c.status, manual: c.kind === 'whatsapp' || (c.kind === 'x' && c.config?.mode !== 'api') })),
+      socialChannels: (await many<any>(`SELECT id, kind, name, status, config FROM connections WHERE deleted_at IS NULL AND status <> 'revoked' AND kind IN ('facebook','instagram','threads','x','whatsapp','mastodon','bluesky') ORDER BY kind, name`)).map((c) => ({ id: c.id, kind: c.kind, name: c.name, status: c.status, manual: c.kind === 'whatsapp' || (c.kind === 'x' && c.config?.mode !== 'api') })),
       responsibilities: await many<any>(`SELECT id, name, area FROM responsibilities WHERE active ORDER BY name`),
       warningFields: ((await one<any>(`SELECT fields FROM warning_templates WHERE status = 'active' ORDER BY created_at DESC, version DESC LIMIT 1`))?.fields ?? []).map((f: any) => ({ key: f.key, label: f.label, required: !!f.required })),
       users: canManage ? await many<any>(`SELECT id, name FROM users WHERE status = 'active' ORDER BY name`) : [],

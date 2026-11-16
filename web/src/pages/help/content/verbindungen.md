@@ -157,6 +157,7 @@ Muss ein Beitrag wieder weg (z. B. Widerspruch einer abgebildeten Person), im Be
 | Instagram | Die Schnittstelle von Instagram erlaubt **kein Löschen**. BlaulichtCMS zeigt einen Link zum Beitrag: dort in Instagram löschen und anschließend **Gelöscht – bestätigen** wählen. |
 | Storys | Lassen sich über die Schnittstellen nicht löschen (sie verschwinden nach 24 Stunden): in Facebook bzw. Instagram löschen und bestätigen. |
 | Threads | Von Hand in Threads löschen und bestätigen. |
+| Mastodon, Bluesky | BlaulichtCMS löscht den Beitrag über die Schnittstelle. |
 | X | Über die X-API Gepostetes löscht BlaulichtCMS über die Schnittstelle; von Hand Geteiltes von Hand löschen und bestätigen. |
 | WhatsApp-Kanal | Von Hand im Kanal löschen und bestätigen. |
 
@@ -208,6 +209,37 @@ X lässt sich auf zwei Wegen anbinden – umschaltbar in der Verbindung mit **Ü
 4. In BlaulichtCMS **Über die X-API posten** einschalten, die vier Werte eintragen und **Zugangsdaten speichern** – sie werden verschlüsselt gespeichert und nie wieder angezeigt. BlaulichtCMS meldet sich damit nach OAuth 1.0a im Benutzerkontext an.
 5. **Testen:** BlaulichtCMS liest das Konto und prüft die Zugriffsstufe des Tokens (Schreibrecht). Einen Testbeitrag legt BlaulichtCMS nicht an – er wäre öffentlich sichtbar und kostet Guthaben. Danach **Aktivieren**.
 
+## Mastodon
+
+Mastodon ist ein kostenloses, dezentrales Netzwerk: Jede **Instanz** (Server) hat eine eigene Adresse – viele Behörden nutzen z. B. [social.bund.de](https://social.bund.de/). BlaulichtCMS nutzt die offizielle [Mastodon-API](https://docs.joinmastodon.org/methods/statuses/) der gewählten Instanz. Veröffentlicht werden Text, bis zu 4 Bilder **mit Alternativtext** oder ein Video sowie der Link zur Website. Die Höchstlänge legt die Instanz fest (meist **500 Zeichen**; jede Adresse zählt 23). Ist der Text länger, kürzt BlaulichtCMS ihn mit „…“.
+
+**Einrichten**
+
+1. Unter **Verbindungen → Neue Verbindung → Mastodon-Konto** die **Adresse der Instanz** eintragen (nur `https://…` ohne Pfad – sie steht im Profil hinter dem Benutzernamen: `@feuerwehr@social.example` → `https://social.example`), Sichtbarkeit wählen und speichern.
+2. **Mit Mastodon verbinden:** BlaulichtCMS registriert sich selbst als App auf der Instanz (mit der angezeigten Weiterleitungsadresse) und leitet zur Anmeldung weiter. Dort mit dem Konto anmelden und **Autorisieren**. Die Rechte sind `read:accounts read:statuses write:statuses write:media`.
+3. **Alternativ:** In Mastodon unter **Einstellungen → Entwicklung → Neue Anwendung** eine Anwendung mit denselben Rechten anlegen und den **Zugangstoken** in BlaulichtCMS hinterlegen ([Mastodon-Doku](https://docs.joinmastodon.org/client/token/)).
+4. **Testen:** BlaulichtCMS liest Konto und Grenzen der Instanz, legt einen **geplanten** Beitrag (nur für Erwähnte, einen Tag in der Zukunft) an und löscht ihn sofort wieder und lädt ein neutrales Testbild mit Alternativtext hoch, ohne es zu veröffentlichen. Öffentlich erscheint dabei nichts. Danach **Aktivieren**.
+
+| Einstellung | Bedeutung |
+|---|---|
+| Sichtbarkeit | **Öffentlich** (Zeitleisten und Suche), **Nicht gelistet** (öffentlich lesbar, nicht in öffentlichen Zeitleisten) oder **Nur Folgende**. |
+| Inhaltswarnung | Je Beitrag optional im Beitrag unter **Soziale Kanäle**: Der Beitrag erscheint hinter der Warnung (z. B. „Einsatz mit Verletzten“) und ist erst nach einem Klick lesbar. Sie zählt zur Höchstlänge. |
+| Sprache | Sprachcode der Beiträge, Standard `de` – hilft Suche und Übersetzung. |
+
+Beim **Entfernen** löscht BlaulichtCMS den Beitrag über die Schnittstelle. Ein erneuter Versuch nach unklarem Ausgang legt keinen zweiten Beitrag an: BlaulichtCMS schickt einen Wiederholungsschutz mit (Idempotency-Key) und sucht vorher im Konto nach dem Beitrag.
+
+## Bluesky
+
+Bluesky ist kostenlos und wird über das offene [AT Protocol](https://atproto.com/) angebunden. BlaulichtCMS meldet sich mit einem **App-Passwort** an – nie mit dem Kontopasswort. Veröffentlicht werden Text (höchstens **300 Zeichen**, gezählt werden sichtbare Zeichen; Adressen zählen voll), bis zu **4 Bilder mit Alternativtext** und der Link zur Website. Ohne Bilder zeigt Bluesky den Link als **Vorschaukarte** mit Titel, Kurzfassung und Titelbild des Beitrags – BlaulichtCMS ruft dafür die Website nicht ab. Videos überträgt BlaulichtCMS zu Bluesky nicht. Links und Hashtags im Text sind anklickbar.
+
+**Einrichten**
+
+1. In Bluesky unter **Einstellungen → Datenschutz und Sicherheit → App-Passwörter** ein neues App-Passwort anlegen (Name z. B. „BlaulichtCMS“, ohne Zugriff auf Direktnachrichten). Es lässt sich jederzeit einzeln widerrufen.
+2. Unter **Verbindungen → Neue Verbindung → Bluesky-Konto** das **Handle** (z. B. `feuerwehr-musterstadt.bsky.social`) und das App-Passwort eintragen und speichern. Liegt das Konto auf einem eigenen Server (PDS), dessen Adresse unter „Eigener Server“ eintragen – sonst leer lassen.
+3. **Testen:** BlaulichtCMS meldet sich an und lädt ein neutrales Testbild hoch, ohne es zu verwenden (ein Testbeitrag wäre öffentlich). Danach **Aktivieren**.
+
+Beim **Entfernen** löscht BlaulichtCMS den Beitrag über die Schnittstelle. Bluesky begrenzt die Zahl der Anmeldungen; BlaulichtCMS meldet sich deshalb nur zum Testen, Veröffentlichen, Prüfen und Löschen an.
+
 ## WhatsApp-Kanal
 
 WhatsApp bietet **keine Schnittstelle**, um in einen WhatsApp-Kanal zu posten. Die WhatsApp Business Platform ist für Nachrichten an einzelne Personen gedacht, nicht für Kanäle. Ein WhatsApp-Kanal geht deshalb nur über **Teilen von Hand**:
@@ -226,12 +258,14 @@ Für Kanäle ohne Schnittstelle (WhatsApp-Kanal, X im Modus „Teilen von Hand�
 
 Wird die Freigabe widerrufen oder der Beitrag von den sozialen Kanälen entfernt, werden noch nicht geteilte Aufträge abgebrochen. Was schon geteilt ist, muss von Hand gelöscht und bestätigt werden.
 
-### Datenschutz bei Threads, X und WhatsApp
+### Datenschutz bei Threads, X, WhatsApp, Mastodon und Bluesky
 
 Wie bei Facebook und Instagram sind das Hinweise zur Orientierung, keine Rechtsberatung.
 
 - **Threads** gehört zu Meta; für Empfänger, Drittland und Datenschutzerklärung gilt sinngemäß, was oben unter *Datenschutz bei Facebook und Instagram* steht.
 - **X** (X Corp., USA): Beim Posten über die X-API gehen Text und Bilder von BlaulichtCMS an X; beim Teilen von Hand überträgt die Person selbst. Die Rechtsgrundlage für die Übermittlung in die USA und die Präsenz auf X gehören in die Bewertung und die Datenschutzerklärung.
+- **Mastodon:** Text, Bilder und Alternativtexte gehen an den Betreiber der gewählten Instanz und von dort an andere Instanzen, deren Personen dem Konto folgen (Föderation). Gelöschte Beiträge entfernt jede Instanz selbst – meist zeitnah, aber ohne Garantie. Eine Behörden-Instanz (z. B. social.bund.de) vereinfacht die Bewertung.
+- **Bluesky** (Bluesky Social PBC, USA): Text, Bilder und Alternativtexte gehen an den Bluesky-Server und sind über das offene Protokoll öffentlich abrufbar. Drittlandübermittlung und Präsenz gehören in die Bewertung und die Datenschutzerklärung.
 - **WhatsApp-Kanal:** BlaulichtCMS überträgt nichts an WhatsApp – geteilt wird von Hand. Der Kanal selbst ist eine Präsenz bei Meta und gehört ebenso in die Datenschutzerklärung.
 
 ## FE2 (Einsatzentwürfe)

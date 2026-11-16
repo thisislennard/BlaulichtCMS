@@ -92,7 +92,7 @@ export function outputTemplates(o: Pick<OutputRef, 'kind' | 'config'>): string[]
     case 'banner':
       return [c.title, c.text, c.linkUrl, c.linkText];
     case 'post':
-      return [c.title, c.body, c.excerpt, c.variants?.wordpress?.title, c.variants?.wordpress?.body, c.variants?.facebook?.body, c.variants?.instagram?.body, c.variants?.threads?.body, c.variants?.x?.body, c.variants?.whatsapp?.body];
+      return [c.title, c.body, c.excerpt, c.variants?.wordpress?.title, c.variants?.wordpress?.body, c.variants?.facebook?.body, c.variants?.instagram?.body, c.variants?.threads?.body, c.variants?.x?.body, c.variants?.whatsapp?.body, c.variants?.mastodon?.body, c.variants?.mastodon?.cw, c.variants?.bluesky?.body];
     case 'mail':
       return [c.subject, c.body];
     case 'notify':

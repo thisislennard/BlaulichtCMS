@@ -1667,6 +1667,54 @@ describe('Soziale Kanäle: OAuth 1.0a, Zeichenzählung, Texte (#188, #189)', asy
   });
 });
 
+describe('Mastodon und Bluesky: Zählung, Facetten, Instanz (#215)', async () => {
+  const ch = await import('../src/connections/channels.js');
+  const md = await import('../src/connections/mastodon.js');
+  const bs = await import('../src/connections/bluesky.js');
+  it('Mastodon: Grapheme, Adressen zählen 23, Höchstlänge der Instanz abzüglich Inhaltswarnung', () => {
+    expect(ch.mastodonLength('Hallo 🚒')).toBe(7);
+    expect(ch.mastodonLength('Mehr: https://example.org/eine/sehr/lange/adresse')).toBe(6 + 23);
+    const rev = { title: 'T', body: 'Wort '.repeat(200), variants: { mastodon: { cw: 'Hinweis: Rauch' } } };
+    const t = ch.socialText(rev, 'mastodon', 'https://example.org/b', { max: 500 });
+    expect(ch.mastodonLength(t) + ch.mastodonLength('Hinweis: Rauch')).toBeLessThanOrEqual(500);
+    expect(t.endsWith('https://example.org/b')).toBe(true);
+    expect(ch.socialTextTooLong(rev, 'mastodon', null, { max: 500 })).toBe(true);
+    expect(ch.socialTextTooLong(rev, 'mastodon', null, { max: 5000 })).toBe(false);
+    expect(ch.limitsFor({ kind: 'mastodon', capabilities: { max_characters: 1000 } })).toEqual({ max: 1000 });
+    expect(ch.limitsFor({ kind: 'mastodon', capabilities: {} })).toEqual({ max: 500 });
+    expect(ch.contentWarning({ title: 'T', body: '', variants: { mastodon: { cw: '  CW  ' } } })).toBe('CW');
+  });
+  it('Mastodon: Instanz nur als https-Adresse ohne Pfad; HTML-Text für die Wiedererkennung', () => {
+    expect(md.normalizeInstance('social.bund.de')).toBe('https://social.bund.de');
+    expect(md.normalizeInstance('https://social.bund.de/')).toBe('https://social.bund.de');
+    expect(md.normalizeInstance('http://social.bund.de')).toBeNull();
+    expect(md.normalizeInstance('https://social.bund.de/@feuerwehr')).toBeNull();
+    expect(md.normalizeInstance('https://user:pw@social.bund.de')).toBeNull();
+    const html = '<p>Brand &amp; Rauch</p><p>Mehr: <a href="https://example.org/b"><span class="invisible">https://</span><span>example.org/b</span></a><br>#Feuerwehr</p>';
+    const plain = ['Brand & Rauch', '', 'Mehr: https://example.org/b', '#Feuerwehr'].join(String.fromCharCode(10));
+    expect(md.mastodonHtmlToText(html)).toBe(plain);
+    expect(ch.markerFor(md.mastodonHtmlToText(html), 'mastodon')).toBe(ch.markerFor(plain, 'mastodon'));
+    expect(md.mastodonMedia([{ kind: 'image' }, { kind: 'video', id: 'v' }, { kind: 'image' }])).toEqual([{ kind: 'video', id: 'v' }]);
+    expect(md.mastodonMedia(Array.from({ length: 6 }, () => ({ kind: 'image' })), 4)).toHaveLength(4);
+  });
+  it('Bluesky: 300 Grapheme, Facetten mit Byte-Positionen (UTF-8) für Links und Hashtags', () => {
+    expect(ch.blueskyLength('Grüße 🚒')).toBe(7);
+    expect(ch.blueskyLength('ä'.repeat(1600))).toBeGreaterThan(300);
+    const t = ch.socialText({ title: 'T', body: 'Wort '.repeat(100) }, 'bluesky', 'https://example.org/b');
+    expect(ch.blueskyLength(t)).toBeLessThanOrEqual(300);
+    const text = 'Übung 🚒 heute: https://example.org/b. #Feuerwehr';
+    const f = bs.blueskyFacets(text);
+    const bytes = Buffer.from(text, 'utf8');
+    expect(f).toHaveLength(2);
+    expect(bytes.subarray(f[0].index.byteStart, f[0].index.byteEnd).toString()).toBe('https://example.org/b');
+    expect(f[0].features[0]).toEqual({ $type: 'app.bsky.richtext.facet#link', uri: 'https://example.org/b' });
+    expect(bytes.subarray(f[1].index.byteStart, f[1].index.byteEnd).toString()).toBe('#Feuerwehr');
+    expect(f[1].features[0]).toEqual({ $type: 'app.bsky.richtext.facet#tag', tag: 'Feuerwehr' });
+    expect(bs.normalizeService('')).toBe('https://bsky.social');
+    expect(bs.normalizeService('http://pds.example')).toBeNull();
+  });
+});
+
 describe('Leistung (#192)', () => {
   it('Argon2 läuft asynchron und höchstens ARGON2_SLOTS-mal gleichzeitig (Threadpool bleibt frei)', async () => {
     const pw = await import('../src/auth/passwords.js');
