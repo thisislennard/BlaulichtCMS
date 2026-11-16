@@ -21,6 +21,7 @@ export default {
         warn: { DEFAULT: v('warn'), soft: v('warn-soft') },
         err: { DEFAULT: v('err'), soft: v('err-soft') },
         knob: v('knob'),
+        flow: { input: v('flow-input'), 'input-soft': v('flow-input-soft'), output: v('flow-output'), 'output-soft': v('flow-output-soft') },
         scrim: v('scrim'),
         site: {
           info: { bg: v('site-info-bg'), fg: v('site-info-fg'), line: v('site-info-line') },

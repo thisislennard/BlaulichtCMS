@@ -34,6 +34,10 @@ const WarningConfig = lazy(() => import('./pages/warnings/WarningConfig'));
 const Connections = lazy(() => import('./pages/connections/Connections'));
 const ConnectionDetail = lazy(() => import('./pages/connections/ConnectionDetail'));
 const OfficialWarnings = lazy(() => import('./pages/connections/Connections').then((m) => ({ default: m.OfficialWarnings })));
+const Automations = lazy(() => import('./pages/automations/Automations'));
+const AutomationEditor = lazy(() => import('./pages/automations/Editor'));
+const AutomationInputs = lazy(() => import('./pages/automations/Inputs'));
+const AutomationOutputs = lazy(() => import('./pages/automations/Outputs'));
 const Help = lazy(() => import('./pages/help/Help'));
 const PrintSheet = lazy(() => import('./pages/print/PrintSheet'));
 const InstallApp = lazy(() => import('./pages/InstallApp'));
@@ -120,6 +124,10 @@ const router = createBrowserRouter([
       { path: 'warnungen/:id', element: <Page perm={['warning.draft', 'warning.level', 'warning.approve', 'warning.send', 'warning.rules']}><WarningCase /></Page> },
       { path: 'verbindungen', element: <Page perm={['connection.manage']}><Connections /></Page> },
       { path: 'verbindungen/:id', element: <Page perm={['connection.manage']}><ConnectionDetail /></Page> },
+      { path: 'automationen', element: <Page perm={['automation.read', 'automation.manage']}><Automations /></Page> },
+      { path: 'automationen/eingaenge', element: <Page perm={['automation.read', 'automation.manage']}><AutomationInputs /></Page> },
+      { path: 'automationen/ausgaenge', element: <Page perm={['automation.read', 'automation.manage']}><AutomationOutputs /></Page> },
+      { path: 'automationen/:id', element: <Page perm={['automation.read', 'automation.manage']}><AutomationEditor /></Page> },
       { path: 'amtliche-warnungen', element: <Page perm={['post.read']}><OfficialWarnings /></Page> },
       { path: 'benutzer', element: <Page perm={['user.read']}><Users /></Page> },
       { path: 'system', element: <Page perm={['system.read']}><SystemStatus /></Page> },

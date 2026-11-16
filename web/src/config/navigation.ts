@@ -45,6 +45,14 @@ export const navigation: NavGroup[] = [
     ],
   },
   {
+    group: 'nav.automations',
+    items: [
+      { id: 'automations', path: '/automationen', label: 'nav.automationList', icon: 'Workflow', perm: ['automation.read', 'automation.manage'] },
+      { id: 'automationInputs', path: '/automationen/eingaenge', label: 'nav.automationInputs', icon: 'Zap', perm: ['automation.read', 'automation.manage'] },
+      { id: 'automationOutputs', path: '/automationen/ausgaenge', label: 'nav.automationOutputs', icon: 'Send', perm: ['automation.read', 'automation.manage'] },
+    ],
+  },
+  {
     group: 'nav.warnings',
     items: [
       { id: 'warnings', path: '/warnungen', label: 'nav.warningCases', icon: 'Siren', perm: ['warning.draft', 'warning.level', 'warning.approve', 'warning.send', 'warning.rules'] },

@@ -33,5 +33,9 @@
   "warningCases": "Warning drafts",
   "warningConfig": "Keywords & rules",
   "connections": "Connections",
-  "officialWarnings": "Official warnings"
+  "officialWarnings": "Official warnings",
+  "automations": "Automation",
+  "automationList": "Automations",
+  "automationInputs": "Inputs",
+  "automationOutputs": "Outputs"
 }

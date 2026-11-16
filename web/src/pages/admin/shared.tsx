@@ -338,6 +338,12 @@ export function auditHref(
       return "/quellen";
     case "plugin":
       return "/kanaele";
+    case "automation":
+      return id && !deleted ? `/automationen/${id}` : "/automationen";
+    case "automation_input":
+      return "/automationen/eingaenge";
+    case "automation_output":
+      return "/automationen/ausgaenge";
     default:
       return null;
   }
@@ -350,7 +356,7 @@ export function auditArea(
   const p = ev.action.split(".")[0];
   if (["post", "publication", "template", "rss"].includes(p)) return "editorial";
   if (["collection", "upload_link", "media"].includes(p)) return "media";
-  if (["site", "bridge", "banner", "connection", "social"].includes(p)) return "channels";
+  if (["site", "bridge", "banner", "connection", "social", "automation"].includes(p)) return "channels";
   if (p === "warning") return "warnings";
   if (["user", "auth", "setup"].includes(p)) return "user";
   return "system";

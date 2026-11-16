@@ -7,6 +7,7 @@ import { Button, EmptyState, ErrorBox, FieldWrap, Input, PageHeader, Rev, Segmen
 import { Icon } from '../../components/ui/Icon';
 import { Dialog, useErrorToast } from '../../components/ui/overlays';
 import { useAuth } from '../../lib/auth';
+import { AutomationApprovals } from '../automations/Approvals';
 import { fmtRelative } from '../../lib/format';
 import { safeHref } from '../../lib/url';
 
@@ -109,6 +110,7 @@ export default function Posts({ mode }: { mode?: 'approvals' }) {
           )
         }
       />
+      {mode === 'approvals' && <AutomationApprovals />}
       <SegmentedControl
         label="Filter"
         value={filter}

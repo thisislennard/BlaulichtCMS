@@ -44,6 +44,13 @@
   --bc-upload-accent-gruen: #15803d;    --bc-upload-accent-orange: #b93d0a;    --bc-upload-accent-anthrazit: #374151;
   --bc-upload-accent-on: #ffffff;
 
+  /* Automationen-Editor: Kategorien der Knoten (nur Symbolfläche und Mono-Label, immer mit Text „Eingang“/„Ausgang“) */
+  --bc-flow-input: #2F5B8A;
+  --bc-flow-input-soft: rgba(47, 91, 138, .12);
+  --bc-flow-output: #6A4C9C;
+  --bc-flow-output-soft: rgba(106, 76, 156, .12);
+  --bc-flow-grid: #D3D8DE;
+
   /* Typo */
   --bc-font: 'IBM Plex Sans', system-ui, 'Segoe UI', sans-serif;
   --bc-font-mono: 'IBM Plex Mono', ui-monospace, monospace;
@@ -91,6 +98,12 @@
   --bc-warn-soft: rgba(242, 184, 75, .14);
   --bc-err: #FF7A85;
   --bc-err-soft: rgba(255, 90, 110, .14);
+
+  --bc-flow-input: #8DB3E0;
+  --bc-flow-input-soft: rgba(141, 179, 224, .14);
+  --bc-flow-output: #B9A3E3;
+  --bc-flow-output-soft: rgba(185, 163, 227, .14);
+  --bc-flow-grid: #2A2E35;
 
   --bc-shadow-float: 0 16px 40px rgba(0, 0, 0, .5);
   --bc-ring: 0 0 0 3px rgba(255, 90, 110, .3);

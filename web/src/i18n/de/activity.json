@@ -151,6 +151,33 @@
     "dashboard": {
       "shared_saved": "Gemeinsames Dashboard gespeichert"
     },
+    "automation": {
+      "created": "Automation angelegt",
+      "updated": "Automation geändert",
+      "deleted": "Automation gelöscht",
+      "tested": "Testlauf",
+      "activated": "Automation aktiviert",
+      "disabled": "Automation deaktiviert",
+      "started": "Automation von Hand gestartet",
+      "run_canceled": "Lauf abgebrochen",
+      "direct_enabled": "Direktversand erlaubt",
+      "direct_disabled": "Direktversand entzogen",
+      "input_created": "Eingang angelegt",
+      "input_updated": "Eingang geändert",
+      "input_deleted": "Eingang gelöscht",
+      "output_created": "Ausgang angelegt",
+      "output_updated": "Ausgang geändert",
+      "output_deleted": "Ausgang gelöscht",
+      "approval_requested": "Freigabe angefordert",
+      "approval_approved": "Freigabe erteilt",
+      "approval_rejected": "Freigabe abgelehnt",
+      "post_created": "Beitragsentwurf angelegt",
+      "post_published": "Beitrag direkt übergeben",
+      "banner_created": "Banner-Entwurf angelegt",
+      "banner_published": "Banner direkt veröffentlicht",
+      "warning_prepared": "Warnentwurf vorbereitet",
+      "mail_sent": "E-Mail versendet"
+    },
     "import": {
       "committed": "Import übernommen"
     },
@@ -343,6 +370,33 @@
     },
     "dashboard": {
       "shared_saved": "hat das gemeinsame Dashboard gespeichert"
+    },
+    "automation": {
+      "created": "hat die Automation „{o}“ angelegt",
+      "updated": "hat die Automation „{o}“ geändert",
+      "deleted": "hat die Automation „{o}“ gelöscht",
+      "tested": "hat „{o}“ getestet",
+      "activated": "hat die Automation „{o}“ aktiviert",
+      "disabled": "hat die Automation „{o}“ deaktiviert",
+      "started": "hat „{o}“ von Hand gestartet",
+      "run_canceled": "hat einen Lauf abgebrochen",
+      "direct_enabled": "hat „{o}“ den Direktversand erlaubt",
+      "direct_disabled": "hat „{o}“ den Direktversand entzogen",
+      "input_created": "hat den Eingang „{o}“ angelegt",
+      "input_updated": "hat den Eingang „{o}“ geändert",
+      "input_deleted": "hat den Eingang „{o}“ gelöscht",
+      "output_created": "hat den Ausgang „{o}“ angelegt",
+      "output_updated": "hat den Ausgang „{o}“ geändert",
+      "output_deleted": "hat den Ausgang „{o}“ gelöscht",
+      "approval_requested": "hat die Freigabe „{o}“ angefordert",
+      "approval_approved": "hat „{o}“ freigegeben",
+      "approval_rejected": "hat „{o}“ abgelehnt",
+      "post_created": "hat den Beitragsentwurf „{o}“ angelegt",
+      "post_published": "hat „{o}“ direkt an die Website übergeben",
+      "banner_created": "hat den Banner-Entwurf „{o}“ angelegt",
+      "banner_published": "hat das Banner „{o}“ direkt veröffentlicht",
+      "warning_prepared": "hat den Warnentwurf „{o}“ vorbereitet",
+      "mail_sent": "hat die E-Mail „{o}“ versendet"
     },
     "import": {
       "committed": "hat den Import aus „{o}“ übernommen"
