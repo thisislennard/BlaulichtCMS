@@ -62,13 +62,17 @@ final class BlaulichtCMS_Bridge_Publisher {
 	 * @param bool $downloaded Wird true, wenn die Datei in diesem Aufruf neu geladen wurde.
 	 * @return int|WP_Error Anhang-ID.
 	 */
-	private static function import_media( array $m, int $post_id, bool &$downloaded = false ) {
+	public static function import_media( array $m, int $post_id, bool &$downloaded = false ) {
 		$alt      = sanitize_text_field( (string) ( $m['alt'] ?? '' ) );
 		$existing = self::find_attachment( (string) $m['id'] );
 		if ( $existing ) {
-			// Ältere Übernahmen ohne Alternativtext nachziehen, redaktionell gesetzte Texte nicht überschreiben.
-			if ( '' !== $alt && '' === (string) get_post_meta( $existing, '_wp_attachment_image_alt', true ) ) {
+			// Alternativtext nachziehen (#217): leer oder noch der zuletzt von BlaulichtCMS gesetzte Text → neuer Text aus
+			// BlaulichtCMS. In WordPress redaktionell geänderte Texte bleiben unverändert.
+			$cur  = (string) get_post_meta( $existing, '_wp_attachment_image_alt', true );
+			$mine = (string) get_post_meta( $existing, self::ALT_META, true );
+			if ( '' !== $alt && $alt !== $cur && ( '' === $cur || $cur === $mine ) ) {
 				update_post_meta( $existing, '_wp_attachment_image_alt', $alt );
+				update_post_meta( $existing, self::ALT_META, $alt );
 			}
 			return $existing;
 		}
@@ -102,6 +106,7 @@ final class BlaulichtCMS_Bridge_Publisher {
 		update_post_meta( $id, '_blaulichtcms_media_id', (string) $m['id'] );
 		if ( '' !== $alt ) {
 			update_post_meta( $id, '_wp_attachment_image_alt', $alt );
+			update_post_meta( $id, self::ALT_META, $alt );
 		}
 		return (int) $id;
 	}
@@ -123,6 +128,9 @@ final class BlaulichtCMS_Bridge_Publisher {
 		return $ids ? (int) $ids[0] : 0;
 	}
 
+	/** Zuletzt von BlaulichtCMS gesetzter Alternativtext eines Anhangs (zum Erkennen redaktioneller Änderungen, #217). */
+	const ALT_META = '_blaulichtcms_alt';
+
 	/** Meta je verwendetem BlaulichtCMS-Medium. */
 	const USES_META = '_blaulichtcms_uses_media';
 	/** Markiert einen zurückgezogenen Beitrag (zählt nicht mehr als Verwendung seiner Medien). */
@@ -134,7 +142,7 @@ final class BlaulichtCMS_Bridge_Publisher {
 	 *
 	 * @return string[]
 	 */
-	private static function used_media( int $post_id ): array {
+	public static function used_media( int $post_id ): array {
 		$ids = array_map( 'strval', (array) get_post_meta( $post_id, self::USES_META, false ) );
 		$att = get_posts(
 			array(
@@ -162,7 +170,7 @@ final class BlaulichtCMS_Bridge_Publisher {
 	}
 
 	/** Verwendete Medien eines Beitrags festhalten (ersetzt die bisherige Liste). */
-	private static function set_used_media( int $post_id, array $media_ids ): void {
+	public static function set_used_media( int $post_id, array $media_ids ): void {
 		delete_post_meta( $post_id, self::USES_META );
 		foreach ( array_unique( array_map( 'strval', $media_ids ) ) as $mid ) {
 			if ( '' !== $mid ) {
@@ -224,7 +232,7 @@ final class BlaulichtCMS_Bridge_Publisher {
 	 * @param string[] $media_ids BlaulichtCMS-Medien-IDs.
 	 * @return int Anzahl gelöschter Anhänge.
 	 */
-	private static function delete_unused_media( array $media_ids, int $post_id ): int {
+	public static function delete_unused_media( array $media_ids, int $post_id ): int {
 		$deleted = 0;
 		foreach ( array_unique( array_map( 'strval', $media_ids ) ) as $mid ) {
 			if ( '' === $mid ) {

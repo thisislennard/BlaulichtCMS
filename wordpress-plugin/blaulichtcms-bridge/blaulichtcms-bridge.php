@@ -1,8 +1,8 @@
 <?php
 /**
  * Plugin Name:       BlaulichtCMS Bridge
- * Description:       Verbindet diese Website mit BlaulichtCMS: holt freigegebene Beiträge und Hinweis-Banner per HTTPS ab, veröffentlicht sie und meldet WordPress-ID und Adresse zurück. Shortcodes [blaulichtcms_banner] und [blaulichtcms_einsaetze].
- * Version:           0.8.0
+ * Description:       Verbindet diese Website mit BlaulichtCMS: holt freigegebene Beiträge und Hinweis-Banner per HTTPS ab, veröffentlicht sie und meldet WordPress-ID und Adresse zurück. Shortcodes [blaulichtcms_banner], [blaulichtcms_einsaetze], [blaulichtcms_einsatzliste] und [blaulichtcms_einsatzstatistik].
+ * Version:           0.9.0
  * Requires at least: 6.4
  * Requires PHP:      8.1
  * Author:            BlaulichtCMS
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'BLAULICHTCMS_BRIDGE_VERSION', '0.8.0' );
+define( 'BLAULICHTCMS_BRIDGE_VERSION', '0.9.0' );
 define( 'BLAULICHTCMS_BRIDGE_FILE', __FILE__ );
 define( 'BLAULICHTCMS_BRIDGE_DIR', plugin_dir_path( __FILE__ ) );
 
@@ -37,6 +37,8 @@ require_once BLAULICHTCMS_BRIDGE_DIR . 'includes/class-client.php';
 require_once BLAULICHTCMS_BRIDGE_DIR . 'includes/class-authors.php';
 require_once BLAULICHTCMS_BRIDGE_DIR . 'includes/class-publisher.php';
 require_once BLAULICHTCMS_BRIDGE_DIR . 'includes/class-banners.php';
+require_once BLAULICHTCMS_BRIDGE_DIR . 'includes/class-incidents.php';
+require_once BLAULICHTCMS_BRIDGE_DIR . 'includes/class-incidents-admin.php';
 require_once BLAULICHTCMS_BRIDGE_DIR . 'includes/class-sync.php';
 require_once BLAULICHTCMS_BRIDGE_DIR . 'includes/class-admin.php';
 require_once BLAULICHTCMS_BRIDGE_DIR . 'includes/class-updater.php';
@@ -48,6 +50,8 @@ register_deactivation_hook( __FILE__, array( 'BlaulichtCMS_Bridge_Sync', 'deacti
 BlaulichtCMS_Bridge_Sync::boot();
 BlaulichtCMS_Bridge_Admin::boot();
 BlaulichtCMS_Bridge_Banners::boot();
+BlaulichtCMS_Bridge_Incidents::boot();
+BlaulichtCMS_Bridge_Incidents_Admin::boot();
 BlaulichtCMS_Bridge_Authors::boot();
 BlaulichtCMS_Bridge_Updater::boot();
 BlaulichtCMS_Bridge_Signature::boot();

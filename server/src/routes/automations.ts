@@ -68,6 +68,7 @@ async function checkOutputRefs(kind: OutputKind, cfg: any) {
     if (n!.n !== new Set(cfg.siteIds).size) throw badRequest('Mindestens eine gewählte Website ist nicht verfügbar.');
   }
   if (kind === 'post' && cfg.siteId && !(await one(`SELECT 1 FROM wp_sites WHERE id = $1 AND status <> 'revoked'`, [cfg.siteId]))) throw badRequest('Der gewählte Zielkanal ist nicht verfügbar.');
+  if (kind === 'incident_entry' && cfg.siteId && !(await one(`SELECT 1 FROM wp_sites WHERE id = $1 AND status <> 'revoked'`, [cfg.siteId]))) throw badRequest('Die gewählte Website ist nicht verfügbar.');
   if (kind === 'post' && cfg.socialTargets?.length) {
     const rows = await many<{ id: string; kind: string }>(`SELECT id, kind FROM connections WHERE id = ANY($1::uuid[]) AND deleted_at IS NULL AND status <> 'revoked' AND kind IN ('facebook','instagram','threads','x','whatsapp','mastodon','bluesky')`, [cfg.socialTargets.map((t: any) => t.connectionId)]);
     if (rows.length !== cfg.socialTargets.length) throw badRequest('Mindestens ein gewählter sozialer Kanal ist nicht verfügbar.');

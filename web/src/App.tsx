@@ -22,6 +22,7 @@ const Posts = lazy(() => import('./pages/posts/Posts'));
 const PostEditor = lazy(() => import('./pages/posts/PostEditor'));
 const Templates = lazy(() => import('./pages/posts/Templates'));
 const Banners = lazy(() => import('./pages/banners/Banners'));
+const IncidentList = lazy(() => import('./pages/incidents/IncidentList'));
 const Sources = lazy(() => import('./pages/sources/Sources'));
 const Collections = lazy(() => import('./pages/media/Collections'));
 const CollectionDetail = lazy(() => import('./pages/media/CollectionDetail'));
@@ -162,6 +163,7 @@ const router = createBrowserRouter(withErrors([
       { path: 'kalender', element: <Page perm={['calendar.view']}><CalendarPage /></Page> },
       { path: 'quellen', element: <Page perm={['source.view']}><Sources /></Page> },
       { path: 'banner', element: <Page perm={['banner.view']}><Banners /></Page> },
+      { path: 'einsatzliste', element: <Page perm={['incident.view']}><IncidentList /></Page> },
       { path: 'kanaele', element: <Page perm={['channel.view']}><Sites /></Page> },
       { path: 'warnungen', element: <Page perm={['warning.view']}><Warnings /></Page> },
       { path: 'warnungen/pflege', element: <Page perm={['warning.rules', 'warning.approve', 'warning.settings']}><WarningConfig /></Page> },

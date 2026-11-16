@@ -1,0 +1,114 @@
+/*
+ * BlaulichtCMS Bridge – Einsatzliste und Jahresstatistik (#213).
+ * Schrift, Schriftgröße und Textfarbe kommen vom Theme. Farben aus den Einstellungen: --bcl-accent (Akzent, z. B.
+ * Kopfzeile und Jahresabschnitte), --bcl-head-bg/--bcl-head-fg (Tabellenkopf), --bcl-cat je Kategorie.
+ */
+.bcl{--bcl-accent:var(--wp--preset--color--primary,#a72920);--bcl-on-accent:#fff;--bcl-head-bg:var(--bcl-accent);--bcl-head-fg:var(--bcl-on-accent);--bcl-line:color-mix(in srgb,currentColor 18%,transparent);--bcl-soft:color-mix(in srgb,currentColor 5%,transparent);--bcl-radius:10px;font:inherit;color:inherit;margin:0 0 1.5em}
+.bcl *,.bcl *::before,.bcl *::after{box-sizing:border-box}
+.bcl-heading{margin:0 0 .6em}
+.bcl-sr{position:absolute!important;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.bcl-empty{opacity:.8}
+.bcl a{color:inherit;text-decoration:underline;text-underline-offset:2px}
+.bcl a:focus-visible,.bcl summary:focus-visible,.bcl button:focus-visible,.bcl select:focus-visible{outline:3px solid var(--bcl-accent);outline-offset:2px}
+
+/* Filter */
+.bcl-filter{display:flex;flex-wrap:wrap;gap:.6em 1em;align-items:flex-end;margin:0 0 1em}
+.bcl-filter label{display:flex;flex-direction:column;gap:.2em;font-size:.9em}
+.bcl-filter select{font:inherit;padding:.35em .5em;min-width:9em;border:1px solid var(--bcl-line);border-radius:6px;background:transparent;color:inherit}
+.bcl-filter button{font:inherit;font-weight:600;padding:.4em 1em;border:0;border-radius:6px;background:var(--bcl-accent);color:var(--bcl-on-accent);cursor:pointer}
+
+/* Tabelle */
+.bcl-table-wrap{overflow-x:auto}
+.bcl-table{width:100%;border-collapse:collapse;font-size:.95em}
+.bcl-table th{background:var(--bcl-head-bg);color:var(--bcl-head-fg);text-align:left;font-weight:700;padding:.55em .7em;white-space:nowrap}
+.bcl-table td{padding:.5em .7em;border-bottom:1px solid var(--bcl-line);vertical-align:top}
+.bcl-table tbody tr:nth-child(even) td{background:var(--bcl-soft)}
+.bcl-table tr.is-special td{background:color-mix(in srgb,var(--bcl-accent) 8%,transparent)}
+.bcl-col-nr,.bcl-col-datum{white-space:nowrap;font-variant-numeric:tabular-nums}
+.bcl-time{opacity:.75}
+.bcl-sub{display:block;font-size:.85em;opacity:.75}
+.bcl-thumb{width:64px;height:auto;border-radius:4px;display:block}
+.bcl-flag{display:inline-block;margin:.15em .4em 0 0;font-size:.75em;font-weight:700;padding:.05em .45em;border-radius:3px;border:1px solid currentColor;opacity:.85;vertical-align:middle}
+.bcl-flag-special{border-color:var(--bcl-accent);color:var(--bcl-accent);opacity:1}
+.bcl-table td .bcl-flag{display:block;width:max-content}
+
+/* Kategorie: Farbe immer mit Name (nie Farbe allein) */
+.bcl-cat{--bcl-cat:var(--bcl-accent);display:inline-flex;align-items:center;gap:.3em;font-size:.85em;font-weight:600;padding:.1em .5em .1em .4em;border-radius:999px;border:1px solid var(--bcl-cat);background:color-mix(in srgb,var(--bcl-cat) 12%,transparent);white-space:nowrap}
+.bcl-icon{width:1.05em;height:1.05em;flex:none;fill:none;stroke:var(--bcl-cat,currentColor);stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+
+/* Jahresabschnitte (wie ein Akkordeon) */
+.bcl-year{margin:0 0 .5em;border-radius:var(--bcl-radius);overflow:hidden;border:1px solid var(--bcl-line)}
+.bcl-year>summary{display:flex;justify-content:space-between;align-items:center;gap:1em;cursor:pointer;list-style:none;padding:.7em 1em;background:var(--bcl-accent);color:var(--bcl-on-accent);font-weight:700}
+.bcl-year>summary::-webkit-details-marker{display:none}
+.bcl-year>summary::after{content:"+";font-size:1.3em;line-height:1}
+.bcl-year[open]>summary::after{content:"–"}
+.bcl-count{margin-left:auto;font-weight:400;opacity:.9}
+.bcl-year>.bcl-table-wrap,.bcl-year>.bcl-cards{padding:.5em}
+
+/* Karten */
+.bcl-cards{list-style:none;margin:0;padding:0;display:grid;gap:1em;grid-template-columns:repeat(auto-fill,minmax(16rem,1fr))}
+.bcl-card article{height:100%;border:1px solid var(--bcl-line);border-radius:var(--bcl-radius);overflow:hidden;display:flex;flex-direction:column}
+.bcl-card.is-special article{border-top:4px solid var(--bcl-accent)}
+.bcl-card-img{width:100%;height:auto;aspect-ratio:3/2;object-fit:cover;display:block}
+.bcl-card-body{padding:.8em 1em 1em}
+.bcl-card-meta{margin:0 0 .3em;font-size:.85em;opacity:.8}
+.bcl-card-title{margin:0 0 .5em;font-size:1.1em;line-height:1.3}
+.bcl-facts{margin:0;display:grid;gap:.25em}
+.bcl-facts>div{display:grid;grid-template-columns:minmax(7em,auto) 1fr;gap:.6em}
+.bcl-facts dt{font-weight:700}
+.bcl-facts dd{margin:0}
+
+/* Seiten */
+.bcl-pages ul{list-style:none;display:flex;flex-wrap:wrap;gap:.35em;padding:0;margin:1em 0 0}
+.bcl-pages a,.bcl-pages span{display:inline-block;min-width:2.2em;text-align:center;padding:.3em .5em;border:1px solid var(--bcl-line);border-radius:6px;text-decoration:none}
+.bcl-pages span[aria-current]{background:var(--bcl-accent);border-color:var(--bcl-accent);color:var(--bcl-on-accent);font-weight:700}
+
+/* Statistik */
+.bcl-total{display:flex;flex-wrap:wrap;align-items:baseline;gap:.3em 1em;margin:0 0 1em}
+.bcl-total-n{font-size:2.6em;font-weight:800;line-height:1;color:var(--bcl-accent)}
+.bcl-total-l{font-weight:700}
+.bcl-total-prev{opacity:.8;font-size:.9em}
+.bcl-chart{margin:0 0 1.5em}
+.bcl-chart figcaption{font-weight:700;margin:0 0 .5em}
+.bcl-bars{list-style:none;margin:0;padding:0;display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:4px;align-items:end;height:12em;border-bottom:1px solid var(--bcl-line)}
+.bcl-bars li{display:flex;flex-direction:column-reverse;align-items:center;height:100%;min-width:0}
+.bcl-bar-label{font-size:.75em;opacity:.8;padding-top:.3em;white-space:nowrap}
+.bcl-bar-track{flex:1;width:100%;display:flex;align-items:flex-end;justify-content:center}
+.bcl-bar{display:block;width:min(70%,2.4em);height:var(--bcl-v);min-height:2px;background:var(--bcl-bar,var(--bcl-accent));border-radius:4px 4px 0 0}
+.bcl-bar-value{font-size:.8em;font-variant-numeric:tabular-nums;padding-bottom:.15em}
+.bcl-chart.is-horizontal .bcl-bars{grid-auto-flow:row;height:auto;border:0;gap:.45em}
+.bcl-chart.is-horizontal .bcl-bars li{display:grid;grid-template-columns:minmax(6em,30%) 1fr 3em;align-items:center;gap:.6em;height:auto}
+.bcl-chart.is-horizontal .bcl-bar-label{font-size:.9em;opacity:1;padding:0;white-space:normal}
+.bcl-chart.is-horizontal .bcl-bar-track{height:1.1em;justify-content:flex-start;align-items:stretch}
+.bcl-chart.is-horizontal .bcl-bar{width:var(--bcl-v);height:auto;border-radius:0 4px 4px 0}
+.bcl-chart.is-horizontal .bcl-bar-value{padding:0}
+.bcl-as-table{margin-top:.5em;font-size:.9em}
+.bcl-as-table summary{cursor:pointer}
+.bcl-mini{max-width:28em;margin-top:.4em}
+
+/* Detailseite */
+.bcl-detail .bcl-facts{margin:0 0 1.2em;padding:1em;border-left:4px solid var(--bcl-accent);background:var(--bcl-soft)}
+.bcl-gallery{display:grid;gap:.6em;grid-template-columns:repeat(auto-fill,minmax(14rem,1fr));margin:1em 0}
+.bcl-gallery figure{margin:0}
+.bcl-gallery img{width:100%;height:auto;border-radius:6px;display:block}
+.bcl-more{font-weight:700}
+
+/* Schmale Bildschirme: Tabellenzeilen als Blöcke mit Beschriftung */
+@media (max-width:767px){
+	.bcl-list .bcl-table thead{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+	.bcl-list .bcl-table,.bcl-list .bcl-table tbody,.bcl-list .bcl-table tr,.bcl-list .bcl-table td{display:block;width:100%}
+	.bcl-list .bcl-table tr{border-bottom:2px solid var(--bcl-line);padding:.4em 0}
+	.bcl-list .bcl-table td{border:0;padding:.15em .5em;display:grid;grid-template-columns:8.5em 1fr;gap:.5em;background:none!important}
+	.bcl-list .bcl-table td::before{content:attr(data-label);font-weight:700}
+	.bcl-list .bcl-table td:empty{display:none}
+	.bcl-chart.is-horizontal .bcl-bars li{grid-template-columns:1fr 2.5em;grid-template-areas:"l v" "t t"}
+	.bcl-chart.is-horizontal .bcl-bar-label{grid-area:l}
+	.bcl-chart.is-horizontal .bcl-bar-value{grid-area:v;text-align:right}
+	.bcl-chart.is-horizontal .bcl-bar-track{grid-area:t}
+}
+@media (forced-colors:active){
+	.bcl-bar{background:CanvasText}
+	.bcl-cat,.bcl-flag{border:1px solid CanvasText}
+	.bcl-year>summary,.bcl-table th{border-bottom:1px solid CanvasText}
+}
+@media print{.bcl-filter,.bcl-pages{display:none}.bcl-year:not([open])>*:not(summary){display:block}}

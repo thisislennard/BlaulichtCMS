@@ -102,4 +102,16 @@ export const OUTPUT_CONFIG: Record<OutputKind, z.ZodType<any>> = {
     data: z.record(z.string().regex(/^[a-z][a-z0-9_]{0,39}$/), tpl(2000)).default({}),
     responsibilityIds: z.array(z.uuid()).max(20).default([]),
   }),
+  // Einsatzliste (#213): Vorlagen mit {{platzhaltern}}; der Ort wird beim Lauf gegen die Allowlist der Ortsangaben geprüft
+  incident_entry: z.object({
+    siteId: z.uuid().nullable().default(null),
+    title: z.string().min(2).max(400),
+    keyword: tpl(200),
+    alarmAt: tpl(200),
+    location: tpl(400),
+    vehicles: tpl(1000),
+    units: tpl(1000),
+    report: tpl(5000),
+    submit: z.boolean().default(true),
+  }),
 };

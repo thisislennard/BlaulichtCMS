@@ -61,6 +61,7 @@ Immer verfügbar: `automation` (Name des Workflows), `lauf`, `jetzt`. Bei FE2 un
 | E-Mail | über den eingerichteten Mailserver an **Rollen** (Konten) und/oder **Zuständigkeiten** (externe Adressen) | ja (für Zuständigkeiten) |
 | App-Benachrichtigung | an Rollen oder einzelne Personen, optional mit Link in BlaulichtCMS | – (immer sofort) |
 | Warnentwurf vorbereiten | Warnentwurf mit vorausgefüllten Feldern; Warnstufe, Freigabe und Versand bleiben bei Menschen | nein |
+| Einsatz in Einsatzliste | Eintrag für die [Einsatzliste](/hilfe/einsatzliste) (Einsatzmeldung, Stichwort, Alarmzeit, Ort, optional Fahrzeuge, weitere Kräfte, Kurzbericht, Website), wahlweise zur Freigabe eingereicht. Je Einsatz (Alarmzeit + Stichwort) nur ein Eintrag; der Ort wird gegen die erlaubten Ortsangaben geprüft | nein |
 
 **E-Mails:** An Konten geht die E-Mail sofort (wie eine Benachrichtigung). An Zuständigkeiten nur nach einer Freigabe auf der Seite [Freigaben](/freigaben) oder mit Direktversand. Ist der **Testmodus** des Mailversands an (Warnentwurf → Pflege), geht alles für Zuständigkeiten nur an das Testpostfach. Freie Adressen gibt es nicht. Alle Empfänger stehen in Blindkopie.
 

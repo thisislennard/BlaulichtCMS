@@ -106,6 +106,30 @@ derselben Adresse** (`site_url`, ohne Groß-/Kleinschreibung und abschließenden
 neuen Kopplung zählen dabei gemeinsam; die Bridge findet den Beitrag über `blaulichtcms_post_id`. Ohne aktive Neu-Kopplung
 ist der Beitrag von BlaulichtCMS aus nicht erreichbar.
 
+## Einsatzliste (ab Bridge 0.9.0)
+
+```json
+{ "id": "…", "type": "incident.upsert",
+  "incident": { "id": "…", "revision": 2, "alarm_at": "2026-11-14T13:30:00.000Z", "number": 81, "keyword": "F 2",
+                "keyword_label": "Brand", "category": "Brand", "title": "Kaminbrand", "location": "Nord", "report": "…",
+                "vehicles": "HLF, DLK", "units": "Polizei", "link_url": null, "featured": false, "false_alarm": false,
+                "cover_media_id": "…" },
+  "media": [ { "id": "…", "kind": "image", "alt": "Kaminbrand – Bild 1", "mime": "image/jpeg", "filename": "…", "path": "/api/v1/bridge/media/…" } ] }
+{ "id": "…", "type": "incident.delete", "incident": { "id": "…" }, "media_ids": ["…"] }
+```
+
+Freigegebene Einträge der Einsatzliste (#213). BlaulichtCMS liefert sie nur an Bridges aus, die mit der Kopfzeile
+`X-BlaulichtCMS-Bridge-Version` mindestens 0.9.0 melden – bei älteren Bridges warten die Aufträge. Ein noch nicht
+abgeholter Auftrag, dessen Fassung nicht mehr freigegeben ist, wird abgebrochen. Die Bridge legt je Eintrag einen Inhalt vom
+Typ `blaulichtcms_einsatz` an (gefunden über `_bcl_id`), übernimmt Bilder wie bei Beiträgen und meldet das Ergebnis über
+`POST /bridge/jobs/{id}/result` (`url` = Detailseite, leer bei abgeschalteten Detailseiten). `incident.delete` löscht den
+Inhalt endgültig samt nicht anderweitig verwendeter Bilder; ein nicht vorhandener Eintrag gilt als erledigt. Der Ort ist
+in BlaulichtCMS bereits auf Ortsteil-Ebene gebracht; Adressen und Namen werden nicht übertragen.
+
+`alt` je Bild: Alternativtext für `_wp_attachment_image_alt` (Beiträge und Einsatzliste). Ab Bridge 0.9.0 zieht die
+Bridge einen geänderten Text auch bei bereits übernommenen Bildern nach, solange er in WordPress nicht von Hand geändert
+wurde (Meta `_blaulichtcms_alt` merkt sich den zuletzt übertragenen Text).
+
 ## Medien laden
 
 ```http
@@ -113,7 +137,7 @@ GET /api/v1/bridge/media/{id}
 ```
 
 Die Bridge setzt `path` an die BlaulichtCMS-Adresse, mit der sie gekoppelt ist (`url` dient nur zur Information).
-Nur Medien, die zu einem Auftrag **dieser** Website gehören. Ausgeliefert wird die **öffentliche Fassung** ohne
+Nur Medien, die zu einem Auftrag **dieser** Website gehören (Beitrag oder Eintrag der Einsatzliste). Ausgeliefert wird die **öffentliche Fassung** ohne
 Standort- und Kameradaten.
 
 ## Ergebnis melden

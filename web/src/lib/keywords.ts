@@ -83,6 +83,6 @@ export function meaning(k: KeywordEntry): string {
 /** Aktive Stichwortliste; nur mit einem der Leserechte (Warnvorgänge, Automationen, Verbindungen). */
 export function useKeywords() {
   const { can } = useAuth();
-  const allowed = can('warning.view') || can('automation.read') || can('connection.view');
+  const allowed = can('warning.view') || can('automation.read') || can('connection.view') || can('incident.view');
   return useQuery({ queryKey: ['keywords'], queryFn: () => get<KeywordsResponse>('/keywords'), enabled: allowed, staleTime: 5 * 60_000 });
 }

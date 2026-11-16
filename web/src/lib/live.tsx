@@ -27,6 +27,8 @@ const MAP: Record<string, string[][]> = {
   collections: [['collection'], ['collections'], ['dashboard']],
   banners: [['banners'], ['dashboard']],
   banner_jobs: [['banners'], ['dashboard']],
+  incident_entries: [['incidents']],
+  incident_jobs: [['incidents']],
   wp_sites: [['sites'], ['dashboard']],
   notifications: [['notifications']],
   rss_items: [['rss'], ['dashboard']],

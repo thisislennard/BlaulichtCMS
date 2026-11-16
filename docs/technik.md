@@ -43,7 +43,7 @@ Alle Verbindungen sind optional und laufen unter *Kanäle → Verbindungen* nach
 
 | Verbindung | Wofür | Geprüft |
 |---|---|---|
-| WordPress (Bridge) | Beiträge, Banner, Einsatzübersicht; Updates mit Ed25519-Signatur | echtes WordPress mit HTTPS |
+| WordPress (Bridge) | Beiträge, Banner, Einsatzübersicht, Einsatzliste mit Jahresstatistik (ab 0.9.0); Updates mit Ed25519-Signatur | echtes WordPress mit HTTPS |
 | FE2 | interner Entwurf je Einsatz; Feldzuordnung je Instanz | mit nachgebildeten Meldungen |
 | Feuersoftware Connect | regelmäßiger Abruf der Öffentlichen Connect Schnittstelle (60–300 s, Retry-After), Filter nach RIC und Stichwort, derselbe Entwurf wie bei FE2 (nur Ort, keine Adresse) | gegen nachgebildete Connect-Schnittstelle |
 | Amtliche Warnungen | Warn-App-Schnittstelle des Bundes (Kreis-ARS) oder CAP, Banner mit Quellenvermerk | echte Schnittstelle |
@@ -245,6 +245,9 @@ Ergebnisse je Verbindung: [docs/integrationen.md](integrationen.md).
   (Hessen: Runderlass vom 30.08.2024, Scan – abgeglichen mit der digitalen Fassung vom 01.11.2022; Bayern: ABek-Anlage
   Stand 15.03.2017, nur Kürzel der Übersicht, ABek laut gesetze-bayern.de befristet bis 16.07.2027). Neue Fassungen
   müssen von Hand nachgetragen werden; `test/keywords.test.ts` prüft Wortlaut-Stichproben und Dubletten.
+- Einsatzliste in WordPress (Bridge 0.9.0, #213): Server, Aufträge und Rückmeldungen sind automatisiert getestet; Darstellung
+  (Liste, Statistik, Detailseite, Einstellungsseite) noch auf einem Test-WordPress mit dem eigenen Theme prüfen. Der
+  CSV-Import folgt dem Exportformat der Erweiterung „Einsatzverwaltung“ (Spaltennamen aus deren Quelltext), nicht einer echten Exportdatei.
 - Datenschutz: Angaben unter *Einstellungen → Datenschutz* ausfüllen, Verarbeitungsverzeichnis und DSFA mit den
   Vorlagen in [docs/datenschutz.md](datenschutz.md) erstellen.
 

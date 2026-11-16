@@ -283,7 +283,7 @@ final class BlaulichtCMS_Bridge_Banners {
 	}
 
 	public static function blocks(): void {
-		wp_register_script( 'blaulichtcms-bridge-blocks', plugins_url( 'assets/blocks.js', BLAULICHTCMS_BRIDGE_FILE ), array( 'wp-blocks', 'wp-element', 'wp-server-side-render', 'wp-block-editor' ), BLAULICHTCMS_BRIDGE_VERSION, true );
+		wp_register_script( 'blaulichtcms-bridge-blocks', plugins_url( 'assets/blocks.js', BLAULICHTCMS_BRIDGE_FILE ), array( 'wp-blocks', 'wp-element', 'wp-server-side-render', 'wp-block-editor', 'wp-components' ), BLAULICHTCMS_BRIDGE_VERSION, true );
 		register_block_type(
 			'blaulichtcms/banner',
 			array(

@@ -34,6 +34,7 @@ export const MODULES: ModuleDef[] = [
   { id: 'publishing', label: 'Veröffentlichung' },
   { id: 'banners', label: 'Banner' },
   { id: 'calendar', label: 'Kalender' },
+  { id: 'incidents', label: 'Einsatzliste' },
   { id: 'warnings', label: 'Warnentwürfe und amtliche Warnungen' },
   { id: 'press', label: 'Presse' },
   { id: 'connections', label: 'Verbindungen' },
@@ -83,6 +84,7 @@ export const PERMISSIONS: PermissionDef[] = [
   /* Freigabe */
   P('approval.post', 'approval', 'critical', 'Beiträge freigeben', 'Eine konkrete Fassung eines Beitrags freigeben oder zurückweisen und eine Freigabe zurücknehmen.', ['post.view']),
   P('approval.banner', 'approval', 'critical', 'Banner freigeben', 'Eingereichte Banner freigeben oder zurückweisen.', ['banner.view']),
+  P('approval.incident', 'approval', 'critical', 'Einsatzliste freigeben', 'Eingereichte Einträge der Einsatzliste freigeben oder zurückweisen (auch mehrere auf einmal).', ['incident.view']),
   P('approval.automation', 'approval', 'critical', 'Freigaben in Workflows erteilen', 'Wartende Freigabeschritte laufender Workflows freigeben oder ablehnen.'),
 
   /* Veröffentlichung */
@@ -102,6 +104,12 @@ export const PERMISSIONS: PermissionDef[] = [
   /* Kalender (#200) */
   P('calendar.view', 'calendar', 'read', 'Kalender ansehen', 'Termine, Kategorien und eingelesene Kalender ansehen; geplante Beiträge erscheinen zusätzlich mit „Beiträge ansehen“.'),
   P('calendar.manage', 'calendar', 'write', 'Termine verwalten', 'Eigene Termine und Serien anlegen, ändern und löschen; Kategorien mit Farben verwalten.', ['calendar.view']),
+
+  /* Einsatzliste (#213) */
+  P('incident.view', 'incidents', 'read', 'Einsatzliste ansehen', 'Einträge der Einsatzliste, ihren Stand auf der Website und die Einstellungen ansehen.'),
+  P('incident.edit', 'incidents', 'write', 'Einsatzliste bearbeiten', 'Einträge anlegen, aus Einsatzmeldungen übernehmen, bearbeiten, importieren (CSV), zur Freigabe einreichen und nicht veröffentlichte Einträge löschen.', ['incident.view', 'channel.view']),
+  P('incident.publish', 'incidents', 'critical', 'Einsatzliste veröffentlichen', 'Freigegebene Einträge an die Website übergeben und von der Website zurückziehen.', ['incident.view', 'channel.view']),
+  P('incident.settings', 'incidents', 'write', 'Einsatzliste einstellen', 'Erlaubte Ortsangaben (Datenschutz: nur Ortsteile) und die Standard-Website der Einsatzliste festlegen.', ['incident.view'], true),
 
   /* Warnentwürfe */
   P('warning.view', 'warnings', 'read', 'Warnvorgänge ansehen', 'Warnvorgänge, Fassungen, PDF, Stichwörter und Zuständigkeiten ansehen.'),
@@ -188,10 +196,10 @@ export const LEGACY_PERMISSIONS: Record<string, string[]> = {
   'media.read': ['media.view', 'media.export'],
   'media.manage': ['media.view', 'media.download_original', 'media.collections', 'media.upload', 'media.links', 'media.review', 'media.organize', 'media.redact', 'media.trash', 'media.design'],
   'media.admin': ['media.view', 'media.admin'],
-  'post.read': ['post.view', 'source.view', 'banner.view', 'channel.view', 'official.view'],
-  'post.edit': ['post.view', 'post.create', 'post.edit', 'post.submit', 'post.archive', 'post.templates', 'source.view', 'source.items', 'source.manage', 'channel.view', 'banner.view', 'banner.edit', 'official.view', 'official.dismiss', 'connection.view', 'press.view', 'press.manage', 'press.reply', 'press.snippets', 'press.contacts'],
-  'post.approve': ['post.view', 'banner.view', 'approval.post', 'approval.banner', 'approval.automation', 'press.view', 'press.approve'],
-  'post.publish': ['post.view', 'banner.view', 'channel.view', 'connection.view', 'publish.website', 'publish.unpublish', 'publish.social', 'publish.social_remove', 'banner.publish', 'press.view', 'press.contacts', 'press.release'],
+  'post.read': ['post.view', 'source.view', 'banner.view', 'channel.view', 'official.view', 'incident.view'],
+  'post.edit': ['post.view', 'post.create', 'post.edit', 'post.submit', 'post.archive', 'post.templates', 'source.view', 'source.items', 'source.manage', 'channel.view', 'banner.view', 'banner.edit', 'official.view', 'official.dismiss', 'connection.view', 'press.view', 'press.manage', 'press.reply', 'press.snippets', 'press.contacts', 'incident.view', 'incident.edit'],
+  'post.approve': ['post.view', 'banner.view', 'approval.post', 'approval.banner', 'approval.automation', 'press.view', 'press.approve', 'incident.view', 'approval.incident'],
+  'post.publish': ['post.view', 'banner.view', 'channel.view', 'connection.view', 'publish.website', 'publish.unpublish', 'publish.social', 'publish.social_remove', 'banner.publish', 'press.view', 'press.contacts', 'press.release', 'incident.view', 'incident.publish'],
   'channel.manage': ['channel.view', 'channel.sites', 'channel.updates'],
   'warning.draft': ['warning.view', 'warning.draft', 'warning.delete'],
   'warning.level': ['warning.view', 'warning.level'],
@@ -206,7 +214,7 @@ export const LEGACY_PERMISSIONS: Record<string, string[]> = {
   'user.manage': ['user.view', 'user.invite', 'user.edit', 'user.assign_roles', 'user.lock', 'user.sessions', 'user.delete'],
   'audit.read': ['audit.view'],
   'system.read': ['system.status', 'system.logs', 'settings.view', 'update.view'],
-  'system.manage': ['settings.view', 'settings.general', 'settings.security', 'settings.privacy', 'settings.media', 'settings.editorial', 'settings.system', 'system.status', 'system.maintenance', 'system.retention', 'backup.manage', 'backup.download', 'update.view', 'update.install', 'dashboard.templates', 'warning.settings', 'press.view', 'press.mailbox'],
+  'system.manage': ['settings.view', 'settings.general', 'settings.security', 'settings.privacy', 'settings.media', 'settings.editorial', 'settings.system', 'system.status', 'system.maintenance', 'system.retention', 'backup.manage', 'backup.download', 'update.view', 'update.install', 'dashboard.templates', 'warning.settings', 'press.view', 'press.mailbox', 'incident.view', 'incident.settings'],
   'privacy.manage': ['privacy.manage'],
 };
 

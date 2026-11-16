@@ -19,6 +19,7 @@ import { textFor, wpCategoryList } from './posts.js';
 import { sendFileResponse } from './files.js';
 import { approvalStillValid } from '../lib/approval.js';
 import { EXCLUDE_RE, verifyBridgeSignature, type SignatureState } from '../lib/bridge-signature.js';
+import { bridgeSupportsIncidents } from './incidents.js';
 
 export const BRIDGE_API_VERSION = 1;
 
@@ -131,6 +132,8 @@ function sitePayload(s: any) {
 interface BridgeSite {
   id: string;
   name: string;
+  /** Version der Bridge laut Kopfzeile dieser Anfrage (leer bei älteren Bridges) */
+  version?: string | null;
 }
 
 /**
@@ -164,7 +167,7 @@ async function bridgeAuth(req: FastifyRequest): Promise<BridgeSite> {
   }
   const pv = String(req.headers['x-blaulichtcms-bridge-version'] ?? '').slice(0, 20) || null;
   await pool.query(`UPDATE wp_sites SET last_seen_at = now(), plugin_version = COALESCE($2, plugin_version) WHERE id = $1`, [site.id, pv]);
-  return { id: site.id, name: site.name };
+  return { id: site.id, name: site.name, version: pv };
 }
 
 /**
@@ -187,6 +190,9 @@ async function revokeSite(db: Queryable, id: string, revokedBy: string | null, r
   // Statusprüfung in der Vergabe-Anweisung)
   await db.query(`SELECT id FROM publications WHERE site_id = $1 AND status IN ('queued','sent','unknown') FOR UPDATE`, [id]);
   await db.query(`SELECT id FROM banner_jobs WHERE site_id = $1 AND status IN ('queued','sent') FOR UPDATE`, [id]);
+  await db.query(`SELECT id FROM incident_jobs WHERE site_id = $1 AND status IN ('queued','sent') FOR UPDATE`, [id]);
+  await db.query(`UPDATE incident_jobs SET status = 'canceled', result_at = now(), error = $2 WHERE site_id = $1 AND status = 'queued'`, [id, reason]);
+  await db.query(`UPDATE incident_jobs SET status = 'failed', result_at = now(), error = $2 WHERE site_id = $1 AND status = 'sent'`, [id, `${reason} – Ergebnis offen`]);
   await db.query(`UPDATE publications SET status = 'canceled', result_at = now(), error = $2 WHERE site_id = $1 AND status = 'queued'`, [id, reason]);
   await db.query(`UPDATE banner_jobs SET status = 'canceled', result_at = now(), error = $2 WHERE site_id = $1 AND status = 'queued'`, [id, reason]);
   await db.query(
@@ -511,6 +517,8 @@ export async function bridgeRoutes(app: FastifyInstance) {
       [site.id, REDELIVER_AFTER_SEC],
     );
     const jobs: any[] = bannerRows.map((b) => ({ id: b.id, type: b.action === 'upsert' ? 'banner.upsert' : 'banner.delete', banner: b.payload }));
+    // Einsatzliste (#213): erst ab Bridge 0.9.0 – ältere Bridges kennen die Auftragsart nicht, die Aufträge warten
+    if (bridgeSupportsIncidents(site.version)) jobs.push(...(await incidentJobs(site, await publicBase(req))));
     // Vollständige Liste aktiver Banner: Die Bridge gleicht damit ihren lokalen Stand ab (auch nach Datenverlust in WordPress)
     const active = await many<any>(
       `SELECT b.* FROM banners b WHERE b.site_id = $1 AND b.ended_at IS NULL AND b.ends_at > now()
@@ -574,7 +582,7 @@ export async function bridgeRoutes(app: FastifyInstance) {
     if (!pub) {
       // Banner-Auftrag?
       const bj = await one<any>(`SELECT j.*, b.title FROM banner_jobs j JOIN banners b ON b.id = j.banner_id WHERE j.id = $1 AND j.site_id = $2`, [id, site.id]);
-      if (!bj) throw notFound('Auftrag nicht gefunden.');
+      if (!bj) return incidentResult(site, req, id, body);
       if (bj.status === 'done') return { ok: true, status: 'published', duplicate: true };
       const ok = body.status === 'published';
       await pool.query(`UPDATE banner_jobs SET status = $2, error = $3, result_at = now() WHERE id = $1`, [id, ok ? 'done' : 'failed', ok ? null : (body.error ?? 'Unbekannter Fehler').slice(0, 1000)]);
@@ -629,15 +637,80 @@ export async function bridgeRoutes(app: FastifyInstance) {
   app.get('/bridge/media/:id', bridgeLimit, async (req, reply) => {
     const site = await bridgeAuth(req);
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
-    const allowed = await one(
-      `SELECT 1 FROM publications pb JOIN post_revisions rv ON rv.id = pb.revision_id
-        WHERE pb.site_id = $1 AND pb.status IN ('sent','unknown','queued','published') AND rv.media_ids @> ARRAY[$2::uuid] LIMIT 1`,
-      [site.id, id],
-    );
+    const allowed =
+      (await one(
+        `SELECT 1 FROM publications pb JOIN post_revisions rv ON rv.id = pb.revision_id
+          WHERE pb.site_id = $1 AND pb.status IN ('sent','unknown','queued','published') AND rv.media_ids @> ARRAY[$2::uuid] LIMIT 1`,
+        [site.id, id],
+      )) ??
+      // Bilder eines Eintrags der Einsatzliste, der an diese Website übergeben wird oder dort steht (#213)
+      (await one(`SELECT 1 FROM incident_jobs j WHERE j.site_id = $1 AND j.action = 'upsert' AND j.status IN ('queued','sent','done') AND j.payload->'media_ids' ? $2 LIMIT 1`, [site.id, id]));
     if (!allowed) throw notFound('Datei gehört zu keinem Auftrag dieser Website.');
     const m = await one<any>(`SELECT * FROM media WHERE id = $1 AND status = 'ready' AND deleted_at IS NULL`, [id]);
     const pf = m ? publicFileFor(m) : null;
     if (!pf) throw notFound('Keine öffentliche Fassung vorhanden.');
     return sendFileResponse(reply, pf.path, pf.type, `${id}.${pf.ext}`);
   });
+}
+
+/* ------------------------------------------------------------------ Einsatzliste (#213) */
+
+/** Aufträge der Einsatzliste für diese Website: überholte abbrechen, hängende als fehlgeschlagen markieren, ausgeben. */
+async function incidentJobs(site: BridgeSite, base: string) {
+  await pool.query(`UPDATE incident_jobs SET status = 'failed', error = 'Die Website hat den Auftrag mehrfach abgeholt, aber nie bestätigt.', result_at = now() WHERE site_id = $1 AND status = 'sent' AND attempts >= $2`, [site.id, MAX_BRIDGE_ATTEMPTS]);
+  // Veröffentlichen nur mit weiterhin gültiger Freigabe genau dieser Fassung
+  await pool.query(
+    `UPDATE incident_jobs j SET status = 'canceled', error = 'Freigabe nicht mehr gültig', result_at = now()
+      WHERE j.site_id = $1 AND j.status = 'queued' AND j.action = 'upsert'
+        AND NOT EXISTS (SELECT 1 FROM incident_entries e WHERE e.id = j.entry_id AND e.revision = j.revision AND e.approved_hash = e.content_hash)`,
+    [site.id],
+  );
+  const rows = await many<any>(
+    `UPDATE incident_jobs SET status = 'sent', fetched_at = now(), attempts = attempts + 1
+      WHERE id IN (SELECT id FROM incident_jobs j WHERE j.site_id = $1 AND (j.status = 'queued' OR (j.status = 'sent' AND j.fetched_at < now() - make_interval(secs => $2)))
+                     AND EXISTS (SELECT 1 FROM wp_sites s WHERE s.id = j.site_id AND s.status = 'active')
+                   ORDER BY j.created_at LIMIT 25 FOR UPDATE SKIP LOCKED)
+      RETURNING id, action, payload`,
+    [site.id, REDELIVER_AFTER_SEC],
+  );
+  if (!rows.length) return [];
+  const ids = [...new Set(rows.flatMap((r) => (r.action === 'upsert' ? ((r.payload.media_ids ?? []) as string[]) : [])))];
+  const media = ids.length ? await many<any>(`SELECT * FROM media WHERE id = ANY($1::uuid[]) AND status = 'ready' AND deleted_at IS NULL`, [ids]) : [];
+  return rows.map((r) => {
+    const p = r.payload;
+    if (r.action === 'delete') return { id: r.id, type: 'incident.delete', incident: { id: p.id }, media_ids: (p.media_ids ?? []).map(String) };
+    const list = ((p.media_ids ?? []) as string[]).map((mid) => media.find((m) => m.id === mid)).filter((m: any) => m && publicFileFor(m));
+    const { media_ids: _ignored, ...incident } = p;
+    return {
+      id: r.id,
+      type: 'incident.upsert',
+      incident: { ...incident, cover_media_id: list[0] ? bridgeMediaKey(list[0]) : null },
+      media: list.map((m: any, i: number) => ({
+        id: bridgeMediaKey(m),
+        kind: m.kind,
+        alt: list.length > 1 ? `${p.title} – Bild ${i + 1}` : p.title,
+        mime: publicFileFor(m)?.type ?? m.mime,
+        filename: `${m.id}.${publicFileFor(m)?.ext ?? 'bin'}`,
+        path: `/api/v1/bridge/media/${m.id}`,
+        url: `${base}/api/v1/bridge/media/${m.id}`,
+        width: m.width,
+        height: m.height,
+      })),
+    };
+  });
+}
+
+/** Ergebnis eines Einsatzlisten-Auftrags. Wiederholte Meldungen desselben Ergebnisses ändern nichts. */
+async function incidentResult(site: BridgeSite, req: FastifyRequest, id: string, body: { status: 'published' | 'failed'; remote_id?: string; url?: string; error?: string }) {
+  const j = await one<any>(`SELECT j.*, e.title, e.id AS eid FROM incident_jobs j LEFT JOIN incident_entries e ON e.id = j.entry_id WHERE j.id = $1 AND j.site_id = $2`, [id, site.id]);
+  if (!j) throw notFound('Auftrag nicht gefunden.');
+  if (j.status === 'done') return { ok: true, status: 'published', duplicate: true };
+  if (j.status === 'canceled') throw new AppError(409, 'job_canceled', 'Der Auftrag wurde in BlaulichtCMS abgebrochen.');
+  const ok = body.status === 'published';
+  const url = ok && body.url && /^https?:\/\//.test(body.url) ? body.url : null;
+  await pool.query(`UPDATE incident_jobs SET status = $2, error = $3, remote_id = $4, remote_url = $5, result_at = now() WHERE id = $1`, [id, ok ? 'done' : 'failed', ok ? null : (body.error ?? 'Unbekannter Fehler').slice(0, 1000), body.remote_id ?? null, url]);
+  const label = j.title ?? String(j.payload?.title ?? 'Einsatz');
+  await audit(bridgeActor(site, req), ok ? (j.action === 'delete' ? 'incident.removed_from_site' : 'incident.synced') : 'incident.sync_failed', { type: 'incident', id: j.eid ?? j.entry_id, label }, { auftrag: id, aktion: j.action, url }, ok ? 'ok' : 'failed');
+  if (!ok) await notify({ kind: 'error', title: `Einsatzliste nicht übertragen: ${label}`.slice(0, 200), body: body.error ?? '', link: '/einsatzliste', permission: 'incident.publish' });
+  return { ok: true, status: body.status };
 }

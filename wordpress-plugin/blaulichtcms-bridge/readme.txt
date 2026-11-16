@@ -4,7 +4,7 @@ Tags: blaulichtcms, redaktion, veröffentlichung
 Requires at least: 6.4
 Tested up to: 6.9
 Requires PHP: 8.1
-Stable tag: 0.8.0
+Stable tag: 0.9.0
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -21,6 +21,7 @@ BlaulichtCMS ist ein eigenständiges CMS für Öffentlichkeitsarbeit und Krisenk
 * Hinweise mit Schweregraden (Hinweis, Warnung, Gefahr): Farbe und Darstellung (Banner, Popup oder beides) je Schweregrad einstellbar.
 * Idempotent: Erneutes Abholen oder Bestätigen desselben Auftrags erzeugt keinen zweiten Beitrag – der Beitrag wird über die BlaulichtCMS-ID wiedergefunden und aktualisiert.
 * Medien kommen als geprüfte, öffentliche Fassung ohne Standortdaten und werden in der Mediathek wiederverwendet.
+* Einsatzliste mit Jahresstatistik: freigegebene Einsätze aus BlaulichtCMS als Liste (Tabelle oder Karten, Filter nach Jahr und Kategorie, Jahresabschnitte), Statistik je Jahr, Monat und Kategorie mit Diagramm, Detailseite je Einsatz. Shortcodes `[blaulichtcms_einsatzliste]` und `[blaulichtcms_einsatzstatistik]`, gleichnamige Blöcke.
 
 == Installation ==
 
@@ -38,6 +39,7 @@ Ein Host-Cron ist nicht nötig. Die Bridge ruft über WP-Cron ab; ist WP-Cron ab
 Unter **Einstellungen → BlaulichtCMS Bridge**:
 
 * **Beiträge:** Autor (eigener Autor der Bridge mit einstellbarem Anzeigenamen, Person aus BlaulichtCMS oder vorhandener Benutzer) und Standardkategorie. Wie ein Beitrag aussieht, bestimmt das Theme.
+* **Einsatzliste** (eigene Seite **Einstellungen → BlaulichtCMS Einsatzliste**, mit Vorschau): Spalten und Reihenfolge, Sortierung, Einträge je Seite, Filter für Besucher, Tabelle oder Karten, Jahresabschnitte, Detailseiten samt Adresse, Akzent- und Kopfzeilenfarbe, Farbe und Symbol je Kategorie, Ansichten der Statistik. Shortcode-Attribute überschreiben die Vorgaben, z. B. `[blaulichtcms_einsatzliste jahr="2025" darstellung="karten" spalten="datum,stichwort,meldung,ort"]`.
 * **Darstellung der Hinweise:** je Schweregrad Farbe und Darstellung – Banner (Seitenanfang, Shortcode `[blaulichtcms_banner]`, Block „BlaulichtCMS: Hinweise“), Popup beim Aufruf der Seite (modaler Dialog, Esc oder „Verstanden“ schließt, der Browser merkt sich geschlossene Hinweise) oder beides. Vorgabe: Hinweis und Warnung als Banner, Gefahr als Banner und Popup.
 
 == Häufige Fragen ==
@@ -55,6 +57,12 @@ Nur im Testbetrieb: `define( 'BLAULICHTCMS_BRIDGE_ALLOW_HTTP', true );` in der w
 Neue Versionen bietet die gekoppelte BlaulichtCMS-Instanz über den normalen WordPress-Updateweg an (Dashboard → Aktualisierungen bzw. `wp plugin update blaulichtcms-bridge`). In der Plugin-Liste lässt sich „Automatische Updates aktivieren“ einschalten; WordPress installiert freigegebene Versionen dann selbst (mit derselben Prüfung von Prüfsumme und Signatur). Ist WP-Cron abgeschaltet, holt die Bridge ihr automatisches Update selbst nach. Websites im Update-Kanal „Test“ erhalten eine neue Version zuerst; alle anderen erst, nachdem sie in BlaulichtCMS freigegeben wurde. Vor der Installation prüft die Bridge das Paket gegen die SHA-256-Prüfsumme aus BlaulichtCMS. Ist in der Bridge ein Signaturschlüssel hinterlegt (includes/signing-keys.php), installiert sie zusätzlich nur Pakete mit gültiger Ed25519-Signatur des Betreibers; der private Schlüssel liegt nicht auf dem BlaulichtCMS-Server. Die Kopplung bleibt beim Update erhalten.
 
 == Changelog ==
+
+= 0.9.0 =
+* Einsatzliste (#213): Aufträge „Einsatz veröffentlichen/zurückziehen“ aus BlaulichtCMS. Jeder Einsatz wird ein eigener Inhalt (Typ `blaulichtcms_einsatz`) mit Alarmzeit, Stichwort und Bedeutung, Kategorie, Einsatzmeldung, Ort (nur Ortsteil), Fahrzeugen, weiteren Kräften, Kurzbericht und Bildern. Zurückgezogene Einsätze werden samt nicht anderweitig verwendeter Bilder entfernt.
+* Shortcodes `[blaulichtcms_einsatzliste]` (Tabelle oder Karten, Filter nach Jahr und Kategorie, Seiten, Jahresabschnitte, nur besondere Einsätze) und `[blaulichtcms_einsatzstatistik]` (Anzahl mit Vorjahr und Fehlalarmen, je Monat, je Kategorie, je Jahr; Balkendiagramm mit Tabelle als Alternative), gleichnamige Blöcke mit Einstellungen in der Seitenleiste. Auf schmalen Bildschirmen erscheinen Tabellenzeilen als Blöcke mit Beschriftung.
+* Neue Einstellungsseite „BlaulichtCMS Einsatzliste“ mit Vorschau; Schrift und Grundfarben kommen vom Theme.
+* Alternativtexte von Bildern (#217): Ein in BlaulichtCMS geänderter Alternativtext wird auch bei bereits übernommenen Bildern nachgezogen, solange er in WordPress nicht von Hand geändert wurde.
 
 = 0.8.0 =
 * Kategorie je Beitrag und je Automation: BlaulichtCMS überträgt die gewählten Kategorien; die Bridge meldet dafür die Kategorien der Website an BlaulichtCMS. Ohne Auswahl gilt die Standardkategorie.

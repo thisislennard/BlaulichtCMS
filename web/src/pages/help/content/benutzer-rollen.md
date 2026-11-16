@@ -113,6 +113,7 @@ Alle Rechte, nach Bereichen. Die Tabelle entspricht dem Rollen-Editor; „Setzt 
 | --- | --- | --- | --- |
 | Beiträge freigeben | kritisch | Eine konkrete Fassung eines Beitrags freigeben oder zurückweisen und eine Freigabe zurücknehmen. | Beiträge ansehen |
 | Banner freigeben | kritisch | Eingereichte Banner freigeben oder zurückweisen. | Banner ansehen |
+| Einsatzliste freigeben | kritisch | Eingereichte Einträge der Einsatzliste freigeben oder zurückweisen (auch mehrere auf einmal). | Einsatzliste ansehen |
 | Freigaben in Workflows erteilen | kritisch | Wartende Freigabeschritte laufender Workflows freigeben oder ablehnen. | – |
 
 **Veröffentlichung**
@@ -141,6 +142,15 @@ Alle Rechte, nach Bereichen. Die Tabelle entspricht dem Rollen-Editor; „Setzt 
 | --- | --- | --- | --- |
 | Kalender ansehen | lesen | Termine, Kategorien und eingelesene Kalender ansehen; geplante Beiträge erscheinen zusätzlich mit „Beiträge ansehen“. | – |
 | Termine verwalten | ändern | Eigene Termine und Serien anlegen, ändern und löschen; Kategorien mit Farben verwalten. | Kalender ansehen |
+
+**Einsatzliste**
+
+| Recht | Stufe | Erlaubt | Setzt voraus |
+| --- | --- | --- | --- |
+| Einsatzliste ansehen | lesen | Einträge der Einsatzliste, ihren Stand auf der Website und die Einstellungen ansehen. | – |
+| Einsatzliste bearbeiten | ändern | Einträge anlegen, aus Einsatzmeldungen übernehmen, bearbeiten, importieren (CSV), zur Freigabe einreichen und nicht veröffentlichte Einträge löschen. | Einsatzliste ansehen, Websites ansehen |
+| Einsatzliste veröffentlichen | kritisch | Freigegebene Einträge an die Website übergeben und von der Website zurückziehen. | Einsatzliste ansehen, Websites ansehen |
+| Einsatzliste einstellen | ändern | Erlaubte Ortsangaben (Datenschutz: nur Ortsteile) und die Standard-Website der Einsatzliste festlegen. | Einsatzliste ansehen |
 
 **Warnentwürfe und amtliche Warnungen**
 

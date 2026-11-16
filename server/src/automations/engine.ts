@@ -9,6 +9,7 @@ import { getSettings, type Settings } from '../lib/settings.js';
 import { bannerHash, enqueueBannerJob } from '../routes/banners.js';
 import { revisionHash } from '../routes/posts.js';
 import { warningHash } from '../routes/warnings.js';
+import { createEntry, parseLocalDate } from '../incidents/list.js';
 import { classifySmtpError, smtpTransport } from '../warnings/mail.js';
 import { OUTPUT_KINDS, type NodeType } from './catalog.js';
 import { graphHash, inputFields, topoOrder, type Graph, type GraphNode, type InputRef, type OutputRef } from './graph.js';
@@ -655,6 +656,37 @@ async function runOutput(ctx: Ctx, node: GraphNode, data: Data, prev: StepRow | 
         return done({ ports: ['out'], produced: { warnentwurf_link: `/warnungen/${w.id}`, warnentwurf_nr: caseNo }, info: `Warnentwurf ${caseNo} vorbereitet – Warnstufe, Freigabe und Versand bleiben bei Menschen.`, log: values }, db);
       });
       await notify({ kind: 'info', title: `Warnentwurf vorbereitet: ${res.produced?.warnentwurf_nr}`, body: `Aus dem Workflow „${ctx.run.automation_name}“ – bitte prüfen und ergänzen.`, link: res.produced?.warnentwurf_link as string, permission: 'warning.draft' });
+      return res;
+    }
+
+    case 'incident_entry': {
+      const title = r(c.title, 200);
+      const keyword = r(c.keyword ?? '', 60);
+      // Ein einzelnes Feld als Rohwert (ISO), sonst den gefüllten Text lesen (Platzhalter erscheinen als Ortszeit)
+      const single = /^\s*\{\{\s*([a-z0-9_]+)\s*\}\}\s*$/.exec(String(c.alarmAt ?? ''));
+      const rawAt = (single ? String(data[single[1]] ?? '') : r(c.alarmAt ?? '', 100)).trim();
+      const at = (rawAt && !Number.isNaN(Date.parse(rawAt)) ? new Date(rawAt) : rawAt ? parseLocalDate(rawAt, '', ctx.tz) : null) ?? new Date();
+      const location = r(c.location ?? '', 200);
+      const desc = { titel: title, stichwort: keyword, alarmzeit: at.toISOString(), ort: location };
+      if (ctx.test) return done({ ports: ['out'], produced: { einsatzliste_link: '/einsatzliste' }, info: `Testlauf: würde den Einsatz „${title || keyword}“ für die Einsatzliste vorschlagen${c.submit === false ? '' : ' und zur Freigabe einreichen'}.`, log: desc });
+      // Ein Einsatz nur einmal – auch wenn der Workflow bei Aktualisierungen erneut läuft
+      const ref = rawAt ? `wf:${crypto.createHash('sha256').update(`${at.toISOString()}|${keyword}`).digest('hex').slice(0, 40)}` : `wf:${ctx.run.id}:${node.id}`;
+      const res = await tx(async (db) => {
+        const ev = rawAt ? await one<{ id: string }>(`SELECT id FROM fe2_events WHERE fields->>'started_at' = $1 AND coalesce(keyword, '') = $2 AND received_at > now() - interval '7 days' ORDER BY received_at DESC LIMIT 1`, [at.toISOString(), keyword], db) : null;
+        const linked = ev && !(await one(`SELECT 1 FROM incident_entries WHERE fe2_event_id = $1`, [ev.id], db)) ? ev.id : null;
+        const created = await createEntry(
+          db,
+          { siteId: c.siteId ?? null, alarmAt: at, keyword, title, location, vehicles: r(c.vehicles ?? '', 500), units: r(c.units ?? '', 500), report: r(c.report ?? '', 5000), source: 'workflow', sourceRef: ref, fe2EventId: linked, submit: c.submit !== false },
+          ctx.actor,
+          null,
+        );
+        if (!created) return done({ ports: ['out'], produced: { einsatzliste_link: '/einsatzliste' }, info: 'Dieser Einsatz steht schon in der Einsatzliste – kein zweiter Eintrag.', log: desc }, db);
+        await audit(ctx.actor, 'automation.incident_entry_created', { type: 'incident', id: created.entry.id, label: created.entry.title }, { ...auditDetails, ort_entfernt: created.locationRemoved || undefined }, 'ok', db);
+        return done({ ports: ['out'], produced: { einsatzliste_link: '/einsatzliste' }, info: `Einsatz „${created.entry.title}“ für die Einsatzliste ${c.submit === false ? 'angelegt' : 'angelegt und zur Freigabe eingereicht'}${created.locationRemoved ? ' (Ortsangabe entfernt: keine erlaubte Ortsangabe)' : ''}.`, log: { ...desc, eintrag: created.entry.id } }, db);
+      });
+      if (res.log && (res.log as any).eintrag) {
+        await notify(c.submit === false ? { kind: 'info', title: `Neuer Eintrag für die Einsatzliste: ${title || keyword}`.slice(0, 200), body: `Aus dem Workflow „${ctx.run.automation_name}“.`, link: '/einsatzliste', permission: 'incident.edit' } : { kind: 'info', title: `Einsatzliste: Freigabe erbeten – ${title || keyword}`.slice(0, 200), body: `Aus dem Workflow „${ctx.run.automation_name}“.`, link: '/einsatzliste', permission: 'approval.incident' });
+      }
       return res;
     }
   }

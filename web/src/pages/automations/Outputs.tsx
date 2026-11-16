@@ -19,6 +19,7 @@ const DEFAULTS: Record<string, Record<string, any>> = {
   mail: { roles: [], responsibilityIds: [], subject: '', body: '' },
   notify: { roles: [], userIds: [], kind: 'info', title: '', body: '', link: '' },
   warning_draft: { data: {}, responsibilityIds: [] },
+  incident_entry: { siteId: null, title: '{{stichwort_text}}', keyword: '{{stichwort}}', alarmAt: '{{alarmzeit}}', location: '{{ortsteil}}', vehicles: '', units: '{{einheiten}}', report: '', submit: true },
 };
 
 /** Alle Felder aller Eingänge (die Prüfung im Editor sagt, ob ein Feld an der jeweiligen Stelle vorhanden ist). */
@@ -172,6 +173,21 @@ export function OutputDialog({ output, kind, cat, onClose, preset }: { output: O
             {T('title', 'Titel', { max: 300, required: true })}
             {T('body', 'Text', { rows: 3, max: 1000 })}
             {T('link', 'Link (optional)', { max: 300, help: 'Seite in BlaulichtCMS, z. B. {{beitrag_link}} oder /banner.' })}
+          </>
+        )}
+
+        {kind === 'incident_entry' && (
+          <>
+            <Notice icon="ShieldCheck" title="Nur grob und erst nach Freigabe">Der Workflow schlägt einen Eintrag für die Einsatzliste vor – je Einsatz nur einmal. Der Ort wird gegen die erlaubten Ortsangaben der Einsatzliste geprüft (keine Straßen, keine Namen). Veröffentlicht wird erst nach Freigabe unter Kanäle → <Link to="/einsatzliste">Einsatzliste</Link>.</Notice>
+            <SelectField id="o-isite" label="Website" value={c.siteId ?? ''} onChange={(v) => set({ siteId: v || null })} options={[{ value: '', label: 'Standard der Einsatzliste' }, ...sites.map((s) => ({ value: s.id, label: s.name }))]} />
+            {T('title', 'Einsatzmeldung', { max: 400, required: true, help: 'Kurz, ohne Adressen und Namen – z. B. {{stichwort_text}}.' })}
+            {T('keyword', 'Stichwort', { max: 200, help: 'Die Bedeutung kommt aus dem Stichwortverzeichnis.' })}
+            {T('alarmAt', 'Alarmzeit', { max: 200, help: 'Leer oder nicht lesbar = Zeitpunkt des Laufs.' })}
+            {T('location', 'Ort (Ortsteil)', { max: 400 })}
+            {T('vehicles', 'Fahrzeuge (optional)', { max: 1000 })}
+            {T('units', 'Weitere Kräfte (optional)', { max: 1000 })}
+            {T('report', 'Kurzbericht (optional)', { rows: 4, max: 5000 })}
+            <Switch checked={c.submit !== false} onChange={(v) => set({ submit: v })} label="Zur Freigabe einreichen" />
           </>
         )}
 

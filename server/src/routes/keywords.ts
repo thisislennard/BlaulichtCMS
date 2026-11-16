@@ -13,7 +13,7 @@ import { activeKeywords, exportKeywords, importOwnList, parseKeywordList, syncCa
  * Einstellung (`general.state`, routes/system.ts).
  */
 export async function keywordRoutes(app: FastifyInstance) {
-  app.get('/keywords', { preHandler: requireAnyAuth('warning.view', 'automation.read', 'connection.view') }, async () => {
+  app.get('/keywords', { preHandler: requireAnyAuth('warning.view', 'automation.read', 'connection.view', 'incident.view') }, async () => {
     const state = String((await getSettings())['general.state'] ?? '');
     const entries = await activeKeywords();
     return {

@@ -95,6 +95,10 @@ Neue Bridge-Versionen kommen über den normalen WordPress-Updateweg – zuerst a
 
 Eine neue, freigegebene Fassung desselben BlaulichtCMS-Beitrags **aktualisiert** den bestehenden WordPress-Beitrag. Bilder und Videos, die in der neuen Fassung fehlen, löscht die Bridge aus der Mediathek, sofern kein anderer Beitrag und keine andere Seite sie verwendet.
 
+## Einsatzliste und Jahresstatistik
+
+Ab Bridge 0.9.0 zeigt die Website freigegebene Einsätze aus der [Einsatzliste](/hilfe/einsatzliste): Shortcodes `[blaulichtcms_einsatzliste]` und `[blaulichtcms_einsatzstatistik]` bzw. die Blöcke **BlaulichtCMS: Einsatzliste** und **BlaulichtCMS: Einsatzstatistik**. Spalten, Sortierung, Filter, Anzahl je Seite, Tabelle oder Karten, Jahresabschnitte, Detailseiten, Farben und Symbole je Kategorie stellt man unter **Einstellungen → BlaulichtCMS Einsatzliste** ein (mit Vorschau). Jeder Einsatz ist ein eigener Inhalt vom Typ „Einsatz“ (`blaulichtcms_einsatz`), keine normale Beitragsseite; Schrift und Grundfarben kommen vom Theme.
+
 ## Zurückziehen
 
 **Zurückziehen** im Beitrag wirkt auf **jede** Website, auf der der Beitrag noch steht – auch wenn eine frühere Fassung auf eine andere Website ging. Die Bridge setzt den WordPress-Beitrag auf „Entwurf“ und löscht die übernommenen Bilder und Videos endgültig aus der Mediathek (samt aller Bildgrößen unter `/wp-content/uploads`), sofern kein anderer Beitrag und keine andere Seite sie verwendet. So ist ein Bild nach einem Widerspruch einer abgebildeten Person auch über die Mediathek nicht mehr abrufbar. Kopien in Caches, Suchmaschinen oder bei Dritten erreicht die Bridge nicht. Facebook und Instagram sind davon getrennt – siehe [Verbindungen](/hilfe/verbindungen) („Von sozialen Kanälen entfernen“).

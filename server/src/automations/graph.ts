@@ -99,6 +99,8 @@ export function outputTemplates(o: Pick<OutputRef, 'kind' | 'config'>): string[]
       return [c.title, c.body, c.link];
     case 'warning_draft':
       return Object.values(c.data ?? {}) as string[];
+    case 'incident_entry':
+      return [c.title, c.keyword, c.alarmAt, c.location, c.vehicles, c.units, c.report];
     default:
       return [];
   }

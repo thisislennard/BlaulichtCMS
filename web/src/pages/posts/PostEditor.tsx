@@ -83,7 +83,7 @@ function Paragraphs({ text }: { text: string }) {
   );
 }
 
-function MediaPicker({ collections, chosen, onClose, onAdd }: { collections: PostDetail['collections']; chosen: string[]; onClose: () => void; onAdd: (m: MediaItem[]) => void }) {
+export function MediaPicker({ collections, chosen, onClose, onAdd }: { collections: PostDetail['collections']; chosen: string[]; onClose: () => void; onAdd: (m: MediaItem[]) => void }) {
   const all = useQuery({ queryKey: ['collections', false], queryFn: () => get<any[]>('/collections') });
   const [cid, setCid] = useState(collections[0]?.id ?? '');
   const [onlySelected, setOnlySelected] = useState(true);

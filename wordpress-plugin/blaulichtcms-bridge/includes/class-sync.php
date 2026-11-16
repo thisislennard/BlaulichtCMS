@@ -372,6 +372,10 @@ final class BlaulichtCMS_Bridge_Sync {
 							'url'           => '',
 							'remote_status' => 'ok',
 						);
+					} elseif ( 'incident.upsert' === $type ) {
+						$out = BlaulichtCMS_Bridge_Incidents::upsert( $job );
+					} elseif ( 'incident.delete' === $type ) {
+						$out = BlaulichtCMS_Bridge_Incidents::delete( $job );
 					} else {
 						$out = 'post.unpublish' === $type ? BlaulichtCMS_Bridge_Publisher::unpublish( $job ) : BlaulichtCMS_Bridge_Publisher::upsert( $job );
 					}

@@ -46,6 +46,7 @@ export const navigation: NavGroup[] = [
   {
     group: 'nav.channels',
     items: [
+      { id: 'incidents', path: '/einsatzliste', label: 'nav.incidents', icon: 'ListOrdered', perm: ['incident.view'] },
       { id: 'banners', path: '/banner', label: 'nav.banners', icon: 'Megaphone', perm: ['banner.view'] },
       { id: 'sites', path: '/kanaele', label: 'nav.sites', icon: 'Globe', perm: ['channel.view'] },
       { id: 'connections', path: '/verbindungen', label: 'nav.connections', icon: 'Plug', perm: ['connection.configure'] },

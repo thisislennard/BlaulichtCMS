@@ -171,15 +171,15 @@ describe('Feine Rechte und Rollen (0.3.0)', () => {
     const snap = Object.fromEntries(P.SYSTEM_ROLES.filter((r) => r.id !== 'platform_admin').map((r) => [r.id, r.permissions.join(' ')]));
     expect(snap).toEqual({
       media_manager:
-        'media.view media.export media.download_original media.collections media.upload media.links media.review media.organize media.redact media.trash media.design post.view source.view channel.view banner.view calendar.view official.view templates.view templates.manage',
+        'media.view media.export media.download_original media.collections media.upload media.links media.review media.organize media.redact media.trash media.design post.view source.view channel.view banner.view calendar.view incident.view official.view templates.view templates.manage',
       editor:
-        'media.view media.export media.download_original media.collections media.upload media.links media.review media.organize media.redact media.trash media.design post.view post.create post.edit post.submit post.archive post.templates source.view source.items source.manage channel.view banner.view banner.edit calendar.view calendar.manage official.view official.dismiss press.view press.manage press.reply press.snippets press.contacts connection.view automation.read templates.view templates.manage',
-      approver: 'media.view media.export post.view source.view approval.post approval.banner approval.automation channel.view banner.view calendar.view official.view press.view press.approve automation.read templates.view audit.view',
-      publisher: 'media.view media.export post.view source.view publish.website publish.unpublish publish.social publish.social_remove channel.view banner.view banner.publish calendar.view official.view press.view press.contacts press.release connection.view templates.view',
+        'media.view media.export media.download_original media.collections media.upload media.links media.review media.organize media.redact media.trash media.design post.view post.create post.edit post.submit post.archive post.templates source.view source.items source.manage channel.view banner.view banner.edit calendar.view calendar.manage incident.view incident.edit official.view official.dismiss press.view press.manage press.reply press.snippets press.contacts connection.view automation.read templates.view templates.manage',
+      approver: 'media.view media.export post.view source.view approval.post approval.banner approval.incident approval.automation channel.view banner.view calendar.view incident.view official.view press.view press.approve automation.read templates.view audit.view',
+      publisher: 'media.view media.export post.view source.view publish.website publish.unpublish publish.social publish.social_remove channel.view banner.view banner.publish calendar.view incident.view incident.publish official.view press.view press.contacts press.release connection.view templates.view',
       warning_author: 'warning.view warning.draft warning.delete',
       warning_approver: 'warning.view warning.draft warning.delete warning.level warning.approve',
       warning_sender: 'warning.view warning.send',
-      viewer: 'media.view media.export post.view source.view channel.view banner.view calendar.view official.view templates.view',
+      viewer: 'media.view media.export post.view source.view channel.view banner.view calendar.view incident.view official.view templates.view',
     });
     expect(P.SYSTEM_ROLES.find((r) => r.id === 'platform_admin')!.permissions).toEqual(ids);
   });
@@ -1794,5 +1794,32 @@ describe('Web-App-Manifest (#197)', () => {
   });
   it('Schnellzugriffe zeigen nur auf eigene Pfade', () => {
     for (const s of m.shortcuts) expect(s.url).toMatch(/^\/(?!\/)/);
+  });
+});
+
+describe('Einsatzliste: Ort nur grob, CSV und Datum (#213)', () => {
+  it('Ort: Allowlist mit Wortabgleich, ohne Liste keine Adressen', async () => {
+    const { coarseLocation, looksLikeAddress } = await import('../src/incidents/list.js');
+    expect(coarseLocation('Gartenstraße , Musterstadt', ['Musterstadt', 'Nord'])).toEqual({ value: 'Musterstadt', removed: false });
+    expect(coarseLocation('nord', ['Musterstadt', 'Nord'])).toEqual({ value: 'Nord', removed: false });
+    expect(coarseLocation('Alt Oberdorf', ['Oberdorf'])).toEqual({ value: 'Oberdorf', removed: false });
+    expect(coarseLocation('Hauptstraße 5', ['Nord'])).toEqual({ value: '', removed: true });
+    expect(coarseLocation('Gartenstraße, Musterstadt', [])).toEqual({ value: 'Musterstadt', removed: false });
+    expect(coarseLocation('Im Brühl', [])).toEqual({ value: '', removed: true });
+    expect(coarseLocation('Nord', [])).toEqual({ value: 'Nord', removed: false });
+    for (const a of ['Hauptstr. 1', '65835 Musterstadt', 'Steinmühlenweg', 'An der Untermühle', 'Marktplatz']) expect(looksLikeAddress(a), a).toBe(true);
+    for (const a of ['Musterstadt', 'Oberdorf', 'Nord']) expect(looksLikeAddress(a), a).toBe(false);
+  });
+
+  it('CSV: Trennzeichen, Anführungszeichen, Ortszeit', async () => {
+    const { parseCsv, parseLocalDate, parseIncidentCsv } = await import('../src/incidents/list.js');
+    expect(parseCsv('a;b\n"x;1";"y ""z"""\n')).toEqual([['a', 'b'], ['x;1', 'y "z"']]);
+    expect(parseCsv('a,b\r\n1,"zwei\nZeilen"')).toEqual([['a', 'b'], ['1', 'zwei\nZeilen']]);
+    expect(parseLocalDate('14.11.2026 14:30', '', 'Europe/Berlin')!.toISOString()).toBe('2026-11-14T13:30:00.000Z');
+    expect(parseLocalDate('2026-07-01', '08:15', 'Europe/Berlin')!.toISOString()).toBe('2026-07-01T06:15:00.000Z');
+    expect(parseLocalDate('31.13.2026', '', 'Europe/Berlin')).toBeNull();
+    const r = parseIncidentCsv('Datum;Uhrzeit;Stichwort;Einsatzmeldung;Ort\n01.02.2026;07:05;F 1;Mülltonne;Nord', 'Europe/Berlin');
+    expect(r.rows[0]).toMatchObject({ keyword: 'F 1', title: 'Mülltonne', location: 'Nord', number: null });
+    expect(r.rows[0].alarmAt.toISOString()).toBe('2026-02-01T06:05:00.000Z');
   });
 });

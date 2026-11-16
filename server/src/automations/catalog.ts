@@ -16,7 +16,7 @@ export interface FieldDef {
 }
 
 export type InputKind = 'fe2' | 'feuersoftware' | 'warnfeed' | 'rss' | 'upload' | 'schedule' | 'manual' | 'press';
-export type OutputKind = 'banner' | 'post' | 'mail' | 'notify' | 'warning_draft';
+export type OutputKind = 'banner' | 'post' | 'mail' | 'notify' | 'warning_draft' | 'incident_entry';
 export type NodeType = 'input' | 'output' | 'condition' | 'switch' | 'template' | 'delay' | 'dedup' | 'approval' | 'merge';
 
 export const FIELD_KEY = /^[a-z][a-z0-9_]{0,39}$/;
@@ -199,6 +199,13 @@ export const OUTPUT_KINDS: Record<OutputKind, { label: string; description: stri
       { key: 'warnentwurf_link', label: 'Link zum Warnentwurf', type: 'url', example: '/warnungen/…' },
       { key: 'warnentwurf_nr', label: 'Vorgangsnummer', type: 'text', example: 'W-2026-0007' },
     ],
+  },
+  incident_entry: {
+    label: 'Einsatz in Einsatzliste',
+    description: 'Eintrag für die Einsatzliste der Website vorschlagen (Stichwort, Ortsteil, Alarmzeit) – veröffentlicht wird erst nach Freigabe. Ein Einsatz entsteht nur einmal, auch bei Aktualisierungen.',
+    icon: 'ListOrdered',
+    directCapable: false,
+    produces: [{ key: 'einsatzliste_link', label: 'Link zur Einsatzliste', type: 'url', example: '/einsatzliste' }],
   },
 };
 

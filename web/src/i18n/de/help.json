@@ -127,6 +127,10 @@
       "title": "Begriffe",
       "summary": "Glossar der BlaulichtCMS-Begriffe."
     },
+    "einsatzliste": {
+      "title": "Einsatzliste auf der Website",
+      "summary": "Einsätze aus Alarmen vorschlagen, freigeben und veröffentlichen; Liste, Jahresstatistik und Detailseiten in WordPress einstellen; Import."
+    },
     "banner": {
       "title": "Banner auf der Website",
       "summary": "Zeitgesteuerte Hinweise mit Priorität, Ablauf auch ohne Verbindung, Platzierung per Shortcode oder Block."

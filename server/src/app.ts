@@ -69,6 +69,7 @@ import { postRoutes } from './routes/posts.js';
 import { bridgeRoutes } from './routes/bridge.js';
 import { uploadRoutes } from './routes/uploads.js';
 import { bannerRoutes } from './routes/banners.js';
+import { incidentRoutes } from './routes/incidents.js';
 import { eventRoutes, stopEvents } from './routes/events.js';
 import { rssRoutes } from './routes/rss.js';
 import { warningRoutes } from './routes/warnings.js';
@@ -252,6 +253,7 @@ export async function buildApp(): Promise<FastifyInstance> {
       await api.register(bridgeRoutes);
       await api.register(uploadRoutes);
       await api.register(bannerRoutes);
+      await api.register(incidentRoutes);
       await api.register(eventRoutes);
       await api.register(rssRoutes);
       await api.register(warningRoutes);

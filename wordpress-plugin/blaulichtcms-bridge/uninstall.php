@@ -35,6 +35,9 @@ function blaulichtcms_bridge_uninstall_site(): void {
 	delete_option( 'blaulichtcms_bridge_settings' );
 	delete_option( 'blaulichtcms_bridge_status' );
 	delete_option( 'blaulichtcms_bridge_banners' );
+	delete_option( 'blaulichtcms_bridge_incidents' ); // Einsatzliste: Einstellungen (Einträge bleiben wie Beiträge erhalten)
+	delete_option( 'blaulichtcms_bridge_incidents_rev' );
+	delete_option( 'blaulichtcms_bridge_incidents_rewrite' );
 	delete_option( 'blaulichtcms_bridge_lock' );
 	delete_transient( 'blaulichtcms_bridge_lock' );
 	delete_transient( 'blaulichtcms_bridge_update' ); // Update-Angebot je Website (ab 0.6.0)
@@ -46,6 +49,13 @@ function blaulichtcms_bridge_uninstall_site(): void {
 			"DELETE FROM {$wpdb->options} WHERE option_name LIKE %s OR option_name LIKE %s",
 			$wpdb->esc_like( '_transient_blaulichtcms_bridge_notice_' ) . '%',
 			$wpdb->esc_like( '_transient_timeout_blaulichtcms_bridge_notice_' ) . '%'
+		)
+	);
+	$wpdb->query(
+		$wpdb->prepare(
+			"DELETE FROM {$wpdb->options} WHERE option_name LIKE %s OR option_name LIKE %s",
+			$wpdb->esc_like( '_transient_blaulichtcms_bcl_stats_' ) . '%',
+			$wpdb->esc_like( '_transient_timeout_blaulichtcms_bcl_stats_' ) . '%'
 		)
 	);
 }

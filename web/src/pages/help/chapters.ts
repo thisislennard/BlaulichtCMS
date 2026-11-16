@@ -52,6 +52,7 @@ export const GROUPS: ChapterGroup[] = [
     ['verbindungen', 'Plug'],
     ['workflows', 'Workflow'],
     ['banner', 'Megaphone'],
+    ['einsatzliste', 'ListOrdered'],
     ['ohne-website', 'Unlink'],
   ]),
   G('admin', [
