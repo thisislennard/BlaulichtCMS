@@ -3,6 +3,7 @@ import { permissionsFor } from '../auth/permissions.js';
 import { log } from './log.js';
 import { getSettings } from './settings.js';
 import { freeBytes } from '../media/storage.js';
+import { emitUpload } from '../automations/events.js';
 
 /*
  * Benachrichtigungen der Medien wie in LiFeOS (Paket 5), über die vorhandenen In-App-Benachrichtigungen:
@@ -76,6 +77,7 @@ export async function noticeNewMedia(mediaId: string) {
     [mediaId],
   );
   if (!m) return;
+  await emitUpload({ collectionId: m.collection_id, collectionTitle: m.title, linkLabel: m.label });
   const owner = (await ownerIfEligible(m.l_owner)) ?? (await ownerIfEligible(m.c_owner));
   await mediaNotice({
     category: 'media_new',

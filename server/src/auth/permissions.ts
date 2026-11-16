@@ -23,6 +23,7 @@ export const MODULES: ModuleDef[] = [
   { id: 'publishing', label: 'Veröffentlichung' },
   { id: 'warnings', label: 'Warnentwürfe' },
   { id: 'connections', label: 'Verbindungen' },
+  { id: 'automations', label: 'Automationen' },
   { id: 'users', label: 'Benutzer' },
   { id: 'system', label: 'System & Protokolle' },
 ];
@@ -42,6 +43,9 @@ export const PERMISSIONS: PermissionDef[] = [
   { id: 'warning.rules', module: 'warnings', label: 'Stichwörter und Regeln pflegen', level: 'critical', description: 'Stichwörter, Prüffragen, Warnstufen-Regeln, Vorlagen und Zuständigkeiten pflegen.' },
   { id: 'warning.send', module: 'warnings', label: 'Warnentwurf versenden', level: 'critical', description: 'Freigegebene Warnentwürfe per E-Mail an die zuständige Stelle senden.' },
   { id: 'connection.manage', module: 'connections', label: 'Verbindungen verwalten', level: 'critical', description: 'Optionale Verbindungen (FE2, Feuersoftware Connect, Facebook, Instagram, amtliche Warnfeeds) einrichten, testen, aktivieren, widerrufen und löschen.' },
+  { id: 'automation.read', module: 'automations', label: 'Automationen ansehen', level: 'read', description: 'Automationen, Eingänge, Ausgänge und Laufprotokolle ansehen.' },
+  { id: 'automation.manage', module: 'automations', label: 'Automationen verwalten', level: 'write', description: 'Eingänge, Ausgänge und Abläufe anlegen, bearbeiten, testen, aktivieren und deaktivieren. Ausgänge legen nur Entwürfe und Benachrichtigungen an; Freigaben bleiben bei den Menschen.' },
+  { id: 'automation.publish', module: 'automations', label: 'Automationen direkt veröffentlichen lassen', level: 'critical', description: 'Einer Automation erlauben, markierte Ausgänge ohne menschliche Freigabe zu veröffentlichen bzw. zu versenden (mit Passwortbestätigung, Audit und Sicherheitsmeldung).' },
   { id: 'user.read', module: 'users', label: 'Benutzer ansehen', level: 'read', description: 'Benutzerliste und Rollen ansehen.' },
   { id: 'user.manage', module: 'users', label: 'Benutzer verwalten', level: 'critical', description: 'Einladen, Rollen ändern, deaktivieren, Zwei-Faktor zurücksetzen.' },
   { id: 'audit.read', module: 'system', label: 'Audit-Protokoll ansehen', level: 'read', description: 'Wer hat wann was geändert.' },
@@ -76,13 +80,13 @@ export const ROLES: RoleDef[] = [
     id: 'editor',
     label: 'Redaktion',
     description: 'Erstellt Beiträge, übernimmt Medien und reicht Fassungen zur Freigabe ein.',
-    permissions: ['media.read', 'media.manage', 'post.read', 'post.edit'],
+    permissions: ['media.read', 'media.manage', 'post.read', 'post.edit', 'automation.read'],
   },
   {
     id: 'approver',
     label: 'Freigabe',
     description: 'Gibt geprüfte Fassungen frei.',
-    permissions: ['media.read', 'post.read', 'post.approve', 'audit.read'],
+    permissions: ['media.read', 'post.read', 'post.approve', 'audit.read', 'automation.read'],
   },
   {
     id: 'publisher',

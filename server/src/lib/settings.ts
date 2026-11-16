@@ -136,6 +136,13 @@ export const DEFAULT_SETTINGS = {
   'media.allow_animated': false,
 
   'editorial.four_eyes': false,
+  /**
+   * Automationen (automations/*): globaler Schalter (aus = keine neuen Läufe, offene Läufe werden abgebrochen),
+   * Grenze der Läufe je Automation und Minute (Schutz gegen Schleifen und Fluten) und Aufbewahrung der Laufprotokolle.
+   */
+  'automations.enabled': true,
+  'automations.max_runs_per_minute': 20,
+  'privacy.automation_run_days': 30,
   'invites.valid_hours': 72,
   /** Gemeinsame Dashboard-Vorlagen je Rolle ({ rolle: layout }) und allgemein ('*'). */
   'dashboard.layouts': {} as Record<string, unknown>,
@@ -262,6 +269,8 @@ export const SETTING_RANGES: Record<string, [number, number]> = {
   'privacy.official_warning_days': [0, 3650],
   'privacy.upload_link_days': [0, 3650],
   'privacy.uploader_months': [0, 120],
+  'privacy.automation_run_days': [1, 3650],
+  'automations.max_runs_per_minute': [1, 600],
   'media.max_file_mb': [1, 20000],
   'media.link_max_files': [1, 1000],
   'media.link_default_days': [1, 90],

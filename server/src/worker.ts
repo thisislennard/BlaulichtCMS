@@ -30,6 +30,8 @@ import { runRetention } from './lib/retention.js';
 import { checkExpiringLinks, checkStorage } from './lib/media-notify.js';
 import { cleanupDesignImages } from './routes/media-design.js';
 import { checkForUpdate, updateCheckDue } from './updates/github.js';
+import { executeRun } from './automations/engine.js';
+import { automationTick } from './automations/events.js';
 
 process.env.BLAULICHTCMS_ROLE ??= 'worker';
 
@@ -62,6 +64,10 @@ const handlers: Record<string, (job: Job) => Promise<void>> = {
   // Ebenfalls genau ein Versuch je Anstoß; Wiederholung nur gezielt für den betroffenen Kanal
   'social.publish': async (job) => {
     await runSocialPublication(String(job.payload.id));
+  },
+  // Automationen: ein Lauf je Auftrag; Wiederholung überspringt erledigte Schritte (automations/engine.ts)
+  'automation.run': async (job) => {
+    await executeRun(String(job.payload.runId), job);
   },
 };
 
@@ -213,6 +219,8 @@ async function maintenance(isLeader: boolean) {
   if (due('warnfeed', 60_000)) await refreshDueWarnfeeds().catch((e) => log('warn', 'warnfeed', e.message));
   // Feuersoftware Connect: jede aktive Verbindung in ihrem Abstand (60–300 s); geprüft wird alle 10 s
   if (due('feuersoftware', 10_000)) await pollDueFeuersoftware().catch((e) => log('warn', 'feuersoftware', e.message));
+  // Automationen: Zeitpläne starten, abgelaufene Freigaben schließen
+  if (due('automations', 30_000)) await automationTick().catch((e) => log('warn', 'automation', e.message));
   if (s['backup.enabled'] && due('backup-check', 10 * 60_000)) {
     const now = new Date(new Date().toLocaleString('en-US', { timeZone: s['general.timezone'] }));
     if (now.getHours() === s['backup.hour']) {

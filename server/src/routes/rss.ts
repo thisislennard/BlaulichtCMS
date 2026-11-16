@@ -10,6 +10,7 @@ import { httpRequest } from '../lib/http.js';
 import { getSettings } from '../lib/settings.js';
 import { log } from '../lib/log.js';
 import { revisionHash } from './posts.js';
+import { emitRssItem } from '../automations/events.js';
 
 /**
  * RSS- und Atom-Quellen. Abruf nur über den geschützten HTTP-Client (keine internen Adressen,
@@ -104,7 +105,8 @@ async function fetchFeed(url: string, cache: { etag?: string | null; lastModifie
   return { notModified: false as const, feed: parseFeed(res.text()), etag: res.headers['etag'] ?? null, lastModified: res.headers['last-modified'] ?? null };
 }
 
-async function storeItems(feedId: string, items: FeedItem[]) {
+/** `emit`: neue Einträge an Automationen melden (nur beim regulären Abruf, nicht beim ersten Einlesen einer Quelle). */
+async function storeItems(feedId: string, items: FeedItem[], emit = false) {
   let added = 0;
   for (const it of items) {
     const r = await pool.query(
@@ -112,6 +114,7 @@ async function storeItems(feedId: string, items: FeedItem[]) {
       [feedId, it.key, it.title.slice(0, 300), it.link && /^https?:\/\//i.test(it.link) ? it.link.slice(0, 1000) : null, it.summary, it.published],
     );
     added += r.rowCount ?? 0;
+    if (r.rowCount && emit) await emitRssItem(feedId, it);
   }
   return added;
 }
@@ -127,7 +130,7 @@ export async function refreshFeed(f: any) {
   try {
     const r = await fetchFeed(f.url, { etag: f.etag, lastModified: f.last_modified });
     if (!r.notModified) {
-      await storeItems(f.id, r.feed.items);
+      await storeItems(f.id, r.feed.items, true);
       await pool.query('UPDATE rss_feeds SET etag = $2, last_modified = $3 WHERE id = $1', [f.id, r.etag, r.lastModified]);
     }
     await pool.query('UPDATE rss_feeds SET last_success_at = now(), last_error = NULL WHERE id = $1', [f.id]);

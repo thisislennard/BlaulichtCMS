@@ -5,6 +5,7 @@ import { log } from '../lib/log.js';
 import { notify } from '../lib/notify.js';
 import { getSettings } from '../lib/settings.js';
 import { revisionHash } from '../routes/posts.js';
+import { emitIncident } from '../automations/events.js';
 import type { Connection } from './common.js';
 
 /**
@@ -225,6 +226,7 @@ export async function handleIncident(c: Connection, source: IncidentSource, inpu
         await audit(actor, `${source}.draft_created`, { type: 'post', id: p.id, label: title }, { ref }, 'ok', db);
       }
       await notify({ kind: 'info', title: `Neuer Einsatzentwurf aus ${label}: ${title}`.slice(0, 200), link: postId ? `/beitraege/${postId}` : '/verbindungen', permission: 'post.edit' });
+      await emitIncident(c, source, { eventId, sequence: 1, phase: closed ? 'beendet' : 'neu', fields, postId }, db);
       log('info', source, `Einsatz angelegt (Ref ${ref})`);
       return { outcome: 'created' as const, fe2EventId: ev.id, postId, sequence: 1 };
     }
@@ -246,6 +248,7 @@ export async function handleIncident(c: Connection, source: IncidentSource, inpu
         await notify({ kind: 'info', title: `${label}-Aktualisierung zu „${existing.title}“${closed ? ' – Einsatz beendet' : ''}`.slice(0, 200), body: 'Der Entwurf wurde bereits bearbeitet und bleibt unverändert.', link: `/beitraege/${existing.post_id}`, permission: 'post.edit' });
       }
     }
+    await emitIncident(c, source, { eventId, sequence: seq, phase: closed ? 'beendet' : 'aktualisierung', fields, postId: existing.post_id }, db);
     log('info', source, `Folgeereignis ${seq} (Ref ${ref})${closed ? ', beendet' : ''}`);
     return { outcome: 'updated' as const, fe2EventId: existing.id, postId: existing.post_id, sequence: seq };
   });

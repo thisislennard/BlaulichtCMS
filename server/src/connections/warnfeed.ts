@@ -6,6 +6,7 @@ import { log } from '../lib/log.js';
 import { notify } from '../lib/notify.js';
 import { bannerHash, enqueueBannerJob } from '../routes/banners.js';
 import { allowedPrivateHosts, type Connection, type TestStep } from './common.js';
+import { emitOfficialWarning } from '../automations/events.js';
 
 /**
  * Amtliche Warnungen als eigene Verbindung – strikt getrennt vom eigenen Warnentwurf (MoWaS-Übergabe).
@@ -229,6 +230,7 @@ export async function refreshWarnfeed(c: Connection) {
       await pool.query(`UPDATE official_warnings SET superseded_by = $2 WHERE id = $1 AND superseded_by IS NULL`, [row.id, later.id]);
       continue;
     }
+    await emitOfficialWarning(c, row, area, warningSource(w));
     if (area && w.msgType !== 'Cancel') {
       await notify({ kind: 'warning', title: `Amtliche Warnung: ${w.headline || w.event}`.slice(0, 200), body: w.areas.slice(0, 3).join(', '), link: '/verbindungen', permission: 'post.read' });
       if (autoBannerAllowed(c)) await createBanner(c, row);

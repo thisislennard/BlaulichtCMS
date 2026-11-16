@@ -39,7 +39,8 @@ export type SecurityEvent =
   | 'master_key_rotated'
   | 'update_settings'
   | 'update_install'
-  | 'update_rolled_back';
+  | 'update_rolled_back'
+  | 'automation_direct_publish';
 
 const throttle = new Map<string, number>();
 

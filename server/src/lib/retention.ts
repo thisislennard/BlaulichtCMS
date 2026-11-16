@@ -327,6 +327,17 @@ export async function runRetention(opts: { dryRun: boolean; actor?: Actor; setti
     linkCat.count += q!.n;
   }
   report.categories.push(linkCat);
+  // Laufprotokolle der Automationen (Eingangsdaten, Schritte, Freigaben) – offene Läufe bleiben
+  report.categories.push(
+    await simpleCategory(opts.dryRun, {
+      key: 'automation_runs',
+      label: 'Laufprotokolle der Automationen (Eingangsdaten, Schritte, Freigaben)',
+      days: days(s['privacy.automation_run_days']),
+      table: 'automation_runs',
+      where: `status NOT IN ('queued','running','waiting') AND COALESCE(finished_at, created_at) < now() - make_interval(days => $1)`,
+    }),
+  );
+  if (!opts.dryRun) await pool.query(`DELETE FROM automation_dedup WHERE expires_at < now() - interval '1 day'`);
 
   if (!opts.dryRun) {
     const total = report.categories.reduce((n, c) => n + c.count, 0);
