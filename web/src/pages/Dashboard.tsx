@@ -1,36 +1,30 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { Link, useSearchParams } from 'react-router';
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { get, put } from '../api/client';
-import { Button, Card, cx, EmptyState, ErrorBox, Notice, PageHeader, Rev, Select, SkeletonRows, StatusBadge } from '../components/ui/core';
-import { Icon } from '../components/ui/Icon';
-import { useErrorToast, useToast } from '../components/ui/overlays';
+import { Button, EmptyState, ErrorBox, Notice, PageHeader, SkeletonRows } from '../components/ui/core';
+import { UnsavedChangesGuard, useErrorToast, useToast } from '../components/ui/overlays';
 import { useAuth } from '../lib/auth';
-import { fmtDateTime, fmtRelative, fmtTime } from '../lib/format';
+import { fmtTime } from '../lib/format';
 import { useLive } from '../lib/live';
 import { NewCollectionDialog } from './media/Collections';
 import { NewPostDialog } from './posts/Posts';
-import { safeHref } from '../lib/url';
+import { columnStyle, fromEdit, isPanel, sameLayout, toEdit, type EditLayout, type Layout, type LayoutResponse } from './dashboard/model';
+import { BadgeTile, PanelTile } from './dashboard/widgets';
 
-type WidgetId = 'approvals' | 'ready' | 'publications' | 'uploads' | 'media' | 'sites' | 'banners' | 'rss';
-type Size = 's' | 'm' | 'l';
-interface Layout {
-  desktop: { id: WidgetId; size: Size }[];
-  mobile: WidgetId[];
-}
+// Bearbeitungsmodus (Drag-and-drop) erst laden, wenn „Anpassen“ gewählt wird – hält die Startseite schlank
+const loadEditor = () => import('./dashboard/Editor');
+const DashboardEditor = lazy(loadEditor);
 
-const TITLES: Record<WidgetId, string> = {
-  media: 'Redaktionsfluss',
-  approvals: 'Offene Freigaben',
-  ready: 'Bereit zur Veröffentlichung',
-  publications: 'Veröffentlichungen',
-  uploads: 'Neue Uploads',
-  sites: 'Websites',
-  banners: 'Aktive Banner',
-  rss: 'Quellen (RSS)',
-};
-const SPAN: Record<Size, string> = { s: 'lg:col-span-4 md:col-span-6', m: 'lg:col-span-6 md:col-span-6', l: 'col-span-12' };
-const SIZE_LABEL: Record<Size, string> = { s: 'Klein', m: 'Mittel', l: 'Breit' };
+/** Eingebaute Rollen als Rückfall, falls die Rollenliste nicht abrufbar ist (Recht „Benutzer ansehen“ fehlt). */
+const BUILTIN_ROLES = [
+  { id: 'platform_admin', label: 'Administration' },
+  { id: 'editor', label: 'Redaktion' },
+  { id: 'media_manager', label: 'Medienverwaltung' },
+  { id: 'approver', label: 'Freigabe' },
+  { id: 'publisher', label: 'Veröffentlichung' },
+  { id: 'viewer', label: 'Lesezugriff' },
+];
 
 function useIsMobile() {
   const [m, setM] = useState(() => window.matchMedia('(max-width: 767px)').matches);
@@ -41,270 +35,6 @@ function useIsMobile() {
     return () => mq.removeEventListener('change', fn);
   }, []);
   return m;
-}
-
-function List({ children }: { children: ReactNode }) {
-  return <ul className="m-0 p-0 list-none flex flex-col divide-y divide-line">{children}</ul>;
-}
-
-/** Inhalt eines Widgets – rein darstellend, Daten kommen vom bestätigten Stand des Servers. */
-function WidgetBody({ id, d }: { id: WidgetId; d: any }) {
-  switch (id) {
-    case 'media':
-      return <FlowBoard d={d} />;
-    case 'approvals':
-      return !d.pendingApprovals?.length ? (
-        <EmptyState icon="CheckCircle2" title="Nichts offen" />
-      ) : (
-        <List>
-          {d.pendingApprovals.map((p: any) => (
-            <li key={p.id} className="py-2.5 flex items-center gap-3">
-              <div className="min-w-0 flex-1">
-                <Link to={`/beitraege/${p.id}`} className="font-medium truncate block">
-                  {p.title}
-                </Link>
-                <div className="text-meta text-fg-muted">
-                  <Rev n={p.number} /> · eingereicht {fmtRelative(p.submitted_at)}
-                  {p.submitted_by_name ? ` von ${p.submitted_by_name}` : ''}
-                </div>
-              </div>
-              <StatusBadge status="in_review" />
-            </li>
-          ))}
-        </List>
-      );
-    case 'ready':
-      return !d.readyToPublish?.length ? (
-        <EmptyState icon="Globe" title="Nichts wartet" />
-      ) : (
-        <List>
-          {d.readyToPublish.map((p: any) => (
-            <li key={p.id} className="py-2.5 flex items-center gap-2">
-              <Link to={`/beitraege/${p.id}`} className="font-medium flex-1 truncate">
-                {p.title}
-              </Link>
-              <span className="text-meta text-fg-muted">{p.site_id ? 'mit Zielkanal' : 'intern'}</span>
-            </li>
-          ))}
-        </List>
-      );
-    case 'publications':
-      return !d.publications?.length ? (
-        <EmptyState icon="Globe" title="Noch keine Veröffentlichung" />
-      ) : (
-        <List>
-          {d.publications.map((p: any) => (
-            <li key={p.id} className="py-2.5 flex flex-col gap-1">
-              <div className="flex items-center gap-2 flex-wrap">
-                <StatusBadge status={p.status} labels={p.action === 'unpublish' ? { published: 'Zurückgezogen' } : undefined} />
-                <Link to={`/beitraege/${p.post_id}`} className="font-medium">
-                  {p.title}
-                </Link>
-                <span className="text-meta text-fg-muted">
-                  {p.site_name} · <Rev n={p.revision_number} />
-                </span>
-              </div>
-              {p.remote_url && p.action !== 'unpublish' && (
-                <a href={safeHref(p.remote_url)} target="_blank" rel="noopener noreferrer" className="text-sm break-all">
-                  {p.remote_url}
-                </a>
-              )}
-              {p.error && <div className="text-sm text-err">{p.error}</div>}
-              <div className="text-meta text-fg-muted">{p.result_at ? `bestätigt ${fmtDateTime(p.result_at)}` : `beauftragt ${fmtRelative(p.created_at)}`}</div>
-            </li>
-          ))}
-        </List>
-      );
-    case 'uploads':
-      return !d.recentCollections?.length ? (
-        <EmptyState icon="Images" title="Keine neuen Uploads" />
-      ) : (
-        <List>
-          {d.recentCollections.map((c: any) => (
-            <li key={c.id} className="py-2.5 flex items-center gap-3">
-              <Icon name="Images" size={16} className="text-fg-muted" />
-              <Link to={`/medien/${c.id}`} className="font-medium flex-1 truncate">
-                {c.title}
-              </Link>
-              <span className="text-meta text-fg-muted">
-                {c.uploads} · {fmtRelative(c.last_upload)}
-              </span>
-            </li>
-          ))}
-        </List>
-      );
-    case 'sites':
-      return !d.sites?.length ? (
-        <EmptyState icon="Globe" title="Keine Website gekoppelt" text="Der interne Ablauf funktioniert auch ohne Website." />
-      ) : (
-        <ul className="m-0 p-0 list-none flex flex-col gap-2 text-sm">
-          {d.sites.map((s: any) => (
-            <li key={s.id} className="flex items-center gap-2 flex-wrap">
-              <StatusBadge status={s.status} labels={{ pending: 'Wartet auf Kopplung' }} />
-              <span className="font-medium">{s.name}</span>
-              <span className="text-fg-muted">{s.last_seen_at ? `zuletzt ${fmtRelative(s.last_seen_at)}` : 'noch nicht gemeldet'}</span>
-            </li>
-          ))}
-        </ul>
-      );
-    case 'banners':
-      return !d.banners?.length ? (
-        <EmptyState icon="Megaphone" title="Kein Banner aktiv" />
-      ) : (
-        <List>
-          {d.banners.map((b: any) => (
-            <li key={b.id} className="py-2.5 flex items-center gap-2">
-              <span className={cx('w-2 h-2 rounded-full shrink-0', b.tone === 'danger' ? 'bg-err' : b.tone === 'warning' ? 'bg-warn' : 'bg-primary')} aria-hidden="true" />
-              <Link to="/banner" className="font-medium flex-1 truncate">
-                {b.title}
-              </Link>
-              <span className="text-meta text-fg-muted">bis {fmtTime(b.ends_at)}</span>
-            </li>
-          ))}
-        </List>
-      );
-    case 'rss':
-      return !d.rss?.length ? (
-        <EmptyState icon="Newspaper" title="Keine Einträge" text="Quellen lassen sich unter „Quellen“ hinzufügen." />
-      ) : (
-        <List>
-          {d.rss.map((i: any) => (
-            <li key={i.id} className="py-2 flex flex-col">
-              <a href={safeHref(i.link)} target="_blank" rel="noopener noreferrer" className="font-medium">
-                {i.starred_at && <Icon name="Sparkles" size={12} className="inline mr-1 text-warn" />}
-                {i.title}
-              </a>
-              <span className="text-meta text-fg-muted">
-                {i.feed_title} · {i.published_at ? fmtRelative(i.published_at) : ''}
-              </span>
-            </li>
-          ))}
-        </List>
-      );
-  }
-}
-
-
-/* ------------------------------ Redaktionsfluss (Leitstand) ------------------------------ */
-
-function FlowColumn({ title, count, hot, children }: { title: string; count: number; hot?: boolean; children?: ReactNode }) {
-  return (
-    <div className="flex-1 min-w-[180px] flex flex-col gap-2">
-      <div className="flex items-baseline justify-between px-0.5 pb-1">
-        <span className="text-sm font-semibold">{title}</span>
-        <span className={cx('font-mono text-[20px] font-medium tabular', hot && count > 0 ? 'text-primary' : 'text-fg-muted')}>{count}</span>
-      </div>
-      {children}
-    </div>
-  );
-}
-
-function FlowCard({ to, title, meta, sub, hot, cta, children }: { to: string; title: string; meta?: ReactNode; sub?: ReactNode; hot?: boolean; cta?: string; children?: ReactNode }) {
-  return (
-    <Link to={to} className={cx('flex flex-col gap-1.5 p-3.5 rounded-card bg-card border !text-fg transition-shadow duration-fast', hot ? 'border-primary shadow-selected' : 'border-line hover:shadow-ring')}>
-      {hot && <span className="font-mono text-[11px] font-medium tracking-[0.06em] text-primary">DU BIST DRAN</span>}
-      <span className="text-sm font-semibold leading-snug">{title}</span>
-      {meta && <span className="font-mono text-[11.5px] text-fg-muted">{meta}</span>}
-      {sub && <span className="text-meta text-fg-muted">{sub}</span>}
-      {children}
-      {cta && <span className={cx('mt-1 inline-flex items-center justify-center gap-1.5 h-8 rounded-control text-sm font-semibold', hot ? 'bg-primary-solid text-on-primary' : 'bg-card border border-line text-fg')}>{cta} →</span>}
-    </Link>
-  );
-}
-
-function More({ to, n }: { to: string; n: number }) {
-  if (n <= 0) return null;
-  return (
-    <Link to={to} className="px-3 py-2 text-center text-meta !text-fg-muted hover:!text-fg border border-dashed border-line rounded-card">
-      + {n} weitere
-    </Link>
-  );
-}
-
-/** Der Weg eines Beitrags als Spalten: Eingang → Sichtung → Freigabe → Bereit → Veröffentlicht. */
-function FlowBoard({ d }: { d: any }) {
-  const { can } = useAuth();
-  const MAX = 3;
-  const approvals: any[] = d.pendingApprovals ?? [];
-  const ready: any[] = d.readyToPublish ?? [];
-  const pubs: any[] = d.publications ?? [];
-  const cols = d.recentCollections ?? [];
-  return (
-    <section aria-label="Redaktionsfluss" className="flex flex-col gap-4">
-      <div className="flex items-baseline justify-between gap-3 pb-2.5 border-b border-fg">
-        <h3 className="m-0 font-mono text-[12px] font-medium uppercase tracking-[0.08em]">
-          <span className="text-fg-muted">01 —</span> Redaktionsfluss
-        </h3>
-        <Link to="/beitraege" className="text-sm !text-fg-muted hover:!text-fg">
-          Alle Beiträge →
-        </Link>
-      </div>
-      <div className="overflow-x-auto -mx-1 px-1 pb-1">
-        <div className="flex gap-3 min-w-[920px]">
-          {d.media && (
-            <FlowColumn title="Eingang" count={d.media.last_24h}>
-              {cols.slice(0, 2).map((c: any) => (
-                <FlowCard key={c.id} to={`/medien/${c.id}`} title={c.title} meta={`${c.uploads} Uploads`} sub={c.last_upload ? fmtRelative(c.last_upload) : undefined} />
-              ))}
-              {!cols.length && <p className="m-0 px-0.5 text-meta text-fg-muted">Keine neuen Uploads in 24 Std.</p>}
-            </FlowColumn>
-          )}
-          {d.media && (
-            <FlowColumn title="Sichtung" count={d.media.unreviewed} hot={can('media.manage')}>
-              {d.media.unreviewed > 0 ? (
-                <FlowCard to="/medien" title={`${d.media.unreviewed} ${d.media.unreviewed === 1 ? 'Datei' : 'Dateien'} offen`} meta={d.media.quarantine ? `${d.media.quarantine} in Prüfung` : 'geprüft, ohne Standort'} hot={can('media.manage')} cta={can('media.manage') ? 'Sichten' : undefined} />
-              ) : (
-                <p className="m-0 px-0.5 text-meta text-fg-muted">Alles gesichtet.</p>
-              )}
-            </FlowColumn>
-          )}
-          {d.pendingApprovals && (
-            <FlowColumn title="Freigabe" count={approvals.length} hot>
-              {approvals.slice(0, MAX).map((p: any) => (
-                <FlowCard
-                  key={p.id}
-                  to={`/beitraege/${p.id}`}
-                  title={p.title}
-                  meta={`F${p.number} · eingereicht ${fmtTime(p.submitted_at)}`}
-                  sub={p.submitted_by_name ? `von ${p.submitted_by_name}` : undefined}
-                  hot={can('post.approve')}
-                  cta={can('post.approve') ? 'Prüfen' : undefined}
-                />
-              ))}
-              <More to="/freigaben" n={approvals.length - MAX} />
-              {!approvals.length && <p className="m-0 px-0.5 text-meta text-fg-muted">Nichts offen.</p>}
-            </FlowColumn>
-          )}
-          {d.readyToPublish && (
-            <FlowColumn title="Bereit" count={ready.length}>
-              {ready.slice(0, MAX).map((p: any) => (
-                <FlowCard key={p.id} to={`/beitraege/${p.id}`} title={p.title} meta="freigegeben" sub={p.site_id ? 'mit Zielkanal' : 'intern'} />
-              ))}
-              <More to="/freigaben" n={ready.length - MAX} />
-              {!ready.length && <p className="m-0 px-0.5 text-meta text-fg-muted">Nichts wartet.</p>}
-            </FlowColumn>
-          )}
-          {d.publications && (
-            <FlowColumn title="Veröffentlicht" count={pubs.length}>
-              {pubs.slice(0, 2).map((p: any) => (
-                <FlowCard key={p.id} to={`/beitraege/${p.post_id}`} title={p.title} meta={`F${p.revision_number} · ${p.result_at ? fmtTime(p.result_at) : fmtRelative(p.created_at)}`} sub={p.site_name}>
-                  {p.status === 'published' && p.remote_url ? (
-                    <span className="flex items-center gap-1.5 text-meta text-ok">
-                      <Icon name="Check" size={13} strokeWidth={2.2} /> URL bestätigt
-                    </span>
-                  ) : (
-                    <StatusBadge status={p.status} className="self-start" />
-                  )}
-                </FlowCard>
-              ))}
-              <More to="/kanaele" n={pubs.length - 2} />
-              {!pubs.length && <p className="m-0 px-0.5 text-meta text-fg-muted">Noch nichts veröffentlicht.</p>}
-            </FlowColumn>
-          )}
-        </div>
-      </div>
-    </section>
-  );
 }
 
 function greeting(name?: string) {
@@ -324,23 +54,64 @@ function summary(d: any, canApprove: boolean) {
   return s.charAt(0).toUpperCase() + s.slice(1) + '.';
 }
 
-const LINKS: Partial<Record<WidgetId, [string, string]>> = { approvals: ['/freigaben', 'Alle'], sites: ['/kanaele', 'Verwalten'], banners: ['/banner', 'Alle'], rss: ['/quellen', 'Alle'], uploads: ['/medien', 'Alle'] };
+/** Anzeige ohne Bearbeitung: Kennzahlen oben, darunter die Spalten (am Handy die eigene Reihenfolge untereinander). */
+function DashboardView({ layout, available, d, mobile }: { layout: Layout; available: string[]; d: any; mobile: boolean }) {
+  const badges = layout.badges.filter((id) => available.includes(id));
+  const columns = layout.columns.map((c) => ({ weight: c.weight, widgets: c.widgets.filter((id) => available.includes(id)) })).filter((c) => c.widgets.length);
+  const mobileList = layout.mobile.filter((id) => available.includes(id) && isPanel(id));
+  const empty = mobile ? !mobileList.length : !columns.length;
+  return (
+    <>
+      {badges.length > 0 && (
+        <section aria-label="Kennzahlen" className="grid grid-cols-2 sm:flex sm:flex-wrap gap-3">
+          {badges.map((id) => (
+            <BadgeTile key={id} id={id} d={d} className="sm:flex-1 sm:min-w-[150px]" />
+          ))}
+        </section>
+      )}
+      {mobile ? (
+        <div className="flex flex-col gap-5">
+          {mobileList.map((id) => (
+            <div key={id} data-dash-tile={id} className="min-w-0">
+              <PanelTile id={id} d={d} />
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="flex flex-wrap items-start gap-5">
+          {columns.map((c, i) => (
+            <div key={i} data-dash-view-column={c.weight} style={columnStyle(c.weight)} className="flex flex-col gap-5 min-w-0">
+              {c.widgets.map((id) => (
+                <div key={id} data-dash-tile={id} className="min-w-0">
+                  <PanelTile id={id} d={d} />
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+      )}
+      {empty && !badges.length && <EmptyState icon="LayoutDashboard" title="Keine Widgets" text="Über „Anpassen“ Widgets hinzufügen." />}
+    </>
+  );
+}
 
 export default function Dashboard() {
-  const { me, can, isPlatformAdmin } = useAuth();
+  const { me, can } = useAuth();
   const qc = useQueryClient();
   const toast = useToast();
   const toastError = useErrorToast();
   const live = useLive();
   const isMobile = useIsMobile();
+  const canTemplates = can('system.manage');
   const q = useQuery({ queryKey: ['dashboard'], queryFn: () => get<any>('/dashboard'), refetchInterval: live === 'live' ? 120_000 : 15_000, refetchOnWindowFocus: true });
-  const lq = useQuery({ queryKey: ['dashboard-layout'], queryFn: () => get<{ layout: Layout; source: string; widgets: WidgetId[] }>('/dashboard/layout') });
+  const lq = useQuery({ queryKey: ['dashboard-layout'], queryFn: () => get<LayoutResponse>('/dashboard/layout') });
   const [newPost, setNewPost] = useState(false);
   const [newCollection, setNewCollection] = useState(false);
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState<Layout | null>(null);
-  const [dragIdx, setDragIdx] = useState<number | null>(null);
-  const [shareTarget, setShareTarget] = useState('');
+  // Arbeitskopie: beim Einstieg aus dem gespeicherten Stand erzeugt; „Abbrechen“ verwirft sie und zeigt wieder exakt den alten Stand
+  const [draft, setDraft] = useState<EditLayout | null>(null);
+  const [busy, setBusy] = useState(false);
+  const editing = !!draft;
+  const rq = useQuery({ queryKey: ['roles'], queryFn: () => get<{ roles: { id: string; label: string }[] }>('/roles'), enabled: editing && canTemplates && can('user.read'), staleTime: 60_000 });
   const first = me?.user.name.split(' ')[0];
 
   // Schnellzugriffe der installierten App: /?aktion=beitrag bzw. /?aktion=medien
@@ -353,39 +124,31 @@ export default function Dashboard() {
   }, [sp, setSp, can]);
 
   const available = lq.data?.widgets ?? [];
-  const layout: Layout | null = draft ?? lq.data?.layout ?? null;
-  const visible = useMemo(() => {
-    if (!layout) return [];
-    if (isMobile && !editing) return layout.mobile.filter((id) => available.includes(id)).map((id) => ({ id, size: 'l' as Size }));
-    return layout.desktop.filter((w) => available.includes(w.id));
-  }, [layout, isMobile, editing, available]);
+  const saved = lq.data?.layout ?? null;
+  const dirty = useMemo(() => !!draft && !!saved && !sameLayout(fromEdit(draft), saved), [draft, saved]);
+  const d = q.data ?? {};
 
   const startEdit = () => {
-    setDraft(structuredClone(lq.data!.layout));
-    setEditing(true);
+    if (!saved) return;
+    void loadEditor();
+    setDraft(toEdit(saved));
   };
-  const update = (fn: (l: Layout) => Layout) => setDraft((l) => (l ? fn(structuredClone(l)) : l));
-  const move = (from: number, to: number) =>
-    update((l) => {
-      const [w] = l.desktop.splice(from, 1);
-      l.desktop.splice(Math.max(0, Math.min(l.desktop.length, to)), 0, w);
-      return l;
-    });
-  const save = async (scope: 'personal' | 'role' | 'all', role?: string, layoutValue: Layout | null = draft) => {
+  const save = async (scope: 'personal' | 'role' | 'all', role: string | undefined, layout: Layout | null) => {
+    setBusy(true);
     try {
-      await put('/dashboard/layout', { scope, role, layout: layoutValue });
-      toast({ tone: 'success', title: scope === 'personal' ? (layoutValue ? 'Dashboard gespeichert' : 'Auf Vorlage zurückgesetzt') : 'Vorlage gespeichert' });
+      await put('/dashboard/layout', { scope, role, layout });
+      toast({ tone: 'success', title: scope === 'personal' ? (layout ? 'Dashboard gespeichert' : 'Auf Vorlage zurückgesetzt') : layout ? 'Vorlage gespeichert' : 'Vorlage entfernt' });
       await qc.invalidateQueries({ queryKey: ['dashboard-layout'] });
-      if (scope === 'personal') {
-        setEditing(false);
-        setDraft(null);
-      }
+      if (scope === 'personal') setDraft(null);
     } catch (e) {
       toastError(e);
+    } finally {
+      setBusy(false);
     }
   };
-  const d = q.data ?? {};
-  const hidden = available.filter((id) => !layout?.desktop.some((w) => w.id === id));
+  const saveTemplate = (target: string, layout: Layout | null) => save(target === '*' ? 'all' : 'role', target === '*' ? undefined : target, layout);
+
+  const view = q.data && saved ? <DashboardView layout={saved} available={available} d={d} mobile={isMobile} /> : null;
 
   return (
     <div className="flex flex-col gap-6">
@@ -410,7 +173,7 @@ export default function Dashboard() {
                   Neuer Beitrag
                 </Button>
               )}
-              {lq.data && (
+              {saved && (
                 <Button icon="LayoutDashboard" onClick={startEdit} aria-label="Dashboard anpassen">
                   <span className="hidden sm:inline">Anpassen</span>
                 </Button>
@@ -418,9 +181,15 @@ export default function Dashboard() {
             </>
           ) : (
             <>
-              <Button onClick={() => (setEditing(false), setDraft(null))}>Abbrechen</Button>
-              {lq.data?.source === 'personal' && <Button onClick={() => save('personal', undefined, null)}>Auf Vorlage zurücksetzen</Button>}
-              <Button variant="primary" icon="Save" onClick={() => save('personal')}>
+              <Button disabled={busy} onClick={() => setDraft(null)}>
+                Abbrechen
+              </Button>
+              {lq.data?.source === 'personal' && (
+                <Button disabled={busy} icon="RotateCcw" onClick={() => save('personal', undefined, null)}>
+                  Auf Vorlage zurücksetzen
+                </Button>
+              )}
+              <Button variant="primary" icon="Save" loading={busy} onClick={() => draft && save('personal', undefined, fromEdit(draft))}>
                 Für mich speichern
               </Button>
             </>
@@ -428,105 +197,24 @@ export default function Dashboard() {
         }
       />
       {live === 'reconnecting' && <Notice tone="warning">Verbindung unterbrochen. Angezeigt wird der zuletzt bestätigte Stand; nach der Wiederverbindung wird neu geladen.</Notice>}
-      {editing && draft && (
-        <Card title="Dashboard anpassen" subtitle="Widgets ziehen, Größe wählen und festlegen, was auf dem Handy erscheint.">
-          <div className="flex flex-col gap-4 text-sm">
-            {hidden.length > 0 && (
-              <div className="flex flex-wrap gap-2 items-center">
-                <span className="text-fg-muted">Hinzufügen:</span>
-                {hidden.map((id) => (
-                  <Button key={id} size="sm" icon="Plus" onClick={() => update((l) => (l.desktop.push({ id, size: 'm' }), l))}>
-                    {TITLES[id]}
-                  </Button>
-                ))}
-              </div>
-            )}
-            <div className="flex flex-col gap-1">
-              <span className="font-medium">Reihenfolge auf dem Handy</span>
-              <ol className="m-0 pl-5 flex flex-col gap-1">
-                {draft.mobile.filter((id) => available.includes(id)).map((id, i) => (
-                  <li key={id} className="flex items-center gap-2">
-                    <span className="flex-1">{TITLES[id]}</span>
-                    <Button size="sm" iconOnly icon="ArrowUp" aria-label={`${TITLES[id]} nach oben`} disabled={i === 0} onClick={() => update((l) => (([l.mobile[i - 1], l.mobile[i]] = [l.mobile[i], l.mobile[i - 1]]), l))} />
-                    <Button size="sm" iconOnly icon="ArrowDown" aria-label={`${TITLES[id]} nach unten`} disabled={i === draft.mobile.length - 1} onClick={() => update((l) => (([l.mobile[i + 1], l.mobile[i]] = [l.mobile[i], l.mobile[i + 1]]), l))} />
-                  </li>
-                ))}
-              </ol>
-            </div>
-            {isPlatformAdmin && (
-              <div className="flex flex-wrap gap-2 items-center border-t border-line pt-3">
-                <span className="text-fg-muted">Als gemeinsame Vorlage speichern für</span>
-                <Select value={shareTarget} onChange={(e) => setShareTarget(e.target.value)} className="max-w-[220px]" aria-label="Vorlage für">
-                  <option value="">– wählen –</option>
-                  <option value="*">alle</option>
-                  <option value="editor">Redaktion</option>
-                  <option value="media_manager">Medienverwaltung</option>
-                  <option value="approver">Freigabe</option>
-                  <option value="publisher">Veröffentlichung</option>
-                  <option value="viewer">Lesezugriff</option>
-                  <option value="platform_admin">Administration</option>
-                </Select>
-                <Button size="sm" disabled={!shareTarget} onClick={() => save(shareTarget === '*' ? 'all' : 'role', shareTarget === '*' ? undefined : shareTarget)}>
-                  Vorlage speichern
-                </Button>
-              </div>
-            )}
-          </div>
-        </Card>
-      )}
       {(q.isLoading || lq.isLoading) && <SkeletonRows rows={6} />}
       {q.error && <ErrorBox title="Dashboard konnte nicht geladen werden">{(q.error as Error).message}</ErrorBox>}
-      {q.data && layout && (
-        <div className="grid grid-cols-12 gap-5">
-          {visible.map((w, i) => {
-            const link = LINKS[w.id];
-            const body = <WidgetBody id={w.id} d={d} />;
-            return (
-              <section
-                key={w.id}
-                aria-label={TITLES[w.id]}
-                className={cx('col-span-12', SPAN[w.size], editing && 'outline-dashed outline-2 outline-line rounded-card', dragIdx === i && 'opacity-50')}
-                draggable={editing}
-                onDragStart={() => setDragIdx(i)}
-                onDragOver={(e) => editing && dragIdx !== null && dragIdx !== i && e.preventDefault()}
-                onDrop={(e) => (e.preventDefault(), dragIdx !== null && move(dragIdx, i), setDragIdx(null))}
-                onDragEnd={() => setDragIdx(null)}
-              >
-                {editing && (
-                  <div className="flex flex-wrap items-center gap-1.5 p-2 text-sm cursor-grab">
-                    <Icon name="Menu" size={14} className="text-fg-muted" />
-                    <span className="font-medium flex-1">{TITLES[w.id]}</span>
-                    {(['s', 'm', 'l'] as Size[]).map((s) => (
-                      <Button key={s} size="sm" variant={w.size === s ? 'primary' : 'secondary'} aria-pressed={w.size === s} onClick={() => update((l) => ((l.desktop[i].size = s), l))}>
-                        {SIZE_LABEL[s]}
-                      </Button>
-                    ))}
-                    <label className="flex items-center gap-1 ml-1">
-                      <input
-                        type="checkbox"
-                        checked={draft!.mobile.includes(w.id)}
-                        onChange={(e) => update((l) => ((l.mobile = e.target.checked ? [...l.mobile, w.id] : l.mobile.filter((x) => x !== w.id)), l))}
-                      />
-                      Handy
-                    </label>
-                    <Button size="sm" iconOnly icon="ArrowUp" aria-label="Nach vorne" disabled={i === 0} onClick={() => move(i, i - 1)} />
-                    <Button size="sm" iconOnly icon="ArrowDown" aria-label="Nach hinten" disabled={i === visible.length - 1} onClick={() => move(i, i + 1)} />
-                    <Button size="sm" iconOnly icon="X" aria-label={`${TITLES[w.id]} ausblenden`} onClick={() => update((l) => ((l.desktop = l.desktop.filter((x) => x.id !== w.id)), (l.mobile = l.mobile.filter((x) => x !== w.id)), l))} />
-                  </div>
-                )}
-                {w.id === 'media' ? (
-                  body
-                ) : (
-                  <Card className="h-full" title={TITLES[w.id]} action={link && !editing ? <Link to={link[0]} className="text-sm">{link[1]}</Link> : undefined}>
-                    {body}
-                  </Card>
-                )}
-              </section>
-            );
-          })}
-          {!visible.length && <div className="col-span-12"><EmptyState icon="LayoutDashboard" title="Keine Widgets" text="Über „Anpassen“ Widgets hinzufügen." /></div>}
-        </div>
+      {lq.error && <ErrorBox title="Dashboard-Layout konnte nicht geladen werden">{(lq.error as Error).message}</ErrorBox>}
+      {draft && q.data ? (
+        // Bis der Bearbeitungsmodus geladen ist, bleibt die normale Ansicht stehen (kein Springen)
+        <Suspense fallback={view}>
+          <DashboardEditor
+            draft={draft}
+            onChange={(fn) => setDraft((l) => (l ? fn(l) : l))}
+            available={available}
+            d={d}
+            templates={canTemplates ? { roles: rq.data?.roles ?? BUILTIN_ROLES, existing: lq.data?.templates ?? [], busy, onSave: (t) => saveTemplate(t, fromEdit(draft)), onRemove: (t) => saveTemplate(t, null) } : undefined}
+          />
+        </Suspense>
+      ) : (
+        view
       )}
+      <UnsavedChangesGuard when={dirty} text="Die Änderungen am Dashboard sind noch nicht gespeichert und gehen verloren." />
       {newPost && <NewPostDialog onClose={() => setNewPost(false)} />}
       {newCollection && <NewCollectionDialog open onClose={() => setNewCollection(false)} />}
     </div>

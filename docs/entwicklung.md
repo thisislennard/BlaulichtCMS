@@ -35,6 +35,7 @@ startet PostgreSQL) ist für den Container gedacht, funktioniert aber auch lokal
 | Typprüfung | `npm run typecheck` | Server und Oberfläche |
 | Unit + Integration | `TEST_DATABASE_URL=… npm test` | 90 Tests: Rechte, Krypto, SSRF, Fassungen, Upload, Warnentwürfe, Verbindungen, Import, Sicherheit – braucht ffmpeg und pdftotext |
 | Fokus-Test | `node test/e2e/focus-check.mjs` | Tippen in alle Textfelder und Dialoge ohne Fokusverlust (laufende Instanz nötig) |
+| Dashboard anpassen | `node test/e2e/dashboard-dnd.mjs` | Verschieben mit Maus, Finger (Touch-Emulation) und Tastatur, Abbrechen, Speichern, Vorlagen (Instanz mit den Testdaten des Fokus-Tests nötig) |
 | Abnahme M1 | `node test/e2e/m1-flow.mjs` | 34 Schritte über Container, Browser (Desktop + Handy) und WordPress inkl. Sicherung/Wiederherstellung |
 
 > [!WARNING]
@@ -79,6 +80,18 @@ BLAULICHTCMS_URL=http://localhost:7310 SETUP_TOKEN_FILE=<Datenverzeichnis>/setup
 `SETUP_TOKEN=…` statt der Datei geht auch. `FOCUS_ONLY=<RegExp>` beschränkt auf passende Seiten, `FOCUS_REUSE=1`
 wiederholt den Test gegen dieselbe Instanz mit den Testdaten des letzten Laufs (`test/e2e/out/focus-state.json`),
 `FOCUS_DEBUG=1` protokolliert jeden Klick, `CHROMIUM_PATH` wählt ein vorhandenes Chromium. Ergebnis: `test/e2e/out/focus-report.json`, Exit-Code 1 bei Fehlern.
+
+## Dashboard anpassen (Drag-and-drop)
+
+`test/e2e/dashboard-dnd.mjs` läuft gegen dieselbe Instanz **nach** dem Fokus-Test (er meldet sich mit dessen Testdaten
+aus `test/e2e/out/focus-state.json` an). Er verschiebt Kacheln, Kennzahlen und Spalten mit der Maus, mit echten
+Touch-Ereignissen (Tablet und Handy) und mit der Tastatur, prüft „Abbrechen“ (exakt der alte Stand), Escape,
+Spaltenbreite, Hinzufügen/Löschen von Spalten, Speichern in einem Aufruf, Vorlagen und dass nichts waagerecht überläuft.
+
+```bash
+BLAULICHTCMS_URL=http://localhost:7310 node test/e2e/dashboard-dnd.mjs
+DND_SHOTS=/pfad/fuer/bilder BLAULICHTCMS_URL=… node test/e2e/dashboard-dnd.mjs   # zusätzlich Bildschirmfotos (hell, dunkel, Handy)
+```
 
 ## Image hinter einem TLS-Proxy bauen
 

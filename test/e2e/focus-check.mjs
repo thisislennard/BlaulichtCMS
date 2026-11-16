@@ -486,6 +486,59 @@ try {
     }
   }
 
+  // Dashboard anpassen: Auswahlfelder (Spaltenbreite, Vorlagenziel) und Griffe zum Verschieben behalten Fokus und Wert,
+  // auch wenn Live-Ereignisse eintreffen und alle Abfragen neu geladen werden. Gespeichert wird nichts (Abbrechen).
+  if (!ONLY || ONLY.test('dashboard-anpassen')) {
+    const where = '/ › Dashboard anpassen';
+    console.log(`▶ ${where}`);
+    await gotoRoute(page, '/');
+    try {
+      await page.getByRole('button', { name: 'Dashboard anpassen' }).click({ timeout: 5000 });
+      await page.locator('[data-dash-columns]').waitFor({ timeout: 8000 });
+      await checkFields(page, where, null, new Set());
+      const refetch = () =>
+        page.evaluate(() => {
+          window.dispatchEvent(new Event('offline'));
+          window.dispatchEvent(new Event('online'));
+        });
+      const stillFocused = async (loc, field, type, value) => {
+        await refetch();
+        await sleep(2500); // mindestens ein Live-Ereignis (alle 2 s) und die Neuabfrage abwarten
+        const res = await loc.evaluate((el) => ({ connected: el.isConnected, focused: document.activeElement === el, value: el.value })).catch(() => ({ connected: false, focused: false, value: '' }));
+        tested.push({ where, field, type });
+        const problem = !res.connected ? 'Feld neu erzeugt' : !res.focused ? 'Fokus verloren' : value !== undefined && res.value !== value ? `Auswahl zurückgesetzt („${res.value}“)` : null;
+        if (problem) {
+          failures.push({ where, field, type, problem });
+          console.log(`  ✘ ${where} › ${field}: ${problem}`);
+        }
+      };
+      for (const [field, loc, value] of [
+        ['Breite von Spalte 1', page.getByLabel('Breite von Spalte 1'), '2'],
+        ['Als Vorlage speichern für', page.locator('#dash-template-target'), '*'],
+      ]) {
+        await loc.scrollIntoViewIfNeeded({ timeout: 2000 });
+        await loc.focus();
+        await loc.selectOption(value);
+        await stillFocused(loc, field, 'select', value);
+      }
+      for (const name of [/^Kennzahl „.*“ verschieben$/, /^Kachel „.*“ verschieben$/, /^Spalte 1 verschieben$/]) {
+        const handle = page.getByRole('button', { name }).first();
+        await handle.focus();
+        await stillFocused(handle, `Griff ${name.source}`, 'griff');
+      }
+      // Neue Spalte: ihr Auswahlfeld erscheint und ist sofort bedienbar
+      await page.getByRole('button', { name: 'Spalte hinzufügen' }).click();
+      const added = page.getByLabel('Breite von Spalte 3');
+      await added.focus({ timeout: 3000 });
+      await added.selectOption('5');
+      await stillFocused(added, 'Breite von Spalte 3 (neu)', 'select', '5');
+    } catch (e) {
+      failures.push({ where, field: '-', problem: `Bearbeitungsmodus nicht prüfbar: ${String(e.message).split('\n')[0]}` });
+      console.log(`  ✘ ${where}: ${String(e.message).split('\n')[0]}`);
+    }
+    await page.getByRole('button', { name: 'Abbrechen', exact: true }).click({ timeout: 3000 }).catch(() => {});
+  }
+
   // Befehlspalette (Strg+K)
   await gotoRoute(page, '/');
   await page.keyboard.press('Control+k');

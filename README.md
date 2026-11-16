@@ -154,8 +154,9 @@ flowchart LR
 
 ### Übersicht und Bedienung
 
-- **Dashboard:** offene Freigaben, bestätigter Stand der Veröffentlichungen, neue Uploads, Banner, Websites; per
-  Drag-and-drop anpassbar, eigene Ansicht fürs Handy, Vorlagen je Rolle.
+- **Dashboard:** Kennzahlen-Reihe und Kacheln in bis zu vier Spalten (offene Freigaben, bestätigter Stand der
+  Veröffentlichungen, neue Uploads, Banner, Websites); per Drag-and-drop mit Maus, Finger oder Tastatur anpassbar,
+  eigene Reihenfolge fürs Handy, Vorlagen für alle oder je Rolle.
 - **Live:** neue Uploads, Freigaben und Veröffentlichungen erscheinen ohne Neuladen; Benachrichtigungen in der App
   und auf Wunsch per E-Mail.
 - **App fürs Handy:** installierbar (PWA) mit Schnellzugriffen auf Neuer Beitrag, Medien sammeln und Freigaben.

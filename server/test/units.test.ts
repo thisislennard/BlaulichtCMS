@@ -11,6 +11,8 @@ import { permissionsFor, matrix } from '../src/auth/permissions.js';
 import { revisionHash } from '../src/routes/posts.js';
 import { normalizePublicUrl } from '../src/lib/urls.js';
 import { fileSlug, publicFileName } from '../src/media/names.js';
+import { availableWidgets, DEFAULT_LAYOUT, layoutIssues, migrateLegacyDesktop, normalizeLayout, resolveLayout, WIDGET_DEFS, widgetPermission } from '../src/lib/dashboard-layout.js';
+import { PERMISSIONS } from '../src/auth/permissions.js';
 
 describe('Maskierung', () => {
   it('ersetzt sensible Felder und bekannte Geheimnisse', () => {
@@ -1176,5 +1178,162 @@ describe('Empfangsprotokoll: Schwärzen und Begründungen', () => {
     expect(incidentDecision({ outcome: 'duplicate' }, true).decision).toBe('known');
     expect(incidentDecision({ outcome: 'suppressed' }, true).decision).toBe('suppressed');
     expect(incidentDecision({ outcome: 'ignored' }, true)).toMatchObject({ decision: 'error', reason: expect.stringContaining('Einsatz-ID') });
+  });
+});
+
+describe('Dashboard-Layout (Kennzahlen, Spalten, Vorlagen)', () => {
+  const ALL = new Set(PERMISSIONS.map((p) => p.id));
+  const EDITOR = permissionsFor(['editor']);
+  const ids = (l: { badges: string[]; columns: { widgets: string[] }[]; mobile: string[] }) => [...l.badges, ...l.columns.flatMap((c) => c.widgets), ...l.mobile];
+
+  it('kennt jedes Widget genau einmal und nur mit registriertem Recht', () => {
+    expect(new Set(WIDGET_DEFS.map((w) => w.id)).size).toBe(WIDGET_DEFS.length);
+    for (const w of WIDGET_DEFS) expect(ALL.has(w.permission), w.id).toBe(true);
+    expect(widgetPermission('badge_connection_errors')).toBe('connection.manage');
+    expect(widgetPermission('gibt-es-nicht')).toBeNull();
+    // Standardlayout: nur bekannte Widgets, Kennzahlen und Kacheln sauber getrennt, übersteht die eigene Prüfung
+    expect(layoutIssues(DEFAULT_LAYOUT)).toEqual([]);
+    expect(normalizeLayout(DEFAULT_LAYOUT, ALL)).toEqual(DEFAULT_LAYOUT);
+    expect(availableWidgets(ALL)).toHaveLength(WIDGET_DEFS.length);
+    expect(availableWidgets(ALL, 'badge').every((id) => id.startsWith('badge_'))).toBe(true);
+  });
+
+  it('zeigt nur Widgets, für die das Recht da ist', () => {
+    expect(availableWidgets(EDITOR)).not.toContain('badge_connection_errors');
+    expect(availableWidgets(EDITOR)).toContain('media');
+    expect(availableWidgets(permissionsFor(['warning_author']))).toEqual([]);
+    const onlyPosts = new Set(['post.read']);
+    expect(availableWidgets(onlyPosts)).toEqual(['badge_approvals', 'badge_ready', 'badge_banners', 'approvals', 'ready', 'publications', 'sites', 'banners', 'rss']);
+    const l = normalizeLayout(DEFAULT_LAYOUT, onlyPosts);
+    for (const id of ids(l)) expect(onlyPosts.has(widgetPermission(id)!), id).toBe(true);
+    expect(l.badges).toEqual(['badge_approvals', 'badge_ready', 'badge_banners']);
+    expect(l.columns).toEqual([
+      { weight: 5, widgets: ['publications', 'rss'] },
+      { weight: 3, widgets: ['approvals', 'banners', 'sites'] },
+    ]);
+    expect(l.mobile).toEqual(['approvals', 'ready', 'publications', 'banners']);
+    // Ohne jedes Recht bleibt ein leeres, gültiges Layout
+    expect(normalizeLayout(DEFAULT_LAYOUT, new Set())).toEqual({ version: 2, badges: [], columns: [{ weight: 5, widgets: [] }, { weight: 3, widgets: [] }], mobile: [] });
+  });
+
+  it('überführt alte Layouts (Liste mit Größen) in Spalten', () => {
+    // Bisheriges Standardlayout: breite Kachel links in einer breiten Spalte, der Rest verteilt sich in Lesereihenfolge
+    const old = { desktop: [{ id: 'media', size: 'l' }, { id: 'approvals', size: 'm' }, { id: 'publications', size: 'm' }, { id: 'uploads', size: 'm' }, { id: 'banners', size: 'm' }, { id: 'rss', size: 'm' }, { id: 'sites', size: 'm' }], mobile: ['approvals', 'ready', 'uploads', 'publications', 'banners'] };
+    const l = normalizeLayout(old, ALL);
+    expect(l.version).toBe(2);
+    expect(l.columns).toEqual([
+      { weight: 5, widgets: ['media', 'uploads', 'rss'] },
+      { weight: 3, widgets: ['approvals', 'publications', 'banners', 'sites'] },
+    ]);
+    expect(l.mobile).toEqual(old.mobile);
+    // Alte Layouts kannten keine Kennzahlen: Standardreihe, nach Recht gefiltert
+    expect(l.badges).toEqual(DEFAULT_LAYOUT.badges);
+    expect(normalizeLayout(old, EDITOR).badges).not.toContain('badge_connection_errors');
+    // Kein Widget geht verloren, keines kommt hinzu
+    expect(l.columns.flatMap((c) => c.widgets).sort()).toEqual(old.desktop.map((w) => w.id).sort());
+    // Nur breite Kacheln → eine Spalte; überwiegend kleine → drei Spalten; nur mittlere → zwei gleich breite
+    expect(migrateLegacyDesktop([{ id: 'rss', size: 'l' }, { id: 'media', size: 'l' }])).toEqual([{ weight: 3, widgets: ['rss', 'media'] }]);
+    expect(migrateLegacyDesktop([{ id: 'rss', size: 's' }, { id: 'sites', size: 's' }, { id: 'banners', size: 's' }, { id: 'ready', size: 'm' }])).toEqual([
+      { weight: 3, widgets: ['rss', 'ready'] },
+      { weight: 3, widgets: ['sites'] },
+      { weight: 3, widgets: ['banners'] },
+    ]);
+    expect(migrateLegacyDesktop([{ id: 'rss', size: 'm' }, { id: 'approvals', size: 's' }])).toEqual([
+      { weight: 3, widgets: ['rss'] },
+      { weight: 3, widgets: ['approvals'] },
+    ]);
+    expect(migrateLegacyDesktop([])).toEqual([]);
+    expect(migrateLegacyDesktop('kaputt')).toEqual([]);
+    // Altes Layout mit unbekannter Größe, unbekanntem und doppeltem Widget
+    expect(normalizeLayout({ desktop: [{ id: 'rss', size: 'xxl' }, { id: 'weg' }, { id: 'rss', size: 'm' }, null, 'x'], mobile: ['rss', 'rss', 'weg'] }, ALL)).toMatchObject({ columns: [{ weight: 3, widgets: ['rss'] }, { weight: 3, widgets: [] }], mobile: ['rss'] });
+    // Ein bereits umgestelltes Layout bleibt unverändert (idempotent)
+    expect(normalizeLayout(l, ALL)).toEqual(l);
+  });
+
+  it('räumt beliebige Eingaben auf: unbekannt, doppelt, falsche Art, zu viele Spalten, falsche Gewichte', () => {
+    const l = normalizeLayout(
+      {
+        badges: ['badge_ready', 'rss', 'badge_ready', 'gibt-es-nicht', 7, 'badge_approvals'],
+        columns: [
+          { weight: 2, widgets: ['rss', 'badge_ready', 'rss'] },
+          { weight: 9, widgets: ['media', 'rss'] },
+          'kaputt',
+          { weight: 5, widgets: [] },
+          { weight: 3, widgets: ['sites'] },
+          { weight: 2, widgets: ['banners', 'sites'] },
+          { widgets: ['ready'] },
+        ],
+        mobile: ['rss', 'badge_ready', 'rss', 'ready', '__proto__'],
+      },
+      ALL,
+    );
+    expect(l).toEqual({
+      version: 2,
+      badges: ['badge_ready', 'badge_approvals'],
+      // höchstens vier Spalten: Überzählige wandern in die letzte; jedes Widget höchstens einmal; 9 → normal
+      columns: [
+        { weight: 2, widgets: ['rss'] },
+        { weight: 3, widgets: ['media'] },
+        { weight: 5, widgets: [] },
+        { weight: 3, widgets: ['sites', 'banners', 'ready'] },
+      ],
+      mobile: ['rss', 'ready'],
+    });
+    for (const junk of [null, undefined, 'x', 42, [], { columns: 'x' }, { columns: [] }, { badges: {}, columns: [{}], mobile: 1 }]) {
+      const n = normalizeLayout(junk, ALL);
+      expect(n.version).toBe(2);
+      expect(n.columns.length).toBeGreaterThanOrEqual(1);
+      expect(ids(n)).toEqual([]);
+    }
+    // Ohne Rechte-Angabe (Vorlage der Administration) bleiben alle bekannten Widgets erhalten
+    expect(normalizeLayout(DEFAULT_LAYOUT, null)).toEqual(DEFAULT_LAYOUT);
+  });
+
+  it('prüft beim Speichern die Form streng', () => {
+    const ok = { badges: ['badge_ready'], columns: [{ weight: 2, widgets: ['rss'] }, { weight: 5, widgets: [] }], mobile: [] };
+    expect(layoutIssues(ok)).toEqual([]);
+    expect(layoutIssues({ columns: [{ weight: 3, widgets: [] }] })).toEqual([]);
+    // Unbekannte Widgets sind kein Formfehler – sie fallen beim Normalisieren still weg
+    expect(layoutIssues({ ...ok, badges: ['gibt-es-nicht'] })).toEqual([]);
+    const msg = (v: unknown) => layoutIssues(v).map((i) => `${i.path}: ${i.message}`).join(' | ');
+    expect(msg(null)).toMatch(/Layout fehlt/);
+    expect(msg({ badges: [] })).toMatch(/Spalten fehlen/);
+    expect(msg({ ...ok, columns: [] })).toMatch(/Mindestens eine Spalte/);
+    expect(msg({ ...ok, columns: Array.from({ length: 5 }, () => ({ weight: 3, widgets: [] })) })).toMatch(/Höchstens 4 Spalten/);
+    for (const weight of [1, 4, '3', null, undefined]) expect(msg({ ...ok, columns: [{ weight, widgets: [] }] }), String(weight)).toMatch(/columns\.0\.weight/);
+    expect(msg({ ...ok, columns: [{ weight: 3, widgets: ['rss'] }, { weight: 3, widgets: ['rss'] }] })).toMatch(/mehrfach/);
+    expect(msg({ ...ok, columns: [{ weight: 3, widgets: ['rss', 'rss'] }] })).toMatch(/mehrfach/);
+    expect(msg({ ...ok, badges: ['badge_ready', 'badge_ready'] })).toMatch(/layout\.badges: Einträge dürfen nur einmal/);
+    expect(msg({ ...ok, mobile: ['rss', 'rss'] })).toMatch(/layout\.mobile/);
+    expect(msg({ ...ok, badges: 'x' })).toMatch(/layout\.badges: Liste erwartet/);
+    expect(msg({ ...ok, columns: [{ weight: 3, widgets: [1] }] })).toMatch(/Widget-Kennungen/);
+    expect(msg({ ...ok, columns: ['x'] })).toMatch(/Spalte erwartet/);
+    expect(msg({ ...ok, mobile: Array.from({ length: 41 }, (_, i) => `w${i}`) })).toMatch(/Zu viele/);
+    // Altes Format wird weiter angenommen
+    expect(layoutIssues({ desktop: [{ id: 'rss', size: 'l' }], mobile: ['rss'] })).toEqual([]);
+    expect(msg({ desktop: [], mobile: 'x' })).toMatch(/layout\.mobile/);
+  });
+
+  it('wählt persönlich vor Rollenvorlage vor allgemeiner Vorlage vor Standard', () => {
+    const one = (widgets: string[]) => ({ badges: [], columns: [{ weight: 3, widgets }], mobile: [] });
+    const shared = { '*': one(['sites']), editor: one(['rss']), approver: one(['banners']) };
+    const pick = (o: any) => {
+      const r = resolveLayout({ roles: ['editor'], perms: EDITOR, ...o });
+      return [r.source, r.layout.columns[0].widgets.join()];
+    };
+    expect(pick({ personal: one(['ready']), shared })).toEqual(['personal', 'ready']);
+    expect(pick({ shared })).toEqual(['role', 'rss']);
+    expect(pick({ shared, roles: ['viewer', 'approver'] })).toEqual(['role', 'banners']);
+    expect(pick({ shared, roles: ['viewer'] })).toEqual(['shared', 'sites']);
+    expect(pick({ shared: {} })).toEqual(['default', 'media,publications,rss']);
+    expect(pick({ shared: null, personal: 'kaputt' })).toEqual(['default', 'media,publications,rss']);
+    // Vorlage mit Widgets, für die das Recht fehlt: werden beim Ausliefern entfernt
+    const tpl = { badges: ['badge_connection_errors', 'badge_ready'], columns: [{ weight: 5, widgets: ['media', 'rss'] }], mobile: ['media'] };
+    const r = resolveLayout({ shared: { '*': tpl }, roles: ['warning_author'], perms: new Set(['post.read']) });
+    expect(r.layout).toEqual({ version: 2, badges: ['badge_ready'], columns: [{ weight: 5, widgets: ['rss'] }], mobile: [] });
+    // Altes gespeichertes Layout als persönliche Einstellung
+    const legacy = resolveLayout({ personal: { desktop: [{ id: 'rss', size: 'l' }, { id: 'approvals', size: 's' }], mobile: ['approvals'] }, roles: ['editor'], perms: EDITOR });
+    expect(legacy.source).toBe('personal');
+    expect(legacy.layout.columns).toEqual([{ weight: 5, widgets: ['rss'] }, { weight: 3, widgets: ['approvals'] }]);
   });
 });

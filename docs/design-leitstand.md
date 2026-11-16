@@ -146,8 +146,16 @@ Das Widget „Redaktionsfluss“ (früher „Kennzahlen“, Widget-ID weiterhin 
 
 - Jede Spalte zeigt eine große Mono-Zahl und bis zu drei Karten, danach „+ n weitere“.
 - Wer freigeben darf, sieht offene Freigaben als „Du bist dran“-Karte mit „Prüfen →“.
-- Die Daten kommen unverändert aus `GET /dashboard` – es gibt **keine** Änderung an Server oder API.
-- Das Anpassen des Dashboards (Reihenfolge, Größe, Handy-Auswahl) funktioniert wie bisher.
+- Die Daten kommen aus `GET /dashboard`.
+- Die Spalten des Redaktionsflusses brechen um, wenn die Dashboard-Spalte schmal ist (kein waagerechtes Scrollen).
+
+### Aufbau und Anpassen (seit 0.2.4)
+
+- **Kennzahlen** oben als eigene Reihe: Karte mit `rounded-node`, Beschriftung in `text-meta`, Zahl in Mono 22 px. Rot (`text-primary`) nur bei Handlungsbedarf für die Person; Fehler (`text-err`) immer mit Symbol und Text.
+- Darunter bis zu vier **Spalten** mit Gewicht 2 / 3 / 5 (Schmal / Normal / Breit). Unter 300 px Spaltenbreite brechen die Spalten um; am Handy gilt die eigene Reihenfolge.
+- **Bearbeitungsmodus:** Spalten auf `bg-raised` mit Linie, Kacheln und Kennzahlen mit gestricheltem Rand. Gezogen wird nur am **Griff** (`GripVertical`, 40 × 40 px, `aria-label` „… verschieben“) – mit Maus, Finger und Tastatur (`@dnd-kit`). Während des Ziehens folgt eine kleine Karte mit rotem Rand und `shadow-float` dem Zeiger; die Kachel selbst bleibt abgeblendet an ihrem Platz.
+- Bedienelemente im Bearbeitungsmodus sind mindestens 40 px hoch (Touch-Ziele). „Für mich speichern“ ist die einzige rote Aktion.
+- Welche Widgets es gibt und welches Recht sie brauchen, steht nur in `server/src/lib/dashboard-layout.ts`.
 
 Die Begrüßung richtet sich nach der Tageszeit („Guten Abend, Alex.“), darunter eine Zeile, was gerade wartet.
 

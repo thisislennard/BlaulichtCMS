@@ -1041,22 +1041,94 @@ describe('RSS, Live-Status und Dashboard (M2)', () => {
     expect(unauth.status).toBe(401);
   });
 
-  it('speichert Dashboards persönlich und als Rollenvorlage', async () => {
+  it('speichert Dashboards persönlich und als Rollenvorlage (Kennzahlen, Spalten, Handy)', async () => {
     const def = await editor.get('/dashboard/layout');
     expect(def.json.source).toBe('default');
-    const layout = { desktop: [{ id: 'rss', size: 'l' }, { id: 'approvals', size: 's' }], mobile: ['approvals'] };
+    expect(def.json.layout.version).toBe(2);
+    expect(def.json.layout.columns.map((c: any) => c.weight)).toEqual([5, 3]);
+    // Rechte: Redaktion sieht die Kennzahl „Verbindungsfehler“ nicht, die Administration schon; Vorlagenliste nur für die Administration
+    expect(def.json.widgets).toContain('badge_unreviewed');
+    expect(def.json.widgets).not.toContain('badge_connection_errors');
+    expect(def.json.layout.badges).not.toContain('badge_connection_errors');
+    expect(def.json.templates).toBeUndefined();
+    const adminDef = await admin.get('/dashboard/layout');
+    expect(adminDef.json.widgets).toContain('badge_connection_errors');
+    expect(adminDef.json.layout.badges).toContain('badge_connection_errors');
+    expect(adminDef.json.templates).toEqual([]);
+
+    const layout = { badges: ['badge_ready', 'badge_connection_errors', 'badge_approvals'], columns: [{ weight: 2, widgets: ['rss'] }, { weight: 5, widgets: ['approvals', 'media'] }, { weight: 3, widgets: [] }], mobile: ['approvals'] };
+    // Vorlagen nur durch die Administration, nur für bekannte Rollen
     expect((await editor.put('/dashboard/layout', { scope: 'role', role: 'editor', layout })).status).toBe(403);
+    expect((await editor.put('/dashboard/layout', { scope: 'all', layout })).status).toBe(403);
+    expect((await admin.put('/dashboard/layout', { scope: 'role', role: 'gibt-es-nicht', layout })).status).toBe(400);
     expect((await admin.put('/dashboard/layout', { scope: 'role', role: 'editor', layout })).status).toBe(200);
+    expect((await admin.get('/dashboard/layout')).json.templates).toEqual(['editor']);
+    // Die Vorlage enthält alle Widgets; ausgeliefert wird nur, was die Person sehen darf
+    const stored = (await one<any>(`SELECT value FROM settings WHERE key = 'dashboard.layouts'`))!.value;
+    expect(stored.editor.badges).toEqual(layout.badges);
+    const role = await editor.get('/dashboard/layout');
+    expect(role.json.source).toBe('role');
+    expect(role.json.layout).toEqual({ version: 2, badges: ['badge_ready', 'badge_approvals'], columns: layout.columns, mobile: ['approvals'] });
+    // Andere Rollen bleiben beim Standard, bis es eine Vorlage für alle gibt
+    expect((await publisher.get('/dashboard/layout')).json.source).toBe('default');
+    expect((await admin.put('/dashboard/layout', { scope: 'all', layout: { badges: [], columns: [{ weight: 3, widgets: ['sites'] }], mobile: [] } })).status).toBe(200);
+    const pub = await publisher.get('/dashboard/layout');
+    expect(pub.json.source).toBe('shared');
+    expect(pub.json.layout.columns).toEqual([{ weight: 3, widgets: ['sites'] }]);
     expect((await editor.get('/dashboard/layout')).json.source).toBe('role');
-    await editor.put('/dashboard/layout', { scope: 'personal', layout: { ...layout, mobile: ['rss'] } });
+
+    // Persönlich speichern: alles in einem Aufruf; Unbekanntes und Unerlaubtes fällt still weg
+    const mineBody = { badges: ['badge_connection_errors', 'badge_uploads', 'gibt-es-nicht'], columns: [{ weight: 5, widgets: ['rss', 'gibt-es-nicht', 'badge_uploads'] }, { weight: 2, widgets: ['uploads'] }], mobile: ['rss', 'gibt-es-nicht'] };
+    const saved = await editor.put('/dashboard/layout', { scope: 'personal', layout: mineBody });
+    expect(saved.status).toBe(200);
     const mine = await editor.get('/dashboard/layout');
     expect(mine.json.source).toBe('personal');
-    expect(mine.json.layout.mobile).toEqual(['rss']);
+    expect(mine.json.layout).toEqual({ version: 2, badges: ['badge_uploads'], columns: [{ weight: 5, widgets: ['rss'] }, { weight: 2, widgets: ['uploads'] }], mobile: ['rss'] });
+    expect(saved.json.layout).toEqual(mine.json.layout);
+    const pref = await one<any>(`SELECT preferences->'dashboard' AS d FROM users WHERE email = 'redaktion@example.org'`);
+    expect(JSON.stringify(pref!.d)).not.toMatch(/connection_errors|gibt-es-nicht/);
+
+    // Formfehler werden abgewiesen, der gespeicherte Stand bleibt
+    const bad = async (l: any) => (await editor.put('/dashboard/layout', { scope: 'personal', layout: l })).status;
+    expect(await bad({ ...mineBody, columns: Array.from({ length: 5 }, () => ({ weight: 3, widgets: [] })) })).toBe(400);
+    expect(await bad({ ...mineBody, columns: [{ weight: 4, widgets: [] }] })).toBe(400);
+    expect(await bad({ ...mineBody, columns: [{ weight: 3, widgets: ['rss'] }, { weight: 3, widgets: ['rss'] }] })).toBe(400);
+    expect(await bad({ ...mineBody, columns: [] })).toBe(400);
+    expect(await bad({ badges: [] })).toBe(400);
+    expect(await bad('kaputt')).toBe(400);
+    expect((await editor.get('/dashboard/layout')).json.layout).toEqual(mine.json.layout);
+
+    // Layout aus der Zeit vor 0.2.4 in der Datenbank: wird beim Laden umgestellt, ohne die Daten anzufassen
+    const legacy = { desktop: [{ id: 'rss', size: 'l' }, { id: 'approvals', size: 's' }, { id: 'weg', size: 'm' }], mobile: ['approvals'] };
+    await pool.query(`UPDATE users SET preferences = preferences || jsonb_build_object('dashboard', $1::jsonb) WHERE email = 'redaktion@example.org'`, [JSON.stringify(legacy)]);
+    const old = await editor.get('/dashboard/layout');
+    expect(old.json.source).toBe('personal');
+    expect(old.json.layout.columns).toEqual([{ weight: 5, widgets: ['rss'] }, { weight: 3, widgets: ['approvals'] }]);
+    expect(old.json.layout.mobile).toEqual(['approvals']);
+    expect(old.json.layout.badges).toEqual(['badge_approvals', 'badge_unreviewed', 'badge_ready', 'badge_banners', 'badge_uploads']);
+    // … und eine ältere Oberfläche darf im alten Format speichern
+    expect((await editor.put('/dashboard/layout', { scope: 'personal', layout: legacy })).status).toBe(200);
+    expect((await editor.get('/dashboard/layout')).json.layout.columns).toEqual(old.json.layout.columns);
+    // Alte Vorlage in den Einstellungen
+    await setSettings({ 'dashboard.layouts': { ...stored, '*': legacy } } as any);
+    expect((await publisher.get('/dashboard/layout')).json.layout.columns).toEqual(old.json.layout.columns);
+
+    // Zurücksetzen auf die Vorlage; Vorlagen wieder entfernen
     await editor.put('/dashboard/layout', { scope: 'personal', layout: null });
     expect((await editor.get('/dashboard/layout')).json.source).toBe('role');
+    expect((await admin.put('/dashboard/layout', { scope: 'role', role: 'editor', layout: null })).status).toBe(200);
+    expect((await editor.get('/dashboard/layout')).json.source).toBe('shared');
+    expect((await admin.put('/dashboard/layout', { scope: 'all', layout: null })).status).toBe(200);
+    expect((await editor.get('/dashboard/layout')).json.source).toBe('default');
+    expect((await admin.get('/dashboard/layout')).json.templates).toEqual([]);
+    expect(await one(`SELECT 1 FROM audit_events WHERE action = 'dashboard.shared_saved'`)).not.toBeNull();
+
+    // Daten: Verbindungsfehler nur mit dem Recht „Verbindungen verwalten“
     const d = await editor.get('/dashboard');
     expect(Array.isArray(d.json.rss)).toBe(true);
     expect(d.json.confirmedAt).toBeTruthy();
+    expect(d.json.connectionErrors).toBeUndefined();
+    expect(typeof (await admin.get('/dashboard')).json.connectionErrors).toBe('number');
   });
 });
 
@@ -1155,6 +1227,29 @@ describe('Warnentwürfe (M3) und Warnstufen-Assistent (#41)', () => {
     expect((await admin.patch('/settings', { 'warnings.test_mode': false })).status).toBe(400);
     const s = await admin.put('/warning-settings', { host: '127.0.0.1', port, security: 'none', user: '', from: 'blaulichtcms@example.org', testMode: true, testRecipient: TEST_BOX });
     expect(s.status).toBe(200);
+  });
+
+  it('zeigt ohne Lese-Rechte keine Dashboard-Widgets – auch nicht aus Vorlagen oder eigenen Angaben', async () => {
+    // „Warnentwurf“ hat weder „Beiträge ansehen“ noch „Medien sichten“
+    const lone = author;
+    const full = { badges: ['badge_approvals', 'badge_unreviewed', 'badge_connection_errors'], columns: [{ weight: 5, widgets: ['media', 'approvals'] }, { weight: 3, widgets: ['rss', 'uploads'] }], mobile: ['media', 'rss'] };
+    const empty = { version: 2, badges: [], columns: [{ weight: 5, widgets: [] }, { weight: 3, widgets: [] }], mobile: [] };
+    const def = await lone.get('/dashboard/layout');
+    expect(def.json.widgets).toEqual([]);
+    expect(def.json.layout.badges).toEqual([]);
+    expect(def.json.layout.columns.flatMap((c: any) => c.widgets)).toEqual([]);
+    expect((await admin.put('/dashboard/layout', { scope: 'role', role: 'warning_author', layout: full })).status).toBe(200);
+    const tpl = await lone.get('/dashboard/layout');
+    expect(tpl.json.source).toBe('role');
+    expect(tpl.json.layout).toEqual(empty);
+    expect((await lone.put('/dashboard/layout', { scope: 'personal', layout: full })).status).toBe(200);
+    const mine = await lone.get('/dashboard/layout');
+    expect(mine.json.source).toBe('personal');
+    expect(mine.json.layout).toEqual(empty);
+    const d = (await lone.get('/dashboard')).json;
+    expect(Object.keys(d)).toEqual(['confirmedAt']);
+    await lone.put('/dashboard/layout', { scope: 'personal', layout: null });
+    expect((await admin.put('/dashboard/layout', { scope: 'role', role: 'warning_author', layout: null })).status).toBe(200);
   });
 
   it('wird ohne aktive Regeln ausgeliefert; Stichwort ohne Regel ergibt keine Empfehlung', async () => {

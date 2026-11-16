@@ -8,23 +8,7 @@ import { audit } from '../lib/audit.js';
 import { getSettings, setSettings } from '../lib/settings.js';
 import { ROLE_IDS } from '../auth/permissions.js';
 import { POST_STATE_SQL } from './posts.js';
-
-export const WIDGETS = ['approvals', 'ready', 'publications', 'uploads', 'media', 'sites', 'banners', 'rss'] as const;
-type WidgetId = (typeof WIDGETS)[number];
-const WIDGET_PERM: Record<WidgetId, string> = { approvals: 'post.read', ready: 'post.read', publications: 'post.read', uploads: 'media.read', media: 'media.read', sites: 'post.read', banners: 'post.read', rss: 'post.read' };
-const DEFAULT_LAYOUT = {
-  desktop: [
-    { id: 'media', size: 'l' },
-    { id: 'approvals', size: 'm' },
-    { id: 'publications', size: 'm' },
-    { id: 'uploads', size: 'm' },
-    { id: 'banners', size: 'm' },
-    { id: 'rss', size: 'm' },
-    { id: 'sites', size: 'm' },
-  ],
-  mobile: ['approvals', 'ready', 'uploads', 'publications', 'banners'],
-};
-const availableWidgets = (perms: Set<string>) => WIDGETS.filter((w) => perms.has(WIDGET_PERM[w]));
+import { availableWidgets, layoutIssues, normalizeLayout, resolveLayout } from '../lib/dashboard-layout.js';
 
 export async function dashboardRoutes(app: FastifyInstance) {
   /** Erstes Dashboard: offene Freigaben, bestätigter Veröffentlichungsstand, Medieneingang, Kanäle. */
@@ -79,42 +63,56 @@ export async function dashboardRoutes(app: FastifyInstance) {
           WHERE i.hidden_at IS NULL ORDER BY COALESCE(i.published_at, i.fetched_at) DESC LIMIT 8`,
       );
     }
+    if (perms.has('connection.manage')) {
+      // Aktive Verbindungen, deren letzter Abruf oder Versand fehlgeschlagen ist (Kennzahl „Verbindungsfehler“)
+      out.connectionErrors = (await one<{ n: number }>(`SELECT count(*)::int AS n FROM connections WHERE status = 'active' AND deleted_at IS NULL AND last_error IS NOT NULL`))!.n;
+    }
     out.confirmedAt = new Date().toISOString();
     return out;
   });
 
   /* ------------------------------ Dashboard-Layout ------------------------------ */
 
-  const layoutSchema = z.object({
-    desktop: z.array(z.object({ id: z.enum(WIDGETS), size: z.enum(['s', 'm', 'l']) })).max(20),
-    mobile: z.array(z.enum(WIDGETS)).max(20),
-  });
-
+  /**
+   * Layout der Person: persönlich → Rollenvorlage → Vorlage für alle → Standard. Immer normalisiert (auch Layouts im
+   * Format vor 0.2.4) und auf die eigenen Rechte gefiltert; `widgets` nennt alles, was die Person einblenden darf.
+   */
   app.get('/dashboard/layout', { preHandler: requireAuth() }, async (req) => {
     const a = req.auth!;
     const s = await getSettings();
-    const personal = (a.user?.preferences as any)?.dashboard;
     const shared = (s['dashboard.layouts'] ?? {}) as Record<string, unknown>;
-    const roleLayout = a.roles.map((r) => shared[r]).find(Boolean);
-    const layout = personal ?? roleLayout ?? shared['*'] ?? DEFAULT_LAYOUT;
-    return { layout, source: personal ? 'personal' : roleLayout ? 'role' : shared['*'] ? 'shared' : 'default', widgets: availableWidgets(a.permissions) };
+    const { layout, source } = resolveLayout({ personal: (a.user?.preferences as any)?.dashboard, shared, roles: a.roles, perms: a.permissions });
+    return {
+      layout,
+      source,
+      widgets: availableWidgets(a.permissions),
+      // Nur für die Administration: für wen es gemeinsame Vorlagen gibt ('*' = alle)
+      templates: a.permissions.has('system.manage') ? Object.keys(shared).filter((k) => shared[k]) : undefined,
+    };
   });
 
   app.put('/dashboard/layout', { preHandler: requireAuth() }, async (req) => {
-    const body = z.object({ scope: z.enum(['personal', 'role', 'all']).default('personal'), role: z.string().max(40).optional(), layout: layoutSchema.nullable() }).parse(req.body);
+    const body = z.object({ scope: z.enum(['personal', 'role', 'all']).default('personal'), role: z.string().max(40).optional(), layout: z.unknown().nullable() }).parse(req.body);
     const a = req.auth!;
+    if (body.layout != null) {
+      const issues = layoutIssues(body.layout);
+      if (issues.length) throw badRequest(`Das Dashboard-Layout ist ungültig: ${issues[0].message}`, { issues });
+    }
     if (body.scope === 'personal') {
       if (!a.user) throw badRequest('Nur für Benutzerkonten.');
-      if (body.layout) await pool.query(`UPDATE users SET preferences = preferences || jsonb_build_object('dashboard', $2::jsonb) WHERE id = $1`, [a.user.id, JSON.stringify(body.layout)]);
+      // Gespeichert wird nur, was die Person sehen darf – Unbekanntes und Unerlaubtes fällt still weg.
+      const layout = body.layout != null ? normalizeLayout(body.layout, a.permissions) : null;
+      if (layout) await pool.query(`UPDATE users SET preferences = preferences || jsonb_build_object('dashboard', $2::jsonb) WHERE id = $1`, [a.user.id, JSON.stringify(layout)]);
       else await pool.query(`UPDATE users SET preferences = preferences - 'dashboard' WHERE id = $1`, [a.user.id]);
-      return { ok: true };
+      return { ok: true, layout };
     }
     if (!a.permissions.has('system.manage')) throw new AppError(403, 'forbidden', 'Gemeinsame Dashboards darf nur die Administration speichern.');
     const key = body.scope === 'all' ? '*' : body.role;
     if (!key || (key !== '*' && !ROLE_IDS.includes(key))) throw badRequest('Unbekannte Rolle.');
     const s = await getSettings(true);
     const layouts = { ...(s['dashboard.layouts'] as Record<string, unknown>) };
-    if (body.layout) layouts[key] = body.layout;
+    // Vorlagen enthalten alle bekannten Widgets; gefiltert wird beim Ausliefern nach den Rechten der jeweiligen Person.
+    if (body.layout != null) layouts[key] = normalizeLayout(body.layout, null);
     else delete layouts[key];
     await setSettings({ 'dashboard.layouts': layouts } as any, a.user?.id ?? null);
     await audit(a.actor, 'dashboard.shared_saved', { type: 'settings', label: key === '*' ? 'alle' : key });
