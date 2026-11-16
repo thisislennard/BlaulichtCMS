@@ -58,8 +58,11 @@ interface Drill {
   };
 }
 
-type Form = { enabled: boolean; url: string; username: string; password: string; fingerprint: string; keepDaily: number; keepWeekly: number; keepMonthly: number; drillInterval: OffsiteConfig['drill_interval'] };
-const fromConfig = (c: OffsiteConfig): Form => ({ enabled: c.enabled, url: c.url, username: c.username, password: '', fingerprint: c.tls_fingerprint, keepDaily: c.keep_daily, keepWeekly: c.keep_weekly, keepMonthly: c.keep_monthly, drillInterval: c.drill_interval });
+type Form = { enabled: boolean; url: string; username: string; password: string; fingerprint: string; keepDaily: string; keepWeekly: string; keepMonthly: string; drillInterval: OffsiteConfig['drill_interval'] };
+const fromConfig = (c: OffsiteConfig): Form => ({ enabled: c.enabled, url: c.url, username: c.username, password: '', fingerprint: c.tls_fingerprint, keepDaily: String(c.keep_daily), keepWeekly: String(c.keep_weekly), keepMonthly: String(c.keep_monthly), drillInterval: c.drill_interval });
+
+/** Ganze Zahl im Bereich, sonst null (Eingabe bleibt beim Tippen unverändert, geprüft wird beim Speichern). */
+const intIn = (v: string, lo: number, hi: number) => (/^\d+$/.test(v.trim()) && Number(v) >= lo && Number(v) <= hi ? Number(v) : null);
 
 const DRILL_STATUS: Record<Drill['status'], { tone: 'success' | 'error' | 'primary' | 'neutral'; label: string }> = {
   queued: { tone: 'neutral', label: 'eingeplant' },
@@ -109,6 +112,7 @@ export function OffsiteBackupSection() {
   const set = (p: Partial<Form>) => setForm({ ...form, ...p });
   const dirty = JSON.stringify({ ...form, password: '' }) !== JSON.stringify(fromConfig(c)) || !!form.password;
   const target = { url: form.url.trim(), username: form.username.trim(), fingerprint: form.fingerprint.trim(), ...(form.password ? { password: form.password } : {}) };
+  const keepInvalid = intIn(form.keepDaily, 1, 365) === null || intIn(form.keepWeekly, 0, 260) === null || intIn(form.keepMonthly, 0, 120) === null;
   const failedLater = c.last_error_at && (!c.last_ok_at || new Date(c.last_error_at) > new Date(c.last_ok_at));
 
   const runTest = async () => {
@@ -127,7 +131,7 @@ export function OffsiteBackupSection() {
     setBusy('save');
     setError(null);
     try {
-      const r = await put<{ config: OffsiteConfig }>('/backups/offsite', { ...target, enabled: form.enabled, keepDaily: form.keepDaily, keepWeekly: form.keepWeekly, keepMonthly: form.keepMonthly, drillInterval: form.drillInterval });
+      const r = await put<{ config: OffsiteConfig }>('/backups/offsite', { ...target, enabled: form.enabled, keepDaily: intIn(form.keepDaily, 1, 365), keepWeekly: intIn(form.keepWeekly, 0, 260), keepMonthly: intIn(form.keepMonthly, 0, 120), drillInterval: form.drillInterval });
       toast({ tone: 'success', title: 'Gespeichert', text: r.config.enabled ? 'Neue Sicherungen gehen ab jetzt zusätzlich außer Haus.' : undefined });
       setForm(fromConfig(r.config));
       setEditingPassword(false);
@@ -209,14 +213,14 @@ export function OffsiteBackupSection() {
       <fieldset className="m-0 p-0 border-0 flex flex-col gap-2">
         <legend className="text-sm font-medium mb-1">Aufbewahrung auf dem Ziel</legend>
         <FieldGrid className="grid-cols-[repeat(auto-fit,minmax(min(160px,100%),1fr))]">
-          <FieldWrap label="Tage (je Tag die neueste)" htmlFor="os-kd">
-            <Input id="os-kd" type="number" min={1} max={365} value={form.keepDaily} onChange={(e) => set({ keepDaily: Math.max(1, Math.min(365, Number(e.target.value) || 1)) })} />
+          <FieldWrap label="Tage (je Tag die neueste)" htmlFor="os-kd" error={intIn(form.keepDaily, 1, 365) === null ? '1 bis 365' : undefined}>
+            <Input id="os-kd" type="number" min={1} max={365} value={form.keepDaily} invalid={intIn(form.keepDaily, 1, 365) === null} onChange={(e) => set({ keepDaily: e.target.value })} />
           </FieldWrap>
-          <FieldWrap label="Wochen (je Woche die neueste)" htmlFor="os-kw">
-            <Input id="os-kw" type="number" min={0} max={260} value={form.keepWeekly} onChange={(e) => set({ keepWeekly: Math.max(0, Math.min(260, Number(e.target.value) || 0)) })} />
+          <FieldWrap label="Wochen (je Woche die neueste)" htmlFor="os-kw" error={intIn(form.keepWeekly, 0, 260) === null ? '0 bis 260' : undefined}>
+            <Input id="os-kw" type="number" min={0} max={260} value={form.keepWeekly} invalid={intIn(form.keepWeekly, 0, 260) === null} onChange={(e) => set({ keepWeekly: e.target.value })} />
           </FieldWrap>
-          <FieldWrap label="Monate (je Monat die neueste)" htmlFor="os-km">
-            <Input id="os-km" type="number" min={0} max={120} value={form.keepMonthly} onChange={(e) => set({ keepMonthly: Math.max(0, Math.min(120, Number(e.target.value) || 0)) })} />
+          <FieldWrap label="Monate (je Monat die neueste)" htmlFor="os-km" error={intIn(form.keepMonthly, 0, 120) === null ? '0 bis 120' : undefined}>
+            <Input id="os-km" type="number" min={0} max={120} value={form.keepMonthly} invalid={intIn(form.keepMonthly, 0, 120) === null} onChange={(e) => set({ keepMonthly: e.target.value })} />
           </FieldWrap>
         </FieldGrid>
         <p className="m-0 text-meta text-fg-muted">Ältere Sicherungen löscht BlaulichtCMS nach jeder Übertragung auf dem Ziel. Andere Dateien im Ordner bleiben unberührt. Gelöschte Daten leben in Sicherungen bis zum Ablauf dieser Fristen weiter (Datenschutz).</p>
@@ -265,7 +269,7 @@ export function OffsiteBackupSection() {
         <Button icon="Plug" loading={busy === 'test'} disabled={!form.url.trim() || !!busy} onClick={runTest}>
           Verbindung testen
         </Button>
-        <Button variant="primary" icon="Save" loading={busy === 'save'} disabled={!dirty || !!busy} onClick={save}>
+        <Button variant="primary" icon="Save" loading={busy === 'save'} disabled={!dirty || !!busy || keepInvalid} onClick={save}>
           Speichern
         </Button>
       </div>
