@@ -1111,3 +1111,70 @@ describe('Gestaltung der Upload-Seite', () => {
     expect(resolveDesign(d, '<b>Fest</b>', null).blocks[0].text).toBe('Hallo <b>Fest</b>');
   });
 });
+
+describe('Empfangsprotokoll: Schwärzen und Begründungen', () => {
+  it('FE2-Meldung: nur Allowlist-Werte bleiben, Personen, Freitext, Koordinaten und Adressen nie', async () => {
+    const { redactIncidentPayload } = await import('../src/connections/receipts.js');
+    const payload = {
+      einsatz: { id: 'E-1', stichwort: 'F-WALD-2', ort: 'Musterstadt', ortsteil: 'Nord', alarmzeit: '2026-11-14T10:00', einheiten: ['HLF 1', { name: 'TLF 2', address: 'RIC-77' }], status: 'offen', strasse: 'Hauptstraße', hausnummer: '12', lat: 50.12345, lng: 8.6789, sachverhalt: 'Person eingeklemmt' },
+      meldung: { alarmtext: 'VERTRAULICH Person Max Mustermann Tel 0123 456789', anrufer: { name: 'Erika Musterfrau', telefon: '0171 2345678', ort: 'Nachbarstadt' } },
+      melder: 'Erika Musterfrau',
+      zusatz: { kontakt: 'max@example.org' },
+    };
+    const r = redactIncidentPayload(payload, { keepPaths: ['einsatz.id', 'einsatz.stichwort'] }) as any;
+    const s = JSON.stringify(r);
+    for (const secret of ['Hauptstraße', 'Mustermann', 'Musterfrau', '0123 456789', '0171', 'max@example.org', 'eingeklemmt', '50.12345', '8.6789', 'Nachbarstadt']) expect(s).not.toContain(secret);
+    expect(r.einsatz).toMatchObject({ id: 'E-1', stichwort: 'F-WALD-2', ort: 'Musterstadt', ortsteil: 'Nord', alarmzeit: '2026-11-14T10:00', status: 'offen', lat: '‹entfernt: Koordinate›' });
+    expect(r.einsatz.einheiten).toEqual(['HLF 1', { name: 'TLF 2', address: 'RIC-77' }]);
+    expect(r.einsatz.strasse).toBe('‹ausgeblendet: Text, 11 Zeichen›');
+    expect(r.einsatz.hausnummer).toMatch(/^‹ausgeblendet/);
+    expect(r.meldung.anrufer.ort).toMatch(/^‹ausgeblendet/);
+    // Struktur bleibt sichtbar (für die Feldzuordnung)
+    expect(Object.keys(r.meldung)).toEqual(['alarmtext', 'anrufer']);
+  });
+  it('Feuersoftware-Einsatz: Adresse nur Ort/Ortsteil, ohne Einsatznummer, Sachverhalt, meldende Person', async () => {
+    const { redactIncidentPayload } = await import('../src/connections/receipts.js');
+    const { normalizeKeys } = await import('../src/connections/feuersoftware.js');
+    const op = normalizeKeys({ id: 'FS-1', start: '2026-11-15T10:00:00Z', keyword: 'B3 Wohnungsbrand', category: 'Brand', facts: 'Person bewusstlos', ric: 'Musterwehr Vollalarm', number: '4711-2026', reporter: { name: 'Erika Musterfrau', phoneNumber: '0123 456789' }, address: { street: 'Hauptstraße', houseNumber: '12', city: 'Musterstadt', district: 'Nord', cityWithDistrict: 'Musterstadt - Nord', streetWithHouseNumber: 'Hauptstraße 12', lat: 50.1, lng: 8.6, zipCode: '12345' }, properties: [{ key: 'Patient', value: 'Max Mustermann' }] });
+    const r = redactIncidentPayload(op) as any;
+    const s = JSON.stringify(r);
+    for (const secret of ['Hauptstraße', '4711-2026', 'bewusstlos', 'Musterfrau', 'Mustermann', '0123 456789', '12345', '50.1', '8.6']) expect(s).not.toContain(secret);
+    expect(r).toMatchObject({ Id: 'FS-1', Keyword: 'B3 Wohnungsbrand', Category: 'Brand', Ric: 'Musterwehr Vollalarm', Address: { City: 'Musterstadt', District: 'Nord', CityWithDistrict: 'Musterstadt - Nord', Lat: '‹entfernt: Koordinate›' } });
+  });
+  it('erlaubte Texte werden auf Telefon, E-Mail und Straße mit Hausnummer geprüft', async () => {
+    const { scrubText } = await import('../src/connections/receipts.js');
+    expect(scrubText('Musterstadt, Hauptstraße 12a')).toBe('Musterstadt, ‹Adresse›');
+    expect(scrubText('Rückruf 0171 2345678')).toBe('Rückruf ‹Telefon›');
+    expect(scrubText('an a.b@example.org')).toBe('an ‹E-Mail›');
+    expect(scrubText('2026-11-14T10:00:00Z')).toBe('2026-11-14T10:00:00Z');
+    expect(scrubText('B3 Wohnungsbrand')).toBe('B3 Wohnungsbrand');
+  });
+  it('Rohdaten: gleiche Inhalte gleiche Prüfsumme, zu große werden gekürzt', async () => {
+    const { packRaw, RAW_MAX_BYTES } = await import('../src/connections/receipts.js');
+    expect(packRaw({ a: 1 }).hash).toBe(packRaw({ a: 1 }).hash);
+    const big = packRaw({ text: 'ä'.repeat(RAW_MAX_BYTES) });
+    expect(big.truncated).toBe(true);
+    expect(Buffer.byteLength(big.body)).toBeLessThanOrEqual(RAW_MAX_BYTES);
+    expect(big.bytes).toBeGreaterThan(RAW_MAX_BYTES);
+  });
+  it('Gebietsfilter, RIC- und Stichwortfilter nennen den Grund', async () => {
+    const { areaMatch } = await import('../src/connections/warnfeed.js');
+    const w = { geocodes: ['064340000000'], areas: ['Kreis Nachbarland'] };
+    expect(areaMatch(w, {})).toMatchObject({ ok: true, reason: expect.stringContaining('Kein Gebietsfilter') });
+    expect(areaMatch(w, { codes: ['064360008008'], names: ['Musterstadt'] })).toEqual({ ok: false, reason: 'Gebiet passt nicht: Geocodes der Meldung 064340000000 – eingestellt 064360008008; Orte der Meldung Kreis Nachbarland – eingestellt Musterstadt.' });
+    expect(areaMatch({ geocodes: ['060000000000'], areas: [] }, { codes: ['064360008008'] }).reason).toContain('größere Gebiet 060000000000');
+    expect(areaMatch({ geocodes: [], areas: ['Musterstadt-Nord'] }, { names: ['Musterstadt'] }).reason).toBe('Gebiet passt: Ortsname „Musterstadt“ in „Musterstadt-Nord“.');
+    const { matchReason } = await import('../src/connections/feuersoftware.js');
+    expect(matchReason({ Ric: 'Nachbarwehr', Keyword: 'TH 1' }, { rics: ['Musterwehr'], keywords: ['B3'] }).reason).toBe('RIC nicht in der Liste: „Nachbarwehr“ – eingestellt „Musterwehr“; Stichwort nicht in der Liste: „TH 1“ enthält keins von „B3“.');
+    expect(matchReason({ Keyword: 'TH 1' }, { keywords: ['B3'] }).reason).toBe('Stichwort nicht in der Liste: „TH 1“ enthält keins von „B3“.');
+  });
+  it('Ergebnis einer Einsatzmeldung als Entscheidung', async () => {
+    const { incidentDecision } = await import('../src/connections/fe2.js');
+    expect(incidentDecision({ outcome: 'created', postId: 'p' }, true).decision).toBe('accepted');
+    expect(incidentDecision({ outcome: 'created', postId: null }, false).reason).toContain('ohne Beitragsentwurf');
+    expect(incidentDecision({ outcome: 'updated', sequence: 2, draft: 'kept' }, true)).toMatchObject({ decision: 'updated', reason: expect.stringContaining('Meldung 2') });
+    expect(incidentDecision({ outcome: 'duplicate' }, true).decision).toBe('known');
+    expect(incidentDecision({ outcome: 'suppressed' }, true).decision).toBe('suppressed');
+    expect(incidentDecision({ outcome: 'ignored' }, true)).toMatchObject({ decision: 'error', reason: expect.stringContaining('Einsatz-ID') });
+  });
+});

@@ -22,6 +22,8 @@ import { FE2_ALLOWED_FIELDS, FE2_DEFAULT_MAPPING, handleFe2Event } from '../conn
 import { checkFormats, connectionTestImage, deleteFacebookPost, facebookAuthorizeUrl, facebookExchange, instagramAuthorizeUrl, instagramExchange, markerFor, mediaForRevision, mediaUrl, socialText, testFacebook, testInstagram } from '../connections/meta.js';
 import { FEUERSOFTWARE_DEFAULT_INTERVAL, FEUERSOFTWARE_INTERVALS, pollFeuersoftware, testFeuersoftware } from '../connections/feuersoftware.js';
 import { endBanner, insecureFeed, insecureFeedUrl, REVIEW_CHECKS, refreshWarnfeed, testWarnfeed, warningBannerText } from '../connections/warnfeed.js';
+import { listReceipts, Receipt, RECEIPT_CAP, receiptItems, receiptRaw } from '../connections/receipts.js';
+import { getSettings } from '../lib/settings.js';
 
 /** Öffentliche Sicht auf eine Verbindung – nie mit Geheimnissen. */
 async function view(c: Connection) {
@@ -454,7 +456,48 @@ export async function connectionRoutes(app: FastifyInstance) {
       return r;
     }
     if (c.kind !== 'warnfeed' || c.status !== 'active') throw badRequest('Nur für aktive Warnfeeds und Feuersoftware-Verbindungen.');
-    return refreshWarnfeed(c);
+    return refreshWarnfeed(c, { trigger: 'manual' });
+  });
+
+  /* ------------------------------------------------------------ Empfangsprotokoll */
+
+  /**
+   * Empfangsprotokoll eingehender Verbindungen (Warnfeed, FE2, Feuersoftware): Abrufe bzw. eingehende Meldungen der
+   * letzten Tage, neueste zuerst, seitenweise. Nur mit „Verbindungen verwalten“. Rohdaten von FE2/Feuersoftware sind
+   * geschwärzt gespeichert; das Öffnen wird deshalb nicht eigens auditiert.
+   */
+  const RECEIPT_KINDS: ConnectionKind[] = ['warnfeed', 'fe2', 'feuersoftware'];
+  const receiptFilter = z.enum(['accepted', 'filtered', 'error']).optional().catch(undefined);
+  const receiptConnection = async (req: FastifyRequest) => {
+    const { id } = z.object({ id: z.uuid() }).parse(req.params);
+    const c = await loadConnection(id, pool, { includeDeleted: true });
+    if (c.deleted_at && !req.auth!.permissions.has('system.manage')) throw notFound('Verbindung nicht gefunden.');
+    if (!RECEIPT_KINDS.includes(c.kind)) throw badRequest('Ein Empfangsprotokoll gibt es nur für amtliche Warnungen, FE2 und Feuersoftware Connect.');
+    return c;
+  };
+
+  app.get('/connections/:id/receipts', { preHandler: manage }, async (req) => {
+    const c = await receiptConnection(req);
+    const q = z.object({ page: z.coerce.number().int().min(1).max(10_000).default(1), limit: z.coerce.number().int().min(1).max(100).default(20), filter: receiptFilter }).parse(req.query ?? {});
+    const s = await getSettings();
+    return { ...(await listReceipts(c.id, { filter: q.filter ?? null, page: q.page, limit: q.limit })), retention_days: Number(s['privacy.receipt_days']) || 7, cap: RECEIPT_CAP };
+  });
+
+  app.get('/connections/:id/receipts/:receiptId/items', { preHandler: manage }, async (req) => {
+    const c = await receiptConnection(req);
+    const { receiptId } = z.object({ receiptId: z.uuid() }).parse(req.params);
+    const { filter } = z.object({ filter: receiptFilter }).parse(req.query ?? {});
+    const items = await receiptItems(c.id, receiptId, filter ?? null);
+    if (!items) throw notFound('Eintrag nicht gefunden (inzwischen gelöscht?).');
+    return { items, redacted: c.kind !== 'warnfeed' };
+  });
+
+  app.get('/connections/:id/receipts/:receiptId/items/:itemId/raw', { preHandler: manage }, async (req) => {
+    const c = await receiptConnection(req);
+    const { receiptId, itemId } = z.object({ receiptId: z.uuid(), itemId: z.uuid() }).parse(req.params);
+    const raw = await receiptRaw(c.id, receiptId, itemId);
+    if (!raw) throw notFound('Rohdaten nicht gefunden (inzwischen gelöscht?).');
+    return { ...raw, redacted: c.kind !== 'warnfeed' };
   });
 
   /* ------------------------------------------------------------ FE2-Eingang */
@@ -472,20 +515,36 @@ export async function connectionRoutes(app: FastifyInstance) {
       const { id } = z.object({ id: z.uuid() }).parse(req.params);
       const c = await one<Connection>(`SELECT * FROM connections WHERE id = $1 AND kind = 'fe2' AND deleted_at IS NULL`, [id]);
       if (!c || c.status === 'revoked') throw new AppError(401, 'unauthorized', 'Zugangsschlüssel fehlt oder ist ungültig.');
-      await fe2Auth(req, c, pathToken);
-      if (c.status === 'disabled') throw new AppError(409, 'disabled', 'Die Verbindung ist angehalten.');
-      let body: unknown = req.body;
-      if (typeof body === 'string') {
+      const test = req.headers['x-blaulichtcms-test'] === '1';
+      // Empfangsprotokoll: jede Anfrage an eine bestehende Verbindung – Fehlversuche ohne gültigen Schlüssel nur ohne
+      // Inhalt und höchstens einer je Minute (sonst ließe sich das Protokoll von außen füllen)
+      const rec = new Receipt(c.id, test ? 'test' : 'inbound');
+      let logIt = true;
+      try {
         try {
-          body = JSON.parse(body);
-        } catch {
-          throw badRequest('Erwartet wird JSON oder ein Formular.');
+          await fe2Auth(req, c, pathToken);
+        } catch (e) {
+          logIt = !(await one(`SELECT 1 FROM connection_receipts WHERE connection_id = $1 AND http_status = 401 AND created_at > now() - interval '1 minute'`, [c.id]));
+          throw e;
         }
+        if (c.status === 'disabled') throw new AppError(409, 'disabled', 'Die Verbindung ist angehalten.');
+        let body: unknown = req.body;
+        if (typeof body === 'string') {
+          try {
+            body = JSON.parse(body);
+          } catch {
+            throw badRequest('Erwartet wird JSON oder ein Formular.');
+          }
+        }
+        if (body == null || typeof body !== 'object') throw badRequest('Erwartet wird JSON oder ein Formular.');
+        const r = await handleFe2Event(c, body, { test, rec });
+        if (r.outcome === 'ignored') throw badRequest('Keine Einsatz-ID gefunden – Zuordnung prüfen.');
+        await rec.finish({ ok: true, httpStatus: 200, received: 1 });
+        return { ok: true, outcome: r.outcome, sequence: r.sequence ?? null };
+      } catch (e: any) {
+        if (logIt) await rec.finish({ ok: false, error: e instanceof AppError ? e.message : 'Interner Fehler beim Verarbeiten – Details im Systemprotokoll.', httpStatus: e instanceof AppError ? e.status : 500, received: rec.size });
+        throw e;
       }
-      if (body == null || typeof body !== 'object') throw badRequest('Erwartet wird JSON oder ein Formular.');
-      const r = await handleFe2Event(c, body, { test: req.headers['x-blaulichtcms-test'] === '1' });
-      if (r.outcome === 'ignored') throw badRequest('Keine Einsatz-ID gefunden – Zuordnung prüfen.');
-      return { ok: true, outcome: r.outcome, sequence: r.sequence ?? null };
     };
     inbound.post('/inbound/fe2/:id', { bodyLimit: 64 * 1024, config: { rateLimit: { max: 60, timeWindow: '1 minute' } } }, (req) => receive(req));
     // „Schlüssel in der Adresse“ (Option je Verbindung): für Absender, die keine eigene Kopfzeile setzen können. Der
@@ -679,7 +738,7 @@ export async function connectionRoutes(app: FastifyInstance) {
 
   app.get('/official-warnings', { preHandler: requireAuth('post.read') }, async () =>
     many<any>(
-      `SELECT w.id, w.identifier, w.msg_type, w.severity, w.event, w.headline, w.areas, w.effective_at, w.expires_at, w.web_url, w.in_area, w.cancelled, w.superseded_by IS NOT NULL AS superseded, w.banner_id, w.received_at, c.name || CASE WHEN c.deleted_at IS NOT NULL THEN ' (Verbindung gelöscht)' ELSE '' END AS source
+      `SELECT w.id, w.connection_id, w.identifier, w.msg_type, w.severity, w.event, w.headline, w.areas, w.effective_at, w.expires_at, w.web_url, w.in_area, w.cancelled, w.superseded_by IS NOT NULL AS superseded, w.banner_id, w.received_at, c.name || CASE WHEN c.deleted_at IS NOT NULL THEN ' (Verbindung gelöscht)' ELSE '' END AS source
          FROM official_warnings w JOIN connections c ON c.id = w.connection_id WHERE w.dismissed_at IS NULL ORDER BY w.received_at DESC LIMIT 100`,
     ),
   );

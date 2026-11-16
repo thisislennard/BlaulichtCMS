@@ -146,6 +146,9 @@ flowchart LR
   Felder, keine Adressen). FE2 meldet per HTTP-Eingang, Feuersoftware Connect wird regelmäßig abgefragt (Filter nach
   RIC und Stichwort, Rücksicht auf das Abfragelimit).
 - **Einheitlicher Ablauf** für alle Verbindungen: Verbinden → Testen → Vorschau → Aktivieren.
+- **Empfangsprotokoll** für amtliche Warnungen, FE2 und Feuersoftware: jeder Abruf bzw. jede eingehende Meldung mit
+  allen gelieferten Meldungen, Entscheidung samt Grund (z. B. „Gebiet passt nicht“, „RIC nicht in der Liste“) und
+  Rohdaten – Einsatzdaten nur geschwärzt, 7 Tage aufbewahrt.
 - **Medienimport:** einmalige Übernahme von Medien und gültigen Upload-Links aus einem Altsystem (Austauschformat,
   Exportskript für LiFeOS).
 

@@ -9,6 +9,7 @@ import { CopyButton, OneTimeSecret, useErrorToast, useToast, useConfirm } from '
 import { useAuth } from '../../lib/auth';
 import { fmtDateTime } from '../../lib/format';
 import { CONN_STATE } from './Connections';
+import { RECEIPT_KINDS, ReceiptLog } from './ReceiptLog';
 
 const STEPS = [
   { id: 'verbinden', label: 'Verbinden' },
@@ -50,7 +51,12 @@ export default function ConnectionDetail() {
   const q = useQuery({ queryKey: ['connection', id], queryFn: () => get<any>(`/connections/${id}`) });
   const sites = useQuery({ queryKey: ['sites'], queryFn: () => get<any[]>('/sites') });
   const c = q.data;
-  const [step, setStep] = useState<Step>('verbinden');
+  // Empfangsprotokoll als eigene Ansicht neben den Schritten, direkt aufrufbar über ?ansicht=empfangsprotokoll
+  const [step, setStepState] = useState<Step | 'empfang'>(() => (params.get('ansicht') === 'empfangsprotokoll' ? 'empfang' : 'verbinden'));
+  const setStep = (s: Step | 'empfang') => {
+    setStepState(s);
+    setParams(s === 'empfang' ? { ansicht: 'empfangsprotokoll' } : {}, { replace: true });
+  };
   const [cfg, setCfg] = useState<any>(null);
   const [secret, setSecret] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
@@ -166,6 +172,14 @@ export default function ConnectionDetail() {
               </li>
             );
           })}
+          {RECEIPT_KINDS.includes(c.kind) && (
+            <li className="pl-2 ml-1 border-l border-line">
+              <button type="button" onClick={() => setStep('empfang')} aria-current={step === 'empfang' ? 'page' : undefined} className={cx('flex items-center gap-2 h-9 px-3 rounded-full border text-sm font-medium', step === 'empfang' ? 'bg-primary text-on-primary border-primary' : 'bg-card border-line hover:bg-raised')}>
+                <Icon name="ScrollText" size={14} />
+                Empfangsprotokoll
+              </button>
+            </li>
+          )}
         </ol>
       </nav>
       {deleted ? <Notice tone="error">Diese Verbindung wurde am {fmtDateTime(c.deleted_at)} gelöscht; ihre Zugangsdaten sind gelöscht. Sie ist nur noch zur Nachvollziehbarkeit sichtbar.</Notice> : revoked && <Notice tone="error">Diese Verbindung wurde widerrufen; ihre Zugangsdaten sind gelöscht.</Notice>}
@@ -433,6 +447,12 @@ export default function ConnectionDetail() {
             ) : (
               <p className="m-0 text-sm text-fg-muted">Noch nicht getestet.</p>
             )}
+            {RECEIPT_KINDS.includes(c.kind) && (
+              <p className="m-0 text-meta text-fg-muted">
+                Was genau angekommen ist – jede Meldung mit Entscheidung, Grund und Rohdaten – zeigt das{' '}
+                <button type="button" className="underline hover:text-fg" onClick={() => setStep('empfang')}>Empfangsprotokoll</button>.
+              </p>
+            )}
           </div>
         </Card>
       )}
@@ -543,6 +563,8 @@ export default function ConnectionDetail() {
           )}
         </div>
       )}
+
+      {step === 'empfang' && <ReceiptLog id={id} kind={c.kind} />}
     </div>
   );
 }

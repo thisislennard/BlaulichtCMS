@@ -7,6 +7,7 @@ import { getSettings } from '../lib/settings.js';
 import { revisionHash } from '../routes/posts.js';
 import { emitIncident } from '../automations/events.js';
 import type { Connection } from './common.js';
+import { redactIncidentPayload, type Receipt, type ReceiptDecision } from './receipts.js';
 
 /**
  * FE2-Eingang für interne Einsatzentwürfe.
@@ -149,6 +150,43 @@ export interface Fe2Result {
   fe2EventId?: string;
   postId?: string | null;
   sequence?: number;
+  /** Bei Folgeereignissen: unbearbeiteter Entwurf ersetzt, bearbeiteter Entwurf belassen (Hinweis an die Redaktion), kein Entwurf */
+  draft?: 'replaced' | 'kept' | 'none';
+}
+
+/** Angaben einer Einsatzmeldung für das Empfangsprotokoll – nur Felder der Allowlist (Ort ohne Straße). */
+export function incidentInfo(eventId: string | null, f: Partial<Record<Fe2Field, string>>, extra: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    eventId,
+    keyword: f.keyword ?? null,
+    keywordText: f.keyword_text ?? null,
+    category: f.category ?? null,
+    place: [f.municipality, f.district].filter(Boolean).join(', ') || null,
+    alarmTime: f.started_at ?? null,
+    status: f.status ?? null,
+    ...extra,
+  };
+}
+
+/** Ergebnis von handleIncident() als Entscheidung mit lesbarer Begründung (Empfangsprotokoll). */
+export function incidentDecision(r: Fe2Result, createDrafts: boolean): { decision: ReceiptDecision; reason: string } {
+  switch (r.outcome) {
+    case 'created':
+      return { decision: 'accepted', reason: createDrafts && r.postId ? 'Neuer Einsatz – übernommen, Beitragsentwurf angelegt.' : 'Neuer Einsatz – übernommen (ohne Beitragsentwurf, „Beitragsentwürfe anlegen“ ist aus).' };
+    case 'updated':
+      return {
+        decision: 'updated',
+        reason: `Aktualisierung eines bekannten Einsatzes (Meldung ${r.sequence ?? '?'}) – ${r.draft === 'replaced' ? 'unbearbeiteter Entwurf aktualisiert' : r.draft === 'kept' ? 'Entwurf wurde schon bearbeitet und bleibt unverändert, Redaktion benachrichtigt' : 'Einsatzmeldung aktualisiert (kein Entwurf)'}.`,
+      };
+    case 'duplicate':
+      return { decision: 'known', reason: 'Schon bekannt (unverändert) – dieselbe Meldung kam bereits.' };
+    case 'suppressed':
+      return { decision: 'suppressed', reason: 'Gesperrt: Der Einsatz wurde früher übernommen und inzwischen gelöscht (Löschfrist oder Datenschutzanfrage) – nicht erneut angelegt.' };
+    case 'test':
+      return { decision: 'test', reason: 'Testmeldung – nur die Vorschau wurde aktualisiert, nichts angelegt.' };
+    default:
+      return { decision: 'error', reason: 'Keine Einsatz-ID gefunden – Feldzuordnung prüfen.' };
+  }
 }
 
 async function instanceTimeZone(): Promise<string> {
@@ -164,7 +202,26 @@ export function incidentRef(connectionId: string, eventId: string): string {
  * FE2-Ereignis verarbeiten. Vor der Aktivierung (oder mit Testkennung) nur die Vorschau speichern, sonst wie jede
  * Einsatzmeldung über handleIncident().
  */
-export async function handleFe2Event(c: Connection, payload: unknown, opts: { test?: boolean } = {}): Promise<Fe2Result> {
+export async function handleFe2Event(c: Connection, payload: unknown, opts: { test?: boolean; rec?: Receipt } = {}): Promise<Fe2Result> {
+  // Empfangsprotokoll: nur geschwärzte Rohdaten (Werte der Feldzuordnung und unbedenkliche Felder bleiben stehen)
+  const note = async (d: { decision: ReceiptDecision; reason: string }) => {
+    if (!opts.rec) return;
+    const parsed = parseFe2(payload, c.config.mapping ?? {}, await instanceTimeZone());
+    const keepPaths = Object.values({ ...FE2_DEFAULT_MAPPING, ...(c.config.mapping ?? {}) }).filter((p): p is string => typeof p === 'string' && !!p);
+    opts.rec.add({ ...d, info: incidentInfo(parsed.eventId, parsed.fields, { ignoredKeys: parsed.ignoredKeys }), raw: redactIncidentPayload(payload, { keepPaths }) });
+  };
+  let r: Fe2Result;
+  try {
+    r = await processFe2Event(c, payload, opts);
+  } catch (e: any) {
+    await note({ decision: 'error', reason: `Fehler beim Verarbeiten: ${String(e?.message ?? e).slice(0, 300)}` });
+    throw e;
+  }
+  await note(incidentDecision(r, c.config.createDrafts !== false));
+  return r;
+}
+
+async function processFe2Event(c: Connection, payload: unknown, opts: { test?: boolean } = {}): Promise<Fe2Result> {
   const tz = await instanceTimeZone();
   const parsed = parseFe2(payload, c.config.mapping ?? {}, tz);
   if (!parsed.eventId) return { outcome: 'ignored' };
@@ -236,10 +293,13 @@ export async function handleIncident(c: Connection, source: IncidentSource, inpu
       `UPDATE fe2_events SET fields = $2, keyword = COALESCE($3, keyword), title = $4, payload_hash = $5, sequence = $6, status = $7, updated_at = now() WHERE id = $1`,
       [existing.id, JSON.stringify(fields), fields.keyword ?? null, draftTitle(fields), hash, seq, closed ? 'closed' : existing.status],
     );
+    let draft: Fe2Result['draft'] = 'none';
     if (existing.post_id) {
+      draft = 'kept';
       const post = await one<any>(`SELECT p.current_revision, r.created_by, r.submitted_at FROM posts p JOIN post_revisions r ON r.post_id = p.id AND r.number = p.current_revision WHERE p.id = $1 FOR UPDATE OF p`, [existing.post_id], db);
       if (post && post.current_revision === 1 && !post.created_by && !post.submitted_at) {
         // Noch unbearbeiteter automatischer Entwurf → mit den neuen Feldern ersetzen (neue Fassung)
+        draft = 'replaced';
         const title = draftTitle(fields);
         const rev = { title, body: draftBody(fields, source, tz), excerpt: '', media_ids: [] as string[], cover_id: null, site_id: null };
         await db.query(`UPDATE post_revisions SET title = $2, body = $3, content_hash = $4, change_note = $5 WHERE post_id = $1 AND number = 1`, [existing.post_id, title, rev.body, revisionHash(rev), `Automatisch aus ${label} (Meldung ${seq})`]);
@@ -250,6 +310,6 @@ export async function handleIncident(c: Connection, source: IncidentSource, inpu
     }
     await emitIncident(c, source, { eventId, sequence: seq, phase: closed ? 'beendet' : 'aktualisierung', fields, postId: existing.post_id }, db);
     log('info', source, `Folgeereignis ${seq} (Ref ${ref})${closed ? ', beendet' : ''}`);
-    return { outcome: 'updated' as const, fe2EventId: existing.id, postId: existing.post_id, sequence: seq };
+    return { outcome: 'updated' as const, fe2EventId: existing.id, postId: existing.post_id, sequence: seq, draft };
   });
 }

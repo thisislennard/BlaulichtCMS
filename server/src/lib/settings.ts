@@ -40,6 +40,11 @@ export const DEFAULT_SETTINGS = {
   'privacy.official_warning_days': 90,
   'privacy.upload_link_days': 90,
   /**
+   * Empfangsprotokoll der eingehenden Verbindungen (connections/receipts.ts): Abrufe und eingehende Meldungen samt
+   * Entscheidung und Rohdaten (FE2/Feuersoftware geschwärzt) so viele Tage aufbewahren (1–30).
+   */
+  'privacy.receipt_days': 7,
+  /**
    * Angaben der Hochladenden (Name, E-Mail, Aufnahmeort, Aufnahmedatum – je Link abfragbar) nach so vielen Monaten
    * entfernen; die Dateien bleiben (wie press_uploader_anonymize_months in LiFeOS). 0 = nie.
    */
@@ -268,6 +273,7 @@ export const SETTING_RANGES: Record<string, [number, number]> = {
   'privacy.warning_days': [0, 3650],
   'privacy.official_warning_days': [0, 3650],
   'privacy.upload_link_days': [0, 3650],
+  'privacy.receipt_days': [1, 30],
   'privacy.uploader_months': [0, 120],
   'privacy.automation_run_days': [1, 3650],
   'automations.max_runs_per_minute': [1, 600],

@@ -9,6 +9,7 @@ import { audit, SYSTEM_ACTOR, type Actor } from './audit.js';
 import { conflict, notFound } from './errors.js';
 import { log } from './log.js';
 import { getSettings, type Settings } from './settings.js';
+import { purgeOrphanRaws } from '../connections/receipts.js';
 
 /*
  * Löschfristen (#97, Art. 5 Abs. 1 lit. e, Art. 17, Art. 25 Abs. 2 DSGVO).
@@ -312,6 +313,16 @@ export async function runRetention(opts: { dryRun: boolean; actor?: Actor; setti
       where: `GREATEST(COALESCE(expires_at, effective_at, sent_at, received_at), COALESCE(last_seen_at, received_at)) < now() - make_interval(days => $1)`,
     }),
   );
+  // Empfangsprotokoll der Verbindungen (Einträge samt Meldungen); danach Rohdaten ohne Bezug
+  const receiptCat = await simpleCategory(opts.dryRun, {
+    key: 'connection_receipts',
+    label: 'Empfangsprotokoll der Verbindungen (Abrufe, Meldungen, Rohdaten – Einsatzdaten geschwärzt)',
+    days: Math.max(1, days(s['privacy.receipt_days'])),
+    table: 'connection_receipts',
+    where: `created_at < now() - make_interval(days => $1)`,
+  });
+  if (!opts.dryRun) await purgeOrphanRaws();
+  report.categories.push(receiptCat);
   const linkCat = await simpleCategory(opts.dryRun, {
     key: 'upload_links',
     label: 'Abgelaufene und widerrufene Upload-Links (Token, Bezeichnung)',

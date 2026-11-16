@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router';
 import { get, post } from '../../api/client';
-import { Badge, Button, Card, EmptyState, ErrorBox, FieldWrap, Input, Notice, PageHeader, Select, SkeletonRows, StatusBadge, Switch } from '../../components/ui/core';
+import { Badge, Button, Card, EmptyState, ErrorBox, FieldWrap, Input, LinkButton, Notice, PageHeader, Select, SkeletonRows, StatusBadge, Switch } from '../../components/ui/core';
 import { useAuth } from '../../lib/auth';
 import { Icon } from '../../components/ui/Icon';
 import { Dialog, OneTimeSecret, useConfirm, useErrorToast, useToast } from '../../components/ui/overlays';
@@ -136,9 +136,26 @@ export function OfficialWarnings() {
   const nav = useNavigate();
   const [site, setSite] = useState('');
   const active = (sites.data ?? []).filter((s) => s.status === 'active');
+  // „Was ist angekommen?“ – Empfangsprotokoll der Warnfeeds (nur mit „Verbindungen verwalten“)
+  const feedsQ = useQuery({ queryKey: ['connections', false], queryFn: () => get<any[]>('/connections'), enabled: can('connection.manage') });
+  const feeds = (feedsQ.data ?? []).filter((c) => c.kind === 'warnfeed');
   return (
     <div className="flex flex-col gap-5">
-      <PageHeader title="Amtliche Warnungen" subtitle="Aus verbundenen Warnquellen – getrennt vom eigenen Warnentwurf. Maßgeblich ist immer die Originalquelle." />
+      <PageHeader
+        title="Amtliche Warnungen"
+        subtitle="Aus verbundenen Warnquellen – getrennt vom eigenen Warnentwurf. Maßgeblich ist immer die Originalquelle."
+        actions={
+          feeds.length > 0 ? (
+            <div className="flex flex-wrap gap-2">
+              {feeds.map((f) => (
+                <LinkButton key={f.id} to={`/verbindungen/${f.id}?ansicht=empfangsprotokoll`} icon="ScrollText">
+                  {feeds.length > 1 ? `Was ist angekommen? (${f.name})` : 'Was ist angekommen?'}
+                </LinkButton>
+              ))}
+            </div>
+          ) : undefined
+        }
+      />
       <Notice>
         Ohne fachlich geprüfte Freigabe für automatische Banner verlinkt die Website auf die Originalquelle, z. B. <a href="https://warnung.bund.de" target="_blank" rel="noreferrer">warnung.bund.de</a>. Ein Banner-Entwurf durchläuft die normale Freigabe.
       </Notice>

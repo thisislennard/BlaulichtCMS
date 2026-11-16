@@ -4522,6 +4522,260 @@ async function uploadPublic(token: string, name: string, data: Buffer, fields: R
   return anonymous.raw('POST', `/public/upload/${token}`, multipart({ name, data, type: 'image/jpeg' }, { clientKey: `k-${crypto.randomBytes(6).toString('hex')}`, ...fields }));
 }
 
+describe('Empfangsprotokoll eingehender Verbindungen', () => {
+  // Lokale Ersatzdienste für CAP-Quelle und Feuersoftware Connect – nichts geht an echte Dienste
+  let srv: import('node:http').Server;
+  let base = '';
+  const state: { cap: 'ok' | '503'; fs: 'ok' | '503'; alerts: any[]; ops: any[] } = { cap: 'ok', fs: 'ok', alerts: [], ops: [] };
+  const FS_KEY = 'fs-protokoll-schluessel-2026';
+  const START = new Date(Date.now() - 3600_000).toISOString();
+  const alert = (id: string, area: string, code: string) => ({
+    identifier: id,
+    sender: 'opendata@dwd.de',
+    sent: new Date().toISOString(),
+    status: 'Actual',
+    msgType: 'Alert',
+    info: [{ language: 'de-DE', event: 'STURMBÖEN', severity: 'Moderate', urgency: 'Immediate', headline: `Amtliche WARNUNG vor STURMBÖEN (${area})`, description: 'Fiktive Testwarnung.', expires: new Date(Date.now() + 3 * 3600_000).toISOString(), area: [{ areaDesc: area, geocode: [{ valueName: 'ARS', value: code }] }] }],
+  });
+  const op = (id: string, ric: string, extra: any = {}) => ({
+    Id: id,
+    Start: START,
+    Keyword: 'B3 Wohnungsbrand',
+    Category: 'Brand',
+    Facts: 'VERTRAULICH Person bewusstlos',
+    Ric: ric,
+    Number: '4711-2026',
+    Reporter: { Name: 'Erika Musterfrau', PhoneNumber: '0123 456789' },
+    Address: { Street: 'Hauptstraße', HouseNumber: '12', City: 'Musterstadt', District: 'Nord', CityWithDistrict: 'Musterstadt - Nord', StreetWithHouseNumber: 'Hauptstraße 12', Lat: 50.123, Lng: 8.654, ZipCode: '12345' },
+    ...extra,
+  });
+  let wf: any;
+  let fsId = '';
+  let fe2Id = '';
+  let fe2Token = '';
+  const receipts = async (id: string, q = '') => admin.get(`/connections/${id}/receipts${q}`);
+  const items = async (id: string, rid: string, q = '') => (await admin.get(`/connections/${id}/receipts/${rid}/items${q}`)).json.items as any[];
+  /** Alles, was zu einer Verbindung im Empfangsprotokoll gespeichert ist (Einträge, Meldungen, Rohdaten) */
+  const stored = async (id: string) =>
+    JSON.stringify(
+      await many<any>(
+        `SELECT r.error, r.summary, i.reason, i.info, b.body FROM connection_receipts r
+           LEFT JOIN connection_receipt_items i ON i.receipt_id = r.id LEFT JOIN connection_receipt_raws b ON b.hash = i.raw_hash WHERE r.connection_id = $1`,
+        [id],
+      ),
+    );
+
+  beforeAll(async () => {
+    srv = http.createServer((req, res) => {
+      if (req.url === '/cap.json') {
+        if (state.cap === '503') {
+          res.writeHead(503);
+          return res.end();
+        }
+        res.writeHead(200, { 'content-type': 'application/json' });
+        return res.end(JSON.stringify(state.alerts));
+      }
+      if (req.headers.authorization !== `bearer ${FS_KEY}`) {
+        res.writeHead(401);
+        return res.end();
+      }
+      if (state.fs === '503') {
+        res.writeHead(503);
+        return res.end();
+      }
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify(state.ops));
+    });
+    await new Promise<void>((r) => srv.listen(0, '127.0.0.1', r));
+    base = `http://127.0.0.1:${(srv.address() as any).port}`;
+    process.env.BLAULICHTCMS_FEUERSOFTWARE_URL = base;
+    state.alerts = [alert('PROTOKOLL-1', 'Gemeinde Musterstadt', '099990001001'), alert('PROTOKOLL-2', 'Gemeinde Nachbarort', '099980002002')];
+    wf = (await one<any>(
+      `INSERT INTO connections (kind, name, status, config, private_target, private_approved_at) VALUES ('warnfeed', 'Protokoll-Feed', 'active', $1, '127.0.0.1', now()) RETURNING *`,
+      [JSON.stringify({ format: 'cap', url: `${base}/cap.json`, areaFilter: { codes: [], names: ['Musterstadt'] } })],
+    ))!;
+  });
+  afterAll(() => {
+    srv?.close();
+    delete process.env.BLAULICHTCMS_FEUERSOFTWARE_URL;
+  });
+
+  it('Warnfeed: jeder Abruf mit allen Meldungen, Entscheidung und Grund – auch herausgefilterte und Fehler', async () => {
+    const { refreshWarnfeed } = await import('../src/connections/warnfeed.js');
+    expect(await refreshWarnfeed(wf, { trigger: 'manual' })).toEqual({ total: 2, added: 2 });
+    const r1 = (await receipts(wf.id)).json;
+    expect(r1.total).toBe(1);
+    expect(r1.retention_days).toBe(7);
+    expect(r1.items[0]).toMatchObject({ trigger: 'manual', trigger_label: '„Jetzt abrufen“', ok: true, received: 2, accepted: 1, filtered: 1, errors: 0, http_status: 200 });
+    expect(r1.items[0].duration_ms).toBeGreaterThanOrEqual(0);
+    const it1 = await items(wf.id, r1.items[0].id);
+    const byId = (id: string) => it1.find((i) => i.info.identifier === id);
+    expect(byId('PROTOKOLL-1')).toMatchObject({ decision: 'accepted', decision_label: 'übernommen', has_raw: true, info: { provider: 'Deutscher Wetterdienst', msgType: 'Alert', severity: 'Moderate', areas: ['Gemeinde Musterstadt'], inArea: true } });
+    expect(byId('PROTOKOLL-1').reason).toContain('Ortsname „Musterstadt“ in „Gemeinde Musterstadt“');
+    expect(byId('PROTOKOLL-2')).toMatchObject({ decision: 'filtered', info: { inArea: false } });
+    expect(byId('PROTOKOLL-2').reason).toMatch(/^Gebiet passt nicht: Orte der Meldung Gemeinde Nachbarort – eingestellt Musterstadt\. Gespeichert als „außerhalb des Gebiets“/);
+    // Rohdaten vollständig, wie geliefert (öffentliche Daten)
+    const raw = await admin.get(`/connections/${wf.id}/receipts/${r1.items[0].id}/items/${byId('PROTOKOLL-2').id}/raw`);
+    expect(raw.status).toBe(200);
+    expect(raw.json).toMatchObject({ redacted: false, truncated: false });
+    expect(JSON.parse(raw.json.body)).toEqual(state.alerts[1]);
+    // Zweiter Abruf: beide schon bekannt, Rohdaten nur einmal gespeichert
+    await refreshWarnfeed(wf);
+    const r2 = (await receipts(wf.id)).json.items[0];
+    expect(r2).toMatchObject({ trigger: 'scheduled', received: 2, accepted: 0, filtered: 0 });
+    expect((await items(wf.id, r2.id)).map((i) => i.decision)).toEqual(['known', 'known']);
+    expect((await one<any>(`SELECT count(DISTINCT i.raw_hash)::int AS n FROM connection_receipt_items i JOIN connection_receipts r ON r.id = i.receipt_id WHERE r.connection_id = $1`, [wf.id]))!.n).toBe(2);
+    // Ausgeblendete Meldung
+    const w1 = (await one<any>(`SELECT id FROM official_warnings WHERE connection_id = $1 AND identifier = 'PROTOKOLL-1'`, [wf.id]))!;
+    expect((await editor.post(`/official-warnings/${w1.id}/dismiss`)).status).toBe(200);
+    await refreshWarnfeed(wf);
+    const r3 = (await receipts(wf.id)).json.items[0];
+    expect((await items(wf.id, r3.id)).find((i) => i.info.identifier === 'PROTOKOLL-1')).toMatchObject({ decision: 'dismissed', decision_label: 'ausgeblendet' });
+    // Fehlerhafter Abruf: Fehlermeldung, HTTP-Status
+    state.cap = '503';
+    await expect(refreshWarnfeed(wf)).rejects.toThrow('HTTP 503');
+    state.cap = 'ok';
+    const r4 = (await receipts(wf.id)).json.items[0];
+    expect(r4).toMatchObject({ ok: false, error: expect.stringMatching(/^HTTP 503 von 127\.0\.0\.1/), http_status: 503, received: 0 });
+    // Die Liste der amtlichen Warnungen nennt die Verbindung (Link „Was ist angekommen?“)
+    expect((await editor.get('/official-warnings')).json.find((w: any) => w.identifier === 'PROTOKOLL-2')).toMatchObject({ connection_id: wf.id });
+  });
+
+  it('Filter, Seiten und Recht „Verbindungen verwalten“', async () => {
+    const all = (await receipts(wf.id)).json;
+    expect(all.total).toBe(4);
+    expect(all.items.map((r: any) => r.trigger)).toEqual(['scheduled', 'scheduled', 'scheduled', 'manual']);
+    expect((await receipts(wf.id, '?filter=accepted')).json.total).toBe(1);
+    expect((await receipts(wf.id, '?filter=filtered')).json.total).toBe(2);
+    expect((await receipts(wf.id, '?filter=error')).json.items.map((r: any) => r.ok)).toEqual([false]);
+    const p2 = (await receipts(wf.id, '?limit=1&page=2')).json;
+    expect(p2).toMatchObject({ total: 4, page: 2, limit: 1 });
+    expect(p2.items).toHaveLength(1);
+    expect(p2.items[0].id).toBe(all.items[1].id);
+    const first = all.items[3];
+    expect((await items(wf.id, first.id, '?filter=filtered')).map((i) => i.info.identifier)).toEqual(['PROTOKOLL-2']);
+    expect((await items(wf.id, first.id, '?filter=accepted')).map((i) => i.info.identifier)).toEqual(['PROTOKOLL-1']);
+    // Ohne Recht: nichts
+    expect((await editor.get(`/connections/${wf.id}/receipts`)).status).toBe(403);
+    expect((await editor.get(`/connections/${wf.id}/receipts/${first.id}/items`)).status).toBe(403);
+    const it0 = (await items(wf.id, first.id))[0];
+    expect((await editor.get(`/connections/${wf.id}/receipts/${first.id}/items/${it0.id}/raw`)).status).toBe(403);
+    expect((await anonymous.get(`/connections/${wf.id}/receipts`)).status).toBe(401);
+    // Fremde Verbindung: Eintrag passt nicht
+    const other = (await one<any>(`INSERT INTO connections (kind, name, config) VALUES ('warnfeed', 'Anderer Feed', '{}') RETURNING id`))!;
+    expect((await admin.get(`/connections/${other.id}/receipts/${first.id}/items`)).status).toBe(404);
+    expect((await admin.get(`/connections/${other.id}/receipts/${first.id}/items/${it0.id}/raw`)).status).toBe(404);
+  });
+
+  it('FE2: eingehende Meldungen samt Fehlversuchen, Rohdaten nur geschwärzt', async () => {
+    const c = await admin.post('/connections', { kind: 'fe2', name: 'FE2 Protokoll (Test)' });
+    fe2Id = c.json.id;
+    fe2Token = c.json.token;
+    const send = (body: any, tok = fe2Token, headers: Record<string, string> = {}) => anonymous.raw('POST', `/inbound/fe2/${fe2Id}`, { body, headers: { authorization: `Bearer ${tok}`, ...headers } });
+    const alarm = (id: string, extra: any = {}) => ({
+      einsatz: { id, stichwort: 'F-WALD-2', stichwort_text: 'Waldbrand mittel', ort: 'Musterstadt', ortsteil: 'Nord', alarmzeit: '2026-11-14T10:00', einheiten: ['HLF 1'], status: 'offen', strasse: 'Hauptstraße 12', koordinaten: { lat: 50.123, lng: 8.654 }, ...extra },
+      meldung: { alarmtext: 'VERTRAULICH Person Max Mustermann Tel 0123 456789', anrufer: { name: 'Erika Musterfrau', telefon: '0171 2345678' } },
+    });
+    expect((await send(alarm('PR-1'), fe2Token, { 'x-blaulichtcms-test': '1' })).json.outcome).toBe('test');
+    let r = (await receipts(fe2Id)).json.items[0];
+    expect(r).toMatchObject({ trigger: 'test', ok: true, http_status: 200, received: 1 });
+    let its = await items(fe2Id, r.id);
+    expect(its[0]).toMatchObject({ decision: 'test', info: { eventId: 'PR-1', keyword: 'F-WALD-2', place: 'Musterstadt, Nord', alarmTime: expect.stringMatching(/^2026-11-14T/) } });
+    const raw = (await admin.get(`/connections/${fe2Id}/receipts/${r.id}/items/${its[0].id}/raw`)).json;
+    expect(raw.redacted).toBe(true);
+    const body = JSON.parse(raw.body);
+    expect(body.einsatz).toMatchObject({ id: 'PR-1', stichwort: 'F-WALD-2', ort: 'Musterstadt', koordinaten: '‹entfernt: Koordinate›' });
+    expect(body.meldung.alarmtext).toMatch(/^‹ausgeblendet: Text, \d+ Zeichen›$/);
+    // Aktiv: neu, unverändert, Aktualisierung
+    await pool.query(`UPDATE connections SET status = 'active' WHERE id = $1`, [fe2Id]);
+    expect((await send(alarm('PR-2'))).json.outcome).toBe('created');
+    expect((await send(alarm('PR-2'))).json.outcome).toBe('duplicate');
+    expect((await send(alarm('PR-2', { status: 'beendet' }))).json.outcome).toBe('updated');
+    const list = (await receipts(fe2Id)).json.items.slice(0, 3);
+    const decisions = [];
+    for (const x of list) decisions.push((await items(fe2Id, x.id))[0].decision);
+    expect(decisions).toEqual(['updated', 'known', 'accepted']);
+    expect(list[2].trigger).toBe('inbound');
+    // Ohne Einsatz-ID: 400, Fehler mit Grund
+    expect((await send({ einsatz: { stichwort: 'F-1' } })).status).toBe(400);
+    r = (await receipts(fe2Id)).json.items[0];
+    expect(r).toMatchObject({ ok: false, http_status: 400, error: 'Keine Einsatz-ID gefunden – Zuordnung prüfen.' });
+    expect((await items(fe2Id, r.id))[0]).toMatchObject({ decision: 'error', reason: expect.stringContaining('Einsatz-ID') });
+    // Falscher Schlüssel: ohne Inhalt, höchstens ein Eintrag je Minute
+    const n0 = (await receipts(fe2Id)).json.total;
+    expect((await send(alarm('PR-3'), 'bcfe2_falsch')).status).toBe(401);
+    expect((await send(alarm('PR-3'), 'bcfe2_falsch')).status).toBe(401);
+    const after = (await receipts(fe2Id)).json;
+    expect(after.total).toBe(n0 + 1);
+    expect(after.items[0]).toMatchObject({ ok: false, http_status: 401, received: 0 });
+    expect(await items(fe2Id, after.items[0].id)).toEqual([]);
+    // Nichts Personenbezogenes und kein Schlüssel in den gespeicherten Daten
+    const all = await stored(fe2Id);
+    expect(all).toContain('F-WALD-2');
+    for (const secret of ['Hauptstraße', 'Mustermann', 'Musterfrau', '0123 456789', '0171', 'VERTRAULICH', '50.123', '8.654', fe2Token, 'bcfe2_falsch']) expect(all).not.toContain(secret);
+  });
+
+  it('Feuersoftware: Abruf mit Filtergründen (RIC, älter als 24 Stunden), Fehler mit HTTP-Status, Rohdaten geschwärzt', async () => {
+    const { updateConnectionSecrets } = await import('../src/connections/common.js');
+    const { pollFeuersoftware } = await import('../src/connections/feuersoftware.js');
+    const c = (await one<any>(`INSERT INTO connections (kind, name, status, config) VALUES ('feuersoftware', 'Connect Protokoll', 'active', $1) RETURNING *`, [JSON.stringify({ intervalSeconds: 120, rics: ['Musterwehr Vollalarm'], keywords: [], createDrafts: true })]))!;
+    fsId = c.id;
+    await updateConnectionSecrets(c, { apiKey: FS_KEY }, null);
+    state.ops = [op('PFS-1', 'Musterwehr Vollalarm'), op('PFS-2', 'Nachbarwehr', { Keyword: 'TH 1' }), op('PFS-ALT', 'Musterwehr Vollalarm', { Start: new Date(Date.now() - 3 * 86400_000).toISOString() })];
+    expect(await pollFeuersoftware(fsId, { force: true })).toMatchObject({ seen: 2, matched: 1, created: 1 });
+    const r = (await receipts(fsId)).json.items[0];
+    expect(r).toMatchObject({ trigger: 'manual', ok: true, http_status: 200, received: 3, accepted: 1, filtered: 2 });
+    const its = await items(fsId, r.id);
+    const by = (id: string) => its.find((i) => i.info.eventId === id);
+    expect(by('PFS-1')).toMatchObject({ decision: 'accepted', info: { keyword: 'B3 Wohnungsbrand', place: 'Musterstadt - Nord', ric: 'Musterwehr Vollalarm' } });
+    expect(by('PFS-1').reason).toContain('RIC „Musterwehr Vollalarm“ passt');
+    expect(by('PFS-2')).toMatchObject({ decision: 'filtered', reason: 'RIC nicht in der Liste: „Nachbarwehr“ – eingestellt „Musterwehr Vollalarm“.' });
+    expect(by('PFS-ALT')).toMatchObject({ decision: 'filtered', reason: expect.stringMatching(/^Älter als 24 Stunden/) });
+    const raw = JSON.parse((await admin.get(`/connections/${fsId}/receipts/${r.id}/items/${by('PFS-1').id}/raw`)).json.body);
+    expect(raw).toMatchObject({ Id: 'PFS-1', Keyword: 'B3 Wohnungsbrand', Address: { City: 'Musterstadt', Lat: '‹entfernt: Koordinate›' } });
+    // Fehler: Serverfehler mit Status
+    state.fs = '503';
+    await pool.query(`UPDATE connections SET last_poll_at = NULL WHERE id = $1`, [fsId]);
+    expect((await pollFeuersoftware(fsId, { force: true })).error).toContain('Serverfehler (503)');
+    state.fs = 'ok';
+    expect((await receipts(fsId)).json.items[0]).toMatchObject({ ok: false, http_status: 503, trigger: 'manual', error: expect.stringContaining('Serverfehler (503)') });
+    const all = await stored(fsId);
+    for (const secret of ['Hauptstraße', '4711-2026', 'bewusstlos', 'VERTRAULICH', 'Musterfrau', '0123 456789', '12345', '50.123', '8.654', FS_KEY]) expect(all).not.toContain(secret);
+  });
+
+  it('Obergrenze je Verbindung und Löschfrist samt Rohdaten', async () => {
+    const { RECEIPT_CAP } = await import('../src/connections/receipts.js');
+    const { refreshWarnfeed } = await import('../src/connections/warnfeed.js');
+    await pool.query(
+      `INSERT INTO connection_receipts (connection_id, trigger, ok, created_at) SELECT $1, 'scheduled', true, now() - interval '2 days' - make_interval(secs => g) FROM generate_series(1, $2::int) g`,
+      [wf.id, RECEIPT_CAP],
+    );
+    await refreshWarnfeed(wf);
+    const count = async () => (await one<any>(`SELECT count(*)::int AS n FROM connection_receipts WHERE connection_id = $1`, [wf.id]))!.n;
+    expect(await count()).toBe(RECEIPT_CAP);
+    // Die echten Abrufe sind die neuesten und bleiben
+    expect((await receipts(wf.id)).json.items[0].received).toBe(2);
+    // Löschfrist: älter als 7 Tage → weg, samt Meldungen; Rohdaten ohne Bezug danach ebenfalls
+    const newest = (await receipts(wf.id)).json.items[0].id;
+    await pool.query(`UPDATE connection_receipts SET created_at = now() - interval '8 days' WHERE connection_id = $1`, [wf.id]);
+    await pool.query(`UPDATE connection_receipt_raws SET last_used_at = now() - interval '2 hours'`);
+    const { runRetention } = await import('../src/lib/retention.js');
+    const preview = await runRetention({ dryRun: true });
+    expect(preview.categories.find((c) => c.key === 'connection_receipts')).toMatchObject({ days: 7, count: RECEIPT_CAP });
+    await runRetention({ dryRun: false });
+    expect(await count()).toBe(0);
+    expect((await one<any>(`SELECT count(*)::int AS n FROM connection_receipt_items WHERE receipt_id = $1`, [newest]))!.n).toBe(0);
+    // Rohdaten der Warnmeldungen sind weg; die der anderen Verbindungen (inzwischen ebenfalls älter markiert) bleiben, solange sie noch verwendet werden
+    expect((await one<any>(`SELECT count(*)::int AS n FROM connection_receipt_raws b WHERE b.body LIKE '%PROTOKOLL-%'`))!.n).toBe(0);
+    expect((await one<any>(`SELECT count(*)::int AS n FROM connection_receipt_raws b WHERE b.body LIKE '%PFS-1%'`))!.n).toBeGreaterThan(0);
+    // Verbindung endgültig löschen entfernt ihr Protokoll mit
+    const tmp = (await one<any>(`INSERT INTO connections (kind, name, config) VALUES ('warnfeed', 'Nie benutzt', '{}') RETURNING id`))!;
+    await pool.query(`INSERT INTO connection_receipts (connection_id, trigger, ok) VALUES ($1, 'test', false)`, [tmp.id]);
+    expect((await admin.raw('DELETE', `/connections/${tmp.id}`)).json.mode).toBe('deleted');
+    expect((await one<any>(`SELECT count(*)::int AS n FROM connection_receipts WHERE connection_id = $1`, [tmp.id]))!.n).toBe(0);
+  });
+});
+
 describe('Medien wie LiFeOS 1: Upload-Seite und Link-Bedienung', () => {
   it('Gültigkeit in Stunden oder bis Termin, mit Höchstdauer', async () => {
     const col = (await editor.post('/collections', { title: 'Link-Bedienung', createLink: true, linkHours: 6 })).json;

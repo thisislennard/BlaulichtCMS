@@ -91,6 +91,7 @@ const RANGES: Record<string, [number, number]> = {
   'privacy.warning_days': [0, 3650],
   'privacy.official_warning_days': [0, 3650],
   'privacy.upload_link_days': [0, 3650],
+  'privacy.receipt_days': [1, 30],
   'privacy.uploader_months': [0, 120],
   'privacy.automation_run_days': [1, 3650],
   'automations.max_runs_per_minute': [1, 600],
@@ -422,6 +423,7 @@ export default function Settings() {
                   <NumField k="privacy.fe2_event_days" label="Einsatzmeldungen (FE2, Feuersoftware Connect)" help="Stichwort, Einsatzart, Ort, Zeit, Einheiten. Beiträge und Warnvorgänge daraus bleiben. 0 = nie." unit={t("admin.common.days")} v={v} set={set} ro={ro} />
                   <NumField k="privacy.automation_run_days" label="Laufprotokolle der Automationen" help="Eingangsdaten, Schritte und Freigaben abgeschlossener Läufe (1 bis 3650 Tage)." unit={t("admin.common.days")} min={1} max={3650} v={v} set={set} ro={ro} />
                   <NumField k="privacy.official_warning_days" label="Amtliche Warnungen" help="Gerechnet ab dem Ablauf der Warnung, frühestens ab dem letzten Abruf, in dem die Quelle sie noch geliefert hat. 0 = nie." unit={t("admin.common.days")} v={v} set={set} ro={ro} />
+                  <NumField k="privacy.receipt_days" label="Empfangsprotokoll der Verbindungen" help="Abrufe und eingehende Meldungen von amtlichen Warnungen, FE2 und Feuersoftware Connect samt Entscheidung und Rohdaten (Einsatzdaten nur geschwärzt). Höchstens 500 Einträge je Verbindung. 1–30 Tage." unit={t("admin.common.days")} min={1} max={30} v={v} set={set} ro={ro} />
                 </FieldGrid>
                 <RetentionPreview manage={manage} dirty={dirty} />
                 <FieldWrap label="Eigener Hinweis (optional)" htmlFor="s-privacy-upload_notice" help="Erscheint zusätzlich im Abschnitt „Datenschutz“ der Upload-Seite, z. B. Rechtsgrundlage oder Ansprechperson. Höchstens 2000 Zeichen.">

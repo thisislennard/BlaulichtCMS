@@ -4,7 +4,8 @@ import { StepError } from '../lib/errors.js';
 import { log } from '../lib/log.js';
 import { notify } from '../lib/notify.js';
 import { connectionSecrets, type Connection, type TestStep } from './common.js';
-import { draftTitle, handleIncident, normalizeTime, type Fe2Field } from './fe2.js';
+import { draftTitle, handleIncident, incidentDecision, incidentInfo, normalizeTime, type Fe2Field } from './fe2.js';
+import { Receipt, redactIncidentPayload, type ReceiptTrigger } from './receipts.js';
 import { getSettings } from '../lib/settings.js';
 
 /**
@@ -47,9 +48,12 @@ function baseUrl(): string {
 
 export class ConnectError extends Error {
   retryAfter: number | null;
-  constructor(message: string, retryAfter: number | null = null) {
+  /** HTTP-Status der Antwort (für das Empfangsprotokoll), ohne Antwort null */
+  status: number | null;
+  constructor(message: string, retryAfter: number | null = null, status: number | null = null) {
     super(message);
     this.retryAfter = retryAfter;
+    this.status = status;
   }
 }
 
@@ -89,27 +93,28 @@ export async function connectRequest(apiKey: string, path: string): Promise<unkn
     if (e instanceof StepError && e.errorClass === 'config') throw new ConnectError(`Feuersoftware Connect ist nicht erreichbar: ${e.message}`);
     throw new ConnectError('Feuersoftware Connect ist nicht erreichbar – erreicht der Server connectapi.feuersoftware.com über HTTPS (Internet, DNS, Firewall)?');
   }
-  if (res.status === 200) {
+  const st = res.status;
+  if (st === 200) {
     try {
       return normalizeKeys(JSON.parse(res.text()));
     } catch {
-      throw new ConnectError('Unerwartete Antwort von Feuersoftware (kein JSON) – hat sich die Schnittstelle geändert?');
+      throw new ConnectError('Unerwartete Antwort von Feuersoftware (kein JSON) – hat sich die Schnittstelle geändert?', null, st);
     }
   }
-  if (res.status === 401) throw new ConnectError('Der API-Key wird abgelehnt (401) – im Connect Portal prüfen, ob die „Öffentliche Connect Schnittstelle“ aktiv ist, und den Schlüssel neu eintragen.');
-  if (res.status === 403) throw new ConnectError('Zugriff verweigert (403) – der Schlüssel darf diese Daten nicht lesen (anderer Standort? Schnittstelle im Connect Portal deaktiviert oder wegen Überlast gesperrt?).');
-  if (res.status === 404) throw new ConnectError('Adresse bei Feuersoftware nicht gefunden (404) – hat sich die Schnittstelle geändert?');
-  if (res.status === 429) {
+  if (st === 401) throw new ConnectError('Der API-Key wird abgelehnt (401) – im Connect Portal prüfen, ob die „Öffentliche Connect Schnittstelle“ aktiv ist, und den Schlüssel neu eintragen.', null, st);
+  if (st === 403) throw new ConnectError('Zugriff verweigert (403) – der Schlüssel darf diese Daten nicht lesen (anderer Standort? Schnittstelle im Connect Portal deaktiviert oder wegen Überlast gesperrt?).', null, st);
+  if (st === 404) throw new ConnectError('Adresse bei Feuersoftware nicht gefunden (404) – hat sich die Schnittstelle geändert?', null, st);
+  if (st === 429) {
     const wait = retryAfterSeconds(res.headers['retry-after']);
-    throw new ConnectError(`Zu viele Abfragen (429) – Feuersoftware begrenzt die Zahl der Abfragen. Nächster Versuch in ${wait} s; bei Wiederholung den Abrufabstand erhöhen.`, wait);
+    throw new ConnectError(`Zu viele Abfragen (429) – Feuersoftware begrenzt die Zahl der Abfragen. Nächster Versuch in ${wait} s; bei Wiederholung den Abrufabstand erhöhen.`, wait, st);
   }
-  if (res.status >= 500) throw new ConnectError(`Feuersoftware meldet einen Serverfehler (${res.status}) – meist vorübergehend, der nächste Versuch läuft automatisch.`);
-  throw new ConnectError(`Feuersoftware antwortet mit HTTP ${res.status}.`);
+  if (st >= 500) throw new ConnectError(`Feuersoftware meldet einen Serverfehler (${st}) – meist vorübergehend, der nächste Versuch läuft automatisch.`, null, st);
+  throw new ConnectError(`Feuersoftware antwortet mit HTTP ${st}.`, null, st);
 }
 
 export async function fetchOperations(apiKey: string): Promise<any[]> {
   const data = await connectRequest(apiKey, '/operation?onlyLatest=true');
-  if (!Array.isArray(data)) throw new ConnectError('Unerwartete Antwort von Feuersoftware (keine Einsatzliste).');
+  if (!Array.isArray(data)) throw new ConnectError('Unerwartete Antwort von Feuersoftware (keine Einsatzliste).', null, 200);
   return data.filter((op) => op && typeof op === 'object');
 }
 
@@ -151,9 +156,21 @@ export function matchReason(op: any, f: FsFilter): { ok: boolean; reason: string
   const kw = String(op.Keyword ?? '').toLowerCase();
   const hit = keywords.find((w) => kw.includes(w.toLowerCase()));
   if (hit) return { ok: true, reason: `Stichwort enthält „${hit}“` };
-  const parts = [rics.length ? `RIC „${splitList(String(op.Ric ?? '')).join(', ') || '(keine)'}“ – eingestellt „${rics.join(', ')}“` : null, keywords.length ? `Stichwort ohne ${keywords.join(', ')}` : null];
-  return { ok: false, reason: `passt nicht: ${parts.filter(Boolean).join('; ')}` };
+  const parts = [
+    rics.length ? `RIC nicht in der Liste: „${splitList(String(op.Ric ?? '')).join(', ') || '(keine)'}“ – eingestellt „${rics.join(', ')}“` : null,
+    keywords.length ? `Stichwort nicht in der Liste: „${String(op.Keyword ?? '').trim() || '(keins)'}“ enthält keins von „${keywords.join(', ')}“` : null,
+  ];
+  return { ok: false, reason: `${parts.filter(Boolean).join('; ')}.` };
 }
+
+/** Angaben eines Connect-Einsatzes für das Empfangsprotokoll: Allowlist-Felder und RIC, nie Adresse oder Einsatznummer. */
+function opInfo(op: any, tz: string) {
+  const { eventId, fields } = operationFields(op, tz);
+  return incidentInfo(eventId ?? (text(op.Id, 64) || null), fields, { ric: text(op.Ric, 200) || null });
+}
+
+/** Geschwärzte Rohdaten eines Einsatzes (ohne Straße, Hausnummer, Koordinaten, Sachverhalt, meldende Person, Einsatznummer). */
+const opRaw = (op: any) => redactIncidentPayload(op);
 
 /** Nur Ort bzw. Ort mit Ortsteil – nie Straße und Hausnummer. */
 export function locationArea(op: any): string {
@@ -208,9 +225,18 @@ export async function testFeuersoftware(c: Connection) {
     steps.push({ name: 'Einsätze abrufen', ok: false, message: `Feuersoftware hat um eine Pause gebeten – bitte nach ${wait.toLocaleTimeString('de-DE', { timeZone: (await getSettings())['general.timezone'] || 'Europe/Berlin', hour: '2-digit', minute: '2-digit', second: '2-digit' })} erneut testen.`, kind: 'read' });
     return { steps, preview, capabilities: { read: false, drafts: false } };
   }
+  const rec = new Receipt(c.id, 'test');
   try {
     let ops = await fetchOperations(sec.apiKey);
+    rec.httpStatus = 200;
     const all = ops.length;
+    const tz = (await getSettings())['general.timezone'] || 'Europe/Berlin';
+    for (const op of ops) {
+      const m = matchReason(op, filterOf(c));
+      if (!isRecent(op)) rec.add({ decision: 'filtered', reason: `Älter als ${MAX_AGE_HOURS} Stunden – wird nie übernommen.`, info: opInfo(op, tz), raw: opRaw(op) });
+      else rec.add({ decision: m.ok ? 'test' : 'filtered', reason: m.ok ? `Test – nichts angelegt. Würde übernommen: ${m.reason}.` : m.reason, info: opInfo(op, tz), raw: opRaw(op) });
+    }
+    await rec.finish({ ok: true, received: all, summary: 'Verbindungstest – nichts angelegt.' });
     ops = ops.filter((op) => isRecent(op));
     steps.push({ name: 'Einsätze abrufen', ok: true, message: all ? `Verbindung steht: ${all} Einsatz/Einsätze gelesen, davon ${ops.length} aus den letzten ${MAX_AGE_HOURS} Stunden (nur diese werden übernommen).` : 'Verbindung steht, der Schlüssel wird angenommen. Zurzeit liefert Connect keinen Einsatz.', kind: 'read' });
     const f = filterOf(c);
@@ -228,6 +254,7 @@ export async function testFeuersoftware(c: Connection) {
   } catch (e: any) {
     const err = e instanceof ConnectError ? e : new ConnectError(String(e?.message ?? e));
     steps.push({ name: 'Einsätze abrufen', ok: false, message: err.message.slice(0, 300), kind: 'read' });
+    await rec.finish({ ok: false, error: err.message.slice(0, 300), httpStatus: err.status, received: 0 });
     await pool.query(`UPDATE connections SET last_poll_at = now(), retry_after_until = CASE WHEN $2::int IS NULL THEN retry_after_until ELSE now() + make_interval(secs => $2::int) END WHERE id = $1`, [c.id, err.retryAfter]);
   }
   return { steps, preview, capabilities: { read: steps.every((s) => s.ok), drafts: steps.every((s) => s.ok) } };
@@ -280,19 +307,29 @@ export async function pollFeuersoftware(id: string, opts: { force?: boolean } = 
       if (cur.retry_after_until && new Date(cur.retry_after_until) > new Date()) return { skipped: 'Feuersoftware hat um eine Pause gebeten.' };
       return { skipped: 'Gerade erst abgerufen – bitte kurz warten.' };
     }
-    return await runPoll(c);
+    const rec = new Receipt(c.id, opts.force ? 'manual' : 'scheduled');
+    try {
+      const r = await runPoll(c, rec);
+      await rec.finish(r.error ? { ok: false, error: r.error, received: 0 } : { ok: true, received: r.received, summary: r.warnings?.length ? r.warnings.join(' ') : null });
+      return r;
+    } catch (e: any) {
+      await rec.finish({ ok: false, error: String(e?.message ?? e).slice(0, 300), received: rec.size });
+      throw e;
+    }
   } finally {
     inFlight.delete(id);
   }
 }
 
-async function runPoll(c: Connection): Promise<PollResult> {
+async function runPoll(c: Connection, rec: Receipt): Promise<PollResult & { received?: number }> {
   const sec = await connectionSecrets(c);
   let ops: any[];
   try {
     ops = await fetchOperations(sec.apiKey ?? '');
+    rec.httpStatus = 200;
   } catch (e: any) {
     const err = e instanceof ConnectError ? e : new ConnectError(String(e?.message ?? e));
+    rec.httpStatus = err.status;
     await recordFailure(c, err);
     return { error: err.message };
   }
@@ -301,25 +338,37 @@ async function runPoll(c: Connection): Promise<PollResult> {
   const warnings: string[] = [];
   let matched = 0;
   let created = 0;
+  const received = ops.length;
+  // Jeder gelieferte Einsatz steht mit Entscheidung im Empfangsprotokoll – auch ältere und nicht passende
+  const note = (op: any, decision: Parameters<Receipt['add']>[0]['decision'], reason: string) => rec.add({ decision, reason, info: opInfo(op, tz), raw: opRaw(op) });
+  for (const op of ops.filter((x) => !isRecent(x))) note(op, 'filtered', `Älter als ${MAX_AGE_HOURS} Stunden (Alarm ${text(op.Start ?? op.CreatedAt, 40) || 'unbekannt'}) – wird nie übernommen.`);
   ops = ops.filter((op) => isRecent(op));
   for (const op of ops) {
-    if (!matchReason(op, f).ok) continue;
+    const m = matchReason(op, f);
+    if (!m.ok) {
+      note(op, 'filtered', m.reason);
+      continue;
+    }
     matched++;
     const { eventId, fields, closed } = operationFields(op, tz);
     if (!eventId) {
       warnings.push('Ein Einsatz ohne gültige Kennung wurde übersprungen.');
+      note(op, 'error', 'Fehler beim Verarbeiten: Einsatz ohne gültige Kennung (Id fehlt oder ist zu lang) – übersprungen.');
       continue;
     }
     try {
       const r = await handleIncident(c, 'feuersoftware', { eventId, fields, closed });
       if (r.outcome === 'created') created++;
+      const d = incidentDecision(r, c.config.createDrafts !== false);
+      note(op, d.decision, `${d.reason} Filter: ${m.reason}.`);
     } catch (e: any) {
       log('warn', 'feuersoftware', `Einsatz nicht übernommen: ${e?.message ?? e}`);
       warnings.push('Ein Einsatz konnte nicht übernommen werden – Details im Systemprotokoll.');
+      note(op, 'error', `Fehler beim Verarbeiten: ${String(e?.message ?? e).slice(0, 300)}`);
     }
   }
   await recordSuccess(c);
-  return { seen: ops.length, matched, created, warnings: [...new Set(warnings)] };
+  return { seen: ops.length, matched, created, warnings: [...new Set(warnings)], received };
 }
 
 async function recordFailure(c: Connection, err: ConnectError) {

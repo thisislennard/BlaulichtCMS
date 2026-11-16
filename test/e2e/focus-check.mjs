@@ -329,6 +329,12 @@ async function freshSetup() {
   const conn = await admin.post('/connections', { kind: 'fe2', name: 'FE2 Test', config: {} }).catch((e) => (console.log('  (Verbindung)', e.message), null));
   const wf = await admin.post('/connections', { kind: 'warnfeed', name: 'Amtliche Warnungen Test', config: {} }).catch((e) => (console.log('  (Warnfeed)', e.message), null));
   const fsc = await admin.post('/connections', { kind: 'feuersoftware', name: 'Feuersoftware Test', config: {} }).catch((e) => (console.log('  (Feuersoftware)', e.message), null));
+  // Empfangsprotokoll mit Inhalt: eine fiktive Testmeldung an den FE2-Eingang
+  if (conn?.token) {
+    await fetch(`${BC}/api/v1/inbound/fe2/${conn.id}`, { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${conn.token}`, 'x-blaulichtcms-test': '1', 'x-blaulichtcms-request': '1' }, body: JSON.stringify({ einsatz: { id: 'FOKUS-1', stichwort: 'F-TEST-1', ort: 'Musterstadt' }, meldung: { alarmtext: 'Fiktiver Text' } }) })
+      .then(async (r) => r.ok || console.log('  (FE2-Testmeldung)', r.status, await r.text()))
+      .catch((e) => console.log('  (FE2-Testmeldung)', e.message));
+  }
   // Website wie die Bridge koppeln (ohne WordPress), damit Banner und Kanäle Inhalt haben
   try {
     const s = await admin.post('/sites', { name: 'Testwebsite' });
@@ -418,7 +424,7 @@ try {
   let n = 0;
   churn = setInterval(() => editor.post('/posts', { title: `Live-Ereignis ${++n}`, kind: 'news' }).catch(() => {}), 2000);
 
-  const routes = ['/', '/beitraege', `/beitraege/${post.id}`, `/beitraege/${sub.id}`, '/vorlagen', '/freigaben', '/medien', `/medien/${col.collection.id}`, '/medien/dateien', '/medien/papierkorb', '/medien/verwaltung', '/medien/gestaltung', ...(st.linkId ? [`/medien/gestaltung?link=${st.linkId}`] : []), '/quellen', '/banner', '/kanaele', '/warnungen', '/warnungen/pflege', ...(warn ? [`/warnungen/${warn.id}`] : []), '/verbindungen', ...(conn ? [`/verbindungen/${conn.id}`] : []), ...(st.warnfeedId ? [`/verbindungen/${st.warnfeedId}`] : []), ...(st.feuersoftwareId ? [`/verbindungen/${st.feuersoftwareId}`] : []), '/amtliche-warnungen', '/benutzer', '/system', '/protokolle', '/datenschutz-anfragen', '/einstellungen', '/profil', '/hilfe', '/aktivitaeten', '/benachrichtigungen'];
+  const routes = ['/', '/beitraege', `/beitraege/${post.id}`, `/beitraege/${sub.id}`, '/vorlagen', '/freigaben', '/medien', `/medien/${col.collection.id}`, '/medien/dateien', '/medien/papierkorb', '/medien/verwaltung', '/medien/gestaltung', ...(st.linkId ? [`/medien/gestaltung?link=${st.linkId}`] : []), '/quellen', '/banner', '/kanaele', '/warnungen', '/warnungen/pflege', ...(warn ? [`/warnungen/${warn.id}`] : []), '/verbindungen', ...(conn ? [`/verbindungen/${conn.id}`, `/verbindungen/${conn.id}?ansicht=empfangsprotokoll`] : []), ...(st.warnfeedId ? [`/verbindungen/${st.warnfeedId}`, `/verbindungen/${st.warnfeedId}?ansicht=empfangsprotokoll`] : []), ...(st.feuersoftwareId ? [`/verbindungen/${st.feuersoftwareId}`] : []), '/amtliche-warnungen', '/benutzer', '/system', '/protokolle', '/datenschutz-anfragen', '/einstellungen', '/profil', '/hilfe', '/aktivitaeten', '/benachrichtigungen'];
   for (const r of routes) await scanRoute(page, r);
 
   // Löschdialoge (Löschen-Knöpfe klickt der Rundgang bewusst nicht): Warnvorgang mit Begründung, Verbindung
@@ -493,7 +499,7 @@ try {
   const mp = await mob.newPage();
   mp.on('dialog', (d) => d.accept().catch(() => {}));
   seenGlobal.clear();
-  for (const r of [`/beitraege/${post.id}`, '/profil', `/medien/${col.collection.id}`, '/medien/gestaltung', ...(warn ? [`/warnungen/${warn.id}`] : [])]) await scanRoute(mp, r, { buttons: false });
+  for (const r of [`/beitraege/${post.id}`, '/profil', `/medien/${col.collection.id}`, '/medien/gestaltung', ...(warn ? [`/warnungen/${warn.id}`] : []), ...(conn ? [`/verbindungen/${conn.id}?ansicht=empfangsprotokoll`] : [])]) await scanRoute(mp, r, { buttons: false });
 
   const uniqueFields = new Set(tested.map((t) => `${t.where}|${t.field}`)).size;
   const where = new Set(tested.map((t) => t.where)).size;

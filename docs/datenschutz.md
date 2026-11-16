@@ -60,6 +60,7 @@ Warnfeeds (amtliche Warnungen) ◀──Abruf───────────�
 | Einsatzmeldungen aus FE2 und Feuersoftware Connect (`fe2_events`, Spalte `source`) | ggf. Betroffene eines Einsatzes (indirekt über Ort/Zeit) | Stichwort, Einsatzart, Ort bzw. Ort mit Ortsteil, Zeit, Einheiten (Allowlist; keine Alarmtexte, kein Sachverhalt, keine Straße/Hausnummer, keine meldende Person, keine Telefonnummern, keine Lagemeldungen) | **90 Tage** | `privacy.fe2_event_days` |
 | Übernommene Einsätze (`connection_seen_events`) | – | nur Prüfsumme aus Verbindung und Einsatz-ID (verhindert, dass gelöschte Einsätze erneut angelegt werden) | **30 Tage** | fest |
 | Amtliche Warnungen (`official_warnings`) | – | keine personenbezogenen Daten | **90 Tage** nach Ablauf und nachdem die Quelle sie nicht mehr liefert | `privacy.official_warning_days` |
+| Empfangsprotokoll der Verbindungen (`connection_receipts`, `connection_receipt_items`, `connection_receipt_raws`) | bei Einsätzen ggf. Betroffene (indirekt über Ort/Zeit) | je Abruf bzw. eingehender Meldung: Zeit, Auslöser, Ergebnis, Fehlermeldung, HTTP-Status, Dauer, Zähler; je Meldung Entscheidung mit Grund und Rohdaten. Amtliche Warnungen vollständig (öffentlich). FE2 und Feuersoftware nur **geschwärzt**: Werte bleiben nur für Stichwort, Einsatzart, Ort/Ortsteil, Zeiten, Status, RIC, Einheiten, Kennung und die Felder der FE2-Feldzuordnung (auch dort werden E-Mail-Adressen, Telefonnummern und Straßen mit Hausnummer ersetzt); Straße, Hausnummer, PLZ, Einsatznummer, Sachverhalt, Alarmtext und sonstiger Freitext erscheinen nur als „‹ausgeblendet: Text, n Zeichen›“, Koordinaten werden entfernt, alles unter meldender Person, Anrufer, Patient, Kontakt ist ausgeblendet. Keine Kopfzeilen, keine Schlüssel. Fehlversuche am FE2-Eingang ohne gültigen Schlüssel nur ohne Inhalt, höchstens einer je Minute | **7 Tage**, höchstens 500 Einträge je Verbindung; mit der Verbindung gelöscht, wenn diese endgültig gelöscht wird | `privacy.receipt_days` (1–30) |
 | Konten (`users`, `sessions`, `invitations`, `trusted_devices`) | Redaktion, Administration | Name, E-Mail, Rollen, Passwort-Hash, TOTP (verschlüsselt), letzte Anmeldung, Sitzungen mit IP und Browser, gemerkte Geräte der Zwei-Faktor-Anmeldung (Browser-Kennung, Zeitpunkte, Hash der Gerätekennung, keine IP) | Konto bis zur Löschung; Sitzungen und gemerkte Geräte 7 Tage nach Ende bzw. Ablauf; Einladungen 30 Tage nach Ablauf | `security.remember_days`, `security.mfa_remember_days` |
 | Audit (`audit_events`) | alle Handelnden, Hochladende (IP) | Name, E-Mail, Aktion, Objekt, IP | **365 Tage**; IP ohne Konto **30 Tage** | `retention.audit_days`, `privacy.upload_ip_retention_days` |
 | Systemprotokoll (`app_logs`) | Handelnde (selten) | technische Meldungen | **30 Tage** | `retention.log_days` |
@@ -78,6 +79,13 @@ Das Audit enthält keine Empfängeradressen von Warnversänden und Zuständigkei
 Zuständigkeiten, Domains und die Zahl hinzugefügter bzw. entfernter Adressen (#185). Die Adressen selbst stehen in der
 Zuständigkeit und im Versandnachweis (`warning_sends`) und fallen dort mit `privacy.warning_days` weg. Einträge aus der
 Zeit davor bleiben unverändert (das Audit ist versiegelt und unveränderlich) und entfallen mit `retention.audit_days`.
+
+Das **Empfangsprotokoll** (Verbindung → *Empfangsprotokoll*) sehen nur Personen mit dem Recht „Verbindungen
+verwalten“; Liste, Meldungen und Rohdaten sind nur mit diesem Recht abrufbar. Weil Einsatzdaten dort nur geschwärzt
+liegen, wird das Öffnen der Rohdaten nicht eigens auditiert, und das Protokoll ist nicht Teil der Datenschutzsuche
+(es enthält keine Namen, Telefonnummern oder Adressen; Ort und Zeit eines Einsatzes stehen ohnehin in den
+Einsatzmeldungen). Es dient der Einrichtung und Fehlersuche (Gebietsfilter, RIC, Stichwörter, Feldzuordnung) und
+verschwindet nach der kurzen Frist von selbst.
 
 Die Löschfristen wendet der Worker stündlich an; *Einstellungen → Datenschutz → „Was würde gelöscht?“* zeigt vorab,
 was fällig ist. Jeder Lauf steht im Audit (`retention.run`).

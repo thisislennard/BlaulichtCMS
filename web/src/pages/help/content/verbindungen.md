@@ -15,6 +15,36 @@ Eine Verbindung lässt sich nur mit einem **bestandenen Test der aktuellen Einst
 - Eine angehaltene Verbindung mit unveränderten Einstellungen lässt sich ohne neuen Test wieder aktivieren.
 - Jede Rücksetzung steht im Audit-Protokoll („Neuer Test nötig“ mit vorherigem Status und Grund).
 
+## Empfangsprotokoll
+
+Bei **amtlichen Warnungen**, **FE2** und **Feuersoftware Connect** zeigt die Verbindung neben den vier Schritten ein **Empfangsprotokoll**: Was ist bei BlaulichtCMS angekommen, und was wurde daraus? Auf der Seite [Amtliche Warnungen](/amtliche-warnungen) führt **Was ist angekommen?** direkt dorthin (Recht „Verbindungen verwalten“).
+
+- **Ein Eintrag je Abruf bzw. eingehender Meldung**, neueste zuerst: Zeit, Auslöser (planmäßiger Abruf, „Jetzt abrufen“, eingehende Meldung, Test), Ergebnis (OK oder die Fehlermeldung), HTTP-Status, Dauer und wie viele Meldungen empfangen, übernommen und herausgefiltert wurden. Die Liste aktualisiert sich selbst, solange sie offen ist.
+- **Aufklappen** zeigt jede einzelne Meldung – auch die aussortierten – mit den wichtigsten Angaben (bei Warnungen Herausgeber wie DWD, MoWaS oder Hochwasserportal, Überschrift, Stufe, Art, Gebiete, Gültigkeit, Kennung; bei Einsätzen Stichwort, Einsatzart, Ort, Alarmzeit, RIC, Kennung) und der **Entscheidung mit Grund**:
+
+| Entscheidung | Bedeutung |
+|---|---|
+| übernommen | neu angelegt – Warnung angezeigt (ggf. mit Banner) bzw. Einsatz mit Beitragsentwurf |
+| Aktualisierung | ersetzt eine bekannte Meldung (Aktualisierung, Entwarnung, Folgemeldung eines Einsatzes) |
+| schon bekannt | kam bereits bei einem früheren Abruf, unverändert |
+| herausgefiltert | aussortiert, mit Grund: „Gebiet passt nicht: …“, „RIC nicht in der Liste: …“, „Stichwort nicht in der Liste: …“, „Älter als 24 Stunden“, „Schon ersetzt“ |
+| ausgeblendet | unter „Amtliche Warnungen“ ausgeblendet, wird nicht erneut angezeigt |
+| gesperrt | Einsatz wurde früher übernommen und inzwischen gelöscht – wird nicht neu angelegt |
+| Test | Verbindungstest bzw. Testmeldung – nichts angelegt |
+| Fehler | Meldung nicht lesbar oder Verarbeitung fehlgeschlagen |
+
+- **Rohdaten anzeigen** öffnet die Meldung als JSON (mit Kopieren-Knopf). Amtliche Warnungen stehen vollständig da, wie die Quelle sie liefert. Bei FE2 und Feuersoftware sind die Rohdaten **geschwärzt**: Stichwort, Einsatzart, Ort, Zeiten, Status, RIC, Einheiten und die Felder der Feldzuordnung bleiben lesbar; Straße, Hausnummer, Koordinaten, Namen, Telefonnummern, meldende Person und Freitext erscheinen nur als „‹ausgeblendet …›“.
+- Der Filter **Anzeigen** beschränkt die Liste auf übernommene, herausgefilterte oder fehlerhafte Einträge.
+
+**Filter einstellen mit dem Protokoll:**
+
+- *Eigene Warnung fehlt:* Eintrag mit „herausgefiltert – Gebiet passt nicht“ suchen. Der Grund nennt Geocodes und Orte der Meldung und die eingestellten Werte. Den passenden Ortsnamen oder Geocode-Präfix unter **Verbinden** ergänzen (siehe [Regionalschlüssel und Gebietsfilter](#regionalschluessel-und-gebietsfilter)).
+- *Zu viele Warnungen:* bei „übernommen“ steht, welcher Filter gegriffen hat (z. B. „Ortsname … in …“) – zu allgemeine Ortsnamen enger fassen.
+- *Feuersoftware übernimmt den eigenen Einsatz nicht:* „RIC nicht in der Liste“ nennt die RIC, wie Connect sie liefert – genau diese Schreibweise unter **RICs** eintragen (siehe [Feuersoftware: Filter](#feuersoftware-filter)).
+- *FE2 meldet „Keine Einsatz-ID gefunden“:* in den Rohdaten die Feldnamen der Meldung ablesen und die [Feldzuordnung](#feldzuordnung) anpassen. Fehlversuche mit falschem Schlüssel stehen ebenfalls im Protokoll (ohne Inhalt, höchstens einer je Minute).
+
+Das Protokoll hält die Einträge der letzten **7 Tage** (*Einstellungen → Datenschutz*, 1–30 Tage), höchstens 500 je Verbindung; sehr große Rohdaten werden gekürzt gespeichert.
+
 ## Widerrufen und löschen
 
 Beides steht in der Verbindung unter Schritt **Aktivieren** und braucht das Recht „Verbindungen verwalten“. Jede Aktion steht im Audit-Protokoll.
