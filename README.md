@@ -242,6 +242,9 @@ flowchart LR
   Freigabe nur je Workflow mit eigenem Recht, Passwortbestätigung, Audit und Sicherheitsmeldung.
 - **Export und Import:** Workflows als JSON-Datei (versioniert, ohne Kennungen und Zugangsdaten) exportieren und
   mit Vorschau und Zuordnung der Ein- und Ausgänge als Entwurf importieren.
+- **Mit KI erstellen:** Formatbeschreibung als JSON-Schema, Katalog der Installation (Ein-/Ausgänge, Felder, Vergleiche,
+  Bildvorlagen, Stichwortverzeichnis – ohne Zugangsdaten, Kennungen, Einsatz- oder Personendaten) und eine
+  anbieterneutrale Vorlage für die Anfrage; das Ergebnis wird geprüft (Fehler mit Ort und Erwartung) und als Entwurf importiert.
 
 ### Übersicht und Bedienung
 

@@ -88,6 +88,8 @@ function Heading({ level, line, children }: { level: 2 | 3 | 4; line?: number; c
 }
 
 function MdLink({ href = '', children }: { href?: string; children?: ReactNode }) {
+  // Dateien der Oberfläche (z. B. /schema/….json) direkt laden, nicht über den Router
+  if (href.startsWith('/') && /.[a-z0-9]{2,8}$/i.test(href.split(/[?#]/)[0])) return <a href={href} download>{children}</a>;
   if (href.startsWith('/')) return <Link to={href}>{children}</Link>;
   if (href.startsWith('#')) return <a href={href}>{children}</a>;
   return (

@@ -674,3 +674,84 @@ describe('Automationen: Export und Import (#196)', () => {
     expect((await one<any>(`SELECT count(*)::int AS n FROM automations WHERE name LIKE '%(Import%'`))!.n).toBe(2);
   });
 });
+
+describe('Workflows mit KI erstellen: Katalog exportieren (#199)', () => {
+  it('liefert nur Bausteine (Art + Name, Felder, Stichwörter, Bildvorlagen) – keine Kennungen, Zugangsdaten, Einsatz- oder Personendaten', async () => {
+    await one(`INSERT INTO fire_keywords (code, label, category, details, source, aliases) VALUES ('B 3', 'Brand Wohnhaus', 'Brand', 'interne Notiz zur Alarmierung', 'eigen', '{B3}') ON CONFLICT (code) DO NOTHING RETURNING id`);
+    const { invalidateKeywords } = await import('../src/keywords/store.js');
+    invalidateKeywords();
+    await one(`INSERT INTO design_templates (title, kind, layout) VALUES ('Story 9:16', 'image', $1) RETURNING id`, [JSON.stringify({ width: 1080, height: 1920, elements: [{ type: 'text', id: 'titel', label: 'Titel', default: 'Freiwillige Feuerwehr Musterort', maxLength: 80 }, { type: 'image', id: 'foto', label: 'Foto' }] })]);
+    const manual = await admin.post('/automation-inputs', { name: 'Start von Hand (KI)', kind: 'manual', config: { fields: [{ key: 'thema', label: 'Thema', example: 'Erika Beispiel, 0171 0000000' }] } });
+    expect(manual.status, JSON.stringify(manual.json)).toBe(200);
+    const notify = await admin.post('/automation-outputs', { name: 'Hinweis an die Redaktion (KI)', kind: 'notify', config: { userIds: [editorId], title: 'Neu: {{thema}}', body: '', link: '' } });
+    expect(notify.status, JSON.stringify(notify.json)).toBe(200);
+
+    expect((await anonymous.get('/automations/catalog/export')).status).toBe(401);
+    const media = (await acceptInvite('medien-ki@example.org', ['media_manager'], 'Kim')).client;
+    expect((await media.get('/automations/catalog/export')).status).toBe(403);
+    const r = await editor.raw('GET', '/automations/catalog/export');
+    expect(r.status, JSON.stringify(r.json)).toBe(200);
+    const c = r.json;
+    expect(c.format).toBe('blaulichtcms.automations.catalog');
+    expect(c.workflowFile).toMatchObject({ format: 'blaulichtcms.automations', schemaVersion: 1, schemaPath: '/schema/blaulichtcms-automations-1.schema.json' });
+    expect(c.inputs).toEqual(expect.arrayContaining([{ kind: 'fe2', name: 'FE2-Alarm' }, { kind: 'manual', name: 'Start von Hand (KI)', fields: [{ key: 'thema', label: 'Thema' }] }]));
+    expect(c.outputs).toEqual(expect.arrayContaining([{ kind: 'post', name: 'Einsatzentwurf', usesFields: expect.any(Array) }, { kind: 'notify', name: 'Hinweis an die Redaktion (KI)', usesFields: ['thema'] }, { kind: 'mail', name: 'Übersicht per Mail', usesFields: ['offene_beitraege', 'offene_beitraege_liste'] }]));
+    expect(c.triggers.map((t: any) => t.kind)).toEqual(['fe2', 'feuersoftware', 'warnfeed', 'rss', 'upload', 'schedule', 'press', 'calendar', 'manual']);
+    expect(c.operators.map((o: any) => o.op)).toContain('in');
+    expect(c.imageTemplates).toEqual([{ name: 'Story 9:16', textFields: [{ id: 'titel', label: 'Titel', maxLength: 80 }] }]);
+    expect(c.calendarCategories).toEqual(expect.arrayContaining(['Übung']));
+    expect(c.keywords.entries).toEqual(expect.arrayContaining([{ code: 'B 3', label: 'Brand Wohnhaus', category: 'Brand' }]));
+
+    const text = JSON.stringify(c);
+    // Kennungen (Verbindungen, Ein-/Ausgänge, Website, Konten, Zuständigkeiten …) und Einstellungen
+    expect(text).not.toMatch(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/);
+    for (const id of [fe2Conn.id, fe2Input, postOutput, siteId, editorId, manual.json.id, notify.json.id]) expect(text).not.toContain(id);
+    expect(text).not.toMatch(/"(config|connectionId|responsibilityIds|userIds|siteIds?|listIds|socialTargets|recipients|password|secret|token|subject|body|aliases|details|default)":/i);
+    // Personen, Kontakte, Einsatzdaten, Läufe
+    expect(text).not.toMatch(/@example\.(org|invalid)|Robin|Erika|0171|Hauptstraße|Max Muster|interne Notiz|Musterort|E-1|Großbrand/);
+    expect(await one(`SELECT 1 FROM audit_events WHERE action = 'automation.catalog_exported'`)).not.toBeNull();
+    // Vorlage für die Anfrage im Katalog der Oberfläche
+    const cat = await editor.get('/automations/catalog');
+    expect(cat.json.ai).toMatchObject({ schemaPath: '/schema/blaulichtcms-automations-1.schema.json', catalogFile: 'workflow-katalog.json' });
+    expect(cat.json.ai.prompt).toMatch(/Der Workflow soll: …$/);
+  });
+
+  it('eine KI-Datei nach Schema mit Namen aus dem Katalog: Vorschau schlägt die Ein-/Ausgänge vor, Import legt einen Entwurf ohne Fehler an', async () => {
+    const file = {
+      format: 'blaulichtcms.automations',
+      schemaVersion: 1,
+      references: { inputs: [{ ref: 'in1', kind: 'fe2', name: 'FE2-Alarm' }], outputs: [{ ref: 'out1', kind: 'post', name: 'Einsatzentwurf' }] },
+      automations: [
+        {
+          name: 'Von der KI: Brände als Entwurf',
+          graph: {
+            nodes: [
+              { id: 'in1', type: 'input', data: { inputRef: 'in1' } },
+              { id: 'if1', type: 'condition', data: { combinator: 'or', rules: [{ field: 'stichwort', op: 'starts_with', value: 'B' }, { field: 'stichwort_kategorie', op: 'eq', value: 'Brand' }] } },
+              { id: 'out1', type: 'output', data: { outputRef: 'out1' } },
+            ],
+            edges: [
+              { id: 'a', source: 'in1', target: 'if1' },
+              { id: 'b', source: 'if1', sourceHandle: 'true', target: 'out1' },
+            ],
+          },
+        },
+      ],
+    };
+    const p = await admin.post('/automations/import/preview', { file });
+    expect(p.status, JSON.stringify(p.json)).toBe(200);
+    expect(p.json.inputs[0].suggested).toBe(fe2Input);
+    expect(p.json.outputs[0].suggested).toBe(postOutput);
+    const i = await admin.post('/automations/import', { file, mapping: { inputs: { in1: fe2Input }, outputs: { out1: postOutput } } });
+    expect(i.status, JSON.stringify(i.json)).toBe(200);
+    const d = await admin.get(`/automations/${i.json.created[0].id}`);
+    expect(d.json.status).toBe('draft');
+    expect(d.json.validation.errors).toEqual([]);
+    // Fehlerhafte KI-Datei: Ort als JSON-Pfad samt Erwartung
+    const bad = structuredClone(file) as any;
+    bad.automations[0].graph.nodes[1].data.rules[0].op = 'startsWith';
+    const r = await admin.post('/automations/import/preview', { file: bad });
+    expect(r.status).toBe(400);
+    expect(r.json.details.problems[0]).toEqual({ path: 'automations[0].graph.nodes[1].data.rules[0].op', message: expect.stringMatching(/Bedingung.*"starts_with".*gefunden „startsWith“/) });
+  });
+});

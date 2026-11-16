@@ -40,6 +40,8 @@ export interface Catalog {
   imageTemplates?: { id: string; title: string; texts: { id: string; label: string; default: string; maxLength: number }[]; images: { id: string; label: string; required: boolean }[] }[];
   /** Vorlagen für neue Workflows (server/src/automations/templates.ts) */
   templates?: WorkflowTemplate[];
+  /** Workflows mit KI erstellen (#199): Vorlage für die Anfrage, Schema- und Katalog-Datei */
+  ai?: { prompt: string; schemaFile: string; schemaPath: string; catalogFile: string };
 }
 
 export interface SlotPreset {

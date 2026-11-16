@@ -163,6 +163,10 @@
       "title": "Workflows",
       "summary": "Aus Vorlagen oder Schritt für Schritt bauen (Wenn – Nur wenn – Dann), erweitert im Editor; testen, aktivieren; Direktversand je Workflow; Beispiele."
     },
+    "workflows-ki": {
+      "title": "Workflows mit KI erstellen",
+      "summary": "Formatbeschreibung und Katalog an eine KI geben, Ergebnis prüfen und als Entwurf importieren; Datenschutz, Vorlage für die Anfrage, Dateiformat."
+    },
     "verbindungen": {
       "title": "Verbindungen: Facebook, Instagram, FE2, Warnungen",
       "summary": "Verbinden, Testen, Vorschau, Aktivieren; soziale Kanäle im Beitrag, FE2-Entwürfe, amtliche Warnungen."

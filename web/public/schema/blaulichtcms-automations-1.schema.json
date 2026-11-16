@@ -1,0 +1,1095 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "BlaulichtCMS-Workflows (Format blaulichtcms.automations, schemaVersion 1)",
+  "description": "Datei mit einem oder mehreren Workflows für BlaulichtCMS (Import unter Workflows → Importieren; importierte Workflows sind immer inaktive Entwürfe). Ein Workflow ist ein Ablauf aus Knoten (nodes) und Verbindungen (edges): Eingang (Auslöser) → Verarbeitung → Ausgang (Aktion). Platzhalter in Texten: {{feldname}} – nur Felder, die an dieser Stelle vorhanden sind (Felder des Auslösers, Systemfelder, Felder aus „Felder setzen“, „Bild aus Vorlage erzeugen“ und vorherigen Ausgängen). Zusätzlich prüft der Import: Knoten-Kennungen eindeutig je Workflow; inputRef/outputRef verweisen auf einen Eintrag in references; Verbindungen nur zwischen vorhandenen Knoten. Nach dem Import prüft der Editor außerdem: mindestens ein Eingang und ein Ausgang, jeder Knoten angeschlossen, sourceHandle passend zur Knotenart, keine Kreise, Felder und Platzhalter an der Stelle vorhanden.",
+  "type": "object",
+  "properties": {
+    "format": {
+      "type": "string",
+      "const": "blaulichtcms.automations",
+      "description": "Immer „blaulichtcms.automations“."
+    },
+    "schemaVersion": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 1,
+      "description": "Formatversion, derzeit 1."
+    },
+    "appVersion": {
+      "type": "string",
+      "maxLength": 40,
+      "description": "BlaulichtCMS-Version beim Export (nur zur Information, optional)."
+    },
+    "exportedAt": {
+      "type": "string",
+      "maxLength": 40,
+      "description": "Zeitpunkt des Exports (nur zur Information, optional)."
+    },
+    "references": {
+      "default": {
+        "inputs": [],
+        "outputs": []
+      },
+      "type": "object",
+      "properties": {
+        "inputs": {
+          "default": [],
+          "maxItems": 200,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/inputReference"
+          }
+        },
+        "outputs": {
+          "default": [],
+          "maxItems": 200,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/outputReference"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "description": "Die im Ablauf verwendeten Ein- und Ausgänge als Bezug (Art + Name) – ohne Kennungen, Einstellungen oder Zugangsdaten."
+    },
+    "automations": {
+      "minItems": 1,
+      "maxItems": 50,
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/automation"
+      },
+      "description": "1–50 Workflows."
+    }
+  },
+  "required": [
+    "format",
+    "schemaVersion",
+    "automations"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "automation": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 120,
+          "description": "Name des Workflows."
+        },
+        "description": {
+          "default": "",
+          "type": "string",
+          "maxLength": 500,
+          "description": "Kurze Beschreibung (optional)."
+        },
+        "graph": {
+          "type": "object",
+          "properties": {
+            "nodes": {
+              "maxItems": 60,
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/node"
+              }
+            },
+            "edges": {
+              "maxItems": 150,
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/edge"
+              }
+            }
+          },
+          "required": [
+            "nodes",
+            "edges"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "name",
+        "graph"
+      ],
+      "additionalProperties": false
+    },
+    "node": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{1,40}$",
+          "description": "Kennung des Knotens, eindeutig im Workflow (z. B. „in1“, „if1“, „out1“)."
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "input",
+            "output",
+            "condition",
+            "switch",
+            "template",
+            "delay",
+            "dedup",
+            "approval",
+            "merge",
+            "image"
+          ],
+          "description": "Knotenart: input = Eingang; output = Ausgang; condition = Bedingung; switch = Verzweigung; template = Felder setzen; delay = Warten; dedup = Einmal je Vorgang; approval = Freigabe anfordern; merge = Zusammenführen; image = Bild aus Vorlage erzeugen."
+        },
+        "position": {
+          "default": {
+            "x": 0,
+            "y": 0
+          },
+          "type": "object",
+          "properties": {
+            "x": {
+              "type": "number"
+            },
+            "y": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "x",
+            "y"
+          ],
+          "description": "Lage auf der Fläche des Editors (optional; z. B. x in Schritten von 320 nach rechts, y in Schritten von 170 je Zweig).",
+          "additionalProperties": false
+        },
+        "data": {
+          "type": "object",
+          "description": "Einstellungen je Knotenart, siehe $defs/data_<type>.",
+          "default": {}
+        }
+      },
+      "required": [
+        "id",
+        "type"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "input"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "properties": {
+              "data": {
+                "$ref": "#/$defs/data_input"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "output"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "properties": {
+              "data": {
+                "$ref": "#/$defs/data_output"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "condition"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "properties": {
+              "data": {
+                "$ref": "#/$defs/data_condition"
+              }
+            },
+            "required": [
+              "data"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "switch"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "properties": {
+              "data": {
+                "$ref": "#/$defs/data_switch"
+              }
+            },
+            "required": [
+              "data"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "template"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "properties": {
+              "data": {
+                "$ref": "#/$defs/data_template"
+              }
+            },
+            "required": [
+              "data"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "delay"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "properties": {
+              "data": {
+                "$ref": "#/$defs/data_delay"
+              }
+            },
+            "required": [
+              "data"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "dedup"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "properties": {
+              "data": {
+                "$ref": "#/$defs/data_dedup"
+              }
+            },
+            "required": [
+              "data"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "approval"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "properties": {
+              "data": {
+                "$ref": "#/$defs/data_approval"
+              }
+            },
+            "required": [
+              "data"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "merge"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "properties": {
+              "data": {
+                "$ref": "#/$defs/data_merge"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "image"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "properties": {
+              "data": {
+                "$ref": "#/$defs/data_image"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "edge": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{1,40}$"
+        },
+        "source": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{1,40}$",
+          "description": "Kennung des Knotens, von dem die Verbindung ausgeht."
+        },
+        "sourceHandle": {
+          "default": "out",
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 60
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Ausgang des Quellknotens je Knotenart – input: out (weiter); output: out (danach); condition: true (trifft zu), false (trifft nicht zu); switch: case:<id> (je Fall, id aus cases), default (sonst); template: out (weiter); delay: out (weiter); dedup: out (weiter); approval: approved (freigegeben), rejected (abgelehnt); merge: out (weiter); image: out (weiter)."
+        },
+        "target": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{1,40}$",
+          "description": "Kennung des Knotens, zu dem die Verbindung führt (nie ein Eingang)."
+        },
+        "targetHandle": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 20
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Optional, immer „in“."
+        }
+      },
+      "required": [
+        "id",
+        "source",
+        "target"
+      ],
+      "additionalProperties": false,
+      "description": "Verbindung von einem Ausgang (sourceHandle) eines Knotens zum nächsten Knoten."
+    },
+    "inputReference": {
+      "type": "object",
+      "properties": {
+        "ref": {
+          "type": "string",
+          "pattern": "^(in|out)[0-9]{1,4}$",
+          "description": "Kennung des Bezugs in dieser Datei: „in1“, „in2“ … für Eingänge, „out1“, „out2“ … für Ausgänge."
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "fe2",
+            "feuersoftware",
+            "warnfeed",
+            "rss",
+            "upload",
+            "schedule",
+            "press",
+            "calendar",
+            "manual"
+          ],
+          "description": "Art des Eingangs: fe2 = FE2-Alarm; feuersoftware = Feuersoftware-Einsatz; warnfeed = Amtliche Warnung; rss = RSS-Eintrag; upload = Neue Uploads; schedule = Zeitplan; press = Neue Presseanfrage; calendar = Kalendereintrag; manual = Manueller Start."
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120,
+          "description": "Name genau wie im Katalog (inputs bzw. outputs); beim Import wird der gleichnamige Ein- bzw. Ausgang derselben Art vorgeschlagen."
+        }
+      },
+      "required": [
+        "ref",
+        "kind",
+        "name"
+      ],
+      "additionalProperties": false,
+      "description": "Eingang (Auslöser) als Bezug: Art und genauer Name eines vorhandenen Eingangs aus dem Katalog."
+    },
+    "outputReference": {
+      "type": "object",
+      "properties": {
+        "ref": {
+          "type": "string",
+          "pattern": "^(in|out)[0-9]{1,4}$",
+          "description": "Kennung des Bezugs in dieser Datei: „in1“, „in2“ … für Eingänge, „out1“, „out2“ … für Ausgänge."
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "banner",
+            "post",
+            "mail",
+            "notify",
+            "warning_draft",
+            "incident_entry",
+            "press_release"
+          ],
+          "description": "Art des Ausgangs: banner = Banner; post = Beitrag; mail = E-Mail; notify = App-Benachrichtigung; warning_draft = Warnentwurf vorbereiten; incident_entry = Einsatz in Einsatzliste; press_release = Pressemitteilung an Verteiler."
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120,
+          "description": "Name genau wie im Katalog (inputs bzw. outputs); beim Import wird der gleichnamige Ein- bzw. Ausgang derselben Art vorgeschlagen."
+        }
+      },
+      "required": [
+        "ref",
+        "kind",
+        "name"
+      ],
+      "additionalProperties": false,
+      "description": "Ausgang (Aktion) als Bezug: Art und genauer Name eines vorhandenen Ausgangs aus dem Katalog."
+    },
+    "data_input": {
+      "description": "Eingang: Auslöser aus der Liste der Eingänge. inputRef: Bezug aus references.inputs (z. B. „in1“). Ohne inputRef bleibt der Auslöser offen und wird nach dem Import gewählt.",
+      "type": "object",
+      "properties": {
+        "inputRef": {
+          "type": "string",
+          "pattern": "^(in|out)[0-9]{1,4}$",
+          "description": "Bezug aus references.inputs"
+        },
+        "label": {
+          "type": "string",
+          "maxLength": 80,
+          "description": "Bezeichnung des Knotens (optional)"
+        }
+      },
+      "additionalProperties": false
+    },
+    "data_output": {
+      "description": "Ausgang: Aktion aus der Liste der Ausgänge. outputRef: Bezug aus references.outputs (z. B. „out1“). Texte, Empfänger und Gestaltung stehen im Ausgang selbst, nicht in der Datei.",
+      "type": "object",
+      "properties": {
+        "outputRef": {
+          "type": "string",
+          "pattern": "^(in|out)[0-9]{1,4}$",
+          "description": "Bezug aus references.outputs"
+        },
+        "label": {
+          "type": "string",
+          "maxLength": 80,
+          "description": "Bezeichnung des Knotens (optional)"
+        }
+      },
+      "additionalProperties": false
+    },
+    "data_condition": {
+      "description": "Bedingung: Prüft Felder und verzweigt nach „trifft zu“ und „trifft nicht zu“. Regeln „Feld – Vergleich – Wert“ (field, op, value), verknüpft mit combinator „and“ oder „or“; höchstens 20 Regeln und eine Ebene Untergruppen ({ combinator, rules }).",
+      "type": "object",
+      "properties": {
+        "combinator": {
+          "type": "string",
+          "enum": [
+            "and",
+            "or"
+          ]
+        },
+        "rules": {
+          "maxItems": 20,
+          "type": "array",
+          "items": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "field": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9_]{0,39}$"
+                  },
+                  "op": {
+                    "type": "string",
+                    "enum": [
+                      "eq",
+                      "neq",
+                      "contains",
+                      "not_contains",
+                      "starts_with",
+                      "in",
+                      "gte",
+                      "lte",
+                      "exists",
+                      "not_exists"
+                    ]
+                  },
+                  "value": {
+                    "type": "string",
+                    "maxLength": 500
+                  }
+                },
+                "required": [
+                  "field",
+                  "op"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "combinator": {
+                    "type": "string",
+                    "enum": [
+                      "and",
+                      "or"
+                    ]
+                  },
+                  "rules": {
+                    "maxItems": 20,
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "field": {
+                          "type": "string",
+                          "pattern": "^[a-z][a-z0-9_]{0,39}$"
+                        },
+                        "op": {
+                          "type": "string",
+                          "enum": [
+                            "eq",
+                            "neq",
+                            "contains",
+                            "not_contains",
+                            "starts_with",
+                            "in",
+                            "gte",
+                            "lte",
+                            "exists",
+                            "not_exists"
+                          ]
+                        },
+                        "value": {
+                          "type": "string",
+                          "maxLength": 500
+                        }
+                      },
+                      "required": [
+                        "field",
+                        "op"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "combinator",
+                  "rules"
+                ]
+              }
+            ]
+          }
+        },
+        "label": {
+          "type": "string",
+          "maxLength": 80
+        }
+      },
+      "required": [
+        "combinator",
+        "rules"
+      ]
+    },
+    "data_switch": {
+      "description": "Verzweigung: Wählt den Weg nach dem Wert eines Feldes. field: Feld, nach dessen Wert verzweigt wird; cases: 1–12 Fälle { id, value }.",
+      "type": "object",
+      "properties": {
+        "field": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]{0,39}$"
+        },
+        "cases": {
+          "minItems": 1,
+          "maxItems": 12,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]{1,40}$"
+              },
+              "value": {
+                "type": "string",
+                "maxLength": 200
+              }
+            },
+            "required": [
+              "id",
+              "value"
+            ]
+          }
+        },
+        "label": {
+          "type": "string",
+          "maxLength": 80
+        }
+      },
+      "required": [
+        "field",
+        "cases"
+      ]
+    },
+    "data_template": {
+      "description": "Felder setzen: Legt neue Felder aus Textvorlagen mit {{platzhaltern}} an. fields: 1–20 Einträge { key, template } – legt das Feld key mit dem Text aus template an (Platzhalter {{feld}} erlaubt).",
+      "type": "object",
+      "properties": {
+        "fields": {
+          "minItems": 1,
+          "maxItems": 20,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "key": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_]{0,39}$"
+              },
+              "template": {
+                "default": "",
+                "type": "string",
+                "maxLength": 5000
+              }
+            },
+            "required": [
+              "key"
+            ]
+          }
+        },
+        "label": {
+          "type": "string",
+          "maxLength": 80
+        }
+      },
+      "required": [
+        "fields"
+      ]
+    },
+    "data_delay": {
+      "description": "Warten: Wartet eine feste Zeit (höchstens 24 Stunden). minutes: 1–1440.",
+      "type": "object",
+      "properties": {
+        "minutes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1440
+        },
+        "label": {
+          "type": "string",
+          "maxLength": 80
+        }
+      },
+      "required": [
+        "minutes"
+      ]
+    },
+    "data_dedup": {
+      "description": "Einmal je Vorgang: Lässt je Schlüssel nur den ersten Lauf im Zeitfenster durch. fields: 1–5 Feldnamen als Schlüssel; windowMinutes: Zeitfenster 1–10080.",
+      "type": "object",
+      "properties": {
+        "fields": {
+          "minItems": 1,
+          "maxItems": 5,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]{0,39}$"
+          }
+        },
+        "windowMinutes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10080
+        },
+        "label": {
+          "type": "string",
+          "maxLength": 80
+        }
+      },
+      "required": [
+        "fields",
+        "windowMinutes"
+      ]
+    },
+    "data_approval": {
+      "description": "Freigabe anfordern: Hält den Lauf an, bis eine Person freigibt oder ablehnt. title und summary (mit Platzhaltern); timeoutHours: 1–72 – ohne Entscheidung gilt die Anfrage danach als abgelehnt.",
+      "type": "object",
+      "properties": {
+        "title": {
+          "default": "",
+          "type": "string",
+          "maxLength": 200
+        },
+        "summary": {
+          "default": "",
+          "type": "string",
+          "maxLength": 1000
+        },
+        "timeoutHours": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 72
+        },
+        "label": {
+          "type": "string",
+          "maxLength": 80
+        }
+      },
+      "required": [
+        "timeoutHours"
+      ]
+    },
+    "data_merge": {
+      "description": "Zusammenführen: Führt Wege wieder zusammen. Keine Einstellungen.",
+      "type": "object",
+      "properties": {
+        "label": {
+          "type": "string",
+          "maxLength": 80
+        }
+      }
+    },
+    "data_image": {
+      "description": "Bild aus Vorlage erzeugen: Füllt eine befüllbare Bildvorlage mit Feldern und legt das Bild in den Medien ab; Beitrags-Ausgänge danach übernehmen es (auch für Social und Story). templateName: Name einer Bildvorlage aus dem Katalog; texts: Kennung des Textfelds der Vorlage → Text mit Platzhaltern; altText: Alternativtext. templateId, images und collectionId gehören zur Installation und werden in Dateien nicht verwendet.",
+      "type": "object",
+      "properties": {
+        "templateId": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+        },
+        "templateName": {
+          "type": "string",
+          "maxLength": 150
+        },
+        "texts": {
+          "default": {},
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]{0,39}$"
+          },
+          "additionalProperties": {
+            "default": "",
+            "type": "string",
+            "maxLength": 2000
+          }
+        },
+        "images": {
+          "default": {},
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]{0,39}$"
+          },
+          "additionalProperties": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          }
+        },
+        "altText": {
+          "default": "",
+          "type": "string",
+          "maxLength": 1000
+        },
+        "collectionId": {
+          "default": null,
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "label": {
+          "type": "string",
+          "maxLength": 80
+        }
+      }
+    }
+  },
+  "examples": [
+    {
+      "format": "blaulichtcms.automations",
+      "schemaVersion": 1,
+      "references": {
+        "inputs": [
+          {
+            "ref": "in1",
+            "kind": "fe2",
+            "name": "Alarm"
+          }
+        ],
+        "outputs": [
+          {
+            "ref": "out1",
+            "kind": "post",
+            "name": "Beitrag „Einsatz“"
+          }
+        ]
+      },
+      "automations": [
+        {
+          "name": "Alarm mit Stichwort-Kategorie Brand → Beitragsentwurf",
+          "description": "Nur bei Bränden (Kategorie aus dem Stichwortverzeichnis) einen Beitragsentwurf mit Stichwort und Ort anlegen.",
+          "graph": {
+            "nodes": [
+              {
+                "id": "in1",
+                "type": "input",
+                "position": {
+                  "x": 0,
+                  "y": 0
+                },
+                "data": {
+                  "inputRef": "in1"
+                }
+              },
+              {
+                "id": "if1",
+                "type": "condition",
+                "position": {
+                  "x": 320,
+                  "y": 0
+                },
+                "data": {
+                  "combinator": "and",
+                  "rules": [
+                    {
+                      "field": "stichwort_kategorie",
+                      "op": "eq",
+                      "value": "Brand"
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "out1",
+                "type": "output",
+                "position": {
+                  "x": 640,
+                  "y": 0
+                },
+                "data": {
+                  "outputRef": "out1"
+                }
+              }
+            ],
+            "edges": [
+              {
+                "id": "e_in1_if1",
+                "source": "in1",
+                "sourceHandle": "out",
+                "target": "if1"
+              },
+              {
+                "id": "e_if1_out1",
+                "source": "if1",
+                "sourceHandle": "true",
+                "target": "out1"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "format": "blaulichtcms.automations",
+      "schemaVersion": 1,
+      "references": {
+        "inputs": [
+          {
+            "ref": "in1",
+            "kind": "calendar",
+            "name": "Kalender: Beginn eines Termins"
+          }
+        ],
+        "outputs": [
+          {
+            "ref": "out1",
+            "kind": "post",
+            "name": "Beitrag „Übung“"
+          },
+          {
+            "ref": "out2",
+            "kind": "banner",
+            "name": "Banner „Achtung Übung“"
+          }
+        ]
+      },
+      "automations": [
+        {
+          "name": "Kalendertermin Übung → Story-Bild + Banner",
+          "description": "Zu Beginn einer Übung aus dem Kalender ein Story-Bild aus einer Bildvorlage erzeugen, einen Beitragsentwurf mit dem Bild (als Story vorauswählbar) und einen Banner „Achtung Übung“ anlegen.",
+          "graph": {
+            "nodes": [
+              {
+                "id": "in1",
+                "type": "input",
+                "position": {
+                  "x": 0,
+                  "y": 0
+                },
+                "data": {
+                  "inputRef": "in1"
+                }
+              },
+              {
+                "id": "if1",
+                "type": "condition",
+                "position": {
+                  "x": 320,
+                  "y": 0
+                },
+                "data": {
+                  "combinator": "and",
+                  "rules": [
+                    {
+                      "field": "kategorie",
+                      "op": "eq",
+                      "value": "Übung"
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "img1",
+                "type": "image",
+                "position": {
+                  "x": 640,
+                  "y": 0
+                },
+                "data": {
+                  "label": "Story-Bild",
+                  "texts": {
+                    "titel": "{{titel}}",
+                    "text": "{{beginn}} · {{ort}}"
+                  },
+                  "altText": "Übung: {{titel}} – {{beginn}}, {{ort}}",
+                  "templateName": "Story 9:16"
+                }
+              },
+              {
+                "id": "out1",
+                "type": "output",
+                "position": {
+                  "x": 960,
+                  "y": 0
+                },
+                "data": {
+                  "outputRef": "out1"
+                }
+              },
+              {
+                "id": "out2",
+                "type": "output",
+                "position": {
+                  "x": 960,
+                  "y": 170
+                },
+                "data": {
+                  "outputRef": "out2"
+                }
+              }
+            ],
+            "edges": [
+              {
+                "id": "e_in1_if1",
+                "source": "in1",
+                "sourceHandle": "out",
+                "target": "if1"
+              },
+              {
+                "id": "e_if1_img1",
+                "source": "if1",
+                "sourceHandle": "true",
+                "target": "img1"
+              },
+              {
+                "id": "e_img1_out1",
+                "source": "img1",
+                "sourceHandle": "out",
+                "target": "out1"
+              },
+              {
+                "id": "e_img1_out2",
+                "source": "img1",
+                "sourceHandle": "out",
+                "target": "out2"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -51,6 +51,7 @@ export const GROUPS: ChapterGroup[] = [
     ['wordpress', 'Globe'],
     ['verbindungen', 'Plug'],
     ['workflows', 'Workflow'],
+    ['workflows-ki', 'Sparkles'],
     ['banner', 'Megaphone'],
     ['einsatzliste', 'ListOrdered'],
     ['ohne-website', 'Unlink'],

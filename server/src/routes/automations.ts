@@ -19,6 +19,10 @@ import { buildExport, mappedGraph, parseTransferFile, suggestions, TRANSFER_MAX_
 import { summarizeGraph, type SummaryLabels } from '../automations/summary.js';
 import { templateById, templateGraph, TEMPLATES } from '../automations/templates.js';
 import { config } from '../config.js';
+import { buildAiCatalog } from '../automations/aicatalog.js';
+import { AI_PROMPT, CATALOG_FILE, SCHEMA_FILE, SCHEMA_URL_PATH } from '../automations/format.js';
+import { stateName } from '../keywords/catalog.js';
+import { activeKeywords } from '../keywords/store.js';
 
 /**
  * Automationen: Eingänge und Ausgänge (wiederverwendbare Bausteine), Abläufe mit Entwurf, Test, Aktivierung und
@@ -143,6 +147,8 @@ export async function automationRoutes(app: FastifyInstance) {
     return {
       enabled: s['automations.enabled'],
       maxRunsPerMinute: s['automations.max_runs_per_minute'],
+      // Workflows mit KI erstellen (#199): Vorlage für die Anfrage, Schema-Datei (statisch) und Katalog-Datei
+      ai: { prompt: AI_PROMPT, schemaFile: SCHEMA_FILE, schemaPath: SCHEMA_URL_PATH, catalogFile: CATALOG_FILE },
       inputKinds: Object.entries(INPUT_KINDS).map(([kind, d]) => ({ kind, ...d, fields: inputFields({ kind: kind as InputKind, config: {} }) })),
       outputKinds: Object.entries(OUTPUT_KINDS).map(([kind, d]) => ({ kind, ...d })),
       templates: TEMPLATES,
@@ -295,6 +301,27 @@ export async function automationRoutes(app: FastifyInstance) {
     const stamp = new Date().toISOString().slice(0, 10);
     reply.header('content-disposition', `attachment; filename="automationen-${stamp}.json"`);
     return file;
+  });
+
+  /**
+   * Katalog für „Workflows mit KI erstellen“ (#199): vorhandene Ein-/Ausgänge (Art + Name), Felder je Auslöser,
+   * Vergleiche, Bildvorlagen, Kalender-Kategorien und aktives Stichwortverzeichnis – ohne Kennungen, Einstellungen,
+   * Zugangsdaten, Einsatz- oder Personendaten (Positivliste in automations/aicatalog.ts).
+   */
+  app.get('/automations/catalog/export', { preHandler: read, config: { rateLimit: { max: 30, timeWindow: '1 minute' } } }, async (req, reply) => {
+    const refs = await loadRefs();
+    const state = String((await getSettings())['general.state'] ?? '');
+    const catalog = buildAiCatalog({
+      appVersion: config.version,
+      inputs: refs.inputs.values(),
+      outputs: refs.outputs.values(),
+      imageTemplates: await many<any>(`SELECT title, layout FROM design_templates WHERE kind = 'image' AND layout IS NOT NULL ORDER BY lower(title)`),
+      calendarCategories: (await many<{ name: string }>(`SELECT name FROM calendar_categories ORDER BY position, lower(name)`)).map((c) => c.name),
+      keywords: { state, stateName: stateName(state), entries: await activeKeywords() },
+    });
+    await audit(req.auth!.actor, 'automation.catalog_exported', { type: 'automation', label: 'Workflow-Katalog' }, { eingaenge: catalog.inputs.length, ausgaenge: catalog.outputs.length, stichwoerter: catalog.keywords.entries.length });
+    reply.header('content-disposition', `attachment; filename="${CATALOG_FILE}"`).header('cache-control', 'no-store');
+    return catalog;
   });
 
   const importBody = z.object({

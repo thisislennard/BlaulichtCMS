@@ -135,6 +135,11 @@ Workflows lassen sich als JSON-Datei sichern oder auf eine andere BlaulichtCMS-I
 - **Importieren** (Recht *Workflows verwalten*): Datei wählen (höchstens 1 MB). BlaulichtCMS prüft Format, Version und jeden Schritt und nennt Fehler verständlich, z. B. „keine Exportdatei“ oder „aus einer neueren BlaulichtCMS-Version“. Die **Vorschau** zeigt, was angelegt wird. Je Ein- und Ausgang aus der Datei einen vorhandenen derselben Art wählen – gleichnamige sind vorgeschlagen – oder **Nicht zuordnen** und später im Editor wählen.
 - **Bildvorlagen** im Schritt „Bild aus Vorlage erzeugen“ stehen in der Datei nur mit ihrem **Namen**. Beim Import wird die gleichnamige befüllbare Bildvorlage eingesetzt; fehlt sie, bleibt der Platz offen (mit Hinweis auf den Namen). Feste Bilder und die Zielsammlung werden nicht exportiert.
 - Importierte Workflows sind immer **Entwürfe**: nicht aktiv, nicht getestet, ohne Direktversand. Ist der Name schon vergeben, wird „(Import)“ angehängt. Vor dem Aktivieren im Editor prüfen und testen. Dateien aus Version 0.3.0 (Format `blaulichtcms.automations`) bleiben importierbar; das Format heißt unverändert so.
+- Statt einer Datei lässt sich der JSON-Text auch **einfügen** (**Als Text einfügen** → **Prüfen**). Fehlermeldungen nennen den Ort in der Datei als JSON-Pfad (z. B. `automations[0].graph.nodes[2].data.rules[0].op`) und was erwartet wurde; **Meldungen kopieren** übernimmt sie als Text.
+
+## Workflows mit KI erstellen
+
+Unter **Mit KI erstellen** stehen die Formatbeschreibung (JSON-Schema), der **Katalog** dieser Installation (vorhandene Ein- und Ausgänge, Felder, Vergleiche, Bildvorlagen, Stichwortverzeichnis – ohne Zugangsdaten, Kennungen, Einsatz- oder Personendaten) und eine Vorlage für die Anfrage an eine KI. Das Ergebnis wird wie oben importiert und startet als Entwurf. **Nie Einsatz- oder Personendaten an eine KI geben.** Ablauf, Datenschutz und Dateiformat: [Workflows mit KI erstellen](/hilfe/workflows-ki).
 
 ## Beispiele
 

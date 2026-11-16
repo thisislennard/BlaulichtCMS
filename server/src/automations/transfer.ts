@@ -16,12 +16,19 @@ export const TRANSFER_SCHEMA_VERSION = 1;
 export const TRANSFER_MAX_BYTES = 1024 * 1024;
 export const TRANSFER_MAX_AUTOMATIONS = 50;
 
-const refKey = z.string().regex(/^(in|out)[0-9]{1,4}$/, 'ungültiger Bezug');
+/** Bezug auf einen Ein- oder Ausgang in der Datei: „in“ bzw. „out“ mit Nummer. */
+export const REF_PATTERN = /^(in|out)[0-9]{1,4}$/;
+const refKey = z.string().regex(REF_PATTERN, 'ungültiger Bezug – erwartet „in“ bzw. „out“ mit Nummer, z. B. „in1“ oder „out1“');
 const inputKind = z.enum(Object.keys(INPUT_KINDS) as [InputKind, ...InputKind[]]);
 const outputKind = z.enum(Object.keys(OUTPUT_KINDS) as [OutputKind, ...OutputKind[]]);
 
-const fileNode = z.object({
-  id: z.string().regex(/^[A-Za-z0-9_-]{1,40}$/, 'ungültige Kennung'),
+/** Eingang bzw. Ausgang als Bezug (Art + Name); Knoten verweisen über `ref` darauf. */
+export const inputReferenceSchema = z.object({ ref: refKey, kind: inputKind, name: z.string().trim().min(1).max(120) });
+export const outputReferenceSchema = z.object({ ref: refKey, kind: outputKind, name: z.string().trim().min(1).max(120) });
+
+/** Knoten in der Datei; `data` prüft parseTransferFile je Art (Ein-/Ausgänge nur mit Bezug und Bezeichnung). */
+export const fileNodeSchema = z.object({
+  id: z.string().regex(/^[A-Za-z0-9_-]{1,40}$/, 'ungültige Kennung – erwartet 1–40 Zeichen aus Buchstaben, Ziffern, _ und -'),
   type: z.enum(Object.keys(NODE_TYPES) as [NodeType, ...NodeType[]]),
   position: z.object({ x: z.number().finite(), y: z.number().finite() }).default({ x: 0, y: 0 }),
   data: z.record(z.string(), z.any()).default({}),
@@ -34,8 +41,8 @@ export const transferFileSchema = z.object({
   exportedAt: z.string().max(40).optional(),
   references: z
     .object({
-      inputs: z.array(z.object({ ref: refKey, kind: inputKind, name: z.string().trim().min(1).max(120) })).max(200).default([]),
-      outputs: z.array(z.object({ ref: refKey, kind: outputKind, name: z.string().trim().min(1).max(120) })).max(200).default([]),
+      inputs: z.array(inputReferenceSchema).max(200).default([]),
+      outputs: z.array(outputReferenceSchema).max(200).default([]),
     })
     .default({ inputs: [], outputs: [] }),
   automations: z
@@ -44,7 +51,7 @@ export const transferFileSchema = z.object({
         name: z.string().trim().min(2).max(120),
         description: z.string().trim().max(500).default(''),
         graph: z.object({
-          nodes: z.array(fileNode).max(LIMITS.maxNodes, `höchstens ${LIMITS.maxNodes} Knoten`),
+          nodes: z.array(fileNodeSchema).max(LIMITS.maxNodes, `höchstens ${LIMITS.maxNodes} Knoten`),
           edges: graphSchema.shape.edges,
         }),
       }),
@@ -120,7 +127,7 @@ export class TransferError extends Error {
 }
 
 const PATH_WORDS: Record<string, string> = { name: 'Name', description: 'Beschreibung', graph: 'Ablauf', nodes: 'Knoten', edges: 'Verbindung', data: 'Einstellungen', references: 'Bezüge', inputs: 'Eingang', outputs: 'Ausgang', automations: 'Workflow', schemaVersion: 'Formatversion', kind: 'Art', type: 'Typ' };
-/** Lesbarer Ort eines Prüffehlers, z. B. „Automation 1 › Knoten 2 › Einstellungen“. */
+/** Lesbarer Ort eines Prüffehlers, z. B. „Workflow 1 › Knoten 2 › Einstellungen“. */
 function pathLabel(p: PropertyKey[]): string {
   const out: string[] = [];
   for (const k of p) {
@@ -130,51 +137,126 @@ function pathLabel(p: PropertyKey[]): string {
   return out.filter((x) => x !== 'Ablauf').join(' › ');
 }
 
-/** Datei prüfen (Format, Version, Aufbau, Daten je Knoten, Bezüge). Wirft TransferError mit verständlichen Meldungen. */
-export function parseTransferFile(raw: unknown): TransferFile {
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new TransferError('Die Datei enthält kein gültiges JSON-Objekt.');
-  const r = raw as Record<string, unknown>;
-  if (r.format !== TRANSFER_FORMAT) throw new TransferError('Das ist keine Exportdatei für BlaulichtCMS-Workflows.');
-  if (typeof r.schemaVersion === 'number' && r.schemaVersion > TRANSFER_SCHEMA_VERSION) {
-    throw new TransferError(`Die Datei stammt aus einer neueren BlaulichtCMS-Version (Format ${r.schemaVersion}${typeof r.appVersion === 'string' ? `, Version ${r.appVersion.slice(0, 40)}` : ''}). Bitte BlaulichtCMS zuerst aktualisieren.`);
+/** Ort in der Datei als JSON-Pfad, z. B. `automations[0].graph.nodes[2].data.rules[0].op` (für KI-erzeugte Dateien). */
+export function jsonPath(p: readonly PropertyKey[]): string {
+  let out = '';
+  for (const k of p) {
+    if (typeof k === 'number') out += `[${k}]`;
+    else if (/^[A-Za-z_][A-Za-z0-9_]*$/.test(String(k))) out += `${out ? '.' : ''}${String(k)}`;
+    else out += `[${JSON.stringify(String(k))}]`;
   }
-  const parsed = transferFileSchema.safeParse(raw);
+  return out;
+}
+
+const TYPE_WORDS: Record<string, string> = { string: 'Text', number: 'Zahl', int: 'ganze Zahl', array: 'Liste', object: 'Objekt', boolean: 'true oder false', record: 'Objekt' };
+
+/** Gefundener Wert, gekürzt (für „gefunden …“). */
+function shown(v: unknown): string {
+  if (typeof v === 'string') return `„${v.length > 60 ? `${v.slice(0, 60)}…` : v}“`;
+  if (typeof v === 'number' || typeof v === 'boolean' || v === null) return String(v);
+  return Array.isArray(v) ? 'eine Liste' : 'ein Objekt';
+}
+
+type Issue = z.core.$ZodIssue;
+
+/**
+ * Prüffehler flach und verständlich: Bei Alternativen (Regel oder Untergruppe einer Bedingung) zählt die am besten
+ * passende (wenigste fehlende Angaben); fehlende Angaben heißen „fehlt“, falsche Werte nennen Erwartung und Fund.
+ */
+function flatIssues(issues: readonly Issue[], base: PropertyKey[] = []): { path: PropertyKey[]; message: string }[] {
+  const out: { path: PropertyKey[]; message: string }[] = [];
+  const score = (l: readonly Issue[]) => l.filter((x) => (x as { input?: unknown }).input === undefined).length * 100 + l.length;
+  for (const i of issues) {
+    const path = [...base, ...i.path];
+    const input = (i as { input?: unknown }).input;
+    if (i.code === 'invalid_union' && i.errors.length) {
+      const best = [...i.errors].sort((a, b) => score(a) - score(b))[0];
+      if (best.length) {
+        out.push(...flatIssues(best, path));
+        continue;
+      }
+    }
+    if (i.code === 'invalid_key' && i.issues.length) out.push({ path, message: `Schlüssel ${shown(input)}: ${i.issues[0].message}` });
+    else if (i.code === 'invalid_type' && input === undefined) out.push({ path, message: `fehlt (erwartet ${TYPE_WORDS[i.expected] ?? i.expected})` });
+    else if ((i.code === 'invalid_value' || i.code === 'invalid_format') && input !== undefined) out.push({ path, message: `${i.message} – gefunden ${shown(input)}` });
+    else out.push({ path, message: i.message });
+  }
+  return out;
+}
+
+const MAX_PROBLEMS = 30;
+const names = (xs: string[], max = 10) => (xs.length ? xs.slice(0, max).join(', ') + (xs.length > max ? ', …' : '') : 'keine');
+
+/**
+ * Datei prüfen (Format, Version, Aufbau, Daten je Knoten, Bezüge). Wirft TransferError mit verständlichen Meldungen:
+ * jede nennt den Ort als JSON-Pfad (`path`) und, wo möglich, Erwartung und Fund – so lassen sich auch Dateien aus
+ * einer KI gezielt korrigieren.
+ */
+export function parseTransferFile(raw: unknown): TransferFile {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    throw new TransferError('Die Datei enthält kein gültiges JSON-Objekt.', [{ path: '', message: `Erwartet ein Objekt { "format": "${TRANSFER_FORMAT}", "schemaVersion": ${TRANSFER_SCHEMA_VERSION}, "automations": [ … ] } – gefunden ${raw == null ? 'nichts' : shown(raw)}.` }]);
+  }
+  const r = raw as Record<string, unknown>;
+  if (r.format !== TRANSFER_FORMAT) {
+    throw new TransferError('Das ist keine Exportdatei für BlaulichtCMS-Workflows.', [{ path: 'format', message: `Erwartet "format": "${TRANSFER_FORMAT}" – ${r.format === undefined ? 'fehlt' : `gefunden ${shown(r.format)}`}.` }]);
+  }
+  if (typeof r.schemaVersion === 'number' && r.schemaVersion > TRANSFER_SCHEMA_VERSION) {
+    throw new TransferError(`Die Datei stammt aus einer neueren BlaulichtCMS-Version (Format ${r.schemaVersion}${typeof r.appVersion === 'string' ? `, Version ${r.appVersion.slice(0, 40)}` : ''}). Bitte BlaulichtCMS zuerst aktualisieren.`, [{ path: 'schemaVersion', message: `Diese Installation liest "schemaVersion": ${TRANSFER_SCHEMA_VERSION}.` }]);
+  }
+  const parsed = transferFileSchema.safeParse(raw, { reportInput: true });
   if (!parsed.success) {
-    const details = parsed.error.issues.slice(0, 20).map((i) => ({ path: i.path.join('.'), message: i.path.length ? `${pathLabel(i.path)}: ${i.message}` : i.message }));
+    const details = flatIssues(parsed.error.issues)
+      .slice(0, MAX_PROBLEMS)
+      .map((i) => ({ path: jsonPath(i.path), message: i.path.length ? `${pathLabel(i.path)}: ${i.message}` : i.message }));
     throw new TransferError('Die Datei ist unvollständig oder beschädigt.', details);
   }
   const file = parsed.data;
-  const inRefs = new Set(file.references.inputs.map((x) => x.ref));
-  const outRefs = new Set(file.references.outputs.map((x) => x.ref));
-  if (inRefs.size !== file.references.inputs.length || outRefs.size !== file.references.outputs.length) throw new TransferError('Die Datei enthält doppelte Bezüge.');
   const problems: { path: string; message: string }[] = [];
+  for (const what of ['inputs', 'outputs'] as const) {
+    const refs = file.references[what].map((x) => x.ref);
+    refs.forEach((ref, i) => {
+      if (refs.indexOf(ref) !== i) problems.push({ path: `references.${what}[${i}].ref`, message: `Doppelter Bezug „${ref}“ – jeder Bezug darf nur einmal vorkommen.` });
+    });
+  }
+  if (problems.length) throw new TransferError('Die Datei enthält doppelte Bezüge.', problems.slice(0, MAX_PROBLEMS));
+  const inRefs = file.references.inputs.map((x) => x.ref);
+  const outRefs = file.references.outputs.map((x) => x.ref);
   file.automations.forEach((a, ai) => {
     const ids = new Set<string>();
     a.graph.nodes.forEach((n, ni) => {
-      const at = `automations.${ai}.graph.nodes.${ni}`;
-      if (ids.has(n.id)) problems.push({ path: at, message: `„${a.name}“: doppelte Knoten-Kennung „${n.id}“.` });
+      const at: PropertyKey[] = ['automations', ai, 'graph', 'nodes', ni];
+      const who = `„${a.name}“, Knoten „${n.id}“`;
+      if (ids.has(n.id)) problems.push({ path: jsonPath([...at, 'id']), message: `„${a.name}“: doppelte Knoten-Kennung „${n.id}“ – jede Kennung nur einmal je Workflow.` });
       ids.add(n.id);
-      if (n.type === 'input') {
-        const ref = n.data.inputRef;
-        if (ref !== undefined && (typeof ref !== 'string' || !inRefs.has(ref))) problems.push({ path: at, message: `„${a.name}“: Eingang verweist auf einen unbekannten Bezug.` });
-        if (Object.keys(n.data).some((k) => k !== 'inputRef' && k !== 'label')) problems.push({ path: at, message: `„${a.name}“: Eingangs-Knoten mit unerwarteten Angaben.` });
-      } else if (n.type === 'output') {
-        const ref = n.data.outputRef;
-        if (ref !== undefined && (typeof ref !== 'string' || !outRefs.has(ref))) problems.push({ path: at, message: `„${a.name}“: Ausgang verweist auf einen unbekannten Bezug.` });
-        if (Object.keys(n.data).some((k) => k !== 'outputRef' && k !== 'label')) problems.push({ path: at, message: `„${a.name}“: Ausgangs-Knoten mit unerwarteten Angaben.` });
+      if (n.type === 'input' || n.type === 'output') {
+        const key = n.type === 'input' ? 'inputRef' : 'outputRef';
+        const known = n.type === 'input' ? inRefs : outRefs;
+        const ref = n.data[key];
+        if (ref !== undefined && (typeof ref !== 'string' || !known.includes(ref))) {
+          problems.push({ path: jsonPath([...at, 'data', key]), message: `${who}: ${n.type === 'input' ? 'Eingang' : 'Ausgang'} verweist auf einen unbekannten Bezug ${shown(ref)} – erwartet ein „ref“ aus references.${n.type === 'input' ? 'inputs' : 'outputs'} (${names(known)}).` });
+        }
+        const extra = Object.keys(n.data).filter((k) => k !== key && k !== 'label');
+        if (extra.length) problems.push({ path: jsonPath([...at, 'data']), message: `${who}: ${n.type === 'input' ? 'Eingangs' : 'Ausgangs'}-Knoten mit unerwarteten Angaben (${names(extra)}) – erlaubt sind nur „${key}“ und „label“.` });
       } else {
-        const d = NODE_DATA[n.type].safeParse(n.data);
-        if (!d.success) problems.push({ path: at, message: `„${a.name}“: Schritt „${NODE_TYPES[n.type].label}“ hat ungültige Einstellungen (${d.error.issues[0]?.path.join('.') || 'Angaben'}: ${d.error.issues[0]?.message}).` });
+        const d = NODE_DATA[n.type].safeParse(n.data, { reportInput: true });
+        if (!d.success) {
+          for (const i of flatIssues(d.error.issues).slice(0, 5)) {
+            problems.push({ path: jsonPath([...at, 'data', ...i.path]), message: `${who}: Schritt „${NODE_TYPES[n.type].label}“ hat ungültige Einstellungen – ${jsonPath(i.path) || 'data'}: ${i.message}` });
+          }
+        }
       }
-      if (n.data.label !== undefined && (typeof n.data.label !== 'string' || n.data.label.length > 80)) problems.push({ path: at, message: `„${a.name}“: Bezeichnung eines Knotens zu lang.` });
+      if (n.data.label !== undefined && (typeof n.data.label !== 'string' || n.data.label.length > 80)) problems.push({ path: jsonPath([...at, 'data', 'label']), message: `${who}: Bezeichnung zu lang (höchstens 80 Zeichen).` });
     });
     a.graph.edges.forEach((e, ei) => {
-      if (!ids.has(e.source) || !ids.has(e.target)) problems.push({ path: `automations.${ai}.graph.edges.${ei}`, message: `„${a.name}“: Verbindung zu einem unbekannten Knoten.` });
+      for (const end of ['source', 'target'] as const) {
+        if (!ids.has(e[end])) problems.push({ path: jsonPath(['automations', ai, 'graph', 'edges', ei, end]), message: `„${a.name}“: Verbindung „${e.id}“ führt ${end === 'source' ? 'von' : 'zu'} einem unbekannten Knoten „${e[end]}“ – vorhanden: ${names([...ids])}.` });
+      }
     });
   });
-  if (problems.length) throw new TransferError('Die Datei enthält ungültige Abläufe.', problems.slice(0, 20));
+  if (problems.length) throw new TransferError('Die Datei enthält ungültige Abläufe.', problems.slice(0, MAX_PROBLEMS));
   return file;
 }
+
 
 export interface TransferMapping {
   inputs: Record<string, string | null>;

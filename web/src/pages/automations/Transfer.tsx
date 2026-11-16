@@ -2,8 +2,8 @@ import { useId, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { ApiError, download, post } from '../../api/client';
-import { Button, ErrorBox, FieldWrap, Notice, Select } from '../../components/ui/core';
-import { Dialog, useToast } from '../../components/ui/overlays';
+import { Button, ErrorBox, FieldWrap, Notice, Select, Textarea } from '../../components/ui/core';
+import { CopyButton, Dialog, useToast } from '../../components/ui/overlays';
 import { Icon } from '../../components/ui/Icon';
 import type { AutomationListItem } from './Automations';
 
@@ -89,13 +89,46 @@ interface Preview {
   outputs: RefRow[];
 }
 
-function fileError(e: unknown): { title: string; lines: string[] } {
+/** Prüfmeldung: Ort in der Datei als JSON-Pfad (z. B. automations[0].graph.nodes[1].data.op) und Text. */
+interface Problem {
+  path: string;
+  message: string;
+}
+interface FileProblem {
+  title: string;
+  lines: Problem[];
+  hint?: string;
+}
+
+function fileError(e: unknown): FileProblem {
   if (e instanceof ApiError) {
-    const problems = (e.details?.problems ?? []) as { message: string }[];
-    return { title: e.message, lines: problems.map((p) => p.message) };
+    const problems = (e.details?.problems ?? []) as Problem[];
+    return { title: e.message, lines: problems.map((p) => ({ path: String(p.path ?? ''), message: String(p.message ?? '') })) };
   }
   return { title: (e as Error)?.message ?? String(e), lines: [] };
 }
+
+/**
+ * JSON aus Datei oder eingefügtem Text lesen. Ein umschließender Markdown-Codeblock, wie ihn KI-Antworten oft haben,
+ * wird entfernt; bei Syntaxfehlern nennt die Meldung Zeile und Spalte.
+ */
+function parseJsonText(raw: string): { ok: true; value: unknown } | { ok: false; problem: FileProblem } {
+  const text = raw.trim().replace(/^```[a-zA-Z]*[ \t]*\r?\n([\s\S]*?)\r?\n?```$/, '$1');
+  try {
+    return { ok: true, value: JSON.parse(text) };
+  } catch (e) {
+    const pos = /position (\d+)/.exec(String((e as Error)?.message ?? ''));
+    let where = '';
+    if (pos) {
+      const before = text.slice(0, Number(pos[1]));
+      where = `Fehler in Zeile ${before.split('\n').length}, Spalte ${before.length - before.lastIndexOf('\n')}.`;
+    }
+    return { ok: false, problem: { title: 'Kein gültiges JSON.', lines: where ? [{ path: '', message: where }] : [], hint: 'Nur das JSON übernehmen – bei einer KI-Antwort ohne Erklärungen davor oder danach.' } };
+  }
+}
+
+/** Meldungen als Text, z. B. zum Weitergeben an die KI, die die Datei erstellt hat. */
+const problemText = (p: FileProblem) => [p.title, ...p.lines.map((l) => `- ${l.path ? `${l.path}: ` : ''}${l.message}`)].join('\n');
 
 function MappingRows({ title, rows, value, onChange, kind }: { title: string; rows: RefRow[]; value: Record<string, string>; onChange: (ref: string, id: string) => void; kind: 'Eingang' | 'Ausgang' }) {
   const base = useId();
@@ -138,21 +171,32 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
   const [preview, setPreview] = useState<Preview | null>(null);
   const [inputs, setInputs] = useState<Record<string, string>>({});
   const [outputs, setOutputs] = useState<Record<string, string>>({});
-  const [error, setError] = useState<{ title: string; lines: string[] } | null>(null);
+  const [error, setError] = useState<FileProblem | null>(null);
   const [busy, setBusy] = useState(false);
+  const [pasting, setPasting] = useState(false);
+  const [text, setText] = useState('');
+  const textId = useId();
+
+  const tooBig = (bytes: number): FileProblem => ({ title: `Die Datei ist zu groß (${(bytes / 1024 / 1024).toFixed(1).replace('.', ',')} MB, höchstens 1 MB).`, lines: [] });
 
   const pick = async (f: File | undefined) => {
     if (!f) return;
+    setFileName(f.name);
+    if (f.size > MAX_BYTES) {
+      setPreview(null);
+      return setError(tooBig(f.size));
+    }
+    await check(await f.text());
+  };
+
+  const check = async (raw: string) => {
     setError(null);
     setPreview(null);
-    setFileName(f.name);
-    if (f.size > MAX_BYTES) return setError({ title: `Die Datei ist zu groß (${(f.size / 1024 / 1024).toFixed(1).replace('.', ',')} MB, höchstens 1 MB).`, lines: [] });
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(await f.text());
-    } catch {
-      return setError({ title: 'Die Datei ist kein gültiges JSON.', lines: ['Bitte eine mit „Exportieren“ erzeugte .json-Datei wählen.'] });
-    }
+    const bytes = new Blob([raw]).size;
+    if (bytes > MAX_BYTES) return setError(tooBig(bytes));
+    const r = parseJsonText(raw);
+    if (!r.ok) return setError(r.problem);
+    const parsed = r.value;
     setBusy(true);
     try {
       const p = await post<Preview>('/automations/import/preview', { file: parsed });
@@ -205,20 +249,53 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
       <div className="flex flex-col gap-4">
         <input ref={fileRef} type="file" accept="application/json,.json" className="sr-only" aria-label="Exportdatei wählen" onChange={(e) => (pick(e.target.files?.[0]), (e.target.value = ''))} />
         <div className="flex items-center gap-3 flex-wrap">
-          <Button icon="FileUp" loading={busy && !preview} onClick={() => fileRef.current?.click()}>
-            {fileName ? 'Andere Datei wählen' : 'Datei wählen'}
+          <Button icon="FileUp" loading={busy && !preview && !pasting} onClick={() => (setPasting(false), fileRef.current?.click())}>
+            {fileName && !pasting ? 'Andere Datei wählen' : 'Datei wählen'}
           </Button>
-          <span className="text-sm text-fg-muted break-all">{fileName || 'JSON-Datei aus „Exportieren“, höchstens 1 MB'}</span>
+          {!pasting && (
+            <Button icon="Braces" onClick={() => (setPasting(true), setFileName(''))}>
+              Als Text einfügen
+            </Button>
+          )}
+          {!pasting && <span className="text-sm text-fg-muted break-all">{fileName || 'JSON-Datei aus „Exportieren“ oder von einer KI, höchstens 1 MB'}</span>}
         </div>
+        {pasting && (
+          <div className="flex flex-col gap-2">
+            <FieldWrap label="Workflow-Datei als Text" htmlFor={textId} help="Den JSON-Text einfügen, z. B. die Antwort einer KI – ohne Erklärungen davor oder danach.">
+              <Textarea
+                id={textId}
+                mono
+                rows={8}
+                value={text}
+                onChange={(e) => {
+                  setText(e.target.value);
+                  // Geänderter Text: alte Vorschau gilt nicht mehr
+                  if (preview) setPreview(null);
+                }}
+                placeholder='{ "format": "blaulichtcms.automations", … }'
+                spellCheck={false}
+              />
+            </FieldWrap>
+            <div>
+              <Button icon="CheckCircle2" loading={busy && !preview} disabled={!text.trim()} onClick={() => check(text)}>
+                Prüfen
+              </Button>
+            </div>
+          </div>
+        )}
         {error && (
-          <ErrorBox title={error.title}>
+          <ErrorBox title={error.title} actions={error.lines.length > 0 ? <CopyButton value={problemText(error)} size="sm" label="Meldungen kopieren" /> : undefined}>
             {error.lines.length > 0 && (
-              <ul className="m-0 pl-4">
+              <ul className="m-0 pl-4 flex flex-col gap-1">
                 {error.lines.map((l, i) => (
-                  <li key={i}>{l}</li>
+                  <li key={i}>
+                    {l.message}
+                    {l.path && <span className="block font-mono text-meta break-all">{l.path}</span>}
+                  </li>
                 ))}
               </ul>
             )}
+            {error.hint && <p className="m-0 mt-1">{error.hint}</p>}
           </ErrorBox>
         )}
         {preview && (

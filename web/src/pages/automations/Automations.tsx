@@ -10,6 +10,7 @@ import { fmtRelative } from '../../lib/format';
 import { AutomationBadge, DirectBadge, RunBadge, useCatalog, type WorkflowTemplate } from './shared';
 import { AutomationApprovals } from './Approvals';
 import { ExportDialog, ImportDialog } from './Transfer';
+import { AiAssistDialog } from './AiAssist';
 
 export interface AutomationListItem {
   id: string;
@@ -105,7 +106,7 @@ export default function Automations() {
   const cat = useCatalog();
   const q = useQuery({ queryKey: ['automations'], queryFn: () => get<AutomationListItem[]>('/automations'), refetchInterval: 20_000 });
   const [create, setCreate] = useState(false);
-  const [transfer, setTransfer] = useState<null | 'export' | 'import'>(null);
+  const [transfer, setTransfer] = useState<null | 'export' | 'import' | 'ai'>(null);
   const kindLabel = (k: string) => cat.data?.inputKinds.find((x) => x.kind === k)?.label ?? k;
   return (
     <div className="flex flex-col gap-5">
@@ -126,6 +127,9 @@ export default function Automations() {
                 Importieren
               </Button>
             )}
+            <Button icon="Sparkles" disabled={!cat.data?.ai} onClick={() => setTransfer('ai')}>
+              Mit KI erstellen
+            </Button>
             {manage && (
               <Button variant="primary" icon="Plus" onClick={() => setCreate(true)}>
                 Neuer Workflow
@@ -205,6 +209,7 @@ export default function Automations() {
       {create && <CreateDialog templates={cat.data?.templates ?? []} onClose={() => setCreate(false)} />}
       {transfer === 'export' && q.data && <ExportDialog items={q.data} onClose={() => setTransfer(null)} />}
       {transfer === 'import' && <ImportDialog onClose={() => setTransfer(null)} />}
+      {transfer === 'ai' && cat.data?.ai && <AiAssistDialog ai={cat.data.ai} canImport={manage} onImport={() => setTransfer('import')} onClose={() => setTransfer(null)} />}
     </div>
   );
 }
