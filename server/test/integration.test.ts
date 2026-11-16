@@ -962,6 +962,130 @@ describe('Banner (M2)', () => {
   });
 });
 
+describe('WordPress: Kategorien, Autor, Darstellung der Hinweise, Meldung der Bridge (#186)', () => {
+  let siteId = '';
+  let key = '';
+  let pid = '';
+  const auth = () => ({ authorization: `Bearer ${key}` });
+  const cur = async () => (await editor.get(`/posts/${pid}`)).json;
+
+  it('nimmt die Meldung der Bridge an und zeigt sie auf der Website-Karte', async () => {
+    const s = await admin.post('/sites', { name: 'Kategorien-Testseite' });
+    siteId = s.json.site.id;
+    // Kopplung direkt in der Datenbank – POST /bridge/pair ist auf 10 je Minute begrenzt und gehört anderen Tests
+    const prefix = crypto.randomBytes(6).toString('hex');
+    key = `bcb_${prefix}_${crypto.randomBytes(24).toString('base64url')}`;
+    await pool.query(`UPDATE wp_sites SET status = 'active', key_prefix = $2, key_hash = $3, pairing_code_hash = NULL, site_url = 'https://kat.example.org', paired_at = now() WHERE id = $1`, [siteId, prefix, crypto.createHash('sha256').update(key).digest('hex')]);
+    const report = {
+      categories: [
+        { id: 3, name: 'Einsätze', parent: 0 },
+        { id: 9, name: 'Brandeinsätze', parent: 3 },
+      ],
+      cron: { mode: 'self', wp_cron_disabled: true, healthy: true, hint: '' },
+      auto_update: true,
+      author_mode: 'person',
+      display: { info: 'banner', warning: 'popup', danger: 'both' },
+      banner_auto: true,
+      unbekannt: 'wird ignoriert',
+    };
+    const r = await anonymous.post('/bridge/report', report, auth());
+    expect(r.status).toBe(200);
+    expect(r.json).toEqual({ ok: true, send_author: false });
+    // Ohne gültigen Schlüssel keine Meldung, ungültige Werte werden abgewiesen
+    expect((await anonymous.post('/bridge/report', report)).status).toBe(401);
+    expect((await anonymous.post('/bridge/report', { cron: { mode: 'irgendwas' } }, auth())).status).toBe(400);
+    const site = (await admin.get('/sites')).json.find((x: any) => x.id === siteId);
+    expect(site.report.categories).toHaveLength(2);
+    expect(site.report.cron.mode).toBe('self');
+    expect(site.report.display.warning).toBe('popup');
+    expect(site.report.unbekannt).toBeUndefined();
+    expect(site.report_at).toBeTruthy();
+    // Kategorien auch im Katalog der Automationen (Auswahl im Ausgang „Beitrag“)
+    const cat = (await admin.get('/automations/catalog')).json;
+    expect(cat.sites.find((x: any) => x.id === siteId).categories.map((c: any) => c.id)).toEqual([3, 9]);
+  });
+
+  it('Autorenname übertragen: nur mit Recht, Vorgabe aus', async () => {
+    expect((await editor.put(`/sites/${siteId}/options`, { sendAuthor: true })).status).toBe(403);
+    const r = await admin.put(`/sites/${siteId}/options`, { sendAuthor: true });
+    expect(r.status).toBe(200);
+    expect(r.json.send_author).toBe(true);
+    expect((await anonymous.post('/bridge/report', {}, auth())).json.send_author).toBe(true);
+  });
+
+  it('Kategorie ist Teil der Fassung und geht mit Autor an die Bridge', async () => {
+    const p = await editor.post('/posts', { title: 'Brand in Lagerhalle' });
+    pid = p.json.id;
+    let d = await cur();
+    await editor.put(`/posts/${pid}/revision`, { baseRevision: d.revision.number, title: 'Brand in Lagerhalle', body: 'Text.', siteId, variants: { wordpress: { categories: [9, 3, 9] } } });
+    d = await cur();
+    expect(d.revision.variants.wordpress.categories).toEqual([3, 9]);
+    const hashBefore = d.revision.content_hash;
+    // Gleiche Auswahl in anderer Reihenfolge ist keine Änderung
+    const same = await editor.put(`/posts/${pid}/revision`, { baseRevision: d.revision.number, title: 'Brand in Lagerhalle', body: 'Text.', siteId, variants: { wordpress: { categories: [9, 3] } } });
+    expect(same.json.changed).toBe(false);
+    await editor.post(`/posts/${pid}/submit`, { revision: d.revision.number });
+    await approver.post(`/posts/${pid}/decision`, { revision: d.revision.number, contentHash: hashBefore, decision: 'approved' });
+    // Andere Kategorie → neue Fassung, Freigabe entfällt
+    const ch = await editor.put(`/posts/${pid}/revision`, { baseRevision: d.revision.number, title: 'Brand in Lagerhalle', body: 'Text.', siteId, variants: { wordpress: { categories: [3] } } });
+    expect(ch.json.changed).toBe(true);
+    expect(ch.json.approvalInvalidated).toBe(true);
+    d = await cur();
+    await editor.post(`/posts/${pid}/submit`, { revision: d.revision.number });
+    await approver.post(`/posts/${pid}/decision`, { revision: d.revision.number, contentHash: d.revision.content_hash, decision: 'approved' });
+    await publisher.post(`/posts/${pid}/publish`, { revision: d.revision.number, contentHash: d.revision.content_hash });
+    const job = (await anonymous.get('/bridge/jobs', auth())).json.jobs.find((j: any) => j.blaulichtcms_post_id === pid);
+    expect(job.post.categories).toEqual([3]);
+    expect(job.author.name).toBe('Robin');
+    expect(job.author.key).toMatch(/^[a-f0-9]{32}$/);
+    // Schlüssel ist nicht die Konto-ID
+    const uid = (await one<any>(`SELECT created_by FROM posts WHERE id = $1`, [pid]))!.created_by;
+    expect(job.author.key).not.toContain(String(uid).replace(/-/g, '').slice(0, 12));
+    await anonymous.post(`/bridge/jobs/${job.id}/result`, { status: 'published', remote_id: 11, url: 'https://kat.example.org/brand/' }, auth());
+  });
+
+  it('ohne „Autorenname übertragen“ geht kein Name an die Website', async () => {
+    await admin.put(`/sites/${siteId}/options`, { sendAuthor: false });
+    let d = await cur();
+    await editor.put(`/posts/${pid}/revision`, { baseRevision: d.revision.number, title: 'Brand in Lagerhalle', body: 'Text, ergänzt.', siteId, variants: {} });
+    d = await cur();
+    await editor.post(`/posts/${pid}/submit`, { revision: d.revision.number });
+    await approver.post(`/posts/${pid}/decision`, { revision: d.revision.number, contentHash: d.revision.content_hash, decision: 'approved' });
+    await publisher.post(`/posts/${pid}/publish`, { revision: d.revision.number, contentHash: d.revision.content_hash });
+    const job = (await anonymous.get('/bridge/jobs', auth())).json.jobs.find((j: any) => j.blaulichtcms_post_id === pid);
+    expect(job.author).toBeUndefined();
+    expect(job.post.categories).toBeUndefined();
+    await anonymous.post(`/bridge/jobs/${job.id}/result`, { status: 'published', remote_id: 11, url: 'https://kat.example.org/brand/' }, auth());
+  });
+
+  it('Darstellung eines Hinweises ist Teil der Fassung und geht an die Bridge', async () => {
+    const ends = new Date(Date.now() + 2 * 3600_000).toISOString();
+    const b = await editor.post('/banners', { siteId, title: 'Unwetter', tone: 'danger', priority: 3, endsAt: ends, display: 'popup' });
+    expect(b.status).toBe(200);
+    expect(b.json.display).toBe('popup');
+    expect((await editor.post('/banners', { siteId, title: 'Falsch', endsAt: ends, display: 'blinken' })).status).toBe(400);
+    const list = async () => (await editor.get('/banners')).json.find((x: any) => x.id === b.json.id);
+    let st = await list();
+    await editor.post(`/banners/${st.id}/submit`);
+    await approver.post(`/banners/${st.id}/approve`, { contentHash: st.content_hash });
+    // Nur die Darstellung ändern → neue Fassung
+    const u = await editor.put(`/banners/${st.id}`, { siteId, title: 'Unwetter', tone: 'danger', priority: 3, startsAt: st.starts_at, endsAt: st.ends_at, display: 'both' });
+    expect(u.json.changed).toBe(true);
+    st = await list();
+    expect(st.state).toBe('draft');
+    await editor.post(`/banners/${st.id}/submit`);
+    await approver.post(`/banners/${st.id}/approve`, { contentHash: st.content_hash });
+    await publisher.post(`/banners/${st.id}/publish`, { contentHash: st.content_hash });
+    const job = (await anonymous.get('/bridge/jobs', auth())).json.jobs.find((j: any) => j.type === 'banner.upsert' && j.banner.id === st.id);
+    expect(job.banner.display).toBe('both');
+    // Ohne feste Darstellung bleibt die Prüfsumme im bisherigen Format (bestehende Freigaben gelten weiter)
+    const { bannerHash } = await import('../src/routes/banners.js');
+    const row = { site_id: siteId, title: 'x', text: '', tone: 'info', priority: 2, starts_at: ends, ends_at: ends, link_url: null, link_text: null };
+    expect(bannerHash({ ...row, display: 'auto' })).toBe(bannerHash(row));
+    expect(bannerHash({ ...row, display: 'popup' })).not.toBe(bannerHash(row));
+  });
+});
+
 describe('RSS, Live-Status und Dashboard (M2)', () => {
   it('fügt RSS und Atom mit Vorschau hinzu, dedupliziert, nutzt ETag und übernimmt Themenideen', async () => {
     const http = await import('node:http');
@@ -2005,7 +2129,7 @@ describe('Bridge-Updates über den WordPress-Updateweg (M4)', () => {
     await admin.put(`/sites/${test.id}/update-channel`, { channel: 'test' });
     const o = (await offer(test.key)).json;
     expect(o.available).toBe(true);
-    expect(o.version).toBe('0.7.0');
+    expect(o.version).toBe('0.8.0');
     expect(o.package).toMatch(/^https:\/\/blaulichtcms\.example\.org\/api\/v1\/bridge\/update\/package\?/);
     const path = new URL(o.package).pathname + new URL(o.package).search;
     const dl = await anonymous.raw('GET', path);
@@ -2013,11 +2137,11 @@ describe('Bridge-Updates über den WordPress-Updateweg (M4)', () => {
     expect(crypto.createHash('sha256').update(dl.rawPayload).digest('hex')).toBe(o.sha256);
     expect((await anonymous.raw('GET', path.replace(/sig=[0-9a-f]{4}/, 'sig=0000'))).status).toBe(403);
     // Freigabe ohne Rückmeldung der Testwebsite mit der neuen Version → abgelehnt
-    const rel = await admin.post('/sites/bridge-release', { version: '0.7.0', note: 'Auf Testseite geprüft.' });
+    const rel = await admin.post('/sites/bridge-release', { version: '0.8.0', note: 'Auf Testseite geprüft.' });
     expect(rel.status).toBe(409);
     // Testwebsite meldet nach dem Update die neue Version (Kopplung blieb erhalten)
-    expect((await offer(test.key, '0.7.0')).status).toBe(200);
-    expect((await admin.post('/sites/bridge-release', { version: '0.7.0', note: 'Auf Testseite geprüft, Theme unverändert.' })).status).toBe(200);
+    expect((await offer(test.key, '0.8.0')).status).toBe(200);
+    expect((await admin.post('/sites/bridge-release', { version: '0.8.0', note: 'Auf Testseite geprüft, Theme unverändert.' })).status).toBe(200);
     expect((await offer(live.key)).json.available).toBe(true);
     const st = (await admin.get('/sites/bridge-release')).json;
     expect(st.releases[0].tested_on_name).toBe('Update-Testseite');

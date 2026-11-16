@@ -64,12 +64,24 @@ GET /api/v1/bridge/jobs
       "blaulichtcms_post_id": "9a1b…",     // stabile Inhalts-ID → Idempotenz in WordPress
       "revision": 4,
       "content_hash": "e3b0…",
-      "post": { "title": "…", "body": "Absätze …", "excerpt": "", "status": "publish", "cover_media_id": "…" },
+      "post": { "title": "…", "body": "Absätze …", "excerpt": "", "status": "publish", "cover_media_id": "…", "categories": [12, 7] },
+      "author": { "key": "3be1…", "name": "Vorname Nachname" },   // nur, wenn „Autorenname übertragen“ an ist
       "media": [ { "id": "…", "kind": "image", "mime": "image/jpeg", "filename": "….jpg", "path": "/api/v1/bridge/media/…", "url": "https://blaulichtcms.example.org/api/v1/bridge/media/…", "width": 2560, "height": 1920 } ]
-    }
-  ]
+    },
+    { "id": "…", "type": "banner.upsert", "banner": { "id": "…", "revision": 2, "title": "…", "text": "…", "tone": "danger", "priority": 3, "starts_at": "…", "ends_at": "…", "link_url": null, "link_text": null, "display": "auto" } }
+  ],
+  "banner_ids": ["…"]
 }
 ```
+
+- `post.categories` (ab 0.4, Bridge ab 0.8.0): WordPress-Kategorie-IDs aus der freigegebenen Fassung. Die Bridge
+  übernimmt nur Kategorien, die es in WordPress gibt; fehlt das Feld, gilt ihre Standardkategorie.
+- `author` (ab 0.4): nur, wenn für die Website „Autorenname übertragen“ eingeschaltet ist und der Beitrag eine
+  verfassende Person hat. `key` ist ein je Website verschiedener HMAC der Konto-ID (nicht umkehrbar), `name` der
+  Anzeigename. Die Bridge legt damit im Modus „Person aus BlaulichtCMS“ je Person einen Autor ohne Rechte und ohne
+  Anmeldung an; sonst ignoriert sie das Feld.
+- `banner.display` (ab 0.4): `auto` (nach Schweregrad, wie in der Bridge eingestellt), `banner`, `popup` oder `both`.
+  Ältere Bridges ignorieren das Feld und zeigen ein Banner.
 
 - Ausgeliefert werden Aufträge im Status `queued` und `unknown`, sowie `sent`, wenn die letzte Abholung länger als
   120 Sekunden zurückliegt. Ein zweiter Abruf innerhalb dieser Frist liefert den Auftrag nicht doppelt aus.
@@ -140,8 +152,43 @@ das Paket beim Klick auf „Aktualisieren“ über ein frisch abgerufenes Angebo
 Signaturschlüssel hinterlegt, zusätzlich die Ed25519-Signatur in `signature.json`. Verfahren, Einrichtung und
 Restrisiko: `docs/bridge-signatur.md`.
 
+Automatische Updates (Bridge ab 0.8.0): Die Bridge trägt sich immer in das Update-Verzeichnis von WordPress ein
+(`response` mit neuer Version, sonst `no_update`). Damit funktioniert der Schalter „Automatische Updates aktivieren“ in
+der Plugin-Liste; WordPress installiert über denselben geprüften Download (`upgrader_pre_download`). Ist WP-Cron
+abgeschaltet, ruft die Selbstauslösung höchstens alle 12 Stunden `WP_Automatic_Updater::update()` nur für die Bridge
+auf (gleiche Prüfungen wie WordPress: Schalter, Filter `auto_update_plugin`, Dateirechte). Die Kopfzeile
+`Update URI: https://blaulichtcms.invalid/bridge` verhindert, dass WordPress ein gleichnamiges Plugin von wordpress.org
+anbietet.
+
+## Meldung der Bridge
+
+```http
+POST /api/v1/bridge/report
+```
+
+```json
+{
+  "categories": [ { "id": 12, "name": "Einsätze", "parent": 0 } ],
+  "cron": { "mode": "self", "wp_cron_disabled": true, "healthy": true, "hint": "" },
+  "auto_update": true,
+  "author_mode": "bridge",
+  "display": { "info": "banner", "warning": "banner", "danger": "both" },
+  "banner_auto": true
+}
+```
+
+Antwort: `{ "ok": true, "send_author": false }`. Die Bridge (ab 0.8.0) sendet nach einem erfolgreichen Abruf, wenn sich
+etwas geändert hat, sonst höchstens alle 6 Stunden. BlaulichtCMS speichert die Meldung je Website
+(`wp_sites.bridge_report`) und zeigt sie auf der Website-Karte; die Kategorien erscheinen als Auswahl im Beitrag und im
+Ausgang „Beitrag“. `cron.mode`: `wp-cron`, `host` (WP-CLI oder wp-cron.php per Host-Cron), `self` (Selbstauslösung),
+`manual` oder `unknown`.
+
 ## Abruf
 
 - WP-Cron: Ereignis `blaulichtcms_bridge_poll`, jede Minute.
-- Host-Cron (empfohlen): `* * * * * wp --path=/var/www/html blaulichtcms-bridge poll`
+- Selbstauslösung (ab 0.8.0), wenn WP-Cron abgeschaltet ist (`DISABLE_WP_CRON`): Am Ende eines Seitenaufrufs sendet
+  die Bridge höchstens einmal je Abrufintervall eine nicht blockierende Anfrage an
+  `admin-ajax.php?action=blaulichtcms_bridge_tick` der eigenen Website (Prüfwert aus den Schlüsseln der wp-config.php).
+  Mit aktivem WP-Cron nur als Rückfall, wenn 10 Minuten kein Abruf lief.
+- Host-Cron (optional): `* * * * * wp --path=/var/www/html blaulichtcms-bridge poll`
 - WP-CLI: `wp blaulichtcms-bridge pair <url> <code>`, `wp blaulichtcms-bridge status`

@@ -31,7 +31,8 @@ export const INPUT_CONFIG: Record<InputKind, z.ZodType<any>> = {
 
 const variants = z
   .object({
-    wordpress: z.object({ title: tpl(400), body: tpl(20_000) }).partial().optional(),
+    // Kategorien (#186): WordPress-Kategorie-IDs, wie die Bridge sie meldet; leer = Standard der Website
+    wordpress: z.object({ title: tpl(400), body: tpl(20_000), categories: z.array(z.number().int().positive()).max(20).default([]) }).partial().optional(),
     facebook: z.object({ body: tpl(20_000) }).partial().optional(),
     instagram: z.object({ body: tpl(2_200) }).partial().optional(),
   })
@@ -51,6 +52,8 @@ export const OUTPUT_CONFIG: Record<OutputKind, z.ZodType<any>> = {
     endFromField: z.boolean().default(true),
     linkUrl: tpl(500),
     linkText: tpl(100),
+    // Darstellung auf der Website (#186): auto = nach Schweregrad, wie in der Bridge eingestellt
+    display: z.enum(['auto', 'banner', 'popup', 'both']).default('auto'),
     submit: z.boolean().default(true),
   }),
   post: z.object({

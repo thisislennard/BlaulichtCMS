@@ -7,6 +7,7 @@
  *   GET  /api/v1/bridge/jobs                offene Aufträge
  *   POST /api/v1/bridge/jobs/{id}/result    Ergebnis melden
  *   GET  /api/v1/bridge/media/{id}          öffentliche Medienfassung
+ *   POST /api/v1/bridge/report              Kategorien, Abrufweg, Updates, Darstellung (ab 0.8.0)
  *
  * @package BlaulichtCMSBridge
  */
@@ -177,6 +178,24 @@ final class BlaulichtCMS_Bridge_Client {
 				array(
 					'timeout' => 20,
 					'headers' => self::headers( false ),
+				)
+			)
+		);
+	}
+
+	/** Meldung an BlaulichtCMS (#186). Antwort: { ok, send_author }. */
+	public static function report( array $data ) {
+		$bad = self::guard();
+		if ( $bad ) {
+			return $bad;
+		}
+		return self::decode(
+			wp_remote_post(
+				self::base() . '/api/v1/bridge/report',
+				array(
+					'timeout' => 15,
+					'headers' => self::headers(),
+					'body'    => wp_json_encode( $data ),
 				)
 			)
 		);

@@ -24,13 +24,40 @@ Die **BlaulichtCMS Bridge** ist ein WordPress-Plugin. Sie holt freigegebene Beit
 
 Die Kopplung ist selbst der Test: Nur mit gültigem Code entsteht ein Schlüssel. Danach zeigt die Website-Karte in BlaulichtCMS **Aktiv**, die Bridge-Version und den **letzten Abruf**. In WordPress zeigt **Einstellungen → BlaulichtCMS Bridge** den Kopplungsstand, den letzten Abruf und den letzten Fehler; **Jetzt abrufen** holt sofort ab. Für einen vollständigen Test einen Beitrag auf einer **Testwebsite** veröffentlichen und wieder zurückziehen.
 
+## Einstellungen der Bridge
+
+In WordPress unter **Einstellungen → BlaulichtCMS Bridge**:
+
+| Bereich | Was sich einstellen lässt |
+|---|---|
+| Beiträge → Autor | **Eigener Autor der Bridge** (Anzeigename einstellbar, Vorgabe „Redaktion“), **Person aus BlaulichtCMS** (je Person, die den Beitrag angelegt hat, ein eigener Autor) oder ein **vorhandener Benutzer** |
+| Beiträge → Standardkategorie | gilt, wenn in BlaulichtCMS keine Kategorie gewählt ist |
+| Darstellung der Hinweise | je Schweregrad Farbe und Darstellung (Banner, Popup oder beides), mit Vorschau – siehe [Banner](/hilfe/banner#schweregrad-farbe-und-darstellung) |
+| Banner am Seitenanfang | automatisch oder nur über Shortcode/Block |
+
+**Wie Beiträge aussehen**, bestimmt das **Theme** der Website (Schrift, Aufbau, Beitragsbild, Autorenangabe). Aus BlaulichtCMS kommen Titel, Text, Kurzfassung, Titelbild, weitere Bilder und Videos sowie die **Kategorie**.
+
+### Kategorie
+
+Die Bridge meldet die Kategorien der Website an BlaulichtCMS (ab Bridge 0.8.0). Im Beitrag erscheint unter **Zielkanal** die Auswahl **Kategorie auf der Website**, ebenso im [Ausgang „Beitrag“](/hilfe/automationen#ausgaenge) einer Automation, sobald dort ein Zielkanal gewählt ist. Die Kategorie gehört zur freigegebenen Fassung – eine Änderung braucht eine neue Freigabe. Ohne Auswahl gilt die Standardkategorie. Eine neu angelegte Kategorie erscheint nach dem nächsten Abruf in BlaulichtCMS.
+
+### Autor
+
+Die Bridge legt den eigenen Autor bzw. die Autoren aus BlaulichtCMS beim ersten Beitrag **selbst an**. Diese Konten haben die Rolle „BlaulichtCMS-Autor“ **ohne jede Berechtigung**, kein bekanntes Passwort und keine E-Mail-Adresse; Anmeldung, Passwort-Zurücksetzen und Anwendungspasswörter sind gesperrt. Sie dienen nur der Autorenangabe.
+
+Für **Person aus BlaulichtCMS** muss in BlaulichtCMS auf der Website-Karte unter [Websites](/kanaele) **Autorenname übertragen** eingeschaltet sein (Vorgabe: aus). Übertragen wird nur der Anzeigename; statt der Konto-ID geht ein nicht umkehrbarer Schlüssel an die Website. Beiträge aus Automationen haben keine verfassende Person und erhalten den eigenen Autor der Bridge.
+
 ## Abruf und Cronjob
 
-Die Bridge holt **jede Minute** neue Aufträge ab. Dafür nutzt sie WP-Cron, den Zeitplaner von WordPress. In BlaulichtCMS warnt die Website-Karte, wenn sich die Bridge länger als 15 Minuten nicht gemeldet hat.
+Die Bridge holt **jede Minute** neue Aufträge ab. Dafür nutzt sie WP-Cron, den Zeitplaner von WordPress. **Ein Cronjob beim Hoster ist nicht nötig.** In BlaulichtCMS warnt die Website-Karte, wenn sich die Bridge länger als 15 Minuten nicht gemeldet hat; ab Bridge 0.8.0 zeigt sie auch den **Abrufweg**.
+
+### WP-Cron abgeschaltet
+
+Manche Hoster schalten WP-Cron ab (`DISABLE_WP_CRON`). Dann **stößt die Bridge den Abruf selbst an**: Am Ende eines Seitenaufrufs schickt sie höchstens einmal je Minute eine kurze Anfrage an die eigene Website, die den Abruf startet (Selbstauslösung). Auch ihre automatischen Updates holt sie so nach. Die Bridge-Einstellungen zeigen den Abrufweg und einen Hinweis, wenn die Selbstauslösung die eigene Website nicht erreicht (z. B. weil der Hoster Anfragen an die eigene Adresse sperrt).
 
 ### Was ist ein Cronjob?
 
-WP-Cron läuft nur, wenn jemand die Website aufruft. Bei wenig Besucherverkehr oder mit Seitencache bleiben Aufträge deshalb liegen. Ein **Cronjob** ist ein Zeitplan beim Hoster oder auf dem Server, der eine Aufgabe regelmäßig startet – z. B. jede Minute. Damit läuft der Abruf zuverlässig, unabhängig von Besuchern ([WordPress: WP-Cron an den System-Zeitplaner hängen](https://developer.wordpress.org/plugins/cron/hooking-wp-cron-into-the-system-task-scheduler/)).
+WP-Cron und die Selbstauslösung laufen nur, wenn jemand die Website aufruft. Bei sehr wenig Besucherverkehr oder einem Seitencache, der PHP ganz umgeht, können Aufträge deshalb etwas liegen bleiben. Ein **Cronjob** ist ein Zeitplan beim Hoster oder auf dem Server, der eine Aufgabe regelmäßig startet – z. B. jede Minute. Er ist **optional** und macht den Abruf unabhängig von Besuchern ([WordPress: WP-Cron an den System-Zeitplaner hängen](https://developer.wordpress.org/plugins/cron/hooking-wp-cron-into-the-system-task-scheduler/)).
 
 ### Host-Cron mit WP-CLI
 
@@ -58,13 +85,13 @@ Cache-Plugins und Hoster-Caches liefern Seiten aus dem Zwischenspeicher. Die Bri
 
 ### Bridge-Updates
 
-Neue Bridge-Versionen kommen über den normalen WordPress-Updateweg – zuerst auf Websites im Kanal **„Test“**, dann nach Freigabe für alle. Ablauf: [Updates → BlaulichtCMS Bridge](/hilfe/updates#blaulichtcms-bridge).
+Neue Bridge-Versionen kommen über den normalen WordPress-Updateweg – zuerst auf Websites im Kanal **„Test“**, dann nach Freigabe für alle. In der Plugin-Liste lässt sich **Automatische Updates aktivieren** einschalten; WordPress installiert freigegebene Versionen dann selbst, geprüft wie bisher (Prüfsumme und Signatur). Ablauf: [Updates → BlaulichtCMS Bridge](/hilfe/updates#blaulichtcms-bridge).
 
 ## Was in WordPress entsteht
 
 - Ein Beitrag (Status „Veröffentlicht“) mit Titel, Text und Kurzfassung
 - Titelbild als Beitragsbild, weitere Bilder und Videos unter dem Text
-- Autor und Kategorie lassen sich in den Bridge-Einstellungen festlegen
+- Kategorie aus BlaulichtCMS oder die Standardkategorie, Autor nach den [Einstellungen der Bridge](#einstellungen-der-bridge)
 
 Eine neue, freigegebene Fassung desselben BlaulichtCMS-Beitrags **aktualisiert** den bestehenden WordPress-Beitrag. Bilder und Videos, die in der neuen Fassung fehlen, löscht die Bridge aus der Mediathek, sofern kein anderer Beitrag und keine andere Seite sie verwendet.
 
@@ -80,6 +107,7 @@ Hinweise zur Orientierung, keine Rechtsberatung:
 
 - Freigegebene Beiträge mit Bildern und Videos werden auf der Website **öffentlich**. Die Bridge überträgt nur den freigegebenen Text und die öffentlichen Fassungen der Dateien (ohne Standortdaten, neutral benannt) – keine Originale, keine Hinweise der hochladenden Personen.
 - Läuft WordPress bei einem **externen Hoster**, verarbeitet dieser die Inhalte im Auftrag: dafür ist ein Vertrag zur Auftragsverarbeitung (Art. 28 DSGVO) nötig. Liegt der Hoster außerhalb der EU oder nutzt er dort Unterauftragnehmer, die Grundlage der Übermittlung prüfen.
+- Der Name der Person, die einen Beitrag angelegt hat, geht nur an die Website, wenn **Autorenname übertragen** eingeschaltet ist; er erscheint dann öffentlich als Autor.
 - Plugins, Statistik, eingebundene Schriften oder Videos auf der Website sind eigene Verarbeitungen der Website und gehören in deren Datenschutzerklärung.
 - Ein Widerspruch einer abgebildeten Person: Beitrag **zurückziehen** (siehe oben) bzw. die Datei aus der Fassung nehmen und neu freigeben.
 
@@ -87,7 +115,7 @@ Hinweise zur Orientierung, keine Rechtsberatung:
 
 | Anzeige in BlaulichtCMS | Was tun |
 |---|---|
-| Wartet auf Abholung (lange) | Bridge-Einstellungen prüfen: letzter Abruf? WP-Cron/Host-Cron läuft? |
+| Wartet auf Abholung (lange) | Bridge-Einstellungen prüfen: letzter Abruf, Abrufweg, Hinweis zur Selbstauslösung |
 | Fehlgeschlagen | Fehlermeldung lesen, Ursache beheben, „Erneut versuchen“ |
 | Ergebnis unbekannt | Abwarten – die Bridge prüft beim nächsten Abruf selbst und erzeugt keinen zweiten Beitrag |
 | Ergebnis unbekannt nach Widerruf der Kopplung | Die Website kann nichts mehr melden. Auf der Website nachsehen und im Beitrag „Ergebnis von Hand festhalten“ (veröffentlicht oder nicht). Der Widerruf einer Freigabe ist trotzdem möglich. |

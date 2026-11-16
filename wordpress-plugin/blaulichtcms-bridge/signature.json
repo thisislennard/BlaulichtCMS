@@ -1,23 +1,24 @@
 {
   "format": 1,
-  "version": "0.7.0",
+  "version": "0.8.0",
   "key": "atg1y8zLUY4uuvCe4VD5SJYAG7uhejUBGgwYQgTnr+o=",
   "files": {
-    "assets/banner.css": "178c0c78388e13ce3abe4cbf1eca89afdcd6bbc664742ef38458e54c3007bc90",
-    "assets/banner.js": "7f765908910890e95bf5dedb4330d36cbac0bacb6501b1c12c234cbbe7bb8e9b",
+    "assets/banner.css": "16717dc88a82726d6d5ed6f64ac30400520bb1c3985ec0948e366a0a2f366fc0",
+    "assets/banner.js": "dddcdd71314801f440ffd7497e743548f47733224362ecf8ac64e360441a059e",
     "assets/blocks.js": "3872282454b836e108d2eaf06f8a72ba41bc4c66744a893d6ea630009c470e03",
-    "blaulichtcms-bridge.php": "e9a7ee124b6083b6fc8b0827150a19f086b5a5992d6e43d0eb6ad47020ca8843",
-    "includes/class-admin.php": "d42755c21e5fba16520510eea40e8ecafa7fc42ce115c7299f976d23e2156ab4",
-    "includes/class-banners.php": "04ed8ba4debf60c9a6021e73f39d7cf15de6ac44d57754aa5485e8d68ed289bb",
-    "includes/class-client.php": "bfe40d96bbd2ece40b2962b4e696d88fbb666bc9d2260285bd3bc910372b0521",
-    "includes/class-publisher.php": "d9e548bfb767a2d677671e9132cb0aa4872824dc91b0c2bf5b1e2f9c10c61784",
-    "includes/class-settings.php": "21dead0ecce38e55aea6fbe82a1915806dde48f23503997aa0b696e10fcfb14b",
+    "blaulichtcms-bridge.php": "631a7a54e80c2ce902fe78563b12002918fcc4643a4c7ac7e1e2a38fb6f8deb8",
+    "includes/class-admin.php": "0c282eb57fad779b6a01b677e6a254ac54c8be22b639a56c240f8fd2c8fb9d03",
+    "includes/class-authors.php": "e0a8bb51d224971cd14c35982ecfae0f1401495a735fed6b365d86d5ffcdd3a4",
+    "includes/class-banners.php": "bcbd76cd8ef16ce980b2d7cf00e441eecccbe5e53ff19475be2574560d12b7c7",
+    "includes/class-client.php": "1c48cc4695a5799ccad851358831217fcc8244b56ddcecd0b727c88c43757319",
+    "includes/class-publisher.php": "33256aac35a4d99dd2c682ab0c8ba19cadbaaee2515fddc344d7c4edccc688d4",
+    "includes/class-settings.php": "0e0a4204b87674a45d8d8611e5f0537d414bc0467067739014f5182f0998a2b6",
     "includes/class-signature.php": "1fa7ab9089b7700b6ac5d219aca9e8a23469487e49eb54f6576055f8e64021aa",
-    "includes/class-sync.php": "53a5c1603abb7fd1c40be2daa6facf75f6edf93455ceb0059f2f413c4e66c31a",
-    "includes/class-updater.php": "aef6010a259779a55aaf0567d6b6747181f137ce1c8efad918f1a6a81962299a",
+    "includes/class-sync.php": "017ee657e7b71e276612b1f6dc4da9a3fa373651ed891aea773e094e1b73b106",
+    "includes/class-updater.php": "43bc99e7466088ce2cc9a9718abb4df6818f065667ff79725a11f168ad33f41c",
     "includes/signing-keys.php": "5abfca43e047edeca3e8e446170a02097bfa5313bf54f973ce464714b74d88a3",
-    "readme.txt": "b96ae13a34fb0830a9bf4581dfe2b1a8009c24965b8f24d17f013ac564c0d010",
+    "readme.txt": "ec3cd27057291deb0cfb14c7823355949c66afcc0d2a8850f3285fffdd59d86d",
     "uninstall.php": "1fc233d1450f0c6a9fd93895fded39f1c91f9fa8410d69d170ce7724420da6c4"
   },
-  "signature": "ggX1Mlw5oZKcihbcKi22+WcSolvDTdm9amazgnrZGvaa5+c9KgDVkC87r7JR6nDVFDB2ZVfGoS2ImUODSeutBQ=="
+  "signature": "wTIJSkQIaVbzt3dNmaQaA64ky08ySUjerPEup/6r7n4N+BH6CRkRo3fCsUP19M94q076sgUHHXIgVZMlnRfmAg=="
 }

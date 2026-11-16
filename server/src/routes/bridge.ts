@@ -14,7 +14,7 @@ import { notify } from '../lib/notify.js';
 import { publicBase } from '../lib/urls.js';
 import { getSettings } from '../lib/settings.js';
 import { publicFileFor } from './media.js';
-import { textFor } from './posts.js';
+import { textFor, wpCategoryList } from './posts.js';
 import { sendFileResponse } from './files.js';
 import { approvalStillValid } from '../lib/approval.js';
 import { EXCLUDE_RE, verifyBridgeSignature, type SignatureState } from '../lib/bridge-signature.js';
@@ -78,6 +78,34 @@ function pairingCode(): string {
 }
 const normCode = (c: string) => c.toUpperCase().replace(/[^A-Z0-9]/g, '');
 
+/**
+ * Meldung der Bridge (#186, ab 0.8.0) für die Oberfläche: Kategorien, Abrufweg, automatische Updates, Darstellung der
+ * Hinweise und Autorenangabe. Nur bekannte Felder – die Website liefert die Daten, BlaulichtCMS übernimmt sie nicht blind.
+ */
+const DISPLAY = z.enum(['banner', 'popup', 'both']);
+const bridgeReport = z.object({
+  categories: z.array(z.object({ id: z.number().int().positive(), name: z.string().max(1000).transform((v) => v.trim().slice(0, 200) || '–'), parent: z.number().int().min(0).optional() })).max(1000).optional(),
+  cron: z
+    .object({
+      mode: z.enum(['wp-cron', 'self', 'host', 'manual', 'unknown']).optional(),
+      wp_cron_disabled: z.boolean().optional(),
+      healthy: z.boolean().optional(),
+      hint: z.string().max(2000).transform((v) => v.slice(0, 300)).optional(),
+    })
+    .optional(),
+  auto_update: z.boolean().optional(),
+  author_mode: z.enum(['bridge', 'person', 'fixed']).optional(),
+  display: z.object({ info: DISPLAY.optional(), warning: DISPLAY.optional(), danger: DISPLAY.optional() }).optional(),
+  banner_auto: z.boolean().optional(),
+});
+export type BridgeReport = z.infer<typeof bridgeReport>;
+
+function reportPayload(r: any): BridgeReport | null {
+  if (!r || typeof r !== 'object') return null;
+  const parsed = bridgeReport.safeParse(r);
+  return parsed.success ? parsed.data : null;
+}
+
 function sitePayload(s: any) {
   return {
     id: s.id,
@@ -93,6 +121,9 @@ function sitePayload(s: any) {
     created_at: s.created_at,
     open_jobs: s.open_jobs ?? 0,
     published_count: s.published_count ?? 0,
+    send_author: !!s.send_author,
+    report: reportPayload(s.bridge_report),
+    report_at: s.bridge_report_at ?? null,
   };
 }
 
@@ -192,8 +223,17 @@ const bridgeActor = (site: BridgeSite, req: FastifyRequest): Actor => ({ id: nul
  */
 export const bridgeMediaKey = (m: { id: string; public_rev?: number | null }) => (m.public_rev ? `${m.id}.${m.public_rev}` : m.id);
 
-function jobPayload(p: any, media: any[], base: string) {
+/**
+ * Autorenangabe (#186) – nur, wenn für die Website eingeschaltet. Statt der Konto-ID geht ein je Website verschiedener,
+ * nicht umkehrbarer Schlüssel an WordPress; die Bridge legt damit je Person höchstens einen Autor ohne Anmeldung an.
+ */
+export function bridgeAuthorKey(siteId: string, userId: string) {
+  return hmacHex(deriveKey('bridge-author'), `${siteId}.${userId}`).slice(0, 32);
+}
+
+function jobPayload(p: any, media: any[], base: string, author: { key: string; name: string } | null) {
   const text = textFor(p, 'wordpress');
+  const categories = wpCategoryList(p.variants?.wordpress?.categories);
   const cover = media.find((m) => m.id === p.cover_id);
   return {
     id: p.id,
@@ -208,7 +248,10 @@ function jobPayload(p: any, media: any[], base: string) {
       excerpt: text.excerpt,
       status: 'publish',
       cover_media_id: cover ? bridgeMediaKey(cover) : p.cover_id,
+      // Leer = Standardkategorie der Bridge (#186). Die Bridge übernimmt nur Kategorien, die es in WordPress gibt.
+      ...(categories.length ? { categories } : {}),
     },
+    ...(author ? { author } : {}),
     media: media.map((m, i) => ({
       id: bridgeMediaKey(m),
       kind: m.kind,
@@ -260,6 +303,16 @@ export async function bridgeRoutes(app: FastifyInstance) {
     if (!s) throw badRequest('Ein neuer Kopplungscode ist nur für noch nicht gekoppelte Websites möglich.');
     await audit(req.auth!.actor, 'site.pairing_code', { type: 'site', id, label: s.name });
     return { site: sitePayload(s), pairingCode: code, blaulichtcmsUrl: await publicBase(req) };
+  });
+
+  /** Einstellungen je Website (#186): Name der verfassenden Person für die Autorenangabe übertragen (Vorgabe: aus). */
+  app.put('/sites/:id/options', { preHandler: requireAuth('channel.sites') }, async (req) => {
+    const { id } = z.object({ id: z.uuid() }).parse(req.params);
+    const b = z.object({ sendAuthor: z.boolean() }).parse(req.body);
+    const s = await one<any>(`UPDATE wp_sites SET send_author = $2 WHERE id = $1 AND status <> 'revoked' RETURNING *`, [id, b.sendAuthor]);
+    if (!s) throw notFound('Website nicht gefunden oder widerrufen.');
+    await audit(req.auth!.actor, 'site.options', { type: 'site', id, label: s.name }, { autorenname_uebertragen: b.sendAuthor });
+    return sitePayload(s);
   });
 
   app.post('/sites/:id/revoke', { preHandler: requireAuth('channel.sites') }, async (req) => {
@@ -363,6 +416,18 @@ export async function bridgeRoutes(app: FastifyInstance) {
     return { ok: true, site_id: site.id, site_name: site.name, api_version: BRIDGE_API_VERSION, poll_interval: POLL_SECONDS };
   });
 
+  /**
+   * Meldung der Bridge (#186): Kategorien der Website (Auswahl im Beitrag und im Ausgang), Abrufweg, automatische
+   * Updates und Darstellung. Die Bridge sendet nur bei Änderungen und sonst höchstens alle paar Stunden.
+   */
+  app.post('/bridge/report', bridgeLimit, async (req) => {
+    const site = await bridgeAuth(req);
+    const parsed = bridgeReport.safeParse(req.body);
+    if (!parsed.success) throw badRequest('Meldung der Bridge ist ungültig.');
+    const r = await one<any>(`UPDATE wp_sites SET bridge_report = $2, bridge_report_at = now() WHERE id = $1 RETURNING send_author`, [site.id, JSON.stringify(parsed.data)]);
+    return { ok: true, send_author: !!r?.send_author };
+  });
+
   /** Update-Angebot für die Bridge (WordPress-Update-Hook). Testwebsites sofort, andere nach Freigabe. */
   app.get('/bridge/update', bridgeLimit, async (req) => {
     const site = await bridgeAuth(req);
@@ -453,10 +518,14 @@ export async function bridgeRoutes(app: FastifyInstance) {
     );
     if (!rows.length) return { jobs, banner_ids: active.map((b) => b.id), poll_interval: POLL_SECONDS };
     const base = await publicBase(req);
+    const sendAuthor = !!(await one<any>(`SELECT send_author FROM wp_sites WHERE id = $1`, [site.id]))?.send_author;
     for (const r of rows) {
       const p = await one<any>(
-        `SELECT pb.id, pb.post_id, pb.action, (SELECT kind FROM posts WHERE id = pb.post_id) AS kind, rv.number, rv.title, rv.body, rv.excerpt, rv.variants, rv.media_ids, rv.cover_id, rv.content_hash
-           FROM publications pb JOIN post_revisions rv ON rv.id = pb.revision_id WHERE pb.id = $1`,
+        `SELECT pb.id, pb.post_id, pb.action, po.kind, po.created_by AS author_id, u.name AS author_name,
+                rv.number, rv.title, rv.body, rv.excerpt, rv.variants, rv.media_ids, rv.cover_id, rv.content_hash
+           FROM publications pb JOIN post_revisions rv ON rv.id = pb.revision_id JOIN posts po ON po.id = pb.post_id
+           LEFT JOIN users u ON u.id = po.created_by
+          WHERE pb.id = $1`,
         [r.id],
       );
       if (p.action === 'unpublish') {
@@ -467,7 +536,8 @@ export async function bridgeRoutes(app: FastifyInstance) {
       }
       const media = p.media_ids.length ? await many<any>(`SELECT * FROM media WHERE id = ANY($1) AND status = 'ready' AND deleted_at IS NULL`, [p.media_ids]) : [];
       const ordered = p.media_ids.map((id: string) => media.find((m: any) => m.id === id)).filter((m: any) => m && publicFileFor(m));
-      jobs.push(jobPayload(p, ordered, base));
+      const author = sendAuthor && p.author_id && p.author_name ? { key: bridgeAuthorKey(site.id, p.author_id), name: String(p.author_name).slice(0, 100) } : null;
+      jobs.push(jobPayload(p, ordered, base, author));
     }
     await audit(bridgeActor(site, req), 'publication.fetched', { type: 'site', id: site.id, label: site.name }, { auftraege: rows.map((r) => r.id) });
     return { jobs, banner_ids: active.map((b) => b.id), poll_interval: POLL_SECONDS };

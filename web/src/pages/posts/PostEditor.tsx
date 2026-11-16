@@ -14,6 +14,7 @@ import { KIND_LABEL } from './Posts';
 import { SocialStatusCard, SocialTargetsCard } from './SocialPanel';
 import { safeHref } from '../../lib/url';
 import { PrivacyChecklistHint, SENSITIVE_LABELS } from '../media/PrivacyDialog';
+import { WpCategoryPicker } from '../channels/WpCategories';
 
 interface PostDetail {
   post: { id: string; kind: string; created_at: string; created_by_name: string | null; archived: boolean; current_revision: number };
@@ -37,17 +38,19 @@ interface Draft {
   mediaIds: string[];
   coverId: string | null;
   siteId: string | null;
-  wp: { title: string; body: string; excerpt: string };
+  wp: { title: string; body: string; excerpt: string; categories: number[] };
   publishAt: string; // datetime-local, leer = sofort
   social: string[];
   fb: string;
   ig: string;
 }
 
-const emptyWp = { title: '', body: '', excerpt: '' };
-const wpOf = (v: any) => ({ title: v?.wordpress?.title ?? '', body: v?.wordpress?.body ?? '', excerpt: v?.wordpress?.excerpt ?? '' });
+const emptyWp = { title: '', body: '', excerpt: '', categories: [] as number[] };
+/** Kategorien geordnet – gleiche Auswahl in anderer Reihenfolge ist keine Änderung (#186). */
+const sortCats = (c: unknown) => (Array.isArray(c) ? [...new Set(c.map(Number).filter((n) => Number.isInteger(n) && n > 0))].sort((a, b) => a - b) : []);
+const wpOf = (v: any) => ({ title: v?.wordpress?.title ?? '', body: v?.wordpress?.body ?? '', excerpt: v?.wordpress?.excerpt ?? '', categories: sortCats(v?.wordpress?.categories) });
 /** Website-Fassung zählt nur mit Zielkanal – sonst ist sie unsichtbar und darf keine neue Fassung auslösen. */
-const NO_WP = { title: '', body: '', excerpt: '' };
+const NO_WP = { title: '', body: '', excerpt: '', categories: [] as number[] };
 
 /** Einfache Absätze wie auf der Website (Leerzeile = neuer Absatz). */
 function Paragraphs({ text }: { text: string }) {
@@ -171,7 +174,7 @@ function PostEditorInner({ id }: { id: string }) {
     JSON.stringify(dr.mediaIds) !== JSON.stringify(r.media_ids) ||
     dr.coverId !== r.cover_id ||
     dr.siteId !== r.site_id ||
-    JSON.stringify(dr.siteId ? dr.wp : NO_WP) !== JSON.stringify(r.site_id ? wpOf(r.variants) : NO_WP) ||
+    JSON.stringify(dr.siteId ? { ...dr.wp, categories: sortCats(dr.wp.categories) } : NO_WP) !== JSON.stringify(r.site_id ? wpOf(r.variants) : NO_WP) ||
     dr.publishAt !== toLocalInput(r.publish_at) ||
     JSON.stringify([...dr.social].sort()) !== JSON.stringify([...(r.social_targets ?? [])].sort()) ||
     dr.fb !== (r.variants?.facebook?.body ?? '') ||
@@ -402,7 +405,7 @@ function PostEditorInner({ id }: { id: string }) {
 
           <Card title="Zielkanal">
             <FieldWrap label="Veröffentlichen auf" help="Ohne Zielkanal bleibt der Beitrag intern. Eine Änderung des Zielkanals verlangt eine neue Freigabe." htmlFor="e-site">
-              <Select id="e-site" value={draft.siteId ?? ''} disabled={!editable} onChange={(e) => setDraft({ ...draft, siteId: e.target.value || null })}>
+              <Select id="e-site" value={draft.siteId ?? ''} disabled={!editable} onChange={(e) => setDraft({ ...draft, siteId: e.target.value || null, wp: { ...draft.wp, categories: [] } })}>
                 <option value="">Nur intern (keine Veröffentlichung)</option>
                 {/* Ohne „Websites ansehen“ fehlt die Liste – den gespeicherten Zielkanal trotzdem zeigen */}
                 {!can('channel.view') && draft.siteId && <option value={draft.siteId}>WordPress</option>}
@@ -419,6 +422,7 @@ function PostEditorInner({ id }: { id: string }) {
                 <FieldWrap label="Termin (optional)" help="Leer = sofort nach dem Veröffentlichen. Der Termin ist Teil der freigegebenen Fassung." htmlFor="e-at">
                   <Input id="e-at" type="datetime-local" value={draft.publishAt} disabled={!editable} onChange={(e) => setDraft({ ...draft, publishAt: e.target.value })} className="max-w-[260px]" />
                 </FieldWrap>
+                <WpCategoryPicker categories={(sites.data ?? []).find((s) => s.id === draft.siteId)?.report?.categories} value={draft.wp.categories} disabled={!editable} onChange={(categories) => setDraft({ ...draft, wp: { ...draft.wp, categories } })} help="Ohne Auswahl gilt die Standardkategorie der Website. Die Kategorie ist Teil der freigegebenen Fassung." />
                 <details className="border border-line rounded-card p-3" open={!!(draft.wp.title || draft.wp.body || draft.wp.excerpt)}>
                   <summary className="cursor-pointer font-medium text-sm">Eigener Text für die Website (optional)</summary>
                   <div className="flex flex-col gap-3 mt-3">

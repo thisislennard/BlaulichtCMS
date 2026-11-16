@@ -16,8 +16,16 @@ export interface ChannelText {
   title?: string;
   body?: string;
   excerpt?: string;
+  /** Nur WordPress (#186): Kategorie-IDs der Website; leer = Standardkategorie der Bridge */
+  categories?: number[];
 }
 export type Variants = Partial<Record<'wordpress' | 'facebook' | 'instagram', ChannelText>>;
+
+/** Kategorie-IDs geordnet und ohne Doppelte – gleiche Auswahl ergibt dieselbe Prüfsumme. */
+export function wpCategoryList(v: unknown): number[] {
+  if (!Array.isArray(v)) return [];
+  return [...new Set(v.map(Number).filter((n) => Number.isInteger(n) && n > 0 && n < 2 ** 31))].sort((a, b) => a - b).slice(0, 20);
+}
 
 function cleanVariants(v: Variants | null | undefined): Variants {
   const out: Variants = {};
@@ -26,6 +34,8 @@ function cleanVariants(v: Variants | null | undefined): Variants {
     if (t?.title?.trim()) c.title = t.title;
     if (t?.body?.trim()) c.body = t.body;
     if (t?.excerpt?.trim()) c.excerpt = t.excerpt;
+    const cats = wpCategoryList(t?.categories);
+    if (k === 'wordpress' && cats.length) c.categories = cats;
     if (Object.keys(c).length) (out as any)[k] = c;
   }
   return out;
@@ -47,7 +57,7 @@ export function revisionHash(r: { title: string; body: string; excerpt: string; 
 }
 
 /** Text, der an einen Kanal geht: Kanaltext, sonst Grundtext. */
-export function textFor(rev: { title: string; body: string; excerpt: string; variants?: Variants | null }, channel: 'wordpress'): Required<ChannelText> {
+export function textFor(rev: { title: string; body: string; excerpt: string; variants?: Variants | null }, channel: 'wordpress'): Required<Omit<ChannelText, 'categories'>> {
   const v = (rev.variants ?? {})[channel] ?? {};
   return { title: v.title?.trim() ? v.title : rev.title, body: v.body?.trim() ? v.body : rev.body, excerpt: v.excerpt?.trim() ? v.excerpt : rev.excerpt };
 }
@@ -136,7 +146,7 @@ const revisionInput = z.object({
   siteId: z.uuid().nullable().default(null),
   variants: z
     .object({
-      wordpress: z.object({ title: z.string().max(200).optional(), body: z.string().max(50_000).optional(), excerpt: z.string().max(1_000).optional() }).optional(),
+      wordpress: z.object({ title: z.string().max(200).optional(), body: z.string().max(50_000).optional(), excerpt: z.string().max(1_000).optional(), categories: z.array(z.number().int().positive()).max(20).optional() }).optional(),
       facebook: z.object({ body: z.string().max(60_000).optional() }).optional(),
       instagram: z.object({ body: z.string().max(2_200).optional() }).optional(),
     })

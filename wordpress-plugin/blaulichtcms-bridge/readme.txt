@@ -4,7 +4,7 @@ Tags: blaulichtcms, redaktion, veröffentlichung
 Requires at least: 6.4
 Tested up to: 6.9
 Requires PHP: 8.1
-Stable tag: 0.7.0
+Stable tag: 0.8.0
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -15,7 +15,10 @@ Verbindet eine WordPress-Website mit BlaulichtCMS: freigegebene Beiträge werden
 BlaulichtCMS ist ein eigenständiges CMS für Öffentlichkeitsarbeit und Krisenkommunikation. Die Bridge ist die Verbindung zur Website:
 
 * Kopplung per einmaligem Code aus BlaulichtCMS. Der entstehende Schlüssel gilt nur für diese Website und lässt sich in BlaulichtCMS widerrufen.
-* Die Bridge ruft nur aus (HTTPS-Abruf jede Minute über WP-Cron oder Host-Cron). WordPress braucht keinen offenen Eingang für BlaulichtCMS.
+* Die Bridge ruft nur aus (HTTPS-Abruf jede Minute über WP-Cron; ist WP-Cron abgeschaltet, stößt die Bridge den Abruf selbst an). WordPress braucht keinen offenen Eingang für BlaulichtCMS.
+* Kategorie je Beitrag und je Automation aus BlaulichtCMS; Standardkategorie in den Einstellungen.
+* Autor: eigener Autor der Bridge, je Person aus BlaulichtCMS oder ein vorhandener Benutzer. Angelegte Autoren haben keine Rechte und keine Anmeldung.
+* Hinweise mit Schweregraden (Hinweis, Warnung, Gefahr): Farbe und Darstellung (Banner, Popup oder beides) je Schweregrad einstellbar.
 * Idempotent: Erneutes Abholen oder Bestätigen desselben Auftrags erzeugt keinen zweiten Beitrag – der Beitrag wird über die BlaulichtCMS-ID wiedergefunden und aktualisiert.
 * Medien kommen als geprüfte, öffentliche Fassung ohne Standortdaten und werden in der Mediathek wiederverwendet.
 
@@ -26,9 +29,16 @@ BlaulichtCMS ist ein eigenständiges CMS für Öffentlichkeitsarbeit und Krisenk
 3. In BlaulichtCMS **Website koppeln** wählen und den Kopplungscode notieren.
 4. In WordPress **Einstellungen → BlaulichtCMS Bridge** die BlaulichtCMS-Adresse und den Code eintragen und **Koppeln** klicken.
 
-Host-Cron (empfohlen bei wenig Besucherverkehr oder aktivem Seitencache):
+Ein Host-Cron ist nicht nötig. Die Bridge ruft über WP-Cron ab; ist WP-Cron abgeschaltet (`DISABLE_WP_CRON`), stößt sie den Abruf bei jedem Seitenaufruf selbst an (höchstens einmal je Minute). Optional bei sehr wenig Besucherverkehr oder einem Seitencache, der PHP umgeht:
 
     * * * * * wp --path=/var/www/html blaulichtcms-bridge poll
+
+== Einstellungen ==
+
+Unter **Einstellungen → BlaulichtCMS Bridge**:
+
+* **Beiträge:** Autor (eigener Autor der Bridge mit einstellbarem Anzeigenamen, Person aus BlaulichtCMS oder vorhandener Benutzer) und Standardkategorie. Wie ein Beitrag aussieht, bestimmt das Theme.
+* **Darstellung der Hinweise:** je Schweregrad Farbe und Darstellung – Banner (Seitenanfang, Shortcode `[blaulichtcms_banner]`, Block „BlaulichtCMS: Hinweise“), Popup beim Aufruf der Seite (modaler Dialog, Esc oder „Verstanden“ schließt, der Browser merkt sich geschlossene Hinweise) oder beides. Vorgabe: Hinweis und Warnung als Banner, Gefahr als Banner und Popup.
 
 == Häufige Fragen ==
 
@@ -42,9 +52,16 @@ Nur im Testbetrieb: `define( 'BLAULICHTCMS_BRIDGE_ALLOW_HTTP', true );` in der w
 
 == Updates ==
 
-Neue Versionen bietet die gekoppelte BlaulichtCMS-Instanz über den normalen WordPress-Updateweg an (Dashboard → Aktualisierungen bzw. `wp plugin update blaulichtcms-bridge`). Websites im Update-Kanal „Test“ erhalten eine neue Version zuerst; alle anderen erst, nachdem sie in BlaulichtCMS freigegeben wurde. Vor der Installation prüft die Bridge das Paket gegen die SHA-256-Prüfsumme aus BlaulichtCMS. Ist in der Bridge ein Signaturschlüssel hinterlegt (includes/signing-keys.php), installiert sie zusätzlich nur Pakete mit gültiger Ed25519-Signatur des Betreibers; der private Schlüssel liegt nicht auf dem BlaulichtCMS-Server. Die Kopplung bleibt beim Update erhalten.
+Neue Versionen bietet die gekoppelte BlaulichtCMS-Instanz über den normalen WordPress-Updateweg an (Dashboard → Aktualisierungen bzw. `wp plugin update blaulichtcms-bridge`). In der Plugin-Liste lässt sich „Automatische Updates aktivieren“ einschalten; WordPress installiert freigegebene Versionen dann selbst (mit derselben Prüfung von Prüfsumme und Signatur). Ist WP-Cron abgeschaltet, holt die Bridge ihr automatisches Update selbst nach. Websites im Update-Kanal „Test“ erhalten eine neue Version zuerst; alle anderen erst, nachdem sie in BlaulichtCMS freigegeben wurde. Vor der Installation prüft die Bridge das Paket gegen die SHA-256-Prüfsumme aus BlaulichtCMS. Ist in der Bridge ein Signaturschlüssel hinterlegt (includes/signing-keys.php), installiert sie zusätzlich nur Pakete mit gültiger Ed25519-Signatur des Betreibers; der private Schlüssel liegt nicht auf dem BlaulichtCMS-Server. Die Kopplung bleibt beim Update erhalten.
 
 == Changelog ==
+
+= 0.8.0 =
+* Kategorie je Beitrag und je Automation: BlaulichtCMS überträgt die gewählten Kategorien; die Bridge meldet dafür die Kategorien der Website an BlaulichtCMS. Ohne Auswahl gilt die Standardkategorie.
+* Autor: Die Bridge legt einen eigenen Autor (Anzeigename einstellbar) oder – wenn in BlaulichtCMS eingeschaltet – je verfassender Person einen Autor an. Rolle „BlaulichtCMS-Autor“ ohne Rechte, ohne E-Mail-Adresse, Anmeldung, Passwort-Zurücksetzen und Anwendungspasswörter gesperrt. Ein fest gewählter Benutzer gilt weiter.
+* Hinweise auffälliger: Symbol, kräftigere Farben, „Gefahr“ vollflächig. Farbe und Darstellung (Banner, Popup oder beides) je Schweregrad einstellbar, mit Vorschau. Das Popup ist ein barrierearmer modaler Dialog und erscheint je Hinweis und Fassung nur einmal. Einzelne Hinweise können in BlaulichtCMS eine feste Darstellung haben.
+* Kein Host-Cron mehr nötig: Ist WP-Cron abgeschaltet, stößt die Bridge den Abruf selbst an; Anzeige des Abrufwegs und Hinweis, wenn der Abruf ausfällt. Der Abrufweg erscheint auch in BlaulichtCMS.
+* Automatische Updates: Der Schalter „Automatische Updates aktivieren“ in der Plugin-Liste funktioniert; Prüfsumme und Signatur werden wie bisher geprüft. Kopfzeile „Update URI“, damit WordPress nie ein gleichnamiges Plugin von wordpress.org anbietet.
 
 = 0.7.0 =
 * Umbenennung in BlaulichtCMS Bridge: Plugin-Ordner und Hauptdatei `blaulichtcms-bridge`, Shortcodes `[blaulichtcms_banner]` und `[blaulichtcms_einsaetze]`, Blöcke `blaulichtcms/banner` und `blaulichtcms/incidents`, WP-CLI-Befehl `wp blaulichtcms-bridge poll`, Optionen und Beitragsfelder mit Präfix `blaulichtcms`.

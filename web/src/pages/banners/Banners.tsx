@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { get, post, put } from '../../api/client';
-import type { Site } from '../../api/types';
+import type { BannerDisplay, Site } from '../../api/types';
 import { Button, Card, cx, EmptyState, ErrorBox, FieldWrap, Input, Notice, PageHeader, Rev, Select, SkeletonRows, StatusBadge, Textarea } from '../../components/ui/core';
 import { Dialog, useErrorToast, useToast, useConfirm } from '../../components/ui/overlays';
 import { useAuth } from '../../lib/auth';
@@ -18,6 +18,7 @@ interface Banner {
   ends_at: string;
   link_url: string | null;
   link_text: string | null;
+  display: BannerDisplay;
   site_id: string;
   site_name: string;
   content_hash: string;
@@ -35,6 +36,20 @@ const TONE: Record<string, { label: string; cls: string }> = {
   danger: { label: 'Gefahr', cls: 'bg-site-danger-bg text-site-danger-fg border-site-danger-line' },
 };
 const PRIO = { 1: 'niedrig', 2: 'normal', 3: 'hoch' } as Record<number, string>;
+/** Darstellung auf der Website (#186). „auto“ folgt der Einstellung der Website je Schweregrad. */
+export const DISPLAY_OPTIONS: { value: BannerDisplay; label: string }[] = [
+  { value: 'auto', label: 'Nach Schweregrad (Einstellung der Website)' },
+  { value: 'banner', label: 'Nur Banner' },
+  { value: 'popup', label: 'Nur Popup beim Aufruf der Seite' },
+  { value: 'both', label: 'Banner und Popup' },
+];
+const DISPLAY_LABEL: Record<string, string> = { banner: 'Banner', popup: 'Popup', both: 'Banner und Popup' };
+/** Tatsächliche Darstellung auf einer Website: feste Wahl oder die von der Bridge gemeldete Einstellung je Schweregrad. */
+function effectiveDisplay(display: BannerDisplay, tone: string, site: Site | undefined): string | null {
+  if (display !== 'auto') return DISPLAY_LABEL[display];
+  const d = site?.report?.display?.[tone as 'info' | 'warning' | 'danger'];
+  return d ? `${DISPLAY_LABEL[d]} (Einstellung der Website)` : null;
+}
 const LABELS = { live: 'Aktiv auf der Website', expired: 'Abgelaufen', ended: 'Beendet', publishing: 'Wird übertragen', scheduled: 'Geplant' };
 
 /** Vorschau in denselben Farben wie auf der Website (Bridge-Stylesheet). */
@@ -66,6 +81,7 @@ function BannerDialog({ banner, sites, onClose }: { banner: Banner | null; sites
     endsAt: toLocalInput(banner?.ends_at ?? inTwoHours),
     linkUrl: banner?.link_url ?? '',
     linkText: banner?.link_text ?? '',
+    display: (banner?.display ?? 'auto') as BannerDisplay,
   });
   const save = async () => {
     const body = { ...v, startsAt: fromLocalInput(v.startsAt), endsAt: fromLocalInput(v.endsAt), linkUrl: v.linkUrl.trim() || null, linkText: v.linkText.trim() || null };
@@ -112,7 +128,7 @@ function BannerDialog({ banner, sites, onClose }: { banner: Banner | null; sites
           <Textarea id="b-text" rows={2} value={v.text} onChange={(e) => setV({ ...v, text: e.target.value })} maxLength={500} />
         </FieldWrap>
         <div className="grid sm:grid-cols-2 gap-4">
-          <FieldWrap label="Art" htmlFor="b-tone">
+          <FieldWrap label="Schweregrad" help="Farbe und Darstellung je Schweregrad legt die Website fest (Bridge-Einstellungen)." htmlFor="b-tone">
             <Select id="b-tone" value={v.tone} onChange={(e) => setV({ ...v, tone: e.target.value as any })}>
               <option value="info">Hinweis</option>
               <option value="warning">Warnung</option>
@@ -124,6 +140,15 @@ function BannerDialog({ banner, sites, onClose }: { banner: Banner | null; sites
               <option value={3}>hoch</option>
               <option value={2}>normal</option>
               <option value={1}>niedrig</option>
+            </Select>
+          </FieldWrap>
+          <FieldWrap label="Darstellung" htmlFor="b-display" help={effectiveDisplay(v.display, v.tone, sites.find((s) => s.id === v.siteId)) ? `Auf dieser Website: ${effectiveDisplay(v.display, v.tone, sites.find((s) => s.id === v.siteId))}` : 'Popup = Dialog beim Aufruf der Seite; jede Person schließt ihn einmal.'}>
+            <Select id="b-display" value={v.display} onChange={(e) => setV({ ...v, display: e.target.value as BannerDisplay })}>
+              {DISPLAY_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
             </Select>
           </FieldWrap>
           <FieldWrap label="Start" htmlFor="b-start">
@@ -180,7 +205,8 @@ export default function Banners() {
               <div className="flex flex-wrap items-center gap-2 text-sm">
                 <StatusBadge status={b.state} labels={LABELS} />
                 <span className="text-fg-muted">
-                  {b.site_name} · Priorität {PRIO[b.priority]} · {fmtDateTime(b.starts_at)} – {fmtDateTime(b.ends_at)} · <Rev n={b.revision} />
+                  {b.site_name} · Priorität {PRIO[b.priority]}
+                  {effectiveDisplay(b.display ?? 'auto', b.tone, sites.data?.find((s) => s.id === b.site_id)) ? ` · ${effectiveDisplay(b.display ?? 'auto', b.tone, sites.data?.find((s) => s.id === b.site_id))}` : ''} · {fmtDateTime(b.starts_at)} – {fmtDateTime(b.ends_at)} · <Rev n={b.revision} />
                 </span>
               </div>
               <BannerPreview b={b} />

@@ -151,16 +151,22 @@ Ausführlich im Hilfe-Center der App (`/hilfe`). Derselbe Ablauf läuft automati
 
 ## WordPress verbinden
 
-1. In BlaulichtCMS *Kanäle → Websites → Bridge herunterladen* (ZIP, aktuell Version 0.7.0).
+1. In BlaulichtCMS *Kanäle → Websites → Bridge herunterladen* (ZIP, aktuell Version 0.8.0).
 2. In WordPress *Plugins → Installieren → Plugin hochladen*, dann aktivieren.
 3. In BlaulichtCMS *Website koppeln*, den einmaligen **Kopplungscode** notieren (30 Minuten gültig).
 4. In WordPress *Einstellungen → BlaulichtCMS Bridge* die BlaulichtCMS-Adresse (`https://…`) und den Code eintragen, dann **Koppeln**.
 
-Die Bridge holt jede Minute über WP-Cron ab. Zuverlässiger ist zusätzlich ein Host-Cron:
+Die Bridge holt jede Minute über WP-Cron ab; ist WP-Cron abgeschaltet (`DISABLE_WP_CRON`), stößt sie den Abruf bei
+Seitenaufrufen selbst an. Ein Host-Cron ist nicht nötig, hilft aber bei sehr wenig Besuchern oder einem Seitencache, der
+PHP umgeht:
 
 ```cron
 * * * * * wp --path=/var/www/html blaulichtcms-bridge poll
 ```
+
+In *Einstellungen → BlaulichtCMS Bridge* lassen sich Autor (eigener Autor der Bridge, Person aus BlaulichtCMS oder
+vorhandener Benutzer), Standardkategorie sowie Farbe und Darstellung der Hinweise je Schweregrad (Banner, Popup oder
+beides) festlegen. Automatische Updates der Bridge schaltet man in der Plugin-Liste von WordPress ein.
 
 Banner erscheinen automatisch am Seitenanfang (abschaltbar), alternativ per Block „BlaulichtCMS: Hinweise“ oder
 `[blaulichtcms_banner]`. Die Einsatzübersicht kommt per `[blaulichtcms_einsaetze]`. Abgelaufene Banner verschwinden auch aus

@@ -7,13 +7,14 @@ import { Icon } from '../../components/ui/Icon';
 import { Dialog, useConfirm, useErrorToast, useToast } from '../../components/ui/overlays';
 import { useAuth } from '../../lib/auth';
 import { fmtDateTime } from '../../lib/format';
-import { BannerPreview } from '../banners/Banners';
+import { BannerPreview, DISPLAY_OPTIONS } from '../banners/Banners';
+import { WpCategoryPicker } from '../channels/WpCategories';
 import { CheckList, Help, NumberField, SelectField, TemplateField, outputSummary, useCatalog, useOutputs, type Catalog, type OutputDef } from './shared';
 
 /** Ausgänge: wiederverwendbare Aktionen mit ihrer Gestaltung (Banner-Stil, Beitragsvorlage, E-Mail, Benachrichtigung, Warnentwurf). */
 
 const DEFAULTS: Record<string, Record<string, any>> = {
-  banner: { siteIds: [], title: '', text: '', tone: 'auto', priority: 2, durationHours: 6, endFromField: true, linkUrl: '', linkText: '', submit: true },
+  banner: { siteIds: [], title: '', text: '', tone: 'auto', priority: 2, durationHours: 6, endFromField: true, linkUrl: '', linkText: '', display: 'auto', submit: true },
   post: { kind: 'news', title: '', body: '', excerpt: '', variants: {}, siteId: null, submit: false },
   mail: { roles: [], responsibilityIds: [], subject: '', body: '' },
   notify: { roles: [], userIds: [], kind: 'info', title: '', body: '', link: '' },
@@ -94,6 +95,14 @@ function OutputDialog({ output, kind, cat, onClose }: { output: OutputDef | null
                 labelAction={<Help title="Stil nach Warnstufe" anchor="ausgaenge">Bei amtlichen Warnungen: Stufe 1 = Hinweis, 2 = Warnung, ab 3 = Gefahr. Ohne Feld „stufe“ gilt „Hinweis“. Farben kommen aus dem Banner-Stil der Website.</Help>}
               />
               <SelectField id="o-prio" label="Priorität" value={String(c.priority)} onChange={(v) => set({ priority: Number(v) })} options={[{ value: '3', label: 'hoch' }, { value: '2', label: 'normal' }, { value: '1', label: 'niedrig' }]} />
+              <SelectField
+                id="o-display"
+                label="Darstellung auf der Website"
+                value={c.display ?? 'auto'}
+                onChange={(v) => set({ display: v })}
+                options={DISPLAY_OPTIONS}
+                labelAction={<Help title="Darstellung" anchor="ausgaenge">„Nach Schweregrad“ folgt der Einstellung der Website (Bridge-Einstellungen → Darstellung der Hinweise). Popup = Dialog beim Aufruf der Seite, den jede Person einmal schließt.</Help>}
+              />
               <NumberField id="o-dur" label="Dauer" unit="Stunden" min={1} max={168} value={c.durationHours} onChange={(v) => set({ durationHours: v })} help="Ablauf ab Anlage, wenn kein Gültig-bis-Feld vorhanden ist." />
               <div className="pt-6">
                 <Switch checked={!!c.endFromField} onChange={(v) => set({ endFromField: v })} label="Ablauf aus „gueltig_bis“" description="Amtliche Warnungen: Banner endet mit der Warnung." />
@@ -109,8 +118,15 @@ function OutputDialog({ output, kind, cat, onClose }: { output: OutputDef | null
           <>
             <div className="grid sm:grid-cols-2 gap-4">
               <SelectField id="o-kind" label="Art des Beitrags" value={c.kind} onChange={(v) => set({ kind: v })} options={[{ value: 'news', label: 'Meldung' }, { value: 'incident', label: 'Einsatz' }, { value: 'event', label: 'Termin' }, { value: 'situation', label: 'Lage' }]} />
-              <SelectField id="o-site" label="Zielkanal (optional)" value={c.siteId ?? ''} onChange={(v) => set({ siteId: v || null })} placeholder="Kein Zielkanal (intern)" options={sites.map((s) => ({ value: s.id, label: s.name }))} help="Für den Direktversand nötig." />
+              <SelectField id="o-site" label="Zielkanal (optional)" value={c.siteId ?? ''} onChange={(v) => set({ siteId: v || null, variants: { ...c.variants, wordpress: { ...c.variants?.wordpress, categories: [] } } })} placeholder="Kein Zielkanal (intern)" options={sites.map((s) => ({ value: s.id, label: s.name }))} help="Für den Direktversand nötig." />
             </div>
+            {c.siteId && (
+              <WpCategoryPicker
+                categories={cat.sites.find((s) => s.id === c.siteId)?.categories}
+                value={c.variants?.wordpress?.categories ?? []}
+                onChange={(categories) => set({ variants: { ...c.variants, wordpress: { ...c.variants?.wordpress, categories } } })}
+              />
+            )}
             {T('title', 'Titel', { max: 400, required: true })}
             {T('body', 'Text', { rows: 6, max: 20000 })}
             {T('excerpt', 'Kurzfassung', { rows: 2, max: 1000 })}

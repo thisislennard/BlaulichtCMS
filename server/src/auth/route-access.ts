@@ -33,6 +33,7 @@ export const PUBLIC_ROUTES: string[] = [
   'GET /bridge/update/package',
   'GET /bridge/jobs',
   'POST /bridge/unpair',
+  'POST /bridge/report',
   'POST /bridge/jobs/:id/result',
   'GET /bridge/media/:id',
   // Verbindungen: Rückkehr von der Meta-Anmeldung (Zustand im Vorgang), FE2-Eingang (Zugangsschlüssel),

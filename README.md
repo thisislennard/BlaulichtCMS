@@ -15,7 +15,7 @@ Fotos per Link vom Handy sammeln · sichten · Beiträge schreiben · Fassung fr
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-18-4169E1?logo=postgresql&logoColor=white)
 ![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)
 ![Docker](https://img.shields.io/badge/Docker-ein_Container-2496ED?logo=docker&logoColor=white)
-![WordPress](https://img.shields.io/badge/BlaulichtCMS_Bridge-0.7.0-21759B?logo=wordpress&logoColor=white)
+![WordPress](https://img.shields.io/badge/BlaulichtCMS_Bridge-0.8.0-21759B?logo=wordpress&logoColor=white)
 
 </div>
 
@@ -118,9 +118,12 @@ flowchart LR
 
 - **WordPress über die BlaulichtCMS Bridge:** Plugin direkt aus BlaulichtCMS, Kopplung per Einmalcode, die Website holt
   Aufträge per HTTPS ab – kein offener Eingang zur Website. WordPress-ID und URL kommen zurück; auch eine doppelte
-  Abholung erzeugt nie einen zweiten Beitrag. Updates des Plugins sind signiert.
+  Abholung erzeugt nie einen zweiten Beitrag. Kategorie je Beitrag und je Automation; Autor als eigener Autor der
+  Bridge oder je Person (ohne Rechte, ohne Anmeldung). Kein Host-Cron nötig. Updates des Plugins sind signiert und
+  laufen auf Wunsch automatisch.
 - **Banner auf der Website:** Hinweise und Gefahrenmeldungen mit Laufzeit, automatisch am Seitenanfang oder per Block
-  bzw. Shortcode; abgelaufene Banner verschwinden auch aus zwischengespeicherten Seiten.
+  bzw. Shortcode; abgelaufene Banner verschwinden auch aus zwischengespeicherten Seiten. Farbe und Darstellung je
+  Schweregrad (Banner, barrierearmes Popup beim Aufruf der Seite oder beides) stellt die Website ein.
 - **Einsatzübersicht** auf der Website per Shortcode bzw. Block.
 - **Facebook und Instagram:** Veröffentlichung je Kanal mit eigenem Status; Facebook-Beiträge lassen sich wieder
   löschen, für Instagram gibt es einen geführten Weg.

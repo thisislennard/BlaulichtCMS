@@ -11,11 +11,14 @@ import { getSettings } from '../lib/settings.js';
  * Hinweis-Banner: Entwurf → Freigabe genau dieser Fassung → Veröffentlichen an eine Website.
  * Start und Ablauf setzt die Bridge lokal durch – auch ohne Verbindung zu BlaulichtCMS und bei aktivem Seitencache.
  */
-export function bannerHash(b: { title: string; text: string; tone: string; priority: number; starts_at: string | Date; ends_at: string | Date; link_url: string | null; link_text: string | null; site_id: string }) {
-  return crypto
-    .createHash('sha256')
-    .update(JSON.stringify([b.site_id, b.title, b.text, b.tone, b.priority, new Date(b.starts_at).toISOString(), new Date(b.ends_at).toISOString(), b.link_url ?? null, b.link_text ?? null]))
-    .digest('hex');
+export const BANNER_DISPLAYS = ['auto', 'banner', 'popup', 'both'] as const;
+export type BannerDisplay = (typeof BANNER_DISPLAYS)[number];
+
+export function bannerHash(b: { title: string; text: string; tone: string; priority: number; starts_at: string | Date; ends_at: string | Date; link_url: string | null; link_text: string | null; site_id: string; display?: string | null }) {
+  const base: unknown[] = [b.site_id, b.title, b.text, b.tone, b.priority, new Date(b.starts_at).toISOString(), new Date(b.ends_at).toISOString(), b.link_url ?? null, b.link_text ?? null];
+  // Darstellung (#186) ist Teil der Fassung; ohne feste Darstellung bleibt das bisherige Format (bestehende Freigaben gelten)
+  if (b.display && b.display !== 'auto') base.push(b.display);
+  return crypto.createHash('sha256').update(JSON.stringify(base)).digest('hex');
 }
 
 export function bannerPayload(b: any) {
@@ -30,6 +33,8 @@ export function bannerPayload(b: any) {
     ends_at: new Date(b.ends_at).toISOString(),
     link_url: b.link_url,
     link_text: b.link_text,
+    /** auto = nach Schweregrad, wie in der Bridge eingestellt (#186) */
+    display: (b.display ?? 'auto') as BannerDisplay,
   };
 }
 
@@ -59,6 +64,7 @@ const input = z
     endsAt: z.iso.datetime({ offset: true }),
     linkUrl: z.url().max(500).nullable().default(null),
     linkText: z.string().trim().max(60).nullable().default(null),
+    display: z.enum(BANNER_DISPLAYS).default('auto'),
   })
   .refine((b) => new Date(b.endsAt) > new Date(b.startsAt ?? Date.now()), { message: 'Das Ende muss nach dem Start liegen.', path: ['endsAt'] })
   .refine((b) => !b.linkUrl || /^https?:\/\//.test(b.linkUrl), { message: 'Nur http(s)-Links.', path: ['linkUrl'] });
@@ -108,10 +114,10 @@ export async function bannerRoutes(app: FastifyInstance) {
     if (!site || site.status === 'revoked') throw badRequest('Die Website ist nicht verfügbar.');
     const starts = v.startsAt ?? new Date().toISOString();
     assertEndsAfterStart(starts, v.endsAt);
-    const row = { site_id: v.siteId, title: v.title, text: v.text, tone: v.tone, priority: v.priority, starts_at: starts, ends_at: v.endsAt, link_url: v.linkUrl, link_text: v.linkText };
+    const row = { site_id: v.siteId, title: v.title, text: v.text, tone: v.tone, priority: v.priority, starts_at: starts, ends_at: v.endsAt, link_url: v.linkUrl, link_text: v.linkText, display: v.display };
     const b = await one<any>(
-      `INSERT INTO banners (site_id, title, text, tone, priority, starts_at, ends_at, link_url, link_text, content_hash, created_by, updated_by) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$11) RETURNING *`,
-      [v.siteId, v.title, v.text, v.tone, v.priority, starts, v.endsAt, v.linkUrl, v.linkText, bannerHash(row), req.auth!.user?.id ?? null],
+      `INSERT INTO banners (site_id, title, text, tone, priority, starts_at, ends_at, link_url, link_text, content_hash, created_by, updated_by, display) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$11,$12) RETURNING *`,
+      [v.siteId, v.title, v.text, v.tone, v.priority, starts, v.endsAt, v.linkUrl, v.linkText, bannerHash(row), req.auth!.user?.id ?? null, v.display],
     );
     await audit(req.auth!.actor, 'banner.created', { type: 'banner', id: b.id, label: b.title });
     return bannerPayload(b);
@@ -127,13 +133,13 @@ export async function bannerRoutes(app: FastifyInstance) {
       const starts = v.startsAt ?? new Date(b.starts_at).toISOString();
       // Ohne neuen Start gilt der gespeicherte – das Eingabeschema prüft nur gegen „jetzt“ (#181)
       assertEndsAfterStart(starts, v.endsAt);
-      const row = { site_id: v.siteId, title: v.title, text: v.text, tone: v.tone, priority: v.priority, starts_at: starts, ends_at: v.endsAt, link_url: v.linkUrl, link_text: v.linkText };
+      const row = { site_id: v.siteId, title: v.title, text: v.text, tone: v.tone, priority: v.priority, starts_at: starts, ends_at: v.endsAt, link_url: v.linkUrl, link_text: v.linkText, display: v.display };
       const hash = bannerHash(row);
       if (hash === b.content_hash) return { changed: false, banner: b };
       const u = await one<any>(
         `UPDATE banners SET site_id = $2, title = $3, text = $4, tone = $5, priority = $6, starts_at = $7, ends_at = $8, link_url = $9, link_text = $10,
-                content_hash = $11, revision = revision + 1, submitted_at = NULL, submitted_by = NULL, updated_at = now(), updated_by = $12 WHERE id = $1 RETURNING *`,
-        [id, v.siteId, v.title, v.text, v.tone, v.priority, starts, v.endsAt, v.linkUrl, v.linkText, hash, req.auth!.user?.id ?? null],
+                content_hash = $11, revision = revision + 1, submitted_at = NULL, submitted_by = NULL, updated_at = now(), updated_by = $12, display = $13 WHERE id = $1 RETURNING *`,
+        [id, v.siteId, v.title, v.text, v.tone, v.priority, starts, v.endsAt, v.linkUrl, v.linkText, hash, req.auth!.user?.id ?? null, v.display],
         db,
       );
       await audit(req.auth!.actor, 'banner.revised', { type: 'banner', id, label: u.title }, { fassung: u.revision, freigabe_entfaellt: b.approved_hash === b.content_hash }, 'ok', db);

@@ -486,12 +486,13 @@ async function runOutput(ctx: Ctx, node: GraphNode, data: Data, prev: StepRow | 
       return tx(async (db) => {
         const ids: string[] = [];
         for (const site of usable) {
-          const row = { site_id: site.id, title, text, tone, priority: Number(c.priority) || 2, starts_at: new Date(), ends_at: ends, link_url: linkUrl, link_text: linkText };
+          const display = ['banner', 'popup', 'both'].includes(c.display) ? c.display : 'auto';
+          const row = { site_id: site.id, title, text, tone, priority: Number(c.priority) || 2, starts_at: new Date(), ends_at: ends, link_url: linkUrl, link_text: linkText, display };
           const hash = bannerHash(row);
           const b = await one<any>(
-            `INSERT INTO banners (site_id, title, text, tone, priority, starts_at, ends_at, link_url, link_text, content_hash, submitted_at, approved_hash, approved_at)
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10, CASE WHEN $11 THEN now() END, CASE WHEN $12 THEN $10 END, CASE WHEN $12 THEN now() END) RETURNING *`,
-            [site.id, title, text, tone, row.priority, row.starts_at, ends, linkUrl, linkText, hash, c.submit !== false || direct, direct],
+            `INSERT INTO banners (site_id, title, text, tone, priority, starts_at, ends_at, link_url, link_text, content_hash, submitted_at, approved_hash, approved_at, display)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10, CASE WHEN $11 THEN now() END, CASE WHEN $12 THEN $10 END, CASE WHEN $12 THEN now() END, $13) RETURNING *`,
+            [site.id, title, text, tone, row.priority, row.starts_at, ends, linkUrl, linkText, hash, c.submit !== false || direct, direct, display],
             db,
           );
           if (direct) await enqueueBannerJob(db, b, 'upsert', null);
@@ -511,7 +512,8 @@ async function runOutput(ctx: Ctx, node: GraphNode, data: Data, prev: StepRow | 
       const excerpt = r(c.excerpt, 1000);
       const variants: Record<string, any> = {};
       const wp = { title: r(c.variants?.wordpress?.title ?? '', 200), body: r(c.variants?.wordpress?.body ?? '', 50_000) };
-      if (wp.title || wp.body) variants.wordpress = Object.fromEntries(Object.entries(wp).filter(([, v]) => v));
+      const wpCats = [...new Set(((c.variants?.wordpress?.categories ?? []) as unknown[]).map(Number).filter((n) => Number.isInteger(n) && n > 0))].sort((a, b) => a - b).slice(0, 20);
+      if (wp.title || wp.body || wpCats.length) variants.wordpress = { ...Object.fromEntries(Object.entries(wp).filter(([, v]) => v)), ...(wpCats.length ? { categories: wpCats } : {}) };
       const fb = r(c.variants?.facebook?.body ?? '', 60_000);
       if (fb) variants.facebook = { body: fb };
       const ig = r(c.variants?.instagram?.body ?? '', 2200);

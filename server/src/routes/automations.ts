@@ -130,7 +130,8 @@ export async function automationRoutes(app: FastifyInstance) {
       connections: await many<any>(`SELECT id, kind, name, status FROM connections WHERE deleted_at IS NULL AND kind IN ('fe2','feuersoftware','warnfeed') ORDER BY name`),
       feeds: await many<any>(`SELECT id, title FROM rss_feeds ORDER BY title`),
       collections: await many<any>(`SELECT id, title FROM collections WHERE deleted_at IS NULL AND archived_at IS NULL ORDER BY created_at DESC LIMIT 200`),
-      sites: await many<any>(`SELECT id, name, status FROM wp_sites WHERE status <> 'revoked' ORDER BY name`),
+      // Kategorien der Website, wie die Bridge sie meldet (#186) – Auswahl im Beitrags-Ausgang
+      sites: await many<any>(`SELECT id, name, status, COALESCE(bridge_report->'categories', '[]'::jsonb) AS categories FROM wp_sites WHERE status <> 'revoked' ORDER BY name`),
       responsibilities: await many<any>(`SELECT id, name, area FROM responsibilities WHERE active ORDER BY name`),
       warningFields: ((await one<any>(`SELECT fields FROM warning_templates WHERE status = 'active' ORDER BY created_at DESC, version DESC LIMIT 1`))?.fields ?? []).map((f: any) => ({ key: f.key, label: f.label, required: !!f.required })),
       users: canManage ? await many<any>(`SELECT id, name FROM users WHERE status = 'active' ORDER BY name`) : [],

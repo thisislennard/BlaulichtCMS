@@ -27,8 +27,8 @@ Immer verfügbar: `automation`, `lauf`, `jetzt`. Bei FE2 und Feuersoftware gibt 
 
 | Ausgang | Wirkung | Direktversand möglich |
 |---|---|---|
-| Banner | Banner-Entwurf je gewählter Website, wahlweise zur Freigabe eingereicht. Stil fest oder **nach Warnstufe** (1 Hinweis, 2 Warnung, ab 3 Gefahr), Priorität, Dauer oder Ablauf aus `gueltig_bis`, Link nur https | ja |
-| Beitrag | Beitragsentwurf (Art, Titel, Text, Kurzfassung, Texte je Kanal, optional Zielkanal), wahlweise eingereicht | ja (braucht Zielkanal) |
+| Banner | Banner-Entwurf je gewählter Website, wahlweise zur Freigabe eingereicht. Stil (Schweregrad) fest oder **nach Warnstufe** (1 Hinweis, 2 Warnung, ab 3 Gefahr), Priorität, **Darstellung** (nach Schweregrad wie auf der Website eingestellt, nur Banner, nur Popup oder beides), Dauer oder Ablauf aus `gueltig_bis`, Link nur https | ja |
+| Beitrag | Beitragsentwurf (Art, Titel, Text, Kurzfassung, Texte je Kanal, optional Zielkanal und **WordPress-Kategorie**), wahlweise eingereicht | ja (braucht Zielkanal) |
 | E-Mail | über den eingerichteten Mailserver an **Rollen** (Konten) und/oder **Zuständigkeiten** (externe Adressen) | ja (für Zuständigkeiten) |
 | App-Benachrichtigung | an Rollen oder einzelne Personen, optional mit Link in BlaulichtCMS | – (immer sofort) |
 | Warnentwurf vorbereiten | Warnentwurf mit vorausgefüllten Feldern; Warnstufe, Freigabe und Versand bleiben bei Menschen | nein |

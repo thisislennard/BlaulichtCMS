@@ -147,6 +147,26 @@ export interface Site {
   created_at: string;
   open_jobs: number;
   published_count: number;
+  /** Name der verfassenden Person für die Autorenangabe in WordPress übertragen (#186) */
+  send_author?: boolean;
+  /** Meldung der Bridge ab 0.8.0 (#186) */
+  report?: BridgeReport | null;
+  report_at?: string | null;
+}
+
+export type BannerDisplay = 'auto' | 'banner' | 'popup' | 'both';
+export interface WpCategory {
+  id: number;
+  name: string;
+  parent?: number;
+}
+export interface BridgeReport {
+  categories?: WpCategory[];
+  cron?: { mode?: 'wp-cron' | 'self' | 'host' | 'manual' | 'unknown'; wp_cron_disabled?: boolean; healthy?: boolean; hint?: string };
+  auto_update?: boolean;
+  author_mode?: 'bridge' | 'person' | 'fixed';
+  display?: Partial<Record<'info' | 'warning' | 'danger', 'banner' | 'popup' | 'both'>>;
+  banner_auto?: boolean;
 }
 
 export interface Publication {

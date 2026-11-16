@@ -18,8 +18,37 @@ final class BlaulichtCMS_Bridge_Settings {
 	const OPTION        = 'blaulichtcms_bridge_settings';
 	const STATUS_OPTION = 'blaulichtcms_bridge_status';
 
-	/** Felder, die nur der Abruf schreibt. */
-	const STATUS_KEYS = array( 'last_poll', 'last_success', 'last_error', 'last_jobs' );
+	/**
+	 * Felder, die nur der Abruf schreibt. Ab 0.8.0 (#186) zusätzlich: Abrufweg, Selbstauslösung, Meldung an BlaulichtCMS
+	 * und eigener Update-Lauf, wenn WP-Cron abgeschaltet ist.
+	 */
+	const STATUS_KEYS = array( 'last_poll', 'last_success', 'last_error', 'last_jobs', 'last_trigger', 'tick_at', 'last_report', 'report_hash', 'send_author', 'last_auto_update', 'auto_update_note' );
+
+	/** Schweregrade der Hinweise (Art in BlaulichtCMS) und ihre Vorgaben für Farbe und Darstellung (#186). */
+	const TONES = array(
+		'info'    => array(
+			'label'   => 'Hinweis',
+			'color'   => '#134a86',
+			'display' => 'banner',
+		),
+		'warning' => array(
+			'label'   => 'Warnung',
+			'color'   => '#b25e00',
+			'display' => 'banner',
+		),
+		'danger'  => array(
+			'label'   => 'Gefahr',
+			'color'   => '#c8102e',
+			'display' => 'both',
+		),
+	);
+
+	/** Darstellungen eines Hinweises auf der Website. */
+	const DISPLAYS = array(
+		'banner' => 'Banner',
+		'popup'  => 'Popup',
+		'both'   => 'Banner und Popup',
+	);
 
 	/** Standardwerte. */
 	public static function defaults(): array {
@@ -30,13 +59,40 @@ final class BlaulichtCMS_Bridge_Settings {
 			'site_name'     => '',
 			'poll_interval' => 60,
 			'author_id'     => 0,
+			'author_mode'   => '', // '' = bisheriges Verhalten: fester Benutzer, wenn gewählt, sonst eigener Autor der Bridge
+			'author_name'   => 'Redaktion',
 			'category_id'   => 0,
 			'last_poll'     => 0,
 			'last_success'  => 0,
 			'last_error'    => '',
 			'last_jobs'     => 0,
 			'banner_auto'   => true,
+			'display_info'    => self::TONES['info']['display'],
+			'display_warning' => self::TONES['warning']['display'],
+			'display_danger'  => self::TONES['danger']['display'],
+			'color_info'      => self::TONES['info']['color'],
+			'color_warning'   => self::TONES['warning']['color'],
+			'color_danger'    => self::TONES['danger']['color'],
+			'last_trigger'     => '',
+			'tick_at'          => 0,
+			'last_report'      => 0,
+			'report_hash'      => '',
+			'send_author'      => false,
+			'last_auto_update' => 0,
+			'auto_update_note' => '',
 		);
+	}
+
+	/** Darstellung je Schweregrad (banner, popup, both). */
+	public static function display_for_tone( string $tone ): string {
+		$v = (string) self::get( 'display_' . $tone );
+		return isset( self::DISPLAYS[ $v ] ) ? $v : ( self::TONES[ $tone ]['display'] ?? 'banner' );
+	}
+
+	/** Farbe je Schweregrad (#rrggbb). */
+	public static function color_for_tone( string $tone ): string {
+		$v = sanitize_hex_color( (string) self::get( 'color_' . $tone ) );
+		return $v ? $v : ( self::TONES[ $tone ]['color'] ?? '#134a86' );
 	}
 
 	/**

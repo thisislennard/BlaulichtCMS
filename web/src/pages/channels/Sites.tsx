@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { download, get, post } from '../../api/client';
 import type { Site } from '../../api/types';
-import { Badge, Button, Card, EmptyState, ErrorBox, FieldWrap, Input, Notice, PageHeader, Select, SkeletonRows, StatusBadge } from '../../components/ui/core';
+import { Badge, Button, Card, EmptyState, ErrorBox, FieldWrap, Input, Notice, PageHeader, Select, SkeletonRows, StatusBadge, Switch } from '../../components/ui/core';
 import { put } from '../../api/client';
 import { Icon } from '../../components/ui/Icon';
 import { CopyButton, Dialog, useErrorToast, useConfirm } from '../../components/ui/overlays';
@@ -11,6 +11,42 @@ import { Link } from 'react-router';
 import { useAuth } from '../../lib/auth';
 import { fmtDateTime, fmtRelative } from '../../lib/format';
 import { safeHref } from '../../lib/url';
+
+const CRON_LABEL: Record<string, string> = {
+  'wp-cron': 'WP-Cron',
+  host: 'Host-Cron',
+  self: 'Selbstauslösung der Bridge (WP-Cron abgeschaltet)',
+  manual: 'bisher nur „Jetzt abrufen“',
+  unknown: 'noch kein Abruf',
+};
+const DISPLAY_SHORT: Record<string, string> = { banner: 'Banner', popup: 'Popup', both: 'Banner + Popup' };
+const AUTHOR_LABEL: Record<string, string> = { bridge: 'eigener Autor der Bridge', person: 'Person aus BlaulichtCMS', fixed: 'fester Benutzer' };
+
+/** Meldung der Bridge (#186): Abrufweg, automatische Updates, Darstellung, Autor, Kategorien. */
+function BridgeReportRows({ site }: { site: Site }) {
+  const r = site.report;
+  if (!r) return null;
+  return (
+    <>
+      <dt className="text-fg-muted">Abrufweg</dt>
+      <dd className="m-0">{CRON_LABEL[r.cron?.mode ?? 'unknown'] ?? '–'}</dd>
+      <dt className="text-fg-muted">Auto-Updates</dt>
+      <dd className="m-0">{r.auto_update ? 'an' : 'aus'}</dd>
+      {r.display && (
+        <>
+          <dt className="text-fg-muted">Hinweise</dt>
+          <dd className="m-0">
+            Hinweis: {DISPLAY_SHORT[r.display.info ?? 'banner']} · Warnung: {DISPLAY_SHORT[r.display.warning ?? 'banner']} · Gefahr: {DISPLAY_SHORT[r.display.danger ?? 'both']}
+          </dd>
+        </>
+      )}
+      <dt className="text-fg-muted">Autor</dt>
+      <dd className="m-0">{AUTHOR_LABEL[r.author_mode ?? 'bridge'] ?? '–'}</dd>
+      <dt className="text-fg-muted">Kategorien</dt>
+      <dd className="m-0">{r.categories?.length ?? 0} gemeldet</dd>
+    </>
+  );
+}
 
 interface Pairing {
   site: Site;
@@ -55,7 +91,7 @@ function PairingDialog({ pairing, onClose }: { pairing: Pairing; onClose: () => 
           </div>
         </li>
         <li>„Koppeln“ klicken. Die Website erscheint danach hier als aktiv.</li>
-        <li>Für zuverlässigen Abruf jede Minute einen Cronjob einrichten – siehe <Link to="/hilfe/wordpress#abruf-und-cronjob">Abruf und Cronjob</Link>.</li>
+        <li>Fertig: Die Bridge holt Aufträge jede Minute selbst ab, ein Cronjob ist nicht nötig. In den Bridge-Einstellungen lassen sich Autor, Standardkategorie und die Darstellung der Hinweise festlegen – siehe <Link to="/hilfe/wordpress#einstellungen-der-bridge">Einstellungen der Bridge</Link>.</li>
       </ol>
       <Notice tone="warning" className="mt-4">
         Der Code ist einmalig und bis {pairing.site.pairing_expires_at ? fmtDateTime(pairing.site.pairing_expires_at) : 'in 30 Minuten'} gültig. Er wird nur jetzt angezeigt. Der daraus entstehende Schlüssel gilt nur für diese eine Website und lässt sich jederzeit widerrufen.
@@ -120,8 +156,24 @@ export default function Sites() {
                 <dd className="m-0">{s.plugin_version ?? '–'}{s.wp_version ? ` · WordPress ${s.wp_version}` : ''}</dd>
                 <dt className="text-fg-muted">Aufträge</dt>
                 <dd className="m-0">{s.open_jobs} offen · {s.published_count} veröffentlicht</dd>
+                {s.status === 'active' && <BridgeReportRows site={s} />}
               </dl>
-              {stale && <Notice tone="warning" className="mt-3">Die Website hat sich seit über 15 Minuten nicht gemeldet. WP-Cron bzw. Host-Cron prüfen – <Link to="/hilfe/wordpress#abruf-und-cronjob">Abruf und Cronjob</Link>.</Notice>}
+              {s.status === 'active' && s.report?.cron?.hint && <Notice tone="warning" className="mt-3">{s.report.cron.hint}</Notice>}
+              {s.status !== 'revoked' && (
+                <div className="mt-3">
+                  <Switch
+                    checked={!!s.send_author}
+                    disabled={!manage}
+                    onChange={async (v) => {
+                      await put(`/sites/${s.id}/options`, { sendAuthor: v }).catch(toastError);
+                      refresh();
+                    }}
+                    label="Autorenname übertragen"
+                    description="Name der Person, die den Beitrag angelegt hat, für die Autorenangabe in WordPress. Wirkt nur, wenn in den Bridge-Einstellungen „Person aus BlaulichtCMS“ gewählt ist. Sonst steht dort der eigene Autor der Bridge."
+                  />
+                </div>
+              )}
+              {stale && <Notice tone="warning" className="mt-3">Die Website hat sich seit über 15 Minuten nicht gemeldet. In WordPress unter Einstellungen → BlaulichtCMS Bridge den Abrufweg und den letzten Fehler prüfen – <Link to="/hilfe/wordpress#abruf-und-cronjob">Abruf und Cronjob</Link>.</Notice>}
               {manage && s.status !== 'revoked' && (
                 <div className="flex gap-2 mt-3 flex-wrap">
                   {s.status === 'pending' && (

@@ -107,8 +107,8 @@ final class BlaulichtCMS_Bridge_Publisher {
 	}
 
 	/**
-	 * Autor, wenn in den Einstellungen keiner gewählt ist: unter WP-Cron/CLI gibt es keinen angemeldeten Benutzer,
-	 * die Beiträge hätten sonst keinen bzw. je nach Abrufweg einen anderen Autor (#86).
+	 * Letzter Rückfall, wenn kein Autor ermittelt oder angelegt werden konnte: unter WP-Cron/CLI gibt es keinen
+	 * angemeldeten Benutzer, die Beiträge hätten sonst keinen bzw. je nach Abrufweg einen anderen Autor (#86).
 	 */
 	private static function fallback_author(): int {
 		$ids = get_users(
@@ -244,6 +244,22 @@ final class BlaulichtCMS_Bridge_Publisher {
 		return $deleted;
 	}
 
+	/**
+	 * Kategorie-IDs aus BlaulichtCMS prüfen: nur vorhandene Kategorien dieser Website, höchstens 20.
+	 *
+	 * @return int[]
+	 */
+	private static function categories( array $ids ): array {
+		$out = array();
+		foreach ( array_slice( $ids, 0, 20 ) as $id ) {
+			$id = absint( $id );
+			if ( $id && term_exists( $id, 'category' ) ) {
+				$out[] = $id;
+			}
+		}
+		return array_values( array_unique( $out ) );
+	}
+
 	/** Text aus BlaulichtCMS (einfache Absätze) sicher in HTML umwandeln. */
 	private static function body_html( string $text ): string {
 		return wpautop( esc_html( $text ) );
@@ -319,12 +335,18 @@ final class BlaulichtCMS_Bridge_Publisher {
 			'post_content' => $content,
 			'post_excerpt' => sanitize_textarea_field( (string) ( $p['excerpt'] ?? '' ) ),
 		);
-		$author = (int) $settings['author_id'] ?: self::fallback_author();
+		// Autor (#186): eigener Autor der Bridge, je Person aus BlaulichtCMS oder fester Benutzer
+		$author = BlaulichtCMS_Bridge_Authors::for_job( $job ) ?: self::fallback_author();
 		if ( $author ) {
 			$data['post_author'] = $author;
 		}
-		if ( $settings['category_id'] ) {
-			$data['post_category'] = array( (int) $settings['category_id'] );
+		// Kategorien (#186): Auswahl aus BlaulichtCMS, sofern es sie in WordPress gibt; sonst die Standardkategorie
+		$categories = self::categories( (array) ( $p['categories'] ?? array() ) );
+		if ( ! $categories && $settings['category_id'] && term_exists( (int) $settings['category_id'], 'category' ) ) {
+			$categories = array( (int) $settings['category_id'] );
+		}
+		if ( $categories ) {
+			$data['post_category'] = $categories;
 		}
 
 		// Neuer Beitrag zunächst als Entwurf: erst wenn alle Medien übernommen sind, wird er öffentlich (#68).

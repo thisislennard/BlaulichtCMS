@@ -26,7 +26,7 @@ export interface Catalog {
   connections: { id: string; kind: string; name: string; status: string }[];
   feeds: { id: string; title: string }[];
   collections: { id: string; title: string }[];
-  sites: { id: string; name: string; status: string }[];
+  sites: { id: string; name: string; status: string; categories?: { id: number; name: string; parent?: number }[] }[];
   responsibilities: { id: string; name: string; area: string }[];
   warningFields: { key: string; label: string; required: boolean }[];
   users: { id: string; name: string }[];

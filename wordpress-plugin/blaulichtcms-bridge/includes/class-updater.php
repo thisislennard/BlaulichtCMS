@@ -9,6 +9,12 @@
  * - Multisite (#161): Das Angebot liegt je Website (Transient statt Site-Transient). Läuft das Update im Netzwerk-Admin
  *   und ist die Hauptsite nicht gekoppelt, übernimmt eine gekoppelte Website des Netzes Angebot und Prüfung. Ein Paket
  *   von BlaulichtCMS wird nie ungeprüft an WordPress zurückgegeben.
+ * - Automatische Updates (#186): Die Bridge steht immer im Update-Verzeichnis von WordPress (mit oder ohne neue
+ *   Version). Damit erscheint in der Plugin-Liste „Automatische Updates aktivieren“, und WordPress installiert freigegebene
+ *   Versionen selbst – über denselben geprüften Download (Prüfsumme und Signatur). Ist WP-Cron abgeschaltet und ruft
+ *   kein Host-Cron wp-cron.php auf, laufen die automatischen Updates von WordPress gar nicht; dann holt die
+ *   Selbstauslösung der Bridge das automatische Update für die Bridge allein nach (höchstens alle 12 Stunden).
+ * - Kopfzeile „Update URI“: WordPress fragt wordpress.org nie nach einem gleichnamigen Plugin.
  *
  * @package BlaulichtCMSBridge
  */
@@ -116,6 +122,7 @@ final class BlaulichtCMS_Bridge_Updater {
 		$offer = self::any_offer();
 		if ( $offer && version_compare( $offer['version'], BLAULICHTCMS_BRIDGE_VERSION, '>' ) ) {
 			$transient->response[ self::plugin_file() ] = (object) array(
+				'id'           => self::plugin_file(),
 				'slug'         => self::SLUG,
 				'plugin'       => self::plugin_file(),
 				'new_version'  => $offer['version'],
@@ -125,8 +132,25 @@ final class BlaulichtCMS_Bridge_Updater {
 				'requires_php' => $offer['requires_php'],
 				'tested'       => $offer['tested'],
 			);
-		} elseif ( isset( $transient->response[ self::plugin_file() ] ) ) {
-			unset( $transient->response[ self::plugin_file() ] );
+			if ( isset( $transient->no_update ) && is_array( $transient->no_update ) ) {
+				unset( $transient->no_update[ self::plugin_file() ] );
+			}
+		} else {
+			if ( isset( $transient->response[ self::plugin_file() ] ) ) {
+				unset( $transient->response[ self::plugin_file() ] );
+			}
+			// Ohne Eintrag zeigt WordPress für das Plugin keinen Schalter „Automatische Updates“ (#186)
+			if ( ! isset( $transient->no_update ) || ! is_array( $transient->no_update ) ) {
+				$transient->no_update = array();
+			}
+			$transient->no_update[ self::plugin_file() ] = (object) array(
+				'id'          => self::plugin_file(),
+				'slug'        => self::SLUG,
+				'plugin'      => self::plugin_file(),
+				'new_version' => BLAULICHTCMS_BRIDGE_VERSION,
+				'url'         => '',
+				'package'     => '',
+			);
 		}
 		return $transient;
 	}
@@ -201,6 +225,66 @@ final class BlaulichtCMS_Bridge_Updater {
 			return new WP_Error( 'blaulichtcms_update_checksum', 'Das Update-Paket stimmt nicht mit der Prüfsumme von BlaulichtCMS überein und wurde verworfen.' );
 		}
 		return $tmp;
+	}
+
+	/** Sind automatische Updates für die Bridge eingeschaltet (Schalter in der Plugin-Liste oder Filter)? */
+	public static function auto_update_enabled(): bool {
+		if ( ! function_exists( 'wp_is_auto_update_enabled_for_type' ) ) {
+			require_once ABSPATH . 'wp-admin/includes/update.php';
+		}
+		if ( ! wp_is_auto_update_enabled_for_type( 'plugin' ) ) {
+			return false;
+		}
+		$on   = in_array( self::plugin_file(), (array) get_site_option( 'auto_update_plugins', array() ), true );
+		$item = (object) array(
+			'slug'   => self::SLUG,
+			'plugin' => self::plugin_file(),
+		);
+		// Derselbe Filter wie bei WordPress selbst (Erzwingen oder Abschalten durch andere Plugins/Konfiguration)
+		return (bool) apply_filters( 'auto_update_plugin', $on, $item ); // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals
+	}
+
+	/**
+	 * Automatisches Update der Bridge nachholen, wenn WP-Cron abgeschaltet ist (aus der Selbstauslösung).
+	 * Prüft wie WordPress selbst (WP_Automatic_Updater: Schalter, Filter, Dateirechte, Versionsverwaltung) und lädt über
+	 * verified_download() – Prüfsumme und Signatur gelten unverändert.
+	 */
+	public static function maybe_auto_update(): void {
+		$s = BlaulichtCMS_Bridge_Settings::all();
+		if ( time() - (int) $s['last_auto_update'] < 12 * HOUR_IN_SECONDS || ! self::auto_update_enabled() ) {
+			return;
+		}
+		BlaulichtCMS_Bridge_Settings::status( array( 'last_auto_update' => time() ) );
+		$offer = self::offer();
+		if ( ! $offer || ! version_compare( $offer['version'], BLAULICHTCMS_BRIDGE_VERSION, '>' ) ) {
+			BlaulichtCMS_Bridge_Settings::status( array( 'auto_update_note' => '' ) );
+			return;
+		}
+		require_once ABSPATH . 'wp-admin/includes/admin.php';
+		require_once ABSPATH . 'wp-admin/includes/class-wp-upgrader.php';
+		wp_update_plugins();
+		$plugins = get_site_transient( 'update_plugins' );
+		$item    = is_object( $plugins ) && isset( $plugins->response[ self::plugin_file() ] ) ? $plugins->response[ self::plugin_file() ] : null;
+		if ( ! $item ) {
+			return;
+		}
+		if ( ! WP_Upgrader::create_lock( 'auto_updater' ) ) {
+			return; // WordPress aktualisiert gerade selbst
+		}
+		try {
+			$updater = new WP_Automatic_Updater();
+			if ( $updater->is_disabled() ) {
+				BlaulichtCMS_Bridge_Settings::status( array( 'auto_update_note' => 'Automatische Updates sind in dieser WordPress-Installation abgeschaltet (AUTOMATIC_UPDATER_DISABLED).' ) );
+				return;
+			}
+			$result = $updater->update( 'plugin', $item );
+			$note   = null === $result
+				? 'Automatisches Update nicht möglich (Dateirechte, Versionsverwaltung oder durch einen Filter abgeschaltet).'
+				: ( is_wp_error( $result ) || false === $result ? 'Automatisches Update auf ' . $offer['version'] . ' fehlgeschlagen' . ( is_wp_error( $result ) ? ': ' . $result->get_error_message() : '.' ) : '' );
+			BlaulichtCMS_Bridge_Settings::status( array( 'auto_update_note' => $note ) );
+		} finally {
+			WP_Upgrader::release_lock( 'auto_updater' );
+		}
 	}
 
 	public static function clear(): void {
