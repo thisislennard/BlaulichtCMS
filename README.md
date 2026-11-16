@@ -9,7 +9,7 @@ Fotos per Link vom Handy sammeln · sichten · Beiträge schreiben · Fassung fr
 [![CI](https://github.com/thisislennard/BlaulichtCMS/actions/workflows/ci.yml/badge.svg)](https://github.com/thisislennard/BlaulichtCMS/actions/workflows/ci.yml)
 [![Sicherheitsprüfung](https://github.com/thisislennard/BlaulichtCMS/actions/workflows/security.yml/badge.svg)](https://github.com/thisislennard/BlaulichtCMS/actions/workflows/security.yml)
 [![Lizenz: GPL-3.0](https://img.shields.io/badge/Lizenz-GPL--3.0--or--later-blue)](LICENSE)
-![Version](https://img.shields.io/badge/Version-0.2.3-D21F3C)
+![Version](https://img.shields.io/badge/Version-0.3.0-D21F3C)
 ![TypeScript](https://img.shields.io/badge/TypeScript-7-3178C6?logo=typescript&logoColor=white)
 ![Node.js](https://img.shields.io/badge/Node.js-26-5FA04E?logo=nodedotjs&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-18-4169E1?logo=postgresql&logoColor=white)
@@ -22,7 +22,7 @@ Fotos per Link vom Handy sammeln · sichten · Beiträge schreiben · Fassung fr
 ![Dashboard von BlaulichtCMS](docs/bilder/dashboard.webp)
 
 > [!NOTE]
-> **Version 0.2.3 – noch vor dem ersten Produktivbetrieb.** Der Funktionsumfang ist vollständig und automatisiert
+> **Version 0.3.0 – noch vor dem ersten Produktivbetrieb.** Der Funktionsumfang ist vollständig und automatisiert
 > getestet; was mit echten Fremdsystemen geprüft ist und was noch nicht, steht unter
 > [Teststand und Grenzen](docs/technik.md#teststand-und-grenzen). Alle Screenshots stammen aus einer Testinstanz mit fiktiven Daten.
 
@@ -175,15 +175,16 @@ flowchart LR
 - **App fürs Handy:** installierbar (PWA) mit Schnellzugriffen auf Neuer Beitrag, Medien sammeln und Freigaben.
 - **Schnell bedienbar:** Suche und Schnellaktionen mit `Strg` + `K`, vollständig per Tastatur nutzbar, heller und
   dunkler Modus, Design „Leitstand“ für draußen und nachts.
-- **Hilfe-Center:** 24 Kapitel mit Volltextsuche direkt in der App.
+- **Hilfe-Center:** 25 Kapitel mit Volltextsuche direkt in der App.
 
 ### Benutzer und Sicherheit
 
 - **Rollen:** Administration, Medienverwaltung, Redaktion, Freigabe, Veröffentlichung, Warnentwurf, Warnfreigabe,
   Warnversand, Lesezugriff – kombinierbar, Rechte werden bei jeder Aktion serverseitig geprüft.
-- **Eigene Rollen und feine Rechte:** Rollen selbst anlegen, kopieren und anpassen; über 70 Rechte je Funktion
-  (ansehen, anlegen, freigeben, veröffentlichen, löschen …) in zehn Bereichen. Was jemand nicht darf, wird nicht
-  angezeigt. Vergabe nur innerhalb der eigenen Rechte, Vorschau der Änderung vor dem Speichern, sofort wirksam.
+- **Eigene Rollen und feine Rechte:** Rollen selbst anlegen, kopieren und anpassen; 79 Rechte je Funktion
+  (ansehen, anlegen, freigeben, veröffentlichen, löschen …) in elf Bereichen. Was jemand nicht darf, wird nicht
+  angezeigt. Vergabe nur innerhalb der eigenen Rechte, Vorschau der Änderung vor dem Speichern, sofort wirksam;
+  die Zwei-Faktor-Pflicht richtet sich nach den Rechten.
 - **Anmeldung:** Einladung per Link, Zwei-Faktor-Anmeldung mit Wiederherstellungscodes, erneute Bestätigung für
   kritische Aktionen, Schutz vor gezieltem Aussperren.
 - **Nachvollziehbar:** Aktivitätsprotokoll mit Hash-Kette gegen nachträgliche Änderungen, optional an Syslog;
@@ -221,7 +222,7 @@ flowchart LR
   </tr>
   <tr>
     <td colspan="2"><b>Auf der Website</b><br/>veröffentlicht von der BlaulichtCMS Bridge<br/><br/><img src="docs/bilder/wordpress-beitrag.webp" alt="Beitrag auf WordPress"/></td>
-    <td><b>Hilfe-Center</b><br/>24 Kapitel mit Volltextsuche<br/><br/><img src="docs/bilder/hilfe.webp" alt="Hilfe-Center"/></td>
+    <td><b>Hilfe-Center</b><br/>25 Kapitel mit Volltextsuche<br/><br/><img src="docs/bilder/hilfe.webp" alt="Hilfe-Center"/></td>
   </tr>
   <tr>
     <td><b>Warnentwurf am Handy</b><br/>Stichwort, Lagefragen, Vorschlag<br/><br/><img src="docs/bilder/warnentwurf-handy.webp" alt="Warnentwurf-Assistent am Handy"/></td>
@@ -264,7 +265,7 @@ Optionen, Updates, Sicherung, WordPress: **[Installation und Betrieb](docs/insta
 | [docs/sicherheitspruefung.md](docs/sicherheitspruefung.md) | Ergebnis der Sicherheitsprüfung mit Nachweisen |
 | [docs/datenschutz.md](docs/datenschutz.md) | Datenschutz: Datenkategorien, Empfänger, Löschfristen, TOMs, Vorlagen für Verarbeitungsverzeichnis und DSFA |
 | [docs/entwicklung.md](docs/entwicklung.md) | Entwicklungsumgebung |
-| Hilfe-Center in der App (`/hilfe`) | 24 Kapitel für Redaktion und Administration |
+| Hilfe-Center in der App (`/hilfe`) | 25 Kapitel für Redaktion und Administration |
 
 ---
 
