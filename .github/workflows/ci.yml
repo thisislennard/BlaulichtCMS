@@ -153,6 +153,10 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Image bauen
         run: docker build -t blaulichtcms:ci .
+      - name: Imagegröße (Verlauf je Ebene)
+        run: |
+          echo "Image: $(( $(docker image inspect blaulichtcms:ci --format '{{.Size}}') / 1000000 )) MB"
+          docker history --format '{{.Size}}\t{{.CreatedBy}}' blaulichtcms:ci | cut -c1-160
       - name: Probelauf mit Compose (frisches Volume)
         run: |
           printf 'COOKIE_SECURE=false\nTRUST_PROXY=false\n' > .env
