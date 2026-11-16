@@ -1881,7 +1881,7 @@ describe('Verbindungen (M4): FE2, Facebook, Instagram, amtliche Warnfeeds', () =
     const { runSocialPublication } = await import('../src/connections/social.js');
     const p = await editor.post('/posts', { title: 'Tag der offenen Tür (fiktiv)', kind: 'event' });
     spPostId = p.json.id;
-    const img = await one<any>(`SELECT id FROM media WHERE status = 'ready' AND kind = 'image' AND has_public AND deleted_at IS NULL LIMIT 1`);
+    const img = await one<any>(`SELECT id FROM media WHERE status = 'ready' AND kind = 'image' AND has_public AND deleted_at IS NULL AND cardinality(sensitive_flags) = 0 ORDER BY created_at, id LIMIT 1`);
     let d = (await editor.get(`/posts/${spPostId}`)).json;
     const save = await editor.put(`/posts/${spPostId}/revision`, { baseRevision: d.revision.number, title: d.revision.title, body: 'Wir laden herzlich ein.', excerpt: '', mediaIds: [img.id], socialTargets: [fbId, igId] });
     expect(save.json.changed).toBe(true);
@@ -1953,7 +1953,7 @@ describe('Verbindungen (M4): FE2, Facebook, Instagram, amtliche Warnfeeds', () =
   it('Instagram-Wiederholung legt bei abgelaufenem Container einen neuen an (#149)', async () => {
     const { runSocialPublication } = await import('../src/connections/social.js');
     const p = await editor.post('/posts', { title: 'Container-Test (fiktiv)' });
-    const img = await one<any>(`SELECT id FROM media WHERE status = 'ready' AND kind = 'image' AND has_public AND deleted_at IS NULL LIMIT 1`);
+    const img = await one<any>(`SELECT id FROM media WHERE status = 'ready' AND kind = 'image' AND has_public AND deleted_at IS NULL AND cardinality(sensitive_flags) = 0 ORDER BY created_at, id LIMIT 1`);
     let d = (await editor.get(`/posts/${p.json.id}`)).json;
     await editor.put(`/posts/${p.json.id}/revision`, { baseRevision: d.revision.number, title: d.revision.title, body: 'Container-Test.', excerpt: '', mediaIds: [img.id], socialTargets: [igId] });
     d = (await editor.get(`/posts/${p.json.id}`)).json;
@@ -1981,7 +1981,7 @@ describe('Verbindungen (M4): FE2, Facebook, Instagram, amtliche Warnfeeds', () =
 
   it('Manueller Export und zeitlich begrenzte Medien-URL', async () => {
     const p = await editor.post('/posts', { title: 'Export-Test (fiktiv)' });
-    const img = await one<any>(`SELECT id FROM media WHERE status = 'ready' AND kind = 'image' AND has_public AND deleted_at IS NULL LIMIT 1`);
+    const img = await one<any>(`SELECT id FROM media WHERE status = 'ready' AND kind = 'image' AND has_public AND deleted_at IS NULL AND cardinality(sensitive_flags) = 0 ORDER BY created_at, id LIMIT 1`);
     let d = (await editor.get(`/posts/${p.json.id}`)).json;
     await editor.put(`/posts/${p.json.id}/revision`, { baseRevision: d.revision.number, title: d.revision.title, body: 'Text für den Export.', excerpt: '', mediaIds: [img.id] });
     d = (await editor.get(`/posts/${p.json.id}`)).json;
