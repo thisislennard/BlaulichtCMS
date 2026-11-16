@@ -7,6 +7,7 @@ import type { InputKind } from './catalog.js';
 import { createRun, expireApprovals, type Snapshot } from './engine.js';
 import type { InputRef } from './graph.js';
 import { lastDueSlot, type Data, type ScheduleConfig } from './logic.js';
+import { lookupKeyword } from '../keywords/store.js';
 
 /*
  * Ereignisse aus den vorhandenen Quellen → Läufe aktiver Automationen. Die Quellen rufen nur eine kleine Funktion auf
@@ -86,10 +87,13 @@ export async function emitIncident(
     const triggers = (await activeTriggers(source, q)).filter((t) => t.input.config.connectionId === c.id && (t.input.config.phases ?? ['neu']).includes(ev.phase));
     if (!triggers.length) return;
     const f = ev.fields;
+    // Kategorie aus der aktiven Stichwortliste (#195); unbekannte Stichworte bleiben ohne Kategorie
+    const kw = await lookupKeyword(f.keyword, q).catch(() => null);
     const payload: Data = {
       vorgang: ev.phase,
       stichwort: f.keyword ?? '',
       stichwort_text: f.keyword_text ?? '',
+      stichwort_kategorie: kw?.category ?? '',
       einsatzart: f.category ?? '',
       ort: f.municipality ?? '',
       ortsteil: f.district ?? '',

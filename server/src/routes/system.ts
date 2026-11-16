@@ -17,6 +17,8 @@ import { DEFAULT_SETTINGS, getSettings, SETTING_RANGES, SETTING_TEXT_MAX, setSet
 import { queueStats } from '../jobs/queue.js';
 import { backupPath, BackupRunningError, runBackup } from '../ops/backup.js';
 import { normalizePublicUrl } from '../lib/urls.js';
+import { CATALOGS, STATE_IDS, stateName } from '../keywords/catalog.js';
+import { syncCatalog } from '../keywords/store.js';
 
 const startedAt = Date.now();
 
@@ -210,6 +212,7 @@ export async function systemRoutes(app: FastifyInstance) {
         throw badRequest('Unbekannte Zeitzone.');
       }
     }
+    if (patch['general.state'] != null && patch['general.state'] !== '' && !STATE_IDS.includes(String(patch['general.state']))) throw badRequest('Unbekanntes Bundesland.');
     if (patch['security.password_min_length'] != null && Number(patch['security.password_min_length']) < 10) throw badRequest('Mindestens 10 Zeichen für Passwörter.');
     if (patch['security.session_idle_minutes'] != null && Number(patch['security.session_idle_minutes']) < 5) throw badRequest('Leerlaufzeit mindestens 5 Minuten.');
     if (patch['jobs.concurrency'] != null && (Number(patch['jobs.concurrency']) < 1 || Number(patch['jobs.concurrency']) > 32)) throw badRequest('Parallele Aufträge: 1 bis 32.');
@@ -228,6 +231,12 @@ export async function systemRoutes(app: FastifyInstance) {
       patch['general.public_url'] = normalizePublicUrl(String(patch['general.public_url']));
     }
     await setSettings(patch as any, req.auth!.user?.id ?? null);
+    // Bundesland gewechselt: dessen Stichwortverzeichnis übernehmen, Einträge anderer Verzeichnisse deaktivieren (#195)
+    if (patch['general.state'] != null && patch['general.state'] !== current['general.state']) {
+      const state = String(patch['general.state']);
+      const r = await syncCatalog(state, { activate: true });
+      await audit(req.auth!.actor, 'keywords.state_changed', { type: 'keyword', label: stateName(state) || 'nicht gewählt' }, { verzeichnis: CATALOGS[state]?.version ?? null, neu: r.added, geaendert: r.updated, deaktiviert: r.deactivated, eigene: r.ownKept });
+    }
     // „Angemeldet bleiben“ abgeschaltet: gemerkte Sitzungen sofort beenden. Die eigene Sitzung bleibt, gilt aber ab
     // jetzt wie eine normale (Leerlauf und Höchstdauer).
     const revoked: Record<string, number> = {};

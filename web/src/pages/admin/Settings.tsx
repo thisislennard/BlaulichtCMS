@@ -26,6 +26,7 @@ import { Icon } from "../../components/ui/Icon";
 import { LegalMarkdown } from "../../components/legal/LegalMarkdown";
 import { t } from "../../i18n";
 import { useAuth } from "../../lib/auth";
+import { STATE_OPTIONS, STATES_WITH_CATALOG } from "../../lib/keywords";
 import {
   fmtBytes,
   fmtDateTime,
@@ -203,6 +204,8 @@ export default function Settings() {
       });
       setDraft({ ...fresh.settings });
       qc.invalidateQueries({ queryKey: ["me"] });
+      qc.invalidateQueries({ queryKey: ["keywords"] });
+      qc.invalidateQueries({ queryKey: ["warning-config"] });
       toast({ tone: "success", title: t("admin.settings.saveOk") });
     } catch (e) {
       setSaveError((e as Error).message);
@@ -328,6 +331,32 @@ export default function Settings() {
                     set={set}
                     ro={ro("general.organization")}
                   />
+                  <FieldWrap
+                    label="Bundesland"
+                    htmlFor="s-state"
+                    help={
+                      <>
+                        Legt das Stichwortverzeichnis fest (Warnentwürfe → Stichwörter &amp; Regeln). Mitgeliefert für {STATE_OPTIONS.filter((x) => STATES_WITH_CATALOG.includes(x.id)).map((x) => x.name).join(" und ")}; für andere Länder eine eigene Liste importieren.{" "}
+                        <Link to="/hilfe/stichwoerter-regeln#stichwortverzeichnis-der-laender">Mehr dazu</Link>
+                      </>
+                    }
+                  >
+                    <Select
+                      id="s-state"
+                      disabled={ro("general.state")}
+                      value={v["general.state"] ?? ""}
+                      onChange={(e) => set("general.state", e.target.value)}
+                    >
+                      <option value="">Nicht gewählt</option>
+                      {STATE_OPTIONS.map((x) => (
+                        <option key={x.id} value={x.id}>
+                          {x.name}
+                          {STATES_WITH_CATALOG.includes(x.id) ? " (Verzeichnis mitgeliefert)" : ""}
+                        </option>
+                      ))}
+                      <option value="eigen">Eigene Liste (ohne Landesverzeichnis)</option>
+                    </Select>
+                  </FieldWrap>
                   <TextField
                     k="general.sender_name"
                     label="Absendername"

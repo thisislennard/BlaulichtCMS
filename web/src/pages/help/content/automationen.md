@@ -14,7 +14,7 @@ Ein Eingang hört auf eine vorhandene Quelle. Zugangsdaten, Tests und Gebietsfil
 
 | Eingang | Startet bei | Wichtige Felder |
 |---|---|---|
-| FE2-Alarm / Feuersoftware-Einsatz | neuem Einsatz, Aktualisierung oder Ende (wählbar) | `stichwort`, `stichwort_text`, `einsatzart`, `ort`, `ortsteil`, `alarmzeit`, `einheiten`, `entwurf_link` |
+| FE2-Alarm / Feuersoftware-Einsatz | neuem Einsatz, Aktualisierung oder Ende (wählbar) | `stichwort`, `stichwort_text`, `stichwort_kategorie` (aus dem [Stichwortverzeichnis](/hilfe/stichwoerter-regeln#stichwortverzeichnis-der-laender)), `einsatzart`, `ort`, `ortsteil`, `alarmzeit`, `einheiten`, `entwurf_link` |
 | Amtliche Warnung | neuer Warnung, Aktualisierung oder Entwarnung, wahlweise nur im eigenen Gebiet | `ereignis`, `ueberschrift`, `stufe` (1 gering … 4 extrem), `gebiete`, `gueltig_bis`, `quelle`, `link` |
 | RSS-Eintrag | neuem Eintrag beim regelmäßigen Abruf (eine Quelle oder alle) | `titel`, `link`, `zusammenfassung`, `quelle` |
 | Neue Uploads | geprüften Dateien über einen Upload-Link, gebündelt je Zeitfenster | `sammlung`, `sammlung_link`, `anzahl` |

@@ -67,7 +67,7 @@ gelesen:
 |---|---|---|
 | Einsatz-ID | `einsatz.id` | ohne Einsatz-ID wird die Meldung verworfen |
 | Stichwort | `einsatz.stichwort` | |
-| Stichwort (Klartext) | `einsatz.stichwort_text` | |
+| Stichwort (Klartext) | `einsatz.stichwort_text` | fehlt er, ergänzt BlaulichtCMS ihn aus dem Stichwortverzeichnis (Bundesland in den Einstellungen) |
 | Ort / Ortsteil | `einsatz.ort` / `einsatz.ortsteil` | |
 | Alarmzeit | `einsatz.alarmzeit` | Unix-Zeit, ISO oder `14.11.2026 18:35` (deutsche Ortszeit) |
 | Einheiten | `einsatz.einheiten` | Liste von Namen, Objekten (`name`) oder Text |

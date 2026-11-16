@@ -18,6 +18,8 @@ import { m365Fingerprint, storedM365Settings } from '../lib/mail.js';
 import { SMTP_VERIFY_MAX_AGE_MS, smtpConfigProblem, smtpFingerprint, smtpTransport, storedSmtpSettings, type SmtpSettings } from '../warnings/mail.js';
 import { sendFileResponse } from './files.js';
 import { deleteWarnings, removeWarningFiles } from '../lib/retention.js';
+import { normalizeCode, resolveKeyword } from '../keywords/catalog.js';
+import { invalidateKeywords } from '../keywords/store.js';
 
 /**
  * Warnentwürfe (MoWaS-Übergabe). BlaulichtCMS bereitet vor und übergibt per E-Mail an die zuständige Stelle;
@@ -186,8 +188,9 @@ export async function warningRoutes(app: FastifyInstance) {
         fe2 = await one<any>('SELECT * FROM fe2_events WHERE id = $1', [b.fe2EventId], db);
         if (!fe2) throw notFound('FE2-Einsatz nicht gefunden.');
         if (fe2.keyword && !base.keyword) {
-          const kw = await one<any>(`SELECT id, code, label FROM fire_keywords WHERE active AND (lower(code) = lower($1) OR lower($1) = ANY(SELECT lower(a) FROM unnest(aliases) a))`, [fe2.keyword], db);
-          if (kw) base.keyword = kw;
+          // Abgleich wie bei Einsatzmeldungen: Schreibweise egal, Untergliederungen („F2 W“) zählen zum Stichwort (#195)
+          const hit = resolveKeyword(fe2.keyword, await many<any>(`SELECT id, code, label, aliases FROM fire_keywords WHERE active`, [], db));
+          if (hit) base.keyword = { id: hit.entry.id, code: hit.entry.code, label: hit.entry.label };
         }
       }
       // Jahr in der Zeitzone der Instanz (#83) – sonst trägt ein Vorgang am 1. Januar kurz nach Mitternacht das Vorjahr
@@ -558,9 +561,9 @@ export async function warningRoutes(app: FastifyInstance) {
     const { q } = z.object({ q: z.string().trim().max(60).default('') }).parse(req.query);
     const like = `%${q.toLowerCase()}%`;
     return many<any>(
-      `SELECT k.id, k.code, k.label, k.aliases,
+      `SELECT k.id, k.code, k.label, k.aliases, k.category, k.details,
               (SELECT count(*)::int FROM warning_rules r WHERE r.keyword_id = k.id AND r.status = 'approved') AS rule_count
-         FROM fire_keywords k WHERE k.active AND ($1 = '%%' OR lower(k.code) LIKE $1 OR lower(k.label) LIKE $1 OR EXISTS (SELECT 1 FROM unnest(k.aliases) a WHERE lower(a) LIKE $1))
+         FROM fire_keywords k WHERE k.active AND ($1 = '%%' OR lower(k.code) LIKE $1 OR lower(k.label) LIKE $1 OR lower(k.category) LIKE $1 OR EXISTS (SELECT 1 FROM unnest(k.aliases) a WHERE lower(a) LIKE $1))
         ORDER BY k.code LIMIT 30`,
       [like],
     );
@@ -592,17 +595,29 @@ export async function warningRoutes(app: FastifyInstance) {
 
   const rules = requireAuth('warning.rules');
   app.post('/warning-keywords', { preHandler: rules }, async (req) => {
-    const b = z.object({ code: z.string().trim().min(1).max(40), label: z.string().trim().min(2).max(120), aliases: z.array(z.string().trim().min(1).max(40)).max(20).default([]) }).parse(req.body);
-    const k = await one<any>(`INSERT INTO fire_keywords (code, label, aliases, created_by) VALUES ($1,$2,$3,$4) ON CONFLICT (code) DO NOTHING RETURNING *`, [b.code, b.label, b.aliases, req.auth!.user?.id ?? null]);
+    const b = z.object({ code: z.string().trim().min(1).max(40), label: z.string().trim().min(2).max(300), category: z.string().trim().max(60).default(''), aliases: z.array(z.string().trim().min(1).max(40)).max(20).default([]) }).parse(req.body);
+    // Gleiches Kürzel in anderer Schreibweise („F2“ = „F 2“) gilt als vorhanden (#195)
+    const same = (await many<any>(`SELECT code FROM fire_keywords`)).find((x) => normalizeCode(x.code) === normalizeCode(b.code));
+    if (same) throw conflict(`Dieses Stichwort ist bereits hinterlegt (${same.code}).`);
+    const k = await one<any>(`INSERT INTO fire_keywords (code, label, category, aliases, source, created_by) VALUES ($1,$2,$3,$4,'eigen',$5) ON CONFLICT (code) DO NOTHING RETURNING *`, [b.code, b.label, b.category, b.aliases, req.auth!.user?.id ?? null]);
     if (!k) throw conflict('Dieses Stichwort ist bereits hinterlegt.');
+    invalidateKeywords();
     await audit(req.auth!.actor, 'warning.keyword_created', { type: 'keyword', id: k.id, label: k.code });
     return k;
   });
   app.put('/warning-keywords/:id', { preHandler: rules }, async (req) => {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
-    const b = z.object({ label: z.string().trim().min(2).max(120), aliases: z.array(z.string().trim().min(1).max(40)).max(20), active: z.boolean() }).parse(req.body);
-    const k = await one<any>(`UPDATE fire_keywords SET label = $2, aliases = $3, active = $4 WHERE id = $1 RETURNING *`, [id, b.label, b.aliases, b.active]);
+    const b = z.object({ label: z.string().trim().min(2).max(300), category: z.string().trim().max(60).optional(), aliases: z.array(z.string().trim().min(1).max(40)).max(20), active: z.boolean() }).parse(req.body);
+    // Bezeichnung oder Kategorie eines Verzeichniseintrags geändert: wird zum eigenen Eintrag und bleibt beim
+    // nächsten Übernehmen des Verzeichnisses so (#195). Nur (de)aktivieren ändert die Herkunft nicht.
+    const k = await one<any>(
+      `UPDATE fire_keywords SET label = $2, aliases = $3, active = $4, category = COALESCE($5, category),
+              source = CASE WHEN label IS DISTINCT FROM $2 OR category IS DISTINCT FROM COALESCE($5, category) THEN 'eigen' ELSE source END
+        WHERE id = $1 RETURNING *`,
+      [id, b.label, b.aliases, b.active, b.category ?? null],
+    );
     if (!k) throw notFound();
+    invalidateKeywords();
     await audit(req.auth!.actor, 'warning.keyword_updated', { type: 'keyword', id, label: k.code });
     return k;
   });

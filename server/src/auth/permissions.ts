@@ -103,7 +103,7 @@ export const PERMISSIONS: PermissionDef[] = [
   P('warning.delete_sent', 'warnings', 'critical', 'Versandte Warnvorgänge löschen', 'Bereits versandte Warnvorgänge mit Begründung löschen.', ['warning.delete'], true),
   P('warning.level', 'warnings', 'critical', 'Warnstufe bestätigen', 'Den Warnstufen-Vorschlag ausdrücklich bestätigen oder mit Begründung ändern.', ['warning.view']),
   P('warning.approve', 'warnings', 'critical', 'Warnentwurf freigeben', 'Eine erzeugte PDF-Fassung eines Warnentwurfs freigeben; Prüffragen und Regeln fachlich freigeben.', ['warning.view']),
-  P('warning.rules', 'warnings', 'critical', 'Stichwörter und Regeln pflegen', 'Stichwörter, Prüffragen, Warnstufen-Regeln, Vorlagen und Zuständigkeiten pflegen.', ['warning.view'], true),
+  P('warning.rules', 'warnings', 'critical', 'Stichwörter und Regeln pflegen', 'Stichwörter (auch Stichwortverzeichnis des Landes übernehmen und eigene Liste importieren), Prüffragen, Warnstufen-Regeln, Vorlagen und Zuständigkeiten pflegen.', ['warning.view'], true),
   P('warning.send', 'warnings', 'critical', 'Warnentwurf versenden', 'Freigegebene Warnentwürfe per E-Mail an die zuständige Stelle senden und den Versand klären.', ['warning.view']),
   P('warning.settings', 'warnings', 'critical', 'Versand einstellen', 'Mailserver, Absender und Testmodus für den Versand von Warnentwürfen einstellen und prüfen.', [], true),
   P('official.view', 'warnings', 'read', 'Amtliche Warnungen ansehen', 'Amtliche Warnungen aus den eingerichteten Warnfeeds sehen.'),
@@ -146,7 +146,7 @@ export const PERMISSIONS: PermissionDef[] = [
 
   /* Einstellungen */
   P('settings.view', 'settings', 'read', 'Einstellungen ansehen', 'Alle Einstellungen und die Vorschau der Löschfristen ansehen (ohne Passwörter).'),
-  P('settings.general', 'settings', 'write', 'Allgemeine Einstellungen ändern', 'Name der Instanz, Organisation, Adresse, Zeitzone.', ['settings.view'], true),
+  P('settings.general', 'settings', 'write', 'Allgemeine Einstellungen ändern', 'Name der Instanz, Organisation, Bundesland (Stichwortverzeichnis), Adresse, Zeitzone.', ['settings.view'], true),
   P('settings.security', 'settings', 'critical', 'Sicherheitseinstellungen ändern', 'Zwei-Faktor-Pflicht, Sitzungen, Kontosperre, Passwortlänge, Sicherheitsmeldungen, Gültigkeit von Einladungen, interne Zieladressen.', ['settings.view'], true),
   P('settings.privacy', 'settings', 'critical', 'Datenschutzeinstellungen ändern', 'Löschfristen, Aufbewahrung der Protokolle, Angaben zu Verantwortlichen, Datenschutzhinweise, Datenschutzerklärung und Impressum.', ['settings.view'], true),
   P('settings.media', 'settings', 'write', 'Medieneinstellungen ändern', 'Dateigrößen, erlaubte Dateitypen, Vorgaben für Upload-Links, Prüftiefe und Speichergrenzen.', ['settings.view'], true),

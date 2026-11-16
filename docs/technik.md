@@ -136,6 +136,10 @@ Ergebnisse je Verbindung: [docs/integrationen.md](integrationen.md).
 - Warnentwurf: Die mitgelieferte Vorlage ist ein **nicht abgestimmtes Beispiel**, Warnstufen-Regeln gibt es ab Werk
   keine. Vorlage, Empfänger und Rückmeldeweg mit der zuständigen Stelle abstimmen, Regeln fachlich freigeben. Die
   Weiterverwendung amtlicher Warninhalte (MoWaS) vor dem Einschalten automatischer Banner mit dem BBK klären.
+- Stichwortverzeichnisse (`server/src/keywords/catalogs/*.json`, #195): nur Länder mit öffentlicher amtlicher Quelle
+  (Hessen: Runderlass vom 30.08.2024, Scan – abgeglichen mit der digitalen Fassung vom 01.11.2022; Bayern: ABek-Anlage
+  Stand 15.03.2017, nur Kürzel der Übersicht, ABek laut gesetze-bayern.de befristet bis 16.07.2027). Neue Fassungen
+  müssen von Hand nachgetragen werden; `test/keywords.test.ts` prüft Wortlaut-Stichproben und Dubletten.
 - Datenschutz: Angaben unter *Einstellungen → Datenschutz* ausfüllen, Verarbeitungsverzeichnis und DSFA mit den
   Vorlagen in [docs/datenschutz.md](datenschutz.md) erstellen.
 

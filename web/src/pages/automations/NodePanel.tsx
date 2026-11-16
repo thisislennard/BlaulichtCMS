@@ -1,6 +1,8 @@
 import { Link } from 'react-router';
 import { Badge, Button, cx, FieldWrap, Input, Notice, Select, Switch } from '../../components/ui/core';
 import { Icon } from '../../components/ui/Icon';
+import { KeywordMeaning } from '../../components/KeywordMeaning';
+import { meaning, useKeywords } from '../../lib/keywords';
 import { FieldList, Help, NumberField, SelectField, TemplateField, inputSummary, normKey, outputSummary, type Catalog, type InputDef, type OutputDef } from './shared';
 
 /* Seitenleiste des Editors: Einstellungen des gewählten Knotens. Bedingungen und Vorlagen sind reine Daten. */
@@ -77,6 +79,10 @@ const isGroup = (r: Rule | Group): r is Group => Array.isArray((r as Group).rule
 function RuleRow({ r, fields, ops, onChange, onRemove, idp, disabled }: { r: Rule; fields: { key: string; label: string }[]; ops: Record<string, string>; onChange: (r: Rule) => void; onRemove: () => void; idp: string; disabled?: boolean }) {
   const noValue = r.op === 'exists' || r.op === 'not_exists';
   const known = fields.some((f) => f.key === r.field);
+  // Stichwortverzeichnis (#195): Vorschläge für Stichwort und Stichwort-Kategorie, unbekannte Werte bleiben erlaubt
+  const kw = useKeywords();
+  const kwList = r.field === 'stichwort' || r.field === 'stichwort_kategorie' ? (kw.data?.entries ?? []) : [];
+  const suggestions = r.field === 'stichwort' ? kwList.map((k) => ({ value: k.code, label: meaning(k) || k.category })) : [...new Set(kwList.map((k) => k.category).filter(Boolean))].map((c) => ({ value: c, label: '' }));
   return (
     <div className="grid grid-cols-[1fr_auto] gap-1.5 p-2 rounded-node bg-bg border border-line">
       <div className="flex flex-col gap-1.5 min-w-0">
@@ -99,7 +105,17 @@ function RuleRow({ r, fields, ops, onChange, onRemove, idp, disabled }: { r: Rul
             ))}
           </Select>
           <label className="sr-only" htmlFor={`${idp}-v`}>Wert</label>
-          <Input id={`${idp}-v`} value={noValue ? '' : (r.value ?? '')} disabled={disabled || noValue} placeholder={r.op === 'in' ? 'a, b, c' : noValue ? '–' : 'Wert'} maxLength={500} onChange={(e) => onChange({ ...r, value: e.target.value })} />
+          <Input id={`${idp}-v`} list={suggestions.length ? `${idp}-vl` : undefined} value={noValue ? '' : (r.value ?? '')} disabled={disabled || noValue} placeholder={r.op === 'in' ? 'a, b, c' : noValue ? '–' : 'Wert'} maxLength={500} onChange={(e) => onChange({ ...r, value: e.target.value })} />
+          {suggestions.length > 0 && (
+            <datalist id={`${idp}-vl`}>
+              {suggestions.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </datalist>
+          )}
+          {r.field === 'stichwort' && !noValue && r.op !== 'in' && r.value ? <KeywordMeaning code={r.value} /> : null}
         </div>
       </div>
       <Button size="sm" iconOnly icon="X" aria-label="Regel entfernen" disabled={disabled} onClick={onRemove} />

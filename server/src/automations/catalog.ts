@@ -32,6 +32,7 @@ const INCIDENT_FIELDS: FieldDef[] = [
   { key: 'vorgang', label: 'Vorgang', type: 'choice', example: 'neu', options: ['neu', 'aktualisierung', 'beendet'] },
   { key: 'stichwort', label: 'Stichwort', type: 'text', example: 'B2' },
   { key: 'stichwort_text', label: 'Stichwort (Klartext)', type: 'text', example: 'Brand Wohngebäude' },
+  { key: 'stichwort_kategorie', label: 'Stichwort-Kategorie (Stichwortverzeichnis)', type: 'text', example: 'Brand' },
   { key: 'einsatzart', label: 'Einsatzart', type: 'text', example: 'Brand' },
   { key: 'ort', label: 'Gemeinde/Ort', type: 'text', example: 'Musterstadt' },
   { key: 'ortsteil', label: 'Ortsteil', type: 'text', example: 'Nord' },

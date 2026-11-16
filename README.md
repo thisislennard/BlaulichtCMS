@@ -145,6 +145,9 @@ flowchart LR
   Stelle.
 - **Pflege:** Stichwörter mit Aliasen, Lagefragen, Regeln mit Versionen, Zuständigkeiten, Vorlagen – Regeln gibt immer
   eine andere Person frei.
+- **Stichwortverzeichnis je Bundesland:** amtliche Verzeichnisse für Hessen (Runderlass 2024) und Bayern (ABek-Anlage)
+  wortgetreu mitgeliefert, für alle Länder eigene Liste per CSV/JSON importier- und exportierbar; Bedeutung der
+  Stichworte in Einsatzmeldungen, Automationen und Filtern.
 - **Amtliche Warnungen:** Warn-App-Schnittstelle des Bundes (NINA, gefiltert nach Regionalschlüssel) oder CAP-Feeds,
   auf Wunsch als Banner auf der Website mit Quellenvermerk.
 

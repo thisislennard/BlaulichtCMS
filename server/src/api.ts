@@ -7,6 +7,7 @@ import { buildApp } from './app.js';
 import { ensureSetupToken } from './routes/auth.js';
 import { ensureMediaDirs } from './media/storage.js';
 import { recordActivationResult } from './updates/installer.js';
+import { refreshKeywordCatalog } from './keywords/store.js';
 
 process.env.BLAULICHTCMS_ROLE ??= 'api';
 
@@ -19,6 +20,8 @@ async function main() {
   if (config.trustProxyWarning) log('warn', 'api', config.trustProxyWarning);
   await ensureSetupToken();
   ensureMediaDirs();
+  // Mitgeliefertes Stichwortverzeichnis des eingestellten Landes nach einem Update auffrischen (#195)
+  await refreshKeywordCatalog().catch((e) => log('error', 'keywords', `Stichwortverzeichnis: ${(e as Error).message}`));
   // Ergebnis einer Umschaltung durch den Supervisor (In-App-Update) ins Protokoll übernehmen
   await recordActivationResult().catch((e) => log('error', 'updates', `Umschaltergebnis: ${(e as Error).message}`));
   process.on('message', (m: any) => {

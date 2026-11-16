@@ -7,6 +7,7 @@ import { usePageMeta } from '../../components/layout/AppShell';
 import { Icon } from '../../components/ui/Icon';
 import { Dialog, UnsavedChangesGuard, useErrorToast, useToast } from '../../components/ui/overlays';
 import { useAuth } from '../../lib/auth';
+import { resolveKeyword, useKeywords } from '../../lib/keywords';
 import { fmtDateTime, fromLocalInput, toLocalInput } from '../../lib/format';
 import { KIND, LevelBadge, WARN_STATE } from './Warnings';
 
@@ -228,6 +229,7 @@ function WarningCaseInner({ id }: { id: string }) {
   const editable = !!d && can('warning.draft') && ['draft', 'rejected', 'in_review'].includes(d.state);
   const kwQuery = useDebounced(kwSearch);
   const keywords = useQuery({ queryKey: ['warning-keywords', kwQuery], queryFn: () => get<Keyword[]>(`/warning-keywords?q=${encodeURIComponent(kwQuery)}`), enabled: step === 'stufe' && !allClear && editable });
+  const kwAll = useKeywords();
   const fe2 = useQuery({ queryKey: ['fe2-events'], queryFn: () => get<any[]>('/fe2-events'), enabled: step === 'stufe' && !allClear && editable });
   const questions = useQuery({
     queryKey: ['warning-questions', v?.keyword?.id],
@@ -455,8 +457,10 @@ function WarningCaseInner({ id }: { id: string }) {
                                   type="button"
                                   className="text-sm underline"
                                   onClick={async () => {
-                                    const found = await get<Keyword[]>(`/warning-keywords?q=${encodeURIComponent(e.keyword ?? '')}`);
-                                    const exact = found.find((k) => k.code.toLowerCase() === String(e.keyword).toLowerCase() || k.aliases?.some((a) => a.toLowerCase() === String(e.keyword).toLowerCase()));
+                                    // Abgleich über das Stichwortverzeichnis: Schreibweise egal, „F2 W“ gehört zu „F 2“ (#195)
+                                    const code = resolveKeyword(e.keyword, kwAll.data?.entries ?? [])?.entry.code ?? e.keyword ?? '';
+                                    const found = await get<Keyword[]>(`/warning-keywords?q=${encodeURIComponent(code)}`);
+                                    const exact = found.find((k) => k.code.toLowerCase() === String(code).toLowerCase() || k.aliases?.some((a) => a.toLowerCase() === String(code).toLowerCase()));
                                     if (exact) change({ keyword: exact, answers: {} });
                                     else toast({ tone: 'warning', title: 'Stichwort nicht hinterlegt', text: `„${e.keyword}“ ist lokal nicht gepflegt.` });
                                   }}

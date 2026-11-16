@@ -1,8 +1,36 @@
 Unter [Stichwörter & Regeln](/warnungen/pflege) werden die Grundlagen des Warnstufen-Assistenten **lokal** gepflegt. BlaulichtCMS wird **ohne aktive Regeln** ausgeliefert – alle Inhalte stimmt die Organisation selbst mit der zuständigen Stelle ab.
 
+## Stichwortverzeichnis der Länder
+
+Unter [Einstellungen → Allgemein](/einstellungen#allgemein) wird das **Bundesland** gewählt (Recht „Allgemeine Einstellungen ändern“). Für Länder mit öffentlichem, amtlichem Verzeichnis übernimmt BlaulichtCMS dessen Einsatzstichworte in die Stichwortliste. Das Verzeichnis ist **wortgetreu** aus der Quelle abgeschrieben; nichts wird ergänzt.
+
+| Land | Quelle | Übernommen |
+|---|---|---|
+| Hessen | Gemeinsamer Runderlass des HMdI und des HMFG zur Festlegung der Einsatzstichworte für Brand-, Hilfeleistungs- und Rettungsdiensteinsätze vom 30. August 2024, gültig 1. Oktober 2024 bis 31. Dezember 2029 ([PDF](https://familie.hessen.de/sites/familie.hessen.de/files/2024-09/2024-08-30_gemeinsamer_runderlass_einsatzstichworte.pdf)) | 58 Einsatzstichworte mit Meldebild, Kategorien Brand, Hilfeleistung, Unwetter, Rettungsdienst. Abgeglichen mit der Vorgängerfassung vom 1. November 2022 ([PDF](https://innen.hessen.de/sites/innen.hessen.de/files/2022-12/EinsatzstichworteErl-Endversion-gez.pdf)), die am 30. September 2024 außer Kraft trat. |
+| Bayern | Einsatzstichwörter, Anlage zu Nr. 2.1.4 der Alarmierungsbekanntmachung (ABek) des Staatsministeriums des Innern, Stand 15.03.2017 ([PDF auf gesetze-bayern.de](https://www.gesetze-bayern.de/Content/Resource?path=resources%2fBayVV_215_I_2279_BayVV215-I-2279-KF-001-Anhang-001.PDF)) | 125 Stichwörter der Übersicht (Brand, THL, ABC, RD, sonstige, Infoeinsätze), **nur die Kürzel**. Die Schlagwörter der Detailtabellen sind nicht übernommen. |
+
+Für alle anderen Länder steht dort **„Kein öffentliches Verzeichnis hinterlegt – eigene Liste importieren“**. Dort ist entweder kein landesweites Verzeichnis öffentlich zugänglich, oder die Stichworte legen Kreise und Leitstellen selbst fest. „Eigene Liste“ arbeitet ganz ohne Landesverzeichnis.
+
+So arbeitet die Liste:
+
+- **Wechsel des Landes:** Die Einträge des neuen Verzeichnisses werden übernommen bzw. wieder aktiviert, die des bisherigen deaktiviert (nicht gelöscht – Regeln und Vorgänge behalten ihren Bezug).
+- **Eigene Einträge haben Vorrang.** Ein eigener Eintrag mit demselben Kürzel ersetzt den Eintrag des Verzeichnisses. Wer Bezeichnung oder Kategorie eines Verzeichniseintrags ändert, macht ihn damit zum eigenen Eintrag.
+- **Neu übernehmen** (Stichwörter & Regeln → Stichwortverzeichnis) frischt das Verzeichnis auf, z. B. nach einem Update mit neuer Fassung. Das geschieht auch bei jedem Start. Von Hand deaktivierte Einträge bleiben dabei aus.
+- **Eigene Liste importieren:** CSV mit Semikolon in der Reihenfolge `code;bezeichnung;kategorie` (Kopfzeile optional) oder JSON (`[{"code": "…", "bezeichnung": "…", "kategorie": "…"}]`). Vorher zeigt BlaulichtCMS, wie viele Einträge übernommen und welche Zeilen übersprungen werden. Recht: „Stichwörter und Regeln pflegen“.
+- **Export** als CSV oder JSON enthält die ganze Liste mit Herkunft (Länderkürzel oder `eigen`). Die CSV lässt sich wieder importieren. Alle importierten Zeilen werden dabei zu eigenen Einträgen, also vorher auf die gewünschten Zeilen kürzen.
+
+Wo die Liste wirkt:
+
+- **Einsatzmeldungen** (FE2, Feuersoftware Connect): Fehlt der Klartext zum Stichwort, ergänzt BlaulichtCMS ihn aus der Liste, z. B. im Titel des Einsatzentwurfs. In der Vorschau der Einsätze steht die Bedeutung neben dem Stichwort.
+- **Automationen:** Bedingungen auf `stichwort` und `stichwort_kategorie` schlagen die Einträge der Liste vor. Das Feld `stichwort_kategorie` kommt aus der Liste.
+- **Warnentwurf:** Beim Übernehmen aus einem Einsatz wird das passende Stichwort gewählt.
+- **Feuersoftware-Filter:** Unter dem Stichwortfilter steht die Bedeutung der eingetragenen Stichworte.
+
+Beim Abgleich zählen weder Groß- und Kleinschreibung noch Leerzeichen oder Bindestriche: `F2` ist dasselbe wie `F 2`. Untergliederungen wie `F2 W` oder `F2.1`, die der hessische Erlass zulässt, gehören zum Stichwort `F 2`. `H 10` gehört dagegen nicht zu `H 1`. **Unbekannte Stichworte bleiben unverändert** stehen.
+
 ## Stichwörter und Aliase
 
-Ein Stichwort hat ein **Kürzel** (z. B. aus der Alarm- und Ausrückeordnung), eine **Bezeichnung** und beliebige **Aliase** für die Suche und für die Zuordnung aus FE2. Nicht mehr genutzte Stichwörter werden **deaktiviert**, nicht gelöscht. Bezeichnung und Aliase lassen sich über **Bearbeiten** ändern; das Kürzel bleibt fest, weil Regeln und Vorgänge darauf verweisen.
+Ein Stichwort hat ein **Kürzel** (z. B. aus der Alarm- und Ausrückeordnung), eine **Bezeichnung**, eine **Kategorie** und beliebige **Aliase** für die Suche und für die Zuordnung aus FE2. Nicht mehr genutzte Stichwörter werden **deaktiviert**, nicht gelöscht. Bezeichnung, Kategorie und Aliase lassen sich über **Bearbeiten** ändern; das Kürzel bleibt fest, weil Regeln und Vorgänge darauf verweisen. Über dem Verzeichnis filtern Suchfeld und Kategorie die Liste; Lagefragen legt **Lagefrage hinzufügen** am jeweiligen Stichwort an.
 
 ## Lagefragen
 

@@ -145,7 +145,7 @@ Alle Rechte, nach Bereichen. Die Tabelle entspricht dem Rollen-Editor; „Setzt 
 | Versandte Warnvorgänge löschen | kritisch | Bereits versandte Warnvorgänge mit Begründung löschen. | Warnvorgänge löschen |
 | Warnstufe bestätigen | kritisch | Den Warnstufen-Vorschlag ausdrücklich bestätigen oder mit Begründung ändern. | Warnvorgänge ansehen |
 | Warnentwurf freigeben | kritisch | Eine erzeugte PDF-Fassung eines Warnentwurfs freigeben; Prüffragen und Regeln fachlich freigeben. | Warnvorgänge ansehen |
-| Stichwörter und Regeln pflegen | kritisch | Stichwörter, Prüffragen, Warnstufen-Regeln, Vorlagen und Zuständigkeiten pflegen. | Warnvorgänge ansehen |
+| Stichwörter und Regeln pflegen | kritisch | Stichwörter (auch Stichwortverzeichnis des Landes übernehmen und eigene Liste importieren), Prüffragen, Warnstufen-Regeln, Vorlagen und Zuständigkeiten pflegen. | Warnvorgänge ansehen |
 | Warnentwurf versenden | kritisch | Freigegebene Warnentwürfe per E-Mail an die zuständige Stelle senden und den Versand klären. | Warnvorgänge ansehen |
 | Versand einstellen | kritisch | Mailserver, Absender und Testmodus für den Versand von Warnentwürfen einstellen und prüfen. | – |
 | Amtliche Warnungen ansehen | lesen | Amtliche Warnungen aus den eingerichteten Warnfeeds sehen. | – |
@@ -203,7 +203,7 @@ Alle Rechte, nach Bereichen. Die Tabelle entspricht dem Rollen-Editor; „Setzt 
 | Recht | Stufe | Erlaubt | Setzt voraus |
 | --- | --- | --- | --- |
 | Einstellungen ansehen | lesen | Alle Einstellungen und die Vorschau der Löschfristen ansehen (ohne Passwörter). | – |
-| Allgemeine Einstellungen ändern | ändern | Name der Instanz, Organisation, Adresse, Zeitzone. | Einstellungen ansehen |
+| Allgemeine Einstellungen ändern | ändern | Name der Instanz, Organisation, Bundesland (Stichwortverzeichnis), Adresse, Zeitzone. | Einstellungen ansehen |
 | Sicherheitseinstellungen ändern | kritisch | Zwei-Faktor-Pflicht, Sitzungen, Kontosperre, Passwortlänge, Sicherheitsmeldungen, Gültigkeit von Einladungen, interne Zieladressen. | Einstellungen ansehen |
 | Datenschutzeinstellungen ändern | kritisch | Löschfristen, Aufbewahrung der Protokolle, Angaben zu Verantwortlichen, Datenschutzhinweise, Datenschutzerklärung und Impressum. | Einstellungen ansehen |
 | Medieneinstellungen ändern | ändern | Dateigrößen, erlaubte Dateitypen, Vorgaben für Upload-Links, Prüftiefe und Speichergrenzen. | Einstellungen ansehen |

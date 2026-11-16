@@ -10,6 +10,7 @@ import { useAuth } from '../../lib/auth';
 import { fmtDateTime } from '../../lib/format';
 import { CONN_STATE } from './Connections';
 import { RECEIPT_KINDS, ReceiptLog } from './ReceiptLog';
+import { KeywordMeaning } from '../../components/KeywordMeaning';
 
 const STEPS = [
   { id: 'verbinden', label: 'Verbinden' },
@@ -440,7 +441,11 @@ export default function ConnectionDetail() {
                         <p className="m-0">Teile des Einsatzstichworts, z. B. <code className="font-mono">B3, TH</code>. Ein Einsatz passt, wenn sein Stichwort einen der Begriffe enthält.</p>
                         <p className="m-0 text-fg-muted">Ohne RICs und Stichwörter wird jeder Einsatz des Standorts übernommen.</p>
                       </HelpTip>
-                    } help="Optional. Ohne Filter gilt jeder Einsatz des Standorts."><ListInput id="fs-kw" value={cfg.keywords ?? []} onChange={(keywords) => setCfg({ ...cfg, keywords })} /></FieldWrap>
+                    } help="Optional. Ohne Filter gilt jeder Einsatz des Standorts."><ListInput id="fs-kw" value={cfg.keywords ?? []} onChange={(keywords) => setCfg({ ...cfg, keywords })} />
+                      {(cfg.keywords ?? []).length > 0 && (
+                        <span className="flex flex-wrap gap-x-3 mt-1">{(cfg.keywords as string[]).map((k) => <KeywordMeaning key={k} code={k} />)}</span>
+                      )}
+                    </FieldWrap>
                   </div>
                   <Switch checked={cfg.createDrafts !== false} onChange={(v) => setCfg({ ...cfg, createDrafts: v })} label="Beitragsentwürfe anlegen" description="Je Einsatz genau ein interner Entwurf mit Stichwort, Einsatzart, Ort (ohne Straße und Hausnummer) und Alarmzeit." />
                   <p className="m-0 text-meta text-fg-muted">Lagemeldungen, Sachverhalt, Adresse und Angaben zur meldenden Person übernimmt BlaulichtCMS nicht.</p>
@@ -584,6 +589,7 @@ export default function ConnectionDetail() {
                       <Icon name={o.matched ? 'CheckCircle2' : 'XCircle'} size={16} className={o.matched ? 'text-ok mt-0.5' : 'text-fg-muted mt-0.5'} />
                       <div>
                         <div className="font-medium">{o.title}</div>
+                        {o.keyword && <KeywordMeaning code={o.keyword} className="block text-meta text-fg-muted" />}
                         <div className="text-meta text-fg-muted">{[o.start ? fmtDateTime(o.start) : null, o.ric ? `RIC ${o.ric}` : null, o.reason].filter(Boolean).join(' · ')}</div>
                       </div>
                     </li>

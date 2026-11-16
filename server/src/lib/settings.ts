@@ -12,6 +12,11 @@ export const DEFAULT_SETTINGS = {
   'general.public_url': '',
   'general.timezone': 'Europe/Berlin',
   'general.language': 'de',
+  /**
+   * Bundesland für das Stichwortverzeichnis (#195, keywords/catalog.ts): Länderkürzel, 'eigen' (nur eigene Liste) oder
+   * leer (nicht gewählt). Beim Wechsel wird das mitgelieferte Verzeichnis in die Stichwortliste übernommen.
+   */
+  'general.state': '',
 
   'jobs.concurrency': 4,
   'retention.log_days': 30,

@@ -8,6 +8,7 @@ import { revisionHash } from '../routes/posts.js';
 import { emitIncident } from '../automations/events.js';
 import type { Connection } from './common.js';
 import { redactIncidentPayload, type Receipt, type ReceiptDecision } from './receipts.js';
+import { withKeywordText } from '../keywords/store.js';
 
 /**
  * FE2-Eingang für interne Einsatzentwürfe.
@@ -246,10 +247,12 @@ async function processFe2Event(c: Connection, payload: unknown, opts: { test?: b
  * wird nicht neu angelegt (connection_seen_events).
  */
 export async function handleIncident(c: Connection, source: IncidentSource, input: { eventId: string; fields: Partial<Record<Fe2Field, string>>; closed: boolean }): Promise<Fe2Result> {
-  const { eventId, fields, closed } = input;
+  const { eventId, closed } = input;
   const label = SOURCE_LABEL[source];
   const tz = await instanceTimeZone();
-  const hash = crypto.createHash('sha256').update(JSON.stringify(fields)).digest('hex');
+  // Prüfsumme über die gelieferten Felder – der Klartext aus dem Stichwortverzeichnis (#195) zählt nicht als Änderung
+  const hash = crypto.createHash('sha256').update(JSON.stringify(input.fields)).digest('hex');
+  const fields = await withKeywordText(input.fields);
   const key = `${c.id}:${eventId}`;
   const seenHash = incidentRef(c.id, eventId);
   // Protokolle nur mit gekürzter Prüfsumme der Einsatz-ID – keine Inhalte
