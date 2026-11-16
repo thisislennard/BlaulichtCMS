@@ -115,6 +115,25 @@ export const TEMPLATES: TemplateDef[] = [
       },
     ],
   },
+  {
+    id: 'calendar-exercise-story-banner',
+    title: 'Kalendertermin Übung → Story-Bild + Banner',
+    description: 'Zu Beginn einer Übung aus dem Kalender ein Story-Bild aus einer Bildvorlage erzeugen, einen Beitragsentwurf mit dem Bild (als Story vorauswählbar) und einen Banner „Achtung Übung“ anlegen.',
+    icon: 'ImageUp',
+    input: { kinds: ['calendar'], preset: { name: 'Kalender: Beginn eines Termins', config: { timing: 'start' } } },
+    rules: [{ field: 'kategorie', op: 'eq', value: 'Übung' }],
+    image: { label: 'Story-Bild', texts: { titel: '{{titel}}', text: '{{beginn}} · {{ort}}' }, altText: 'Übung: {{titel}} – {{beginn}}, {{ort}}' },
+    outputs: [
+      {
+        kind: 'post',
+        preset: { name: 'Beitrag „Übung“', config: { kind: 'event', title: 'Übung: {{titel}}', body: '{{beschreibung}}\n\nBeginn: {{beginn}}\nOrt: {{ort}}\n\nEs handelt sich um eine Übung, es besteht keine Gefahr.', submit: false } },
+      },
+      {
+        kind: 'banner',
+        preset: { name: 'Banner „Achtung Übung“', config: { title: 'Achtung Übung', text: '{{titel}} – {{ort}}. Es handelt sich um eine Übung, es besteht keine Gefahr.', tone: 'info', priority: 2, durationHours: 4, endFromField: true, submit: true } },
+      },
+    ],
+  },
 ];
 
 export function templateById(id: string): TemplateDef | undefined {

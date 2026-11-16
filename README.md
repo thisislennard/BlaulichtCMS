@@ -216,7 +216,8 @@ flowchart LR
 ### Workflows
 
 - **Vorlagen:** „Alarm → Banner auf der Website“, „DWD-Warnung → Banner + Beitragsentwurf“, „Alarm mit
-  Stichwort-Kategorie Brand → Beitragsentwurf“, „Warnung → Benachrichtigen“ oder leer beginnen; passende Ein- und
+  Stichwort-Kategorie Brand → Beitragsentwurf“, „Warnung → Benachrichtigen“, „Kalendertermin Übung → Story-Bild + Banner“
+  oder leer beginnen; passende Ein- und
   Ausgänge werden eingesetzt, offene Plätze hervorgehoben.
 - **Geführt in drei Schritten:** *Wenn* (Auslöser) – *Nur wenn* (Feld – Vergleich – Wert, mit Vorschlägen aus dem
   Stichwortverzeichnis) – *Dann* (Aktionen). Fehlende Ein- und Ausgänge direkt im Workflow anlegen. Jeder Workflow

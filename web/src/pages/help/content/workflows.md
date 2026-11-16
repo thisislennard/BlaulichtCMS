@@ -20,6 +20,7 @@ Unter [Workflows](/workflows) steht jeder Workflow mit einem Satz, was er tut �
 | Termin von Hand → Story-Bild + Beitragsentwurf | Manueller Start mit den Feldern `titel`, `beginn`, `ort` | – | **Bild aus Vorlage erzeugen** (Bildvorlage wählen), danach Beitragsentwurf „Veranstaltung“ mit dem Bild – als Story vorauswählbar |
 | Warnung → Benachrichtigen | Amtliche Warnung (eigenes Gebiet) | – | App-Benachrichtigung an die Rolle Redaktion |
 | Übung im Kalender → Banner „Achtung Übung“ | Kalendereintrag (zu Beginn) | `kategorie` ist gleich „Übung“ | Banner „Achtung Übung“ (Hinweis) bis zum Ende des Termins (`gueltig_bis`), zur Freigabe |
+| Kalendertermin Übung → Story-Bild + Banner | Kalendereintrag (zu Beginn) | `kategorie` ist gleich „Übung“ | **Bild aus Vorlage erzeugen** mit `{{titel}}`, `{{beginn}}`, `{{ort}}` (Bildvorlage wählen), danach Beitragsentwurf mit dem Bild (Story im Beitrags-Ausgang vorauswählen) und Banner „Achtung Übung“ |
 | Leer beginnen | – | – | – |
 
 Gibt es genau einen passenden Auslöser bzw. eine passende Aktion, setzt die Vorlage ihn gleich ein. Sonst bleibt der **Platz offen** (gelb, „Offen“): einen vorhandenen wählen oder mit **Neu anlegen …** direkt im Workflow einrichten – das Formular ist mit den Werten der Vorlage vorbelegt (z. B. Banner-Titel und Stufe); Pflichtangaben wie die Website oder die Verbindung wählt man selbst.
