@@ -403,6 +403,7 @@ async function freshSetup() {
   }
   // Designvorlagen (#208): eine Vorlage für die Detailseite
   const designTemplate = await admin.post('/design-templates', { title: 'Fokus-Vorlage', usageNote: 'Nur intern' }).catch((e) => (console.log('  (Designvorlage)', e.message), null));
+  const imageTemplate = await admin.post('/design-templates', { title: 'Fokus-Bildvorlage', kind: 'image', width: 1080, height: 1080 }).catch((e) => (console.log('  (Bildvorlage)', e.message), null));
   console.log('✔ Testdaten');
   const st = {
     adminSecret: mfa.secret,
@@ -423,6 +424,7 @@ async function freshSetup() {
     warningId: warn?.id ?? null,
     automationId,
     designTemplateId: designTemplate?.id ?? null,
+    imageTemplateId: imageTemplate?.id ?? null,
   };
   return { admin, editor, st };
 
@@ -483,7 +485,7 @@ try {
   let n = 0;
   churn = setInterval(() => editor.post('/posts', { title: `Live-Ereignis ${++n}`, kind: 'news' }).catch(() => {}), 2000);
 
-  const routes = ['/', '/beitraege', `/beitraege/${post.id}`, `/beitraege/${sub.id}`, '/vorlagen', '/kalender', '/freigaben', '/medien', `/medien/${col.collection.id}`, '/medien/dateien', '/medien/papierkorb', '/medien/verwaltung', '/medien/gestaltung', ...(st.linkId ? [`/medien/gestaltung?link=${st.linkId}`] : []), '/designvorlagen', ...(st.designTemplateId ? [`/designvorlagen/${st.designTemplateId}`] : []), '/quellen', '/banner', '/kanaele', '/warnungen', '/warnungen/pflege', ...(warn ? [`/warnungen/${warn.id}`] : []), '/verbindungen', ...(conn ? [`/verbindungen/${conn.id}`, `/verbindungen/${conn.id}?ansicht=empfangsprotokoll`] : []), ...(st.warnfeedId ? [`/verbindungen/${st.warnfeedId}`, `/verbindungen/${st.warnfeedId}?ansicht=empfangsprotokoll`] : []), ...(st.feuersoftwareId ? [`/verbindungen/${st.feuersoftwareId}`] : []), ...[st.threadsId, st.xApiId, st.whatsappId].filter(Boolean).map((x) => `/verbindungen/${x}`), '/amtliche-warnungen', '/workflows', '/workflows/eingaenge', '/workflows/ausgaenge', ...(st.automationId ? [`/workflows/${st.automationId}`] : []), '/benutzer', '/system', '/protokolle', '/datenschutz-anfragen', '/einstellungen', '/profil', '/hilfe', '/aktivitaeten', '/benachrichtigungen'];
+  const routes = ['/', '/beitraege', `/beitraege/${post.id}`, `/beitraege/${sub.id}`, '/vorlagen', '/kalender', '/freigaben', '/medien', `/medien/${col.collection.id}`, '/medien/dateien', '/medien/papierkorb', '/medien/verwaltung', '/medien/gestaltung', ...(st.linkId ? [`/medien/gestaltung?link=${st.linkId}`] : []), '/designvorlagen', ...(st.designTemplateId ? [`/designvorlagen/${st.designTemplateId}`] : []), ...(st.imageTemplateId ? [`/designvorlagen/${st.imageTemplateId}`, `/designvorlagen/${st.imageTemplateId}/editor`] : []), '/quellen', '/banner', '/kanaele', '/warnungen', '/warnungen/pflege', ...(warn ? [`/warnungen/${warn.id}`] : []), '/verbindungen', ...(conn ? [`/verbindungen/${conn.id}`, `/verbindungen/${conn.id}?ansicht=empfangsprotokoll`] : []), ...(st.warnfeedId ? [`/verbindungen/${st.warnfeedId}`, `/verbindungen/${st.warnfeedId}?ansicht=empfangsprotokoll`] : []), ...(st.feuersoftwareId ? [`/verbindungen/${st.feuersoftwareId}`] : []), ...[st.threadsId, st.xApiId, st.whatsappId].filter(Boolean).map((x) => `/verbindungen/${x}`), '/amtliche-warnungen', '/workflows', '/workflows/eingaenge', '/workflows/ausgaenge', ...(st.automationId ? [`/workflows/${st.automationId}`] : []), '/benutzer', '/system', '/protokolle', '/datenschutz-anfragen', '/einstellungen', '/profil', '/hilfe', '/aktivitaeten', '/benachrichtigungen'];
   for (const r of routes) await scanRoute(page, r);
 
   // Löschdialoge (Löschen-Knöpfe klickt der Rundgang bewusst nicht): Warnvorgang mit Begründung, Verbindung

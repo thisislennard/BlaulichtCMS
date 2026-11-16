@@ -150,6 +150,7 @@ export const PERMISSIONS: PermissionDef[] = [
 
   /* Designvorlagen (#208–#210) */
   P('templates.view', 'templates', 'read', 'Designvorlagen ansehen', 'Interne Vorlagen-Bibliothek durchsuchen, Vorlagen mit Nutzungshinweisen ansehen und ihre Dateien (auch ältere Versionen) herunterladen.'),
+  P('templates.use', 'templates', 'write', 'Bilder aus Vorlagen erzeugen', 'Befüllbare Bildvorlagen ausfüllen und das erzeugte Bild in den Medien ablegen (auch im Beitragseditor).', ['templates.view', 'media.upload']),
   P('templates.manage', 'templates', 'write', 'Designvorlagen verwalten', 'Vorlagen und Kategorien anlegen, ändern und löschen, neue Versionen und Dateien hochladen, Bildvorlagen im Editor gestalten und eigene Schriften hochladen.', ['templates.view']),
 
   /* Benutzer und Rollen */
@@ -273,8 +274,8 @@ export const LEGACY_ROLE_PERMISSIONS: Record<string, string[]> = {
  * bekommen (die Sammelbezeichnungen bleiben davon unberührt). Angepasste Rollen erhalten sie nicht automatisch.
  */
 export const ROLE_DEFAULT_ADDITIONS: Record<string, string[]> = {
-  media_manager: ['templates.view', 'templates.manage', 'calendar.view', 'calendar.subscribe'],
-  editor: ['templates.view', 'templates.manage', 'calendar.view', 'calendar.manage', 'calendar.sources', 'calendar.subscribe'],
+  media_manager: ['templates.view', 'templates.use', 'templates.manage', 'calendar.view', 'calendar.subscribe'],
+  editor: ['templates.view', 'templates.use', 'templates.manage', 'calendar.view', 'calendar.manage', 'calendar.sources', 'calendar.subscribe'],
   approver: ['templates.view', 'calendar.view', 'calendar.subscribe'],
   publisher: ['templates.view', 'calendar.view', 'calendar.subscribe'],
   viewer: ['templates.view', 'calendar.view', 'calendar.subscribe'],

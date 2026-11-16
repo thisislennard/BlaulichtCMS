@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 import { del, get, patch, post, qs } from '../../api/client';
-import { Badge, Button, Card, Chip, EmptyState, ErrorBox, FieldWrap, Input, PageHeader, Select, SkeletonRows, Textarea } from '../../components/ui/core';
+import { api, del as apiDel } from '../../api/client';
+import { Badge, Button, Card, Chip, EmptyState, ErrorBox, FieldWrap, Input, PageHeader, SegmentedControl, Select, SkeletonRows, Switch, Textarea } from '../../components/ui/core';
 import { Icon } from '../../components/ui/Icon';
 import { Dialog, useConfirm, useErrorToast, useToast } from '../../components/ui/overlays';
 import { useAuth } from '../../lib/auth';
@@ -39,7 +40,7 @@ export function useCategories() {
 }
 
 /** Anlegen bzw. Ändern der Angaben einer Vorlage (Titel, Kategorie, Beschreibung, Nutzungshinweis, Schlagworte). */
-export function TemplateMetaDialog({ tpl, onClose, onSaved }: { tpl?: Partial<TemplateListItem> & { id?: string }; onClose: () => void; onSaved?: (id: string) => void }) {
+export function TemplateMetaDialog({ tpl, onClose, onSaved }: { tpl?: Partial<TemplateListItem> & { id?: string }; onClose: () => void; onSaved?: (id: string, kind: 'files' | 'image') => void }) {
   const toastError = useErrorToast();
   const toast = useToast();
   const cats = useCategories();
@@ -51,8 +52,11 @@ export function TemplateMetaDialog({ tpl, onClose, onSaved }: { tpl?: Partial<Te
     usageNote: tpl?.usage_note ?? '',
     tags: (tpl?.tags ?? []).join(', '),
     kind: (tpl?.kind ?? 'files') as 'files' | 'image',
+    format: 'square',
   });
   const editing = !!tpl?.id;
+  const formats = useQuery({ queryKey: ['design-fonts'], queryFn: () => get<{ formats: { key: string; label: string; width: number; height: number }[] }>('/design-fonts'), enabled: !editing });
+  const preset = formats.data?.formats.find((f) => f.key === v.format);
   const save = async () => {
     if (busy) return;
     setBusy(true);
@@ -65,12 +69,12 @@ export function TemplateMetaDialog({ tpl, onClose, onSaved }: { tpl?: Partial<Te
         .split(',')
         .map((x) => x.trim())
         .filter(Boolean),
-      ...(editing ? {} : { kind: v.kind }),
+      ...(editing ? {} : { kind: v.kind, ...(v.kind === 'image' && preset ? { width: preset.width, height: preset.height } : {}) }),
     };
     try {
       const id = editing ? (await patch(`/design-templates/${tpl!.id}`, body), tpl!.id!) : (await post<{ id: string }>('/design-templates', body)).id;
       toast({ tone: 'success', title: editing ? 'Vorlage gespeichert' : 'Vorlage angelegt' });
-      onSaved?.(id);
+      onSaved?.(id, v.kind);
       onClose();
     } catch (e) {
       toastError(e);
@@ -93,6 +97,28 @@ export function TemplateMetaDialog({ tpl, onClose, onSaved }: { tpl?: Partial<Te
       }
     >
       <div className="flex flex-col gap-4">
+        {!editing && (
+          <SegmentedControl
+            label="Art der Vorlage"
+            value={v.kind}
+            onChange={(kind) => setV({ ...v, kind })}
+            options={[
+              { value: 'files', label: 'Dateien zum Herunterladen' },
+              { value: 'image', label: 'Befüllbare Bildvorlage' },
+            ]}
+          />
+        )}
+        {!editing && v.kind === 'image' && (
+          <FieldWrap label="Format" htmlFor="dt-format" help="Lässt sich im Editor noch ändern.">
+            <Select id="dt-format" value={v.format} onChange={(e) => setV({ ...v, format: e.target.value })}>
+              {(formats.data?.formats ?? []).map((f) => (
+                <option key={f.key} value={f.key}>
+                  {f.label}
+                </option>
+              ))}
+            </Select>
+          </FieldWrap>
+        )}
         <FieldWrap label="Titel" required htmlFor="dt-title">
           <Input id="dt-title" value={v.title} onChange={(e) => setV({ ...v, title: e.target.value })} maxLength={150} placeholder="z. B. Logo der Organisation" />
         </FieldWrap>
@@ -197,6 +223,99 @@ function CategoriesDialog({ onClose }: { onClose: () => void }) {
   );
 }
 
+interface FontRow {
+  key: string;
+  label: string;
+  bundled: boolean;
+  license: string;
+}
+
+/** Schriften: mitgelieferte (SIL Open Font License) und eigene mit Lizenzhinweis. */
+function FontsDialog({ onClose }: { onClose: () => void }) {
+  const qc = useQueryClient();
+  const toastError = useErrorToast();
+  const toast = useToast();
+  const confirm = useConfirm();
+  const q = useQuery({ queryKey: ['design-fonts'], queryFn: () => get<{ fonts: FontRow[] }>('/design-fonts') });
+  const [file, setFile] = useState<File | null>(null);
+  const [license, setLicense] = useState('');
+  const [ok, setOk] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const refresh = () => qc.invalidateQueries({ queryKey: ['design-fonts'] });
+  const upload = async () => {
+    if (!file) return;
+    setBusy(true);
+    try {
+      const fd = new FormData();
+      fd.append('license', license.trim());
+      fd.append('confirm', ok ? 'true' : 'false');
+      fd.append('file', file);
+      const r = await api<any>('POST', '/design-fonts', fd);
+      toast({ tone: 'success', title: 'Schrift hinzugefügt', text: r.family });
+      setFile(null);
+      setLicense('');
+      setOk(false);
+      if (fileRef.current) fileRef.current.value = '';
+      refresh();
+    } catch (e) {
+      toastError(e);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Dialog open onClose={onClose} title="Schriften" width={640} footer={<Button onClick={onClose}>Schließen</Button>}>
+      <div className="flex flex-col gap-4">
+        <ul className="m-0 p-0 list-none flex flex-col gap-2">
+          {(q.data?.fonts ?? []).map((f) => (
+            <li key={f.key} className="flex items-start gap-2">
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-medium">
+                  {f.label} {f.bundled && <span className="text-fg-muted font-normal">· mitgeliefert</span>}
+                </div>
+                <div className="text-meta text-fg-muted break-words">Lizenz: {f.license}</div>
+              </div>
+              {!f.bundled && (
+                <Button
+                  size="sm"
+                  iconOnly
+                  icon="Trash2"
+                  aria-label={`${f.label} löschen`}
+                  onClick={async () => {
+                    if (!(await confirm({ title: `Schrift „${f.label}“ löschen?`, text: 'Nur möglich, wenn keine Bildvorlage sie verwendet.', confirmLabel: 'Löschen' }))) return;
+                    try {
+                      await apiDel(`/design-fonts/${f.key.slice(7)}`);
+                      refresh();
+                    } catch (e) {
+                      toastError(e);
+                    }
+                  }}
+                />
+              )}
+            </li>
+          ))}
+        </ul>
+        <fieldset className="m-0 p-3 border border-line rounded-card flex flex-col gap-3">
+          <legend className="px-1 text-sm font-medium">Eigene Schrift hinzufügen</legend>
+          <FieldWrap label="Schriftdatei" htmlFor="font-file" help="TrueType (.ttf) oder OpenType (.otf), höchstens 10 MB; je Schnitt (z. B. Fett) eine Datei.">
+            <input ref={fileRef} id="font-file" type="file" accept=".ttf,.otf,font/ttf,font/otf" className="text-sm" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+          </FieldWrap>
+          <FieldWrap label="Lizenz" required htmlFor="font-license" help="z. B. „SIL Open Font License 1.1“ oder „Hausschrift, Lizenz der Organisation bis 2028“.">
+            <Input id="font-license" value={license} maxLength={500} onChange={(e) => setLicense(e.target.value)} />
+          </FieldWrap>
+          <Switch checked={ok} onChange={setOk} label="Ich bestätige, dass die Schrift für Bilder der Organisation verwendet werden darf." />
+          <div>
+            <Button icon="Upload" loading={busy} disabled={!file || license.trim().length < 3 || !ok} onClick={upload}>
+              Schrift hochladen
+            </Button>
+          </div>
+        </fieldset>
+      </div>
+    </Dialog>
+  );
+}
+
 export default function DesignTemplates() {
   const { can } = useAuth();
   const nav = useNavigate();
@@ -207,6 +326,7 @@ export default function DesignTemplates() {
   const [kind, setKind] = useState('');
   const [create, setCreate] = useState(false);
   const [cats, setCats] = useState(false);
+  const [fonts, setFonts] = useState(false);
   const categories = useCategories();
   useEffect(() => {
     const t = setTimeout(() => setTerm(search.trim()), 300);
@@ -229,6 +349,9 @@ export default function DesignTemplates() {
             <>
               <Button icon="Tags" onClick={() => setCats(true)}>
                 Kategorien
+              </Button>
+              <Button icon="Type" onClick={() => setFonts(true)}>
+                Schriften
               </Button>
               <Button variant="primary" icon="Plus" onClick={() => setCreate(true)}>
                 Neue Vorlage
@@ -307,8 +430,9 @@ export default function DesignTemplates() {
           ))}
         </ul>
       )}
-      {create && <TemplateMetaDialog onClose={() => setCreate(false)} onSaved={(id) => nav(`/designvorlagen/${id}`)} />}
+      {create && <TemplateMetaDialog onClose={() => setCreate(false)} onSaved={(id, kind) => nav(kind === 'image' ? `/designvorlagen/${id}/editor` : `/designvorlagen/${id}`)} />}
       {cats && <CategoriesDialog onClose={() => setCats(false)} />}
+      {fonts && <FontsDialog onClose={() => setFonts(false)} />}
     </div>
   );
 }

@@ -114,10 +114,19 @@ Interne Vorlagen-Bibliothek (#208) unter `/designvorlagen`. Server: `server/src/
 | Versionen | neue Version = leere Version mit Nummer +1; Dateien nur in der aktuellen Version änderbar, ältere bleiben abrufbar |
 | Prüfung | ClamAV (falls `CLAMAV_HOST`) direkt beim Upload; nicht erreichbar → 503, Fund → 400 + Audit `design_template.malware_found` |
 | Grenzen | 200 MB je Datei, 10 MB je SVG, 20 Dateien je Version, Vorschaubild höchstens 900 px (WebP) |
-| Rechte | `templates.view` (lesen, herunterladen), `templates.manage` (pflegen); Vorgaben für mitgelieferte Rollen über `ROLE_DEFAULT_ADDITIONS` in `auth/permissions.ts` |
+| Rechte | `templates.view` (lesen, herunterladen), `templates.use` (Bilder erzeugen, setzt `media.upload` voraus), `templates.manage` (pflegen); Vorgaben für mitgelieferte Rollen über `ROLE_DEFAULT_ADDITIONS` in `auth/permissions.ts` |
+| Bildvorlagen (#209) | `templates/layout.ts` (zod-Schema: Format 200–4000 px, höchstens 30 Elemente Text/Bild/Logo/Fläche, alles innerhalb der Fläche), `templates/render.ts`, `templates/images.ts`, API `routes/design-images.ts`, Migration `131_image_templates.sql` (Layout, `design_template_assets`, `design_fonts`, `collections.system_key`) |
+| Rendern | nur sharp/libvips (keine neue Abhängigkeit): Grundfläche + Ebenen per `composite`; Flächen als kleines SVG; Bilder mit `resize`/`extract` (Fokus, Zoom) bzw. `contain`, Eckenradius per Maske; Text über sharp `text` (Pango, Markup maskiert, `wrap: word-char`) |
+| Textanpassung | binäre Suche über die Schriftgröße (Größe … Mindestgröße), bis Höhe und Zeilenzahl passen; sonst Kürzen nach Wörtern mit „…“. libvips beschneidet Textbilder auf die Tinte – die Zeilenzahl ergibt sich aus dem je Schrift und Größe gemessenen Zeilenabstand (Höhe von zwei Zeilen minus eine Zeile) |
+| Schriften | `server/assets/fonts` (Barlow, Barlow Condensed, Atkinson Hyperlegible, je normal/fett, SIL OFL 1.1, Quelle github.com/google/fonts), beim Build nach `server/dist/assets/fonts` kopiert – kommen also mit jedem App-Update, keine Änderung am Image. Jede Schrift wird per `fontfile` angemeldet; zusätzlich setzt `configureFonts()` eine eigene `FONTCONFIG_FILE` (mitgelieferte und hochgeladene Schriften, Cache unter `/data/fonts`, Systemschriften nur falls vorhanden). Eigene TTF/OTF: Name und Stil aus den Tabellen `name`/`OS/2`, Lizenzangabe Pflicht, Ablage `/data/media/templates/fonts` |
+| Erzeugen | volle Größe als PNG (JPEG, falls PNG in den Medien nicht erlaubt) → `finalizeUpload` (Kontingente, Audit) → `processMedia` direkt (sonst Worker) → ausgewählt, Alternativtext in `media.alt_text` (#217); Ziel: gewählte Sammlung, sonst erste Sammlung des Beitrags, sonst Systemsammlung „Bilder aus Vorlagen“ (`system_key = 'design-templates'`). Bild-Platzhalter verwenden die öffentliche Fassung (ohne Standort, mit Unkenntlichmachungen) |
+| Vorschau | `POST …/layout-preview` (Editor, ungespeichertes Layout) und `POST …/fill-preview` (Ausfüllen): JPEG höchstens 900 px, Kopfzeile `x-text-truncated` mit gekürzten Feldern |
 
 Tests: `server/test/templates.test.ts` (gegen PostgreSQL: Rechte, Kategorien, Formatprüfung, SVG-Bereinigung,
-Download-Zähler, Versionen, Suche/Filter, Löschen samt Dateien, Audit).
+Download-Zähler, Versionen, Suche/Filter, Löschen samt Dateien, Audit; Bildvorlagen: Schriften mit Lizenz, Startlayout,
+Bilder der Vorlage, Layoutprüfung, Vorschau, Erzeugen in die Medien und in die Sammlung eines Beitrags) und
+`server/test/template-render.test.ts` (ohne Datenbank: Schriftdateien, Umbruch, Verkleinerung, Kürzen, Platzierung per
+Pixelprüfung, Bildausschnitt).
 
 ---
 

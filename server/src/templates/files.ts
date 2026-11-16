@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { XMLBuilder, XMLParser } from 'fast-xml-parser';
+import { XMLBuilder, XMLParser, XMLValidator } from 'fast-xml-parser';
 import { config } from '../config.js';
 
 /*
@@ -126,6 +126,8 @@ export function sanitizeSvg(input: string): string {
   const pis = text.match(/<\?[\s\S]*?\?>/g) ?? [];
   if (pis.some((p) => !/^<\?xml\s/i.test(p)) || pis.length > 1) throw new SvgRejected('SVG-Dateien mit Verarbeitungsanweisungen (z. B. Stylesheets) sind nicht erlaubt.');
   const opts = { preserveOrder: true, ignoreAttributes: false, attributeNamePrefix: '@_', allowBooleanAttributes: true, processEntities: false, cdataPropName: '#cdata', commentPropName: '#comment', ignoreDeclaration: true, ignorePiTags: true, parseTagValue: false, trimValues: false, maxNestedTags: 200 } as const;
+  const valid = XMLValidator.validate(text, { allowBooleanAttributes: true });
+  if (valid !== true) throw new SvgRejected(`Die SVG-Datei ist kein gültiges XML (Zeile ${valid.err.line}: ${valid.err.msg.slice(0, 120)}).`);
   let tree: any[];
   try {
     tree = new XMLParser(opts as any).parse(text);

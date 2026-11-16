@@ -2,12 +2,13 @@ import { useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, del, get, post } from '../../api/client';
-import { Badge, Button, Card, Chip, ErrorBox, FieldWrap, Notice, PageHeader, SkeletonRows, Table, Td, Textarea, Th } from '../../components/ui/core';
+import { Badge, Button, Card, Chip, ErrorBox, FieldWrap, LinkButton, Notice, PageHeader, SkeletonRows, Table, Td, Textarea, Th } from '../../components/ui/core';
 import { Icon } from '../../components/ui/Icon';
 import { DeleteDialog, Dialog, Menu, useConfirm, useErrorToast, useToast } from '../../components/ui/overlays';
 import { useAuth } from '../../lib/auth';
 import { fmtBytes, fmtDateTime, fmtRelative } from '../../lib/format';
 import { previewUrl, TemplateMetaDialog, type TemplateListItem } from './DesignTemplates';
+import { ImageFillDialog, type Layout } from './ImageFill';
 
 interface TplFile {
   id: string;
@@ -33,6 +34,7 @@ export interface TemplateDetail extends TemplateListItem {
   created_by_name: string | null;
   updated_by_name: string | null;
   preview_source: 'none' | 'auto' | 'upload';
+  layout: Layout | null;
   versions: Version[];
 }
 
@@ -137,6 +139,7 @@ export default function DesignTemplateDetail() {
   const [newVersion, setNewVersion] = useState(false);
   const [remove, setRemove] = useState(false);
   const [showOld, setShowOld] = useState(false);
+  const [fill, setFill] = useState(false);
   const q = useQuery({ queryKey: ['design-template', id], queryFn: () => get<TemplateDetail>(`/design-templates/${id}`) });
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ['design-template', id] });
@@ -227,11 +230,24 @@ export default function DesignTemplateDetail() {
           </span>
         }
         actions={
-          manage && (
+          (manage || (t.kind === 'image' && can('templates.use'))) && (
             <>
+              {t.kind === 'image' && can('templates.use') && (
+                <Button variant="primary" icon="ImageUp" onClick={() => setFill(true)}>
+                  Bild erzeugen
+                </Button>
+              )}
+              {t.kind === 'image' && manage && (
+                <LinkButton to={`/designvorlagen/${t.id}/editor`} icon="LayoutTemplate">
+                  Layout bearbeiten
+                </LinkButton>
+              )}
+              {manage && (
               <Button icon="Pencil" onClick={() => setEdit(true)}>
                 Bearbeiten
               </Button>
+              )}
+              {manage && (
               <Menu
                 items={[
                   { label: 'Neue Version anlegen', icon: 'History', onClick: () => setNewVersion(true) },
@@ -255,6 +271,7 @@ export default function DesignTemplateDetail() {
                   { label: 'Vorlage löschen', icon: 'Trash2', danger: true, onClick: () => setRemove(true) },
                 ]}
               />
+              )}
             </>
           )
         }
@@ -293,13 +310,29 @@ export default function DesignTemplateDetail() {
         </Card>
         <div className="flex flex-col gap-3">
           {t.description && <p className="m-0 whitespace-pre-wrap">{t.description}</p>}
+          {t.kind === 'image' && t.layout && (
+            <div className="text-sm">
+              <div className="font-medium mb-1">
+                Befüllbare Bildvorlage · {t.layout.width} × {t.layout.height} px
+              </div>
+              <ul className="m-0 pl-5">
+                {t.layout.elements
+                  .filter((e) => e.type === 'text' || e.type === 'image')
+                  .map((e) => (
+                    <li key={e.id}>
+                      {e.label} <span className="text-fg-muted">({e.type === 'text' ? 'Text' : 'Bild'}{e.type === 'image' && e.required ? ', Pflicht' : ''}, Kennung {e.id})</span>
+                    </li>
+                  ))}
+              </ul>
+            </div>
+          )}
           <div className="text-sm text-fg-muted">
             {t.download_count} {t.download_count === 1 ? 'Download' : 'Downloads'} insgesamt · angelegt von {t.created_by_name ?? 'unbekannt'} · zuletzt geändert {fmtRelative(t.updated_at)}
             {t.updated_by_name ? ` von ${t.updated_by_name}` : ''}
           </div>
         </div>
       </div>
-      {current && (
+      {current && (t.kind === 'files' || current.files.length > 0 || manage) && (
         <Card
           title={`Aktuelle Version ${current.number}`}
           subtitle={`${fmtDateTime(current.created_at)}${current.created_by_name ? ` · ${current.created_by_name}` : ''}${current.note ? ` · ${current.note}` : ''}`}
@@ -337,6 +370,7 @@ export default function DesignTemplateDetail() {
           )}
         </Card>
       )}
+      {fill && <ImageFillDialog templateId={t.id} onClose={() => setFill(false)} onDone={refresh} />}
       {edit && <TemplateMetaDialog tpl={t} onClose={() => setEdit(false)} onSaved={refresh} />}
       {newVersion && <NewVersionDialog id={t.id} next={t.current_version + 1} onClose={() => setNewVersion(false)} />}
       <DeleteDialog

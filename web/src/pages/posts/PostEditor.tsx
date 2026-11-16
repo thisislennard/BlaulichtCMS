@@ -14,6 +14,7 @@ import { KIND_LABEL } from './Posts';
 import { cleanFormats, SocialStatusCard, SocialTargetsCard } from './SocialPanel';
 import { safeHref } from '../../lib/url';
 import { PrivacyChecklistHint, SENSITIVE_LABELS } from '../media/PrivacyDialog';
+import { ImageFillDialog } from '../designs/ImageFill';
 import { WpCategoryPicker } from '../channels/WpCategories';
 import { HelpTip } from '../../components/ui/HelpTip';
 import { ReadabilityPanel } from './Readability';
@@ -171,6 +172,7 @@ function PostEditorInner({ id }: { id: string }) {
   const sites = useQuery({ queryKey: ['sites'], queryFn: () => get<Site[]>('/sites'), enabled: can('channel.view') });
   const [draft, setDraft] = useState<Draft | null>(null);
   const [mediaCache, setMediaCache] = useState<Record<string, MediaItem>>({});
+  const [fromTemplate, setFromTemplate] = useState(false);
   const [picker, setPicker] = useState(false);
   const [saving, setSaving] = useState(false);
   const [decision, setDecision] = useState<'approved' | 'rejected' | null>(null);
@@ -365,10 +367,20 @@ function PostEditorInner({ id }: { id: string }) {
             title="Medien"
             subtitle="Öffentlich verwendet wird eine geprüfte Fassung ohne Standortdaten."
             action={
-              editable && can('media.view') && (
-                <Button size="sm" icon="Plus" onClick={() => setPicker(true)}>
-                  Medien übernehmen
-                </Button>
+              editable &&
+              (can('media.view') || can('templates.use')) && (
+                <div className="flex flex-wrap gap-2">
+                  {can('templates.use') && (
+                    <Button size="sm" icon="ImageUp" onClick={() => setFromTemplate(true)}>
+                      Bild aus Vorlage
+                    </Button>
+                  )}
+                  {can('media.view') && (
+                    <Button size="sm" icon="Plus" onClick={() => setPicker(true)}>
+                      Medien übernehmen
+                    </Button>
+                  )}
+                </div>
               )
             }
           >
@@ -662,6 +674,17 @@ function PostEditorInner({ id }: { id: string }) {
           onAdd={(ms) => {
             setMediaCache((c) => ({ ...c, ...Object.fromEntries(ms.map((m) => [m.id, m])) }));
             setDraft((dr) => (dr ? { ...dr, mediaIds: [...dr.mediaIds, ...ms.map((m) => m.id)], coverId: dr.coverId ?? ms.find((m) => m.kind === 'image')?.id ?? null } : dr));
+          }}
+        />
+      )}
+      {fromTemplate && (
+        <ImageFillDialog
+          postId={id}
+          onClose={() => setFromTemplate(false)}
+          onDone={(m) => {
+            setMediaCache((c) => ({ ...c, [m.id]: m }));
+            setDraft((dr) => (dr ? { ...dr, mediaIds: [...dr.mediaIds, m.id], coverId: dr.coverId ?? m.id } : dr));
+            qc.invalidateQueries({ queryKey: ['post', id] });
           }}
         />
       )}

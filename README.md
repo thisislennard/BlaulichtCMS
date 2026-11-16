@@ -124,6 +124,10 @@ flowchart LR
   nur für angemeldete Personen.
 - **Mehrere Formate und Versionen:** PNG, SVG, PDF und offene Dateien je Vorlage; neue Versionen hochladen, ältere bleiben
   abrufbar. Nutzungshinweis je Vorlage und Download-Zähler.
+- **Befüllbare Bildvorlagen:** Layout mit Textfeldern (automatischer Umbruch und Verkleinerung), Bild-Platzhaltern mit
+  Zuschnitt, Logo und Flächen im Editor (Maus und Tastatur), Formate für Feed, Story und Link-Vorschau; Ausfüllen mit
+  Live-Vorschau, das Bild landet geprüft in den Medien – auch direkt im Beitragseditor („Bild aus Vorlage“).
+- **Schriften:** freie Schriften (SIL OFL) mitgeliefert, eigene TTF/OTF mit Lizenzhinweis hochladbar.
 - **Sicher:** Inhalt muss zur Endung passen, SVG wird bereinigt (keine Skripte, keine externen Verweise), optional
   ClamAV-Prüfung.
 

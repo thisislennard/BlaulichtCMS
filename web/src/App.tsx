@@ -32,6 +32,7 @@ const MediaAdmin = lazy(() => import('./pages/media/MediaAdmin'));
 const DesignEditor = lazy(() => import('./pages/media/DesignEditor'));
 const DesignTemplates = lazy(() => import('./pages/designs/DesignTemplates'));
 const DesignTemplateDetail = lazy(() => import('./pages/designs/DesignTemplateDetail'));
+const ImageTemplateEditor = lazy(() => import('./pages/designs/ImageTemplateEditor'));
 const Sites = lazy(() => import('./pages/channels/Sites'));
 const Users = lazy(() => import('./pages/admin/Users'));
 const SystemStatus = lazy(() => import('./pages/admin/SystemStatus'));
@@ -162,6 +163,7 @@ const router = createBrowserRouter(withErrors([
       { path: 'designvorlagen', element: <Page perm={['templates.view']}><DesignTemplates /></Page> },
       { path: 'designvorlagen/:id', element: <Page perm={['templates.view']}><DesignTemplateDetail /></Page> },
       { path: 'kalender', element: <Page perm={['calendar.view']}><CalendarPage /></Page> },
+      { path: 'designvorlagen/:id/editor', element: <Page perm={['templates.manage']}><ImageTemplateEditor /></Page> },
       { path: 'quellen', element: <Page perm={['source.view']}><Sources /></Page> },
       { path: 'banner', element: <Page perm={['banner.view']}><Banners /></Page> },
       { path: 'einsatzliste', element: <Page perm={['incident.view']}><IncidentList /></Page> },

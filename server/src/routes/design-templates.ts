@@ -12,6 +12,8 @@ import { scanFile, ScannerUnavailable } from '../media/clamav.js';
 import { moveFile, SizeLimitError, streamToTemp } from '../media/storage.js';
 import { cleanFileName, detectFormat, ensureDir, FORMATS, MAX_FILE_BYTES, MAX_FILES_PER_VERSION, MAX_SVG_BYTES, sanitizeSvg, SvgRejected, templatePaths } from '../templates/files.js';
 import { sendFileResponse } from './files.js';
+import { FORMAT_PRESETS, layoutSchema, MAX_EDGE, MIN_EDGE, starterLayout } from '../templates/layout.js';
+import { refreshImagePreview } from '../templates/images.js';
 
 /*
  * Designvorlagen (#208): interne Bibliothek (nur angemeldet, „Designvorlagen ansehen“). Vorlagen haben eine Kategorie,
@@ -49,7 +51,7 @@ async function assertCategory(id: string | null) {
 const cleanTags = (tags: string[]) => [...new Map(tags.map((t) => [t.toLowerCase(), t])).values()];
 
 /** Schadsoftwareprüfung einer hochgeladenen Datei (wie bei den Medien, aber direkt in der Anfrage). */
-async function malwareCheck(req: FastifyRequest, file: string, name: string) {
+export async function malwareCheck(req: FastifyRequest, file: string, name: string) {
   const c = config.clamav;
   if (!c.host) return;
   let r;
@@ -201,6 +203,7 @@ export async function designTemplateRoutes(app: FastifyInstance) {
       created_by_name: t.created_by_name,
       updated_by_name: t.updated_by_name,
       preview_source: t.preview,
+      layout: t.kind === 'image' && t.layout ? layoutSchema.parse(t.layout) : null,
       versions: versions.map((v) => ({
         ...v,
         current: v.number === t.current_version,
@@ -210,18 +213,27 @@ export async function designTemplateRoutes(app: FastifyInstance) {
   });
 
   app.post('/design-templates', { preHandler: requireAuth('templates.manage') }, async (req) => {
-    const b = meta.extend({ versionNote: z.string().trim().max(500).default('') }).parse(req.body ?? {});
+    const b = meta
+      .extend({
+        versionNote: z.string().trim().max(500).default(''),
+        kind: z.enum(['files', 'image']).default('files'),
+        width: z.number().int().min(MIN_EDGE).max(MAX_EDGE).default(FORMAT_PRESETS[0].width),
+        height: z.number().int().min(MIN_EDGE).max(MAX_EDGE).default(FORMAT_PRESETS[0].height),
+      })
+      .parse(req.body ?? {});
     await assertCategory(b.categoryId);
+    const layout = b.kind === 'image' ? starterLayout(b.width, b.height) : null;
     const t = await tx(async (db) => {
       const row = await one<any>(
-        `INSERT INTO design_templates (title, description, usage_note, category_id, tags, created_by, updated_by) VALUES ($1,$2,$3,$4,$5,$6,$6) RETURNING *`,
-        [b.title, b.description, b.usageNote, b.categoryId, cleanTags(b.tags), userOf(req)],
+        `INSERT INTO design_templates (title, description, usage_note, category_id, tags, created_by, updated_by, kind, layout) VALUES ($1,$2,$3,$4,$5,$6,$6,$7,$8) RETURNING *`,
+        [b.title, b.description, b.usageNote, b.categoryId, cleanTags(b.tags), userOf(req), b.kind, layout ? JSON.stringify(layout) : null],
         db,
       );
       await db.query(`INSERT INTO design_template_versions (template_id, number, note, created_by) VALUES ($1, 1, $2, $3)`, [row!.id, b.versionNote, userOf(req)]);
       return row!;
     });
-    await audit(actorOf(req), 'design_template.created', { type: 'design_template', id: t.id, label: t.title });
+    await audit(actorOf(req), 'design_template.created', { type: 'design_template', id: t.id, label: t.title }, { art: b.kind });
+    if (layout) await refreshImagePreview(t.id);
     return { id: t.id };
   });
 

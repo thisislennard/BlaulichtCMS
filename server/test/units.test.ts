@@ -136,7 +136,7 @@ describe('Feine Rechte und Rollen (0.3.0)', () => {
     // Neue Rechte ohne Vorgänger: nur für die Administration (alle Rechte), eigene Rollen oder als ausdrückliche Vorgabe
     // mitgelieferter Rollen (ROLE_DEFAULT_ADDITIONS)
     const mapped = new Set(Object.values(P.LEGACY_PERMISSIONS).flat());
-    expect(ids.filter((p) => !mapped.has(p)).sort()).toEqual(['calendar.manage', 'calendar.sources', 'calendar.subscribe', 'calendar.view', 'connection.private_targets', 'role.manage', 'settings.mail', 'templates.manage', 'templates.view', 'warning.delete_sent']);
+    expect(ids.filter((p) => !mapped.has(p)).sort()).toEqual(['calendar.manage', 'calendar.sources', 'calendar.subscribe', 'calendar.view', 'connection.private_targets', 'role.manage', 'settings.mail', 'templates.manage', 'templates.use', 'templates.view', 'warning.delete_sent']);
     for (const [role, extra] of Object.entries(P.ROLE_DEFAULT_ADDITIONS)) for (const p of extra) expect(mapped.has(p), `${role}: ${p}`).toBe(false);
   });
 
@@ -171,9 +171,9 @@ describe('Feine Rechte und Rollen (0.3.0)', () => {
     const snap = Object.fromEntries(P.SYSTEM_ROLES.filter((r) => r.id !== 'platform_admin').map((r) => [r.id, r.permissions.join(' ')]));
     expect(snap).toEqual({
       media_manager:
-        'media.view media.export media.download_original media.collections media.upload media.links media.review media.organize media.redact media.trash media.design post.view source.view channel.view banner.view calendar.view calendar.subscribe incident.view official.view templates.view templates.manage',
+        'media.view media.export media.download_original media.collections media.upload media.links media.review media.organize media.redact media.trash media.design post.view source.view channel.view banner.view calendar.view calendar.subscribe incident.view official.view templates.view templates.use templates.manage',
       editor:
-        'media.view media.export media.download_original media.collections media.upload media.links media.review media.organize media.redact media.trash media.design post.view post.create post.edit post.submit post.archive post.templates source.view source.items source.manage channel.view banner.view banner.edit calendar.view calendar.manage calendar.sources calendar.subscribe incident.view incident.edit official.view official.dismiss press.view press.manage press.reply press.snippets press.contacts connection.view automation.read templates.view templates.manage',
+        'media.view media.export media.download_original media.collections media.upload media.links media.review media.organize media.redact media.trash media.design post.view post.create post.edit post.submit post.archive post.templates source.view source.items source.manage channel.view banner.view banner.edit calendar.view calendar.manage calendar.sources calendar.subscribe incident.view incident.edit official.view official.dismiss press.view press.manage press.reply press.snippets press.contacts connection.view automation.read templates.view templates.use templates.manage',
       approver: 'media.view media.export post.view source.view approval.post approval.banner approval.incident approval.automation channel.view banner.view calendar.view calendar.subscribe incident.view official.view press.view press.approve automation.read templates.view audit.view',
       publisher: 'media.view media.export post.view source.view publish.website publish.unpublish publish.social publish.social_remove channel.view banner.view banner.publish calendar.view calendar.subscribe incident.view incident.publish official.view press.view press.contacts press.release connection.view templates.view',
       warning_author: 'warning.view warning.draft warning.delete',

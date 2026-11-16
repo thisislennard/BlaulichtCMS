@@ -9,6 +9,8 @@ import { migrate } from '../src/db/migrate.js';
 import { buildApp } from '../src/app.js';
 import { setSettings } from '../src/lib/settings.js';
 import { templatePaths } from '../src/templates/files.js';
+import { bundledFont } from '../src/templates/fonts.js';
+import { processMedia } from '../src/media/process.js';
 
 /**
  * Designvorlagen (#208–#210) gegen eine echte PostgreSQL-Datenbank (TEST_DATABASE_URL): Bibliothek mit Kategorien,
@@ -52,6 +54,7 @@ class Client {
 let admin: Client;
 let viewer: Client;
 let warnAuthor: Client;
+let editor: Client;
 
 async function acceptInvite(email: string, roles: string[], name: string) {
   const inv = await admin.post('/users/invite', { email, roles });
@@ -79,6 +82,7 @@ beforeAll(async () => {
   expect((await admin.post('/auth/login', { email: 'admin@example.org', password: PASSWORD })).json.next).toBe('done');
   viewer = await acceptInvite('lesen@example.org', ['viewer'], 'Lea');
   warnAuthor = await acceptInvite('warn@example.org', ['warning_author'], 'Wim');
+  editor = await acceptInvite('redaktion@example.org', ['editor'], 'Robin');
 });
 
 afterAll(async () => {
@@ -208,5 +212,131 @@ describe('Designvorlagen: Bibliothek (#208)', () => {
     const actions = (await many<any>(`SELECT action FROM audit_events WHERE action LIKE 'design_template.%'`)).map((a) => a.action);
     for (const a of ['design_template.created', 'design_template.file_uploaded', 'design_template.version_created', 'design_template.file_deleted', 'design_template.preview_uploaded', 'design_template.category_deleted', 'design_template.deleted']) expect(actions).toContain(a);
     expect(await one(`SELECT 1 FROM design_templates WHERE id = $1`, [tplId])).toBeNull();
+  });
+});
+
+describe('Befüllbare Bildvorlagen (#209)', () => {
+  let tplId: string;
+  let fontKey: string;
+  let logoAsset: string;
+  let photoId: string;
+  let layout: any;
+
+  /** Foto in eine Sammlung hochladen und wie der Worker prüfen */
+  async function photo(collectionId: string) {
+    const up = await admin.upload(`/collections/${collectionId}/media`, 'foto.jpg', await sharp({ create: { width: 800, height: 600, channels: 3, background: '#2050a0' } }).jpeg().toBuffer(), 'image/jpeg');
+    expect(up.status, JSON.stringify(up.json)).toBe(200);
+    expect(await processMedia(up.json.media.id)).toBe('ready');
+    return up.json.media.id as string;
+  }
+
+  it('Schriften: mitgelieferte sind da; eigene nur mit Lizenzangabe und Bestätigung, Inhalt muss eine Schrift sein', async () => {
+    const list = await viewer.get('/design-fonts');
+    expect(list.status).toBe(200);
+    expect(list.json.fonts.filter((f: any) => f.bundled).length).toBeGreaterThanOrEqual(6);
+    expect(list.json.formats.map((f: any) => `${f.width}x${f.height}`)).toEqual(expect.arrayContaining(['1080x1080', '1080x1350', '1080x1920', '1200x630']));
+    const ttf = fs.readFileSync(bundledFont('atkinson-bold')!.file);
+    const send = (fields: Record<string, string>, data = ttf, name = 'eigene.ttf') => {
+      const boundary = `----bc${crypto.randomBytes(8).toString('hex')}`;
+      const parts = [
+        ...Object.entries(fields).map(([k, v]) => Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="${k}"\r\n\r\n${v}\r\n`)),
+        Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="${name}"\r\nContent-Type: font/ttf\r\n\r\n`),
+        data,
+        Buffer.from(`\r\n--${boundary}--\r\n`),
+      ];
+      return admin.raw('POST', '/design-fonts', Buffer.concat(parts), { 'content-type': `multipart/form-data; boundary=${boundary}` });
+    };
+    expect((await send({ confirm: 'true' })).json.message).toMatch(/Lizenz/);
+    expect((await send({ license: 'SIL Open Font License' })).json.message).toMatch(/bestätigen/);
+    expect((await send({ license: 'OFL', confirm: 'true' }, Buffer.from('keine Schrift'))).status).toBe(400);
+    const ok = await send({ license: 'SIL Open Font License 1.1', confirm: 'true' });
+    expect(ok.status, JSON.stringify(ok.json)).toBe(200);
+    expect(ok.json).toMatchObject({ family: 'Atkinson Hyperlegible', weight: 700 });
+    fontKey = ok.json.key;
+    expect((await send({ license: 'OFL', confirm: 'true' })).status).toBe(409);
+    expect((await viewer.get('/design-fonts')).json.fonts.find((f: any) => f.key === fontKey)).toMatchObject({ bundled: false, license: 'SIL Open Font License 1.1' });
+  });
+
+  it('Bildvorlage anlegen: Story-Format mit Startlayout und Vorschaubild', async () => {
+    const r = await editor.post('/design-templates', { title: 'Story Übung', kind: 'image', width: 1080, height: 1920, tags: ['Story'] });
+    expect(r.status, JSON.stringify(r.json)).toBe(200);
+    tplId = r.json.id;
+    const d = (await viewer.get(`/design-templates/${tplId}`)).json;
+    expect(d.kind).toBe('image');
+    expect(d.layout).toMatchObject({ width: 1080, height: 1920 });
+    expect(d.layout.elements.map((e: any) => e.type)).toEqual(['image', 'text', 'text']);
+    expect(d.has_preview).toBe(true);
+    layout = d.layout;
+  });
+
+  it('Bilder der Vorlage: SVG-Logo wird bereinigt; Layout prüft Schriften und Bilder', async () => {
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="200" height="100" onload="alert(1)"><script>alert(1)</script><rect width="200" height="100" fill="#ffffff"/></svg>`;
+    const a = await editor.upload(`/design-templates/${tplId}/assets`, 'logo.svg', Buffer.from(svg), 'image/svg+xml');
+    expect(a.status, JSON.stringify(a.json)).toBe(200);
+    logoAsset = a.json.id;
+    const got = await viewer.get(`/design-templates/${tplId}/assets/${logoAsset}`);
+    expect(got.raw.toString()).not.toMatch(/script|onload/);
+    layout = {
+      ...layout,
+      elements: [...layout.elements.map((e: any) => (e.id === 'titel' ? { ...e, font: fontKey, minSize: 60, maxLines: 2 } : e)), { id: 'logo', type: 'logo', label: 'Logo', x: 40, y: 40, w: 200, h: 100, assetId: logoAsset }],
+    };
+    expect((await editor.raw('PUT', `/design-templates/${tplId}/layout`, { layout: { ...layout, elements: [{ ...layout.elements[1], font: 'gibt-es-nicht' }] } })).status).toBe(400);
+    expect((await editor.raw('PUT', `/design-templates/${tplId}/layout`, { layout: { ...layout, elements: [{ id: 'l', type: 'logo', label: 'Fremd', x: 0, y: 0, w: 10, h: 10, assetId: crypto.randomUUID() }] } })).status).toBe(400);
+    expect((await viewer.raw('PUT', `/design-templates/${tplId}/layout`, { layout })).status).toBe(403);
+    const saved = await editor.raw('PUT', `/design-templates/${tplId}/layout`, { layout });
+    expect(saved.status, JSON.stringify(saved.json)).toBe(200);
+    // Schrift in Verwendung lässt sich nicht löschen
+    expect((await admin.del(`/design-fonts/${fontKey.slice(7)}`)).status).toBe(409);
+  });
+
+  it('Vorschau im Editor und beim Ausfüllen (JPEG); gekürzte Texte werden gemeldet; Rechte', async () => {
+    const lp = await editor.post(`/design-templates/${tplId}/layout-preview`, { layout, values: { titel: 'Kurz' } });
+    expect(lp.status).toBe(200);
+    expect(lp.headers['content-type']).toBe('image/jpeg');
+    expect((await viewer.post(`/design-templates/${tplId}/fill-preview`, { values: {} })).status).toBe(403);
+    const long = await editor.post(`/design-templates/${tplId}/fill-preview`, { values: { titel: 'Sehr langer Titel '.repeat(30) } });
+    expect(long.status).toBe(200);
+    expect(long.headers['x-text-truncated']).toBe('titel');
+    const short = await editor.post(`/design-templates/${tplId}/fill-preview`, { values: { titel: 'Übung' } });
+    expect(short.headers['x-text-truncated']).toBe('');
+    const meta = await sharp(short.raw).metadata();
+    expect(meta.format).toBe('jpeg');
+    expect(meta.height).toBe(900);
+  });
+
+  it('Erzeugen: Bild mit Foto landet geprüft und ausgewählt in „Bilder aus Vorlagen“, mit Alternativtext', async () => {
+    const col = await admin.post('/collections', { title: 'Fotos Übung', createLink: false });
+    photoId = await photo(col.json.collection.id);
+    const g = await editor.post(`/design-templates/${tplId}/generate`, { values: { titel: 'Großübung am Samstag', text: 'Sa., 21.11. · 10 Uhr' }, images: { foto: { mediaId: photoId, focusX: 0.3, zoom: 1.5 } }, altText: 'Großübung am Samstag, 21.11. um 10 Uhr' });
+    expect(g.status, JSON.stringify(g.json)).toBe(200);
+    expect(g.json.media).toMatchObject({ status: 'ready', kind: 'image', width: 1080, height: 1920, selection: 'selected', alt_text: 'Großübung am Samstag, 21.11. um 10 Uhr' });
+    expect(g.json.collection.title).toBe('Bilder aus Vorlagen');
+    const sys = await one<any>(`SELECT id FROM collections WHERE system_key = 'design-templates'`);
+    expect(sys!.id).toBe(g.json.collection.id);
+    expect((await admin.get(`/media/${g.json.media.id}/preview`)).status).toBe(200);
+    // zweites Bild: dieselbe Systemsammlung
+    const g2 = await editor.post(`/design-templates/${tplId}/generate`, { values: {}, images: {} });
+    expect(g2.json.collection.id).toBe(sys!.id);
+    expect((await many<any>(`SELECT action FROM audit_events WHERE action = 'design_template.image_generated'`)).length).toBe(2);
+  });
+
+  it('Beitragseditor: Bild landet in der Sammlung des Beitrags; Pflicht-Bild und fremde Medien werden geprüft', async () => {
+    const p = await editor.post('/posts', { title: 'Einladung zur Übung', kind: 'event' });
+    expect(p.status, JSON.stringify(p.json)).toBe(200);
+    const postId = p.json.id ?? p.json.post?.id;
+    const col = await admin.post('/collections', { title: 'Beitragsfotos', postId, createLink: false });
+    const g = await editor.post(`/design-templates/${tplId}/generate`, { values: { titel: 'Einladung' }, images: { foto: { mediaId: photoId } }, postId });
+    expect(g.status, JSON.stringify(g.json)).toBe(200);
+    expect(g.json.collection.id).toBe(col.json.collection.id);
+    // Bild-Platzhalter als Pflicht → ohne Bild abgelehnt
+    const req = { ...layout, elements: layout.elements.map((e: any) => (e.type === 'image' ? { ...e, required: true } : e)) };
+    expect((await editor.raw('PUT', `/design-templates/${tplId}/layout`, { layout: req })).status).toBe(200);
+    const missing = await editor.post(`/design-templates/${tplId}/generate`, { values: {}, images: {} });
+    expect(missing.status).toBe(400);
+    expect(missing.json.message).toMatch(/Bild wählen/);
+    expect((await editor.post(`/design-templates/${tplId}/generate`, { values: {}, images: { foto: { mediaId: crypto.randomUUID() } } })).status).toBe(400);
+    // Dateivorlage lässt sich nicht befüllen
+    const files = await editor.post('/design-templates', { title: 'Nur Dateien' });
+    expect((await editor.post(`/design-templates/${files.json.id}/generate`, { values: {} })).status).toBe(400);
   });
 });

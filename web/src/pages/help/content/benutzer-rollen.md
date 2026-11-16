@@ -206,6 +206,7 @@ Alle Rechte, nach Bereichen. Die Tabelle entspricht dem Rollen-Editor; „Setzt 
 | Recht | Stufe | Erlaubt | Setzt voraus |
 | --- | --- | --- | --- |
 | Designvorlagen ansehen | lesen | Interne Vorlagen-Bibliothek durchsuchen, Vorlagen mit Nutzungshinweisen ansehen und ihre Dateien (auch ältere Versionen) herunterladen. | – |
+| Bilder aus Vorlagen erzeugen | ändern | Befüllbare Bildvorlagen ausfüllen und das erzeugte Bild in den Medien ablegen (auch im Beitragseditor). | Designvorlagen ansehen, Dateien hochladen |
 | Designvorlagen verwalten | ändern | Vorlagen und Kategorien anlegen, ändern und löschen, neue Versionen und Dateien hochladen, Bildvorlagen im Editor gestalten und eigene Schriften hochladen. | Designvorlagen ansehen |
 
 **Benutzer und Rollen**
