@@ -54,6 +54,20 @@ export interface OutputDef {
   updated_by_name: string | null;
 }
 
+/** Feldname normalisieren (beim Verlassen des Feldes): Kleinbuchstaben, Ziffern, _; beginnt mit Buchstaben. */
+export function normKey(v: string): string {
+  const k = v
+    .trim()
+    .toLowerCase()
+    .replace(/ä/g, 'ae')
+    .replace(/ö/g, 'oe')
+    .replace(/ü/g, 'ue')
+    .replace(/ß/g, 'ss')
+    .replace(/[^a-z0-9_]/g, '_')
+    .slice(0, 40);
+  return /^[a-z]/.test(k) ? k : `f_${k}`.slice(0, 40);
+}
+
 export function useCatalog() {
   return useQuery({ queryKey: ['automation-catalog'], queryFn: () => get<Catalog>('/automations/catalog'), staleTime: 30_000 });
 }

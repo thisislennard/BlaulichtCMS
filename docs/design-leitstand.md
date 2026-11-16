@@ -220,6 +220,21 @@ Bei neuen oder überarbeiteten Seiten:
 4. Keine neuen Farben – nur Tokens. Wenn etwas fehlt: Token ergänzen (Hell **und** Dunkel), nicht im Bauteil festschreiben.
 5. Fester Hex-Wert oder `text-white` in einer Komponente? → durch Token ersetzen.
 
+## 10a. Automationen-Editor
+
+- Fläche mit React Flow; alle Farben über `web/src/pages/automations/flow.css`, das die `--xy-*`-Variablen auf Tokens
+  legt (Hell/Dunkel ohne eigene Werte). Raster: `--bc-flow-grid`.
+- Knoten = kleine Karte (`rounded-node`, Linie, kein Schatten), oben Mono-Label der Kategorie **EINGANG /
+  VERARBEITUNG / AUSGANG** mit Symbolfläche. Kategorie-Tokens `--bc-flow-input(-soft)` und `--bc-flow-output(-soft)`
+  (gedecktes Blau bzw. Violett, Hell und Dunkel) färben **nur** die Symbolfläche – die Kategorie steht immer auch als
+  Text da. Verarbeitung bleibt neutral (`bg-raised`). Kein farbiger Seitenstreifen.
+- Gewählt: roter Rahmen + `shadow-selected`; Fehler: Rahmen `border-err` **und** „n Fehler“ mit Symbol; Direktversand:
+  Badge „Direkt“ (Gelb, mit Text). Ports tragen Beschriftungen („trifft zu“, „freigegeben“ …), Verbindungen sind
+  geschwungen mit Pfeil, Beschriftung in Mono.
+- Werkzeugleiste oben links (Ansicht zurücksetzen, Einpassen, Automatisch anordnen, Auswahl fokussieren, Rückgängig,
+  Wiederholen, Löschen), Zoom unten links, Übersichtskarte unten rechts. Die Listenansicht ist die gleichwertige
+  Bedienung ohne Maus und am Handy.
+
 ## 11. Bewusste Ausnahmen
 
 Diese Stellen behalten feste Farben, weil sie unabhängig vom Farbmodus gleich aussehen müssen:

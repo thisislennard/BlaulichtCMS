@@ -25,7 +25,7 @@ bewussten Abweichung von einer Empfehlung samt Ausgleich.
 Stack: Node.js, TypeScript, Fastify, PostgreSQL, React, Vite, Tailwind. Bausteine: Anmeldung (Argon2id, TOTP, Sitzungen, CSRF, Login-Sperre), Rechte-Registry,
 Audit, Maskierung, AES-256-GCM-Geheimnisse, SSRF-Schutz, PostgreSQL-Warteschlange mit Lease und Idempotenz,
 verschlüsselte Datenbanksicherung, Notfall-CLI, UI-Bausteine, Hilfe-Center, CI.
-Bewusst nicht enthalten: Workflow-Engine und Editor, IMAP, MQTT, Teams, allgemeine Webhooks. Updates siehe E9.
+Bewusst nicht enthalten: IMAP, MQTT, Teams, allgemeine Webhooks. Updates siehe E9, Automationen (seit 0.3.0) siehe E17.
 
 ### E2 – Ein Container mit internem PostgreSQL
 
@@ -251,6 +251,68 @@ Alles über Tokens in `web/src/theme/tokens.css` – das endgültige Design läs
 - Image und Datenstand gehören zusammen; der Rückweg führt immer über die Volume-Sicherung von vor dem Update.
 - In-App-Updates (E9): Programmstand und Datenstand gehören ebenso zusammen; der automatische Rückweg spielt die
   Datenbanksicherung von unmittelbar vor der Umschaltung zurück, sobald Migrationen der neuen Version liefen.
+
+### E17 – Automationen: Abläufe als Daten, Entwurf → Test → Version, Direktversand je Automation (0.3.0)
+
+**Aufbau** (`server/src/automations/`, Migration `060_automations.sql`):
+
+- **Eingänge** (`automation_inputs`: FE2, Feuersoftware, amtliche Warnung, RSS, Uploads, Zeitplan, manueller Start) und
+  **Ausgänge** (`automation_outputs`: Banner, Beitrag, E-Mail, App-Benachrichtigung, Warnentwurf vorbereiten) sind
+  wiederverwendbare Bausteine mit serverseitig geprüften Einstellungen (`configs.ts`). Jede Eingangsart deklariert ihre
+  Felder (`catalog.ts`) – sie sind die einzige Grundlage für Platzhalter und Bedingungen.
+- **Ablauf** (`automations.graph`): Knoten und Kanten als JSON. Verarbeitungsknoten: Bedingung (Feld – Operator – Wert,
+  UND/ODER, eine Ebene Untergruppen), Verzweigung, Felder setzen (`{{feld}}`-Vorlagen), Warten (≤ 24 h), Einmal je
+  Vorgang (Schlüssel aus Feldern, Zeitfenster), Freigabe anfordern, Zusammenführen. **Kein Code, keine Ausdrücke,
+  kein eval** – Vorlagen ersetzen nur Platzhalter durch Text, Bedingungen vergleichen mit festen Werten.
+- **Prüfung** (`graph.ts`, ohne Datenbank): Kreise, Pflicht-Anschlüsse, Ports, Grenzen (60 Knoten, 150 Kanten) und ob
+  jedes verwendete Feld an der jeweiligen Stelle vorhanden ist (Schnittmenge über alle eingehenden Wege).
+- **Versionen:** Aktivieren geht nur, wenn genau dieser Stand einen erfolgreichen Testlauf hatte (`tested_hash` =
+  Prüfsumme über Ablauf **und** Einstellungen der verwendeten Ein-/Ausgänge, ohne Positionen). Die Aktivierung speichert
+  eine unveränderliche Momentaufnahme (`automation_versions`); Läufe arbeiten nur auf Momentaufnahmen. Wie bei den
+  Verbindungen (E15) gilt „aktiv nur nach bestandenem Test“.
+- **Ereignisse:** Die Quellen rufen nur eine kleine Funktion auf (`events.ts`: `emitIncident` in `handleIncident`,
+  `emitOfficialWarning` im Warnfeed-Abruf, `emitRssItem` beim regulären RSS-Abruf, `emitUpload` nach der Medienprüfung).
+  In Transaktionen der Quelle läuft das Anlegen unter einem Savepoint; ein Fehler stört den Empfang nie. Zeitpläne
+  startet der Worker-Leader (alle 30 s, keine Nachholung > 10 min, nie vor der Aktivierung).
+- **Ausführung** (`engine.ts`): Auftrag `automation.run` in der Warteschlange, Advisory-Lock je Lauf (nie parallel),
+  topologische Reihenfolge, ein Schritt je Knoten (`automation_steps`, eindeutig je Lauf und Knoten). Ausgänge schreiben
+  Ergebnis und Schritt in **einer** Transaktion – Wiederholung und Fortsetzung legen nichts doppelt an. Ein Ereignis
+  startet je Automation genau einen Lauf (eindeutiger `event_key`). Vorübergehende Fehler: bis zu 4 Versuche mit
+  Backoff; E-Mail mit unklarem Ergebnis wird nie automatisch neu gesendet (wie `warning.send`). Warten und Freigabe
+  halten den Lauf an und setzen ihn über einen neuen Auftrag fort.
+- **Testläufe** laufen direkt in der Anfrage (ohne Worker) als Trockenlauf: Ausgänge beschreiben, was sie tun würden.
+- **Grenzen:** Läufe je Automation und Minute (`automations.max_runs_per_minute`, Standard 20; darüber verworfen,
+  protokolliert, Verwaltung benachrichtigt), globaler Schalter `automations.enabled`, Notbremse „Deaktivieren“ (offene
+  Läufe und Freigaben werden abgebrochen), Löschfrist `privacy.automation_run_days` (30 Tage).
+- **Rechte:** `automation.read` (Administration, Redaktion, Freigabe), `automation.manage` und `automation.publish`
+  (Administration). Freigaben aus Abläufen entscheidet „Fassungen freigeben“; mit `editorial.four_eyes` nicht, wer die
+  Automation zuletzt geändert oder die laufende Version aktiviert hat.
+- **Ausgänge und Vier-Augen:** Banner und Beiträge entstehen als Entwürfe (wahlweise eingereicht); App-Benachrichtigungen
+  und E-Mails an Konten (Rollen) gehen sofort – sie verlassen BlaulichtCMS nicht bzw. nur an hinterlegte Konten; E-Mails
+  an Zuständigkeiten nur nach Freigabe; Warnentwürfe werden nur vorbereitet. Keine sozialen Netzwerke, keine Webhooks.
+
+**Bewusste Abweichung: Direktversand ohne menschliche Freigabe, je Automation wählbar (Entscheidung des Betriebs).**
+Eine Automation kann „Darf direkt veröffentlichen/versenden“ erhalten. Dann veröffentlichen **nur im Editor markierte**
+Banner- und Beitrags-Ausgänge direkt (Banner freigegeben und als Auftrag für die Bridge; Beitrag mit Freigabe ohne
+Person und Veröffentlichungsauftrag) bzw. senden E-Mails an Zuständigkeiten ohne Freigabe. Das hebt für diese Ausgänge
+das Vier-Augen-Prinzip (E10) auf.
+
+Ausgleich:
+
+| Maßnahme | Wirkung |
+|---|---|
+| Eigenes Recht `automation.publish` (nur Administration) | Markieren, Erlauben und Aktivieren einer Version mit markierten Ausgängen; „Verwalten“ allein genügt nicht |
+| Frische Passwortbestätigung (#109, ≤ 10 min) | Erlauben und Aktivieren mit Direktversand; API-Schlüssel können das nie |
+| Pflicht-Testlauf des aktuellen Stands | Erlauben und Aktivieren nur mit `tested_hash` des aktuellen Ablaufs samt Ein-/Ausgängen |
+| Doppelte Bedingung zur Laufzeit | direkt nur, wenn die Version mit Direktversand aktiviert wurde **und** die Automation ihn jetzt noch hat – Entziehen wirkt sofort, auch für wartende Läufe |
+| Sichtbarkeit | Kennzeichnung „Direktversand“ in Liste und Editor, „Direkt“ am Knoten, Versionen „mit Direktversand“ |
+| Nachvollziehbarkeit | Audit (`automation.direct_enabled/disabled`, `automation.activated` mit Zahl der Direkt-Ausgänge, `automation.post_published`, `automation.banner_published`, `automation.mail_sent`) und Sicherheitsmeldung `automation_direct_publish` |
+| Begrenzung | nur Banner, Beitrag (nur mit gekoppeltem Zielkanal), E-Mail an gepflegte Zuständigkeiten; nie Warnentwürfe, nie soziale Netzwerke; Testmodus des Mailversands gilt weiter |
+
+Restrisiko: Eine fehlerhaft gebaute Bedingung oder eine manipulierte Quelle (z. B. gefälschter Feed, falls interne
+Ziele freigegeben sind) kann ungeprüfte Inhalte auf die Website bringen. Gegenmittel: Direktversand nur für eng
+gefasste Abläufe mit geprüften Quellen, Banner mit kurzer Dauer, Laufprotokolle prüfen, im Zweifel entziehen. Die
+automatischen Banner amtlicher Warnungen (E15, fachliche Prüfung je Verbindung) bleiben davon unabhängig.
 
 ## Offene Architekturpunkte
 

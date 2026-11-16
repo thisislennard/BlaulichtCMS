@@ -139,6 +139,10 @@
       "title": "Stichwörter, Regeln und Versand pflegen",
       "summary": "Lagefragen, versionierte Regeln mit fachlicher Freigabe, Zuständigkeiten, Vorlagen, SMTP und Testmodus."
     },
+    "automationen": {
+      "title": "Automationen",
+      "summary": "Eingänge, Verarbeitung und Ausgänge im Editor verbinden, testen, aktivieren; Direktversand je Automation; Beispiele."
+    },
     "verbindungen": {
       "title": "Verbindungen: Facebook, Instagram, FE2, Warnungen",
       "summary": "Verbinden, Testen, Vorschau, Aktivieren; soziale Kanäle im Beitrag, FE2-Entwürfe, amtliche Warnungen."

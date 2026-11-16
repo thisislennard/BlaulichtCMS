@@ -1,7 +1,7 @@
 import { Link } from 'react-router';
 import { Badge, Button, cx, FieldWrap, Input, Notice, Select, Switch } from '../../components/ui/core';
 import { Icon } from '../../components/ui/Icon';
-import { FieldList, Help, NumberField, SelectField, TemplateField, inputSummary, outputSummary, type Catalog, type InputDef, type OutputDef } from './shared';
+import { FieldList, Help, NumberField, SelectField, TemplateField, inputSummary, normKey, outputSummary, type Catalog, type InputDef, type OutputDef } from './shared';
 
 /* Seitenleiste des Editors: Einstellungen des gewählten Knotens. Bedingungen und Vorlagen sind reine Daten. */
 
@@ -279,7 +279,7 @@ export function NodePanel({
             <div key={i} className="flex flex-col gap-1.5 p-2 rounded-node bg-bg border border-line">
               <div className="flex gap-1.5 items-end">
                 <FieldWrap label="Feldname" htmlFor={`${idp}-tk-${i}`} className="flex-1">
-                  <Input id={`${idp}-tk-${i}`} mono value={f.key} disabled={readOnly} maxLength={40} onChange={(e) => set({ fields: d.fields.map((x: any, j: number) => (j === i ? { ...x, key: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '_') } : x)) })} />
+                  <Input id={`${idp}-tk-${i}`} mono value={f.key} disabled={readOnly} maxLength={40} invalid={!/^[a-z][a-z0-9_]{0,39}$/.test(f.key)} onChange={(e) => set({ fields: d.fields.map((x: any, j: number) => (j === i ? { ...x, key: e.target.value } : x)) })} onBlur={(e) => set({ fields: d.fields.map((x: any, j: number) => (j === i ? { ...x, key: normKey(e.target.value) } : x)) })} />
                 </FieldWrap>
                 <Button iconOnly icon="X" aria-label={`Feld ${f.key} entfernen`} disabled={readOnly || d.fields.length <= 1} onClick={() => set({ fields: d.fields.filter((_: any, j: number) => j !== i) })} />
               </div>

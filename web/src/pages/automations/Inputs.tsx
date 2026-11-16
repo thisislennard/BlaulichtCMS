@@ -7,7 +7,7 @@ import { Icon } from '../../components/ui/Icon';
 import { Dialog, useConfirm, useErrorToast, useToast } from '../../components/ui/overlays';
 import { useAuth } from '../../lib/auth';
 import { fmtDateTime } from '../../lib/format';
-import { CheckList, FieldList, Help, NumberField, SelectField, inputSummary, useCatalog, useInputs, type Catalog, type InputDef } from './shared';
+import { CheckList, FieldList, Help, NumberField, SelectField, inputSummary, normKey, useCatalog, useInputs, type Catalog, type InputDef } from './shared';
 
 /** Eingänge: Auslöser auf Grundlage der vorhandenen Verbindungen, Quellen und Sammlungen – hier eingerichtet, im Editor verwendet. */
 
@@ -119,7 +119,7 @@ function InputDialog({ input, kind, cat, onClose }: { input: InputDef | null; ki
                   <Input id={`mf-l-${i}`} value={f.label} maxLength={80} onChange={(e) => setField(i, { label: e.target.value })} />
                 </FieldWrap>
                 <FieldWrap label="Feldname" htmlFor={`mf-k-${i}`}>
-                  <Input id={`mf-k-${i}`} mono value={f.key} maxLength={40} onChange={(e) => setField(i, { key: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '_') })} />
+                  <Input id={`mf-k-${i}`} mono value={f.key} maxLength={40} onChange={(e) => setField(i, { key: e.target.value })} onBlur={(e) => setField(i, { key: normKey(e.target.value) })} invalid={!/^[a-z][a-z0-9_]{0,39}$/.test(f.key)} />
                 </FieldWrap>
                 <FieldWrap label="Beispiel (Testlauf)" htmlFor={`mf-e-${i}`}>
                   <Input id={`mf-e-${i}`} value={f.example} maxLength={300} onChange={(e) => setField(i, { example: e.target.value })} />

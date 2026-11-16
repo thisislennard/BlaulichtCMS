@@ -53,6 +53,27 @@ Alle Verbindungen sind optional und laufen unter *Kanäle → Verbindungen* nach
 
 Details und Einrichtung: [docs/integrationen.md](integrationen.md), Hilfe → *Verbindungen*.
 
+## Automationen
+
+Bereich *Automation* (Liste, Eingänge, Ausgänge, Editor). Der Editor nutzt **React Flow** (`@xyflow/react`, MIT) für
+die Fläche und **dagre** (`@dagrejs/dagre`, MIT) für „Automatisch anordnen“ – beides nur in der Oberfläche
+(`web/dist`), keine neuen Laufzeit-Abhängigkeiten des Servers. Server: `server/src/automations/` (Katalog, Prüfung,
+Vorlagen/Bedingungen, Engine, Ereignisse), API `server/src/routes/automations.ts`, Migration `060_automations.sql`.
+
+| Teil | Umsetzung |
+|---|---|
+| Ablauf | Knoten/Kanten als JSON; Prüfung auf Kreise, Anschlüsse, Ports, Felder je Stelle, Grenzen (60 Knoten, 150 Kanten) |
+| Versionen | Entwurf → Testlauf (Trockenlauf, sofort in der Anfrage) → Aktivieren als unveränderliche Momentaufnahme samt Ein-/Ausgängen |
+| Auslöser | Funktionsaufrufe in FE2/Feuersoftware (`handleIncident`), Warnfeed-Abruf, RSS-Abruf, Medienprüfung; Zeitpläne im Worker-Leader |
+| Ausführung | Auftrag `automation.run`, Advisory-Lock je Lauf, Schritt je Knoten, Ergebnis + Schritt in einer Transaktion, Wiederholung mit Backoff, Warten/Freigabe als Fortsetzung |
+| Grenzen | `automations.max_runs_per_minute` (20), `automations.enabled`, Deaktivieren als Notbremse, `privacy.automation_run_days` (30) |
+| Direktversand | je Automation, Recht `automation.publish`, Passwortbestätigung, Test, Audit, Sicherheitsmeldung (Architektur E17) |
+
+Tests: `server/test/automation-logic.test.ts` (ohne Datenbank: Vorlagen, Bedingungen, Entprellen, Zeitplan, Prüfung,
+Prüfsumme, Rechte) und `server/test/automations.test.ts` (gegen PostgreSQL: Rechte, Ein-/Ausgänge, Test und
+Aktivierung, FE2/Warnfeed/RSS-Ereignisse, Zeitplan mit Mail und Freigabe, Direktversand, Warten, Entprellen, Grenze,
+Notbremse, Löschfrist).
+
 ---
 
 ## Sicherheit

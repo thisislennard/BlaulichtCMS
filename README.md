@@ -152,6 +152,19 @@ flowchart LR
 - **Medienimport:** einmalige Übernahme von Medien und gültigen Upload-Links aus einem Altsystem (Austauschformat,
   Exportskript für LiFeOS).
 
+### Automationen
+
+- **Visueller Editor:** Eingänge (FE2-Alarm, Feuersoftware-Einsatz, amtliche Warnung, RSS-Eintrag, neue Uploads,
+  Zeitplan, manueller Start), Verarbeitung (Bedingung, Verzweigung, Felder setzen, Warten, Einmal je Vorgang, Freigabe
+  anfordern, Zusammenführen) und Ausgänge (Banner, Beitrag, E-Mail, App-Benachrichtigung, Warnentwurf vorbereiten)
+  auf einer Fläche verbinden – mit Palette, Minikarte, automatischer Anordnung, Rückgängig und einer Listenansicht für
+  Tastatur und Handy.
+- **Ein- und Ausgänge** werden auf eigenen Seiten eingerichtet (z. B. Banner-Stil nach Warnstufe, Beitragsvorlage mit
+  Texten je Kanal, E-Mail an Rollen oder Zuständigkeiten) und in vielen Abläufen wiederverwendet.
+- **Sicher:** Abläufe sind Daten (keine Formeln, kein Code); Testlauf ohne Wirkung, aktiv nur nach erfolgreichem Test,
+  Versionen, Schrittprotokoll, Grenzen je Minute, Notbremse. Ausgänge legen Entwürfe an – Direktversand ohne
+  Freigabe nur je Automation mit eigenem Recht, Passwortbestätigung, Audit und Sicherheitsmeldung.
+
 ### Übersicht und Bedienung
 
 - **Dashboard:** Kennzahlen-Reihe und Kacheln in bis zu vier Spalten (offene Freigaben, bestätigter Stand der

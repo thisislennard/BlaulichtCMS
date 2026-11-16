@@ -26,6 +26,7 @@ OWASP File Upload Cheat Sheet. Jeder Punkt ist mit einem Test oder einer Code-St
 | Bridge-Updates | ✅ Signierte, kurzlebige Download-Links; Paket wird in WordPress gegen SHA-256 geprüft; neue Versionen zuerst im Test-Kanal. Code-Signatur (Ed25519, privater Schlüssel offline, öffentlicher fest in der Bridge) ab 0.6.0 – wirksam, sobald der Betreiber den Schlüssel erzeugt hat; Restrisiko in `docs/bridge-signatur.md` | Test „Bridge-Updates“, Unit-Test „Code-Signatur der Bridge“ |
 | Kopfzeilen | ✅ CSP ohne `'unsafe-inline'` für Skripte und Stylesheets, `frame-ancestors 'none'`, `X-Frame-Options: DENY`, `Permissions-Policy` (Kamera, Mikrofon, Standort, Zahlung, USB u. a. aus), HSTS (hinter HTTPS, über `HSTS_*` einstellbar), `Referrer-Policy: no-referrer`, `nosniff`, COOP/CORP `same-origin` | `server/src/app.ts` (helmet), Test „Sicherheits-Kopfzeilen“ |
 | Audit | ✅ Hash-Kette mit HMAC (Schlüssel durch den Master-Schlüssel geschützt), Trigger gegen Ändern/Löschen, tägliche Prüfung mit Benachrichtigung, optionale Weiterleitung an stdout/Syslog; verweigerte Zugriffe und falsche Schlüssel gedrosselt auditiert | Tests „Audit: Hash-Kette …“, „Audit-Lücken …“ |
+| Automationen | ✅ Abläufe sind Daten (keine Ausdrücke, kein eval, Platzhalter nur als Text); Prüfung auf Kreise, Felder und Grenzen; aktiv nur nach erfolgreichem Testlauf genau dieses Stands; Ausführung mit Lock je Lauf, ein Schritt je Knoten, Ergebnis und Schritt in einer Transaktion (kein doppelter Entwurf), ein Lauf je Ereignis, Grenze je Minute, Notbremse und globaler Schalter; keine Webhooks, keine freien Mailadressen; Protokolle mit gekürzten Adressen und Löschfrist. Direktversand siehe Abwägung unten | `server/src/automations/`, `server/test/automations.test.ts`, `server/test/automation-logic.test.ts` |
 | Repository | ✅ Keine Zugangsdaten, keine produktiven Daten; Beispieldaten fiktiv; `.env` und `data/` ignoriert | Secret-Scan (Trivy) bei jedem Push, Workflow „Sicherheitsprüfung“ |
 | Lieferkette | ✅ Basis-Images per Digest, GitHub Actions per Commit-SHA fixiert; Dependabot für npm, Docker und Actions; `npm audit` (Laufzeit ab „hoch“, alles ab „kritisch“) und Trivy-Imagescan (kritische behebbare Lücken brechen ab) bei jedem Push und wöchentlich; Updates nur über Release-Tags (optional signiert) | `.github/workflows/security.yml`, `.github/dependabot.yml`, `docs/betrieb.md` |
 
@@ -65,6 +66,26 @@ entwendetes Gerät oder Cookie nutzbar ist; ein gemerktes Gerät reduziert die A
 **Restrisiko:** Wer ein entsperrtes Gerät mit gemerkter Sitzung in die Hand bekommt, kann bis zur Abmeldung
 nicht-kritische Aktionen ausführen. Für Geräte, die mehrere Personen nutzen, die Haken nicht setzen bzw. die
 Funktionen abschalten oder die Fristen verkürzen; bei Verlust sofort „Auf allen Geräten abmelden“.
+
+### Automationen mit Direktversand: Abwägung
+
+Auf Wunsch des Betriebs kann je Automation erlaubt werden, dass markierte Ausgänge (Banner, Beitrag mit gekoppeltem
+Zielkanal, E-Mail an gepflegte Zuständigkeiten) **ohne menschliche Freigabe** veröffentlichen bzw. versenden.
+
+**Risiko:** Für diese Ausgänge entfällt das Vier-Augen-Prinzip. Eine falsch gebaute Bedingung oder eine manipulierte
+Quelle kann ungeprüfte Inhalte auf die Website bringen oder Mails an externe Stellen auslösen.
+
+**Gegenmaßnahmen:** eigenes Recht `automation.publish` (nur Administration) für Markieren, Erlauben und Aktivieren;
+frische Passwortbestätigung (nie per API-Schlüssel); Pflicht-Testlauf des aktuellen Stands samt Ein- und Ausgängen;
+wirksam nur, wenn die aktive Version damit aktiviert wurde **und** die Automation den Direktversand noch hat (Entziehen
+wirkt sofort, auch ohne das Sonderrecht); Kennzeichnung in Liste, Editor und am Knoten; Audit jeder Änderung und jeder
+direkten Veröffentlichung; Sicherheitsmeldung an die Administration; Grenze je Minute, Notbremse und globaler Schalter;
+nie Warnentwürfe, nie soziale Netzwerke; der Testmodus des Mailversands gilt weiter. Belegt durch die Tests
+„Markieren, Erlauben und Aktivieren verlangen automation.publish, frische Bestätigung und einen Test“ und „markierter
+Ausgang veröffentlicht direkt … nach Entzug wieder nur Entwurf“ (`server/test/automations.test.ts`).
+
+**Restrisiko:** Wer ein Administrationskonto samt Passwort und zweitem Faktor übernimmt, kann Direktversand einrichten
+– wie jede andere kritische Aktion. Ausführlich: `docs/architektur.md`, E17.
 
 ### Content-Security-Policy: Abwägung bei Styles
 

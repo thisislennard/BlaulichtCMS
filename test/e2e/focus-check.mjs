@@ -349,6 +349,35 @@ async function freshSetup() {
   const kw = await admin.post('/warning-keywords', { code: 'F-TEST-1', label: 'Testeinsatz', aliases: ['test'] }).catch((e) => (console.log('  (Stichwort)', e.message), null));
   if (kw) await admin.post(`/warning-keywords/${kw.id}/questions`, { key: 'frage_eins', text: 'Testfrage?' }).catch(() => {});
   const warn = await admin.post('/warnings', { kind: 'initial' }).catch((e) => (console.log('  (Warnung)', e.message), null));
+  // Automationen: Eingang, Ausgang und ein kleiner Ablauf (Editor, Seitenleiste, Listenansicht, Dialoge)
+  let automationId = null;
+  try {
+    const ai = await admin.post('/automation-inputs', { name: 'Fokus-Eingang', kind: 'manual', config: { fields: [{ key: 'ort', label: 'Ort', example: 'Nord' }] } });
+    const ao = await admin.post('/automation-outputs', { name: 'Fokus-Hinweis', kind: 'notify', config: { roles: ['editor'], title: 'Hinweis {{ort}}' } });
+    const au = await admin.post('/automations', { name: 'Fokus-Automation', description: 'Testablauf' });
+    const d = await admin.get(`/automations/${au.id}`);
+    await admin.put(`/automations/${au.id}`, {
+      name: d.name,
+      description: d.description,
+      baseHash: d.draft_hash,
+      graph: {
+        nodes: [
+          { id: 'in', type: 'input', position: { x: 0, y: 0 }, data: { inputId: ai.id } },
+          { id: 'if', type: 'condition', position: { x: 320, y: 0 }, data: { combinator: 'and', rules: [{ field: 'ort', op: 'eq', value: 'Nord' }] } },
+          { id: 'tpl', type: 'template', position: { x: 640, y: 0 }, data: { fields: [{ key: 'text', template: '{{ort}}' }] } },
+          { id: 'out', type: 'output', position: { x: 960, y: 0 }, data: { outputId: ao.id } },
+        ],
+        edges: [
+          { id: 'e1', source: 'in', sourceHandle: 'out', target: 'if' },
+          { id: 'e2', source: 'if', sourceHandle: 'true', target: 'tpl' },
+          { id: 'e3', source: 'tpl', sourceHandle: 'out', target: 'out' },
+        ],
+      },
+    });
+    automationId = au.id;
+  } catch (e) {
+    console.log('  (Automation)', e.message);
+  }
   console.log('✔ Testdaten');
   const st = {
     adminSecret: mfa.secret,
@@ -364,6 +393,7 @@ async function freshSetup() {
     warnfeedId: wf ? (wf.connection ?? wf).id : null,
     feuersoftwareId: fsc?.id ?? null,
     warningId: warn?.id ?? null,
+    automationId,
   };
   return { admin, editor, st };
 
@@ -424,7 +454,7 @@ try {
   let n = 0;
   churn = setInterval(() => editor.post('/posts', { title: `Live-Ereignis ${++n}`, kind: 'news' }).catch(() => {}), 2000);
 
-  const routes = ['/', '/beitraege', `/beitraege/${post.id}`, `/beitraege/${sub.id}`, '/vorlagen', '/freigaben', '/medien', `/medien/${col.collection.id}`, '/medien/dateien', '/medien/papierkorb', '/medien/verwaltung', '/medien/gestaltung', ...(st.linkId ? [`/medien/gestaltung?link=${st.linkId}`] : []), '/quellen', '/banner', '/kanaele', '/warnungen', '/warnungen/pflege', ...(warn ? [`/warnungen/${warn.id}`] : []), '/verbindungen', ...(conn ? [`/verbindungen/${conn.id}`, `/verbindungen/${conn.id}?ansicht=empfangsprotokoll`] : []), ...(st.warnfeedId ? [`/verbindungen/${st.warnfeedId}`, `/verbindungen/${st.warnfeedId}?ansicht=empfangsprotokoll`] : []), ...(st.feuersoftwareId ? [`/verbindungen/${st.feuersoftwareId}`] : []), '/amtliche-warnungen', '/benutzer', '/system', '/protokolle', '/datenschutz-anfragen', '/einstellungen', '/profil', '/hilfe', '/aktivitaeten', '/benachrichtigungen'];
+  const routes = ['/', '/beitraege', `/beitraege/${post.id}`, `/beitraege/${sub.id}`, '/vorlagen', '/freigaben', '/medien', `/medien/${col.collection.id}`, '/medien/dateien', '/medien/papierkorb', '/medien/verwaltung', '/medien/gestaltung', ...(st.linkId ? [`/medien/gestaltung?link=${st.linkId}`] : []), '/quellen', '/banner', '/kanaele', '/warnungen', '/warnungen/pflege', ...(warn ? [`/warnungen/${warn.id}`] : []), '/verbindungen', ...(conn ? [`/verbindungen/${conn.id}`, `/verbindungen/${conn.id}?ansicht=empfangsprotokoll`] : []), ...(st.warnfeedId ? [`/verbindungen/${st.warnfeedId}`, `/verbindungen/${st.warnfeedId}?ansicht=empfangsprotokoll`] : []), ...(st.feuersoftwareId ? [`/verbindungen/${st.feuersoftwareId}`] : []), '/amtliche-warnungen', '/automationen', '/automationen/eingaenge', '/automationen/ausgaenge', ...(st.automationId ? [`/automationen/${st.automationId}`] : []), '/benutzer', '/system', '/protokolle', '/datenschutz-anfragen', '/einstellungen', '/profil', '/hilfe', '/aktivitaeten', '/benachrichtigungen'];
   for (const r of routes) await scanRoute(page, r);
 
   // Löschdialoge (Löschen-Knöpfe klickt der Rundgang bewusst nicht): Warnvorgang mit Begründung, Verbindung
@@ -563,6 +593,48 @@ try {
     }
   }
 
+  // Automationen-Editor: Seitenleiste je Knoten (Fläche) und Listenansicht; Dialoge der Ein- und Ausgänge
+  if (st.automationId && (!ONLY || ONLY.test('automationen'))) {
+    const route = `/automationen/${st.automationId}`;
+    for (const label of ['Fokus-Eingang', 'trifft zu', 'Felder setzen', 'Fokus-Hinweis']) {
+      await gotoRoute(page, route);
+      try {
+        await page.locator('.react-flow__node').filter({ hasText: label }).first().click({ timeout: 5000 });
+        await sleep(400);
+        await checkFields(page, `${route} › Seitenleiste „${label}“`, 'aside', new Set());
+      } catch (e) {
+        failures.push({ where: `${route} › Knoten ${label}`, field: '-', problem: `Knoten nicht wählbar: ${String(e.message).split('\n')[0]}` });
+      }
+    }
+    await gotoRoute(page, route);
+    try {
+      await page.getByRole('button', { name: 'Liste (Tastatur, Handy)' }).click({ timeout: 5000 });
+      await sleep(300);
+      await checkFields(page, `${route} › Listenansicht`, 'main', new Set());
+      await page.getByRole('button', { name: 'Bearbeiten' }).nth(1).click({ timeout: 5000 });
+      await sleep(300);
+      await checkFields(page, `${route} › Listenansicht › Seitenleiste`, 'aside', new Set());
+    } catch (e) {
+      failures.push({ where: `${route} › Listenansicht`, field: '-', problem: String(e.message).split('\n')[0] });
+    }
+    for (const [r, name] of [['/automationen/eingaenge', 'Neuer Eingang'], ['/automationen/ausgaenge', 'Neuer Ausgang']]) {
+      const kinds = r.endsWith('eingaenge') ? ['FE2-Alarm', 'Amtliche Warnung', 'RSS-Eintrag', 'Neue Uploads', 'Zeitplan', 'Manueller Start'] : ['Banner', 'Beitrag', 'E-Mail', 'App-Benachrichtigung', 'Warnentwurf vorbereiten'];
+      for (const k of kinds) {
+        await gotoRoute(page, r);
+        try {
+          await page.getByRole('button', { name }).click({ timeout: 5000 });
+          await page.locator('[role=dialog] button', { hasText: k }).first().click({ timeout: 5000 });
+          await sleep(400);
+          if (k === 'Manueller Start') await page.locator('[role=dialog]').getByRole('button', { name: 'Feld hinzufügen' }).click().catch(() => {});
+          await checkFields(page, `${r} › Dialog „${k}“`, '[role=dialog]', new Set());
+        } catch (e) {
+          failures.push({ where: `${r} › ${k}`, field: '-', problem: `Dialog nicht geöffnet: ${String(e.message).split('\n')[0]}` });
+        }
+        await closeDialogs(page, r);
+      }
+    }
+  }
+
   // Befehlspalette (Strg+K)
   await gotoRoute(page, '/');
   await page.keyboard.press('Control+k');
@@ -576,7 +648,7 @@ try {
   const mp = await mob.newPage();
   mp.on('dialog', (d) => d.accept().catch(() => {}));
   seenGlobal.clear();
-  for (const r of [`/beitraege/${post.id}`, '/profil', `/medien/${col.collection.id}`, '/medien/gestaltung', ...(warn ? [`/warnungen/${warn.id}`] : []), ...(conn ? [`/verbindungen/${conn.id}?ansicht=empfangsprotokoll`] : [])]) await scanRoute(mp, r, { buttons: false });
+  for (const r of [`/beitraege/${post.id}`, '/profil', `/medien/${col.collection.id}`, '/medien/gestaltung', ...(warn ? [`/warnungen/${warn.id}`] : []), ...(conn ? [`/verbindungen/${conn.id}?ansicht=empfangsprotokoll`] : []), ...(st.automationId ? [`/automationen/${st.automationId}`] : [])]) await scanRoute(mp, r, { buttons: false });
 
   const uniqueFields = new Set(tested.map((t) => `${t.where}|${t.field}`)).size;
   const where = new Set(tested.map((t) => t.where)).size;
