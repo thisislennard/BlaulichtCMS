@@ -79,7 +79,7 @@ export async function enqueueBannerJob(db: any, b: any, action: 'upsert' | 'dele
 }
 
 export async function bannerRoutes(app: FastifyInstance) {
-  app.get('/banners', { preHandler: requireAuth('post.read') }, async () => {
+  app.get('/banners', { preHandler: requireAuth('banner.view') }, async () => {
     const rows = await many<any>(
       `SELECT b.*, s.name AS site_name, u.name AS approved_by_name,
               j.status AS job_status, j.revision AS job_revision, j.action AS job_action, j.result_at AS job_result_at, j.error AS job_error
@@ -102,7 +102,7 @@ export async function bannerRoutes(app: FastifyInstance) {
     }));
   });
 
-  app.post('/banners', { preHandler: requireAuth('post.edit') }, async (req) => {
+  app.post('/banners', { preHandler: requireAuth('banner.edit') }, async (req) => {
     const v = input.parse(req.body);
     const site = await one<any>(`SELECT status FROM wp_sites WHERE id = $1`, [v.siteId]);
     if (!site || site.status === 'revoked') throw badRequest('Die Website ist nicht verfügbar.');
@@ -117,7 +117,7 @@ export async function bannerRoutes(app: FastifyInstance) {
     return bannerPayload(b);
   });
 
-  app.put('/banners/:id', { preHandler: requireAuth('post.edit') }, async (req) => {
+  app.put('/banners/:id', { preHandler: requireAuth('banner.edit') }, async (req) => {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
     const v = input.parse(req.body);
     const res = await tx(async (db) => {
@@ -142,7 +142,7 @@ export async function bannerRoutes(app: FastifyInstance) {
     return { changed: res.changed, ...bannerPayload(res.banner) };
   });
 
-  app.post('/banners/:id/submit', { preHandler: requireAuth('post.edit') }, async (req) => {
+  app.post('/banners/:id/submit', { preHandler: requireAuth('banner.edit') }, async (req) => {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
     const b = await one<any>(`UPDATE banners SET submitted_at = now(), submitted_by = $2 WHERE id = $1 AND ended_at IS NULL RETURNING *`, [id, req.auth!.user?.id ?? null]);
     if (!b) throw notFound();
@@ -150,7 +150,7 @@ export async function bannerRoutes(app: FastifyInstance) {
     return { ok: true };
   });
 
-  app.post('/banners/:id/approve', { preHandler: requireAuth('post.approve') }, async (req) => {
+  app.post('/banners/:id/approve', { preHandler: requireAuth('approval.banner') }, async (req) => {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
     const { contentHash } = z.object({ contentHash: z.string().length(64) }).parse(req.body);
     const s = await getSettings();
@@ -175,7 +175,7 @@ export async function bannerRoutes(app: FastifyInstance) {
     return { ok: true };
   });
 
-  app.post('/banners/:id/publish', { preHandler: requireAuth('post.publish') }, async (req) => {
+  app.post('/banners/:id/publish', { preHandler: requireAuth('banner.publish') }, async (req) => {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
     const { contentHash } = z.object({ contentHash: z.string().length(64) }).parse(req.body);
     const job = await tx(async (db) => {
@@ -195,7 +195,7 @@ export async function bannerRoutes(app: FastifyInstance) {
   });
 
   /** Sofort beenden (vor dem geplanten Ablauf). Braucht keine Freigabe – Entfernen ist immer erlaubt. */
-  app.post('/banners/:id/end', { preHandler: requireAuth('post.publish') }, async (req) => {
+  app.post('/banners/:id/end', { preHandler: requireAuth('banner.publish') }, async (req) => {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
     await tx(async (db) => {
       const b = await one<any>(`UPDATE banners SET ended_at = now() WHERE id = $1 AND ended_at IS NULL RETURNING *`, [id], db);

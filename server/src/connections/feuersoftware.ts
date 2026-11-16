@@ -380,7 +380,7 @@ async function recordFailure(c: Connection, err: ConnectError) {
   );
   log('warn', 'feuersoftware', `Abruf „${c.name}“ fehlgeschlagen: ${err.message}`);
   if (r?.consecutive_failures === ALERT_AFTER_FAILURES) {
-    await notify({ kind: 'error', title: `Feuersoftware Connect „${c.name}“ gestört`, body: `Seit ${ALERT_AFTER_FAILURES} Abrufen keine Verbindung: ${err.message}`, link: `/verbindungen/${c.id}`, permission: 'connection.manage' });
+    await notify({ kind: 'error', title: `Feuersoftware Connect „${c.name}“ gestört`, body: `Seit ${ALERT_AFTER_FAILURES} Abrufen keine Verbindung: ${err.message}`, link: `/verbindungen/${c.id}`, permission: 'connection.configure' });
   }
 }
 
@@ -393,7 +393,7 @@ async function recordSuccess(c: Connection) {
   if ((before?.consecutive_failures ?? 0) >= ALERT_AFTER_FAILURES) {
     // Störungsmeldung aufheben und Entwarnung geben
     await pool.query(`DELETE FROM notifications WHERE link = $1 AND title LIKE 'Feuersoftware Connect %gestört'`, [`/verbindungen/${c.id}`]);
-    await notify({ kind: 'success', title: `Feuersoftware Connect „${c.name}“ wieder erreichbar`, link: `/verbindungen/${c.id}`, permission: 'connection.manage' });
+    await notify({ kind: 'success', title: `Feuersoftware Connect „${c.name}“ wieder erreichbar`, link: `/verbindungen/${c.id}`, permission: 'connection.configure' });
     log('info', 'feuersoftware', `Abruf „${c.name}“ wieder erfolgreich`);
   }
 }

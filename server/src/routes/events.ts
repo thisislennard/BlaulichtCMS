@@ -3,6 +3,7 @@ import type { FastifyInstance, FastifyReply } from 'fastify';
 import { config } from '../config.js';
 import { requireAuth } from '../auth/context.js';
 import { log } from '../lib/log.js';
+import { invalidateRoles } from '../auth/roles.js';
 
 /**
  * Live-Status per Server-Sent Events. Ereignisse enthalten nur den Namen der geänderten Tabelle –
@@ -30,6 +31,8 @@ async function ensureListener() {
     const c = new pg.Client({ connectionString: config.databaseUrl, application_name: 'blaulichtcms-api-events' });
     c.on('notification', (n) => {
       if (n.payload) pending.add(n.payload);
+      // Rollen geändert (auch von einem anderen Prozess): Rechte ab der nächsten Anfrage neu laden
+      if (n.payload === 'roles') invalidateRoles();
       // Mehrere Änderungen kurz hintereinander zu einem Ereignis bündeln
       if (!flushTimer) flushTimer = setTimeout(flush, 250);
     });

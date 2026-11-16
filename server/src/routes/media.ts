@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { many, one, pool, tx } from '../db/pool.js';
-import { requireAuth } from '../auth/context.js';
+import { requireAnyAuth, requireAuth } from '../auth/context.js';
 import { audit, type Actor } from '../lib/audit.js';
 import { checkDownloadRate } from '../lib/security-alerts.js';
 import { aad, decrypt, encrypt, randomToken, sha256Hex } from '../lib/crypto.js';
@@ -87,11 +87,11 @@ export async function linkPayload(req: FastifyRequest, l: any) {
   };
 }
 
-const ORIGINALS_FORBIDDEN = 'Originale (mit möglichen Standortdaten) dürfen nur Personen mit „Medien verwalten“ laden. Die öffentliche Fassung ist ohne Standort.';
+const ORIGINALS_FORBIDDEN = 'Originale (mit möglichen Standortdaten) dürfen nur Personen mit dem Recht „Originale herunterladen“ laden. Die öffentliche Fassung ist ohne Standort.';
 
-/** Einen Sammeldownload sehen/laden darf, wer ihn angelegt hat, sowie wer „Medien verwalten“ hat (#94). */
+/** Einen Sammeldownload sehen/laden darf, wer ihn angelegt hat, sowie wer „Originale herunterladen“ hat (#94). */
 function mayAccessExport(req: FastifyRequest, ex: { created_by: string | null }) {
-  if (req.auth!.permissions.has('media.manage')) return true;
+  if (req.auth!.permissions.has('media.download_original')) return true;
   return !!ex.created_by && ex.created_by === req.auth!.user?.id;
 }
 
@@ -501,7 +501,7 @@ export async function loadPublicLink(token: string, ip?: string) {
 export async function mediaRoutes(app: FastifyInstance) {
   /* ------------------------------ Sammlungen (angemeldet) ------------------------------ */
 
-  app.get('/collections', { preHandler: requireAuth('media.read') }, async (req) => {
+  app.get('/collections', { preHandler: requireAuth('media.view') }, async (req) => {
     const q = z
       .object({
         archived: z.enum(['true', 'false', '1', '0']).transform((v) => v === 'true' || v === '1').default(false),
@@ -539,7 +539,7 @@ export async function mediaRoutes(app: FastifyInstance) {
     return { items: rows, total, page: q.page, pages: Math.max(1, Math.ceil(total / q.perPage)) };
   });
 
-  app.post('/collections', { preHandler: requireAuth('media.manage') }, async (req) => {
+  app.post('/collections', { preHandler: requireAuth('media.collections') }, async (req) => {
     const body = z
       .object({
         title: z.string().trim().min(2).max(120),
@@ -563,11 +563,11 @@ export async function mediaRoutes(app: FastifyInstance) {
     return { collection: c, link: l ? await linkPayload(req, l) : null };
   });
 
-  app.get('/collections/:id', { preHandler: requireAuth('media.read') }, async (req) => {
+  app.get('/collections/:id', { preHandler: requireAuth('media.view') }, async (req) => {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
     const c = await one<any>(`SELECT c.*, p.title AS post_title, u.name AS created_by_name FROM collections c LEFT JOIN posts p ON p.id = c.post_id LEFT JOIN users u ON u.id = c.created_by WHERE c.id = $1`, [id]);
     // Sammlung im Papierkorb: nur für „Medien verwalten“ sichtbar (zum Wiederherstellen)
-    if (!c || (c.deleted_at && !req.auth!.permissions.has('media.manage'))) throw notFound('Sammlung nicht gefunden.');
+    if (!c || (c.deleted_at && !req.auth!.permissions.has('media.trash'))) throw notFound('Sammlung nicht gefunden.');
     const media = await many<any>(
       `SELECT m.*, u.name AS uploaded_by_name,
               (SELECT array_agg(t.name ORDER BY lower(t.name)) FROM media_tag_links l JOIN media_tags t ON t.id = l.tag_id WHERE l.media_id = m.id) AS tags
@@ -578,7 +578,7 @@ export async function mediaRoutes(app: FastifyInstance) {
       `SELECT f.id, f.parent_id, f.name, f.sort_order, f.archived_at FROM collection_folders f WHERE f.collection_id = $1 AND f.deleted_at IS NULL ORDER BY f.sort_order, lower(f.name)`,
       [id],
     );
-    const links = req.auth!.permissions.has('media.manage')
+    const links = req.auth!.permissions.has('media.links')
       ? await many<any>(
           `SELECT l.*, u.name AS created_by_name,
                   (SELECT COALESCE(sum(m.size_bytes),0) FROM media m WHERE m.upload_link_id = l.id AND m.status <> 'rejected') AS bytes,
@@ -597,7 +597,7 @@ export async function mediaRoutes(app: FastifyInstance) {
     };
   });
 
-  app.patch('/collections/:id', { preHandler: requireAuth('media.manage') }, async (req) => {
+  app.patch('/collections/:id', { preHandler: requireAuth('media.collections') }, async (req) => {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
     const body = z
       .object({
@@ -630,7 +630,7 @@ export async function mediaRoutes(app: FastifyInstance) {
    * Sammlung endgültig löschen (#97): Originale, Vorschauen, öffentliche Fassungen, Sammeldownloads, Upload-Links und
    * -Sitzungen. Dateien in der aktuellen Fassung eines nicht archivierten Beitrags blockieren (409 mit Beitragstiteln).
    */
-  app.delete('/collections/:id', { preHandler: requireAuth('media.manage') }, async (req) => {
+  app.delete('/collections/:id', { preHandler: requireAuth('media.trash') }, async (req) => {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
     const { permanent } = z.object({ permanent: z.enum(['1', 'true']).optional() }).parse(req.query ?? {});
     // Standard: Papierkorb. Sofort endgültig (ohne Papierkorb) nur mit „Medien administrieren“
@@ -643,7 +643,7 @@ export async function mediaRoutes(app: FastifyInstance) {
     return { ok: true, media: r.media, exports: r.exports };
   });
 
-  app.post('/collections/:id/links', { preHandler: requireAuth('media.manage') }, async (req) => {
+  app.post('/collections/:id/links', { preHandler: requireAuth('media.links') }, async (req) => {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
     const body = linkInputSchema.parse(req.body ?? {});
     const c = await one<any>('SELECT id, archived_at FROM collections WHERE id = $1', [id]);
@@ -661,7 +661,7 @@ export async function mediaRoutes(app: FastifyInstance) {
     return l;
   };
 
-  app.post('/upload-links/:id/revoke', { preHandler: requireAuth('media.manage') }, async (req) => {
+  app.post('/upload-links/:id/revoke', { preHandler: requireAuth('media.links') }, async (req) => {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
     const l = await one<any>(`UPDATE upload_links SET revoked_at = COALESCE(revoked_at, now()), revoked_by = COALESCE(revoked_by, $2) WHERE id = $1 RETURNING *`, [id, req.auth!.user?.id ?? null]);
     if (!l) throw notFound('Link nicht gefunden.');
@@ -670,7 +670,7 @@ export async function mediaRoutes(app: FastifyInstance) {
   });
 
   /* Pausieren: niemand kann hochladen; nach „Fortsetzen“ gilt der Link (auch gedruckt) wieder */
-  app.post('/upload-links/:id/pause', { preHandler: requireAuth('media.manage') }, async (req) => {
+  app.post('/upload-links/:id/pause', { preHandler: requireAuth('media.links') }, async (req) => {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
     await changeableLink(id);
     const l = await one<any>(`UPDATE upload_links SET paused_at = COALESCE(paused_at, now()), paused_by = COALESCE(paused_by, $2) WHERE id = $1 RETURNING *`, [id, req.auth!.user?.id ?? null]);
@@ -678,7 +678,7 @@ export async function mediaRoutes(app: FastifyInstance) {
     return linkPayload(req, l);
   });
 
-  app.post('/upload-links/:id/resume', { preHandler: requireAuth('media.manage') }, async (req) => {
+  app.post('/upload-links/:id/resume', { preHandler: requireAuth('media.links') }, async (req) => {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
     const cur = await changeableLink(id);
     if (new Date(cur.expires_at).getTime() <= Date.now()) throw badRequest('Der Link ist abgelaufen – bitte zuerst verlängern.');
@@ -688,7 +688,7 @@ export async function mediaRoutes(app: FastifyInstance) {
   });
 
   /* Verlängern um eine Dauer (ab dem bisherigen Ablauf, bei abgelaufenem Link ab jetzt) */
-  app.post('/upload-links/:id/extend', { preHandler: requireAuth('media.manage') }, async (req) => {
+  app.post('/upload-links/:id/extend', { preHandler: requireAuth('media.links') }, async (req) => {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
     const { hours } = z.object({ hours: z.number().int().min(1).max(87600) }).parse(req.body ?? {});
     const cur = await changeableLink(id);
@@ -700,7 +700,7 @@ export async function mediaRoutes(app: FastifyInstance) {
   });
 
   /* Bezeichnung, Begrüßungstext und Ablauftermin („Bis Termin“, auch früher) ändern */
-  app.patch('/upload-links/:id', { preHandler: requireAuth('media.manage') }, async (req) => {
+  app.patch('/upload-links/:id', { preHandler: requireAuth('media.links') }, async (req) => {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
     const body = z
       .object({ label: z.string().trim().max(80).optional(), welcomeText: z.string().max(2000).optional(), expiresAt: z.iso.datetime({ offset: true }).optional(), folderId: z.uuid().nullable().optional(), ...linkOptionsSchema })
@@ -723,7 +723,7 @@ export async function mediaRoutes(app: FastifyInstance) {
   });
 
   /* Angaben aller Uploads dieses Links löschen (Name, E-Mail, Ort, Datum, Hinweis) – Dateien bleiben */
-  app.post('/upload-links/:id/clear-uploader', { preHandler: requireAuth('media.manage') }, async (req) => {
+  app.post('/upload-links/:id/clear-uploader', { preHandler: requireAuth('media.links') }, async (req) => {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
     const l = await one<any>(`SELECT id, label, collection_id FROM upload_links WHERE id = $1`, [id]);
     if (!l) throw notFound('Link nicht gefunden.');
@@ -734,7 +734,7 @@ export async function mediaRoutes(app: FastifyInstance) {
   });
 
   /* Neu erzeugen: neuer Token mit denselben Einstellungen – alter Link, QR-Code und Aushang sind sofort ungültig */
-  app.post('/upload-links/:id/regenerate', { preHandler: requireAuth('media.manage') }, async (req) => {
+  app.post('/upload-links/:id/regenerate', { preHandler: requireAuth('media.links') }, async (req) => {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
     await changeableLink(id);
     const s = await getSettings();
@@ -751,7 +751,7 @@ export async function mediaRoutes(app: FastifyInstance) {
   });
 
   /* Upload durch angemeldete Personen (Redaktion, Medienverwaltung) */
-  app.post('/collections/:id/media', { preHandler: requireAuth('media.manage'), config: { rateLimit: { max: 120, timeWindow: '1 minute' } } }, async (req) => {
+  app.post('/collections/:id/media', { preHandler: requireAuth('media.upload'), config: { rateLimit: { max: 120, timeWindow: '1 minute' } } }, async (req) => {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
     const c = await one<any>('SELECT * FROM collections WHERE id = $1', [id]);
     if (!c) throw notFound('Sammlung nicht gefunden.');
@@ -766,7 +766,7 @@ export async function mediaRoutes(app: FastifyInstance) {
    * Mit `versions` (Sichtungsdialog) gilt die Entscheidung nur, wenn niemand die Datei inzwischen anders gesichtet
    * hat (409 statt „letzter gewinnt“, wie die Versionsprüfung in LiFeOS).
    */
-  app.post('/media/selection', { preHandler: requireAuth('media.manage') }, async (req) => {
+  app.post('/media/selection', { preHandler: requireAuth('media.review') }, async (req) => {
     const body = z
       .object({ ids: z.array(z.uuid()).min(1).max(500), selection: z.enum(['pending', 'selected', 'skipped', 'on_hold']), versions: z.record(z.string(), z.number().int().min(0)).optional() })
       .parse(req.body);
@@ -789,7 +789,7 @@ export async function mediaRoutes(app: FastifyInstance) {
   });
 
   /* Anzeigename, Beschreibung und interne Notiz (nur intern; der öffentliche Dateiname bleibt neutral) */
-  app.patch('/media/:id', { preHandler: requireAuth('media.manage') }, async (req) => {
+  app.patch('/media/:id', { preHandler: requireAuth('media.organize') }, async (req) => {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
     const body = z
       .object({ displayName: z.string().trim().max(200).optional(), description: z.string().trim().max(2000).optional(), internalNote: z.string().trim().max(2000).optional() })
@@ -805,7 +805,7 @@ export async function mediaRoutes(app: FastifyInstance) {
   });
 
   /* Details je Datei: Prüfsumme, Duplikate, Upload-Angaben, Beiträge, die die Datei verwenden */
-  app.get('/media/:id/details', { preHandler: requireAuth('media.read') }, async (req) => {
+  app.get('/media/:id/details', { preHandler: requireAuth('media.view') }, async (req) => {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
     const m = await one<any>(
       `SELECT m.*, u.name AS uploaded_by_name, c.title AS collection_title, l.label AS link_label, s.name AS selection_by_name
@@ -828,8 +828,8 @@ export async function mediaRoutes(app: FastifyInstance) {
     return {
       media: mediaPayload(m),
       // Angaben der Hochladenden (personenbezogen) nur mit „Medien verwalten“
-      uploader: req.auth!.permissions.has('media.manage') ? (m.uploader ?? null) : null,
-      consent_at: req.auth!.permissions.has('media.manage') ? (m.consent_at ?? null) : null,
+      uploader: req.auth!.permissions.has('media.review') ? (m.uploader ?? null) : null,
+      consent_at: req.auth!.permissions.has('media.review') ? (m.consent_at ?? null) : null,
       sha256: m.sha256,
       collection_title: m.collection_title,
       link_label: m.link_label ?? null,
@@ -842,10 +842,11 @@ export async function mediaRoutes(app: FastifyInstance) {
   });
 
   /* Sammelaktionen für markierte Dateien (Mehrfachauswahl wie in LiFeOS) */
-  app.post('/media/bulk', { preHandler: requireAuth('media.manage'), config: { rateLimit: { max: 60, timeWindow: '1 minute' } } }, async (req) => {
+  app.post('/media/bulk', { preHandler: requireAnyAuth('media.review', 'media.trash'), config: { rateLimit: { max: 60, timeWindow: '1 minute' } } }, async (req) => {
     const body = z
       .object({ ids: z.array(z.uuid()).min(1).max(1000), action: z.enum(['selection', 'delete']), selection: z.enum(['pending', 'selected', 'skipped', 'on_hold']).optional() })
       .parse(req.body);
+    if (!req.auth!.permissions.has(body.action === 'delete' ? 'media.trash' : 'media.review')) throw forbidden();
     if (body.action === 'selection') {
       if (!body.selection) throw badRequest('Bitte einen Sichtungsstand wählen.');
       const r = await pool.query(
@@ -859,7 +860,7 @@ export async function mediaRoutes(app: FastifyInstance) {
     return { updated: r.deleted };
   });
 
-  app.post('/collections/:id/order', { preHandler: requireAuth('media.manage') }, async (req) => {
+  app.post('/collections/:id/order', { preHandler: requireAuth('media.organize') }, async (req) => {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
     const { ids } = z.object({ ids: z.array(z.uuid()).min(1).max(2000) }).parse(req.body);
     await tx(async (db) => {
@@ -886,13 +887,13 @@ export async function mediaRoutes(app: FastifyInstance) {
   const exportOptions = { variant: z.enum(['public', 'original']).default('public'), withFolders: z.boolean().default(true), withCsv: z.boolean().default(false) };
 
   /* Sammeldownload als ZIP (im Hintergrund, läuft nach Ablauf der Frist ab): ausgewählte, alle, markierte oder ein Ordner */
-  app.post('/collections/:id/exports', { preHandler: requireAuth('media.read') }, async (req) => {
+  app.post('/collections/:id/exports', { preHandler: requireAuth('media.export') }, async (req) => {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
     const body = z
       .object({ selection: z.enum(['selected', 'all', 'ids', 'folder']).default('selected'), ids: z.array(z.uuid()).max(2000).optional(), folderId: z.uuid().nullable().optional(), ...exportOptions })
       .parse(req.body ?? {});
     // Originale enthalten mögliche Standort- und Gerätedaten: wie beim Einzeldownload nur mit „Medien verwalten“ (#94)
-    if (body.variant === 'original' && !req.auth!.permissions.has('media.manage')) throw forbidden(ORIGINALS_FORBIDDEN);
+    if (body.variant === 'original' && !req.auth!.permissions.has('media.download_original')) throw forbidden(ORIGINALS_FORBIDDEN);
     const c = await one<any>('SELECT id, title FROM collections WHERE id = $1 AND deleted_at IS NULL', [id]);
     if (!c) throw notFound('Sammlung nicht gefunden.');
     // Ordner samt Unterordnern (NULL = oberste Ebene ohne Ordner)
@@ -914,9 +915,9 @@ export async function mediaRoutes(app: FastifyInstance) {
   });
 
   /* Sammlungsübergreifender ZIP-Export: markierte Dateien aus der Mediensuche */
-  app.post('/exports', { preHandler: requireAuth('media.read') }, async (req) => {
+  app.post('/exports', { preHandler: requireAuth('media.export') }, async (req) => {
     const body = z.object({ ids: z.array(z.uuid()).min(1).max(2000), ...exportOptions }).parse(req.body ?? {});
-    if (body.variant === 'original' && !req.auth!.permissions.has('media.manage')) throw forbidden(ORIGINALS_FORBIDDEN);
+    if (body.variant === 'original' && !req.auth!.permissions.has('media.download_original')) throw forbidden(ORIGINALS_FORBIDDEN);
     const rows = await many<any>(
       `SELECT m.id, m.collection_id FROM media m JOIN collections c ON c.id = m.collection_id WHERE m.id = ANY($1) AND m.status = 'ready' AND m.deleted_at IS NULL AND c.deleted_at IS NULL`,
       [body.ids],
@@ -926,7 +927,7 @@ export async function mediaRoutes(app: FastifyInstance) {
     return requestExport(req, { collectionId: cols.size === 1 ? [...cols][0] : null, label: 'Auswahl', ids: rows.map((r) => r.id), variant: body.variant, withFolders: body.withFolders, withCsv: body.withCsv, audit: { sammlungen: cols.size } });
   });
 
-  app.get('/exports/:id', { preHandler: requireAuth('media.read') }, async (req) => {
+  app.get('/exports/:id', { preHandler: requireAuth('media.export') }, async (req) => {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
     const ex = await one<any>('SELECT id, status, file_count, size_bytes, error, created_at, finished_at, expires_at, variant, created_by FROM exports WHERE id = $1', [id]);
     if (!ex || !mayAccessExport(req, ex)) throw notFound();
@@ -934,12 +935,12 @@ export async function mediaRoutes(app: FastifyInstance) {
     return { ...rest, size_bytes: ex.size_bytes ? Number(ex.size_bytes) : null };
   });
 
-  app.get('/exports/:id/download', { preHandler: requireAuth('media.read') }, async (req, reply) => {
+  app.get('/exports/:id/download', { preHandler: requireAuth('media.export') }, async (req, reply) => {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
     const ex = await one<any>(`SELECT e.*, COALESCE(c.title, NULLIF(e.label, ''), 'medien') AS title FROM exports e LEFT JOIN collections c ON c.id = e.collection_id WHERE e.id = $1`, [id]);
     if (!ex || !mayAccessExport(req, ex)) throw notFound('Der Download ist nicht (mehr) verfügbar.');
     // Rechte beim Download erneut prüfen – sie können sich seit dem Anlegen geändert haben (#94)
-    if (ex.variant === 'original' && !req.auth!.permissions.has('media.manage')) throw forbidden(ORIGINALS_FORBIDDEN);
+    if (ex.variant === 'original' && !req.auth!.permissions.has('media.download_original')) throw forbidden(ORIGINALS_FORBIDDEN);
     if (ex.status !== 'ready' || new Date(ex.expires_at) < new Date()) throw notFound('Der Download ist nicht (mehr) verfügbar.');
     await audit(req.auth!.actor, 'media.export_downloaded', { type: 'collection', id: ex.collection_id, label: ex.title }, { dateien: ex.file_count, fassung: ex.variant });
     const name = `${ex.title.replace(/[^\p{L}\p{N} _-]/gu, '').trim() || 'medien'}-${ex.variant === 'public' ? 'oeffentlich' : 'originale'}.zip`;
@@ -951,7 +952,7 @@ export async function mediaRoutes(app: FastifyInstance) {
    * unkenntlich gemachte Bereiche und Zuschnitt (Bilder), ohne Ton (Videos). Erzeugt eine neue öffentliche Fassung;
    * das Original bleibt unverändert.
    */
-  app.patch('/media/:id/privacy', { preHandler: requireAuth('media.manage'), config: { rateLimit: { max: 60, timeWindow: '1 minute' } } }, async (req) => {
+  app.patch('/media/:id/privacy', { preHandler: requireAuth('media.redact'), config: { rateLimit: { max: 60, timeWindow: '1 minute' } } }, async (req) => {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
     const body = privacyInput.parse(req.body ?? {});
     const m = await one<any>(`SELECT * FROM media WHERE id = $1 AND deleted_at IS NULL AND status = 'ready'`, [id]);
@@ -1003,7 +1004,7 @@ export async function mediaRoutes(app: FastifyInstance) {
     return { media: mediaPayload(fresh), rendering };
   });
 
-  app.delete('/media/:id', { preHandler: requireAuth('media.manage') }, async (req) => {
+  app.delete('/media/:id', { preHandler: requireAuth('media.trash') }, async (req) => {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
     // In den Papierkorb (wiederherstellbar bis zur Frist); endgültig löscht „Medien administrieren“ oder die Löschfrist
     const r = await trashMedia([id], req.auth!.actor, req.auth!.user?.id ?? null);
@@ -1012,13 +1013,13 @@ export async function mediaRoutes(app: FastifyInstance) {
   });
 
   /* Dateien ausliefern – nur geprüfte Medien, nur mit Recht */
-  app.get('/media/:id/:variant', { preHandler: requireAuth('media.read') }, async (req, reply) => {
+  app.get('/media/:id/:variant', { preHandler: requireAuth('media.view') }, async (req, reply) => {
     const { id, variant } = z.object({ id: z.uuid(), variant: z.enum(['preview', 'original', 'public']) }).parse(req.params);
     // Vorschau einer Datei im Papierkorb nur mit „Medien verwalten“ (Übersicht des Papierkorbs)
-    const trashPreview = variant === 'preview' && req.auth!.permissions.has('media.manage');
+    const trashPreview = variant === 'preview' && req.auth!.permissions.has('media.trash');
     const m = await one<any>(`SELECT * FROM media WHERE id = $1 AND (deleted_at IS NULL OR $2) AND status = 'ready'`, [id, trashPreview]);
     if (!m) throw notFound('Datei nicht gefunden oder noch nicht geprüft.');
-    if (variant === 'original' && !req.auth!.permissions.has('media.manage')) throw forbidden(ORIGINALS_FORBIDDEN);
+    if (variant === 'original' && !req.auth!.permissions.has('media.download_original')) throw forbidden(ORIGINALS_FORBIDDEN);
     if (variant === 'preview') {
       if (!m.has_preview) throw notFound('Keine Vorschau vorhanden.');
       return sendFileResponse(reply, mediaPaths.preview(id), 'image/webp', undefined, { immutable: true });
@@ -1072,7 +1073,7 @@ export async function mediaRoutes(app: FastifyInstance) {
       // Informationspflichten (Art. 13 DSGVO, #96) – immer sichtbar auf der Upload-Seite
       privacy: privacyInfo(s),
       // Hinweis nur für angemeldete Verwaltung: Pflichtangaben fehlen noch
-      setup_hint: privacyIncomplete(s) && !!req.auth && (req.auth.permissions.has('media.manage') || req.auth.permissions.has('system.manage')),
+      setup_hint: privacyIncomplete(s) && !!req.auth && (req.auth.permissions.has('media.links') || req.auth.permissions.has('settings.privacy')),
     };
   });
 

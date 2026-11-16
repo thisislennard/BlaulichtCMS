@@ -165,7 +165,7 @@ async function main() {
       ]);
       if (status === 'fehler') {
         const { notify } = await import('./lib/notify.js');
-        await notify({ kind: 'error', title: 'Volume-Sicherung fehlgeschlagen', body: text, link: '/einstellungen#sicherung', permission: 'system.manage' });
+        await notify({ kind: 'error', title: 'Volume-Sicherung fehlgeschlagen', body: text, link: '/einstellungen#sicherung', permission: 'backup.manage' });
       }
       console.log('Gemeldet.');
       break;
@@ -190,7 +190,7 @@ async function main() {
       if (!user) throw new Error('Konto nicht gefunden.');
       await audit({ ...SYSTEM_ACTOR, name: 'Kommandozeile' }, 'user.mfa_reset', { type: 'user', id: user.id, label: user.email });
       const { notifyAffectedUser, securityAlert } = await import('./lib/security-alerts.js');
-      await securityAlert('mfa_reset', { title: `Zwei-Faktor zurückgesetzt: ${user.email}`, body: 'Über die Kommandozeile im Container.', link: '/benutzer', permission: 'user.manage', kind: 'info' });
+      await securityAlert('mfa_reset', { title: `Zwei-Faktor zurückgesetzt: ${user.email}`, body: 'Über die Kommandozeile im Container.', link: '/benutzer', permission: 'user.lock', kind: 'info' });
       await notifyAffectedUser(user.id, 'Deine Zwei-Faktor-Anmeldung wurde zurückgesetzt', 'Über die Kommandozeile des Servers. Warst du das nicht, bitte sofort die Administration informieren.');
       console.log(`Zwei-Faktor-Anmeldung für ${user.email} zurückgesetzt. Beim nächsten Login wird sie neu eingerichtet.`);
       break;

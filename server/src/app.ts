@@ -55,6 +55,8 @@ import { auditThrottled } from './lib/audit.js';
 import { log } from './lib/log.js';
 import { authRoutes } from './routes/auth.js';
 import { userRoutes } from './routes/users.js';
+import { roleRoutes } from './routes/roles.js';
+import { collectRouteAccess, type RouteEntry } from './auth/route-access.js';
 import { systemRoutes } from './routes/system.js';
 import { dashboardRoutes } from './routes/dashboard.js';
 import { mediaRoutes } from './routes/media.js';
@@ -115,6 +117,13 @@ async function assertNotMaintenance() {
   if (m) throw new AppError(503, 'maintenance', `Wartung: ${m.reason || 'Update wird vorbereitet'}. Änderungen sind kurz nicht möglich.`);
 }
 
+declare module 'fastify' {
+  interface FastifyInstance {
+    /** Alle Routen unter /api/v1 mit ihrer Zugriffsangabe (auth/route-access.ts) */
+    routeAccess: RouteEntry[];
+  }
+}
+
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
     logger: false,
@@ -166,6 +175,8 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(multipart, { limits: { fileSize: 4 * 1024 * 1024 * 1024, files: 1, fields: 10 } });
 
   app.decorateRequest('auth', null);
+  // Routentabelle mit Zugriffsangaben (Tests: Vollständigkeit und 403-Matrix)
+  app.decorate('routeAccess', collectRouteAccess(app));
 
   app.setErrorHandler(async (err: any, req, reply) => {
     if (err instanceof AppError && err.status === 403 && DENIED_AUDIT_CODES.has(err.code) && req.url.startsWith('/api/')) await auditDenied(req, err.code);
@@ -215,6 +226,7 @@ export async function buildApp(): Promise<FastifyInstance> {
     async (api) => {
       await api.register(authRoutes);
       await api.register(userRoutes);
+      await api.register(roleRoutes);
       await api.register(systemRoutes);
       await api.register(dashboardRoutes);
       await api.register(mediaRoutes);

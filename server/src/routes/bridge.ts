@@ -178,7 +178,7 @@ async function revokeSite(db: Queryable, id: string, revokedBy: string | null, r
 /** Verwaltung informieren, dass automatische Banner wegen eines Website-Widerrufs abgeschaltet wurden (#168). */
 async function notifyFeedsDisabled(siteName: string, feeds: { id: string; name: string }[]) {
   for (const f of feeds) {
-    await notify({ kind: 'warning', title: `Warnfeed „${f.name}“: automatische Banner abgeschaltet`, body: `Die Kopplung der Website „${siteName}“ wurde beendet. Bitte eine gekoppelte Website wählen und automatische Banner wieder einschalten.`, link: `/verbindungen/${f.id}`, permission: 'connection.manage' });
+    await notify({ kind: 'warning', title: `Warnfeed „${f.name}“: automatische Banner abgeschaltet`, body: `Die Kopplung der Website „${siteName}“ wurde beendet. Bitte eine gekoppelte Website wählen und automatische Banner wieder einschalten.`, link: `/verbindungen/${f.id}`, permission: 'connection.configure' });
   }
 }
 
@@ -229,7 +229,7 @@ function jobPayload(p: any, media: any[], base: string) {
 export async function bridgeRoutes(app: FastifyInstance) {
   /* ----------------------------- Verwaltung in BlaulichtCMS ----------------------------- */
 
-  app.get('/sites', { preHandler: requireAuth('post.read') }, async () => {
+  app.get('/sites', { preHandler: requireAuth('channel.view') }, async () => {
     const rows = await many<any>(
       `SELECT s.*,
               (SELECT count(*)::int FROM publications p WHERE p.site_id = s.id AND p.status IN ('queued','sent','unknown')) AS open_jobs,
@@ -239,7 +239,7 @@ export async function bridgeRoutes(app: FastifyInstance) {
     return rows.map(sitePayload);
   });
 
-  app.post('/sites', { preHandler: requireAuth('channel.manage') }, async (req) => {
+  app.post('/sites', { preHandler: requireAuth('channel.sites') }, async (req) => {
     const body = z.object({ name: z.string().trim().min(2).max(80) }).parse(req.body);
     const code = pairingCode();
     const s = await one<any>(
@@ -250,7 +250,7 @@ export async function bridgeRoutes(app: FastifyInstance) {
     return { site: sitePayload(s), pairingCode: code, blaulichtcmsUrl: await publicBase(req) };
   });
 
-  app.post('/sites/:id/pairing-code', { preHandler: requireAuth('channel.manage') }, async (req) => {
+  app.post('/sites/:id/pairing-code', { preHandler: requireAuth('channel.sites') }, async (req) => {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
     const code = pairingCode();
     const s = await one<any>(
@@ -262,7 +262,7 @@ export async function bridgeRoutes(app: FastifyInstance) {
     return { site: sitePayload(s), pairingCode: code, blaulichtcmsUrl: await publicBase(req) };
   });
 
-  app.post('/sites/:id/revoke', { preHandler: requireAuth('channel.manage') }, async (req) => {
+  app.post('/sites/:id/revoke', { preHandler: requireAuth('channel.sites') }, async (req) => {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
     const s = await tx(async (db) => {
       const s = await revokeSite(db, id, req.auth!.user?.id ?? null, 'Kopplung widerrufen');
@@ -275,7 +275,7 @@ export async function bridgeRoutes(app: FastifyInstance) {
   });
 
   /** BlaulichtCMS Bridge als installierbare ZIP-Datei (WordPress → Plugins → Installieren → Plugin hochladen). */
-  app.get('/sites/plugin.zip', { preHandler: requireAuth('channel.manage') }, async (req, reply) => {
+  app.get('/sites/plugin.zip', { preHandler: requireAuth('channel.sites') }, async (req, reply) => {
     const pkg = bridgePackage();
     await audit(req.auth!.actor, 'site.plugin_downloaded', { type: 'plugin', label: `BlaulichtCMS Bridge ${pkg.version}` });
     reply.header('content-type', 'application/zip').header('content-disposition', `attachment; filename="blaulichtcms-bridge-${pkg.version}.zip"`);
@@ -285,7 +285,7 @@ export async function bridgeRoutes(app: FastifyInstance) {
   /* ------------------------------ Bridge-Updates ------------------------------ */
 
   /** Stand: Version im Image, Freigaben, Testwebsites. */
-  app.get('/sites/bridge-release', { preHandler: requireAuth('channel.manage') }, async () => {
+  app.get('/sites/bridge-release', { preHandler: requireAuth('channel.updates') }, async () => {
     const pkg = bridgePackage();
     return {
       bundled: { version: pkg.version, sha256: pkg.sha256, signature: pkg.signature },
@@ -294,7 +294,7 @@ export async function bridgeRoutes(app: FastifyInstance) {
     };
   });
 
-  app.put('/sites/:id/update-channel', { preHandler: requireAuth('channel.manage') }, async (req) => {
+  app.put('/sites/:id/update-channel', { preHandler: requireAuth('channel.updates') }, async (req) => {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
     const { channel } = z.object({ channel: z.enum(['test', 'stable']) }).parse(req.body);
     const s = await one<any>(`UPDATE wp_sites SET update_channel = $2 WHERE id = $1 RETURNING name`, [id, channel]);
@@ -307,7 +307,7 @@ export async function bridgeRoutes(app: FastifyInstance) {
    * Version für alle Websites freigeben. Voraussetzung: eine Testwebsite meldet diese Version bereits
    * (Paket und Kompatibilität zuerst auf einer Testwebsite geprüft).
    */
-  app.post('/sites/bridge-release', { preHandler: requireAuth('channel.manage') }, async (req) => {
+  app.post('/sites/bridge-release', { preHandler: requireAuth('channel.updates') }, async (req) => {
     const b = z.object({ version: z.string().max(20), note: z.string().trim().min(5).max(500) }).parse(req.body);
     const pkg = bridgePackage();
     if (b.version !== pkg.version) throw badRequest(`Freigegeben werden kann nur die Version im Image (${pkg.version}).`);
@@ -353,7 +353,7 @@ export async function bridgeRoutes(app: FastifyInstance) {
     );
     if (!updated) throw new AppError(409, 'pairing_used', 'Der Kopplungscode wurde bereits verwendet.');
     await audit({ id: null, name: `Website „${site.name}“ (Bridge)`, type: 'system', ip: req.ip }, 'site.paired', { type: 'site', id: site.id, label: site.name }, { url: body.site_url });
-    await notify({ kind: 'success', title: `Website „${site.name}“ gekoppelt`, body: body.site_url, link: '/kanaele', permission: 'channel.manage' });
+    await notify({ kind: 'success', title: `Website „${site.name}“ gekoppelt`, body: body.site_url, link: '/kanaele', permission: 'channel.sites' });
     await securityAlert('site_paired', { title: `Neue Website gekoppelt: „${site.name}“`, body: `${body.site_url} von ${req.ip}. Die Website kann ab sofort freigegebene Beiträge abholen.`, link: '/kanaele', kind: 'info' });
     return { key, site_id: site.id, site_name: site.name, api_version: BRIDGE_API_VERSION, poll_interval: POLL_SECONDS, blaulichtcms_url: await publicBase(req) };
   });
@@ -413,7 +413,7 @@ export async function bridgeRoutes(app: FastifyInstance) {
         WHERE site_id = $1 AND status = 'sent' AND attempts >= $2 RETURNING id, post_id`,
       [site.id, MAX_BRIDGE_ATTEMPTS],
     );
-    for (const p of stuck) await notify({ kind: 'error', title: 'Veröffentlichung hängt: Website bestätigt nicht', link: `/beitraege/${p.post_id}`, permission: 'post.publish' });
+    for (const p of stuck) await notify({ kind: 'error', title: 'Veröffentlichung hängt: Website bestätigt nicht', link: `/beitraege/${p.post_id}`, permission: 'publish.website' });
     await pool.query(`UPDATE banner_jobs SET status = 'failed' WHERE site_id = $1 AND status = 'sent' AND attempts >= $2`, [site.id, MAX_BRIDGE_ATTEMPTS]);
     // Noch nicht abgeholte Veröffentlichungen ohne gültige Freigabe (widerrufen, neuere Fassung) abbrechen statt ausliefern
     await pool.query(
@@ -483,7 +483,7 @@ export async function bridgeRoutes(app: FastifyInstance) {
       return s;
     });
     if (s) await notifyFeedsDisabled(site.name, s.disabledFeeds);
-    await notify({ kind: 'warning', title: `Website „${site.name}“ hat die Kopplung gelöst`, link: '/einstellungen', permission: 'system.manage' });
+    await notify({ kind: 'warning', title: `Website „${site.name}“ hat die Kopplung gelöst`, link: '/kanaele', permission: 'channel.sites' });
     return { ok: true };
   });
 
@@ -508,7 +508,7 @@ export async function bridgeRoutes(app: FastifyInstance) {
       const ok = body.status === 'published';
       await pool.query(`UPDATE banner_jobs SET status = $2, error = $3, result_at = now() WHERE id = $1`, [id, ok ? 'done' : 'failed', ok ? null : (body.error ?? 'Unbekannter Fehler').slice(0, 1000)]);
       await audit(bridgeActor(site, req), ok ? 'banner.synced' : 'banner.sync_failed', { type: 'banner', id: bj.banner_id, label: bj.title }, { auftrag: id, aktion: bj.action }, ok ? 'ok' : 'failed');
-      if (!ok) await notify({ kind: 'error', title: `Banner nicht übertragen: ${bj.title}`.slice(0, 200), body: body.error ?? '', link: '/banner', permission: 'post.publish' });
+      if (!ok) await notify({ kind: 'error', title: `Banner nicht übertragen: ${bj.title}`.slice(0, 200), body: body.error ?? '', link: '/banner', permission: 'banner.publish' });
       return { ok: true, status: body.status };
     }
     if (pub.status === 'published') {
@@ -518,7 +518,7 @@ export async function bridgeRoutes(app: FastifyInstance) {
     if (body.status === 'published' && pub.action === 'unpublish') {
       await pool.query(`UPDATE publications SET status = 'published', remote_id = $2, remote_status = $3, error = NULL, result_at = now() WHERE id = $1`, [id, body.remote_id ?? null, body.remote_status ?? 'draft']);
       await audit(bridgeActor(site, req), 'publication.unpublished', { type: 'post', id: pub.post_id, label: pub.title }, { auftrag: id });
-      await notify({ kind: 'info', title: `Zurückgezogen: ${pub.title}`.slice(0, 200), body: site.name, link: `/beitraege/${pub.post_id}`, permission: 'post.publish' });
+      await notify({ kind: 'info', title: `Zurückgezogen: ${pub.title}`.slice(0, 200), body: site.name, link: `/beitraege/${pub.post_id}`, permission: 'publish.website' });
     } else if (body.status === 'published') {
       if (!body.remote_id || !body.url) throw badRequest('Für eine erfolgreiche Veröffentlichung sind WordPress-ID und URL nötig.');
       await pool.query(
@@ -542,14 +542,14 @@ export async function bridgeRoutes(app: FastifyInstance) {
           await audit(bridgeActor(site, req), 'publication.unpublish_requested', { type: 'post', id: pub.post_id, label: pub.title }, { grund: 'Freigabe wurde widerrufen, während die Website den Auftrag abholte', auftrag: u.id, website_id: site.id }, 'ok', db);
           return u;
         });
-        await notify({ kind: 'warning', title: `Trotz Widerruf veröffentlicht – Rückzug beauftragt: ${pub.title}`.slice(0, 200), body: site.name, link: `/beitraege/${pub.post_id}`, permission: 'post.publish' });
+        await notify({ kind: 'warning', title: `Trotz Widerruf veröffentlicht – Rückzug beauftragt: ${pub.title}`.slice(0, 200), body: site.name, link: `/beitraege/${pub.post_id}`, permission: 'publish.website' });
         return { ok: true, status: body.status, unpublish: un?.id ?? null };
       }
-      await notify({ kind: 'success', title: `Veröffentlicht: ${pub.title}`.slice(0, 200), body: body.url, link: `/beitraege/${pub.post_id}`, permission: 'post.publish' });
+      await notify({ kind: 'success', title: `Veröffentlicht: ${pub.title}`.slice(0, 200), body: body.url, link: `/beitraege/${pub.post_id}`, permission: 'publish.website' });
     } else {
       await pool.query(`UPDATE publications SET status = 'failed', error = $2, result_at = now() WHERE id = $1`, [id, (body.error ?? 'Unbekannter Fehler').slice(0, 1000)]);
       await audit(bridgeActor(site, req), 'publication.failed', { type: 'post', id: pub.post_id, label: pub.title }, { auftrag: id }, 'failed');
-      await notify({ kind: 'error', title: `Veröffentlichung fehlgeschlagen: ${pub.title}`.slice(0, 200), body: body.error ?? '', link: `/beitraege/${pub.post_id}`, permission: 'post.publish' });
+      await notify({ kind: 'error', title: `Veröffentlichung fehlgeschlagen: ${pub.title}`.slice(0, 200), body: body.error ?? '', link: `/beitraege/${pub.post_id}`, permission: 'publish.website' });
     }
     return { ok: true, status: body.status };
   });

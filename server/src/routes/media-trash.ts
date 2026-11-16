@@ -75,7 +75,7 @@ async function assertRoom(db: any, collectionId: string, ids: string[]) {
 
 export async function mediaTrashRoutes(app: FastifyInstance) {
   /* Übersicht: Sammlungen, Ordner (samt Inhalt) und einzeln gelöschte Dateien */
-  app.get('/trash', { preHandler: requireAuth('media.manage') }, async () => {
+  app.get('/trash', { preHandler: requireAuth('media.trash') }, async () => {
     const days = Math.max(0, Number((await getSettings())['privacy.deleted_media_days']) || 0);
     const purgeAt = (d: string | Date) => (days ? new Date(new Date(d).getTime() + days * 86400_000).toISOString() : null);
     const collections = await many<any>(
@@ -105,7 +105,7 @@ export async function mediaTrashRoutes(app: FastifyInstance) {
   });
 
   /* Ordner samt Unterordnern und Dateien in den Papierkorb */
-  app.delete('/folders/:id', { preHandler: requireAuth('media.manage') }, async (req) => {
+  app.delete('/folders/:id', { preHandler: requireAuth('media.trash') }, async (req) => {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
     const f = await one<any>(`SELECT * FROM collection_folders WHERE id = $1 AND deleted_at IS NULL`, [id]);
     if (!f) throw notFound('Ordner nicht gefunden.');
@@ -127,7 +127,7 @@ export async function mediaTrashRoutes(app: FastifyInstance) {
   });
 
   /* Wiederherstellen (Datei, Ordner samt Inhalt, Sammlung) */
-  app.post('/trash/restore', { preHandler: requireAuth('media.manage') }, async (req) => {
+  app.post('/trash/restore', { preHandler: requireAuth('media.trash') }, async (req) => {
     const b = z.object({ type: z.enum(['media', 'folder', 'collection']), id: z.uuid() }).parse(req.body ?? {});
     const actor = req.auth!.actor;
     if (b.type === 'collection') {

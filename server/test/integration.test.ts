@@ -2461,7 +2461,7 @@ describe('Kontosperre ohne gezieltes Aussperren (#110)', () => {
     // Angreifer ohne Geräte-Cookie: fünf Fehlversuche → unbekannte Geräte gesperrt, Admins benachrichtigt
     for (let i = 0; i < 5; i++) expect((await fresh().post('/auth/login', { ...creds, password: 'falsch-falsch' })).status).toBe(401);
     expect((await fresh().post('/auth/login', creds)).status).toBe(401);
-    expect((await one<any>(`SELECT count(*)::int AS n FROM notifications WHERE permission = 'user.manage' AND title LIKE '%geraet@example.org%'`))!.n).toBe(1);
+    expect((await one<any>(`SELECT count(*)::int AS n FROM notifications WHERE permission = 'user.lock' AND title LIKE '%geraet@example.org%'`))!.n).toBe(1);
     // Das bekannte Gerät meldet sich trotzdem an
     expect((await known.post('/auth/login', creds)).json.next).toBe('done');
     // Ein gefälschtes Geräte-Cookie zählt nicht
@@ -3113,7 +3113,7 @@ describe('Sicherheitsmeldungen (#101)', () => {
     expect((await admin.patch('/settings', { 'security.alert_failed_logins': 3, 'security.alert_downloads': 2 })).status).toBe(200);
     expect(await notes('Sicherheitseinstellungen geändert%')).toBe(before + 1);
     const n = (await one<any>(`SELECT body, permission FROM notifications WHERE title LIKE 'Sicherheitseinstellungen geändert%' ORDER BY id DESC LIMIT 1`))!;
-    expect(n.permission).toBe('system.manage');
+    expect(n.permission).toBe('settings.security');
     expect(n.body).toContain('security.alert_failed_logins: 20 → 3');
     // Gehäufte Fehlversuche (Schwelle 3 in 15 Minuten, alle Konten)
     const failedBefore = await notes('Gehäufte fehlgeschlagene Anmeldungen%');
@@ -5711,7 +5711,7 @@ describe('In-App-Updates aus GitHub-Releases', () => {
     expect((await admin.post('/updates/check')).json.available).toBe(true);
     const n = await many<any>(`SELECT * FROM notifications WHERE title = 'Update verfügbar: Version 9.9.9'`);
     expect(n).toHaveLength(1);
-    expect(n[0].permission).toBe('system.manage');
+    expect(n[0].permission).toBe('update.install');
     const info = await admin.get('/updates');
     expect(info.json).toMatchObject({ available: true, lastCheckError: null });
     expect(info.json.latest.notes).toContain('Testeintrag');

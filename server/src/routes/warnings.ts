@@ -5,7 +5,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { config } from '../config.js';
 import { many, one, pool, tx, type Queryable } from '../db/pool.js';
-import { requireAnyAuth, requireAuth } from '../auth/context.js';
+import { alsoAny, requireAuth } from '../auth/context.js';
 import { audit, settingsDiff } from '../lib/audit.js';
 import { AppError, badRequest, conflict, forbidden, notFound } from '../lib/errors.js';
 import { notify } from '../lib/notify.js';
@@ -133,7 +133,7 @@ const revisionBody = z.object({
 });
 
 export async function warningRoutes(app: FastifyInstance) {
-  const anyWarn = requireAnyAuth('warning.draft', 'warning.level', 'warning.approve', 'warning.send', 'warning.rules');
+  const anyWarn = requireAuth('warning.view');
 
   /* ------------------------------------------------------------ Vorgänge */
 
@@ -279,10 +279,10 @@ export async function warningRoutes(app: FastifyInstance) {
     const level: 'draft' | 'approved' | 'sent' = st!.sends ? 'sent' : st!.approved ? 'approved' : 'draft';
     const me = auth.user?.id ?? null;
     const own = !!me && tree.every((t) => t.created_by === me);
-    const allowed = level === 'sent' ? auth.permissions.has('system.manage') : level === 'approved' ? auth.permissions.has('warning.approve') : own || auth.permissions.has('warning.approve');
+    const allowed = level === 'sent' ? auth.permissions.has('warning.delete_sent') : level === 'approved' ? auth.permissions.has('warning.approve') : own || auth.permissions.has('warning.approve');
     const hint =
       level === 'sent'
-        ? 'Bereits versandt – löschen kann nur die Administration („System verwalten“), mit Begründung.'
+        ? 'Bereits versandt – löschen kann nur, wer „Versandte Warnvorgänge löschen“ hat, mit Begründung.'
         : level === 'approved'
           ? 'Bereits freigegeben – löschen kann, wer Warnentwürfe freigeben darf.'
           : 'Noch nicht freigegeben – löschen kann, wer den Entwurf angelegt hat, oder wer Warnentwürfe freigeben darf.';
@@ -295,7 +295,7 @@ export async function warningRoutes(app: FastifyInstance) {
     return plan;
   });
 
-  app.delete('/warnings/:id', { preHandler: requireAnyAuth('warning.draft', 'warning.approve', 'system.manage') }, async (req) => {
+  app.delete('/warnings/:id', { preHandler: requireAuth('warning.delete') }, async (req) => {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
     const { reason } = z.object({ reason: z.string().trim().max(500).optional() }).parse(req.body ?? {});
     const deleted = await tx(async (db) => {
@@ -542,7 +542,7 @@ export async function warningRoutes(app: FastifyInstance) {
   });
 
   /** Fachliche Eingangsbestätigung (z. B. telefonische Rückmeldung der zuständigen Stelle) – getrennt von der SMTP-Annahme. */
-  app.post('/warning-sends/:id/acknowledge', { preHandler: requireAnyAuth('warning.send', 'warning.approve') }, async (req) => {
+  app.post('/warning-sends/:id/acknowledge', { preHandler: [requireAuth('warning.view'), alsoAny('warning.send', 'warning.approve')] }, async (req) => {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
     const { note } = z.object({ note: z.string().trim().min(3).max(300) }).parse(req.body);
     const s = await one<any>(`UPDATE warning_sends SET acknowledged_at = now(), acknowledged_by = $2, ack_note = $3 WHERE id = $1 AND (status = 'accepted' OR resolution = 'delivered') AND acknowledged_at IS NULL RETURNING warning_id`, [id, req.auth!.user?.id ?? null, note]);
@@ -574,7 +574,7 @@ export async function warningRoutes(app: FastifyInstance) {
 
   app.get('/responsibilities', { preHandler: anyWarn }, async () => many<any>(`SELECT id, name, area, recipients FROM responsibilities WHERE active ORDER BY name`));
 
-  app.get('/warning-config', { preHandler: requireAnyAuth('warning.rules', 'warning.approve', 'system.manage') }, async () => {
+  app.get('/warning-config', { preHandler: [requireAuth('warning.view'), alsoAny('warning.rules', 'warning.approve', 'warning.settings')] }, async () => {
     const s = await getSettings();
     return {
       templates: await many<any>(`SELECT t.*, u.name AS created_by_name FROM warning_templates t LEFT JOIN users u ON u.id = t.created_by ORDER BY family, version DESC`),
@@ -732,7 +732,7 @@ export async function warningRoutes(app: FastifyInstance) {
   };
 
   /** Versandeinstellungen und Testmodus (Administration). */
-  app.put('/warning-settings', { preHandler: requireAuth('system.manage') }, async (req) => {
+  app.put('/warning-settings', { preHandler: requireAuth('warning.settings') }, async (req) => {
     const b = z
       .object({
         host: z.string().trim().max(200),
@@ -787,7 +787,7 @@ export async function warningRoutes(app: FastifyInstance) {
    * gespeichert sind (Passwort leer = gespeichertes Passwort, nur für denselben Server). Eine erfolgreiche Testmail
    * hinterlegt den Prüfwert genau dieser Einstellungen; erst damit lässt sich der Testmodus ausschalten.
    */
-  app.post('/warning-settings/test-mail', { preHandler: requireAuth('system.manage'), config: { rateLimit: { max: 5, timeWindow: '1 minute' } } }, async (req) => {
+  app.post('/warning-settings/test-mail', { preHandler: requireAuth('warning.settings'), config: { rateLimit: { max: 5, timeWindow: '1 minute' } } }, async (req) => {
     const b = z
       .object({
         to: z.email(),

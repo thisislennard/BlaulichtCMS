@@ -6,7 +6,8 @@ import type { Actor } from '../lib/audit.js';
 import { randomToken, safeEqual, sha256Hex } from '../lib/crypto.js';
 import { AppError, forbidden, unauthorized } from '../lib/errors.js';
 import { getSettings } from '../lib/settings.js';
-import { isAdminRoleSet, permissionsFor } from './permissions.js';
+import { finePermissionsFor, hasAdminPermissions, isAdminRoleSet, permissionsFor } from './permissions.js';
+import { ensureRolesFresh } from './roles.js';
 import { deviceHash, issueDeviceCookie, knownDevice } from './lockout.js';
 
 export const SESSION_COOKIE = config.cookieSecure ? '__Host-bc_session' : 'bc_session';
@@ -194,33 +195,68 @@ async function fromApiKey(req: FastifyRequest): Promise<AuthContext | null> {
 }
 
 export async function resolveAuth(req: FastifyRequest, reply?: FastifyReply): Promise<AuthContext | null> {
+  // Rollen und ihre Rechte: aktueller Stand (Änderungen gelten ab der nächsten Anfrage, siehe auth/roles.ts)
+  await ensureRolesFresh();
   return (await fromApiKey(req)) ?? (await fromSession(req, reply));
 }
 
+/**
+ * Zugriffsangabe einer Route. Jede Route unter /api/v1 trägt genau eine davon (oder steht in PUBLIC_ROUTES); die
+ * Tests lesen sie aus der Routentabelle (app.routeAccess) und prüfen Vollständigkeit und die 403-Matrix.
+ * - `login`: jede vollständig angemeldete Person (eigenes Konto, Dashboard, Benachrichtigungen)
+ * - `all`: alle genannten Rechte (im Regelfall genau eines)
+ * - `any`: eines der genannten Rechte; der Handler prüft je Feld oder Aktion das passende
+ */
+export interface RouteAccess {
+  kind: 'login' | 'all' | 'any';
+  permissions: string[];
+}
+export type Guard = ((req: FastifyRequest) => Promise<void>) & { access?: RouteAccess };
+
 /** Prüft angemeldet + volle Sitzung (+ optional Rechte). */
-export function requireAuth(...perms: string[]) {
-  return async (req: FastifyRequest) => {
+export function requireAuth(...perms: string[]): Guard {
+  const guard: Guard = async (req: FastifyRequest) => {
     const a = req.auth;
     if (!a || a.stage !== 'full') throw unauthorized();
     for (const p of perms) if (!a.permissions.has(p)) throw forbidden();
   };
+  guard.access = { kind: perms.length ? 'all' : 'login', permissions: perms };
+  return guard;
 }
 
-export function requireAnyAuth(...perms: string[]) {
-  return async (req: FastifyRequest) => {
+export function requireAnyAuth(...perms: string[]): Guard {
+  const guard: Guard = async (req: FastifyRequest) => {
     const a = req.auth;
     if (!a || a.stage !== 'full') throw unauthorized();
     if (perms.length && !perms.some((p) => a.permissions.has(p))) throw forbidden();
   };
+  guard.access = { kind: perms.length ? 'any' : 'login', permissions: perms };
+  return guard;
 }
 
-/** Updates einspielen = beliebigen Code ausführen: nur Plattform-Admins mit Benutzerkonto (kein API-Schlüssel). */
-export function requirePlatformAdmin() {
+/** Zusätzliche Bedingung hinter requireAuth: außerdem eines dieser Rechte (zählt nicht als Zugriffsangabe). */
+export function alsoAny(...perms: string[]) {
   return async (req: FastifyRequest) => {
+    if (!perms.some((p) => req.auth?.permissions.has(p))) throw forbidden();
+  };
+}
+
+/** Zusätzliche Bedingung: nur mit Benutzerkonto, nicht per API-Schlüssel. */
+export function requireSession() {
+  return async (req: FastifyRequest) => {
+    if (req.auth?.kind !== 'session') throw forbidden('Diese Aktion ist nur mit einer Benutzeranmeldung möglich, nicht per API-Schlüssel.');
+  };
+}
+
+/** Nur die Rolle „Administration“ mit Benutzerkonto (kein API-Schlüssel). */
+export function requirePlatformAdmin(): Guard {
+  const guard: Guard = async (req: FastifyRequest) => {
     const a = req.auth;
     if (!a || a.stage !== 'full') throw unauthorized();
     if (a.kind !== 'session' || !a.roles.includes('platform_admin')) throw forbidden('Nur Plattform-Admins dürfen das.');
   };
+  guard.access = { kind: 'all', permissions: ['role.manage'] };
+  return guard;
 }
 
 /** So lange gilt eine Bestätigung mit Passwort für kritische Aktionen (#109). */
@@ -242,11 +278,19 @@ export function assertRecentAuth(req: FastifyRequest) {
   if (!hasRecentAuth(a)) throw new AppError(403, 'reauth_required', 'Bitte diese Aktion mit deinem Passwort bestätigen.', { minutes: REAUTH_MINUTES });
 }
 
+/**
+ * Zwei-Faktor-Pflicht, ausgedrückt über Rechte statt über feste Rollen:
+ * - `security.require_2fa_all`: alle Konten.
+ * - `security.require_2fa_admins`: Konten mit Verwaltungsrechten (Konten, Rollen, Einstellungen, Sicherungen, Updates,
+ *   Verbindungen, Kopplung von Websites, Datenschutzanfragen … – im Katalog als Verwaltungsrecht markiert). Mit den
+ *   mitgelieferten Rollen trifft das wie bisher nur die Administration; eigene Rollen mit solchen Rechten zählen dazu.
+ * - `security.require_2fa_media`: Konten mit „Originale herunterladen“ (GPS, ungesichtete Bürgerfotos; #140, Art. 32
+ *   DSGVO) – bisher „Medien verwalten“.
+ */
 export function mustUse2fa(roles: string[], s: Awaited<ReturnType<typeof getSettings>>): boolean {
   return (
     s['security.require_2fa_all'] ||
-    (s['security.require_2fa_admins'] && isAdminRoleSet(roles)) ||
-    // Zugriff auf Originale (GPS, ungesichtete Bürgerfotos) nur mit zweitem Faktor (#140, Art. 32 DSGVO)
-    (s['security.require_2fa_media'] && permissionsFor(roles).has('media.manage'))
+    (s['security.require_2fa_admins'] && (isAdminRoleSet(roles) || hasAdminPermissions(roles))) ||
+    (s['security.require_2fa_media'] && finePermissionsFor(roles).has('media.download_original'))
   );
 }

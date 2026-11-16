@@ -25,7 +25,7 @@ const SETTINGS_OWNER = '00000000-0000-0000-0000-000000000002';
  * Server nie – die Oberfläche erfährt nur, ob einer gespeichert ist.
  */
 export async function updateRoutes(app: FastifyInstance) {
-  app.get('/updates', { preHandler: requireAnyAuth('system.read', 'system.manage') }, async () => {
+  app.get('/updates', { preHandler: requireAuth('update.view') }, async () => {
     const s = await getSettings(true);
     const latest = s['updates.latest'] as any;
     const image = await imageInfo();
@@ -52,9 +52,9 @@ export async function updateRoutes(app: FastifyInstance) {
     };
   });
 
-  app.get('/updates/status', { preHandler: requireAnyAuth('system.read', 'system.manage') }, async () => ({ current: config.version, state: installState() }));
+  app.get('/updates/status', { preHandler: requireAuth('update.view') }, async () => ({ current: config.version, state: installState() }));
 
-  app.put('/updates/settings', { preHandler: requireAuth('system.manage') }, async (req) => {
+  app.put('/updates/settings', { preHandler: requireAuth('update.install') }, async (req) => {
     const b = z
       .object({
         enabled: z.boolean(),
@@ -107,13 +107,13 @@ export async function updateRoutes(app: FastifyInstance) {
     return { ok: true, tokenSet: !!patch['updates.token_secret_id'] || (!!oldToken && !dropToken), tokenCleared: dropToken && !b.token };
   });
 
-  app.post('/updates/check', { preHandler: requireAuth('system.manage'), config: { rateLimit: { max: 6, timeWindow: '1 minute' } } }, async (req) => {
+  app.post('/updates/check', { preHandler: requireAuth('update.install'), config: { rateLimit: { max: 6, timeWindow: '1 minute' } } }, async (req) => {
     const r = await checkForUpdate();
     await audit(req.auth!.actor, 'updates.checked', { type: 'update', label: r.latest?.version ?? null }, { ergebnis: r.ok ? (r.available ? 'verfügbar' : 'aktuell') : 'fehler', ...(r.error ? { fehler: r.error } : {}) }, r.ok ? 'ok' : 'failed');
     return r;
   });
 
-  app.post('/updates/install', { preHandler: requireAuth('system.manage'), config: { rateLimit: { max: INSTALL_RATE, timeWindow: '1 minute' } } }, async (req, reply) => {
+  app.post('/updates/install', { preHandler: requireAuth('update.install'), config: { rateLimit: { max: INSTALL_RATE, timeWindow: '1 minute' } } }, async (req, reply) => {
     const b = z.object({ version: z.string().trim().max(20).optional() }).parse(req.body ?? {});
     assertRecentAuth(req);
     try {

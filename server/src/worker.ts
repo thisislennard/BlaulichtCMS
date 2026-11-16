@@ -162,7 +162,7 @@ async function markUnknownPublications() {
     `UPDATE publications SET status = 'unknown' WHERE status = 'sent' AND fetched_at < now() - interval '15 minutes' RETURNING id, post_id`,
   );
   for (const r of rows) {
-    await notify({ kind: 'warning', title: 'Veröffentlichung: Ergebnis unbekannt', body: 'Die Website hat den Auftrag abgeholt, aber noch kein Ergebnis gemeldet.', link: `/beitraege/${r.post_id}`, permission: 'post.publish' });
+    await notify({ kind: 'warning', title: 'Veröffentlichung: Ergebnis unbekannt', body: 'Die Website hat den Auftrag abgeholt, aber noch kein Ergebnis gemeldet.', link: `/beitraege/${r.post_id}`, permission: 'publish.website' });
   }
 }
 

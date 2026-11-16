@@ -22,20 +22,20 @@ export interface WidgetDef {
 }
 
 export const WIDGET_DEFS: readonly WidgetDef[] = [
-  { id: 'badge_approvals', kind: 'badge', permission: 'post.read' },
-  { id: 'badge_unreviewed', kind: 'badge', permission: 'media.read' },
-  { id: 'badge_ready', kind: 'badge', permission: 'post.read' },
-  { id: 'badge_banners', kind: 'badge', permission: 'post.read' },
-  { id: 'badge_uploads', kind: 'badge', permission: 'media.read' },
-  { id: 'badge_connection_errors', kind: 'badge', permission: 'connection.manage' },
-  { id: 'media', kind: 'panel', permission: 'media.read' },
-  { id: 'approvals', kind: 'panel', permission: 'post.read' },
-  { id: 'ready', kind: 'panel', permission: 'post.read' },
-  { id: 'publications', kind: 'panel', permission: 'post.read' },
-  { id: 'uploads', kind: 'panel', permission: 'media.read' },
-  { id: 'sites', kind: 'panel', permission: 'post.read' },
-  { id: 'banners', kind: 'panel', permission: 'post.read' },
-  { id: 'rss', kind: 'panel', permission: 'post.read' },
+  { id: 'badge_approvals', kind: 'badge', permission: 'post.view' },
+  { id: 'badge_unreviewed', kind: 'badge', permission: 'media.view' },
+  { id: 'badge_ready', kind: 'badge', permission: 'post.view' },
+  { id: 'badge_banners', kind: 'badge', permission: 'banner.view' },
+  { id: 'badge_uploads', kind: 'badge', permission: 'media.view' },
+  { id: 'badge_connection_errors', kind: 'badge', permission: 'connection.configure' },
+  { id: 'media', kind: 'panel', permission: 'media.view' },
+  { id: 'approvals', kind: 'panel', permission: 'post.view' },
+  { id: 'ready', kind: 'panel', permission: 'post.view' },
+  { id: 'publications', kind: 'panel', permission: 'post.view' },
+  { id: 'uploads', kind: 'panel', permission: 'media.view' },
+  { id: 'sites', kind: 'panel', permission: 'channel.view' },
+  { id: 'banners', kind: 'panel', permission: 'banner.view' },
+  { id: 'rss', kind: 'panel', permission: 'source.view' },
 ];
 
 const DEF_BY_ID = new Map(WIDGET_DEFS.map((w) => [w.id, w]));

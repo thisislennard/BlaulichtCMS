@@ -1,5 +1,6 @@
 import { many, one, pool } from '../db/pool.js';
 import { permissionsFor } from '../auth/permissions.js';
+import { ensureRolesFresh } from '../auth/roles.js';
 import { log } from './log.js';
 import { getSettings } from './settings.js';
 import { freeBytes } from '../media/storage.js';
@@ -30,7 +31,8 @@ async function ownerIfEligible(userId: string | null): Promise<string | null> {
   if (!userId) return null;
   const u = await one<{ roles: string[]; status: string }>(`SELECT roles, status FROM users WHERE id = $1`, [userId]);
   if (!u || u.status !== 'active') return null;
-  return permissionsFor(u.roles ?? []).has('media.manage') ? userId : null;
+  await ensureRolesFresh();
+  return permissionsFor(u.roles ?? []).has('media.review') ? userId : null;
 }
 
 /**
@@ -86,7 +88,7 @@ export async function noticeNewMedia(mediaId: string) {
     title: (c) => (c === 1 ? `Neue Datei in „${m.title}“` : `${c} neue Dateien in „${m.title}“`),
     body: `Über den Upload-Link${m.label ? ` „${m.label}“` : ''} eingegangen und geprüft – bereit zur Sichtung.`,
     link: `/medien/${m.collection_id}`,
-    permission: 'media.manage',
+    permission: 'media.review',
     userId: owner,
   });
 }
@@ -105,7 +107,7 @@ export async function noticeQuota(kind: 'link' | 'collection', id: string) {
     title: () => (kind === 'link' ? `Upload-Link voll: „${row.title}“` : `Sammlung voll: „${row.title}“`),
     body: kind === 'link' ? `Über den Link${row.label ? ` „${row.label}“` : ''} sind alle erlaubten Dateien eingegangen. Weitere Uploads werden abgewiesen.` : 'Die Sammlung hat ihr Kontingent an Dateien oder Speicher erreicht. Weitere Uploads werden abgewiesen.',
     link: `/medien/${row.cid}`,
-    permission: 'media.manage',
+    permission: 'media.review',
     userId: await ownerIfEligible(row.created_by),
   });
 }
@@ -128,7 +130,7 @@ export async function checkExpiringLinks() {
       title: () => `Upload-Link läuft bald ab: „${l.title}“`,
       body: `Der Link${l.label ? ` „${l.label}“` : ''} gilt nur noch bis ${new Date(l.expires_at).toLocaleString('de-DE', { timeZone: (await getSettings())['general.timezone'] })}. Bei Bedarf in der Sammlung verlängern.`,
       link: `/medien/${l.cid}`,
-      permission: 'media.manage',
+      permission: 'media.review',
       userId: await ownerIfEligible(l.created_by),
     });
   }

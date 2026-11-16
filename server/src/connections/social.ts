@@ -24,7 +24,7 @@ export async function runSocialPublication(id: string) {
     const sec = await connectionSecrets(c).catch(() => ({}));
     const msg = scrub(e.message, sec as any);
     await pool.query(`UPDATE social_publications SET status = $2, error = $3, error_class = $4, updated_at = now() WHERE id = $1`, [id, status, msg, e.errorClass]);
-    await notify({ kind: status === 'unknown' ? 'warning' : 'error', title: `${label}: ${status === 'unknown' ? 'Ergebnis unbekannt – bitte prüfen' : 'Veröffentlichung fehlgeschlagen'}`, body: msg.slice(0, 200), link: `/beitraege/${sp.post_id}`, permission: 'post.publish' });
+    await notify({ kind: status === 'unknown' ? 'warning' : 'error', title: `${label}: ${status === 'unknown' ? 'Ergebnis unbekannt – bitte prüfen' : 'Veröffentlichung fehlgeschlagen'}`, body: msg.slice(0, 200), link: `/beitraege/${sp.post_id}`, permission: 'publish.social' });
     log('warn', 'social', `${label}: ${status} – ${msg}`);
   };
   if (c.status !== 'active') return fail('failed', new StepError('config', 'Der Kanal ist nicht aktiv.'));
@@ -78,7 +78,7 @@ export async function runSocialPublication(id: string) {
           });
     await pool.query(`UPDATE social_publications SET status = 'published', remote_id = $2, remote_url = $3, error = NULL, error_class = NULL, published_at = now(), updated_at = now() WHERE id = $1`, [id, res.id, res.url]);
     await audit({ id: null, name: label, type: 'system' }, 'social.published', { type: 'post', id: sp.post_id, label: rev.title }, { kanal: label, url: res.url });
-    await notify({ kind: 'success', title: `Veröffentlicht auf ${label}: ${rev.title}`.slice(0, 200), link: `/beitraege/${sp.post_id}`, permission: 'post.publish' });
+    await notify({ kind: 'success', title: `Veröffentlicht auf ${label}: ${rev.title}`.slice(0, 200), link: `/beitraege/${sp.post_id}`, permission: 'publish.social' });
   } catch (e) {
     const err = toStepError(e);
     // Eindeutige Ablehnung (4xx, Konfiguration, Format) → fehlgeschlagen; Netz/Zeitüberschreitung/5xx → unbekannt

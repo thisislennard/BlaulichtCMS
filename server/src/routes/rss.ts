@@ -158,18 +158,18 @@ export async function probeFeed(url: string) {
 }
 
 export async function rssRoutes(app: FastifyInstance) {
-  app.post('/rss/preview', { preHandler: requireAuth('post.edit'), config: { rateLimit: { max: 20, timeWindow: '1 minute' } } }, async (req) => {
+  app.post('/rss/preview', { preHandler: requireAuth('source.manage'), config: { rateLimit: { max: 20, timeWindow: '1 minute' } } }, async (req) => {
     const { url } = z.object({ url: z.url().max(1000) }).parse(req.body);
     const r = await fetchFeed(url);
     if (r.notModified) throw badRequest('Keine Daten.');
     return { title: r.feed.title, siteUrl: r.feed.siteUrl, count: r.feed.items.length, items: r.feed.items.slice(0, 5).map((i) => ({ title: i.title, link: i.link, published: i.published, summary: i.summary.slice(0, 200) })) };
   });
 
-  app.get('/rss/feeds', { preHandler: requireAuth('post.read') }, async () =>
+  app.get('/rss/feeds', { preHandler: requireAuth('source.view') }, async () =>
     many<any>(`SELECT f.*, (SELECT count(*)::int FROM rss_items i WHERE i.feed_id = f.id) AS item_count FROM rss_feeds f ORDER BY f.title`),
   );
 
-  app.post('/rss/feeds', { preHandler: requireAuth('post.edit') }, async (req) => {
+  app.post('/rss/feeds', { preHandler: requireAuth('source.manage') }, async (req) => {
     const b = z.object({ url: z.url().max(1000), title: z.string().trim().max(200).optional(), intervalMin: z.number().int().min(5).max(1440).default(30) }).parse(req.body);
     if (await one('SELECT 1 FROM rss_feeds WHERE url = $1', [b.url])) throw new AppError(409, 'feed_exists', 'Diese Quelle ist bereits eingetragen.');
     const r = await probeFeed(b.url);
@@ -183,7 +183,7 @@ export async function rssRoutes(app: FastifyInstance) {
   });
 
   /** Name, Adresse und Abrufintervall ändern. Eine neue Adresse gilt erst nach erfolgreichem Probeabruf. */
-  app.put('/rss/feeds/:id', { preHandler: requireAuth('post.edit') }, async (req) => {
+  app.put('/rss/feeds/:id', { preHandler: requireAuth('source.manage') }, async (req) => {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
     const b = z.object({ url: z.url().max(1000), title: z.string().trim().min(1).max(200), intervalMin: z.number().int().min(5).max(1440) }).parse(req.body);
     const f = await one<any>('SELECT * FROM rss_feeds WHERE id = $1', [id]);
@@ -204,7 +204,7 @@ export async function rssRoutes(app: FastifyInstance) {
     return { feed: row, added };
   });
 
-  app.post('/rss/feeds/:id/refresh', { preHandler: requireAuth('post.edit') }, async (req) => {
+  app.post('/rss/feeds/:id/refresh', { preHandler: requireAuth('source.manage') }, async (req) => {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
     const f = await one<any>('SELECT * FROM rss_feeds WHERE id = $1', [id]);
     if (!f) throw notFound();
@@ -212,7 +212,7 @@ export async function rssRoutes(app: FastifyInstance) {
     return { ok: true };
   });
 
-  app.delete('/rss/feeds/:id', { preHandler: requireAuth('post.edit') }, async (req) => {
+  app.delete('/rss/feeds/:id', { preHandler: requireAuth('source.manage') }, async (req) => {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
     const f = await one<any>('DELETE FROM rss_feeds WHERE id = $1 RETURNING title', [id]);
     if (!f) throw notFound();
@@ -220,7 +220,7 @@ export async function rssRoutes(app: FastifyInstance) {
     return { ok: true };
   });
 
-  app.get('/rss/items', { preHandler: requireAuth('post.read') }, async (req) => {
+  app.get('/rss/items', { preHandler: requireAuth('source.view') }, async (req) => {
     const q = z.object({ filter: z.enum(['new', 'starred', 'hidden', 'all']).default('new'), feedId: z.uuid().optional(), limit: z.coerce.number().min(1).max(200).default(50) }).parse(req.query);
     const where = q.filter === 'new' ? 'i.hidden_at IS NULL' : q.filter === 'starred' ? 'i.starred_at IS NOT NULL AND i.hidden_at IS NULL' : q.filter === 'hidden' ? 'i.hidden_at IS NOT NULL' : 'true';
     return many<any>(
@@ -231,7 +231,7 @@ export async function rssRoutes(app: FastifyInstance) {
     );
   });
 
-  app.post('/rss/items/:id', { preHandler: requireAuth('post.edit') }, async (req) => {
+  app.post('/rss/items/:id', { preHandler: requireAuth('source.items') }, async (req) => {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
     const { action } = z.object({ action: z.enum(['star', 'unstar', 'hide', 'unhide']) }).parse(req.body);
     const uid = req.auth!.user?.id ?? null;
@@ -247,7 +247,7 @@ export async function rssRoutes(app: FastifyInstance) {
   });
 
   /** Eintrag als Themenidee übernehmen: Beitragsentwurf mit Original-Link. */
-  app.post('/rss/items/:id/idea', { preHandler: requireAuth('post.edit') }, async (req) => {
+  app.post('/rss/items/:id/idea', { preHandler: requireAuth('source.items') }, async (req) => {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
     const it = await one<any>(`SELECT i.*, f.title AS feed_title FROM rss_items i JOIN rss_feeds f ON f.id = i.feed_id WHERE i.id = $1`, [id]);
     if (!it) throw notFound();

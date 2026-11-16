@@ -1,5 +1,6 @@
 import { many, one } from '../db/pool.js';
 import { permissionsFor } from '../auth/permissions.js';
+import { ensureRolesFresh } from '../auth/roles.js';
 import { log } from './log.js';
 import { notify } from './notify.js';
 import { getSettings } from './settings.js';
@@ -23,6 +24,7 @@ export type SecurityEvent =
   | 'recovery_code_used'
   | 'admin_granted'
   | 'admin_removed'
+  | 'role_changed'
   | 'mfa_reset'
   | 'mfa_disabled'
   | 'security_settings'
@@ -89,12 +91,13 @@ export async function securityAlert(
   try {
     if (msg.throttleKey && throttled(`${event}:${msg.throttleKey}`, msg.throttleMs ?? 60 * 60_000)) return false;
     const s = await getSettings();
-    const permission = msg.permission ?? 'system.manage';
+    const permission = msg.permission ?? 'settings.security';
     log('warn', 'security', msg.title, { ereignis: event, ...(msg.body ? { text: msg.body.slice(0, 500) } : {}) });
     if (s['security.alert_inapp']) {
       await notify({ kind: msg.kind ?? 'warning', title: msg.title, body: msg.body, link: msg.link ?? '/protokolle', permission });
     }
     if (s['security.alert_mail_admins'] && smtpReady(s)) {
+      await ensureRolesFresh();
       const users = await many<{ email: string; roles: string[] }>(`SELECT email, roles FROM users WHERE status = 'active'`);
       const to = users.filter((u) => permissionsFor(u.roles).has(permission)).map((u) => u.email);
       sendMail(to, msg.title, msg.body ?? '').catch((e) => log('warn', 'security', `Sicherheitsmeldung per E-Mail fehlgeschlagen: ${e.message}`));

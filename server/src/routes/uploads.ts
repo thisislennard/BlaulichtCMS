@@ -258,18 +258,18 @@ export async function uploadRoutes(app: FastifyInstance) {
   /* Angemeldet (Medienverwaltung) */
   const collP = z.object({ cid: z.uuid() });
   const collSessP = z.object({ cid: z.uuid(), id: z.uuid() });
-  app.post('/collections/:cid/upload-sessions', { preHandler: requireAuth('media.manage'), ...lim(240) }, async (req) => {
+  app.post('/collections/:cid/upload-sessions', { preHandler: requireAuth('media.upload'), ...lim(240) }, async (req) => {
     const { cid } = collP.parse(req.params);
     const body = createBody.parse(req.body);
     const ctx = await internalCtx(cid, req);
     const r = await createSession({ ...ctx, folderId: await assertFolder(cid, body.folderId) }, body);
     return { ...r, chunkSize: 8 * 1024 * 1024 };
   });
-  app.get('/collections/:cid/upload-sessions/:id', { preHandler: requireAuth('media.manage') }, async (req) => {
+  app.get('/collections/:cid/upload-sessions/:id', { preHandler: requireAuth('media.upload') }, async (req) => {
     const { cid, id } = collSessP.parse(req.params);
     return status(cid, id);
   });
-  app.put('/collections/:cid/upload-sessions/:id', { preHandler: requireAuth('media.manage'), bodyLimit: MAX_CHUNK + 1024, ...lim(1200) }, async (req) => {
+  app.put('/collections/:cid/upload-sessions/:id', { preHandler: requireAuth('media.upload'), bodyLimit: MAX_CHUNK + 1024, ...lim(1200) }, async (req) => {
     const { cid, id } = collSessP.parse(req.params);
     const { offset } = offQ.parse(req.query);
     return appendChunk(await internalCtx(cid, req), id, offset, req);

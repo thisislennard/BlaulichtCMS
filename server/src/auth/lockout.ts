@@ -112,7 +112,7 @@ export async function registerFailure(user: LockUser, column: 'failed_logins' | 
   );
   if (r?.locked_now) {
     const body = `Nach ${limit} Fehlversuchen sind Anmeldungen von unbekannten Geräten für ${minutes} Minuten gesperrt. Bereits benutzte Geräte sind nicht betroffen.`;
-    await securityAlert('account_locked', { title: `Konto ${r.email} vorübergehend gesperrt`, body: `${body} Die Sperre lässt sich in der Benutzerverwaltung aufheben; Quelle der Versuche steht im Audit-Protokoll.`, link: '/benutzer', permission: 'user.manage' });
+    await securityAlert('account_locked', { title: `Konto ${r.email} vorübergehend gesperrt`, body: `${body} Die Sperre lässt sich in der Benutzerverwaltung aufheben; Quelle der Versuche steht im Audit-Protokoll.`, link: '/benutzer', permission: 'user.lock' });
     await notifyAffectedUser(user.id, 'Dein Konto wurde nach Fehlversuchen vorübergehend gesperrt', `${body} Warst du das nicht, bitte die Administration informieren.`);
   }
 }

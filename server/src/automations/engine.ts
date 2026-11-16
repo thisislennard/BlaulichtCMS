@@ -441,7 +441,7 @@ async function awaitApproval(
     await db.query(`UPDATE automation_runs SET status = 'waiting', resume_at = now() + make_interval(hours => $2) WHERE id = $1`, [runId, a.hours]);
     await audit(ctx.actor, 'automation.approval_requested', { type: 'automation', id: ctx.run.automation_id, label: a.title }, { lauf: String(runId).slice(0, 8), art: a.kind }, 'ok', db);
   });
-  await notify({ kind: 'info', title: `Freigabe erbeten: ${a.title}`.slice(0, 200), body: `Aus der Automation „${ctx.run.automation_name}“.`, link: '/freigaben', permission: 'post.approve' });
+  await notify({ kind: 'info', title: `Freigabe erbeten: ${a.title}`.slice(0, 200), body: `Aus der Automation „${ctx.run.automation_name}“.`, link: '/freigaben', permission: 'approval.automation' });
   return { pause: true };
 }
 
@@ -500,7 +500,7 @@ async function runOutput(ctx: Ctx, node: GraphNode, data: Data, prev: StepRow | 
         }
         return done({ ports: ['out'], produced: { banner_link: '/banner' }, info: `Banner „${title}“ ${direct ? 'direkt veröffentlicht' : c.submit !== false ? 'angelegt und zur Freigabe eingereicht' : 'als Entwurf angelegt'} (${usable.length} Website(s)).`, log: { ...desc, banner: ids } }, db);
       }).then(async (res) => {
-        if (!direct && c.submit !== false) await notify({ kind: 'info', title: `Banner zur Freigabe: ${title}`.slice(0, 200), body: `Aus der Automation „${ctx.run.automation_name}“.`, link: '/banner', permission: 'post.approve' });
+        if (!direct && c.submit !== false) await notify({ kind: 'info', title: `Banner zur Freigabe: ${title}`.slice(0, 200), body: `Aus der Automation „${ctx.run.automation_name}“.`, link: '/banner', permission: 'approval.banner' });
         return res;
       });
     }
@@ -544,7 +544,7 @@ async function runOutput(ctx: Ctx, node: GraphNode, data: Data, prev: StepRow | 
         await audit(ctx.actor, direct ? 'automation.post_published' : 'automation.post_created', { type: 'post', id: p.id, label: title }, { ...auditDetails, website: site?.name ?? null }, 'ok', db);
         return done({ ports: ['out'], produced: { beitrag_link: `/beitraege/${p.id}`, beitrag_titel: title }, info: `Beitrag „${title}“ ${direct ? `direkt an „${site!.name}“ übergeben` : submit ? 'angelegt und zur Freigabe eingereicht' : 'als Entwurf angelegt'}.`, log: { ...desc, beitrag: p.id } }, db);
       });
-      if (submit && !direct) await notify({ kind: 'info', title: `Freigabe erbeten: ${title}`.slice(0, 200), body: `Fassung 1 – aus der Automation „${ctx.run.automation_name}“`, link: res.produced?.beitrag_link as string, permission: 'post.approve' });
+      if (submit && !direct) await notify({ kind: 'info', title: `Freigabe erbeten: ${title}`.slice(0, 200), body: `Fassung 1 – aus der Automation „${ctx.run.automation_name}“`, link: res.produced?.beitrag_link as string, permission: 'approval.post' });
       else if (!direct) await notify({ kind: 'info', title: `Neuer Beitragsentwurf: ${title}`.slice(0, 200), body: `Aus der Automation „${ctx.run.automation_name}“.`, link: res.produced?.beitrag_link as string, permission: 'post.edit' });
       return res;
     }

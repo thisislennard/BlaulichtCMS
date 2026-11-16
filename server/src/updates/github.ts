@@ -157,7 +157,7 @@ export async function checkForUpdate(): Promise<CheckResult> {
         title: `Update verfügbar: Version ${latest!.version}`,
         body: `BlaulichtCMS ${latest!.version} steht bereit (installiert: ${config.version}). Installation unter Einstellungen → Updates.`,
         link: '/einstellungen#updates',
-        permission: 'system.manage',
+        permission: 'update.install',
       });
       log('info', 'updates', `Update verfügbar: ${config.version} → ${latest!.version}`);
     }

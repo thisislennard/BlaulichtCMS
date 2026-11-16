@@ -147,7 +147,7 @@ const revisionInput = z.object({
 });
 
 export async function postRoutes(app: FastifyInstance) {
-  app.get('/posts', { preHandler: requireAuth('post.read') }, async (req) => {
+  app.get('/posts', { preHandler: requireAuth('post.view') }, async (req) => {
     const q = z.object({ state: z.string().max(20).optional(), archived: z.enum(['true', 'false', '1', '0']).transform((v) => v === 'true' || v === '1').default(false) }).parse(req.query);
     const rows = await many<any>(`${POST_STATE_SQL} WHERE ($1::boolean OR p.archived_at IS NULL) ORDER BY p.updated_at DESC LIMIT 300`, [q.archived]);
     const out = rows.map((p) => ({
@@ -166,7 +166,7 @@ export async function postRoutes(app: FastifyInstance) {
     return q.state ? out.filter((p) => p.state === q.state) : out;
   });
 
-  app.post('/posts', { preHandler: requireAuth('post.edit') }, async (req) => {
+  app.post('/posts', { preHandler: requireAuth('post.create') }, async (req) => {
     const body = z.object({ title: z.string().trim().min(2).max(200), kind: z.enum(POST_KINDS).default('news'), templateId: z.uuid().nullable().optional() }).parse(req.body);
     const userId = req.auth!.user?.id ?? null;
     const tpl = body.templateId ? await one<any>('SELECT * FROM post_templates WHERE id = $1 AND archived_at IS NULL', [body.templateId]) : null;
@@ -185,7 +185,7 @@ export async function postRoutes(app: FastifyInstance) {
     return post;
   });
 
-  app.get('/posts/:id', { preHandler: requireAuth('post.read') }, async (req) => {
+  app.get('/posts/:id', { preHandler: requireAuth('post.view') }, async (req) => {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
     const post = await one<any>(`SELECT p.*, u.name AS created_by_name FROM posts p LEFT JOIN users u ON u.id = p.created_by WHERE p.id = $1`, [id]);
     if (!post) throw notFound('Beitrag nicht gefunden.');
@@ -307,9 +307,11 @@ export async function postRoutes(app: FastifyInstance) {
     return result;
   });
 
-  app.patch('/posts/:id', { preHandler: requireAuth('post.edit') }, async (req) => {
+  app.patch('/posts/:id', { preHandler: requireAnyAuth('post.edit', 'post.archive') }, async (req) => {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
     const body = z.object({ kind: z.enum(POST_KINDS).optional(), archived: z.boolean().optional() }).parse(req.body);
+    if (body.kind !== undefined && !req.auth!.permissions.has('post.edit')) throw forbidden('Zum Ändern der Art fehlt das Recht „Beiträge bearbeiten“.');
+    if (body.archived !== undefined && !req.auth!.permissions.has('post.archive')) throw forbidden('Zum Archivieren fehlt das Recht „Beiträge archivieren“.');
     const p = await one<any>(
       `UPDATE posts SET kind = COALESCE($2, kind), archived_at = CASE WHEN $3::boolean IS NULL THEN archived_at WHEN $3 THEN COALESCE(archived_at, now()) ELSE NULL END, updated_at = now() WHERE id = $1 RETURNING *`,
       [id, body.kind ?? null, body.archived ?? null],
@@ -325,7 +327,7 @@ export async function postRoutes(app: FastifyInstance) {
     return { ok: true };
   });
 
-  app.post('/posts/:id/submit', { preHandler: requireAuth('post.edit') }, async (req) => {
+  app.post('/posts/:id/submit', { preHandler: requireAuth('post.submit') }, async (req) => {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
     const { revision } = z.object({ revision: z.number().int().min(1) }).parse(req.body);
     const st = await postState(id);
@@ -335,12 +337,12 @@ export async function postRoutes(app: FastifyInstance) {
     if (!st.current.body.trim()) throw badRequest('Bitte zuerst einen Text schreiben.');
     await pool.query('UPDATE post_revisions SET submitted_at = now(), submitted_by = $2 WHERE id = $1', [st.current.id, req.auth!.user?.id ?? null]);
     await audit(req.auth!.actor, 'post.submitted', { type: 'post', id, label: st.current.title }, { fassung: revision });
-    await notify({ kind: 'info', title: `Freigabe erbeten: ${st.current.title}`.slice(0, 200), body: `Fassung ${revision}`, link: `/beitraege/${id}`, permission: 'post.approve' });
+    await notify({ kind: 'info', title: `Freigabe erbeten: ${st.current.title}`.slice(0, 200), body: `Fassung ${revision}`, link: `/beitraege/${id}`, permission: 'approval.post' });
     return { ok: true };
   });
 
   /** Freigabe bzw. Zurückweisung einer konkreten Fassung (Prüfsumme muss passen). */
-  app.post('/posts/:id/decision', { preHandler: requireAuth('post.approve') }, async (req) => {
+  app.post('/posts/:id/decision', { preHandler: requireAuth('approval.post') }, async (req) => {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
     const body = z.object({ revision: z.number().int().min(1), contentHash: z.string().length(64), decision: z.enum(['approved', 'rejected']), note: z.string().trim().max(500).default(''), privacyChecked: z.boolean().default(false) }).parse(req.body);
     const s = await getSettings();
@@ -390,7 +392,7 @@ export async function postRoutes(app: FastifyInstance) {
     return { ok: true, approvalId: res.a.id };
   });
 
-  app.post('/posts/:id/approval/revoke', { preHandler: requireAuth('post.approve') }, async (req) => {
+  app.post('/posts/:id/approval/revoke', { preHandler: requireAuth('approval.post') }, async (req) => {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
     const res = await tx(async (db) => {
       await db.query('SELECT 1 FROM posts WHERE id = $1 FOR UPDATE', [id]);
@@ -424,7 +426,7 @@ export async function postRoutes(app: FastifyInstance) {
   });
 
   /** Veröffentlichung beauftragen: nur mit gültiger Freigabe genau dieser Fassung. */
-  app.post('/posts/:id/publish', { preHandler: requireAuth('post.publish') }, async (req) => {
+  app.post('/posts/:id/publish', { preHandler: requireAuth('publish.website') }, async (req) => {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
     const body = z.object({ revision: z.number().int().min(1), contentHash: z.string().length(64) }).parse(req.body);
     const pub = await tx(async (db) => {
@@ -459,7 +461,7 @@ export async function postRoutes(app: FastifyInstance) {
    * Adresse) neu gekoppelt, geht der Rückzug an die neue Kopplung (#183) – die Bridge findet den Beitrag über die
    * BlaulichtCMS-Beitrags-ID, unabhängig von der Kopplung.
    */
-  app.post('/posts/:id/unpublish', { preHandler: requireAuth('post.publish') }, async (req) => {
+  app.post('/posts/:id/unpublish', { preHandler: requireAuth('publish.unpublish') }, async (req) => {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
     const { reason } = z.object({ reason: z.string().trim().min(3).max(300) }).parse(req.body);
     const res = await tx(async (db) => {
@@ -506,16 +508,16 @@ export async function postRoutes(app: FastifyInstance) {
 
   const tplBody = z.object({ name: z.string().trim().min(2).max(100), kind: z.enum(POST_KINDS).default('news'), title: z.string().max(200).default(''), body: z.string().max(50_000).default(''), excerpt: z.string().max(1_000).default('') });
 
-  app.get('/templates', { preHandler: requireAuth('post.read') }, async () =>
+  app.get('/templates', { preHandler: requireAuth('post.view') }, async () =>
     many<any>(`SELECT t.*, u.name AS created_by_name FROM post_templates t LEFT JOIN users u ON u.id = t.created_by WHERE t.archived_at IS NULL ORDER BY t.name`),
   );
-  app.post('/templates', { preHandler: requireAuth('post.edit') }, async (req) => {
+  app.post('/templates', { preHandler: requireAuth('post.templates') }, async (req) => {
     const b = tplBody.parse(req.body);
     const t = await one<any>(`INSERT INTO post_templates (name, kind, title, body, excerpt, created_by) VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`, [b.name, b.kind, b.title, b.body, b.excerpt, req.auth!.user?.id ?? null]);
     await audit(req.auth!.actor, 'template.created', { type: 'template', id: t.id, label: t.name });
     return t;
   });
-  app.put('/templates/:id', { preHandler: requireAuth('post.edit') }, async (req) => {
+  app.put('/templates/:id', { preHandler: requireAuth('post.templates') }, async (req) => {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
     const b = tplBody.parse(req.body);
     const t = await one<any>(`UPDATE post_templates SET name = $2, kind = $3, title = $4, body = $5, excerpt = $6, updated_at = now() WHERE id = $1 RETURNING *`, [id, b.name, b.kind, b.title, b.body, b.excerpt]);
@@ -523,7 +525,7 @@ export async function postRoutes(app: FastifyInstance) {
     await audit(req.auth!.actor, 'template.updated', { type: 'template', id, label: t.name });
     return t;
   });
-  app.delete('/templates/:id', { preHandler: requireAuth('post.edit') }, async (req) => {
+  app.delete('/templates/:id', { preHandler: requireAuth('post.templates') }, async (req) => {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
     const t = await one<any>(`UPDATE post_templates SET archived_at = now() WHERE id = $1 RETURNING name`, [id]);
     if (!t) throw notFound();
@@ -531,7 +533,7 @@ export async function postRoutes(app: FastifyInstance) {
     return { ok: true };
   });
 
-  app.post('/publications/:id/cancel', { preHandler: requireAuth('post.publish') }, async (req) => {
+  app.post('/publications/:id/cancel', { preHandler: requireAuth('publish.website') }, async (req) => {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
     const p = await one<any>(`UPDATE publications SET status = 'canceled', result_at = now() WHERE id = $1 AND status = 'queued' RETURNING *`, [id]);
     if (!p) throw badRequest('Nur noch nicht abgeholte Aufträge können abgebrochen werden.');
@@ -544,7 +546,7 @@ export async function postRoutes(app: FastifyInstance) {
    * Die Redaktion prüft auf der Website, ob der Auftrag ausgeführt wurde, und hält das Ergebnis fest (mit Audit).
    * „Ausgeführt“ → 'published' (bei Rückzug: zurückgezogen), „nicht ausgeführt“ → 'canceled'.
    */
-  app.post('/publications/:id/resolve', { preHandler: requireAuth('post.publish') }, async (req) => {
+  app.post('/publications/:id/resolve', { preHandler: requireAuth('publish.website') }, async (req) => {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
     const b = z.object({ outcome: z.enum(['done', 'not_done']), note: z.string().trim().min(3).max(300) }).parse(req.body);
     const p = await tx(async (db) => {
@@ -570,7 +572,7 @@ export async function postRoutes(app: FastifyInstance) {
   });
 
   /** Nach bestätigtem Fehler erneut beauftragen (nur dieser Kanal). */
-  app.post('/publications/:id/retry', { preHandler: requireAuth('post.publish') }, async (req) => {
+  app.post('/publications/:id/retry', { preHandler: requireAuth('publish.website') }, async (req) => {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
     const p = await one<any>(
       `UPDATE publications pb SET status = 'queued', error = NULL, fetched_at = NULL, run_at = GREATEST(run_at, now())
@@ -586,9 +588,8 @@ export async function postRoutes(app: FastifyInstance) {
   });
 
   /** „Fotos und Videos sammeln“: verknüpfte Sammlung samt Upload-Link in einem Schritt. */
-  app.post('/posts/:id/collect', { preHandler: requireAnyAuth('post.edit', 'media.manage') }, async (req) => {
+  app.post('/posts/:id/collect', { preHandler: requireAuth('media.collections') }, async (req) => {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
-    if (!req.auth!.permissions.has('media.manage')) throw forbidden('Zum Anlegen einer Sammlung fehlt das Recht „Medien verwalten“.');
     const body = z.object({ days: z.number().int().min(1).max(3650).optional() }).parse(req.body ?? {});
     const post = await one<any>('SELECT p.id, r.title FROM posts p JOIN post_revisions r ON r.post_id = p.id AND r.number = p.current_revision WHERE p.id = $1', [id]);
     if (!post) throw notFound();

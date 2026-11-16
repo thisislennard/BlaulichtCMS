@@ -3,7 +3,7 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { many, one, pool, tx } from '../db/pool.js';
 import { assertRecentAuth, requireAnyAuth, requireAuth } from '../auth/context.js';
-import { ROLES } from '../auth/permissions.js';
+import { activeRoles } from '../auth/permissions.js';
 import { audit } from '../lib/audit.js';
 import { AppError, badRequest, conflict, forbidden, notFound } from '../lib/errors.js';
 import { securityAlert } from '../lib/security-alerts.js';
@@ -108,7 +108,7 @@ function cleanPayload(p: Record<string, unknown> | undefined, allowed: Set<strin
 const actorUser = (req: FastifyRequest) => req.auth!.user?.id ?? null;
 
 export async function automationRoutes(app: FastifyInstance) {
-  const read = requireAnyAuth('automation.read', 'automation.manage');
+  const read = requireAuth('automation.read');
   const manage = requireAuth('automation.manage');
 
   /* ------------------------------------------------------------ Katalog */
@@ -124,7 +124,7 @@ export async function automationRoutes(app: FastifyInstance) {
       nodeTypes: Object.entries(NODE_TYPES).map(([type, d]) => ({ type, ...d })),
       operators: OPERATORS,
       limits: LIMITS,
-      roles: ROLES.map((r) => ({ id: r.id, label: r.label })),
+      roles: activeRoles().map((r) => ({ id: r.id, label: r.label })),
       connections: await many<any>(`SELECT id, kind, name, status FROM connections WHERE deleted_at IS NULL AND kind IN ('fe2','feuersoftware','warnfeed') ORDER BY name`),
       feeds: await many<any>(`SELECT id, title FROM rss_feeds ORDER BY title`),
       collections: await many<any>(`SELECT id, title FROM collections WHERE deleted_at IS NULL AND archived_at IS NULL ORDER BY created_at DESC LIMIT 200`),
@@ -463,7 +463,7 @@ export async function automationRoutes(app: FastifyInstance) {
 
   /* ------------------------------------------------------------ Freigaben aus Abläufen */
 
-  app.get('/automation-approvals', { preHandler: requireAnyAuth('post.approve', 'automation.manage') }, async (req) => {
+  app.get('/automation-approvals', { preHandler: requireAnyAuth('approval.automation', 'automation.manage') }, async (req) => {
     const uid = req.auth!.user?.id ?? null;
     const four = (await getSettings())['editorial.four_eyes'];
     const rows = await many<any>(
@@ -474,11 +474,11 @@ export async function automationRoutes(app: FastifyInstance) {
     );
     return rows.map(({ updated_by, activated_by, ...r }) => ({
       ...r,
-      can_decide: req.auth!.permissions.has('post.approve') && !(four && uid && [updated_by, activated_by].includes(uid)),
+      can_decide: req.auth!.permissions.has('approval.automation') && !(four && uid && [updated_by, activated_by].includes(uid)),
     }));
   });
 
-  app.post('/automation-approvals/:id/decision', { preHandler: requireAuth('post.approve') }, async (req) => {
+  app.post('/automation-approvals/:id/decision', { preHandler: requireAuth('approval.automation') }, async (req) => {
     const { id } = uuidParam.parse(req.params);
     const b = z.object({ decision: z.enum(['approved', 'rejected']), note: z.string().trim().max(500).default('') }).parse(req.body);
     if (b.decision === 'rejected' && !b.note) throw badRequest('Bitte kurz begründen, warum abgelehnt wird.');

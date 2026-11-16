@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { ROLE_IDS } from '../auth/permissions.js';
+import { roleExists } from '../auth/permissions.js';
 import { FIELD_KEY, LIMITS, type InputKind, type OutputKind } from './catalog.js';
 
 /* Einstellungen je Art von Eingang und Ausgang (serverseitig geprüft; die Oberfläche spiegelt die Felder). */
@@ -37,7 +37,8 @@ const variants = z
   })
   .default({});
 
-const roles = z.array(z.enum(ROLE_IDS as [string, ...string[]])).max(ROLE_IDS.length).default([]);
+// Mitgelieferte und eigene Rollen (Stand der Rollentabelle zum Zeitpunkt der Prüfung)
+const roles = z.array(z.string().max(40).refine((r) => roleExists(r), 'Unbekannte Rolle.')).max(100).default([]);
 
 export const OUTPUT_CONFIG: Record<OutputKind, z.ZodType<any>> = {
   banner: z.object({

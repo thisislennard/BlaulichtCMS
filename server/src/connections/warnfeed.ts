@@ -341,7 +341,7 @@ async function processWarnfeed(c: Connection, rec: Receipt) {
       await emitOfficialWarning(c, row, area.ok, warningSource(w));
       const banner = area.ok && w.msgType !== 'Cancel' && autoBannerAllowed(c);
       if (area.ok && w.msgType !== 'Cancel') {
-        await notify({ kind: 'warning', title: `Amtliche Warnung: ${w.headline || w.event}`.slice(0, 200), body: w.areas.slice(0, 3).join(', '), link: '/verbindungen', permission: 'post.read' });
+        await notify({ kind: 'warning', title: `Amtliche Warnung: ${w.headline || w.event}`.slice(0, 200), body: w.areas.slice(0, 3).join(', '), link: '/verbindungen', permission: 'official.view' });
         if (banner) await createBanner(c, row);
       }
       const effect = banner ? 'angezeigt, Benachrichtigung und automatisches Banner' : 'angezeigt und Benachrichtigung';
@@ -373,7 +373,7 @@ async function disableInsecureAutoBanner(c: Connection) {
   await pool.query(`UPDATE connections SET config = config || '{"autoBanner": false}'::jsonb WHERE id = $1`, [c.id]);
   c.config = { ...c.config, autoBanner: false };
   await audit({ id: null, name: `Warnfeed „${c.name}“`, type: 'system' }, 'connection.auto_banner_disabled', { type: 'connection', id: c.id, label: c.name }, { grund: 'Quelle ohne HTTPS' });
-  await notify({ kind: 'warning', title: `Warnfeed „${c.name}“: automatische Banner abgeschaltet`, body: 'Die Quelle wird über unverschlüsseltes HTTP abgerufen. Bitte eine HTTPS-Adresse eintragen.', link: `/verbindungen/${c.id}`, permission: 'connection.manage' });
+  await notify({ kind: 'warning', title: `Warnfeed „${c.name}“: automatische Banner abgeschaltet`, body: 'Die Quelle wird über unverschlüsseltes HTTP abgerufen. Bitte eine HTTPS-Adresse eintragen.', link: `/verbindungen/${c.id}`, permission: 'connection.configure' });
 }
 
 /**
@@ -389,7 +389,7 @@ async function disableAutoBannerWithoutSite(c: Connection) {
   c.config = { ...c.config, autoBanner: false };
   const why = site ? `Website „${site.name}“ ist ${site.status === 'revoked' ? 'widerrufen' : 'nicht gekoppelt'}` : 'Website nicht gefunden';
   await audit({ id: null, name: `Warnfeed „${c.name}“`, type: 'system' }, 'connection.auto_banner_disabled', { type: 'connection', id: c.id, label: c.name }, { grund: why });
-  await notify({ kind: 'warning', title: `Warnfeed „${c.name}“: automatische Banner abgeschaltet`, body: `${why}. Bitte eine gekoppelte Website wählen und automatische Banner wieder einschalten.`, link: `/verbindungen/${c.id}`, permission: 'connection.manage' });
+  await notify({ kind: 'warning', title: `Warnfeed „${c.name}“: automatische Banner abgeschaltet`, body: `${why}. Bitte eine gekoppelte Website wählen und automatische Banner wieder einschalten.`, link: `/verbindungen/${c.id}`, permission: 'connection.configure' });
 }
 
 /** Herausgebende Stelle für den Quellenvermerk (der DWD verlangt ihn nach GeoNutzV, auch bei Auszügen). */

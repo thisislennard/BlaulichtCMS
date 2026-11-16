@@ -75,7 +75,7 @@ export async function cleanupDesignImages() {
 export async function mediaDesignRoutes(app: FastifyInstance) {
   const meta = { accents: ACCENTS, blockTypes: Object.fromEntries(Object.entries(BLOCK_TYPES).map(([k, v]) => [k, v.label])), maxBlocks: 30 };
 
-  app.get('/media/design', { preHandler: requireAuth('media.manage') }, async () => ({ design: await defaultDesign(), builtin: DEFAULT_DESIGN, ...meta }));
+  app.get('/media/design', { preHandler: requireAuth('media.design') }, async () => ({ design: await defaultDesign(), builtin: DEFAULT_DESIGN, ...meta }));
 
   app.put('/media/design', { preHandler: requireAuth('media.admin') }, async (req) => {
     const { design } = z.object({ design: z.any().nullable() }).parse(req.body ?? {});
@@ -86,7 +86,7 @@ export async function mediaDesignRoutes(app: FastifyInstance) {
     return { design: d ?? DEFAULT_DESIGN };
   });
 
-  app.get('/upload-links/:id/design', { preHandler: requireAuth('media.manage') }, async (req) => {
+  app.get('/upload-links/:id/design', { preHandler: requireAuth('media.design') }, async (req) => {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
     const l = await one<any>(
       `SELECT l.id, l.label, l.design, l.welcome_text, c.title, c.purpose, c.note, c.event_date FROM upload_links l JOIN collections c ON c.id = l.collection_id WHERE l.id = $1`,
@@ -96,7 +96,7 @@ export async function mediaDesignRoutes(app: FastifyInstance) {
     return { own: l.design ? await effectiveDesign(l.design) : null, effective: await effectiveDesign(l.design), default: await defaultDesign(), link: { label: l.label, welcome_text: l.welcome_text, title: l.title, purpose: l.purpose, note: l.note, event_date: l.event_date }, ...meta };
   });
 
-  app.put('/upload-links/:id/design', { preHandler: requireAuth('media.manage') }, async (req) => {
+  app.put('/upload-links/:id/design', { preHandler: requireAuth('media.design') }, async (req) => {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
     const { design } = z.object({ design: z.any().nullable() }).parse(req.body ?? {});
     const d = design ? cleanDesign(design) : null;
@@ -108,7 +108,7 @@ export async function mediaDesignRoutes(app: FastifyInstance) {
   });
 
   /* Bild für die Gestaltung hochladen: neu kodiert, ohne Metadaten */
-  app.post('/media/design-images', { preHandler: requireAuth('media.manage'), config: { rateLimit: { max: 30, timeWindow: '1 minute' } } }, async (req) => {
+  app.post('/media/design-images', { preHandler: requireAuth('media.design'), config: { rateLimit: { max: 30, timeWindow: '1 minute' } } }, async (req) => {
     const part = await req.file({ limits: { fileSize: MAX_IMAGE_BYTES, files: 1, fields: 2 } });
     if (!part) throw badRequest('Keine Datei empfangen.');
     let stored;

@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { many, one, pool, tx } from '../db/pool.js';
-import { requireAnyAuth, requireAuth, requirePlatformAdmin } from '../auth/context.js';
+import { requireAuth, requireSession } from '../auth/context.js';
 import { permissionsFor } from '../auth/permissions.js';
 import { audit, auditThrottled } from '../lib/audit.js';
 import { securityAlert } from '../lib/security-alerts.js';
@@ -144,12 +144,12 @@ async function fe2Auth(req: FastifyRequest, c: Connection, pathToken?: string) {
 const newPathToken = () => `bcfe2p_${randomToken(32)}`;
 
 export async function connectionRoutes(app: FastifyInstance) {
-  const manage = requireAuth('connection.manage');
+  const manage = requireAuth('connection.configure');
 
-  app.get('/connections', { preHandler: requireAnyAuth('connection.manage', 'post.edit', 'post.publish') }, async (req) => {
-    const full = req.auth!.permissions.has('connection.manage');
+  app.get('/connections', { preHandler: requireAuth('connection.view') }, async (req) => {
+    const full = req.auth!.permissions.has('connection.configure');
     // „Gelöschte anzeigen“ nur für die Administration: widerrufene und gelöschte Verbindungen zur Nachvollziehbarkeit
-    const withDeleted = full && req.auth!.permissions.has('system.manage') && (req.query as any)?.deleted === '1';
+    const withDeleted = full && req.auth!.permissions.has('connection.delete') && (req.query as any)?.deleted === '1';
     const rows = await many<Connection>(withDeleted ? `SELECT * FROM connections ORDER BY (deleted_at IS NOT NULL OR status = 'revoked'), kind, name` : `SELECT * FROM connections WHERE status <> 'revoked' AND deleted_at IS NULL ORDER BY kind, name`);
     if (full) return Promise.all(rows.map(view));
     // Redaktion sieht nur verfügbare soziale Kanäle (Name, Art, Funktionen)
@@ -159,7 +159,7 @@ export async function connectionRoutes(app: FastifyInstance) {
   app.get('/connections/:id', { preHandler: manage }, async (req) => {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
     const c = await loadConnection(id, pool, { includeDeleted: true });
-    if (c.deleted_at && !req.auth!.permissions.has('system.manage')) throw notFound('Verbindung nicht gefunden.');
+    if (c.deleted_at && !req.auth!.permissions.has('connection.delete')) throw notFound('Verbindung nicht gefunden.');
     const base = await publicBase(req);
     return {
       ...(await view(c)),
@@ -281,7 +281,7 @@ export async function connectionRoutes(app: FastifyInstance) {
     const st = c.config.oauthState;
     const u = st?.by ? await one<any>(`SELECT id, name, roles FROM users WHERE id = $1 AND status = 'active'`, [st.by]) : null;
     // Die Person, die die Anmeldung gestartet hat, muss das Recht weiterhin haben
-    const by = u && permissionsFor(u.roles).has('connection.manage') ? u : null;
+    const by = u && permissionsFor(u.roles).has('connection.configure') ? u : null;
     const actor = { id: by?.id ?? null, name: by?.name ?? 'Meta-Anmeldung', type: 'user' as const, ip: req.ip };
     const back = (msg: string) => reply.redirect(`/verbindungen/${c.id}?meldung=${encodeURIComponent(msg)}`);
     // Status erst nach erfolgreichem Vergleich verbrauchen – sonst könnte jeder mit der Verbindungs-ID eine laufende
@@ -399,7 +399,7 @@ export async function connectionRoutes(app: FastifyInstance) {
    * gelöscht und sie wird als gelöscht markiert: aus den Listen ausgeblendet, Bezüge zeigen „Verbindung gelöscht“.
    * Abrufe, Eingang und Veröffentlichungen ignorieren sie (Status „widerrufen“).
    */
-  app.delete('/connections/:id', { preHandler: manage }, async (req) => {
+  app.delete('/connections/:id', { preHandler: requireAuth('connection.delete') }, async (req) => {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
     const userId = req.auth!.user?.id ?? null;
     const r = await tx(async (db) => {
@@ -421,7 +421,7 @@ export async function connectionRoutes(app: FastifyInstance) {
   });
 
   /** Internes Ziel (privates Netz) ausdrücklich freigeben – nur Plattform-Administration. */
-  app.post('/connections/:id/approve-private', { preHandler: [manage, requirePlatformAdmin()] }, async (req) => {
+  app.post('/connections/:id/approve-private', { preHandler: [requireAuth('connection.private_targets'), requireSession()] }, async (req) => {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
     const { host } = z.object({ host: z.string().max(200) }).parse(req.body);
     const c = await loadConnection(id);
@@ -471,19 +471,19 @@ export async function connectionRoutes(app: FastifyInstance) {
   const receiptConnection = async (req: FastifyRequest) => {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
     const c = await loadConnection(id, pool, { includeDeleted: true });
-    if (c.deleted_at && !req.auth!.permissions.has('system.manage')) throw notFound('Verbindung nicht gefunden.');
+    if (c.deleted_at && !req.auth!.permissions.has('connection.delete')) throw notFound('Verbindung nicht gefunden.');
     if (!RECEIPT_KINDS.includes(c.kind)) throw badRequest('Ein Empfangsprotokoll gibt es nur für amtliche Warnungen, FE2 und Feuersoftware Connect.');
     return c;
   };
 
-  app.get('/connections/:id/receipts', { preHandler: manage }, async (req) => {
+  app.get('/connections/:id/receipts', { preHandler: requireAuth('connection.log') }, async (req) => {
     const c = await receiptConnection(req);
     const q = z.object({ page: z.coerce.number().int().min(1).max(10_000).default(1), limit: z.coerce.number().int().min(1).max(100).default(20), filter: receiptFilter }).parse(req.query ?? {});
     const s = await getSettings();
     return { ...(await listReceipts(c.id, { filter: q.filter ?? null, page: q.page, limit: q.limit })), retention_days: Number(s['privacy.receipt_days']) || 7, cap: RECEIPT_CAP };
   });
 
-  app.get('/connections/:id/receipts/:receiptId/items', { preHandler: manage }, async (req) => {
+  app.get('/connections/:id/receipts/:receiptId/items', { preHandler: requireAuth('connection.log') }, async (req) => {
     const c = await receiptConnection(req);
     const { receiptId } = z.object({ receiptId: z.uuid() }).parse(req.params);
     const { filter } = z.object({ filter: receiptFilter }).parse(req.query ?? {});
@@ -492,7 +492,7 @@ export async function connectionRoutes(app: FastifyInstance) {
     return { items, redacted: c.kind !== 'warnfeed' };
   });
 
-  app.get('/connections/:id/receipts/:receiptId/items/:itemId/raw', { preHandler: manage }, async (req) => {
+  app.get('/connections/:id/receipts/:receiptId/items/:itemId/raw', { preHandler: requireAuth('connection.log') }, async (req) => {
     const c = await receiptConnection(req);
     const { receiptId, itemId } = z.object({ receiptId: z.uuid(), itemId: z.uuid() }).parse(req.params);
     const raw = await receiptRaw(c.id, receiptId, itemId);
@@ -573,7 +573,7 @@ export async function connectionRoutes(app: FastifyInstance) {
   /* ------------------------------------------------------------ Soziale Kanäle */
 
   /** Formatprüfung je gewähltem Kanal (vor Freigabe und Veröffentlichung sichtbar). */
-  app.get('/posts/:id/social-check', { preHandler: requireAuth('post.read') }, async (req) => {
+  app.get('/posts/:id/social-check', { preHandler: requireAuth('post.view') }, async (req) => {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
     const st = await postState(id);
     if (!st) throw notFound();
@@ -586,7 +586,7 @@ export async function connectionRoutes(app: FastifyInstance) {
   });
 
   /** Veröffentlichen auf den gewählten sozialen Kanälen – nur mit gültiger Freigabe genau dieser Fassung. */
-  app.post('/posts/:id/social', { preHandler: requireAuth('post.publish') }, async (req) => {
+  app.post('/posts/:id/social', { preHandler: requireAuth('publish.social') }, async (req) => {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
     const b = z.object({ revision: z.number().int(), contentHash: z.string().length(64), connectionIds: z.array(z.uuid()).optional() }).parse(req.body);
     return tx(async (db) => {
@@ -626,7 +626,7 @@ export async function connectionRoutes(app: FastifyInstance) {
   });
 
   /** Nur den betroffenen Kanal wiederholen. Bei unbekanntem Ergebnis prüft der Auftrag zuerst, ob es den Beitrag schon gibt. */
-  app.post('/social-publications/:id/retry', { preHandler: requireAuth('post.publish') }, async (req) => {
+  app.post('/social-publications/:id/retry', { preHandler: requireAuth('publish.social') }, async (req) => {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
     const sp = await one<any>(`UPDATE social_publications SET status = CASE WHEN status = 'failed' THEN 'queued' ELSE status END, error = NULL, updated_at = now() WHERE id = $1 AND status IN ('failed','unknown') RETURNING *`, [id]);
     if (!sp) throw badRequest('Nur fehlgeschlagene oder ungeklärte Veröffentlichungen können wiederholt werden.');
@@ -640,7 +640,7 @@ export async function connectionRoutes(app: FastifyInstance) {
    * erlaubt kein Löschen – Hinweis mit Link zum Beitrag, Löschen von Hand und anschließend hier bestätigen. Noch nicht
    * ausgeführte Aufträge des Beitrags werden abgebrochen. Jeder Schritt wird auditiert. Braucht keine neue Freigabe.
    */
-  app.post('/posts/:id/social/remove', { preHandler: requireAuth('post.publish'), config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, async (req) => {
+  app.post('/posts/:id/social/remove', { preHandler: requireAuth('publish.social_remove'), config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, async (req) => {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
     const { reason } = z.object({ reason: z.string().trim().min(3).max(300) }).parse(req.body);
     const st = await postState(id);
@@ -703,7 +703,7 @@ export async function connectionRoutes(app: FastifyInstance) {
   });
 
   /** Löschen von Hand bestätigen (Instagram oder fehlgeschlagenes Löschen) – auditiert. */
-  app.post('/social-publications/:id/confirm-removed', { preHandler: requireAuth('post.publish') }, async (req) => {
+  app.post('/social-publications/:id/confirm-removed', { preHandler: requireAuth('publish.social_remove') }, async (req) => {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
     const sp = await one<any>(
       `UPDATE social_publications SET removal_status = 'removed', removal_error = NULL, removed_at = now(), removed_by = $2, updated_at = now()
@@ -717,7 +717,7 @@ export async function connectionRoutes(app: FastifyInstance) {
   });
 
   /** Manueller Export: Text je Kanal und freigegebene Medien (zeitlich begrenzte Links). */
-  app.get('/posts/:id/social-export', { preHandler: requireAuth('post.publish') }, async (req) => {
+  app.get('/posts/:id/social-export', { preHandler: requireAuth('publish.social') }, async (req) => {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
     const st = await postState(id);
     if (!st) throw notFound();
@@ -736,7 +736,7 @@ export async function connectionRoutes(app: FastifyInstance) {
 
   /* ------------------------------------------------------------ Amtliche Warnungen */
 
-  app.get('/official-warnings', { preHandler: requireAuth('post.read') }, async () =>
+  app.get('/official-warnings', { preHandler: requireAuth('official.view') }, async () =>
     many<any>(
       `SELECT w.id, w.connection_id, w.identifier, w.msg_type, w.severity, w.event, w.headline, w.areas, w.effective_at, w.expires_at, w.web_url, w.in_area, w.cancelled, w.superseded_by IS NOT NULL AS superseded, w.banner_id, w.received_at, c.name || CASE WHEN c.deleted_at IS NOT NULL THEN ' (Verbindung gelöscht)' ELSE '' END AS source
          FROM official_warnings w JOIN connections c ON c.id = w.connection_id WHERE w.dismissed_at IS NULL ORDER BY w.received_at DESC LIMIT 100`,
@@ -749,7 +749,7 @@ export async function connectionRoutes(app: FastifyInstance) {
    * beendet. Die Löschfrist gilt unverändert. Aktualisierungen und Entwarnungen der Quelle sind eigene Meldungen und
    * erscheinen wieder.
    */
-  app.post('/official-warnings/:id/dismiss', { preHandler: requireAuth('post.edit') }, async (req) => {
+  app.post('/official-warnings/:id/dismiss', { preHandler: requireAuth('official.dismiss') }, async (req) => {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
     const w = await one<any>(`UPDATE official_warnings SET dismissed_at = now(), dismissed_by = $2 WHERE id = $1 AND dismissed_at IS NULL RETURNING *`, [id, req.auth!.user?.id ?? null]);
     if (!w) throw notFound('Warnung nicht gefunden oder bereits ausgeblendet.');
@@ -759,7 +759,7 @@ export async function connectionRoutes(app: FastifyInstance) {
   });
 
   /** Ohne automatische Banner: Banner-Entwurf mit Link zur Originalquelle vorbereiten (normale Freigabe). */
-  app.post('/official-warnings/:id/banner-draft', { preHandler: requireAuth('post.edit') }, async (req) => {
+  app.post('/official-warnings/:id/banner-draft', { preHandler: requireAuth('banner.edit') }, async (req) => {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
     const { siteId } = z.object({ siteId: z.uuid() }).parse(req.body);
     const w = await one<any>(`SELECT * FROM official_warnings WHERE id = $1`, [id]);

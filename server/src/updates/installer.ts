@@ -325,7 +325,7 @@ export async function recordActivationResult(): Promise<{ status: string; versio
       await audit(actor, 'system.maintenance_off', { type: 'system', label: 'Wartungsmodus' }, { grund: ok ? 'Update abgeschlossen' : 'Update zurückgerollt' });
     }
     if (ok) {
-      await notify({ kind: 'success', title: `Update auf Version ${a.version} abgeschlossen`, body: `Vorher: ${a.from}. ${a.message ?? ''}`.trim(), link: '/einstellungen#updates', permission: 'system.manage' });
+      await notify({ kind: 'success', title: `Update auf Version ${a.version} abgeschlossen`, body: `Vorher: ${a.from}. ${a.message ?? ''}`.trim(), link: '/einstellungen#updates', permission: 'update.install' });
     } else {
       await securityAlert('update_rolled_back', { kind: 'error', title: `Update auf Version ${a.version} zurückgerollt`, body: `${a.message ?? ''} Es läuft wieder ${a.from}.`.slice(0, 900), link: '/einstellungen#updates' });
     }

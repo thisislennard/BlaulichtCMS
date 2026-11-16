@@ -8,7 +8,11 @@ import { assertRecentAuth, requireAnyAuth, requireAuth } from '../auth/context.j
 import { audit, settingsDiff } from '../lib/audit.js';
 import { runRetention } from '../lib/retention.js';
 import { securityAlert } from '../lib/security-alerts.js';
-import { badRequest } from '../lib/errors.js';
+import { badRequest, forbidden } from '../lib/errors.js';
+import { permissionDef, PERMISSIONS, settingPermission } from '../auth/permissions.js';
+
+/** Rechte, mit denen sich überhaupt eine Einstellung ändern lässt; welches je Schlüssel nötig ist: settingPermission. */
+const SETTINGS_CHANGE_PERMISSIONS = [...PERMISSIONS.filter((p) => p.module === 'settings' && p.level !== 'read').map((p) => p.id), 'backup.manage'];
 import { DEFAULT_SETTINGS, getSettings, SETTING_RANGES, SETTING_TEXT_MAX, setSettings, type SettingKey } from '../lib/settings.js';
 import { queueStats } from '../jobs/queue.js';
 import { backupPath, BackupRunningError, runBackup } from '../ops/backup.js';
@@ -93,9 +97,9 @@ export async function systemStatus() {
 }
 
 export async function systemRoutes(app: FastifyInstance) {
-  app.get('/system/status', { preHandler: requireAnyAuth('system.read', 'post.read') }, async () => systemStatus());
+  app.get('/system/status', { preHandler: requireAuth('system.status') }, async () => systemStatus());
 
-  app.get('/system/logs', { preHandler: requireAuth('system.read') }, async (req) => {
+  app.get('/system/logs', { preHandler: requireAuth('system.logs') }, async (req) => {
     const q = z
       .object({ level: z.enum(['all', 'info', 'warn', 'error']).default('all'), source: z.string().max(40).optional(), q: z.string().max(100).optional(), before: z.coerce.number().optional(), limit: z.coerce.number().min(1).max(500).default(100) })
       .parse(req.query);
@@ -123,7 +127,7 @@ export async function systemRoutes(app: FastifyInstance) {
     return { logs: rows, sources: sources.map((s) => s.source), nextBefore: rows.length === q.limit ? rows[rows.length - 1].id : null };
   });
 
-  app.get('/audit', { preHandler: requireAuth('audit.read') }, async (req) => {
+  app.get('/audit', { preHandler: requireAuth('audit.view') }, async (req) => {
     const q = z
       .object({ q: z.string().max(100).optional(), actor: z.string().max(100).optional(), objectType: z.string().max(40).optional(), result: z.enum(['all', 'ok', 'failed', 'denied']).default('all'), before: z.coerce.number().optional(), limit: z.coerce.number().min(1).max(500).default(100) })
       .parse(req.query);
@@ -155,7 +159,7 @@ export async function systemRoutes(app: FastifyInstance) {
   });
 
   /** Hash-Kette des Audits prüfen (#112): vorher offene Einträge versiegeln, dann die ganze Kette nachrechnen. */
-  app.get('/system/audit-integrity', { preHandler: requireAnyAuth('audit.read', 'system.manage'), config: { rateLimit: { max: 6, timeWindow: '1 minute' } } }, async (req) => {
+  app.get('/system/audit-integrity', { preHandler: requireAuth('audit.view'), config: { rateLimit: { max: 6, timeWindow: '1 minute' } } }, async (req) => {
     const { sealAudit, verifyAudit } = await import('../lib/audit-chain.js');
     await sealAudit();
     const v = await verifyAudit((await getSettings())['retention.audit_days']);
@@ -163,18 +167,19 @@ export async function systemRoutes(app: FastifyInstance) {
     return { ...v, forward: config.auditForward.mode || null };
   });
 
-  app.get('/settings', { preHandler: requireAnyAuth('system.read', 'system.manage') }, async () => {
+  app.get('/settings', { preHandler: requireAuth('settings.view') }, async () => {
     const s = await getSettings(true);
     const out: Record<string, unknown> = {};
     for (const k of Object.keys(DEFAULT_SETTINGS) as SettingKey[]) if (!INTERNAL_KEYS.has(k)) out[k] = s[k];
     return { settings: out, env: { publicUrl: config.publicUrl || null, cookieSecure: config.cookieSecure, trustedProxies: config.trustedProxies, dataDir: config.dataDir } };
   });
 
-  app.patch('/settings', { preHandler: requireAuth('system.manage') }, async (req) => {
+  app.patch('/settings', { preHandler: requireAnyAuth(...SETTINGS_CHANGE_PERMISSIONS) }, async (req) => {
     const body = z.record(z.string(), z.any()).parse(req.body);
     const patch: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(body)) {
       if (!(k in DEFAULT_SETTINGS) || INTERNAL_KEYS.has(k as SettingKey)) throw badRequest(`Unbekannte Einstellung „${k}“.`);
+      if (!req.auth!.permissions.has(settingPermission(k))) throw forbidden(`Für „${k}“ fehlt das Recht „${permissionDef(settingPermission(k))?.label}“.`);
       if (DEDICATED_KEYS.has(k)) throw badRequest(`„${k}“ wird unter Warnentwurf → Einstellungen (E-Mail-Versand) geändert.`);
       const def = (DEFAULT_SETTINGS as any)[k];
       if (typeof def === 'number') {
@@ -248,18 +253,18 @@ export async function systemRoutes(app: FastifyInstance) {
   });
 
   /* Löschfristen (#97): Probelauf „Was würde gelöscht?“ und sofortige Anwendung */
-  app.get('/system/retention', { preHandler: requireAnyAuth('system.read', 'system.manage') }, async () => runRetention({ dryRun: true }));
-  app.post('/system/retention/run', { preHandler: requireAuth('system.manage'), config: { rateLimit: { max: 6, timeWindow: '1 minute' } } }, async (req) =>
+  app.get('/system/retention', { preHandler: requireAuth('settings.view') }, async () => runRetention({ dryRun: true }));
+  app.post('/system/retention/run', { preHandler: requireAuth('system.retention'), config: { rateLimit: { max: 6, timeWindow: '1 minute' } } }, async (req) =>
     runRetention({ dryRun: false, actor: req.auth!.actor }),
   );
 
   /* Sicherungen */
   /** Update-Vorabprüfung und Wartungsmodus (Ablauf: Sichern → Wechseln → Prüfen → Wiederherstellen). */
-  app.get('/system/update-preflight', { preHandler: requireAuth('system.manage') }, async () => {
+  app.get('/system/update-preflight', { preHandler: requireAuth('update.install') }, async () => {
     const { updatePreflight } = await import('../ops/update.js');
     return updatePreflight();
   });
-  app.post('/system/maintenance', { preHandler: requireAuth('system.manage') }, async (req) => {
+  app.post('/system/maintenance', { preHandler: requireAuth('system.maintenance') }, async (req) => {
     const b = z.object({ enabled: z.boolean(), reason: z.string().trim().max(200).default('') }).parse(req.body);
     const { setMaintenance } = await import('../ops/update.js');
     await setMaintenance(b.enabled, req.auth!.user?.name ?? 'Administration', b.reason || 'Update wird vorbereitet', req.auth!.user?.id ?? null);
@@ -267,11 +272,11 @@ export async function systemRoutes(app: FastifyInstance) {
     return { ok: true };
   });
 
-  app.get('/backups', { preHandler: requireAuth('system.manage') }, async () =>
+  app.get('/backups', { preHandler: requireAuth('backup.manage') }, async () =>
     many<any>(`SELECT b.*, u.name AS created_by_name FROM backups b LEFT JOIN users u ON u.id = b.created_by ORDER BY started_at DESC LIMIT 50`),
   );
 
-  app.post('/backups', { preHandler: requireAuth('system.manage') }, async (req) => {
+  app.post('/backups', { preHandler: requireAuth('backup.manage') }, async (req) => {
     try {
       const res = await runBackup('manual', req.auth!.user?.id ?? null);
       await audit(req.auth!.actor, 'backup.created', { type: 'backup', id: res.id, label: res.fileName });
@@ -283,7 +288,7 @@ export async function systemRoutes(app: FastifyInstance) {
     }
   });
 
-  app.get('/backups/:id/download', { preHandler: requireAuth('system.manage') }, async (req, reply) => {
+  app.get('/backups/:id/download', { preHandler: requireAuth('backup.download') }, async (req, reply) => {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
     const b = await one<any>(`SELECT * FROM backups WHERE id = $1 AND status = 'ok'`, [id]);
     if (!b) throw badRequest('Sicherung nicht gefunden.');
@@ -343,17 +348,17 @@ export async function systemRoutes(app: FastifyInstance) {
     const perms = req.auth!.permissions;
     const like = `%${q}%`;
     const out: { type: string; id: string; title: string; subtitle: string; href: string }[] = [];
-    if (perms.has('post.read')) {
+    if (perms.has('post.view')) {
       for (const p of await many<any>(`SELECT id, title FROM posts WHERE title ILIKE $1 AND archived_at IS NULL ORDER BY updated_at DESC LIMIT 8`, [like])) {
         out.push({ type: 'post', id: p.id, title: p.title, subtitle: 'Beitrag', href: `/beitraege/${p.id}` });
       }
     }
-    if (perms.has('media.read')) {
+    if (perms.has('media.view')) {
       for (const c of await many<any>(`SELECT id, title FROM collections WHERE title ILIKE $1 AND archived_at IS NULL ORDER BY created_at DESC LIMIT 6`, [like])) {
         out.push({ type: 'collection', id: c.id, title: c.title, subtitle: 'Sammlung', href: `/medien/${c.id}` });
       }
     }
-    if (perms.has('user.read')) {
+    if (perms.has('user.view')) {
       for (const u of await many<any>(`SELECT id, name, email FROM users WHERE name ILIKE $1 OR email ILIKE $1 ORDER BY name LIMIT 5`, [like])) {
         out.push({ type: 'user', id: u.id, title: u.name, subtitle: u.email, href: `/benutzer` });
       }

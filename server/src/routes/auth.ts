@@ -8,7 +8,7 @@ import { many, one, pool, tx } from '../db/pool.js';
 import { assertRecentAuth, clearSessionCookie, createSession, mustUse2fa, REAUTH_MINUTES, requireAuth, SESSION_COOKIE } from '../auth/context.js';
 import { burnPasswordTime, hashPassword, needsRehash, passwordProblems, verifyPassword } from '../auth/passwords.js';
 import { generateRecoveryCodes, generateTotpSecret, otpauthUrl, recoveryCodeCandidates, recoveryCodeHash, verifyTotp } from '../auth/totp.js';
-import { permissionsFor, ROLES } from '../auth/permissions.js';
+import { activeRoles, permissionsFor } from '../auth/permissions.js';
 import { clearFailures, isLocked, knownDevice, registerFailure } from '../auth/lockout.js';
 import { confirmIdentity } from '../auth/stepup.js';
 import { revokeTrustedDevices, trustDevice, trustedDeviceId } from '../auth/devices.js';
@@ -220,7 +220,7 @@ export async function authRoutes(app: FastifyInstance) {
       await audit(actor, 'auth.recovery_code_used', { type: 'user', id: user.id, label: user.email });
       // Wiederherstellungscode = Telefon verloren oder zweiter Faktor kompromittiert (#101)
       const left = (await one<{ n: number }>('SELECT cardinality(recovery_codes)::int AS n FROM users WHERE id = $1', [user.id]))?.n ?? 0;
-      await securityAlert('recovery_code_used', { title: `Wiederherstellungscode benutzt: ${user.email}`, body: `Anmeldung mit einem Wiederherstellungscode von ${req.ip}; noch ${left} Code(s) übrig.`, link: '/benutzer', permission: 'user.manage', kind: 'info' });
+      await securityAlert('recovery_code_used', { title: `Wiederherstellungscode benutzt: ${user.email}`, body: `Anmeldung mit einem Wiederherstellungscode von ${req.ip}; noch ${left} Code(s) übrig.`, link: '/benutzer', permission: 'user.lock', kind: 'info' });
       await notifyAffectedUser(user.id, 'Anmeldung mit einem Wiederherstellungscode', `Für dein Konto wurde ein Wiederherstellungscode benutzt (noch ${left} übrig). Warst du das nicht, bitte sofort das Passwort ändern und die Administration informieren.`);
     }
     await clearFailures(user, 'mfa_failed', device);
@@ -300,7 +300,7 @@ export async function authRoutes(app: FastifyInstance) {
     await revokeTrustedDevices(user.id);
     await audit(req.auth!.actor, 'auth.mfa_disabled', { type: 'user', id: user.id, label: user.email });
     await notifyAffectedUser(user.id, 'Zwei-Faktor-Anmeldung abgeschaltet', 'Für dein Konto wurde die Zwei-Faktor-Anmeldung abgeschaltet; andere Sitzungen wurden beendet. Warst du das nicht, bitte sofort das Passwort ändern und die Administration informieren.');
-    await securityAlert('mfa_disabled', { title: `Zwei-Faktor abgeschaltet: ${user.email}`, body: 'Die Person hat die Zwei-Faktor-Anmeldung für ihr Konto selbst abgeschaltet.', link: '/benutzer', permission: 'user.manage', kind: 'info' });
+    await securityAlert('mfa_disabled', { title: `Zwei-Faktor abgeschaltet: ${user.email}`, body: 'Die Person hat die Zwei-Faktor-Anmeldung für ihr Konto selbst abgeschaltet.', link: '/benutzer', permission: 'user.lock', kind: 'info' });
     return { ok: true };
   });
 
@@ -347,7 +347,7 @@ export async function authRoutes(app: FastifyInstance) {
       stage: req.auth.stage,
       user: userPayload(u),
       permissions: [...permissionsFor(req.auth.stage === 'full' ? u.roles : [])],
-      roleLabels: ROLES.filter((r) => u.roles.includes(r.id)).map((r) => r.label),
+      roleLabels: activeRoles().filter((r) => u.roles.includes(r.id)).map((r) => r.label),
       instance: { name: s['general.instance_name'], organization: s['general.organization'], timezone: s['general.timezone'], language: s['general.language'], publicUrl: s['general.public_url'] || config.publicUrl || null, privacy: { controller: privacyInfo(s).controller, policy_url: privacyInfo(s).policy_url, incomplete: privacyIncomplete(s) } },
       version: config.version,
       recoveryCodesLeft: u.recovery_codes.length,

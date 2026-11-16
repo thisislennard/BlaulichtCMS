@@ -64,7 +64,7 @@ const idsBody = z.array(z.uuid()).min(1).max(1000);
 export async function mediaOrganizeRoutes(app: FastifyInstance) {
   /* ------------------------------------------ Ordner ------------------------------------------ */
 
-  app.get('/collections/:id/folders', { preHandler: requireAuth('media.read') }, async (req) => {
+  app.get('/collections/:id/folders', { preHandler: requireAuth('media.view') }, async (req) => {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
     return many<any>(
       `SELECT f.id, f.parent_id, f.name, f.sort_order, f.archived_at, f.created_at,
@@ -74,7 +74,7 @@ export async function mediaOrganizeRoutes(app: FastifyInstance) {
     );
   });
 
-  app.post('/collections/:id/folders', { preHandler: requireAuth('media.manage') }, async (req) => {
+  app.post('/collections/:id/folders', { preHandler: requireAuth('media.organize') }, async (req) => {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
     const body = z.object({ name: z.string().max(200), parentId: z.uuid().nullable().optional() }).parse(req.body ?? {});
     let name: string;
@@ -99,7 +99,7 @@ export async function mediaOrganizeRoutes(app: FastifyInstance) {
     return f;
   });
 
-  app.patch('/folders/:id', { preHandler: requireAuth('media.manage') }, async (req) => {
+  app.patch('/folders/:id', { preHandler: requireAuth('media.organize') }, async (req) => {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
     const body = z.object({ name: z.string().max(200).optional(), parentId: z.uuid().nullable().optional(), archived: z.boolean().optional() }).parse(req.body ?? {});
     const cur = await one<any>(`SELECT * FROM collection_folders WHERE id = $1 AND deleted_at IS NULL`, [id]);
@@ -131,7 +131,7 @@ export async function mediaOrganizeRoutes(app: FastifyInstance) {
 
   /* ---------------------------------------- Schlagworte ---------------------------------------- */
 
-  app.get('/media-tags', { preHandler: requireAuth('media.read') }, async () =>
+  app.get('/media-tags', { preHandler: requireAuth('media.view') }, async () =>
     many<any>(
       `SELECT t.id, t.name, count(m.id)::int AS count FROM media_tags t JOIN media_tag_links l ON l.tag_id = t.id JOIN media m ON m.id = l.media_id AND m.deleted_at IS NULL
         GROUP BY t.id ORDER BY lower(t.name)`,
@@ -139,7 +139,7 @@ export async function mediaOrganizeRoutes(app: FastifyInstance) {
   );
 
   /* Schlagworte einer Datei setzen */
-  app.put('/media/:id/tags', { preHandler: requireAuth('media.manage') }, async (req) => {
+  app.put('/media/:id/tags', { preHandler: requireAuth('media.organize') }, async (req) => {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
     const { tags } = z.object({ tags: z.array(z.string().max(100)).max(30) }).parse(req.body ?? {});
     const m = await one<any>(`SELECT id, original_name FROM media WHERE id = $1 AND deleted_at IS NULL`, [id]);
@@ -156,7 +156,7 @@ export async function mediaOrganizeRoutes(app: FastifyInstance) {
   });
 
   /* Sammel-Tagging: Schlagworte hinzufügen und/oder entfernen */
-  app.post('/media/tags', { preHandler: requireAuth('media.manage') }, async (req) => {
+  app.post('/media/tags', { preHandler: requireAuth('media.organize') }, async (req) => {
     const body = z.object({ ids: idsBody, add: z.array(z.string().max(100)).max(30).default([]), remove: z.array(z.string().max(100)).max(30).default([]) }).parse(req.body ?? {});
     const r = await tx(async (db) => {
       const live = (await many<any>(`SELECT id FROM media WHERE id = ANY($1) AND deleted_at IS NULL`, [body.ids], db)).map((x) => x.id);
@@ -192,7 +192,7 @@ export async function mediaOrganizeRoutes(app: FastifyInstance) {
     return c;
   }
 
-  app.post('/media/move', { preHandler: requireAuth('media.manage') }, async (req) => {
+  app.post('/media/move', { preHandler: requireAuth('media.organize') }, async (req) => {
     const body = targetBody.parse(req.body ?? {});
     const res = await tx(async (db) => {
       const media = await many<any>(`SELECT id, collection_id, size_bytes, status, original_name FROM media WHERE id = ANY($1) AND deleted_at IS NULL`, [body.ids], db);
@@ -214,7 +214,7 @@ export async function mediaOrganizeRoutes(app: FastifyInstance) {
     return { moved: res.moved.length };
   });
 
-  app.post('/media/copy', { preHandler: requireAuth('media.manage') }, async (req) => {
+  app.post('/media/copy', { preHandler: requireAuth('media.organize') }, async (req) => {
     const body = targetBody.parse(req.body ?? {});
     const s = await getSettings();
     const free = freeBytes();
@@ -261,14 +261,14 @@ export async function mediaOrganizeRoutes(app: FastifyInstance) {
   });
 
   /* Dateitypen für die Link-Optionen: alle bekannten, mit „global erlaubt“ */
-  app.get('/media/types', { preHandler: requireAuth('media.manage') }, async () => {
+  app.get('/media/types', { preHandler: requireAuth('media.view') }, async () => {
     const allowed = effectiveTypes((await getSettings())['media.allowed_types'], null);
     return TYPE_DEFS.map((t) => ({ key: t.key, label: t.label, kind: t.kind, allowed: allowed.includes(t.key) }));
   });
 
   /* --------------------------------- Mediensuche über alle Sammlungen --------------------------------- */
 
-  app.get('/media/search', { preHandler: requireAuth('media.read') }, async (req) => {
+  app.get('/media/search', { preHandler: requireAuth('media.view') }, async (req) => {
     const q = z
       .object({
         q: z.string().trim().max(100).optional(),

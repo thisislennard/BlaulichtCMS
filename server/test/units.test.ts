@@ -7,7 +7,8 @@ import { MASK, maskValue, preview } from '../src/lib/mask.js';
 import { isPrivateAddress, hostMatches, httpRequest } from '../src/lib/http.js';
 import { decrypt, encrypt } from '../src/lib/crypto.js';
 import { totpAt, verifyTotp, base32Encode } from '../src/auth/totp.js';
-import { permissionsFor, matrix } from '../src/auth/permissions.js';
+import { permissionsFor } from '../src/auth/permissions.js';
+import * as P from '../src/auth/permissions.js';
 import { revisionHash } from '../src/routes/posts.js';
 import { normalizePublicUrl } from '../src/lib/urls.js';
 import { fileSlug, publicFileName } from '../src/media/names.js';
@@ -73,15 +74,177 @@ describe('Rechte', () => {
     expect(permissionsFor([]).size).toBe(0);
     const p = permissionsFor(['editor', 'publisher']);
     expect(p.has('post.edit')).toBe(true);
+    expect(p.has('publish.website')).toBe(true);
+    // Sammelbezeichnungen des alten Stands gelten weiter, wenn alle Teile vorhanden sind
     expect(p.has('post.publish')).toBe(true);
     expect(p.has('post.approve')).toBe(false);
+    expect(p.has('approval.post')).toBe(false);
     expect(p.has('user.manage')).toBe(false);
-    expect(matrix().find((m) => m.module === 'users')!.cells.find((c) => c.role === 'platform_admin')!.level).toBe('full');
+    expect(permissionsFor(['gibt_es_nicht']).size).toBe(0);
   });
   it('trennt Warnentwurf, Warnfreigabe und Versand', () => {
     expect(permissionsFor(['warning_author']).has('warning.approve')).toBe(false);
     expect(permissionsFor(['warning_approver']).has('warning.send')).toBe(false);
     expect(permissionsFor(['warning_sender']).has('warning.draft')).toBe(false);
+  });
+});
+
+describe('Feine Rechte und Rollen (0.3.0)', () => {
+  /**
+   * Stand vor den feinen Rechten – bewusst hier ausgeschrieben, unabhängig vom Programm: die 20 groben Rechte der
+   * Version 0.2.3 und die drei Rechte der Automationen (0.3.0, mit „Automationen ansehen“ für Redaktion und Freigabe).
+   */
+  const OLD_IDS = ['media.read', 'media.manage', 'media.admin', 'post.read', 'post.edit', 'post.approve', 'post.publish', 'channel.manage', 'warning.draft', 'warning.level', 'warning.approve', 'warning.rules', 'warning.send', 'connection.manage', 'automation.read', 'automation.manage', 'automation.publish', 'user.read', 'user.manage', 'audit.read', 'system.read', 'system.manage', 'privacy.manage'];
+  const OLD_ROLES: Record<string, string[]> = {
+    platform_admin: OLD_IDS,
+    media_manager: ['media.read', 'media.manage', 'post.read'],
+    editor: ['media.read', 'media.manage', 'post.read', 'post.edit', 'automation.read'],
+    approver: ['media.read', 'post.read', 'post.approve', 'audit.read', 'automation.read'],
+    publisher: ['media.read', 'post.read', 'post.publish'],
+    warning_author: ['warning.draft'],
+    warning_approver: ['warning.draft', 'warning.level', 'warning.approve'],
+    warning_sender: ['warning.send'],
+    viewer: ['media.read', 'post.read'],
+  };
+  const ids = P.PERMISSIONS.map((p) => p.id);
+
+  it('Katalog: eindeutige Kennungen, bekannte Bereiche, Voraussetzungen vorhanden und ohne Kreis', () => {
+    expect(new Set(ids).size).toBe(ids.length);
+    for (const p of P.PERMISSIONS) {
+      expect(P.MODULES.some((m) => m.id === p.module), p.id).toBe(true);
+      expect(p.label.length, p.id).toBeGreaterThan(3);
+      expect(p.description.length, p.id).toBeGreaterThan(10);
+      for (const r of p.requires ?? []) expect(ids, `${p.id} → ${r}`).toContain(r);
+      // Ändern setzt Ansehen voraus: Voraussetzungen sind nie kritischer als das Recht selbst
+      const closure = P.withRequirements([p.id]);
+      expect(closure).toContain(p.id);
+      for (const c of closure) if (c !== p.id) expect(P.withRequirements([c]), `${p.id} ↔ ${c}`).not.toContain(p.id);
+    }
+    for (const m of P.MODULES) expect(P.PERMISSIONS.some((p) => p.module === m.id), m.id).toBe(true);
+    expect(P.withRequirements(['media.design'])).toEqual(['media.view', 'media.links', 'media.design']);
+    expect(P.withRequirements(['unbekannt', 'post.edit'])).toEqual(['post.view', 'post.edit']);
+  });
+
+  it('Zuordnung alt → neu: jede alte Bezeichnung ist abgebildet, alle Teile existieren', () => {
+    expect(Object.keys(P.LEGACY_PERMISSIONS).sort()).toEqual([...OLD_IDS].sort());
+    for (const [old, parts] of Object.entries(P.LEGACY_PERMISSIONS)) {
+      expect(parts.length, old).toBeGreaterThan(0);
+      for (const p of parts) expect(ids, `${old} → ${p}`).toContain(p);
+      // abgeschlossen: Voraussetzungen der Teile gehören zur selben alten Bezeichnung
+      expect(P.withRequirements(parts).sort(), old).toEqual([...parts].sort());
+    }
+    // Neue Rechte ohne Vorgänger: nur für die Administration (alle Rechte) oder eigene Rollen
+    const mapped = new Set(Object.values(P.LEGACY_PERMISSIONS).flat());
+    expect(ids.filter((p) => !mapped.has(p)).sort()).toEqual(['connection.private_targets', 'role.manage', 'warning.delete_sent']);
+  });
+
+  it('bestehende Rollen behalten genau ihre bisherigen Rechte (alt gegen neu)', () => {
+    P.resetActiveRoles();
+    for (const [role, old] of Object.entries(OLD_ROLES)) {
+      const fine = P.finePermissionsFor([role]);
+      if (role === 'platform_admin') {
+        expect([...fine].sort()).toEqual([...ids].sort());
+      } else {
+        // feine Rechte = Vereinigung der Zuordnungen der alten groben Rechte, nicht mehr und nicht weniger
+        const expected = new Set(old.flatMap((o) => P.LEGACY_PERMISSIONS[o]));
+        expect([...fine].sort(), role).toEqual([...expected].sort());
+      }
+      // und umgekehrt: als Sammelbezeichnung gelten genau die alten groben Rechte
+      const eff = P.permissionsFor([role]);
+      expect(OLD_IDS.filter((o) => eff.has(o)).sort(), role).toEqual([...old].sort());
+    }
+    // Kombinationen: Vereinigung der Einzelrollen
+    for (const a of Object.keys(OLD_ROLES)) {
+      for (const b of Object.keys(OLD_ROLES)) {
+        if (a === 'platform_admin' || b === 'platform_admin') continue;
+        const combo = P.finePermissionsFor([a, b]);
+        const expected = new Set([...OLD_ROLES[a], ...OLD_ROLES[b]].flatMap((o) => P.LEGACY_PERMISSIONS[o]));
+        expect([...combo].sort(), `${a}+${b}`).toEqual([...expected].sort());
+      }
+    }
+  });
+
+  it('Vorgaben der mitgelieferten Rollen (Momentaufnahme)', () => {
+    P.resetActiveRoles();
+    const snap = Object.fromEntries(P.SYSTEM_ROLES.filter((r) => r.id !== 'platform_admin').map((r) => [r.id, r.permissions.join(' ')]));
+    expect(snap).toEqual({
+      media_manager:
+        'media.view media.export media.download_original media.collections media.upload media.links media.review media.organize media.redact media.trash media.design post.view source.view channel.view banner.view official.view',
+      editor:
+        'media.view media.export media.download_original media.collections media.upload media.links media.review media.organize media.redact media.trash media.design post.view post.create post.edit post.submit post.archive post.templates source.view source.items source.manage channel.view banner.view banner.edit official.view official.dismiss connection.view automation.read',
+      approver: 'media.view media.export post.view source.view approval.post approval.banner approval.automation channel.view banner.view official.view automation.read audit.view',
+      publisher: 'media.view media.export post.view source.view publish.website publish.unpublish publish.social publish.social_remove channel.view banner.view banner.publish official.view connection.view',
+      warning_author: 'warning.view warning.draft warning.delete',
+      warning_approver: 'warning.view warning.draft warning.delete warning.level warning.approve',
+      warning_sender: 'warning.view warning.send',
+      viewer: 'media.view media.export post.view source.view channel.view banner.view official.view',
+    });
+    expect(P.SYSTEM_ROLES.find((r) => r.id === 'platform_admin')!.permissions).toEqual(ids);
+  });
+
+  it('Rollenstand: Administration hat immer alle Rechte, eigene Rollen samt Voraussetzungen', () => {
+    P.setActiveRoles([
+      { id: 'platform_admin', label: 'Administration', description: '', permissions: [], system: true, customized: false },
+      { id: 'r_test', label: 'Test', description: '', permissions: ['media.redact', 'gibt.es.nicht'], system: false, customized: false },
+    ]);
+    expect(P.finePermissionsFor(['platform_admin']).size).toBe(ids.length);
+    expect([...P.finePermissionsFor(['r_test'])]).toEqual(['media.view', 'media.redact']);
+    // Teilmenge einer alten Bezeichnung zählt nicht als Sammelbezeichnung
+    expect(P.permissionsFor(['r_test']).has('media.manage')).toBe(false);
+    expect(P.permissionsFor(['r_test']).has('media.read')).toBe(false);
+    expect(P.roleExists('editor')).toBe(false);
+    // Ohne Eintrag der Administration (leere Tabelle) bleibt sie trotzdem vorhanden
+    P.setActiveRoles([]);
+    expect(P.finePermissionsFor(['platform_admin']).size).toBe(ids.length);
+    P.resetActiveRoles();
+    expect(P.roleExists('editor')).toBe(true);
+  });
+
+  it('Zwei-Faktor-Pflicht über Rechte: mitgelieferte Rollen wie bisher, eigene Rollen nach ihren Rechten', async () => {
+    const { mustUse2fa } = await import('../src/auth/context.js');
+    P.resetActiveRoles();
+    const s = { ...DEFAULT_SETTINGS, 'security.require_2fa_all': false, 'security.require_2fa_admins': true, 'security.require_2fa_media': true } as any;
+    const oldRule = (role: string) => role === 'platform_admin' || OLD_ROLES[role].includes('media.manage');
+    for (const role of Object.keys(OLD_ROLES)) {
+      expect(mustUse2fa([role], s), role).toBe(oldRule(role));
+      expect(mustUse2fa([role], { ...s, 'security.require_2fa_media': false }), role).toBe(role === 'platform_admin');
+      expect(P.hasAdminPermissions([role]), role).toBe(role === 'platform_admin');
+    }
+    P.setActiveRoles([
+      { id: 'r_konten', label: 'Kontenpflege', description: '', permissions: ['user.invite'], system: false, customized: false },
+      { id: 'r_original', label: 'Originale', description: '', permissions: ['media.download_original'], system: false, customized: false },
+      { id: 'r_lesen', label: 'Lesen', description: '', permissions: ['post.view', 'approval.post'], system: false, customized: false },
+    ]);
+    expect(mustUse2fa(['r_konten'], s)).toBe(true);
+    expect(mustUse2fa(['r_konten'], { ...s, 'security.require_2fa_admins': false })).toBe(false);
+    expect(mustUse2fa(['r_original'], s)).toBe(true);
+    expect(mustUse2fa(['r_original'], { ...s, 'security.require_2fa_media': false })).toBe(false);
+    expect(mustUse2fa(['r_lesen'], s)).toBe(false);
+    P.resetActiveRoles();
+  });
+
+  it('jede Einstellung hat ein vorhandenes Änderungsrecht', () => {
+    for (const k of Object.keys(DEFAULT_SETTINGS)) expect(ids, k).toContain(P.settingPermission(k));
+    expect(P.settingPermission('security.require_2fa_all')).toBe('settings.security');
+    expect(P.settingPermission('privacy.warning_days')).toBe('settings.privacy');
+    expect(P.settingPermission('retention.audit_days')).toBe('settings.privacy');
+    expect(P.settingPermission('media.max_file_mb')).toBe('settings.media');
+    expect(P.settingPermission('editorial.four_eyes')).toBe('settings.editorial');
+    expect(P.settingPermission('neu.unbekannt')).toBe('settings.security');
+  });
+
+  it('Migration 075 trägt genau die mitgelieferten Rollen ein', () => {
+    const sql = fs.readFileSync(path.join(__dirname, '../migrations/075_roles.sql'), 'utf8');
+    const seeded = [...sql.matchAll(/^\s*\('([a-z_]+)',\s+'([^']+)',\s+'([^']+)', true\)/gm)].map((m) => ({ id: m[1], label: m[2], description: m[3] }));
+    expect(seeded).toEqual(P.SYSTEM_ROLES.map((r) => ({ id: r.id, label: r.label, description: r.description })));
+  });
+
+  it('Hilfe: Tabelle der Rechte in benutzer-rollen.md ist aktuell', () => {
+    const doc = fs.readFileSync(path.join(__dirname, '../../web/src/pages/help/content/benutzer-rollen.md'), 'utf8');
+    const start = doc.indexOf('<!-- rechte:start -->');
+    const end = doc.indexOf('<!-- rechte:ende -->');
+    expect(start, 'Markierung rechte:start fehlt').toBeGreaterThan(-1);
+    expect(doc.slice(start + '<!-- rechte:start -->'.length, end).trim()).toBe(P.permissionTableMarkdown().trim());
   });
 });
 
@@ -1189,7 +1352,7 @@ describe('Dashboard-Layout (Kennzahlen, Spalten, Vorlagen)', () => {
   it('kennt jedes Widget genau einmal und nur mit registriertem Recht', () => {
     expect(new Set(WIDGET_DEFS.map((w) => w.id)).size).toBe(WIDGET_DEFS.length);
     for (const w of WIDGET_DEFS) expect(ALL.has(w.permission), w.id).toBe(true);
-    expect(widgetPermission('badge_connection_errors')).toBe('connection.manage');
+    expect(widgetPermission('badge_connection_errors')).toBe('connection.configure');
     expect(widgetPermission('gibt-es-nicht')).toBeNull();
     // Standardlayout: nur bekannte Widgets, Kennzahlen und Kacheln sauber getrennt, übersteht die eigene Prüfung
     expect(layoutIssues(DEFAULT_LAYOUT)).toEqual([]);
@@ -1202,7 +1365,7 @@ describe('Dashboard-Layout (Kennzahlen, Spalten, Vorlagen)', () => {
     expect(availableWidgets(EDITOR)).not.toContain('badge_connection_errors');
     expect(availableWidgets(EDITOR)).toContain('media');
     expect(availableWidgets(permissionsFor(['warning_author']))).toEqual([]);
-    const onlyPosts = new Set(['post.read']);
+    const onlyPosts = new Set(['post.view', 'banner.view', 'source.view', 'channel.view']);
     expect(availableWidgets(onlyPosts)).toEqual(['badge_approvals', 'badge_ready', 'badge_banners', 'approvals', 'ready', 'publications', 'sites', 'banners', 'rss']);
     const l = normalizeLayout(DEFAULT_LAYOUT, onlyPosts);
     for (const id of ids(l)) expect(onlyPosts.has(widgetPermission(id)!), id).toBe(true);
@@ -1329,7 +1492,7 @@ describe('Dashboard-Layout (Kennzahlen, Spalten, Vorlagen)', () => {
     expect(pick({ shared: null, personal: 'kaputt' })).toEqual(['default', 'media,publications,rss']);
     // Vorlage mit Widgets, für die das Recht fehlt: werden beim Ausliefern entfernt
     const tpl = { badges: ['badge_connection_errors', 'badge_ready'], columns: [{ weight: 5, widgets: ['media', 'rss'] }], mobile: ['media'] };
-    const r = resolveLayout({ shared: { '*': tpl }, roles: ['warning_author'], perms: new Set(['post.read']) });
+    const r = resolveLayout({ shared: { '*': tpl }, roles: ['warning_author'], perms: new Set(['post.view', 'banner.view', 'source.view', 'channel.view']) });
     expect(r.layout).toEqual({ version: 2, badges: ['badge_ready'], columns: [{ weight: 5, widgets: ['rss'] }], mobile: [] });
     // Altes gespeichertes Layout als persönliche Einstellung
     const legacy = resolveLayout({ personal: { desktop: [{ id: 'rss', size: 'l' }, { id: 'approvals', size: 's' }], mobile: ['approvals'] }, roles: ['editor'], perms: EDITOR });
