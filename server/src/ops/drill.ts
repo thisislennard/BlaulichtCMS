@@ -88,6 +88,41 @@ function runRestore(dump: string, url: string): Promise<{ ok: boolean; output: s
 }
 
 const quoteIdent = (s: string) => `"${s.replace(/"/g, '""')}"`;
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * Verbindungen zur Probedatenbank. Ein Fehler auf einer ruhenden Verbindung (z. B. vom Server beendet) wird nur
+ * protokolliert: Ohne Fehler-Listener würfe pg-pool ihn als ungefangene Ausnahme und beendete den Worker.
+ */
+export function openProbePool(url: string): pg.Pool {
+  const p = new pg.Pool({ connectionString: url, max: 2, application_name: 'blaulichtcms-drill' });
+  p.on('error', (e) => log('warn', 'backup', `Probedatenbank: Verbindung beendet (${e.message})`));
+  return p;
+}
+
+/** Anzahl der Verbindungen zu einer Datenbank. */
+async function connectionsTo(admin: pg.Client, dbName: string): Promise<number> {
+  return Number((await admin.query(`SELECT count(*)::int AS n FROM pg_stat_activity WHERE datname = $1`, [dbName])).rows[0].n);
+}
+
+/**
+ * Eigene Probedatenbank löschen. pg-pool meldet `end()` als erledigt, bevor die Verbindungen tatsächlich getrennt
+ * sind – ein sofortiges `DROP … WITH (FORCE)` beendete dann noch offene Probe-Verbindungen (CI-Fehler 57P01). Deshalb:
+ * warten, bis keine Verbindung mehr besteht, dann normal löschen. Erst wenn danach noch etwas verbunden ist (z. B. ein
+ * hängender pg_restore), mit FORCE – das betrifft ausschließlich Verbindungen zu genau dieser zufällig benannten
+ * Probedatenbank, nie die laufende Datenbank oder andere Proben.
+ */
+export async function dropProbeDatabase(admin: pg.Client, dbName: string, waitMs = 15_000): Promise<void> {
+  if (!PROBE_NAME.test(dbName)) throw new Error('Ungültiger Name der Probedatenbank.');
+  const until = Date.now() + waitMs;
+  while ((await connectionsTo(admin, dbName)) > 0 && Date.now() < until) await sleep(100);
+  try {
+    await admin.query(`DROP DATABASE IF EXISTS ${quoteIdent(dbName)}`);
+  } catch (e) {
+    if ((e as { code?: string }).code !== '55006') throw e; // nur „wird noch benutzt“
+    await admin.query(`DROP DATABASE IF EXISTS ${quoteIdent(dbName)} WITH (FORCE)`);
+  }
+}
 
 export interface DrillResult {
   durationMs: number;
@@ -116,6 +151,7 @@ export async function runDrill(drillId: string) {
   const dumpFile = path.join(backupDir(), `.probe-${tag}.dump`);
   const checks: DrillResult['checks'] = [];
   const admin = new pg.Client({ connectionString: config.adminDatabaseUrl, application_name: 'blaulichtcms-drill' });
+  admin.on('error', (e) => log('warn', 'backup', `Probe-Wiederherstellung: Verwaltungsverbindung beendet (${e.message})`));
   let created = false;
   let probe: pg.Pool | null = null;
   try {
@@ -156,9 +192,16 @@ export async function runDrill(drillId: string) {
     await admin.connect();
     const role = (await admin.query(`SELECT rolsuper, rolcreatedb FROM pg_roles WHERE rolname = current_user`)).rows[0];
     if (!role?.rolsuper && !role?.rolcreatedb) throw new Error('Die Datenbankverbindung darf keine Datenbank anlegen (DATABASE_ADMIN_URL mit einem Superuser setzen).');
-    // Reste abgebrochener Proben entfernen (nur Datenbanken mit genau diesem Namensmuster)
+    // Reste abgebrochener Proben entfernen (nur Datenbanken mit genau diesem Namensmuster und nur, wenn niemand mehr
+    // verbunden ist – nie Verbindungen beenden, die nicht zu dieser Probe gehören)
     for (const r of (await admin.query(`SELECT datname FROM pg_database WHERE datname LIKE 'blaulichtcms_probe_%'`)).rows) {
-      if (PROBE_NAME.test(r.datname)) await admin.query(`DROP DATABASE IF EXISTS ${quoteIdent(r.datname)} WITH (FORCE)`).catch(() => {});
+      if (!PROBE_NAME.test(r.datname) || r.datname === dbName) continue;
+      // Belegt (DROP würde bis zu 5 s warten und dann scheitern): stehen lassen, die nächste Probe versucht es wieder
+      if ((await connectionsTo(admin, r.datname)) > 0) {
+        log('warn', 'backup', `Alte Probedatenbank ${r.datname} bleibt: Es ist noch eine Verbindung offen.`);
+        continue;
+      }
+      await admin.query(`DROP DATABASE IF EXISTS ${quoteIdent(r.datname)}`).catch((e) => log('warn', 'backup', `Alte Probedatenbank ${r.datname} bleibt (${(e as Error).message}).`));
     }
     await admin.query(`CREATE DATABASE ${quoteIdent(dbName)} TEMPLATE template0 ENCODING 'UTF8'`);
     created = true;
@@ -169,7 +212,7 @@ export async function runDrill(drillId: string) {
     if (!restored.ok) throw new Error(`Einspielen fehlgeschlagen: ${restored.output}`);
     checks.push({ step: 'Vollständig eingespielt', ok: true });
     // 6. Inhalt prüfen
-    probe = new pg.Pool({ connectionString: url, max: 2, application_name: 'blaulichtcms-drill' });
+    probe = openProbePool(url);
     const tables = (await probe.query(`SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE' ORDER BY table_name`)).rows.map((r) => String(r.table_name));
     let rows = 0;
     const keyTables: Record<string, number> = {};
@@ -234,7 +277,7 @@ export async function runDrill(drillId: string) {
     await probe?.end().catch(() => {});
     if (created) {
       try {
-        await admin.query(`DROP DATABASE IF EXISTS ${quoteIdent(dbName)} WITH (FORCE)`);
+        await dropProbeDatabase(admin, dbName);
       } catch (e) {
         log('warn', 'backup', `Probedatenbank ${dbName} ließ sich nicht löschen: ${(e as Error).message} – wird bei der nächsten Probe entfernt.`);
       }

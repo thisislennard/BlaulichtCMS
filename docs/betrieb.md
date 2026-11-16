@@ -471,8 +471,10 @@ nur `backup-cron.sh`, nicht das Image.
 lokale Prüfsumme geprüft) entschlüsseln, Wegwerf-Datenbank `blaulichtcms_probe_<zufall>` in derselben
 PostgreSQL-Instanz anlegen (Verbindung `DATABASE_ADMIN_URL` bzw. eingebetteter Superuser), `pg_restore --exit-on-error`,
 dann prüfen: Tabellen ≥ 10, `schema_migrations` vorhanden, Benutzerkonten vorhanden, Hash-Kette des Audits mit dem
-Schlüssel aus der Sicherung, Ende der Kette gleich dem laufenden Protokoll. Danach `DROP DATABASE … WITH (FORCE)`;
-Reste abgebrochener Proben entfernt die nächste Probe. Ergebnis in `restore_drills` (Oberfläche, Systemstatus),
+Schlüssel aus der Sicherung, Ende der Kette gleich dem laufenden Protokoll. Danach wird sie gelöscht – erst wenn die eigenen
+Verbindungen wirklich getrennt sind, `WITH (FORCE)` nur als letzter Schritt und nur für genau diese Probedatenbank; die
+laufende Datenbank und andere Verbindungen bleiben immer unberührt. Reste abgebrochener Proben entfernt die nächste
+Probe, sofern niemand mehr mit ihnen verbunden ist. Ergebnis in `restore_drills` (Oberfläche, Systemstatus),
 Fehlschlag als Benachrichtigung. Zeitplan: wöchentlich (Standard) oder monatlich eine Stunde nach der Sicherungszeit,
 bevorzugt mit der neuesten Kopie außer Haus. Platzbedarf: etwa die Datenbankgröße; zu wenig freier Speicher bricht
 mit klarer Meldung ab. Eine Sicherung von vor einem Wechsel des Master-Schlüssels lässt die Audit-Kette nicht prüfen

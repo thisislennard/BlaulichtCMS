@@ -6,6 +6,7 @@ import https from 'node:https';
 import os from 'node:os';
 import path from 'node:path';
 import { Readable } from 'node:stream';
+import pg from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import { many, one, pool } from '../src/db/pool.js';
@@ -17,8 +18,9 @@ import { httpRequest, normalizeFingerprint, peekCertificate } from '../src/lib/h
 import { sealAudit } from '../src/lib/audit-chain.js';
 import { backupDir } from '../src/ops/backup.js';
 import { normalizeDavUrl, parseMultistatus, retentionPlan, uploadBackup, uploadVolumeStream } from '../src/ops/offsite.js';
-import { probeUrl, runDrill } from '../src/ops/drill.js';
+import { dropProbeDatabase, openProbePool, probeUrl, runDrill, scheduleDrill } from '../src/ops/drill.js';
 import { systemStatus } from '../src/routes/system.js';
+import { config } from '../src/config.js';
 
 /**
  * Sicherung außer Haus (WebDAV) und Probe-Wiederherstellung (#212) gegen eine echte PostgreSQL-Datenbank. Ein lokaler
@@ -430,6 +432,69 @@ describe('Sicherung außer Haus (WebDAV) und Probe-Wiederherstellung', () => {
     await expect(uploadVolumeStream('../x.tar.gz.enc', 1, sha, Readable.from([data]))).rejects.toThrow(/Dateiname/);
     const list = await admin.get('/backups/offsite/files');
     expect(list.json.volumes.map((f: any) => f.name)).toEqual([name]);
+  });
+
+  it('Probe-Verbindungen: vom Server beendete Verbindung bringt den Prozess nicht zu Fall (CI-Fehler 57P01)', async () => {
+    // Ohne Fehler-Listener würfe pg-pool den Fehler einer ruhenden, vom Server beendeten Verbindung als ungefangene
+    // Ausnahme (Vitest meldet sie als „Unhandled Error“, im Worker endete der Prozess)
+    const p = openProbePool(config.adminDatabaseUrl);
+    await p.query('SELECT 1');
+    const killed = await pool.query(`SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE application_name = 'blaulichtcms-drill' AND datname = current_database()`);
+    expect(killed.rowCount).toBe(1);
+    await new Promise((r) => setTimeout(r, 300));
+    expect((await p.query('SELECT 2 AS n')).rows[0].n).toBe(2);
+    await p.end();
+  });
+
+  it('Probedatenbank löschen: wartet auf die eigenen Verbindungen statt sie abzuschießen', async () => {
+    const su = new pg.Client({ connectionString: config.adminDatabaseUrl });
+    await su.connect();
+    const name = 'blaulichtcms_probe_0a0b0c0d';
+    await su.query(`CREATE DATABASE ${name}`);
+    const p = openProbePool(probeUrl(config.adminDatabaseUrl, name));
+    let poolErrors = 0;
+    p.on('error', () => poolErrors++);
+    await Promise.all([p.query('SELECT 1'), p.query('SELECT pg_sleep(0.05)')]);
+    // end() meldet „fertig“, bevor die Verbindungen getrennt sind – sofort löschen wie in der Probe
+    await p.end();
+    await dropProbeDatabase(su, name);
+    await new Promise((r) => setTimeout(r, 300));
+    expect(poolErrors).toBe(0);
+    expect((await su.query(`SELECT 1 FROM pg_database WHERE datname = $1`, [name])).rowCount).toBe(0);
+    await expect(dropProbeDatabase(su, 'blaulichtcms')).rejects.toThrow(/Ungültiger Name/);
+    await su.end();
+  });
+
+  it('Probe beendet nie fremde Verbindungen: laufende Datenbank und belegte alte Probe bleiben unberührt', async () => {
+    const live = new pg.Client({ connectionString: config.adminDatabaseUrl, application_name: 'fremd-live' });
+    await live.connect();
+    const su = new pg.Client({ connectionString: config.adminDatabaseUrl });
+    await su.connect();
+    const old = 'blaulichtcms_probe_deadbeef';
+    await su.query(`CREATE DATABASE ${old}`);
+    const other = new pg.Client({ connectionString: probeUrl(config.adminDatabaseUrl, old), application_name: 'fremd-probe' });
+    await other.connect();
+    const errors: string[] = [];
+    live.on('error', (e) => errors.push(`live: ${e.message}`));
+    other.on('error', (e) => errors.push(`probe: ${e.message}`));
+    const started = await admin.post('/backups/drills', { source: 'local' });
+    expect(started.status, JSON.stringify(started.json)).toBe(200);
+    await drain();
+    const d = await one(`SELECT status, error FROM restore_drills WHERE id = $1`, [started.json.id]);
+    expect(d.status, d.error).toBe('ok');
+    await new Promise((r) => setTimeout(r, 300));
+    expect(errors).toEqual([]);
+    expect((await live.query('SELECT 1 AS n')).rows[0].n).toBe(1);
+    expect((await other.query('SELECT 1 AS n')).rows[0].n).toBe(1);
+    // Belegte alte Probe bleibt stehen; ist sie frei, räumt die nächste Probe sie weg
+    expect((await su.query(`SELECT 1 FROM pg_database WHERE datname = $1`, [old])).rowCount).toBe(1);
+    await other.end();
+    const again = await scheduleDrill('manual', null, { source: 'local' });
+    await drain();
+    expect((await one(`SELECT status FROM restore_drills WHERE id = $1`, [again.id])).status).toBe('ok');
+    expect((await su.query(`SELECT 1 FROM pg_database WHERE datname LIKE 'blaulichtcms_probe_%'`)).rowCount).toBe(0);
+    await live.end();
+    await su.end();
   });
 
   it('Ausschalten: keine weiteren Übertragungen', async () => {
