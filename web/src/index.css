@@ -1,3 +1,6 @@
+/* Reihenfolge der Ebenen: die Stile von React Flow (Workflow-Editor, Ebene „xyflow“) liegen über der Grundebene, aber
+   unter Komponenten und Utilities – sonst überschrieben sie Tailwind-Klassen. */
+@layer theme, base, xyflow, components, utilities;
 @import 'tailwindcss';
 @config './theme/tailwind.blaulichtcms.js';
 @import './theme/tokens.css';

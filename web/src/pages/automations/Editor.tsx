@@ -12,14 +12,12 @@ import {
   Position,
   ReactFlow,
   ReactFlowProvider,
-  applyEdgeChanges,
-  applyNodeChanges,
+  EdgeChangeset,
+  NodeChangeset,
   useReactFlow,
   type Connection,
   type Edge,
-  type EdgeChange,
   type Node,
-  type NodeChange,
   type NodeProps,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
@@ -471,21 +469,22 @@ function EditorInner({ a, cat, inputs, outputs }: { a: AutomationDetail; cat: Ca
     return () => clearTimeout(t);
   }, [graph, a.id]);
 
+  // React Flow 13 liefert Änderungen als Changeset (statt Array); nur lesend: bloß Auswahl/Größe übernehmen
   const onNodesChange = useCallback(
-    (changes: NodeChange<FNode>[]) => {
-      if (readOnly) changes = changes.filter((c) => c.type === 'select' || c.type === 'dimensions');
-      if (changes.some((c) => c.type === 'remove')) record();
-      setNodes((ns) => applyNodeChanges(changes, ns));
-      const sel = changes.find((c) => c.type === 'select' && c.selected) as { id: string } | undefined;
+    (changes: NodeChangeset<FNode>) => {
+      if (readOnly) changes = new NodeChangeset<FNode>(changes.toArray().filter((c) => c.type === 'select' || c.type === 'dimensions'));
+      if (changes.getByType('remove').length) record();
+      setNodes((ns) => changes.applyTo(ns));
+      const sel = changes.getByType('select').find((c) => c.selected);
       if (sel) setPanelId(sel.id);
     },
     [readOnly, record],
   );
   const onEdgesChange = useCallback(
-    (changes: EdgeChange<Edge>[]) => {
-      if (readOnly) changes = changes.filter((c) => c.type === 'select');
-      if (changes.some((c) => c.type === 'remove')) record();
-      setEdges((es) => applyEdgeChanges(changes, es));
+    (changes: EdgeChangeset<Edge>) => {
+      if (readOnly) changes = new EdgeChangeset<Edge>(changes.toArray().filter((c) => c.type === 'select'));
+      if (changes.getByType('remove').length) record();
+      setEdges((es) => changes.applyTo(es));
     },
     [readOnly, record],
   );
@@ -545,7 +544,7 @@ function EditorInner({ a, cat, inputs, outputs }: { a: AutomationDetail; cat: Ca
     setPanelId(id);
     if (view === 'canvas') {
       const n = nodes.find((x) => x.id === id);
-      if (n) rf.fitView({ nodes: [{ id }], padding: 0.8, duration: 250, maxZoom: 1.2 });
+      if (n) rf.fitView({ nodes: [{ id }], padding: '22%', duration: 250, maxZoom: 1.2 });
     }
   };
 
@@ -560,12 +559,12 @@ function EditorInner({ a, cat, inputs, outputs }: { a: AutomationDetail; cat: Ca
   const arrange = () => {
     record();
     setNodes((ns) => autoLayout(ns, edges));
-    setTimeout(() => rf.fitView({ padding: 0.2, duration: 300 }), 50);
+    setTimeout(() => rf.fitView({ padding: '8%', duration: 300 }), 50);
   };
   const focusSelection = () => {
     const sel = nodes.filter((n) => n.selected);
     if (!sel.length) return toast({ tone: 'info', title: 'Kein Knoten gewählt', text: 'Zuerst einen oder mehrere Knoten auswählen.' });
-    rf.fitView({ nodes: sel.map((n) => ({ id: n.id })), padding: 0.6, duration: 300, maxZoom: 1.4 });
+    rf.fitView({ nodes: sel.map((n) => ({ id: n.id })), padding: '19%', duration: 300, maxZoom: 1.4 });
   };
   const removeSelected = () => {
     const ids = new Set(nodes.filter((n) => n.selected).map((n) => n.id));
@@ -584,7 +583,7 @@ function EditorInner({ a, cat, inputs, outputs }: { a: AutomationDetail; cat: Ca
         const laid = autoLayout(nodes, edges);
         setNodes(laid);
         setSavedJson(JSON.stringify({ g: toG(laid, edges), m: meta }));
-        setTimeout(() => rf.fitView({ padding: 0.15, maxZoom: 1.1 }), 60);
+        setTimeout(() => rf.fitView({ padding: '6.5%', maxZoom: 1.1 }), 60);
       }, 60);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -879,7 +878,8 @@ function EditorInner({ a, cat, inputs, outputs }: { a: AutomationDetail; cat: Ca
                   nodesConnectable={!readOnly}
                   deleteKeyCode={readOnly ? null : ['Delete', 'Backspace']}
                   fitView
-                  fitViewOptions={{ padding: 0.2, maxZoom: 1.1 }}
+                  // Rand in % je Seite: React Flow 13 liest Zahlen ohne Einheit als Pixel (12: 0.2 ≈ 8 %)
+                  fitViewOptions={{ padding: '8%', maxZoom: 1.1 }}
                   minZoom={0.2}
                   maxZoom={2}
                   ariaLabelConfig={ARIA as any}
@@ -894,7 +894,7 @@ function EditorInner({ a, cat, inputs, outputs }: { a: AutomationDetail; cat: Ca
                       <Button size="sm" variant="ghost" icon="RotateCcw" onClick={() => rf.setViewport({ x: 40, y: 40, zoom: 1 }, { duration: 250 })}>
                         Ansicht zurücksetzen
                       </Button>
-                      <Button size="sm" variant="ghost" icon="Maximize2" onClick={() => rf.fitView({ padding: 0.2, duration: 250 })}>
+                      <Button size="sm" variant="ghost" icon="Maximize2" onClick={() => rf.fitView({ padding: '8%', duration: 250 })}>
                         Einpassen
                       </Button>
                       {!readOnly && (

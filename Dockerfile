@@ -7,8 +7,9 @@
 # Hinter einem TLS-prüfenden Proxy die Proxy-CA als Build-Geheimnis übergeben (landet nicht im Image):
 #   docker build --secret id=build_ca,src=/pfad/zur/proxy-ca.pem --build-arg HTTPS_PROXY=http://proxy:3128 .
 #
-# Basis-Images sind per Digest fixiert (#104): Ein nachträglich neu belegter Tag ändert das Image nicht. Dependabot
-# (.github/dependabot.yml) schlägt neue Digests/Versionen als Pull Request vor; install.sh baut mit --pull.
+# Basis-Images sind per Digest fixiert (#104): Ein nachträglich neu belegter Tag ändert das Image nicht. Die wöchentliche
+# Versionsprüfung (scripts/check-versions.mjs, .github/workflows/versions.yml) meldet neue Tags und Digests im Issue
+# „Neue Versionen verfügbar“; übernommen werden sie von Hand (Tag und Digest). install.sh baut mit --pull.
 # ffmpeg/ffprobe stammen aus mwader/static-ffmpeg (statisch gebaut aus den offiziellen Quellen, Build-Skript und
 # Prüfsummen der Quellen öffentlich: https://github.com/wader/static-ffmpeg). Herkunft und Restrisiko: docs/betrieb.md.
 

@@ -2,7 +2,7 @@
 
 .bc-flow .react-flow {
   --xy-background-color: var(--bc-bg);
-  --xy-background-pattern-dots-color: var(--bc-flow-grid);
+  --xy-background-pattern-color: var(--bc-flow-grid);
   --xy-edge-stroke: var(--bc-text-2);
   --xy-edge-stroke-width: 1.6;
   --xy-edge-stroke-selected: var(--bc-primary);
