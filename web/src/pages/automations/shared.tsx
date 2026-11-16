@@ -32,6 +32,8 @@ export interface Catalog {
   sites: { id: string; name: string; status: string; categories?: { id: number; name: string; parent?: number }[] }[];
   socialChannels?: { id: string; kind: string; name: string; status: string; manual: boolean }[];
   responsibilities: { id: string; name: string; area: string }[];
+  /** Presseverteiler (#207) */
+  pressLists?: { id: string; name: string; contacts: number }[];
   warningFields: { key: string; label: string; required: boolean }[];
   users: { id: string; name: string }[];
   /** Befüllbare Bildvorlagen für „Bild aus Vorlage erzeugen“ (#210) */
@@ -200,6 +202,8 @@ export function outputSummary(o: Pick<OutputDef, 'kind' | 'config'>, cat?: Catal
       return [roles(c.roles), c.userIds?.length ? `${c.userIds.length} Person(en)` : ''].filter(Boolean).join(' · ');
     case 'warning_draft':
       return `${Object.keys(c.data ?? {}).length} vorausgefüllte Felder`;
+    case 'press_release':
+      return `${(c.listIds ?? []).map((id: string) => cat?.pressLists?.find((l) => l.id === id)?.name ?? 'Liste').join(', ')} · Entwurf, Versand von Hand`;
     case 'incident_entry':
       return `${c.submit === false ? 'als Entwurf' : 'zur Freigabe einreichen'}${c.siteId ? ` · ${cat?.sites.find((x) => x.id === c.siteId)?.name ?? 'Website'}` : ''}`;
     default:

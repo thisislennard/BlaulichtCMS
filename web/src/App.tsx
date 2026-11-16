@@ -54,6 +54,9 @@ const PressRequests = lazy(() => import('./pages/press/PressRequests'));
 const PressRequestPage = lazy(() => import('./pages/press/PressRequest'));
 const CalendarPage = lazy(() => import('./pages/calendar/Calendar'));
 const PressSettings = lazy(() => import('./pages/press/PressSettings'));
+const PressDistribution = lazy(() => import('./pages/press/Distribution'));
+const PressReleases = lazy(() => import('./pages/press/Releases'));
+const PressUnsubscribe = lazy(() => import('./pages/public/PressUnsubscribe'));
 const Help = lazy(() => import('./pages/help/Help'));
 const PrintSheet = lazy(() => import('./pages/print/PrintSheet'));
 const InstallApp = lazy(() => import('./pages/InstallApp'));
@@ -124,6 +127,8 @@ const router = createBrowserRouter(withErrors([
   { path: '/app', element: <Suspense fallback={null}><InstallApp /></Suspense> },
   // Datenschutzerklärung und Impressum (#187), ohne Anmeldung
   { path: '/datenschutz', element: <Suspense fallback={null}><LegalPage kind="datenschutz" /></Suspense> },
+  // Abmeldung vom Presseverteiler (#207), ohne Anmeldung
+  { path: '/presse-abmelden/:token', element: <Suspense fallback={null}><PressUnsubscribe /></Suspense> },
   { path: '/impressum', element: <Suspense fallback={null}><LegalPage kind="impressum" /></Suspense> },
   {
     path: '/drucken',
@@ -184,6 +189,8 @@ const router = createBrowserRouter(withErrors([
       { path: 'automationen/*', element: <LegacyWorkflowRedirect /> },
       { path: 'automationen', element: <LegacyWorkflowRedirect /> },
       { path: 'presse', element: <Page perm={['press.view']}><PressRequests /></Page> },
+      { path: 'presse/verteiler', element: <Page perm={['press.contacts']}><PressDistribution /></Page> },
+      { path: 'presse/mitteilungen', element: <Page perm={['press.release']}><PressReleases /></Page> },
       { path: 'presse/einstellungen', element: <Page perm={['press.mailbox', 'press.snippets']}><PressSettings /></Page> },
       { path: 'presse/:id', element: <Page perm={['press.view']}><PressRequestPage /></Page> },
       { path: 'amtliche-warnungen', element: <Page perm={['official.view']}><OfficialWarnings /></Page> },

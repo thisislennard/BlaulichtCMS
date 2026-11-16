@@ -44,5 +44,7 @@
   "automationOutputs": "Ausgänge",
   "press": "Presse",
   "pressRequests": "Presseanfragen",
-  "pressSettings": "Postfach & Textbausteine"
+  "pressSettings": "Postfach & Textbausteine",
+  "pressDistribution": "Presseverteiler",
+  "pressReleases": "Pressemitteilungen"
 }

@@ -43,6 +43,8 @@ export const navigation: NavGroup[] = [
     group: 'nav.press',
     items: [
       { id: 'pressRequests', path: '/presse', label: 'nav.pressRequests', icon: 'MessageSquareQuote', perm: ['press.view'] },
+      { id: 'pressDistribution', path: '/presse/verteiler', label: 'nav.pressDistribution', icon: 'BookUser', perm: ['press.contacts'] },
+      { id: 'pressReleases', path: '/presse/mitteilungen', label: 'nav.pressReleases', icon: 'Newspaper', perm: ['press.release'] },
       { id: 'pressSettings', path: '/presse/einstellungen', label: 'nav.pressSettings', icon: 'Settings', perm: ['press.mailbox', 'press.snippets'] },
     ],
   },

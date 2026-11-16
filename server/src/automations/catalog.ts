@@ -16,7 +16,7 @@ export interface FieldDef {
 }
 
 export type InputKind = 'fe2' | 'feuersoftware' | 'warnfeed' | 'rss' | 'upload' | 'schedule' | 'manual' | 'press' | 'calendar';
-export type OutputKind = 'banner' | 'post' | 'mail' | 'notify' | 'warning_draft' | 'incident_entry';
+export type OutputKind = 'banner' | 'post' | 'mail' | 'notify' | 'warning_draft' | 'incident_entry' | 'press_release';
 export type NodeType = 'input' | 'output' | 'condition' | 'switch' | 'template' | 'delay' | 'dedup' | 'approval' | 'merge' | 'image';
 
 export const FIELD_KEY = /^[a-z][a-z0-9_]{0,39}$/;
@@ -225,6 +225,13 @@ export const OUTPUT_KINDS: Record<OutputKind, { label: string; description: stri
     icon: 'ListOrdered',
     directCapable: false,
     produces: [{ key: 'einsatzliste_link', label: 'Link zur Einsatzliste', type: 'url', example: '/einsatzliste' }],
+  },
+  press_release: {
+    label: 'Pressemitteilung an Verteiler',
+    description: 'Pressemitteilung für Verteilerlisten des Presseverteilers – standardmäßig als Entwurf (Versand von Hand); sofort senden nur mit Direktversand. Jede Mail einzeln adressiert, mit Abmeldelink.',
+    icon: 'Newspaper',
+    directCapable: true,
+    produces: [{ key: 'pressemitteilung_link', label: 'Link zur Pressemitteilung', type: 'url', example: '/presse/mitteilungen' }],
   },
 };
 

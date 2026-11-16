@@ -108,6 +108,32 @@ Unter [Presse → Postfach & Textbausteine](/presse/einstellungen) → *Textbaus
 | `{{frist}}` | Frist |
 | `{{absender}}` | eigener Name |
 
+## Presseverteiler
+
+Unter [Presse → Presseverteiler](/presse/verteiler) (Recht „Presseverteiler pflegen“):
+
+- **Kontakte** von Redaktionen: Name, Medium, E-Mail (Pflicht, jede Adresse nur einmal), Telefon, Notiz.
+- **Herkunft** und **Einwilligung / Rechtsgrundlage** je Kontakt vermerken – z. B. „Visitenkarte Pressetermin“ und „per Mail zugestimmt am …“ bzw. „öffentliche Redaktionsadresse“. So lässt sich jederzeit belegen, woher eine Adresse stammt.
+- **Verteilerlisten** (z. B. „Lokalpresse“, „Rundfunk“); ein Kontakt kann in mehreren Listen stehen.
+- **Import (CSV)**: erste Zeile mit Spaltennamen `name; medium; email; telefon; notiz; herkunft; einwilligung; listen` (nur `email` ist Pflicht, Trennzeichen `;` oder `,`, mehrere Listen mit `|`). **Prüfen** zeigt vorab, was neu ist, was ergänzt wird und welche Zeilen fehlerhaft sind. Vorhandene Adressen werden ergänzt, nicht verdoppelt; fehlende Listen werden angelegt.
+- **Export (CSV)** mit allen Angaben und dem Abmeldezeitpunkt – Werte, die eine Tabellenkalkulation als Formel lesen würde, werden entschärft.
+
+**Abmeldung:** Jede Pressemitteilung enthält einen persönlichen **Abmeldelink** (und die Kopfzeile für die Ein-Klick-Abmeldung im Mailprogramm). Wer sich abmeldet, erhält nichts mehr – auch nicht nach einem erneuten Import. Wieder anmelden lässt sich ein Kontakt nur von Hand und nur mit vermerkter Einwilligung. Die Abmeldeseite braucht die **öffentliche Adresse** von BlaulichtCMS (*Einstellungen → Allgemein*); ohne sie ist kein Versand möglich.
+
+## Pressemitteilungen
+
+Unter [Presse → Pressemitteilungen](/presse/mitteilungen) (Recht „Pressemitteilungen versenden“):
+
+1. **Neue Pressemitteilung** – frei schreiben oder **aus einem Beitrag übernehmen** (Titel und Text der aktuellen Fassung, danach frei änderbar).
+2. **Verteilerlisten** wählen und als Entwurf speichern.
+3. **Prüfen und senden** → **Jetzt senden** (mit Passwortbestätigung).
+
+Jede Mail geht **einzeln** an einen Kontakt – nur dessen Adresse steht im Empfängerfeld, nie eine offene Empfängerliste. Wer in mehreren gewählten Listen steht, bekommt die Mitteilung einmal; abgemeldete Kontakte werden übersprungen. Gesendet wird über den eingestellten Mailweg (SMTP oder Microsoft 365) nacheinander mit kurzer Pause.
+
+Das **Versandprotokoll** zeigt je Empfänger *Gesendet*, *Fehlgeschlagen* (mit Grund) oder *Ergebnis unbekannt* (Abbruch während des Sendens – wird **nie** automatisch wiederholt). Bricht der Versand ab, schreibt **Rest senden** nur die Empfänger an, die noch nicht versucht wurden. Wer gesendet hat, wird benachrichtigt, sobald der Versand fertig ist.
+
+**Workflow-Ausgang „Pressemitteilung an Verteiler“:** legt eine Pressemitteilung mit Texten aus {{platzhaltern}} für gewählte Listen an – **standardmäßig als Entwurf**, den eine Person prüft und sendet (Benachrichtigung an alle mit „Pressemitteilungen versenden“). Sofort gesendet wird nur, wenn der Ausgang im Workflow als **Direktversand** markiert ist – mit denselben Absicherungen wie bei Websites und Bannern (Recht „Workflows direkt veröffentlichen lassen“, Passwortbestätigung, Audit, Sicherheitsmeldung).
+
 ## Verknüpfungen, Notizen und Verlauf
 
 - **Einsatz:** eine Einsatzmeldung aus FE2 oder Feuersoftware Connect.
@@ -134,9 +160,11 @@ Der Eingang **Neue Presseanfrage** startet einen [Workflow](/hilfe/workflows), s
 | Presseanfragen beantworten | Antworten schreiben und senden bzw. zur Freigabe einreichen |
 | Antworten an die Presse freigeben | eingereichte Antworten anderer freigeben oder zurückweisen |
 | Textbausteine verwalten | Textbausteine anlegen, ändern, löschen |
+| Presseverteiler pflegen | Kontakte und Verteilerlisten, Import/Export |
+| Pressemitteilungen versenden | Entwürfe, Versand, Versandprotokoll |
 
 Ab Werk: **Redaktion** – ansehen, bearbeiten, beantworten, Textbausteine, Presseverteiler; **Freigabe** – ansehen und Antworten freigeben; **Veröffentlichung** – ansehen, Presseverteiler und Pressemitteilungen versenden; **Administration** – alles; **Lesezugriff** – nichts (Kontaktdaten). Jede Anlage, Änderung, Notiz, Antwort, Freigabe und Löschung steht im Audit – mit Vorgangsnummer, ohne Kontaktdaten.
 
 ## Datenschutz und Löschfrist
 
-Erledigte Anfragen werden samt Kontaktdaten, Verlauf, Mails und Anhängen **12 Monate nach der Erledigung** gelöscht (*Einstellungen → Datenschutz → Erledigte Presseanfragen*, 0 = nie). Wird eine Anfrage wieder geöffnet, beginnt die Frist bei der nächsten Erledigung neu. Presseanfragen sind Teil der [Datenschutzanfragen](/datenschutz-anfragen) (Suche nach Name, E-Mail, Telefon, Text; Auskunft und Löschung).
+Erledigte Anfragen werden samt Kontaktdaten, Verlauf, Mails und Anhängen **12 Monate nach der Erledigung** gelöscht (*Einstellungen → Datenschutz → Erledigte Presseanfragen*, 0 = nie). Wird eine Anfrage wieder geöffnet, beginnt die Frist bei der nächsten Erledigung neu. Presseanfragen und Kontakte des Presseverteilers sind Teil der [Datenschutzanfragen](/datenschutz-anfragen) (Suche nach Name, E-Mail, Telefon, Text; Auskunft und Löschung). Wird ein Kontakt gelöscht, verschwindet seine Adresse auch aus den Versandprotokollen. Kontakte des Verteilers haben keine automatische Löschfrist – sie bleiben, bis sie gelöscht werden; Abgemeldete bleiben als „abgemeldet“ gespeichert, damit sie nicht versehentlich erneut aufgenommen werden.

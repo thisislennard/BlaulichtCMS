@@ -130,6 +130,8 @@ function outputPhrase(n: GraphNode, outputs: Map<string, OutputRef>, labels: Sum
     }
     case 'warning_draft':
       return 'wird ein Warnentwurf vorbereitet';
+    case 'press_release':
+      return direct ? 'geht sofort eine Pressemitteilung an den Presseverteiler hinaus' : 'entsteht ein Entwurf einer Pressemitteilung für den Presseverteiler';
     case 'incident_entry':
       return c.submit === false ? 'entsteht ein Eintrag für die Einsatzliste' : 'entsteht ein Eintrag für die Einsatzliste, der zur Freigabe eingereicht wird';
     default:

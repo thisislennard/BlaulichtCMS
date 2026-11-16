@@ -200,6 +200,10 @@ flowchart LR
 - **Antworten aus BlaulichtCMS:** Antwort-Editor in der Anfrage, Versand über SMTP oder Microsoft 365 mit richtigen
   Kopfzeilen für den Mail-Verlauf, Textbausteine mit Platzhaltern, optionale Freigabe durch eine zweite Person
   (Standard aus), Status automatisch „beantwortet“, nie automatischer Doppelversand.
+- **Presseverteiler und Pressemitteilungen:** Kontakte von Redaktionen mit Herkunft/Einwilligung, Verteilerlisten,
+  CSV-Import/-Export; Pressemitteilung frei oder aus einem Beitrag an Listen senden – jede Mail einzeln adressiert, mit
+  Abmeldelink (auch Ein-Klick), Versandprotokoll je Empfänger; Workflow-Ausgang „Pressemitteilung an Verteiler“
+  (Standard Entwurf, Direktversand nur mit den bestehenden Absicherungen).
 
 ### Verbindungen
 
@@ -225,7 +229,7 @@ flowchart LR
   Website ein Banner …“); eine Checkliste zeigt vor dem Aktivieren, was noch fehlt.
 - **Erweitert – visueller Editor:** Eingänge (FE2-Alarm, Feuersoftware-Einsatz, amtliche Warnung, RSS-Eintrag, neue Uploads,
   Zeitplan, neue Presseanfrage, Kalendereintrag, manueller Start), Verarbeitung (Bedingung, Verzweigung, Felder setzen, Warten, Einmal je Vorgang, Freigabe
-  anfordern, Zusammenführen) und Ausgänge (Banner, Beitrag, E-Mail, App-Benachrichtigung, Warnentwurf vorbereiten, Einsatz in Einsatzliste)
+  anfordern, Zusammenführen) und Ausgänge (Banner, Beitrag, E-Mail, App-Benachrichtigung, Warnentwurf vorbereiten, Einsatz in Einsatzliste, Pressemitteilung an Verteiler)
   auf einer Fläche verbinden – mit Palette, Minikarte, automatischer Anordnung, Rückgängig und einer Listenansicht für
   Tastatur und Handy.
 - **Ein- und Ausgänge** werden auf eigenen Seiten eingerichtet (z. B. Banner-Stil nach Warnstufe, Beitragsvorlage mit

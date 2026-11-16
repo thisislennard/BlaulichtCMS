@@ -112,6 +112,8 @@ export function outputTemplates(o: Pick<OutputRef, 'kind' | 'config'>): string[]
       return Object.values(c.data ?? {}) as string[];
     case 'incident_entry':
       return [c.title, c.keyword, c.alarmAt, c.location, c.vehicles, c.units, c.report];
+    case 'press_release':
+      return [c.subject, c.body];
     default:
       return [];
   }

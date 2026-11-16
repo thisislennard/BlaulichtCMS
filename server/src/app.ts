@@ -88,6 +88,7 @@ import { calendarIcalRoutes } from './routes/calendar-ical.js';
 import { designImageRoutes } from './routes/design-images.js';
 import { backupOffsiteRoutes } from './routes/backup-offsite.js';
 import { pressReplyRoutes } from './routes/press-replies.js';
+import { pressDistributionRoutes } from './routes/press-distribution.js';
 import { observeProxy } from './lib/proxy-check.js';
 import { healthStatus, isLocalHealthRequest, publicHealth } from './routes/health.js';
 
@@ -233,6 +234,9 @@ export async function buildApp(): Promise<FastifyInstance> {
     // FE2-Eingang (eigener Zugangsschlüssel) und zeitlich begrenzte Medien-URLs (Abruf durch Meta) ohne Sitzung
     if (req.url.startsWith('/api/v1/inbound/')) return assertNotMaintenance();
     if (req.url.startsWith('/api/v1/m/')) return;
+    // Abmeldung vom Presseverteiler (#207): Ein-Klick-Abmeldung aus dem Mailprogramm (RFC 8058) ohne Sitzung und ohne
+    // Sicherheitskennung – geschützt durch den signierten Link, wirkt nur auf genau diesen Kontakt
+    if (req.method === 'POST' && req.url.startsWith('/api/v1/public/press/unsubscribe/')) return;
     req.auth = await resolveAuth(req, reply);
     const changing = !['GET', 'HEAD', 'OPTIONS'].includes(req.method);
     if (changing && req.auth?.kind !== 'api_key' && req.headers[CSRF_HEADER] !== '1') {
@@ -276,6 +280,7 @@ export async function buildApp(): Promise<FastifyInstance> {
       await api.register(calendarIcalRoutes);
       await api.register(backupOffsiteRoutes);
       await api.register(pressReplyRoutes);
+      await api.register(pressDistributionRoutes);
     },
     { prefix: '/api/v1' },
   );

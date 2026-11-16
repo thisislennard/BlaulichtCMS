@@ -19,6 +19,7 @@ const DEFAULTS: Record<string, Record<string, any>> = {
   mail: { roles: [], responsibilityIds: [], subject: '', body: '' },
   notify: { roles: [], userIds: [], kind: 'info', title: '', body: '', link: '' },
   warning_draft: { data: {}, responsibilityIds: [] },
+  press_release: { listIds: [], subject: '{{thema}}', body: '' },
   incident_entry: { siteId: null, title: '{{stichwort_text}}', keyword: '{{stichwort}}', alarmAt: '{{alarmzeit}}', location: '{{ortsteil}}', vehicles: '', units: '{{einheiten}}', report: '', submit: true },
 };
 
@@ -188,6 +189,16 @@ export function OutputDialog({ output, kind, cat, onClose, preset }: { output: O
             {T('units', 'Weitere Kräfte (optional)', { max: 1000 })}
             {T('report', 'Kurzbericht (optional)', { rows: 4, max: 5000 })}
             <Switch checked={c.submit !== false} onChange={(v) => set({ submit: v })} label="Zur Freigabe einreichen" />
+          </>
+        )}
+
+        {kind === 'press_release' && (
+          <>
+            <Notice icon="ShieldCheck" title="Standard: Entwurf">Der Workflow legt die Pressemitteilung als Entwurf unter Presse → <Link to="/presse/mitteilungen">Pressemitteilungen</Link> an; gesendet wird von Hand. Sofort senden nur, wenn der Ausgang im Workflow als Direktversand markiert und der Workflow dafür freigegeben ist. Jede Mail geht einzeln an einen Kontakt, mit Abmeldelink.</Notice>
+            {!(cat.pressLists ?? []).length && <Notice tone="warning">Es gibt noch keine Verteilerliste (Presse → Presseverteiler).</Notice>}
+            <CheckList legend="An Verteilerlisten" options={(cat.pressLists ?? []).map((l) => ({ value: l.id, label: `${l.name} (${l.contacts})` }))} value={c.listIds ?? []} onChange={(v) => set({ listIds: v })} />
+            {T('subject', 'Betreff', { max: 300, required: true })}
+            {T('body', 'Text', { rows: 8, max: 50000, required: true })}
           </>
         )}
 

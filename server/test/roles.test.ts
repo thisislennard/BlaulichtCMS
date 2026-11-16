@@ -194,9 +194,7 @@ describe('Rollen und feine Rechte', () => {
     expect(coarse, 'Routen mit Sammelbezeichnung statt feinem Recht').toEqual([]);
     // Jedes Recht des Katalogs schützt mindestens eine Route oder wird im Handler geprüft
     const used = new Set(table.flatMap((r) => r.access?.permissions ?? []));
-    const handlerOnly = ['media.download_original', 'post.archive', 'warning.delete_sent', 'dashboard.templates', 'warning.level', 'warning.approve', 'warning.rules', 'warning.send', 'warning.draft', 'automation.publish',
-      // Presse (#205–#207): Routen folgen mit den Teilmodulen
-      'press.contacts', 'press.release'];
+    const handlerOnly = ['media.download_original', 'post.archive', 'warning.delete_sent', 'dashboard.templates', 'warning.level', 'warning.approve', 'warning.rules', 'warning.send', 'warning.draft', 'automation.publish'];
     expect(PERMISSION_IDS.filter((p) => !used.has(p) && !handlerOnly.includes(p)), 'Rechte ohne Route').toEqual([]);
   });
 

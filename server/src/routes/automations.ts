@@ -160,6 +160,8 @@ export async function automationRoutes(app: FastifyInstance) {
       sites: await many<any>(`SELECT id, name, status, COALESCE(bridge_report->'categories', '[]'::jsonb) AS categories FROM wp_sites WHERE status <> 'revoked' ORDER BY name`),
       socialChannels: (await many<any>(`SELECT id, kind, name, status, config FROM connections WHERE deleted_at IS NULL AND status <> 'revoked' AND kind IN ('facebook','instagram','threads','x','whatsapp','mastodon','bluesky') ORDER BY kind, name`)).map((c) => ({ id: c.id, kind: c.kind, name: c.name, status: c.status, manual: c.kind === 'whatsapp' || (c.kind === 'x' && c.config?.mode !== 'api') })),
       responsibilities: await many<any>(`SELECT id, name, area FROM responsibilities WHERE active ORDER BY name`),
+      // Presseverteiler (#207): Listen für den Ausgang „Pressemitteilung an Verteiler“ (nur Name und Zahl der Kontakte)
+      pressLists: await many<any>(`SELECT l.id, l.name, (SELECT count(*)::int FROM press_list_members m JOIN press_contacts c ON c.id = m.contact_id WHERE m.list_id = l.id AND c.unsubscribed_at IS NULL) AS contacts FROM press_lists l ORDER BY lower(l.name)`),
       warningFields: ((await one<any>(`SELECT fields FROM warning_templates WHERE status = 'active' ORDER BY created_at DESC, version DESC LIMIT 1`))?.fields ?? []).map((f: any) => ({ key: f.key, label: f.label, required: !!f.required })),
       users: canManage ? await many<any>(`SELECT id, name FROM users WHERE status = 'active' ORDER BY name`) : [],
       // Befüllbare Bildvorlagen für „Bild aus Vorlage erzeugen“ (#210): Textfelder und Bild-Platzhalter je Vorlage

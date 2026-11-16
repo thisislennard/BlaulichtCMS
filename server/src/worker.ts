@@ -41,6 +41,7 @@ import { migratePlaintextSecrets } from './lib/secret-audit.js';
 import { checkPressDeadlines } from './press/deadlines.js';
 import { pollPressMailbox } from './press/mailbox.js';
 import { deliverPressReply } from './routes/press-replies.js';
+import { deliverRelease } from './press/releases.js';
 
 process.env.BLAULICHTCMS_ROLE ??= 'worker';
 
@@ -82,6 +83,10 @@ const handlers: Record<string, (job: Job) => Promise<void>> = {
   // Antworten auf Presseanfragen (#206): genau ein Versuch, Ergebnis unklar ⇒ Prüfung statt Neuversand
   'press.reply': async (job) => {
     await deliverPressReply(String(job.payload.id));
+  },
+  // Pressemitteilungen (#207): Empfänger nacheinander, unterbrochene nie automatisch erneut
+  'press.release': async (job) => {
+    await deliverRelease(String(job.payload.id));
   },
   'notify.deliver': async (job) => {
     await deliverNotification(Number(job.payload.id));

@@ -13,6 +13,7 @@ import { resetM365TokenCache } from '../src/lib/mail.js';
 import { pollPressMailbox } from '../src/press/mailbox.js';
 import { fakeGraph, fakeImap, fakeSmtp } from './press-fakes.js';
 import { deliverPressReply } from '../src/routes/press-replies.js';
+import { deliverRelease } from '../src/press/releases.js';
 
 /**
  * Presseanfragen (#204–#207) gegen eine echte PostgreSQL-Datenbank (TEST_DATABASE_URL). Die Datenbank wird zu Beginn
@@ -520,3 +521,152 @@ describe('Antworten per Mail (#206)', () => {
     }
   });
 });
+
+describe('Presseverteiler und Pressemitteilungen (#207)', () => {
+  let smtp: Awaited<ReturnType<typeof fakeSmtp>>;
+  let publisher: Client;
+  let listA: string;
+  let listB: string;
+  let paula: string;
+
+  beforeAll(async () => {
+    smtp = await fakeSmtp();
+    await setSettings({ 'mail.transport': 'smtp', 'smtp.host': '127.0.0.1', 'smtp.port': smtp.port, 'smtp.security': 'none', 'smtp.from': 'presse@feuerwehr.example', 'general.public_url': '' } as any);
+    publisher = (await login('veroeffentlichung@example.org', 'Vera Veröffentlichung', ['publisher'])).client;
+  });
+  afterAll(async () => {
+    await smtp?.close();
+  });
+
+  it('Kontakte und Listen: Rechte, Dubletten, Herkunft/Einwilligung', async () => {
+    expect((await reader.get('/press/contacts')).status).toBe(403);
+    expect((await approverlessGet('/press/lists')).status).toBe(403);
+    listA = (await editor.post('/press/lists', { name: 'Lokalpresse' })).json.id;
+    listB = (await editor.post('/press/lists', { name: 'Rundfunk' })).json.id;
+    expect((await editor.post('/press/lists', { name: 'lokalpresse' })).status).toBe(409);
+    const c = await editor.post('/press/contacts', { name: 'Paula Müller', outlet: 'Musterstädter Zeitung', email: 'Paula@Zeitung.example', origin: 'Visitenkarte Pressetermin', consent: 'mündlich zugestimmt am 01.11.2026', listIds: [listA, listB] });
+    expect(c.status).toBe(200);
+    paula = c.json.id;
+    expect((await editor.post('/press/contacts', { email: 'paula@zeitung.example' })).status).toBe(409);
+    await editor.post('/press/contacts', { name: 'Radio', outlet: 'Radio Muster', email: 'redaktion@radio.example', listIds: [listB] });
+    const lists = (await publisher.get('/press/lists')).json;
+    expect(lists.map((l: any) => [l.name, l.contacts])).toEqual([['Lokalpresse', 1], ['Rundfunk', 2]]);
+    const all = (await editor.get('/press/contacts')).json;
+    expect(all.find((x: any) => x.id === paula)).toMatchObject({ email: 'paula@zeitung.example', origin: 'Visitenkarte Pressetermin', list_ids: expect.arrayContaining([listA, listB]) });
+  });
+
+  it('CSV-Import und -Export: Listen per Name, keine Dubletten, Abgemeldete bleiben abgemeldet, Formeln entschärft', async () => {
+    await pool.query(`UPDATE press_contacts SET unsubscribed_at = now() WHERE email = 'redaktion@radio.example'`);
+    const csv = 'name;medium;email;listen;herkunft\n"Tom, TV";=HYPERLINK("x");tom@tv.example;Rundfunk|Fernsehen;Messe\nRadio Neu;Radio Muster;REDAKTION@radio.example;Rundfunk;\nkaputt;x;keine-adresse;;\n';
+    const dry = await editor.post('/press/contacts/import', { csv, dryRun: true });
+    expect(dry.json).toMatchObject({ neu: 1, aktualisiert: 1, fehler: 1 });
+    expect(await one(`SELECT 1 FROM press_contacts WHERE email = 'tom@tv.example'`)).toBeNull();
+    const imp = await editor.post('/press/contacts/import', { csv });
+    expect(imp.json).toMatchObject({ neu: 1, aktualisiert: 1 });
+    expect(await one<any>(`SELECT name, unsubscribed_at IS NOT NULL AS unsub FROM press_contacts WHERE email = 'redaktion@radio.example'`)).toMatchObject({ name: 'Radio Neu', unsub: true });
+    expect(await one(`SELECT 1 FROM press_lists WHERE name = 'Fernsehen'`)).not.toBeNull();
+    const exp = await editor.raw('GET', '/press/contacts/export');
+    expect(exp.headers['content-type']).toContain('text/csv');
+    expect(exp.body).toContain(`'=HYPERLINK`);
+    expect(exp.body).toContain('Tom, TV;');
+    expect((await reader.raw('GET', '/press/contacts/export')).status).toBe(403);
+  });
+
+  it('Pressemitteilung aus einem Beitrag: einzeln adressiert, mit Abmeldelink, Versandprotokoll', async () => {
+    const post = await one<any>(`INSERT INTO posts (kind, title) VALUES ('news', 'Neues Löschfahrzeug') RETURNING id`);
+    await pool.query(`INSERT INTO post_revisions (post_id, number, title, body, excerpt, content_hash) VALUES ($1, 1, 'Neues Löschfahrzeug', '<p>Die Feuerwehr hat ein <b>neues</b> Fahrzeug.</p>', '', 'x')`, [post.id]);
+    await pool.query(`UPDATE posts SET current_revision = 1 WHERE id = $1`, [post.id]);
+    expect((await editor.get(`/press/releases/from-post/${post.id}`)).status).toBe(403); // Redaktion darf nicht versenden
+    const tpl = (await publisher.get(`/press/releases/from-post/${post.id}`)).json;
+    expect(tpl).toEqual({ subject: 'Neues Löschfahrzeug', body: 'Die Feuerwehr hat ein neues Fahrzeug.' });
+    const rel = await publisher.post('/press/releases', { ...tpl, listIds: [listB], postId: post.id });
+    expect(rel.status).toBe(200);
+    // ohne öffentliche Adresse kein Abmeldelink ⇒ kein Versand
+    await publisher.reauth();
+    expect((await publisher.post(`/press/releases/${rel.json.id}/send`)).json.message).toMatch(/öffentliche Adresse/);
+    await setSettings({ 'general.public_url': 'https://cms.example.org' } as any);
+    await pool.query(`UPDATE sessions SET reauth_at = now() - interval '1 hour'`);
+    expect((await publisher.post(`/press/releases/${rel.json.id}/send`)).json.error).toBe('reauth_required');
+    await publisher.reauth();
+    const sent = await publisher.post(`/press/releases/${rel.json.id}/send`);
+    expect(sent.json).toMatchObject({ ok: true, recipients: 2 }); // Paula + Tom; Radio ist abgemeldet
+    expect((await publisher.put(`/press/releases/${rel.json.id}`, { subject: 'Neu', body: 'y' })).status).toBe(409);
+    await deliverRelease(rel.json.id);
+    expect(smtp.received).toHaveLength(2);
+    for (const m of smtp.received) {
+      m.raw = m.raw.replace(/\r\n[ \t]+/g, ' ');
+      expect(m.to).toHaveLength(1);
+      expect(m.raw).toMatch(new RegExp(`^To: ${m.to[0].replace('.', '\\.')}\\r?$`, 'm'));
+      expect(m.raw).toMatch(/^List-Unsubscribe: <https:\/\/cms\.example\.org\/api\/v1\/public\/press\/unsubscribe\/[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+>/m);
+      expect(m.raw).toMatch(/^List-Unsubscribe-Post: List-Unsubscribe=One-Click/m);
+      expect(m.raw).not.toMatch(/^(Cc|Bcc):/m);
+    }
+    const d = (await publisher.get(`/press/releases/${rel.json.id}`)).json;
+    expect(d.release.status).toBe('sent');
+    expect(d.recipients.map((x: any) => x.status)).toEqual(['sent', 'sent']);
+    expect(await one(`SELECT 1 FROM audit_events WHERE action = 'press.release_sent'`)).not.toBeNull();
+  });
+
+  it('Abmeldung über den Link (auch Ein-Klick ohne Sitzung) – danach keine Mitteilungen mehr', async () => {
+    const raw = smtp.received.find((m) => m.to[0] === 'paula@zeitung.example')!.raw;
+    const token = /unsubscribe\/([A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)/.exec(raw)![1];
+    const anon = new Client(app);
+    expect((await anon.get(`/public/press/unsubscribe/${token.slice(0, -2)}xx`)).status).toBe(404);
+    expect((await anon.get(`/public/press/unsubscribe/${token}`)).json).toEqual({ email: 'p…@zeitung.example', unsubscribed: false });
+    const res = await app.inject({ method: 'POST', url: `/api/v1/public/press/unsubscribe/${token}`, headers: { 'content-type': 'application/x-www-form-urlencoded' }, payload: 'List-Unsubscribe=One-Click' });
+    expect(res.statusCode).toBe(200);
+    expect((await anon.get(`/public/press/unsubscribe/${token}`)).json.unsubscribed).toBe(true);
+    const rel = await publisher.post('/press/releases', { subject: 'Zweite Mitteilung', body: 'Text', listIds: [listA] });
+    await publisher.reauth();
+    expect((await publisher.post(`/press/releases/${rel.json.id}/send`)).json.message).toMatch(/keine \(angemeldeten\) Kontakte/);
+    // wieder anmelden nur mit vermerkter Einwilligung
+    expect((await editor.put(`/press/contacts/${paula}`, { email: 'paula@zeitung.example', consent: '', resubscribe: true, listIds: [listA] })).status).toBe(400);
+  });
+
+  it('Fehler je Empfänger: Teilversand, Rest nachholen', async () => {
+    await pool.query(`UPDATE press_contacts SET unsubscribed_at = NULL WHERE id = $1`, [paula]);
+    const rel = await publisher.post('/press/releases', { subject: 'Dritte', body: 'Text', listIds: [listA, listB] });
+    await publisher.reauth();
+    await setSettings({ 'smtp.port': 1 } as any);
+    await publisher.post(`/press/releases/${rel.json.id}/send`);
+    await deliverRelease(rel.json.id);
+    const d = (await publisher.get(`/press/releases/${rel.json.id}`)).json;
+    expect(d.release.status).toBe('partial');
+    expect(d.recipients.every((x: any) => x.status === 'failed')).toBe(true);
+    await setSettings({ 'smtp.port': smtp.port } as any);
+  });
+
+  it('Workflow-Ausgang „Pressemitteilung an Verteiler“: Standard Entwurf, Testlauf ohne Wirkung', async () => {
+    const out = await admin.post('/automation-outputs', { name: 'PM', kind: 'press_release', config: { listIds: [listA], subject: 'Presse: {{thema}}', body: 'Zur Anfrage {{nummer}}' } });
+    expect(out.status, JSON.stringify(out.json)).toBe(200);
+    expect((await admin.post('/automation-outputs', { name: 'PM2', kind: 'press_release', config: { listIds: [], subject: 'x', body: 'y' } })).status).toBe(400);
+    const input = (await admin.get('/automation-inputs')).json.find((i: any) => i.kind === 'press');
+    const graph = {
+      nodes: [
+        { id: 'n1', type: 'input', position: { x: 0, y: 0 }, data: { inputId: input.id } },
+        { id: 'n2', type: 'output', position: { x: 200, y: 0 }, data: { outputId: out.json.id } },
+      ],
+      edges: [{ id: 'e1', source: 'n1', sourceHandle: 'out', target: 'n2' }],
+    };
+    const a = await admin.post('/automations', { name: 'Presseanfrage → PM-Entwurf' });
+    const cur = await admin.get(`/automations/${a.json.id}`);
+    expect((await admin.put(`/automations/${a.json.id}`, { name: 'Presseanfrage → PM-Entwurf', graph, baseHash: cur.json.draft_hash })).status).toBe(200);
+    const t = await admin.post(`/automations/${a.json.id}/test`, {});
+    expect(t.json.status, JSON.stringify(t.json)).toBe('succeeded');
+    expect(JSON.stringify(t.json)).toContain('als Entwurf');
+    const before = (await one<any>(`SELECT count(*)::int AS n FROM press_releases`))!.n;
+    expect(before).toBe(3);
+  });
+
+  it('Datenschutzanfrage findet Kontakte und löscht auch die Adresse im Versandprotokoll', async () => {
+    const hits = (await admin.get('/privacy/search?q=tom@tv.example')).json.hits;
+    const hit = hits.find((h: any) => h.kind === 'press_contact');
+    expect(hit.fields.pressemitteilungen).toBe(2);
+    expect((await admin.post('/privacy/action', { kind: 'press_contact', id: hit.id, action: 'delete' })).status).toBe(200);
+    expect(await one(`SELECT 1 FROM press_release_recipients WHERE email = 'tom@tv.example'`)).toBeNull();
+  });
+});
+
+async function approverlessGet(url: string) {
+  return reader.get(url);
+}

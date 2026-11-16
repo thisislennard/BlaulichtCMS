@@ -42,5 +42,7 @@
   "automationOutputs": "Outputs",
   "press": "Press",
   "pressRequests": "Press enquiries",
-  "pressSettings": "Mailbox & snippets"
+  "pressSettings": "Mailbox & snippets",
+  "pressDistribution": "Press contacts",
+  "pressReleases": "Press releases"
 }

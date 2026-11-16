@@ -114,6 +114,12 @@ export const OUTPUT_CONFIG: Record<OutputKind, z.ZodType<any>> = {
     data: z.record(z.string().regex(/^[a-z][a-z0-9_]{0,39}$/), tpl(2000)).default({}),
     responsibilityIds: z.array(z.uuid()).max(20).default([]),
   }),
+  // Pressemitteilung (#207): Entwurf; Versand nur mit Direktversand
+  press_release: z.object({
+    listIds: z.array(z.uuid()).min(1, 'mindestens eine Verteilerliste').max(20),
+    subject: z.string().min(2).max(300),
+    body: z.string().min(1).max(50_000),
+  }),
   // Einsatzliste (#213): Vorlagen mit {{platzhaltern}}; der Ort wird beim Lauf gegen die Allowlist der Ortsangaben geprüft
   incident_entry: z.object({
     siteId: z.uuid().nullable().default(null),

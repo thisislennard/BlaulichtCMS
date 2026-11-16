@@ -56,6 +56,9 @@ export const PUBLIC_ROUTES: string[] = [
   'GET /public/legal/:kind',
   // iCal-Abo des Kalenders (#202): geheimer Link je Person, Drosselung
   'GET /public/calendar/:token',
+  // Abmeldung vom Presseverteiler (#207, signierter Link je Kontakt)
+  'GET /public/press/unsubscribe/:token',
+  'POST /public/press/unsubscribe/:token',
 ];
 
 const API = '/api/v1';
