@@ -53,6 +53,7 @@ import { CSRF_HEADER, resolveAuth } from './auth/context.js';
 import { AppError } from './lib/errors.js';
 import { auditThrottled } from './lib/audit.js';
 import { log } from './lib/log.js';
+import { simplePage } from './lib/error-page.js';
 import { authRoutes } from './routes/auth.js';
 import { userRoutes } from './routes/users.js';
 import { roleRoutes } from './routes/roles.js';
@@ -198,7 +199,11 @@ export async function buildApp(): Promise<FastifyInstance> {
         message: err.code === '23505' ? 'Dieser Eintrag ist bereits vorhanden. Bitte die Ansicht neu laden.' : 'Ein zugehöriger Eintrag wurde inzwischen gelöscht. Bitte die Ansicht neu laden.',
       });
     }
-    if (err.statusCode === 429) return reply.status(429).send({ error: 'rate_limited', message: 'Zu viele Anfragen. Bitte kurz warten.' });
+    if (err.statusCode === 429) {
+      // Wartezeit auch im Inhalt, damit die Oberfläche sie ohne Header-Zugriff anzeigen kann (#194)
+      const retryAfter = Number(reply.getHeader('retry-after')) || null;
+      return reply.status(429).send({ error: 'rate_limited', message: retryAfter ? `Zu viele Anfragen. Bitte ${retryAfter} Sekunden warten.` : 'Zu viele Anfragen. Bitte kurz warten.', details: { retryAfter } });
+    }
     if (err.statusCode === 400 && String(err.code ?? '').startsWith('FST_ERR_CTP')) return reply.status(400).send({ error: 'invalid_request', message: 'Der Inhalt der Anfrage ist kein gültiges JSON.' });
     if (err.statusCode === 413) return reply.status(413).send({ error: 'too_large', message: 'Die Anfrage ist zu groß.' });
     if (err.statusCode && err.statusCode < 500) return reply.status(err.statusCode).send({ error: 'invalid_request', message: err.message });
@@ -260,7 +265,7 @@ export async function buildApp(): Promise<FastifyInstance> {
         WHERE g.old_token_hash = $1 AND g.expires_at > now() AND l.revoked_at IS NULL AND l.paused_at IS NULL AND l.expires_at > now() AND l.token_enc IS NOT NULL`,
       [sha256Hex(token)],
     );
-    if (!row) return reply.status(410).type('text/html; charset=utf-8').send('<!doctype html><meta charset="utf-8"><title>Link ungültig</title><p style="font-family:system-ui;margin:48px auto;max-width:600px">Dieser Upload-Link ist nicht mehr gültig. Bitte bei der Redaktion einen neuen Link erfragen.</p>');
+    if (!row) return reply.status(410).type('text/html; charset=utf-8').send(simplePage('Link ungültig', 'Dieser Upload-Link ist nicht mehr gültig. Bitte bei der Redaktion einen neuen Link erfragen.', { code: '410' }));
     reply.header('cache-control', 'no-store').header('referrer-policy', 'no-referrer');
     return reply.redirect((await uploadLinkUrl(req, row.token_enc, row.id))!, 302);
   });
@@ -291,6 +296,14 @@ export async function buildApp(): Promise<FastifyInstance> {
     });
     const indexHtml = fs.readFileSync(path.join(config.webDist, 'index.html'), 'utf8');
     app.setNotFoundHandler((req, reply) => {
+      // Fehlende Dateien (Skripte einer älteren Fassung, Bilder …) bekommen eine echte 404 statt der App – sonst
+      // scheitert das Nachladen mit einem MIME-Fehler. Seiten ohne Dateiendung zeigt die App selbst (Seite nicht gefunden).
+      const p = req.url.split('?')[0];
+      if (req.method === 'GET' && !p.startsWith('/api/') && (p.startsWith('/assets/') || /\.[a-z0-9]{1,8}$/i.test(p))) {
+        reply.header('cache-control', 'no-store');
+        if (!/\.html?$/i.test(p) && !String(req.headers.accept ?? '').includes('text/html')) return reply.status(404).type('text/plain; charset=utf-8').send('Nicht gefunden.');
+        return reply.status(404).type('text/html; charset=utf-8').send(simplePage('Seite nicht gefunden', 'Diese Adresse gibt es nicht (mehr). Bitte den Link prüfen oder zur Startseite wechseln.', { code: '404', link: { href: '/', label: 'Zur Startseite' } }));
+      }
       if (req.method === 'GET' && !req.url.startsWith('/api/')) {
         return reply.header('cache-control', 'no-cache').type('text/html').send(indexHtml);
       }

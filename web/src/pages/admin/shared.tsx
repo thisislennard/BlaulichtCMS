@@ -1,6 +1,7 @@
 /* Gemeinsame Bausteine der Administrationsseiten (auch von Profil, Aktivitäten, Benachrichtigungen genutzt). */
 import { useId, type ReactNode } from "react";
 import { ApiError } from "../../api/client";
+import { FEEDBACK, feedbackFor } from "../../components/feedback/Feedback";
 import type { Preferences } from "../../api/types";
 import {
   Badge,
@@ -118,12 +119,15 @@ export function LoadError({
   title?: ReactNode;
 }) {
   const e = error as ApiError | Error | null;
+  // Zeitüberschreitung, offline, Wartung, keine Berechtigung … mit eigenem Titel und Text (#194)
+  const fb = feedbackFor(error);
+  const known = fb.kind !== "error";
   const tech = e
     ? `${(e as ApiError).status ?? ""} ${(e as ApiError).code ?? ""} ${e.message}`.trim()
     : "";
   return (
     <ErrorBox
-      title={title ?? t("admin.common.loadError")}
+      title={title ?? (known ? FEEDBACK[fb.kind].title : t("admin.common.loadError"))}
       actions={
         <>
           {onRetry && (
@@ -141,7 +145,9 @@ export function LoadError({
         </>
       }
     >
-      {e?.message &&
+      {known
+        ? fb.message ?? FEEDBACK[fb.kind].text
+        : e?.message &&
       e.message !== "Failed to fetch" &&
       !/^Fehler \d+$/.test(e.message)
         ? e.message

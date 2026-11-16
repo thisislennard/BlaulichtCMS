@@ -20,14 +20,17 @@ self.addEventListener('fetch', (e) => {
   if (e.request.method !== 'GET' || url.origin !== self.location.origin) return;
   if (url.pathname.startsWith('/api/') || url.pathname === '/healthz') return;
   if (e.request.mode === 'navigate') {
-    // Netz zuerst, bei fehlender Verbindung die zuletzt geladene Oberfläche
+    // Netz zuerst, bei fehlender Verbindung die zuletzt geladene Oberfläche. Antwortet statt BlaulichtCMS nur der Proxy
+    // (502/503/504, z. B. während eines Updates), ebenfalls die Oberfläche: Sie zeigt „Server nicht erreichbar“ und
+    // versucht es selbst erneut (#194) – statt einer Fehlerseite des Proxys ohne Erklärung.
     e.respondWith(
       fetch(e.request)
-        .then((res) => {
+        .then(async (res) => {
           if (cacheable(res)) {
             const copy = res.clone();
             caches.open(CACHE).then((c) => c.put('/', copy));
           }
+          if ([502, 503, 504].includes(res.status)) return (await caches.match('/')) || res;
           return res;
         })
         .catch(() => caches.match('/')),

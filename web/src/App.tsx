@@ -1,11 +1,12 @@
 import { lazy, Suspense, type ReactNode } from 'react';
-import { createBrowserRouter, Navigate, RouterProvider, useLocation } from 'react-router';
+import { createBrowserRouter, Navigate, RouterProvider, useLocation, useRouteError, type RouteObject } from 'react-router';
 import { AppShell, RequirePerm } from './components/layout/AppShell';
-import { SkeletonRows } from './components/ui/core';
+import { LinkButton, SkeletonRows } from './components/ui/core';
 import { useAuth } from './lib/auth';
 import { InvitePage, LoginPage, MfaSetupPage, MfaVerifyPage, SetupPage } from './pages/auth/AuthPages';
 import { UploadPage } from './pages/public/UploadPage';
 import { LiveProvider } from './lib/live';
+import { CrashView, FeedbackPage, FeedbackView, feedbackFor } from './components/feedback/Feedback';
 
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const Activities = lazy(() => import('./pages/Activities'));
@@ -47,12 +48,30 @@ function Loading() {
   return <SkeletonRows rows={6} className="pt-2" />;
 }
 
+/** Sitzung nicht prüfbar (Server weg, Zeitüberschreitung, Wartung): erklären und selbst erneut versuchen (#194). */
+function SessionUnavailable() {
+  const { error, retry } = useAuth();
+  return <FeedbackPage {...feedbackFor(error)} onRetry={retry} autoRetry />;
+}
+
+/** Fehler beim Darstellen oder Laden einer Seite (Router-Fehlergrenze), z. B. fehlende Programmteile nach Update. */
+function RouteError({ page }: { page?: boolean }) {
+  const error = useRouteError();
+  return <CrashView error={error} page={page} />;
+}
+
+/** Unbekannte Adresse innerhalb der App. */
+function NotFound() {
+  return <FeedbackView kind="notfound" actions={<LinkButton to="/" variant="primary" icon="LayoutDashboard">Zur Übersicht</LinkButton>} />;
+}
+
 /** Nur mit vollständiger Anmeldung; sonst Login bzw. 2FA. */
 function Protected({ children }: { children: ReactNode }) {
-  const { me, loading } = useAuth();
+  const { me, loading, error } = useAuth();
   const loc = useLocation();
   if (loading) return null;
-  if (!me) return <Navigate to="/login" replace state={{ from: loc.pathname }} />;
+  if (error) return <SessionUnavailable />;
+  if (!me) return <Navigate to="/login" replace state={{ from: loc.pathname + loc.search + loc.hash }} />;
   if (me.stage === 'mfa') return <Navigate to="/2fa" replace />;
   if (me.stage === 'mfa_setup') return <Navigate to="/2fa/einrichten" replace />;
   return <>{children}</>;
@@ -60,8 +79,9 @@ function Protected({ children }: { children: ReactNode }) {
 
 /** Anmeldeseiten passend zum Sitzungsstand: angemeldet → App, ohne Sitzung → Anmeldung. */
 function AuthStage({ need, children }: { need: 'none' | 'mfa' | 'mfa_setup'; children: ReactNode }) {
-  const { me, loading } = useAuth();
+  const { me, loading, error } = useAuth();
   if (loading) return null;
+  if (error) return <SessionUnavailable />;
   const stage = me?.stage ?? 'none';
   if (stage === need) return <>{children}</>;
   if (stage === 'full') return <Navigate to="/" replace />;
@@ -75,7 +95,10 @@ function Page({ perm, children }: { perm?: string[]; children: ReactNode }) {
   return perm ? <RequirePerm perm={perm}>{inner}</RequirePerm> : inner;
 }
 
-const router = createBrowserRouter([
+/** Jede Seite bekommt eine Fehlergrenze; eigene (z. B. im App-Rahmen) gehen vor. */
+const withErrors = (routes: RouteObject[]): RouteObject[] => routes.map((r) => ({ errorElement: <RouteError page />, ...r }));
+
+const router = createBrowserRouter(withErrors([
   { path: '/login', element: <AuthStage need="none"><LoginPage /></AuthStage> },
   { path: '/einrichtung', element: <SetupPage /> },
   { path: '/einladung/:token', element: <InvitePage /> },
@@ -99,6 +122,7 @@ const router = createBrowserRouter([
   },
   {
     path: '/',
+    errorElement: <RouteError page />,
     element: (
       <Protected>
         <LiveProvider enabled>
@@ -107,6 +131,8 @@ const router = createBrowserRouter([
       </Protected>
     ),
     children: [
+      // Fehler einer Seite bleiben im App-Rahmen (Navigation bleibt bedienbar)
+      { errorElement: <RouteError />, children: [
       { index: true, element: <Page><Dashboard /></Page> },
       { path: 'aktivitaeten', element: <Page perm={['audit.view']}><Activities /></Page> },
       { path: 'benachrichtigungen', element: <Page><Notifications /></Page> },
@@ -141,10 +167,11 @@ const router = createBrowserRouter([
       { path: 'profil', element: <Page><Profile /></Page> },
       { path: 'hilfe', element: <Page><Help /></Page> },
       { path: 'hilfe/:chapter', element: <Page><Help /></Page> },
-      { path: '*', element: <Navigate to="/" replace /> },
+      { path: '*', element: <NotFound /> },
+      ] },
     ],
   },
-]);
+]));
 
 export function App() {
   return <RouterProvider router={router} />;

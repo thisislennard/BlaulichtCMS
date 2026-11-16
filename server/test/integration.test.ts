@@ -4099,6 +4099,30 @@ describe('Datenschutzerklärung und Impressum (#187)', () => {
   });
 });
 
+describe('Rückmeldungen bei Fehlern (#194)', () => {
+  it('429 nennt die Wartezeit im Header und im Inhalt', async () => {
+    let last: any = null;
+    for (let i = 0; i < 125 && last?.statusCode !== 429; i++) last = await app.inject({ method: 'GET', url: '/api/v1/public/legal' });
+    expect(last.statusCode).toBe(429);
+    expect(Number(last.headers['retry-after'])).toBeGreaterThan(0);
+    const body = last.json();
+    expect(body.error).toBe('rate_limited');
+    expect(body.details.retryAfter).toBe(Number(last.headers['retry-after']));
+    expect(body.message).toMatch(/Sekunden warten/);
+  });
+
+  it('ungültiger Alt-Link und unbekannte API-Adresse antworten verständlich', async () => {
+    const l = await app.inject({ method: 'GET', url: '/l/gibtesnichtmehr123' });
+    expect(l.statusCode).toBe(410);
+    expect(l.headers['content-type']).toMatch(/text\/html/);
+    expect(l.body).toContain('Link ungültig');
+    expect(l.body).not.toContain('<script');
+    const a = await anonymous.get('/gibt/es/nicht');
+    expect(a.status).toBe(404);
+    expect(a.json.error).toBe('not_found');
+  });
+});
+
 describe('Löschfrist amtlicher Warnungen: noch gelieferte bleiben (#180)', () => {
   it('löscht erst, wenn abgelaufen und seit der Frist nicht mehr in der Quelle', async () => {
     const conn = (await one<any>(`INSERT INTO connections (kind, name, status, config) VALUES ('warnfeed', 'Löschfrist-Feed', 'draft', '{"format":"cap","url":"https://warn.example.invalid/cap.xml"}') RETURNING id`))!;

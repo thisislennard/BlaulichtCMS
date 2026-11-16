@@ -169,6 +169,9 @@ flowchart LR
 
 ### Übersicht und Bedienung
 
+- **Verständliche Rückmeldungen:** Zeitüberschreitung, abgelaufene Sitzung (mit Rückweg), offline bzw. Server nicht
+  erreichbar (mit automatischem erneutem Versuch), kein Zugriff, Seite nicht gefunden, Wartung, zu viele Versuche (mit
+  Wartezeit) und unerwartete Fehler (mit Details) – jeweils mit Symbol, Erklärung und „Was tun?“.
 - **Dashboard:** Kennzahlen-Reihe und Kacheln in bis zu vier Spalten (offene Freigaben, bestätigter Stand der
   Veröffentlichungen, neue Uploads, Banner, Websites); per Drag-and-drop mit Maus, Finger oder Tastatur anpassbar,
   eigene Reihenfolge fürs Handy, Vorlagen für alle oder je Rolle.

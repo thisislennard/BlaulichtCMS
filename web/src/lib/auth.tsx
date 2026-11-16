@@ -8,6 +8,9 @@ import { setLanguage } from '../i18n';
 interface AuthValue {
   me: Me | null;
   loading: boolean;
+  /** Sitzung konnte nicht geprüft werden (Server nicht erreichbar, Zeitüberschreitung, Wartung) – nicht „abgemeldet“. */
+  error: unknown;
+  retry: () => void;
   can: (perm: string) => boolean;
   canAny: (...perms: string[]) => boolean;
   isPlatformAdmin: boolean;
@@ -31,8 +34,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const me = q.data ?? null;
 
   useEffect(() => {
-    // Sitzung abgelaufen: alle zwischengespeicherten Daten verwerfen (geteiltes Handy, #69)
-    setUnauthorizedHandler(() => clearSession(qc));
+    // Sitzung abgelaufen: alle zwischengespeicherten Daten verwerfen (geteiltes Handy, #69); die Anmeldeseite sagt
+    // warum und führt danach zur selben Seite zurück (#194)
+    setUnauthorizedHandler(() => {
+      if (qc.getQueryData(['me'])) markSessionExpired();
+      clearSession(qc);
+    });
   }, [qc]);
 
   useEffect(() => {
@@ -50,6 +57,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const value: AuthValue = {
     me,
     loading: q.isLoading,
+    error: q.data === undefined ? q.error : null,
+    retry: () => void q.refetch(),
     can,
     canAny,
     isPlatformAdmin: !!me?.user.roles.includes('platform_admin') && me.stage === 'full',
@@ -110,6 +119,46 @@ async function fetchMe(): Promise<Me | null> {
   } catch (e) {
     if (e instanceof ApiError && e.status === 401) return null;
     throw e;
+  }
+}
+
+/** Hinweis „Sitzung abgelaufen“ für die Anmeldeseite (einmalig, nur in diesem Tab). */
+const EXPIRED_KEY = 'bc-session-expired';
+export function markSessionExpired() {
+  try {
+    sessionStorage.setItem(EXPIRED_KEY, '1');
+  } catch {
+    /* egal */
+  }
+}
+/** Steht der Hinweis „Sitzung abgelaufen“ an? Gelöscht wird er mit dem Rückweg nach der Anmeldung (takeReturnTo). */
+export function takeSessionExpired(): boolean {
+  try {
+    return sessionStorage.getItem(EXPIRED_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+/** Rückweg nach der Anmeldung (auch über die 2FA-Schritte): nur Pfade dieser App, keine fremden Adressen. */
+const RETURN_KEY = 'bc-return-to';
+/** Eigener Pfad: beginnt mit genau einem „/“, ohne „//“, Backslash oder Steuerzeichen (keine offene Weiterleitung). */
+const ownPath = (p: string) => /^\/(?![/\\])[^\\\s]*$/.test(p);
+export function setReturnTo(path: string | undefined | null) {
+  try {
+    if (path && ownPath(path) && !/^\/(login|2fa|einrichtung|einladung)/.test(path)) sessionStorage.setItem(RETURN_KEY, path);
+  } catch {
+    /* egal */
+  }
+}
+export function takeReturnTo(): string {
+  try {
+    const v = sessionStorage.getItem(RETURN_KEY);
+    sessionStorage.removeItem(RETURN_KEY);
+    sessionStorage.removeItem(EXPIRED_KEY);
+    return v && ownPath(v) ? v : '/';
+  } catch {
+    return '/';
   }
 }
 

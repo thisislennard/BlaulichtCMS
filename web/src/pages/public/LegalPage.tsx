@@ -2,7 +2,8 @@ import { useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router';
 import { get } from '../../api/client';
-import { Button, ErrorBox, SkeletonRows } from '../../components/ui/core';
+import { Button, SkeletonRows } from '../../components/ui/core';
+import { FeedbackView, feedbackFor } from '../../components/feedback/Feedback';
 import { Icon } from '../../components/ui/Icon';
 import { LegalMarkdown } from '../../components/legal/LegalMarkdown';
 import { LegalLinks } from '../../components/legal/LegalLinks';
@@ -27,11 +28,7 @@ export default function LegalPage({ kind }: { kind: 'datenschutz' | 'impressum' 
         </div>
         <h1 className="m-0 text-page font-semibold tracking-[-0.03em]">{title}</h1>
         {q.isLoading && <SkeletonRows rows={6} />}
-        {q.isError && (
-          <ErrorBox title={`${title} konnte nicht geladen werden`} actions={<Button size="sm" icon="RefreshCw" onClick={() => q.refetch()}>Erneut versuchen</Button>}>
-            Bitte die Verbindung prüfen und erneut versuchen.
-          </ErrorBox>
-        )}
+        {q.isError && <FeedbackView {...feedbackFor(q.error)} onRetry={() => q.refetch()} autoRetry compact />}
         {q.data && !q.data.text && (
           <div className="bg-card border border-line rounded-card p-6 flex flex-col items-start gap-2">
             <Icon name="FileText" size={22} className="text-fg-muted" />

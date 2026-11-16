@@ -12,6 +12,7 @@ import { Popover } from '../ui/overlays';
 import { CommandPalette } from './CommandPalette';
 import { useLive } from '../../lib/live';
 import { LegalLinks } from '../legal/LegalLinks';
+import { FeedbackView } from '../feedback/Feedback';
 
 /* Seitentitel/Brotkrumen: Seiten ohne eigenen Menüpunkt (Editor, Details) setzen ihn selbst. */
 interface PageMeta {
@@ -416,11 +417,14 @@ export function RequirePerm({ perm, children }: { perm: string[]; children: Reac
   const { canAny } = useAuth();
   if (!canAny(...perm)) {
     return (
-      <div className="py-20 text-center flex flex-col items-center gap-3">
-        <Icon name="Lock" size={28} className="text-fg-muted" />
-        <h2 className="m-0 text-title font-semibold">Kein Zugriff</h2>
-        <p className="m-0 text-fg-muted">Für diesen Bereich fehlt dir die Berechtigung. Wende dich an eine Person, die Rollen zuweisen darf.</p>
-      </div>
+      <FeedbackView
+        kind="forbidden"
+        actions={
+          <Link to="/" className="inline-flex items-center gap-2 h-ctl px-3.5 rounded-control border border-line bg-card text-sm font-medium !text-fg hover:bg-raised">
+            <Icon name="LayoutDashboard" size={16} /> Zur Übersicht
+          </Link>
+        }
+      />
     );
   }
   return <>{children}</>;

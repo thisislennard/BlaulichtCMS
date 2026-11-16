@@ -1500,3 +1500,14 @@ describe('Dashboard-Layout (Kennzahlen, Spalten, Vorlagen)', () => {
     expect(legacy.layout.columns).toEqual([{ weight: 5, widgets: ['rss'] }, { weight: 3, widgets: ['approvals'] }]);
   });
 });
+
+describe('Einfache Rückmeldeseite (#194)', () => {
+  it('maskiert Text und Link, ohne Skripte', async () => {
+    const { simplePage } = await import('../src/lib/error-page.js');
+    const html = simplePage('Seite <nicht> gefunden', '"Text" & <b>mehr</b>', { code: '404', link: { href: '/"onmouseover="x', label: 'Zur <Startseite>' } });
+    expect(html).toContain('Seite &lt;nicht&gt; gefunden');
+    expect(html).toContain('&quot;Text&quot; &amp; &lt;b&gt;mehr&lt;/b&gt;');
+    expect(html).toContain('href="/&quot;onmouseover=&quot;x"');
+    expect(html).not.toMatch(/<script|<style/);
+  });
+});

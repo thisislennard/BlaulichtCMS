@@ -7,6 +7,7 @@ import { fmtBytes, fmtDateTime } from '../../lib/format';
 import { uploadResumable } from '../../lib/upload';
 import { DesignedPage, type UploadDesign } from './DesignedPage';
 import { LegalLinks } from '../../components/legal/LegalLinks';
+import { FeedbackView, feedbackFor, type Feedback } from '../../components/feedback/Feedback';
 
 type FieldMode = 'off' | 'optional' | 'required';
 
@@ -404,13 +405,18 @@ export function UploadPage() {
   const [error, setError] = useState<{ title: string; text: string } | null>(null);
   const [locked, setLocked] = useState<null | { organization: string | null }>(null);
   const [reload, setReload] = useState(0);
+  // Verbindungsprobleme (Zeitüberschreitung, offline, Server weg, Wartung, zu viele Versuche) mit „Erneut versuchen“ (#194)
+  const [netError, setNetError] = useState<Feedback | null>(null);
 
   useEffect(() => {
     document.title = 'Fotos und Videos hochladen';
     get<LinkInfo>(`/public/upload/${encodeURIComponent(token)}`)
-      .then((i) => (setLocked(null), setInfo(i)))
+      .then((i) => (setLocked(null), setNetError(null), setInfo(i)))
       .catch((e: ApiError) => {
         if (e.status === 401 && e.code === 'password_required') return setLocked({ organization: e.details?.organization ?? null });
+        const fb = feedbackFor(e);
+        if (['timeout', 'offline', 'unreachable', 'maintenance', 'ratelimit'].includes(fb.kind)) return setNetError(fb);
+        setNetError(null);
         setError({
           // Einheitlich für unbekannt, abgelaufen, pausiert und widerrufen (verrät nichts über den Link);
           // 400 = Token unvollständig (z. B. abgeschnitten beim Kopieren) – wie ein unbekannter Link behandeln
@@ -423,7 +429,8 @@ export function UploadPage() {
   return (
     <div className="min-h-screen bg-bg text-fg">
       <main className="max-w-[560px] mx-auto px-4 py-6 flex flex-col gap-5" id="main">
-        {!info && !error && !locked && (
+        {netError && !info && <FeedbackView {...netError} onRetry={() => setReload((n) => n + 1)} autoRetry={netError.kind !== 'ratelimit'} />}
+        {!info && !error && !locked && !netError && (
           <div className="flex items-center gap-2 text-fg-muted py-10 justify-center">
             <Spinner /> Lade …
           </div>

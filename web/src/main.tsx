@@ -12,6 +12,7 @@ import { AuthProvider, ThemeSync } from './lib/auth';
 import { ConfirmProvider, ToastProvider } from './components/ui/overlays';
 import { OfflineBanner } from './components/OfflineBanner';
 import { ReauthProvider } from './components/ReauthDialog';
+import { ErrorBoundary } from './components/feedback/Feedback';
 
 // Farbschema vor dem ersten Rendern setzen (kein Aufblitzen)
 try {
@@ -23,7 +24,8 @@ try {
 
 const queryClient = new QueryClient({
   defaultOptions: {
-    queries: { refetchOnWindowFocus: true, retry: (n, e: any) => n < 2 && !(e?.status >= 400 && e?.status < 500), staleTime: 10_000 },
+    // Nicht erneut versuchen bei 4xx und Zeitüberschreitung (sonst dreht die Ladeanzeige bis zu 90 s)
+    queries: { refetchOnWindowFocus: true, retry: (n, e: any) => n < 2 && !(e?.status >= 400 && e?.status < 500) && e?.code !== 'timeout', staleTime: 10_000 },
   },
 });
 
@@ -34,6 +36,7 @@ if ('serviceWorker' in navigator && import.meta.env.PROD) {
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
+    <ErrorBoundary page>
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <ThemeSync />
@@ -47,5 +50,6 @@ createRoot(document.getElementById('root')!).render(
         </ToastProvider>
       </AuthProvider>
     </QueryClientProvider>
+    </ErrorBoundary>
   </StrictMode>,
 );

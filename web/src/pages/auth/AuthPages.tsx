@@ -1,8 +1,9 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
-import { Link, useNavigate, useParams } from 'react-router';
+import { Link, useLocation, useNavigate, useParams } from 'react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { get, post } from '../../api/client';
-import { useAuth } from '../../lib/auth';
+import { ApiError, get, post } from '../../api/client';
+import { setReturnTo, takeReturnTo, takeSessionExpired, useAuth } from '../../lib/auth';
+import { fmtWait, useCountdown } from '../../components/feedback/Feedback';
 import { Button, FieldWrap, Input, Notice, Select, Spinner } from '../../components/ui/core';
 import { CopyButton } from '../../components/ui/overlays';
 import { Icon } from '../../components/ui/Icon';
@@ -83,7 +84,29 @@ function useAfterLogin() {
     await refresh();
     if (next === 'mfa') navigate('/2fa', { replace: true });
     else if (next === 'mfa_setup') navigate('/2fa/einrichten', { replace: true });
-    else navigate('/', { replace: true });
+    // Zurück zur Seite, auf der die Sitzung abgelaufen ist bzw. die aufgerufen wurde (#194)
+    else navigate(takeReturnTo(), { replace: true });
+  };
+}
+
+/** Anmeldefehler: bei zu vielen Versuchen (429) mit Wartezeit, die herunterzählt. */
+function useLoginError() {
+  const [error, setError] = useState<string | null>(null);
+  const [retryAfter, setRetryAfter] = useState<number | null>(null);
+  const wait = useCountdown(retryAfter);
+  return {
+    wait,
+    text: wait > 0 ? `Zu viele Versuche. Bitte noch ${fmtWait(wait)} warten.` : retryAfter ? null : error,
+    clear: () => (setError(null), setRetryAfter(null)),
+    set: (err: unknown) => {
+      if (err instanceof ApiError && err.status === 429) {
+        setRetryAfter(Number(err.details?.retryAfter) || 60);
+        setError(null);
+      } else {
+        setRetryAfter(null);
+        setError((err as Error).message);
+      }
+    },
   };
 }
 
@@ -92,10 +115,15 @@ export function LoginPage() {
   const [password, setPassword] = useState('');
   // In der installierten App vorbelegt, im normalen Browser-Tab nicht (gemeinsam genutzte Rechner)
   const [remember, setRemember] = useState(isInstalledApp);
-  const [error, setError] = useState<string | null>(null);
+  const err = useLoginError();
   const [busy, setBusy] = useState(false);
   const after = useAfterLogin();
   const navigate = useNavigate();
+  const loc = useLocation();
+  const [expired] = useState(takeSessionExpired);
+  useEffect(() => {
+    setReturnTo((loc.state as { from?: string } | null)?.from);
+  }, [loc.state]);
   const state = useQuery({ queryKey: ['auth-state'], queryFn: () => get('/auth/state') });
   const rememberOn = state.data?.remember?.enabled === true;
   useEffect(() => {
@@ -104,12 +132,12 @@ export function LoginPage() {
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     setBusy(true);
-    setError(null);
+    err.clear();
     try {
       const r = await post('/auth/login', { email, password, remember: rememberOn && remember });
       await after(r.next);
-    } catch (err) {
-      setError((err as Error).message);
+    } catch (e) {
+      err.set(e);
     } finally {
       setBusy(false);
     }
@@ -117,6 +145,11 @@ export function LoginPage() {
   return (
     <AuthLayout title="Anmelden" subtitle={state.data?.organization || (state.data?.instanceName && state.data.instanceName !== 'BlaulichtCMS' ? state.data.instanceName : 'Öffentlichkeitsarbeit und Krisenkommunikation')}>
       <form onSubmit={submit} className="flex flex-col gap-4">
+        {expired && (
+          <Notice icon="LogIn" title="Sitzung abgelaufen">
+            Aus Sicherheitsgründen wurdest du abgemeldet. Nach der Anmeldung geht es auf derselben Seite weiter.
+          </Notice>
+        )}
         <FieldWrap label="E-Mail-Adresse" htmlFor="email">
           <Input id="email" type="email" autoComplete="username" required value={email} onChange={(e) => setEmail(e.target.value)} />
         </FieldWrap>
@@ -132,12 +165,13 @@ export function LoginPage() {
             help={`Auf diesem Gerät bis zu ${dayCount(state.data.remember.days)} nach der letzten Nutzung angemeldet. Nicht auf gemeinsam genutzten Geräten.`}
           />
         )}
-        {error && (
-          <p role="alert" className="m-0 text-sm text-err">
-            {error}
+        {err.text && (
+          <p role="alert" className="m-0 text-sm text-err flex items-start gap-1.5">
+            <Icon name={err.wait > 0 ? 'Hourglass' : 'XCircle'} size={15} className="mt-0.5 shrink-0" />
+            {err.text}
           </p>
         )}
-        <Button type="submit" variant="primary" loading={busy}>
+        <Button type="submit" variant="primary" loading={busy} disabled={err.wait > 0}>
           Anmelden
         </Button>
       </form>
@@ -147,7 +181,7 @@ export function LoginPage() {
 
 export function MfaVerifyPage() {
   const [code, setCode] = useState('');
-  const [error, setError] = useState<string | null>(null);
+  const err = useLoginError();
   const [busy, setBusy] = useState(false);
   const [recovery, setRecovery] = useState(false);
   const [trust, setTrust] = useState(false);
@@ -159,12 +193,12 @@ export function MfaVerifyPage() {
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     setBusy(true);
-    setError(null);
+    err.clear();
     try {
       const r = await post('/auth/mfa', { code, trustDevice: trustOn && trust });
       await after(r.next);
-    } catch (err) {
-      setError((err as Error).message);
+    } catch (e) {
+      err.set(e);
     } finally {
       setBusy(false);
     }
@@ -184,16 +218,17 @@ export function MfaVerifyPage() {
             help="Danach genügt hier das Passwort. Auf anderen Geräten und für kritische Aktionen bleibt der Code nötig."
           />
         )}
-        {error && (
-          <p role="alert" className="m-0 text-sm text-err">
-            {error}
+        {err.text && (
+          <p role="alert" className="m-0 text-sm text-err flex items-start gap-1.5">
+            <Icon name={err.wait > 0 ? 'Hourglass' : 'XCircle'} size={15} className="mt-0.5 shrink-0" />
+            {err.text}
           </p>
         )}
-        <Button type="submit" variant="primary" loading={busy}>
+        <Button type="submit" variant="primary" loading={busy} disabled={err.wait > 0}>
           Bestätigen
         </Button>
         <div className="flex justify-between text-sm">
-          <button type="button" className="text-fg-link hover:text-fg" onClick={() => (setRecovery((r) => !r), setError(null), setCode(''))}>
+          <button type="button" className="text-fg-link hover:text-fg" onClick={() => (setRecovery((r) => !r), err.clear(), setCode(''))}>
             {recovery ? 'Authenticator-Code verwenden' : 'Wiederherstellungscode verwenden'}
           </button>
           <button type="button" className="text-fg-muted hover:text-fg" onClick={() => logout().then(() => navigate('/login'))}>
