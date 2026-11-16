@@ -742,7 +742,8 @@ entfernen: `docker image rm blaulichtcms:rollback-…`.
 | `npm audit` (Laufzeit-Abhängigkeiten ab „hoch“, Entwicklungswerkzeuge ab „kritisch“) | jeder Push und **wöchentlich montags** | GitHub-Workflow „Sicherheitsprüfung“ |
 | Trivy-Imagescan (Bericht hoch/kritisch; kritische, behebbare Lücken lassen den Lauf scheitern) | jeder Push und wöchentlich | GitHub-Workflow „Sicherheitsprüfung“ |
 | Trivy-Secret-Scan des Repositorys | jeder Push | GitHub-Workflow „Sicherheitsprüfung“ |
-| Dependabot-Vorschläge (npm, Basis-Images, Actions) | wöchentlich | Pull Requests auf GitHub |
+| Versionsprüfung (npm, Node.js, Basis-Images samt Digest, PostgreSQL, Actions, Playwright) | **wöchentlich montags** | ein Issue „Neue Versionen verfügbar“ (GitHub-Workflow „Versionsprüfung“) |
+| Dependabot-Warnungen zu bekannten Schwachstellen (ohne Pull Requests) | laufend | Reiter *Security* auf GitHub |
 | Image mit aktuellen Basis-Images neu bauen | **monatlich** und nach bekannt gewordenen Lücken | `sudo bash install.sh --rebuild` |
 | optional Trivy am Host vor dem Wechsel | bei jedem Build durch `install.sh`, wenn `trivy` installiert ist | `trivy.log` im Installationsordner |
 
@@ -759,12 +760,13 @@ die Entwicklung; eine kritische Lücke im Laufzeitpfad führt zu einem Release u
 | `mwader/static-ffmpeg` | Community-Image, statisch gebaut aus den offiziellen ffmpeg-Quellen; Build-Skript und Prüfsummen der Quellen öffentlich auf GitHub (`wader/static-ffmpeg`) | Digest im `Dockerfile`; nur `ffmpeg`/`ffprobe` werden übernommen, die CI kopiert dieselben Dateien |
 
 Alle Images sind mit `@sha256:<digest>` fixiert: ein nachträglich neu belegter Tag ändert den Build nicht.
-Neue Versionen und Digests schlägt Dependabot wöchentlich als Pull Request vor (`.github/dependabot.yml`); die CI baut
-und prüft sie (inkl. Schwachstellenscan), bevor sie übernommen werden.
+Neue Versionen und Digests meldet die wöchentliche Versionsprüfung (`scripts/check-versions.mjs`, Workflow
+„Versionsprüfung“) in genau einem Issue; übernommen werden sie von Hand, die CI baut und prüft sie dann (inkl.
+Schwachstellenscan).
 
 Restrisiko ffmpeg: Das ffmpeg-Image stammt von einem Einzelentwickler. Es verarbeitet anonym hochgeladene Videos im
-selben Container wie Datenbank und Master-Schlüssel. Ausgleich: fixierter Digest mit Prüfung jeder Änderung per Pull
-Request, ffmpeg läuft als unprivilegierter Benutzer mit Zeitgrenzen im schreibgeschützten Container (Speicher-, Prozess- und CPU-Grenzen; Abweichung vom Grundsatz „ein Dienst je Container“ und Restrisiko: `docs/architektur.md`, E2) ohne
+selben Container wie Datenbank und Master-Schlüssel. Ausgleich: fixierter Digest, jede Änderung wird geprüft und
+über die CI gebaut, ffmpeg läuft als unprivilegierter Benutzer mit Zeitgrenzen im schreibgeschützten Container (Speicher-, Prozess- und CPU-Grenzen; Abweichung vom Grundsatz „ein Dienst je Container“ und Restrisiko: `docs/architektur.md`, E2) ohne
 Capabilities, Uploads sind vorher auf Dateityp geprüft. Eine Alternative wäre das ffmpeg-Paket aus Debian; es würde
 den Build aber von Debian-Paketquellen abhängig machen (bisher genügen Docker Hub und npm) und das Image deutlich
 vergrößern – bewusst nicht gewählt.

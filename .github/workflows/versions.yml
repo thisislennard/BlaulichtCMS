@@ -1,0 +1,46 @@
+# Wöchentliche Versionsprüfung statt Dependabot-Pull-Requests (#220, wie bei LiFeOS): alles immer auf dem neuesten
+# Stand, auch Hauptversionen, aber nur ein Issue, keine Branches. scripts/check-versions.mjs vergleicht alle
+# festgelegten Versionen (npm-Pakete von Wurzel/Server/Oberfläche/Browsertests, Node.js, Images samt Digest und
+# PostgreSQL, GitHub Actions per SHA, Playwright/Chromium); bei Abweichungen öffnet bzw. aktualisiert der Lauf genau ein
+# Issue „Neue Versionen verfügbar“ (Label claude), sind alle aktuell, schließt er es.
+# Bekannte Schwachstellen: Dependabot-Warnungen (Repo-Einstellung, ohne PRs) und npm audit/Trivy in security.yml.
+name: Versionsprüfung
+
+on:
+  schedule:
+    - cron: '41 5 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  versions:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 26
+
+      - name: Versionen prüfen
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node scripts/check-versions.mjs > report.md
+
+      - name: Issue anlegen, aktualisieren oder schließen
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          title="Neue Versionen verfügbar"
+          number=$(gh issue list --state open --label claude --search "\"$title\" in:title" --json number,title --jq "map(select(.title == \"$title\")) | .[0].number // empty")
+          if [ -s report.md ]; then
+            if [ -n "$number" ]; then
+              gh issue edit "$number" --body-file report.md
+            else
+              gh issue create --title "$title" --label claude --body-file report.md
+            fi
+          elif [ -n "$number" ]; then
+            gh issue close "$number" --comment "Alle Versionen sind wieder aktuell."
+          fi
