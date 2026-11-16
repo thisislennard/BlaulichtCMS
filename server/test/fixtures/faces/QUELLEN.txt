@@ -1,0 +1,18 @@
+Testbilder für die Gesichtssuche (#214, test/faces.test.ts) – alle gemeinfrei, verkleinert (sharp, JPEG-Qualität 80,
+ohne Metadaten). Erwartete Zahl erkennbarer Gesichter in Klammern.
+
+apollo11-crew.jpg (3)
+  „Apollo 11 Crew“, NASA. Gemeinfrei als Werk der US-Bundesregierung (NASA).
+  https://commons.wikimedia.org/wiki/File:Apollo_11_Crew.jpg
+
+mercury-seven.jpg (7)
+  „The Mercury Seven Astronauts“, NASA, GPN-2000-001286. Gemeinfrei als Werk der US-Bundesregierung (NASA).
+  https://commons.wikimedia.org/wiki/File:The_Mercury_Seven_Astronauts_-_GPN-2000-001286.jpg
+
+astronaut-groups-1-2.jpg (16)
+  „Astronaut Groups 1 and 2“, NASA, GPN-2000-001333. Gemeinfrei als Werk der US-Bundesregierung (NASA).
+  https://commons.wikimedia.org/wiki/File:Astronaut_Groups_1_and_2_-_GPN-2000-001333.jpg
+
+fire-engine.jpg (0 – Fahrzeug mit Kennzeichen, keine Personen)
+  „Fire engine ZIL-131 2009 G1“, George Chernilevsky (2009), vom Urheber als gemeinfrei freigegeben.
+  https://commons.wikimedia.org/wiki/File:Fire_engine_ZIL-131_2009_G1.jpg

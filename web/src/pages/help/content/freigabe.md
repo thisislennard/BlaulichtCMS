@@ -48,6 +48,8 @@ Sind Medien der Fassung in der Sichtung markiert (**Personen erkennbar**, **Verl
 - Keine erkennbaren Verletzten, Betroffenen oder Gesundheitsangaben – das sind besondere Kategorien personenbezogener Daten (Art. 9 DSGVO).
 - Kennzeichen, Adressen und Namen sind unkenntlich, soweit sie Personen zuordenbar machen; bei Videos ist der Ton geprüft (Stimmen, Funkverkehr).
 
+Dasselbe gilt für Bilder mit **offenen Gesichtsvorschlägen** (Hilfe → Sichtung → Gesichter automatisch vorschlagen): Der Dialog zeigt dann **„Gesichtsvorschläge offen“** mit der Zahl der Bilder. Die gefundenen Gesichter sind nicht automatisch unkenntlich – am besten vorher übernehmen oder verwerfen. Läuft die Suche noch, weist der Dialog darauf hin.
+
 Die Bestätigung steht im Audit-Protokoll. Ohne Markierungen zeigt der Dialog dieselben Fragen als Hinweis. Nach der Freigabe lässt sich die öffentliche Fassung einer Datei nicht mehr ändern (erst Freigabe zurückziehen).
 
 Mit eingeschaltetem **Vier-Augen-Prinzip** (Einstellungen → Redaktion) darf niemand die eigene Fassung freigeben: Wer am Beitrag geschrieben hat (Text, Kanaltexte, Bilder und Videos – auch in einer früheren Fassung) oder die Fassung eingereicht hat, kann sie nicht freigeben. Nur den Termin oder den Zielkanal zu ändern zählt nicht als Schreiben. Bei Bannern sind die anlegende, die zuletzt ändernde und die einreichende Person ausgeschlossen, bei Warnentwürfen alle, die am Entwurf geschrieben oder ihn eingereicht haben. Die Bestätigung der Warnstufe darf die freigebende Person selbst vornehmen – sie gehört zu ihrer fachlichen Prüfung.

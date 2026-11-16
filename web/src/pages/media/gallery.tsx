@@ -4,7 +4,7 @@ import { Button, cx, Select, StatusBadge } from '../../components/ui/core';
 import { Icon } from '../../components/ui/Icon';
 import { Dialog, Menu } from '../../components/ui/overlays';
 import { fmtBytes, fmtDateTime } from '../../lib/format';
-import { SENSITIVE_LABELS } from './PrivacyDialog';
+import { openFaces, SENSITIVE_LABELS } from './PrivacyDialog';
 
 /** Name für die Oberfläche: Anzeigename, sonst Originalname. */
 export const mediaName = (m: MediaItem) => (m.display_name || '').trim() || m.original_name;
@@ -106,6 +106,7 @@ export function MediaInfo({ m }: { m: MediaItem }) {
       {m.had_location === null ? row('Standort', 'unbekannt – das Format wird nicht ausgewertet; das Original kann Standortdaten enthalten') : null}
       {!m.had_location && m.had_location !== null && m.location_stripped ? row('Original', 'ohne Standort-, Seriennummer- und Personenangaben gespeichert') : null}
       {m.duplicate_of ? row('Duplikat', 'gleicher Inhalt wie eine ältere Datei (siehe Details)') : null}
+      {m.face_status === 'queued' ? row('Gesichter', 'Suche läuft') : openFaces(m) > 0 ? row('Gesichter', `${openFaces(m)} Vorschläge offen – unter „Datenschutz und Unkenntlichmachen“ prüfen`) : null}
     </dl>
   );
 }

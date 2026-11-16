@@ -11,7 +11,7 @@ import { Dialog, Menu, useErrorToast, useToast, useConfirm } from '../../compone
 import { useAuth } from '../../lib/auth';
 import { fmtBytes, fmtDateTime } from '../../lib/format';
 import { newClientKey, uploadResumable } from '../../lib/upload';
-import { PrivacyDialog } from './PrivacyDialog';
+import { openFaces, PrivacyDialog } from './PrivacyDialog';
 import { Lightbox, MarkBox, MediaList, MediaThumb, mediaName, Pager, useGalleryPrefs, ViewControls, type MenuItems } from './gallery';
 import { MediaDetailsDialog } from './MediaDetails';
 import { ReviewDialog, type Decision } from './ReviewDialog';
@@ -456,6 +456,16 @@ export default function CollectionDetail() {
                 <div className="truncate" title={m.original_name}>
                   {mediaName(m)}
                 </div>
+                {openFaces(m) > 0 &&
+                  (may.redact ? (
+                    <Button size="sm" icon="ScanFace" className="self-start" onClick={() => setPrivacyItem(m)}>
+                      {openFaces(m) === 1 ? 'Gesicht prüfen' : `${openFaces(m)} Gesichter prüfen`}
+                    </Button>
+                  ) : (
+                    <Badge tone="warning" className="self-start">
+                      Gesichtsvorschläge offen
+                    </Badge>
+                  ))}
                 {(m.duplicate_of || !!m.tags?.length) && (
                   <div className="flex flex-wrap gap-1">
                     {m.duplicate_of && <Badge tone="warning">Duplikat</Badge>}

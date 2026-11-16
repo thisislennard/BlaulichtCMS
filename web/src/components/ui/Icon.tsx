@@ -162,6 +162,7 @@ import {
   Reply,
   Paperclip,
   BookUser,
+  ScanFace,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -177,7 +178,7 @@ const MAP: Record<string, LucideIcon> = {
   CircleDashed, Film, UploadCloud, Share2, Image, Sun, Moon, Square, Crop, ShieldAlert, CircleHelp,
   Pause, MessageCircle, Folder, FolderPlus, FolderInput, Tag, Tags, LayoutGrid, List, Star, ListFilter, ChartPie, ShieldX, Palette, Type, Monitor, GripVertical, FileDown, Files, CheckCheck, CopyPlus, SeparatorHorizontal, ImageUp, PanelTop,
   FileUp, TimerOff, WifiOff, ServerOff, Wrench, FileQuestionMark, LogIn, Bug, CloudOff, AtSign, Cloud, ChartColumn, TrendingUp, Accessibility,
-  MessageSquareQuote, Reply, Paperclip, BookUser,
+  MessageSquareQuote, Reply, Paperclip, BookUser, ScanFace,
 };
 
 export function Icon({ name, size = 16, className, strokeWidth = 1.9 }: { name: string; size?: number; className?: string; strokeWidth?: number }) {

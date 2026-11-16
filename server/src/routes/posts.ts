@@ -171,7 +171,12 @@ export async function fourEyesBlocked(postId: string, number: number, submittedB
 
 async function loadMedia(ids: string[]) {
   if (!ids.length) return [];
-  const rows = await many<any>(`SELECT id, original_name, kind, mime, width, height, has_preview, has_public, status, deleted_at, sensitive_flags, (jsonb_array_length(redactions) > 0 OR crop IS NOT NULL) AS redacted, strip_audio, public_rev, alt_text FROM media WHERE id = ANY($1)`, [ids]);
+  const rows = await many<any>(
+    `SELECT id, original_name, kind, mime, width, height, has_preview, has_public, status, deleted_at, sensitive_flags, (jsonb_array_length(redactions) > 0 OR crop IS NOT NULL) AS redacted, strip_audio, public_rev, alt_text,
+            face_status, (SELECT count(*) FROM jsonb_array_elements(face_proposals) p WHERE p->>'status' = 'open')::int AS faces_open
+       FROM media WHERE id = ANY($1)`,
+    [ids],
+  );
   const byId = new Map(rows.map((r) => [r.id, r]));
   return ids.map((id) => byId.get(id)).filter(Boolean);
 }
@@ -529,9 +534,21 @@ export async function postRoutes(app: FastifyInstance) {
       }
       // Markierte Medien (erkennbare Personen, Verletzte/Gesundheitsdaten, Kennzeichen, sensibel): Freigabe nur mit
       // ausdrücklich bestätigter Datenschutz-Prüfung (#118, Art. 9 DSGVO, KUG)
-      const flagged = await one<any>(`SELECT count(*)::int AS n FROM media WHERE id = ANY($1) AND deleted_at IS NULL AND cardinality(sensitive_flags) > 0`, [st.current.media_ids ?? []], db);
-      if (body.decision === 'approved' && flagged!.n > 0 && !body.privacyChecked) {
-        throw new AppError(400, 'privacy_check_required', 'Die Fassung enthält markierte Medien (z. B. erkennbare Personen). Bitte die Datenschutz-Prüfung bestätigen.');
+      // Offene Gesichtsvorschläge (#214) verlangen dieselbe Prüfung: die Suche hat Gesichter gefunden, die noch niemand
+      // übernommen oder verworfen hat.
+      const flagged = await one<any>(
+        `SELECT count(*) FILTER (WHERE cardinality(sensitive_flags) > 0)::int AS n,
+                count(*) FILTER (WHERE jsonb_path_exists(face_proposals, '$[*] ? (@.status == "open")'))::int AS faces
+           FROM media WHERE id = ANY($1) AND deleted_at IS NULL`,
+        [st.current.media_ids ?? []],
+        db,
+      );
+      if (body.decision === 'approved' && (flagged!.n > 0 || flagged!.faces > 0) && !body.privacyChecked) {
+        throw new AppError(
+          400,
+          'privacy_check_required',
+          flagged!.n > 0 ? 'Die Fassung enthält markierte Medien (z. B. erkennbare Personen). Bitte die Datenschutz-Prüfung bestätigen.' : 'Die Fassung enthält Bilder mit offenen Gesichtsvorschlägen. Bitte die Datenschutz-Prüfung bestätigen.',
+        );
       }
       const a = await one<any>(
         `INSERT INTO approvals (post_id, revision_id, content_hash, decision, note, decided_by) VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
@@ -539,7 +556,7 @@ export async function postRoutes(app: FastifyInstance) {
         db,
       );
       if (body.decision === 'rejected') await db.query('UPDATE post_revisions SET submitted_at = NULL WHERE id = $1', [st.current.id]);
-      await audit(req.auth!.actor, body.decision === 'approved' ? 'post.approved' : 'post.rejected', { type: 'post', id, label: st.current.title }, { fassung: body.revision, pruefsumme: body.contentHash.slice(0, 12), ...(body.via !== 'editor' ? { ansicht: body.via === 'push' ? 'Freigabe-Ansicht (aus Push-Mitteilung)' : 'Freigabe-Ansicht' } : {}), ...(flagged!.n > 0 && body.decision === 'approved' ? { datenschutz_geprueft: true, markierte_medien: flagged!.n } : {}) }, 'ok', db);
+      await audit(req.auth!.actor, body.decision === 'approved' ? 'post.approved' : 'post.rejected', { type: 'post', id, label: st.current.title }, { fassung: body.revision, pruefsumme: body.contentHash.slice(0, 12), ...(body.via !== 'editor' ? { ansicht: body.via === 'push' ? 'Freigabe-Ansicht (aus Push-Mitteilung)' : 'Freigabe-Ansicht' } : {}), ...((flagged!.n > 0 || flagged!.faces > 0) && body.decision === 'approved' ? { datenschutz_geprueft: true, markierte_medien: flagged!.n, ...(flagged!.faces > 0 ? { bilder_mit_offenen_gesichtsvorschlaegen: flagged!.faces } : {}) } : {}) }, 'ok', db);
       return { a, title: st.current.title, author: st.current.submitted_by ?? st.current.created_by };
     });
     if (res.author) {

@@ -123,6 +123,7 @@ const RANGES: Record<string, [number, number]> = {
   'media.max_video_edge': [320, 8192],
   'media.full_decode_seconds': [10, 36000],
   'media.check_timeout_s': [60, 14400],
+  'media.face_threshold': [30, 95],
   'smtp.port': [1, 65535],
   'backup.hour': [0, 23],
   'backup.keep': [1, 365],
@@ -567,6 +568,19 @@ export default function Settings() {
                     label="Animierte Bilder (GIF, WebP, PNG, AVIF) zulassen"
                     description="Vorschau und öffentliche Fassung zeigen das erste Bild. Aus: animierte Bilder werden gesperrt."
                   />
+                </div>
+                <div className="flex flex-col gap-3">
+                  <span className="text-sm font-medium">Gesichtsvorschläge</span>
+                  <Switch
+                    checked={!!v["media.face_detect"]}
+                    disabled={ro("media.face_detect")}
+                    onChange={(x) => set("media.face_detect", x)}
+                    label="Gesichter automatisch vorschlagen"
+                    description="Nach der Prüfung sucht BlaulichtCMS in Bildern nach Gesichtern (lokal im Container, nichts verlässt den Server) und schlägt sie unter „Datenschutz und Unkenntlichmachen“ vor. Unkenntlich wird nur, was jemand übernimmt; offene Vorschläge verlangen bei der Freigabe die Datenschutz-Prüfung. Gespeichert werden nur Rechtecke – keine Wiedererkennung. Videos und Kennzeichen bleiben Handarbeit."
+                  />
+                  <FieldGrid>
+                    <NumField k="media.face_threshold" label="Mindestsicherheit der Vorschläge" help="Niedriger: mehr Vorschläge, auch Fehltreffer. Höher: weniger Fehltreffer, aber mehr übersehene Gesichter. Standard 60 %." unit="%" min={30} max={95} v={v} set={set} ro={ro("media.face_threshold")} />
+                  </FieldGrid>
                 </div>
                 <Switch
                   checked={!!v["media.notices"]}

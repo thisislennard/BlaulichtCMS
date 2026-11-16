@@ -15,6 +15,7 @@ import { sendFileResponse } from './files.js';
 import { exportPath } from '../media/exports.js';
 import { publicFileName } from '../media/names.js';
 import { privacyInput, renderPublic } from '../media/privacy.js';
+import { enqueueFaceDetection, faceDetectable, type FaceProposal } from '../media/faces.js';
 import { purgeCollection } from '../lib/retention.js';
 import { computeExpiry, extendExpiry, LINK_UNAVAILABLE, linkState } from '../media/links.js';
 import { descendants } from '../media/folders.js';
@@ -117,6 +118,11 @@ export function mediaPayload(m: any) {
     crop: m.crop ?? null,
     strip_audio: !!m.strip_audio,
     public_rev: m.public_rev ?? 0,
+    // Gesichtsvorschläge (#214): nur Rechtecke, Konfidenz und Entscheidung
+    face_proposals: m.face_proposals ?? [],
+    face_status: m.face_status ?? null,
+    face_checked_at: m.face_checked_at ?? null,
+    face_error: m.face_error ?? null,
     selection: m.selection,
     selection_version: m.selection_version ?? 0,
     sort_order: m.sort_order,
@@ -971,6 +977,9 @@ export async function mediaRoutes(app: FastifyInstance) {
       (body.crop !== undefined && JSON.stringify(body.crop) !== JSON.stringify(m.crop ?? null));
     const audioChange = body.stripAudio !== undefined && body.stripAudio !== m.strip_audio;
     const changesPublic = imageChange || audioChange;
+    // Entscheidungen zu Gesichtsvorschlägen (#214): nur zu offenen oder schon entschiedenen Vorschlägen dieser Datei
+    const known = new Map(((m.face_proposals ?? []) as FaceProposal[]).map((p) => [p.id, p]));
+    const decisions = (body.proposals ?? []).filter((d) => known.get(d.id) && known.get(d.id)!.status !== d.status);
     if (changesPublic) {
       if (!m.has_public) throw badRequest('Für diese Datei gibt es keine öffentliche Fassung (z. B. HEIC).');
       if (imageChange && m.kind !== 'image') throw badRequest('Bereiche und Zuschnitt gibt es nur für Bilder. Videos lassen sich ohne Ton veröffentlichen.');
@@ -984,11 +993,16 @@ export async function mediaRoutes(app: FastifyInstance) {
       );
       if (approved) throw conflict(`Die Datei gehört zur freigegebenen Fassung von „${approved.title}“. Bitte zuerst die Freigabe zurückziehen.`);
     }
+    // Vorschläge in der Datenbank zusammenführen (die Suche kann parallel neue Vorschläge schreiben)
     const u = await one<any>(
       `UPDATE media SET sensitive_flags = COALESCE($2::text[], sensitive_flags), redactions = COALESCE($3::jsonb, redactions),
-              crop = CASE WHEN $4 THEN $5::jsonb ELSE crop END, strip_audio = COALESCE($6, strip_audio)
+              crop = CASE WHEN $4 THEN $5::jsonb ELSE crop END, strip_audio = COALESCE($6, strip_audio),
+              face_proposals = CASE WHEN jsonb_array_length($7::jsonb) = 0 THEN face_proposals ELSE COALESCE((
+                SELECT jsonb_agg(CASE WHEN d.status IS NULL THEN p ELSE p || jsonb_build_object('status', d.status) END ORDER BY e.n)
+                  FROM jsonb_array_elements(face_proposals) WITH ORDINALITY AS e(p, n)
+                  LEFT JOIN jsonb_to_recordset($7::jsonb) AS d(id text, status text) ON d.id = e.p->>'id'), '[]'::jsonb) END
         WHERE id = $1 RETURNING *`,
-      [id, body.flags ?? null, body.redactions !== undefined ? JSON.stringify(body.redactions) : null, body.crop !== undefined, body.crop ? JSON.stringify(body.crop) : null, body.stripAudio ?? null],
+      [id, body.flags ?? null, body.redactions !== undefined ? JSON.stringify(body.redactions) : null, body.crop !== undefined, body.crop ? JSON.stringify(body.crop) : null, body.stripAudio ?? null, JSON.stringify(decisions)],
     );
     let rendering = false;
     if (changesPublic) {
@@ -1008,9 +1022,26 @@ export async function mediaRoutes(app: FastifyInstance) {
       zuschnitt: !!u.crop,
       ohne_ton: u.strip_audio,
       neue_fassung: changesPublic,
+      ...(decisions.length
+        ? { gesichtsvorschlaege_uebernommen: decisions.filter((d) => d.status === 'accepted').length, gesichtsvorschlaege_verworfen: decisions.filter((d) => d.status === 'rejected').length }
+        : {}),
     });
     const fresh = await one<any>(`SELECT * FROM media WHERE id = $1`, [id]);
     return { media: mediaPayload(fresh), rendering };
+  });
+
+  /*
+   * Gesichter suchen (#214): Suche für ein Bild (erneut) einplanen – auch wenn die automatische Suche aus ist oder das Bild
+   * älter ist. Offene Vorschläge werden ersetzt, entschiedene bleiben.
+   */
+  app.post('/media/:id/faces', { preHandler: requireAuth('media.redact'), config: { rateLimit: { max: 30, timeWindow: '1 minute' } } }, async (req) => {
+    const { id } = z.object({ id: z.uuid() }).parse(req.params);
+    const m = await one<any>(`SELECT id, kind, has_public, original_name FROM media WHERE id = $1 AND deleted_at IS NULL AND status = 'ready'`, [id]);
+    if (!m) throw notFound('Datei nicht gefunden oder noch nicht geprüft.');
+    if (!faceDetectable(m)) throw badRequest('Gesichter werden nur in Bildern mit öffentlicher Fassung gesucht (nicht in Videos und HEIC).');
+    await enqueueFaceDetection(id);
+    await audit(req.auth!.actor, 'media.faces_requested', { type: 'media', id, label: m.original_name });
+    return { media: mediaPayload(await one<any>(`SELECT * FROM media WHERE id = $1`, [id])) };
   });
 
   app.delete('/media/:id', { preHandler: requireAuth('media.trash') }, async (req) => {

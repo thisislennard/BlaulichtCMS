@@ -28,6 +28,8 @@ import { resolveActiveRoot } from './updates/releases.js';
  *   password-link <email>          Link zum Neusetzen des Passworts erzeugen (24 h gültig)
  *   reset-mfa <email>              Zwei-Faktor-Anmeldung eines Kontos zurücksetzen
  *   audit-verify                   Hash-Kette des Audit-Protokolls prüfen (Exit 1 bei Auffälligkeiten)
+ *   face-check [datei|-] [prozent] Gesichtssuche prüfen (#214): onnxruntime, Modell und Rechenzeit; ohne Datei ein
+ *                                  leeres Testbild, „-“ liest ein Bild von der Standardeingabe (ohne Datenbank)
  *   rotate-master-key --ja         Master-Schlüssel wechseln und alles neu verschlüsseln (nur im Wartungsmodus,
  *                                  docs/betrieb.md „Master-Schlüssel wechseln“)
  */
@@ -89,6 +91,32 @@ async function main() {
       for (const [k, v] of Object.entries(h.checks)) console.log(`${v.ok ? 'ok  ' : 'FEHL'} ${k}: ${v.detail}`);
       console.log(h.ok ? `ok ${config.version}` : 'Nicht bereit.');
       break;
+    }
+    case 'face-check': {
+      // Gesichtssuche im Image prüfen (#214, CI-Docker-Job): Laufzeit laden, Modell rechnen lassen, Treffer ausgeben
+      const fs = await import('node:fs');
+      const os = await import('node:os');
+      const { detectFaces, faceModelPath, stopFaceRunner } = await import('./media/faces.js');
+      const tmp = path.join(os.tmpdir(), `blaulichtcms-face-check-${process.pid}`);
+      let file = args[0];
+      try {
+        if (!file || file === '-') {
+          if (file === '-') fs.writeFileSync(tmp, fs.readFileSync(0));
+          else {
+            const sharp = (await import('sharp')).default;
+            await sharp({ create: { width: 320, height: 240, channels: 3, background: '#808080' } }).jpeg().toFile(tmp);
+          }
+          file = tmp;
+        }
+        const r = await detectFaces(file, { threshold: Math.min(95, Math.max(30, Number(args[1]) || 60)) / 100, limitInputPixels: 100_000_000 });
+        console.log(`${r.faces.length} Gesicht(er) in ${r.width}×${r.height} Bildpunkten, ${r.ms} ms (${path.relative(APP_ROOT, faceModelPath())})`);
+        for (const f of r.faces) console.log(`  x ${f.x.toFixed(3)} y ${f.y.toFixed(3)} b ${f.w.toFixed(3)} h ${f.h.toFixed(3)} Konfidenz ${f.score.toFixed(2)}`);
+      } finally {
+        stopFaceRunner();
+        fs.rmSync(tmp, { force: true });
+      }
+      process.stdout.write('', () => process.exit(0));
+      return;
     }
     case 'audit-verify': {
       // Hash-Kette des Audits prüfen (#112); Exit-Code 1 bei Auffälligkeiten
@@ -270,7 +298,7 @@ async function main() {
       break;
     }
     default:
-      console.log('Befehle: gen-master-key | migrate | self-check [--release] | update-restore <datei> | preflight [--json] | maintenance on|off [grund] | restore-db <datei> --ja | backup-decrypt <datei> <ziel> | offsite-volume <name> <größe> <sha256> | backup-report ok|fehler <text> | password-link <email> | reset-mfa <email> | audit-verify | rotate-master-key --ja');
+      console.log('Befehle: gen-master-key | migrate | self-check [--release] | update-restore <datei> | preflight [--json] | maintenance on|off [grund] | restore-db <datei> --ja | backup-decrypt <datei> <ziel> | offsite-volume <name> <größe> <sha256> | backup-report ok|fehler <text> | password-link <email> | reset-mfa <email> | audit-verify | rotate-master-key --ja | face-check [datei|-] [prozent]');
       return;
   }
   const { pool } = await import('./db/pool.js');

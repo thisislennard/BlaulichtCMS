@@ -114,7 +114,9 @@
       "deleted": "Datei gelöscht",
       "downloaded": "Original heruntergeladen",
       "export_requested": "Export angefordert",
-      "export_downloaded": "Export heruntergeladen"
+      "export_downloaded": "Export heruntergeladen",
+      "privacy": "Datenschutz der Datei geändert",
+      "faces_requested": "Gesichtssuche angestoßen"
     },
     "site": {
       "created": "Website angelegt",
@@ -371,7 +373,9 @@
       "deleted": "hat „{o}“ gelöscht",
       "downloaded": "hat das Original „{o}“ heruntergeladen",
       "export_requested": "hat einen Export angefordert",
-      "export_downloaded": "hat einen Export heruntergeladen"
+      "export_downloaded": "hat einen Export heruntergeladen",
+      "privacy": "hat Datenschutz und Unkenntlichmachung von „{o}“ geändert",
+      "faces_requested": "hat die Gesichtssuche für „{o}“ angestoßen"
     },
     "site": {
       "created": "hat die Website „{o}“ angelegt",

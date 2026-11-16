@@ -15,6 +15,10 @@ on:
 permissions:
   contents: read
 
+env:
+  # onnxruntime-node (#214): keine GPU-Bibliotheken von NuGet nachladen (gebraucht wird nur der Typcheck/Build)
+  ONNXRUNTIME_NODE_INSTALL: skip
+
 concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: false

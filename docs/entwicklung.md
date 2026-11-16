@@ -9,6 +9,9 @@
 - Docker für Image-Build, Abnahmetest und WordPress-Testsystem
 - Playwright mit Chromium für die Browsertests: eigener Lock in `test/e2e` (feste Version, nicht Teil des Images) –
   `npm ci --prefix test/e2e`, dann `cd test/e2e && npx playwright install chromium`
+- Unter **Linux x64** vor `npm ci` `export ONNXRUNTIME_NODE_INSTALL=skip` setzen: sonst lädt das Installationsskript von
+  `onnxruntime-node` (Gesichtsvorschläge, #214) zusätzlich CUDA-Bibliotheken von NuGet. Gebraucht wird nur die
+  mitgelieferte CPU-Fassung (Windows, macOS und Linux arm64 laden ohnehin nichts nach).
 
 ## Lokal starten (Hot Reload)
 

@@ -1,0 +1,38 @@
+YuNet – Gesichtsdetektor für die Gesichtsvorschläge von BlaulichtCMS (#214)
+
+Datei:      face_detection_yunet_2026may.onnx (229 738 Bytes)
+SHA-256:    ebafce4e3c118d6554634be5c27ab333b4c047a9a8c3faf1d7cf93101c22f0f0
+Herkunft:   OpenCV Zoo, models/face_detection_yunet
+            https://github.com/opencv/opencv_zoo/tree/26cc381e4d2594bb9f47a26eb8fd96c94a13660d/models/face_detection_yunet
+            (Commit 26cc381e „add dynamic input Face detection model for OpenCV 5.x ORT engine“, 22.05.2026;
+            neu exportiert aus face_detection_yunet_2023mar.onnx mit dynamischer Höhe/Breite)
+Training:   https://github.com/ShiqiYu/libfacedetection.train
+Artikel:    Wu, Peng, Yu: „YuNet: A Tiny Millisecond-level Face Detector“, Machine Intelligence Research 20(5), 2023
+Lizenz:     MIT („All files in this directory are licensed under MIT License“, README des Modellordners)
+
+Das Modell findet nur Gesichtsbereiche (Rechteck und Konfidenz). BlaulichtCMS speichert keine Merkmale, keine
+Landmarken und erkennt keine Personen wieder.
+
+-------------------------------------------------------------------------------
+
+MIT License
+
+Copyright (c) 2020 Shiqi Yu <shiqi.yu@gmail.com>
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.

@@ -30,6 +30,14 @@ Warnfeeds (amtliche Warnungen) ◀──Abruf───────────�
   (`media.strip_location`).
 - **Veröffentlichung:** Nur freigegebene Fassungen und öffentliche Fassungen der Dateien (neutral benannt) verlassen
   BlaulichtCMS. Keine Originale, keine Uploader-Hinweise.
+- **Gesichtsvorschläge (#214):** Ein lokales Erkennungsmodell (YuNet, im Container, ohne Netzverbindung) sucht in
+  geprüften Bildern nach Gesichtern, um sie zum **Unkenntlichmachen vorzuschlagen**. Gespeichert werden je Treffer nur
+  Lage und Größe (Rechteck), die Sicherheit des Modells und die Entscheidung (offen, übernommen, verworfen) –
+  **keine** Gesichtsmerkmale, keine Landmarken, kein Abgleich mit anderen Bildern, keine Identifizierung. Damit
+  entstehen keine biometrischen Daten zur eindeutigen Identifizierung (Art. 4 Nr. 14, Art. 9 Abs. 1 DSGVO); die
+  Verarbeitung dient dem Schutz der Abgebildeten. Unkenntlich wird nur, was ein Mensch übernimmt; offene Vorschläge
+  verlangen bei der Freigabe die Datenschutz-Prüfung. Abschaltbar unter *Einstellungen → Medien*
+  (`media.face_detect`).
 - **Warnentwurf:** Rückrufkontakt (Name, Telefon), bestätigende/freigebende Personen, Empfängeradressen, PDF.
 - **Warnvorgang löschen:** von Hand vor Ablauf der Frist möglich (Rechte nach Stand, versandte Vorgänge nur durch
   die Administration mit Begründung); gelöscht werden Fassungen mit Rückrufkontakt, Freigaben, PDF und
@@ -50,6 +58,7 @@ Warnfeeds (amtliche Warnungen) ◀──Abruf───────────�
 | Bereich (Tabellen) | Betroffene | Daten | Löschfrist (Standard) | Einstellung |
 |---|---|---|---|---|
 | Uploads (`media`, `upload_sessions`) | Hochladende, abgebildete Personen | Fotos/Videos (ggf. Gesundheitsdaten, Kennzeichen, Minderjährige), Dateiname, Hinweis, Vorgangsnummer, Aufnahmezeit, Prüfsumme; von der Redaktion ergänzt: Anzeigename, Beschreibung, interne Notiz (Teil der Datenschutzsuche, beim Pseudonymisieren geleert) | abgeschlossene Sammlung **365 Tage** nach letzter Aktivität; Papierkorb (Dateien samt Datensatz) und Datensätze abgewiesener Dateien **30 Tage**; unterbrochene Uploads bis Ablauf der Sitzung | `privacy.collection_retention_days`, `privacy.deleted_media_days` |
+| Gesichtsvorschläge (`media.face_proposals`, `face_status`, `face_checked_at`, `face_model`, `face_error`) | abgebildete Personen | je gefundenem Gesicht Rechteck (normierte Lage und Größe), Sicherheit des Modells, Entscheidung; Stand und Zeitpunkt der Suche, Modellkennung – keine Merkmale, keine Identität | mit der Datei (Papierkorb, Löschfristen, Datenschutzanfragen) | `media.face_detect`, `media.face_threshold` |
 | Gestaltung der Upload-Seite (`design_images`, `upload_links.design`, Einstellung `media.upload_design`) | ggf. auf Bildern Abgebildete | Bilder der Gestaltung (neu kodiert, ohne EXIF/GPS), Texte | bis zur Änderung; nicht verwendete Bilder nach 1 Tag | – |
 | Sicherheitsereignisse der Upload-Seiten (`public_security_events`) | Aufrufende der Upload-Seiten | Ereignis (z. B. falsches Passwort, abgelaufener Link, Rate-Limit), Link, Zeit, gekürzter HMAC der IP-Adresse (keine Klar-IP, kein Token, keine Namen) | **365 Tage** | `media.security_log_days` |
 | Angaben der Hochladenden (`media.uploader`, `upload_sessions.uploader`, `consent_at`) | Hochladende | Name, E-Mail-Adresse, Aufnahmeort, Aufnahmedatum (nur, wenn der Upload-Link sie abfragt; Standard: keins davon), Zeitpunkt der Bestätigung; sichtbar nur mit „Medien sichten und auswählen“, Teil der Datenschutzsuche, Auskunft und Pseudonymisierung | **12 Monate** nach dem Upload (Dateien bleiben); je Link „Angaben der Hochladenden löschen“ | `privacy.uploader_months` |
@@ -159,7 +168,7 @@ Umgesetzt in BlaulichtCMS (Bezug zu BSI IT-Grundschutz in Klammern, Einzelheiten
 |---|---|
 | Zugangskontrolle (ORP.4) | Passwörter mit Argon2id, Zwei-Faktor (Pflicht für Konten mit Verwaltungsrechten und mit „Originale herunterladen“), Sperre nach Fehlversuchen ohne gezieltes Aussperren, erneute Bestätigung bei kritischen Änderungen, Sitzungsdauer begrenzt |
 | Zugriffskontrolle (ORP.4, APP.3.1) | Rollen (mitgeliefert und eigene) mit feinen Rechten je Funktion, serverseitig je Aktion und Datei geprüft, Vergabe nur innerhalb der eigenen Rechte, Rollenänderungen mit altem und neuem Stand im Audit-Protokoll; Originale nur mit „Originale herunterladen“; Upload-Links befristet, pausier- und widerrufbar, neu erzeugbar, auf eine Sammlung beschränkt; einheitliche Meldung für unbekannte, abgelaufene, pausierte und widerrufene Links |
-| Datenminimierung (CON.2) | Standort-/Kameradaten aus öffentlichen Fassungen und Originalen entfernt; neutrale Dateinamen nach außen; FE2-Allowlist; IP ohne Konto nach 30 Tagen entfernt; Hinweisfeld fragt nicht nach Namen; Markierung und Unkenntlichmachen sensibler Inhalte vor der Freigabe |
+| Datenminimierung (CON.2) | Standort-/Kameradaten aus öffentlichen Fassungen und Originalen entfernt; neutrale Dateinamen nach außen; FE2-Allowlist; IP ohne Konto nach 30 Tagen entfernt; Hinweisfeld fragt nicht nach Namen; Markierung und Unkenntlichmachen sensibler Inhalte vor der Freigabe; Gesichtsvorschläge (lokal, nur Rechtecke) mit Pflicht-Prüfung bei offenen Vorschlägen |
 | Speicherbegrenzung (CON.6) | Löschfristen je Datenart mit Probelauf und Audit; „Sammlung löschen“; Auskunft/Löschung je Person |
 | Vertraulichkeit (CON.1) | Geheimnisse und TOTP mit AES-256-GCM, Master-Schlüssel außerhalb der Datenbank und wechselbar (`rotate-master-key`); Sicherungen verschlüsselt mit getrenntem Schlüssel; HTTPS am Proxy, HSTS |
 | Integrität und Nachweis (OPS.1.1.5) | Audit als versiegelte Hash-Kette mit täglicher Prüfung, optional zentrale Weiterleitung; Freigabe gilt für genau eine Fassung (Prüfsumme) |
@@ -203,7 +212,7 @@ DSK-Muss-Liste – zutreffend bei BlaulichtCMS:
 | Datenerhebung bei Dritten ohne deren Wissen | Abgebildete wissen oft nicht vom Upload | **zutreffend** |
 | Umfangreiche Verarbeitung | abhängig vom Einsatzgebiet *[bewerten]* | offen |
 | Systematische Überwachung, Profiling, automatisierte Entscheidungen | nein | nicht zutreffend |
-| Neue Technologien | nein (übliche Web-Anwendung) | nicht zutreffend |
+| Neue Technologien | übliche Web-Anwendung; Gesichtsvorschläge mit einem lokalen Erkennungsmodell (nur Lage im Bild, keine Identifizierung, abschaltbar, Ergebnis nur Vorschlag) | *[bewerten]*, eher nicht zutreffend |
 
 **Empfehlung:** Bei zwei oder mehr zutreffenden Kriterien ist eine DSFA in der Regel durchzuführen. Für BlaulichtCMS
 treffen mehrere Kriterien zu – eine **DSFA wird empfohlen**, mindestens für die Veröffentlichung von Bürgerfotos in

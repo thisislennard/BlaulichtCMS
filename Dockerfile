@@ -15,10 +15,14 @@
 
 FROM node:26-trixie-slim@sha256:e6bedef217677b276c591795e169840edd9096dbf13f29df8ef8d1856b8820bc AS build
 WORKDIR /src
+# Gesichtssuche (#214): onnxruntime-node soll keine GPU-Bibliotheken (CUDA/TensorRT) von NuGet nachladen –
+# gebraucht wird nur die im npm-Paket enthaltene CPU-Fassung
+ENV ONNXRUNTIME_NODE_INSTALL=skip
 COPY package.json package-lock.json ./
 COPY server/package.json server/
 COPY web/package.json web/
-RUN --mount=type=secret,id=build_ca,required=false \
+# npm-Zwischenspeicher als Build-Cache: das große onnxruntime-Paket wird je Build nur einmal geladen (Prüfsummen aus dem Lock)
+RUN --mount=type=secret,id=build_ca,required=false --mount=type=cache,target=/root/.npm,sharing=locked \
     if [ -f /run/secrets/build_ca ]; then export NODE_EXTRA_CA_CERTS=/run/secrets/build_ca; fi; \
     npm ci --no-audit --no-fund
 COPY . .
@@ -26,12 +30,20 @@ RUN npm run build
 
 FROM node:26-trixie-slim@sha256:e6bedef217677b276c591795e169840edd9096dbf13f29df8ef8d1856b8820bc AS deps
 WORKDIR /app
+ENV ONNXRUNTIME_NODE_INSTALL=skip
 COPY package.json package-lock.json ./
 COPY server/package.json server/
 COPY web/package.json web/
-RUN --mount=type=secret,id=build_ca,required=false \
+# onnxruntime-node bringt Bibliotheken für alle Plattformen mit (Windows mit DirectML, macOS, Linux x64/arm64: ~290 MB).
+# Behalten wird nur die Linux-CPU-Bibliothek der eigenen Architektur (x64 ~48 MB, arm64 ~26 MB); fehlt sie, bricht
+# der Build ab. Sie braucht nur glibc, libstdc++ und libgcc_s – beides ist im PostgreSQL-Image (auch Node.js nutzt sie).
+RUN --mount=type=secret,id=build_ca,required=false --mount=type=cache,target=/root/.npm,sharing=locked \
     if [ -f /run/secrets/build_ca ]; then export NODE_EXTRA_CA_CERTS=/run/secrets/build_ca; fi; \
-    npm ci --omit=dev --workspace server --no-audit --no-fund
+    npm ci --omit=dev --workspace server --no-audit --no-fund && \
+    ort=node_modules/onnxruntime-node/bin/napi-v6 && arch="$(node -p process.arch)" && \
+    test -f "$ort/linux/$arch/libonnxruntime.so.1" && test -f "$ort/linux/$arch/onnxruntime_binding.node" && \
+    mv "$ort/linux/$arch" /tmp/ort-keep && rm -rf "$ort" && mkdir -p "$ort/linux" && mv /tmp/ort-keep "$ort/linux/$arch" && \
+    du -sh node_modules/onnxruntime-node
 
 FROM mwader/static-ffmpeg:9.0.2-1@sha256:f5d100184884eb3e82b0eb14bb5ebf98da99826ac824989720297fb9ef21c822 AS ffmpeg
 

@@ -13,7 +13,7 @@ import { fmtDateTime, fmtRelative, fromLocalInput, toLocalInput } from '../../li
 import { KIND_LABEL } from './Posts';
 import { cleanFormats, SocialStatusCard, SocialTargetsCard } from './SocialPanel';
 import { safeHref } from '../../lib/url';
-import { SENSITIVE_LABELS } from '../media/PrivacyDialog';
+import { openFaces, PrivacyDialog, SENSITIVE_LABELS } from '../media/PrivacyDialog';
 import { ImageFillDialog } from '../designs/ImageFill';
 import { DecisionDialog } from './DecisionDialog';
 import { WpCategoryPicker } from '../channels/WpCategories';
@@ -181,6 +181,8 @@ function PostEditorInner({ id }: { id: string }) {
   const [dragIdx, setDragIdx] = useState<number | null>(null);
   const [unpublishing, setUnpublishing] = useState(false);
   const [resolving, setResolving] = useState<Publication | null>(null);
+  // Gesichtsvorschläge direkt aus dem Beitrag prüfen (#214): volle Mediendaten für den Datenschutz-Dialog
+  const [privacyMedia, setPrivacyMedia] = useState<MediaItem | null>(null);
   usePageMeta({ title: q.data?.revision.title });
 
   const d = q.data;
@@ -229,6 +231,13 @@ function PostEditorInner({ id }: { id: string }) {
   const r = d!.revision;
   const refresh = () => Promise.all([qc.invalidateQueries({ queryKey: ['post', id] }), qc.invalidateQueries({ queryKey: ['posts'] }), qc.invalidateQueries({ queryKey: ['dashboard'] })]);
   const editable = can('post.edit');
+  const openPrivacy = async (mid: string) => {
+    try {
+      setPrivacyMedia((await get<{ media: MediaItem }>(`/media/${mid}/details`)).media);
+    } catch (e) {
+      toastError(e);
+    }
+  };
   const activeSites = (sites.data ?? []).filter((s) => s.status === 'active');
   const site = (sites.data ?? []).find((s) => s.id === r.site_id);
 
@@ -428,6 +437,14 @@ function PostEditorInner({ id }: { id: string }) {
                             Markiert
                           </Badge>
                         )}
+                        {openFaces(m) > 0 &&
+                          (can('media.redact') ? (
+                            <Button size="sm" icon="ScanFace" onClick={() => void openPrivacy(mid)}>
+                              {openFaces(m) === 1 ? 'Gesicht prüfen' : `${openFaces(m)} Gesichter prüfen`}
+                            </Button>
+                          ) : (
+                            <Badge tone="warning">{openFaces(m) === 1 ? '1 Gesichtsvorschlag offen' : `${openFaces(m)} Gesichtsvorschläge offen`}</Badge>
+                          ))}
                         {draft.coverId === mid ? (
                           <Badge>Titelbild</Badge>
                         ) : (
@@ -706,9 +723,18 @@ function PostEditorInner({ id }: { id: string }) {
           hash={r.content_hash}
           postId={id}
           flagged={r.media_ids.map((mid) => mediaCache[mid]).filter((m): m is MediaItem => !!m?.sensitive_flags?.length)}
+          faces={r.media_ids.map((mid) => mediaCache[mid]).filter((m): m is MediaItem => !!m)}
           altMissing={d!.accessibility?.applies ? (d!.accessibility.missing ?? []).length : 0}
           altRequired={!!d!.accessibility?.required}
           onClose={() => (setDecision(null), refresh())}
+        />
+      )}
+      {privacyMedia && (
+        <PrivacyDialog
+          m={privacyMedia}
+          onClose={() => setPrivacyMedia(null)}
+          // Zähler aus dem Beitrag verwerfen: offen ist, was in der gespeicherten Liste noch offen ist
+          onSaved={(x) => setMediaCache((c) => ({ ...c, [x.id]: { ...c[x.id], ...x, faces_open: undefined } }))}
         />
       )}
       {collectLink && (

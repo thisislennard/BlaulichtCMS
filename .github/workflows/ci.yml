@@ -8,6 +8,10 @@ on:
 permissions:
   contents: read
 
+env:
+  # onnxruntime-node (Gesichtssuche, #214): keine CUDA-/TensorRT-Bibliotheken von NuGet nachladen, CPU genügt
+  ONNXRUNTIME_NODE_INSTALL: skip
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -171,6 +175,9 @@ jobs:
           docker compose exec -T blaulichtcms node server/dist/cli.js self-check
           # Rauchtest wie bei einem In-App-Update (Module, native Abhängigkeiten, Update-Schlüssel)
           docker compose exec -T blaulichtcms node server/dist/cli.js self-check --release
+          # Gesichtssuche im Image (#214): onnxruntime-node (CPU) und YuNet auf einem gemeinfreien Testbild mit 7 Gesichtern
+          docker compose exec -T blaulichtcms node server/dist/cli.js face-check - < server/test/fixtures/faces/mercury-seven.jpg | tee face-check.txt
+          grep -q '^7 Gesicht' face-check.txt
           # Laufzeitrolle ohne Superuser (#102)
           pre=$(docker compose exec -T blaulichtcms node server/dist/cli.js preflight || true)
           echo "$pre" | grep -q "Datenbankrolle ohne Superuser-Rechte: blaulichtcms_app" || { echo "$pre"; exit 1; }

@@ -25,7 +25,7 @@ flowchart LR
 
 | Baustein | Technik |
 |---|---|
-| Server | TypeScript, Node.js, Fastify; Worker für Medienverarbeitung (sharp, ffmpeg), Hintergrundaufträge und Löschfristen |
+| Server | TypeScript, Node.js, Fastify; Worker für Medienverarbeitung (sharp, ffmpeg, Gesichtsvorschläge mit YuNet über onnxruntime), Hintergrundaufträge und Löschfristen |
 | Datenbank | PostgreSQL 18 im selben Container, nur über Unix-Socket; getrennte Rollen für Migrationen und Anwendung |
 | Oberfläche | React 19, Vite, Tailwind 4, TanStack Query; installierbare Web-App (PWA), Live-Aktualisierung per Server-Sent Events |
 | WordPress | Plugin „BlaulichtCMS Bridge“ (PHP) – holt Aufträge per HTTPS ab, BlaulichtCMS öffnet keinen Eingang zur Website |
@@ -107,6 +107,68 @@ Personen. Routen `GET /insights`, `GET /posts/:id/insights` (Recht `insights.vie
   Freigabe blockiert (Fehler `alt_text_required`) oder nur Warnung.
 - Lesbarkeit: `web/src/lib/readability.ts` (Flesch-Amstad, erste Wiener Sachtextformel, Silbennäherung für das
   Deutsche, Hinweise), im Browser gerechnet; Tests in `server/test/readability.test.ts`.
+
+---
+
+## Gesichtsvorschläge (#214)
+
+Automatische Gesichtssuche als **Vorschlag** im vorhandenen Werkzeug zum Unkenntlichmachen (#118). Ein Mensch
+übernimmt oder verwirft; die Suche ändert nie selbst `media.redactions` oder die öffentliche Fassung.
+
+- **Ablauf:** Nach der Prüfung eines Bildes mit öffentlicher Fassung (nicht HEIC, keine Videos) plant
+  `processMedia` den Auftrag `media.faces` ein (ein Versuch, `dedup_key` je Datei; Einstellung `media.face_detect`,
+  Standard an). Von Hand: `POST /media/:id/faces` (Recht „Medien unkenntlich machen“), auch bei älteren Bildern und
+  ausgeschalteter Automatik. Ergebnis in `media.face_proposals` (Migration 165): `{id, x, y, w, h, score, status}`,
+  normiert 0..1 auf das gedrehte Bild, Status `open | accepted | rejected`; dazu `face_status`, `face_checked_at`,
+  `face_model`, `face_error`. Entscheidungen kommen mit `PATCH /media/:id/privacy` (`proposals: [{id, status}]`,
+  übernommene Bereiche stehen wie alle anderen in `redactions`, jetzt bis 200). Eine neue Suche ersetzt nur offene
+  Vorschläge; Treffer, die zu über 50 % in einem entschiedenen Vorschlag oder einem unkenntlichen Bereich liegen,
+  entfallen. Kopien übernehmen die Vorschläge, gelöscht werden sie mit der Medienzeile.
+- **Freigabe:** `POST /posts/:id/decision` verlangt `privacyChecked`, wenn ein Medium der Fassung markiert ist **oder**
+  offene Vorschläge hat (`privacy_check_required`); das Audit vermerkt `bilder_mit_offenen_gesichtsvorschlaegen`.
+- **Rechnen:** `server/src/media/face-runner.ts` läuft als **eigener Kindprozess** des Workers (`fork`, IPC, ohne Master-Schlüssel und Datenbankzugang in der Umgebung): onnxruntime
+  rechnet synchron, ein Absturz oder eine Zeitüberschreitung (120 s) trifft nur diesen Prozess. Er erbt `nice 10` des
+  Workers, rechnet mit **einem** Kern (`intraOpNumThreads` 1, sharp 1 Thread), Aufträge nacheinander, ohne
+  Speicher-Arena; nach 60 s ohne Auftrag beendet er sich. Arbeitsspeicher im Betrieb rund 100–200 MB.
+- **Vor- und Nachbereitung wie `cv::FaceDetectorYN`:** sharp dreht nach EXIF und verkleinert auf höchstens 1 920 px
+  längere Kante; Eingabe BGR, CHW, float32 0..255 ohne Normierung, rechts/unten auf ein Vielfaches von 32 aufgefüllt;
+  Ausgaben `cls/obj/bbox_{8,16,32}`, Konfidenz √(cls·obj), Mitte `(Spalte, Zeile) + bbox[0..1]` × Schrittweite,
+  Größe `exp(bbox[2..3])` × Schrittweite; NMS mit IoU 0,3, danach entfallen Rechtecke, die zu über 70 % in einem
+  größeren liegen. Weil YuNet Gesichter von etwa 10 bis 300 px findet, rechnet es zusätzlich mit 640 und 320 px
+  (dort zählen nur Treffer ab 12 % der längeren Kante – Nahaufnahmen). Jeder Vorschlag bekommt 15 % Rand je Seite
+  (YuNet rahmt eng von Stirn bis Kinn). Mindestkonfidenz `media.face_threshold` (Standard 60 %, 30–95).
+- **Modell:** `server/assets/models/face_detection_yunet_2026may.onnx` (229 738 Byte, SHA-256
+  `ebafce4e3c118d6554634be5c27ab333b4c047a9a8c3faf1d7cf93101c22f0f0`) aus OpenCV Zoo
+  (`models/face_detection_yunet`, Commit `26cc381e`, dynamische Eingabegröße), **MIT-Lizenz**; Herkunft und
+  Lizenztext in `NOTICE-YuNet.txt` daneben. Es kommt mit dem Build nach `server/dist/assets/models` und damit auch mit
+  App-Updates.
+- **Laufzeit:** `onnxruntime-node` 1.31.1 (MIT, Microsoft), nur der CPU-Ausführungsanbieter. Das npm-Paket enthält
+  Bibliotheken für alle Plattformen (~290 MB); das `Dockerfile` behält nur `bin/napi-v6/linux/<arch>`
+  (`libonnxruntime.so.1` x64 47,5 MB bzw. arm64 25,3 MB, bereits ohne Symbole). Sie braucht nur glibc ≥ 2.28,
+  `libstdc++.so.6` und `libgcc_s.so.1` – beides bringt das PostgreSQL-Image mit (Node.js braucht sie ebenso).
+  `ONNXRUNTIME_NODE_INSTALL=skip` (Dockerfile, CI) verhindert, dass das Installationsskript unter Linux x64
+  CUDA-/TensorRT-Bibliotheken von NuGet lädt. Neue native Abhängigkeit ⇒ Release mit neuem Image (`MIN_IMAGE_VERSION`).
+  Fehlt die Laufzeit (altes Image), meldet die Suche „nicht verfügbar“, alles andere läuft weiter.
+- **Warum nicht** `onnxruntime-web` (WASM; im Image rund 15–25 MB statt 48 MB, aber etwa 2–3× langsamer) oder
+  OpenCV.js (`FaceDetectorYN`, langsamer, eigene Bildumwandlung): Beide würden ebenfalls synchron rechnen und bräuchten
+  denselben Kindprozess. Die native Laufzeit ist die schnellste und am weitesten verbreitete; der Kindprozess fängt
+  Abstürze und Zeitüberschreitungen ab.
+- **Messung** (Entwicklungsrechner, ein Kern): Foto 1 280 × 1 006 px rund 40–110 ms, 4 000 × 2 144 px (16 Gesichter)
+  rund 155 ms je Bild einschließlich Dekodieren und aller Maßstäbe; der erste Auftrag nach Leerlauf braucht zusätzlich
+  den Prozessstart (unter 1 s). Auf 2 langsameren Server-Kernen ist mit einigen Zehntelsekunden je Foto zu rechnen.
+- **Prüfen im Container:** `docker compose exec -T blaulichtcms node server/dist/cli.js face-check - < foto.jpg`
+  (Zahl der Gesichter, Rechenzeit); ohne Datei ein leeres Testbild. Die CI macht das im Docker-Job mit einem
+  gemeinfreien Testbild (7 Gesichter).
+- **Tests:** `server/test/faces.test.ts` – Tensor, Dekodierung, NMS und Maßstäbe ohne Modell; das echte Modell auf
+  gemeinfreien Fotos (`server/test/fixtures/faces`, Quellen in `QUELLEN.txt`: 3, 7 und 16 Gesichter, ein Fahrzeug ohne
+  Personen), Nahaufnahme, EXIF-Drehung, kaputte Datei, Bildgrenze, Zeitüberschreitung; Ablauf mit Datenbank (Auftrag,
+  Übernehmen/Verwerfen, erneute Suche, Freigabe, Kopie, Rechte).
+- **Grenzen:** Erkennungsrate von YuNet auf WIDER FACE (Validierung) laut OpenCV Zoo AP 0,88 / 0,87 / 0,75
+  (leicht / mittel / schwer) – es werden also Gesichter übersehen, vor allem **Seitenansichten** und von hinten,
+  **verdeckte** (Helm, Atemschutz, Maske, Hand), **unscharfe** und **kleine** Gesichter (unter etwa 10 px im 1 920-px-Bild,
+  also unter rund 0,5–1 % der Bildbreite), Spiegelungen. Fehltreffer sind möglich (Muster, Plakate, Figuren). Keine
+  Kennzeichen (kein sauber lizenziertes Modell, siehe Folge-Issue), keine Videos, keine HEIC-Dateien. Die menschliche
+  Prüfung bleibt Pflicht.
 
 ---
 
@@ -283,6 +345,8 @@ Ergebnisse je Verbindung: [docs/integrationen.md](integrationen.md).
 - Einsatzliste in WordPress (Bridge 0.9.0, #213): Server, Aufträge und Rückmeldungen sind automatisiert getestet; Darstellung
   (Liste, Statistik, Detailseite, Einstellungsseite) noch auf einem Test-WordPress mit dem eigenen Theme prüfen. Der
   CSV-Import folgt dem Exportformat der Erweiterung „Einsatzverwaltung“ (Spaltennamen aus deren Quelltext), nicht einer echten Exportdatei.
+- Gesichtsvorschläge (#214): Erkennungsrate und Rechenzeit auf echten Einsatzfotos und auf der Zielhardware (2 Kerne)
+  messen; geprüft ist das Modell bisher auf gemeinfreien Testfotos und einem Entwicklungsrechner.
 - Datenschutz: Angaben unter *Einstellungen → Datenschutz* ausfüllen, Verarbeitungsverzeichnis und DSFA mit den
   Vorlagen in [docs/datenschutz.md](datenschutz.md) erstellen.
 

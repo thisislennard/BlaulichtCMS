@@ -95,6 +95,9 @@ flowchart LR
   markierte Medien verlangen vor der Freigabe eine bewusste Datenschutz-Prüfung.
 - **Unkenntlich machen:** Bereiche verpixeln, weichzeichnen oder abdecken, Bilder zuschneiden, Videos ohne Ton
   veröffentlichen – das Original bleibt unverändert.
+- **Gesichter automatisch vorschlagen:** lokale Gesichtssuche (YuNet, MIT) schlägt Bereiche zum Unkenntlichmachen vor –
+  einzeln oder alle übernehmen bzw. verwerfen; nichts wird ohne Bestätigung unkenntlich, offene Vorschläge verlangen
+  die Datenschutz-Prüfung bei der Freigabe. Keine Wiedererkennung, nur Rechtecke; Kennzeichen und Videos bleiben Handarbeit.
 - **Herunterladen:** einzelne Dateien oder als ZIP (ausgewählte, markierte, ein Ordner oder sammlungsübergreifend) mit
   Ordnerstruktur und optional `metadaten.csv`; Originale nur mit dem Recht „Originale herunterladen“.
 

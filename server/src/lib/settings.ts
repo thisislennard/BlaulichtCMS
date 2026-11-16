@@ -156,6 +156,13 @@ export const DEFAULT_SETTINGS = {
   'media.check_timeout_s': 1800,
   /** Animierte Bilder (GIF, WebP, PNG, AVIF) zulassen; verarbeitet wird das erste Bild. */
   'media.allow_animated': false,
+  /**
+   * Gesichter automatisch vorschlagen (#214, media/faces.ts): nach der Prüfung sucht der Worker in Bildern nach Gesichtern
+   * und legt sie als Vorschläge zum Unkenntlichmachen ab. Übernommen wird nur, was ein Mensch bestätigt.
+   */
+  'media.face_detect': true,
+  /** Mindestkonfidenz der Gesichtsvorschläge in Prozent: niedriger = mehr Vorschläge, auch Fehltreffer. */
+  'media.face_threshold': 60,
 
   'editorial.four_eyes': false,
   /** Barrierefreiheit (#217): Freigabe ohne Alternativtext je Bild blockieren (true) oder nur warnen (false). */
@@ -359,6 +366,7 @@ export const SETTING_RANGES: Record<string, [number, number]> = {
   'media.max_video_edge': [320, 8192],
   'media.full_decode_seconds': [10, 36000],
   'media.check_timeout_s': [60, 14400],
+  'media.face_threshold': [30, 95],
   'smtp.port': [1, 65535],
   'backup.hour': [0, 23],
   'backup.keep': [1, 365],

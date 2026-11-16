@@ -8,7 +8,7 @@ import { Badge, Button, ErrorBox, LinkButton, Notice, Rev, SegmentedControl, Ske
 import { Icon } from '../../components/ui/Icon';
 import { fmtDateTime, fmtRelative } from '../../lib/format';
 import { SOCIAL_LABEL, type SocialKind } from '../../lib/social';
-import { SENSITIVE_LABELS } from '../media/PrivacyDialog';
+import { openFaces, SENSITIVE_LABELS } from '../media/PrivacyDialog';
 import { Lightbox } from '../media/gallery';
 import { DecisionDialog } from './DecisionDialog';
 import { KIND_LABEL } from './Posts';
@@ -326,11 +326,18 @@ export default function ReviewView() {
                     </Badge>
                   </span>
                 )}
+                {openFaces(m) > 0 && (
+                  <span className="absolute top-1 right-1">
+                    <Badge tone="warning" title="Ungeprüfte Vorschläge der Gesichtssuche">
+                      {openFaces(m) === 1 ? '1 Gesicht offen' : `${openFaces(m)} Gesichter offen`}
+                    </Badge>
+                  </span>
+                )}
               </li>
             ))}
           </ul>
         )}
-        {flagged.length > 0 && <p className="m-0 mt-2 text-meta text-fg-muted">Markierte Dateien verlangen beim Freigeben die Datenschutz-Prüfung.</p>}
+        {(flagged.length > 0 || media.some((m) => openFaces(m) > 0)) && <p className="m-0 mt-2 text-meta text-fg-muted">Markierte Dateien und Bilder mit offenen Gesichtsvorschlägen verlangen beim Freigeben die Datenschutz-Prüfung.</p>}
       </Section>
 
       <Section title={b ? `Änderungen zu Fassung ${b.number}${b.approved ? ' (zuletzt freigegeben)' : ''}` : 'Änderungen'}>
@@ -380,7 +387,7 @@ export default function ReviewView() {
       )}
 
       {decision && (
-        <DecisionDialog decision={decision} revision={r.number} hash={r.content_hash} postId={id} flagged={flagged} altMissing={d.accessibility?.applies ? d.accessibility.missing.length : 0} altRequired={!!d.accessibility?.required} via={fromPush ? 'push' : 'review'} onDone={refresh} onClose={() => (setDecision(null), refresh())} />
+        <DecisionDialog decision={decision} revision={r.number} hash={r.content_hash} postId={id} flagged={flagged} faces={media} altMissing={d.accessibility?.applies ? d.accessibility.missing.length : 0} altRequired={!!d.accessibility?.required} via={fromPush ? 'push' : 'review'} onDone={refresh} onClose={() => (setDecision(null), refresh())} />
       )}
       {lightbox !== null && <Lightbox items={media} start={lightbox} onClose={() => setLightbox(null)} />}
     </div>

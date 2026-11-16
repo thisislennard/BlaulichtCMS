@@ -19,6 +19,7 @@ import { ensureMediaDirs, mediaPaths } from './media/storage.js';
 import { cleanupUploadSessions } from './routes/uploads.js';
 import { buildExport, cleanupExports } from './media/exports.js';
 import { renderPublic } from './media/privacy.js';
+import { runFaceDetection, stopFaceRunner } from './media/faces.js';
 import { refreshDueFeeds } from './routes/rss.js';
 import { deliverWarningSend } from './warnings/mail.js';
 import { runSocialPublication } from './connections/social.js';
@@ -64,6 +65,10 @@ const handlers: Record<string, (job: Job) => Promise<void>> = {
   // Öffentliche Fassung nach Datenschutz-Einstellungen neu erzeugen (#118, z. B. Video ohne Ton)
   'media.render_public': async (job) => {
     await renderPublic(String(job.payload.mediaId));
+  },
+  // Gesichtsvorschläge (#214): YuNet im Kindprozess, ein Bild nach dem anderen; Fehler stehen am Medium
+  'media.faces': async (job) => {
+    await runFaceDetection(String(job.payload.mediaId));
   },
   'export.zip': async (job) => {
     await buildExport(String(job.payload.exportId));
@@ -119,6 +124,10 @@ async function processJob(job: Job) {
     log(res === 'dead' ? 'error' : 'warn', 'worker', `Auftrag ${job.kind} #${job.id} fehlgeschlagen (${res === 'dead' ? 'endgültig' : 'wird wiederholt'}): ${err.message}`);
     if (job.kind === 'export.zip' && res === 'dead') {
       await pool.query(`UPDATE exports SET status = 'failed', error = $2 WHERE id = $1`, [job.payload.exportId, err.message.slice(0, 300)]);
+    }
+    // Gesichtssuche (#214): Stand nicht auf „läuft“ stehen lassen – „Erneut suchen“ im Dialog
+    if (job.kind === 'media.faces' && res === 'dead') {
+      await pool.query(`UPDATE media SET face_status = 'failed', face_error = $2, face_checked_at = now() WHERE id = $1 AND face_status = 'queued'`, [job.payload.mediaId, err.message.slice(0, 300)]);
     }
     if (job.kind === 'media.process' && res === 'dead') {
       // Gesperrt statt gelöscht: Datei bleibt in der Quarantäne, „Erneut prüfen“ ist möglich (#73: Teildateien weg)
@@ -378,6 +387,7 @@ async function main() {
     loops.forEach(clearInterval);
     // laufende Aufträge maximal 20 s abschließen lassen, danach übernimmt die Lease
     await Promise.race([Promise.allSettled([...running.values()]), new Promise((r) => setTimeout(r, 20_000))]);
+    stopFaceRunner();
     await pool.query('DELETE FROM worker_heartbeats WHERE worker_id = $1', [WORKER_ID]).catch(() => {});
     await listener.end().catch(() => {});
     await pool.end().catch(() => {});

@@ -88,6 +88,21 @@ export interface MediaItem {
   public_rev?: number;
   /** Nur in Beitragsmedien: öffentliche Fassung bearbeitet (Bereiche/Zuschnitt). */
   redacted?: boolean;
+  /** Gesichtsvorschläge der automatischen Suche (#214) – nur Rechtecke, Konfidenz und Entscheidung. */
+  face_proposals?: FaceProposal[];
+  /** Stand der Suche: null = nie gesucht */
+  face_status?: 'queued' | 'done' | 'failed' | 'unavailable' | null;
+  face_checked_at?: string | null;
+  face_error?: string | null;
+  /** Nur in Beitragsmedien: Zahl offener Gesichtsvorschläge. */
+  faces_open?: number;
+}
+
+export interface FaceProposal extends Region {
+  id: string;
+  /** Konfidenz 0..1 */
+  score: number;
+  status: 'open' | 'accepted' | 'rejected';
 }
 
 export type SensitiveFlag = 'persons' | 'health' | 'plates' | 'sensitive';

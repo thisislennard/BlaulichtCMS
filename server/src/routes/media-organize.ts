@@ -228,17 +228,19 @@ export async function mediaOrganizeRoutes(app: FastifyInstance) {
       const folder = await assertFolder(body.collectionId, body.folderId, db);
       for (const m of media) {
         const nid = crypto.randomUUID();
-        // Datenschutz-Entscheidungen (Markierungen, Bereiche, Zuschnitt, ohne Ton) gelten für den Inhalt und kommen mit;
+        // Datenschutz-Entscheidungen (Markierungen, Bereiche, Zuschnitt, ohne Ton, Gesichtsvorschläge) gelten für den Inhalt und kommen mit;
         // die Sichtung beginnt neu. Vorgangsnummer und Hinweis bleiben, damit Betroffenenanfragen auch Kopien finden.
         await db.query(
           `INSERT INTO media (id, collection_id, folder_id, upload_link_id, uploaded_by, uploader_note, original_name, declared_type, mime, kind, size_bytes, sha256,
                               width, height, taken_at, had_location, status, has_preview, has_public, processed_at, sort_order, upload_ref,
                               sensitive_flags, redactions, crop, strip_audio, public_rev, location_stripped_at, location_strip_error,
+                              face_proposals, face_status, face_checked_at, face_model, face_error,
                               display_name, description, internal_note, duplicate_of)
            SELECT $2, $3, $4, upload_link_id, uploaded_by, uploader_note, original_name, declared_type, mime, kind, size_bytes, sha256,
                   width, height, taken_at, had_location, 'ready', has_preview, has_public, now(),
                   (SELECT COALESCE(max(sort_order),0)+1 FROM media WHERE collection_id = $3), upload_ref,
                   sensitive_flags, redactions, crop, strip_audio, public_rev, location_stripped_at, location_strip_error,
+                  face_proposals, CASE WHEN face_status = 'queued' THEN NULL ELSE face_status END, face_checked_at, face_model, face_error,
                   display_name, description, internal_note, $1
              FROM media WHERE id = $1`,
           [m.id, nid, body.collectionId, folder],

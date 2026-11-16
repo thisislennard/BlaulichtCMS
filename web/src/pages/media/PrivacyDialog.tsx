@@ -1,9 +1,10 @@
-import { useRef, useState } from 'react';
-import { patch } from '../../api/client';
-import type { MediaItem, Redaction, Region, SensitiveFlag } from '../../api/types';
-import { Button, cx, Notice, SegmentedControl, Select, Switch } from '../../components/ui/core';
+import { useEffect, useRef, useState } from 'react';
+import { get, patch, post } from '../../api/client';
+import type { FaceProposal, MediaItem, Redaction, Region, SensitiveFlag } from '../../api/types';
+import { Badge, Button, cx, Notice, SegmentedControl, Select, Spinner, Switch } from '../../components/ui/core';
 import { Icon } from '../../components/ui/Icon';
 import { Dialog, useErrorToast, useToast } from '../../components/ui/overlays';
+import { fmtDateTime } from '../../lib/format';
 
 /** Markierungen aus der Sichtung (#118). */
 export const SENSITIVE_LABELS: Record<SensitiveFlag, string> = {
@@ -30,6 +31,15 @@ export function PrivacyChecklistHint({ className }: { className?: string }) {
   );
 }
 
+/** Zahl offener Gesichtsvorschläge (#214) – aus der Liste oder, in Beitragsmedien, aus dem Zähler des Servers. */
+export function openFaces(m: Pick<MediaItem, 'face_proposals' | 'faces_open'> | null | undefined): number {
+  if (!m) return 0;
+  if (typeof m.faces_open === 'number') return m.faces_open;
+  return (m.face_proposals ?? []).filter((p) => p.status === 'open').length;
+}
+
+const MAX_REDACTIONS = 200;
+
 const clamp = (v: number) => Math.min(1, Math.max(0, v));
 const pct = (v: number) => `${(v * 100).toFixed(3)}%`;
 
@@ -50,6 +60,11 @@ export function PrivacyDialog({ m, onClose, onSaved }: { m: MediaItem; onClose: 
   const [draft, setDraft] = useState<Region | null>(null);
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState<MediaItem | null>(null);
+  // Gesichtsvorschläge (#214): Entscheidungen gelten erst mit „Speichern“
+  const [proposals, setProposals] = useState<FaceProposal[]>(m.face_proposals ?? []);
+  const [decisions, setDecisions] = useState<Record<string, 'accepted' | 'rejected'>>({});
+  const [face, setFace] = useState({ status: m.face_status ?? null, checkedAt: m.face_checked_at ?? null, error: m.face_error ?? null });
+  const [searching, setSearching] = useState(false);
   const area = useRef<HTMLDivElement>(null);
   const start = useRef<{ x: number; y: number } | null>(null);
   const isImage = m.kind === 'image' && m.has_public && m.has_preview;
@@ -61,6 +76,50 @@ export function PrivacyDialog({ m, onClose, onSaved }: { m: MediaItem; onClose: 
   };
   const rect = (a: { x: number; y: number }, b: { x: number; y: number }): Region => ({ x: Math.min(a.x, b.x), y: Math.min(a.y, b.y), w: Math.abs(a.x - b.x), h: Math.abs(a.y - b.y) });
 
+  const statusOf = (p: FaceProposal): FaceProposal['status'] => (p.id in decisions ? decisions[p.id] : p.status);
+  const openList = proposals.filter((p) => statusOf(p) === 'open');
+  const decidedCount = proposals.length - openList.length;
+  const label = (p: FaceProposal) => `V${proposals.indexOf(p) + 1}`;
+
+  const acceptFaces = (list: FaceProposal[]) => {
+    setRedactions((cur) => [...cur, ...list.map((p) => ({ x: p.x, y: p.y, w: p.w, h: p.h, mode }))].slice(0, MAX_REDACTIONS));
+    setDecisions((d) => ({ ...d, ...Object.fromEntries(list.map((p) => [p.id, 'accepted' as const])) }));
+  };
+  const rejectFaces = (list: FaceProposal[]) => setDecisions((d) => ({ ...d, ...Object.fromEntries(list.map((p) => [p.id, 'rejected' as const])) }));
+
+  const applyServer = (x: MediaItem) => {
+    setProposals(x.face_proposals ?? []);
+    setFace({ status: x.face_status ?? null, checkedAt: x.face_checked_at ?? null, error: x.face_error ?? null });
+  };
+
+  // Während die Suche läuft: Stand alle 2 s abfragen (höchstens 3 Minuten)
+  useEffect(() => {
+    if (face.status !== 'queued') return;
+    let n = 0;
+    const t = setInterval(async () => {
+      if (++n > 90) return clearInterval(t);
+      try {
+        const d = await get<{ media: MediaItem }>(`/media/${m.id}/details`);
+        if (d.media.face_status !== 'queued') applyServer(d.media);
+      } catch {
+        /* nächster Versuch */
+      }
+    }, 2000);
+    return () => clearInterval(t);
+  }, [face.status, m.id]);
+
+  const searchFaces = async () => {
+    setSearching(true);
+    try {
+      const r = await post<{ media: MediaItem }>(`/media/${m.id}/faces`);
+      applyServer(r.media);
+    } catch (e) {
+      toastError(e);
+    } finally {
+      setSearching(false);
+    }
+  };
+
   const toggleFlag = (f: SensitiveFlag) => setFlags((cur) => (cur.includes(f) ? cur.filter((x) => x !== f) : SENSITIVE_ORDER.filter((x) => x === f || cur.includes(x))));
 
   const save = async () => {
@@ -69,8 +128,12 @@ export function PrivacyDialog({ m, onClose, onSaved }: { m: MediaItem; onClose: 
       const body: Record<string, unknown> = { flags };
       if (isImage) Object.assign(body, { redactions, crop });
       if (isVideo) body.stripAudio = stripAudio;
+      const decided = Object.entries(decisions).map(([id, status]) => ({ id, status }));
+      if (decided.length) body.proposals = decided;
       const r = await patch<{ media: MediaItem; rendering: boolean }>(`/media/${m.id}/privacy`, body);
       setSaved(r.media);
+      setDecisions({});
+      applyServer(r.media);
       onSaved(r.media);
       toast({ tone: 'success', title: r.rendering ? 'Gespeichert – die öffentliche Fassung wird im Hintergrund neu erzeugt' : 'Gespeichert' });
     } catch (e) {
@@ -151,7 +214,7 @@ export function PrivacyDialog({ m, onClose, onSaved }: { m: MediaItem; onClose: 
                   setDraft(null);
                   if (r.w < 0.01 || r.h < 0.01) return;
                   if (tool === 'crop') setCrop(r);
-                  else setRedactions((cur) => [...cur, { ...r, mode }].slice(0, 50));
+                  else setRedactions((cur) => [...cur, { ...r, mode }].slice(0, MAX_REDACTIONS));
                 }}
               >
                 <img src={`/api/v1/media/${m.id}/preview`} alt="" draggable={false} className="block max-w-full max-h-[50vh]" />
@@ -160,10 +223,27 @@ export function PrivacyDialog({ m, onClose, onSaved }: { m: MediaItem; onClose: 
                     <span className="text-meta bg-err text-on-primary px-1 rounded-chip">{i + 1}</span>
                   </div>
                 ))}
+                {openList.map((p) => (
+                  <div key={p.id} className="absolute border-2 border-dashed border-warn pointer-events-none flex items-start justify-start" style={{ left: pct(p.x), top: pct(p.y), width: pct(p.w), height: pct(p.h) }}>
+                    <span className="text-meta bg-warn text-on-primary px-1 rounded-chip">{label(p)}</span>
+                  </div>
+                ))}
                 {crop && <div className="absolute border-2 border-dashed border-primary pointer-events-none" style={{ left: pct(crop.x), top: pct(crop.y), width: pct(crop.w), height: pct(crop.h) }} />}
                 {draft && <div className={cx('absolute border-2 pointer-events-none', tool === 'crop' ? 'border-dashed border-primary' : 'border-err')} style={{ left: pct(draft.x), top: pct(draft.y), width: pct(draft.w), height: pct(draft.h) }} />}
               </div>
             </div>
+            <FacePanel
+              status={face.status}
+              checkedAt={face.checkedAt}
+              error={face.error}
+              open={openList}
+              decided={decidedCount}
+              label={label}
+              searching={searching}
+              onSearch={searchFaces}
+              onAccept={acceptFaces}
+              onReject={rejectFaces}
+            />
             {(redactions.length > 0 || crop) && (
               <ul className="m-0 p-0 list-none flex flex-col gap-1.5">
                 {redactions.map((r, i) => (
@@ -211,5 +291,67 @@ export function PrivacyDialog({ m, onClose, onSaved }: { m: MediaItem; onClose: 
         {!isImage && !isVideo && <Notice tone="warning">Für diese Datei gibt es keine öffentliche Fassung (z. B. HEIC). Nur Markierungen sind möglich.</Notice>}
       </div>
     </Dialog>
+  );
+}
+
+/**
+ * Gesichtsvorschläge (#214): Stand der automatischen Suche, offene Vorschläge einzeln oder alle übernehmen bzw.
+ * verwerfen, Suche (erneut) anstoßen. Übernommen wird mit der oben gewählten Art; gespeichert erst mit „Speichern“.
+ */
+function FacePanel({ status, checkedAt, error, open, decided, label, searching, onSearch, onAccept, onReject }: { status: MediaItem['face_status']; checkedAt: string | null; error: string | null; open: FaceProposal[]; decided: number; label: (p: FaceProposal) => string; searching: boolean; onSearch: () => void; onAccept: (l: FaceProposal[]) => void; onReject: (l: FaceProposal[]) => void }) {
+  const running = status === 'queued';
+  let text: string;
+  if (running) text = 'Die Suche läuft im Hintergrund …';
+  else if (status === 'failed') text = `Die Suche ist fehlgeschlagen${error ? `: ${error}` : '.'}`;
+  else if (status === 'unavailable') text = `Die automatische Suche ist auf dieser Installation nicht verfügbar${error ? ` (${error})` : ''}. Bitte von Hand prüfen.`;
+  else if (status === 'done') text = open.length ? `${open.length === 1 ? 'Ein offener Vorschlag' : `${open.length} offene Vorschläge`} (gestrichelt im Bild): übernehmen oder verwerfen.` : decided ? 'Alle Vorschläge sind geprüft.' : 'Keine Gesichter gefunden.';
+  else text = 'Für dieses Bild wurde noch nicht nach Gesichtern gesucht.';
+  return (
+    <section aria-label="Gesichtsvorschläge" className="flex flex-col gap-2 p-3 rounded-node border border-line">
+      <div className="flex flex-wrap items-center gap-2">
+        <Icon name="ScanFace" size={16} className="text-fg-muted" />
+        <span className="font-medium">Gesichtsvorschläge</span>
+        {open.length > 0 && <Badge tone="warning">{open.length} offen</Badge>}
+        {running && <Spinner size={14} />}
+        <span className="ml-auto flex flex-wrap gap-2">
+          {open.length > 1 && (
+            <Button size="sm" icon="CheckCheck" onClick={() => onAccept(open)}>
+              Alle übernehmen
+            </Button>
+          )}
+          {open.length > 1 && (
+            <Button size="sm" icon="X" onClick={() => onReject(open)}>
+              Alle verwerfen
+            </Button>
+          )}
+          <Button size="sm" icon="ScanFace" loading={searching} onClick={onSearch}>
+            {status ? 'Erneut suchen' : 'Gesichter suchen'}
+          </Button>
+        </span>
+      </div>
+      <p className="m-0 text-meta text-fg-muted" aria-live="polite">
+        {text}
+        {status === 'done' && checkedAt ? ` Stand: ${fmtDateTime(checkedAt)}.` : ''}
+      </p>
+      {open.length > 0 && (
+        <ul className="m-0 p-0 list-none grid gap-x-4 gap-y-1.5 sm:grid-cols-2">
+          {open.map((p) => (
+            <li key={p.id} className="flex flex-wrap items-center gap-2">
+              <span className="w-8 font-medium text-warn">{label(p)}</span>
+              <span className="text-fg-muted min-w-[6.5rem]">Sicherheit {Math.round(p.score * 100)} %</span>
+              <Button size="sm" icon="Check" aria-label={`Vorschlag ${label(p)} übernehmen`} onClick={() => onAccept([p])}>
+                Übernehmen
+              </Button>
+              <Button size="sm" icon="X" aria-label={`Vorschlag ${label(p)} verwerfen`} onClick={() => onReject([p])}>
+                Verwerfen
+              </Button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <p className="m-0 text-meta text-fg-muted">
+        Die Suche ist nur eine Hilfe: Seitlich, verdeckt, unscharf oder sehr klein abgebildete Gesichter findet sie oft nicht, Kennzeichen und Schilder sucht sie nicht. Bitte das ganze Bild selbst prüfen und fehlende Bereiche von Hand ergänzen.
+      </p>
+    </section>
   );
 }

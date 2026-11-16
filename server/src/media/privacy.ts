@@ -25,9 +25,12 @@ export type Redaction = z.infer<typeof redactionSchema>;
 
 export const privacyInput = z.object({
   flags: z.array(z.enum(SENSITIVE_FLAGS)).max(4).optional(),
-  redactions: z.array(redactionSchema).max(50).optional(),
+  // Bis zu 200 Bereiche: „Alle Gesichtsvorschläge übernehmen“ bei Gruppenfotos (#214)
+  redactions: z.array(redactionSchema).max(200).optional(),
   crop: regionSchema.nullable().optional(),
   stripAudio: z.boolean().optional(),
+  /** Entscheidungen zu Gesichtsvorschlägen (#214): übernommen (Bereich steht in `redactions`) oder verworfen. */
+  proposals: z.array(z.object({ id: z.string().regex(/^[0-9a-f]{8}$/), status: z.enum(['accepted', 'rejected']) })).max(200).optional(),
 });
 
 export interface Px {

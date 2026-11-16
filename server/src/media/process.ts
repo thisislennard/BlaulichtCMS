@@ -15,6 +15,7 @@ import { securityAlert } from '../lib/security-alerts.js';
 import { noticeNewMedia } from '../lib/media-notify.js';
 import { effectiveTypes, typeByMime, typeLabels } from './types.js';
 import { logPublicEvent } from '../lib/public-security.js';
+import { enqueueFaceDetection } from './faces.js';
 
 /** Zugelassene Formate – geprüft wird der Dateiinhalt, nicht Dateiname oder angegebener Typ. */
 export const ALLOWED: Record<string, { kind: 'image' | 'video'; ext: string }> = {
@@ -289,6 +290,10 @@ export async function processMedia(id: string): Promise<'ready' | 'rejected' | '
     }
     await markDuplicate(id);
     await noticeNewMedia(id);
+    // Gesichtsvorschläge (#214): nur Bilder mit öffentlicher Fassung; die Suche läuft als eigener Auftrag
+    if (allowed.kind === 'image' && r.hasPublic && (await getSettings())['media.face_detect']) {
+      await enqueueFaceDetection(id).catch((e) => log('warn', 'media', `Gesichtssuche nicht eingeplant: ${(e as Error).message}`, { media: id }));
+    }
     return 'ready';
   } catch (e) {
     if (!(e instanceof Rejected)) throw e;

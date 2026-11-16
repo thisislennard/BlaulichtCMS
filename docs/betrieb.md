@@ -843,6 +843,11 @@ die Entwicklung; eine kritische Lücke im Laufzeitpfad führt zu einem Release u
 | `postgres:18-trixie` | offizielles Docker-Hub-Image (Laufzeitbasis, Debian trixie) | Digest im `Dockerfile` |
 | `mwader/static-ffmpeg` | Community-Image, statisch gebaut aus den offiziellen ffmpeg-Quellen; Build-Skript und Prüfsummen der Quellen öffentlich auf GitHub (`wader/static-ffmpeg`) | Digest im `Dockerfile`; nur `ffmpeg`/`ffprobe` werden übernommen, die CI kopiert dieselben Dateien |
 
+Gesichtsvorschläge (#214): `onnxruntime-node` (Microsoft, MIT) kommt aus der npm-Registry (Version und Prüfsumme im
+`package-lock.json`); im Image bleibt nur die Linux-CPU-Bibliothek der eigenen Architektur, das YuNet-Modell (MIT)
+liegt mit Prüfsumme im Repository (`server/assets/models`). Der Build lädt das npm-Paket (rund 115 MB) dank
+Build-Cache nur einmal; es werden keine GPU-Bibliotheken nachgeladen (`ONNXRUNTIME_NODE_INSTALL=skip`).
+
 Alle Images sind mit `@sha256:<digest>` fixiert: ein nachträglich neu belegter Tag ändert den Build nicht.
 Neue Versionen und Digests meldet die wöchentliche Versionsprüfung (`scripts/check-versions.mjs`, Workflow
 „Versionsprüfung“) in genau einem Issue; übernommen werden sie von Hand, die CI baut und prüft sie dann (inkl.
