@@ -39,14 +39,17 @@ function useCounts() {
   return { notif: notif.data, status: status.data, approvals };
 }
 
-/** Logo-Marke: Signalrot, abgerundet. */
+/** Logo-Marke „Meldung“: Seite mit Signal, Signalrot, abgerundet. */
 function BrandMark({ size = 30 }: { size?: number }) {
   return (
     <span className="rounded-[9px] bc-signal-bg flex items-center justify-center shrink-0" style={{ width: size, height: size }}>
-      <svg width={size * 0.6} height={size * 0.6} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
-        <circle cx="7.5" cy="12" r="3.5" />
-        <circle cx="16.5" cy="12" r="3.5" />
-        <path d="M11 12h2" />
+      <svg width={size} height={size} viewBox="0 0 64 64" fill="none" stroke="currentColor" strokeWidth="4.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <g transform="translate(-2.75 2)">
+          <rect x="13" y="16" width="27" height="36" rx="5" />
+          <path d="M20.5 30H32.5M20.5 39H29" />
+          <path d="M46 7.5A10.5 10.5 0 0 1 56.5 18" />
+          <circle cx="46" cy="18" r="4.5" fill="currentColor" stroke="none" />
+        </g>
       </svg>
     </span>
   );

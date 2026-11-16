@@ -12,11 +12,14 @@ function AuthLayout({ title, subtitle, children }: { title: string; subtitle?: R
     <div className="min-h-screen bg-bg text-fg flex items-center justify-center p-4">
       <main className="w-full max-w-[420px] flex flex-col gap-6">
         <div className="flex items-center gap-3">
-          <span className="w-10 h-10 rounded-node bc-signal-bg flex items-center justify-center">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
-              <circle cx="7.5" cy="12" r="3.5" />
-              <circle cx="16.5" cy="12" r="3.5" />
-              <path d="M11 12h2" />
+          <span className="w-10 h-10 rounded-[12px] bc-signal-bg flex items-center justify-center shrink-0">
+            <svg width={40} height={40} viewBox="0 0 64 64" fill="none" stroke="currentColor" strokeWidth="4.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <g transform="translate(-2.75 2)">
+                <rect x="13" y="16" width="27" height="36" rx="5" />
+                <path d="M20.5 30H32.5M20.5 39H29" />
+                <path d="M46 7.5A10.5 10.5 0 0 1 56.5 18" />
+                <circle cx="46" cy="18" r="4.5" fill="currentColor" stroke="none" />
+              </g>
             </svg>
           </span>
           <span className="text-title font-semibold tracking-[-0.01em]">BlaulichtCMS</span>
