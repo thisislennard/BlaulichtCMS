@@ -444,6 +444,40 @@ Der Wegwerf-Test braucht vorübergehend Platz für ein zweites Volume und so vie
 VM) mit der Kopie außer Haus und dem getrennt verwahrten Sicherungsschlüssel üben und die Prüfliste unten abhaken –
 das prüft auch, ob Schlüssel und Ablauf im Ernstfall greifbar sind.
 
+### Sicherung außer Haus (WebDAV)
+
+*Einstellungen → Sicherung außer Haus* (Recht „Sicherungen erstellen“; Ziel ändern mit Passwortbestätigung) legt jede
+Datenbanksicherung zusätzlich auf einem WebDAV-Ziel ab (z. B. Synology „WebDAV Server“, HTTPS-Port 5006). Umsetzung:
+`server/src/ops/offsite.ts`, Auftrag `backup.offsite` im Worker (4 Versuche mit Wartezeit, Meldung beim letzten).
+
+| | |
+|---|---|
+| Ablauf | PUT `<name>.part` → GET und SHA-256 mit der lokalen Prüfsumme vergleichen → MOVE auf den endgültigen Namen → Aufbewahrung |
+| Aufbewahrung auf dem Ziel | je Tag/ISO-Woche/Monat die neueste Sicherung für die letzten N Tage/Wochen/Monate (Standard 7/4/6); die neueste und die eben übertragene bleiben immer; gelöscht werden nur Dateien mit dem Namensmuster `blaulichtcms-…bcbk` bzw. im Unterordner `volume/` `blaulichtcms-…tar.gz.enc` |
+| Verschlüsselung | Dateien bleiben BCBK1 (AES-256-GCM, Schlüssel aus dem Master-Schlüssel) bzw. Volume-Archive mit `/etc/blaulichtcms/backup.key` – das Ziel sieht nur Chiffrat |
+| Zugangsdaten | Passwort verschlüsselt in `secrets` (Besitzer `setting`), nie in der API; das gespeicherte Passwort wird nur für denselben Host und Benutzer weiterverwendet |
+| Netz | nur `https`; SSRF-Schutz bleibt aktiv, freigegeben ist genau der eingetragene Host (auch im internen Netz), keine Weiterleitungen; selbst signierte Zertifikate nur per fest hinterlegtem SHA-256-Fingerabdruck (geprüft vor dem Senden) |
+| Volume-Sicherung | `backup-cron.sh` reicht jede neue verschlüsselte Volume-Sicherung per Standardeingabe an `cli.js offsite-volume` weiter (Unterordner `volume/`, Prüfung gegen die `.sha256`-Datei); Exit 3 = kein Ziel eingeschaltet |
+| Status | Systemstatus „Sicherung außer Haus“ (rot nach Fehlschlag, gelb nach mehr als 50 Stunden ohne Erfolg), Benachrichtigung „Sicherung fehlgeschlagen“ |
+
+**Warum nicht SMB:** SMB2/3 bräuchte im Container `smbclient` (oder eine eigene Umsetzung von SMB samt NTLMv2) und
+damit ein neues Image (`MIN_IMAGE_VERSION`). WebDAV über HTTPS braucht nur Node und deckt NAS-Ziele ab. Wer unbedingt
+SMB will, kann das NAS am **Docker-Host** per CIFS einbinden und `BLAULICHTCMS_BACKUP_DIR` dorthin legen – das betrifft
+nur `backup-cron.sh`, nicht das Image.
+
+### Probe-Wiederherstellung (Datenbanksicherung)
+
+`server/src/ops/drill.ts`, Auftrag `backup.drill`: Sicherung (lokal oder vom Ziel außer Haus geladen und gegen die
+lokale Prüfsumme geprüft) entschlüsseln, Wegwerf-Datenbank `blaulichtcms_probe_<zufall>` in derselben
+PostgreSQL-Instanz anlegen (Verbindung `DATABASE_ADMIN_URL` bzw. eingebetteter Superuser), `pg_restore --exit-on-error`,
+dann prüfen: Tabellen ≥ 10, `schema_migrations` vorhanden, Benutzerkonten vorhanden, Hash-Kette des Audits mit dem
+Schlüssel aus der Sicherung, Ende der Kette gleich dem laufenden Protokoll. Danach `DROP DATABASE … WITH (FORCE)`;
+Reste abgebrochener Proben entfernt die nächste Probe. Ergebnis in `restore_drills` (Oberfläche, Systemstatus),
+Fehlschlag als Benachrichtigung. Zeitplan: wöchentlich (Standard) oder monatlich eine Stunde nach der Sicherungszeit,
+bevorzugt mit der neuesten Kopie außer Haus. Platzbedarf: etwa die Datenbankgröße; zu wenig freier Speicher bricht
+mit klarer Meldung ab. Eine Sicherung von vor einem Wechsel des Master-Schlüssels lässt die Audit-Kette nicht prüfen
+(Hinweis im Protokoll, kein Fehler).
+
 ### Löschung und Sicherungen
 
 Gelöschte Daten (Medien, Konten, abgelaufene Inhalte) leben in Sicherungen weiter, bis diese rotiert werden. Fristen:
@@ -455,6 +489,7 @@ Gelöschte Daten (Medien, Konten, abgelaufene Inhalte) leben in Sicherungen weit
 | Sicherung vor Updates (`vor-update/`) | letzte **3**, höchstens **90 Tage** alt | `BLAULICHTCMS_KEEP_PRE_UPDATE`, `BLAULICHTCMS_PRE_UPDATE_MAX_DAYS` (in `/etc/cron.d/blaulichtcms` bzw. beim Aufruf von `install.sh`) |
 | Datenbanksicherung im Volume | 14 Stände | *Einstellungen → Sicherung* |
 | Kopie außer Haus (Vorschlag) | monatlich, höchstens **3 Monate** aufbewahren, dann vernichten bzw. überschreiben | Betrieb |
+| Sicherung außer Haus (WebDAV) | je Tag/Woche/Monat die neueste, Standard 7 Tage, 4 Wochen, **6 Monate** | *Einstellungen → Sicherung außer Haus* |
 
 Damit sind gelöschte Daten spätestens nach rund **4 Monaten** aus allen Sicherungen verschwunden (2 Monate wöchentliche
 Stände bzw. 3 Monate außer Haus plus ein Monat Kopierabstand). Diese Frist gehört ins Verzeichnis der
@@ -491,6 +526,20 @@ docker compose up -d
 Das Skript prüft zuerst die Prüfsumme und entschlüsselt das ganze Archiv einmal zur Probe; erst wenn beides stimmt,
 packt es in das leere Volume aus. Fehlt die `.sha256`-Datei, bricht es ab (bewusst übergehen: `--ohne-pruefsumme`).
 Ältere, unverschlüsselte `.tar.gz` lassen sich weiterhin einspielen.
+
+**Nur die Datenbank zurückspielen** (Datenbanksicherung `.bcbk`, z. B. vom Ziel außer Haus geholt unter
+*Einstellungen → Sicherung außer Haus → Sicherungen auf dem Ziel*, oder von Hand nach `/data/backups` kopiert; in einer
+neuen Instanz vorher den Master-Schlüssel aus dem Tresor als `/data/secrets/master.key` hinterlegen):
+
+```bash
+docker compose exec blaulichtcms node server/dist/cli.js maintenance on "Wiederherstellung"
+docker compose exec blaulichtcms node server/dist/cli.js restore-db blaulichtcms-<zeitpunkt>.bcbk --ja
+docker compose restart blaulichtcms     # setzt Eigentum und Rechte der Datenbankrollen neu
+```
+
+`restore-db` benennt das Schema `public` um, spielt die Sicherung in ein leeres Schema ein und verwirft erst bei Erfolg
+den alten Stand; scheitert das Einspielen, bleibt der bisherige Stand unverändert. Medien sind in der
+Datenbanksicherung nicht enthalten.
 
 **Prüfliste nach der Wiederherstellung**
 

@@ -18,7 +18,11 @@ import { resolveActiveRoot } from './updates/releases.js';
  *                                  Programmdateien, ohne Datenbank – Rauchtest eines In-App-Updates)
  *   update-restore <datei>         Datenbanksicherung zurückspielen (nur für den Supervisor beim Rückweg eines
  *                                  In-App-Updates; als Superuser bzw. DATABASE_ADMIN_URL)
+ *   restore-db <datei> --ja        Datenbanksicherung aus /data/backups zurückspielen (Notfall, #212; ersetzt den
+ *                                  ganzen Datenbestand, danach Container neu starten – docs/betrieb.md)
  *   backup-decrypt <datei> <ziel>  verschlüsselte Sicherung in eine pg_restore-Datei umwandeln
+ *   offsite-volume <name> <größe> <sha256>  Volume-Sicherung (Standardeingabe) zum Ziel außer Haus übertragen (#212,
+ *                                  ruft scripts/backup-cron.sh auf; Exit 3 = kein Ziel eingeschaltet)
  *   backup-report ok|fehler <text> Ergebnis der Volume-Sicherung am Host melden (Systemprotokoll, bei Fehler
  *                                  Benachrichtigung an „System verwalten“) – ruft scripts/backup-cron.sh auf
  *   password-link <email>          Link zum Neusetzen des Passworts erzeugen (24 h gültig)
@@ -137,6 +141,17 @@ async function main() {
       if ((r as any).problems?.length || (r as any).ok === false) process.exitCode = 2;
       break;
     }
+    case 'restore-db': {
+      // Notfall-Wiederherstellung (#212): wie der Rückweg eines Updates, aber bewusst von Hand ausgelöst
+      if (args.length !== 2 || args[1] !== '--ja') throw new Error('Aufruf: restore-db <datei.bcbk> --ja   (ersetzt den gesamten Datenbestand durch den Stand der Sicherung)');
+      const pathMod = await import('node:path');
+      const { backupDir } = await import('./ops/backup.js');
+      const file = pathMod.isAbsolute(args[0]) ? args[0] : pathMod.join(backupDir(), args[0]);
+      const { restoreBackupForRollback } = await import('./ops/restore.js');
+      await restoreBackupForRollback(file, console.log);
+      console.log('Sicherung zurückgespielt. Jetzt den Container neu starten (docker compose restart blaulichtcms) – dabei werden Eigentum und Rechte der Datenbankrollen neu gesetzt.');
+      return;
+    }
     case 'update-restore': {
       if (args.length !== 1) throw new Error('Aufruf: update-restore <datei.bcbk>');
       const { restoreBackupForRollback } = await import('./ops/restore.js');
@@ -150,6 +165,19 @@ async function main() {
       await decryptBackup(args[0], args[1]);
       console.log(`Entschlüsselt nach ${args[1]}. Wiederherstellen (als Superuser, im Container: -h /tmp/blaulichtcms-pg -U blaulichtcms -d blaulichtcms) mit: pg_restore --clean --if-exists --no-owner --no-privileges -d <verbindung> ${args[1]} – danach den Container neu starten (Eigentum und Rechte der Datenbankrollen werden dabei neu gesetzt).`);
       return;
+    }
+    case 'offsite-volume': {
+      const [name, size, sha] = args;
+      if (!name || !size || !sha) throw new Error('Aufruf: offsite-volume <name> <größe> <sha256> < datei');
+      const { uploadVolumeStream } = await import('./ops/offsite.js');
+      const r = await uploadVolumeStream(name, Number(size), sha, process.stdin);
+      if (!r) {
+        console.log('Keine Sicherung außer Haus eingeschaltet (Einstellungen → Sicherung außer Haus).');
+        process.exitCode = 3;
+        break;
+      }
+      console.log(`Außer Haus übertragen und geprüft${r.removed ? ` (${r.removed} ältere Volume-Sicherungen auf dem Ziel entfernt)` : ''}.`);
+      break;
     }
     case 'backup-report': {
       const status = args[0];
@@ -242,7 +270,7 @@ async function main() {
       break;
     }
     default:
-      console.log('Befehle: gen-master-key | migrate | self-check [--release] | update-restore <datei> | preflight [--json] | maintenance on|off [grund] | backup-decrypt <datei> <ziel> | backup-report ok|fehler <text> | password-link <email> | reset-mfa <email> | audit-verify | rotate-master-key --ja');
+      console.log('Befehle: gen-master-key | migrate | self-check [--release] | update-restore <datei> | preflight [--json] | maintenance on|off [grund] | restore-db <datei> --ja | backup-decrypt <datei> <ziel> | offsite-volume <name> <größe> <sha256> | backup-report ok|fehler <text> | password-link <email> | reset-mfa <email> | audit-verify | rotate-master-key --ja');
       return;
   }
   const { pool } = await import('./db/pool.js');

@@ -80,6 +80,13 @@ export async function runBackup(trigger: 'schedule' | 'manual', userId: string |
     await pool.query(`UPDATE backups SET status = 'ok', finished_at = now(), size_bytes = $2, sha256 = $3 WHERE id = $1`, [row!.id, size, crypto.createHash('sha256').update(fs.readFileSync(target)).digest('hex')]);
     await prune();
     log('info', 'backup', `Sicherung erstellt und geprüft: ${fileName} (${Math.round(size / 1024)} KB, ${entries} Einträge)`);
+    // Sicherung außer Haus (#212): Übertragung im Worker einplanen; ein Fehler dabei macht die Sicherung nicht ungültig
+    try {
+      const { scheduleUpload } = await import('./offsite.js');
+      await scheduleUpload(row!.id);
+    } catch (e) {
+      log('warn', 'backup', `Übertragung außer Haus nicht eingeplant: ${(e as Error).message}`);
+    }
     return { id: row!.id, fileName, size };
   } catch (e) {
     fs.rmSync(part, { force: true });

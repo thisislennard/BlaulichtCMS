@@ -109,7 +109,7 @@
     },
     "sicherung": {
       "title": "Sicherung und Wiederherstellung",
-      "summary": "Was gesichert werden muss und wie die Wiederherstellung funktioniert."
+      "summary": "Was gesichert werden muss, Sicherung außer Haus (NAS per WebDAV), Wiederherstellung üben und im Notfall."
     },
     "updates": {
       "title": "Updates",

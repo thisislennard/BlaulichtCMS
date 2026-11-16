@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import { many, one, tx } from '../db/pool.js';
+import { many, one, tx, type Queryable } from '../db/pool.js';
 import { randomToken } from './crypto.js';
 import { lockSecretOwner, readSecret, storeSecret } from './secrets.js';
 import { forwardAudit } from './audit-forward.js';
@@ -107,8 +107,9 @@ export interface AuditVerification {
  * Kette prüfen: Inhalt gegen Hash, Verweis auf den Vorgänger, Lücken in chain_seq. Lücken am alten Ende sind
  * normal (Aufbewahrung, retentionDays); eine Lücke zwischen jüngeren Einträgen heißt: mittendrin gelöscht.
  */
-export async function verifyAudit(retentionDays: number): Promise<AuditVerification> {
-  const key = await chainKey();
+export async function verifyAudit(retentionDays: number, other?: { db: Queryable; key: Buffer }): Promise<AuditVerification> {
+  const key = other?.key ?? (await chainKey());
+  const db = other?.db;
   const problems: AuditProblem[] = [];
   const add = (p: AuditProblem) => problems.length < 50 && problems.push(p);
   const retentionEdge = Date.now() - (retentionDays - 1) * 86_400_000;
@@ -121,6 +122,7 @@ export async function verifyAudit(retentionDays: number): Promise<AuditVerificat
       `SELECT a.id, a.chain_seq, a.prev_hash, a.hash, a.at, audit_canonical(a) AS c FROM audit_events a
         WHERE a.chain_seq > $1 ORDER BY a.chain_seq LIMIT 2000`,
       [after],
+      db,
     );
     if (!rows.length) break;
     for (const r of rows) {
@@ -138,8 +140,8 @@ export async function verifyAudit(retentionDays: number): Promise<AuditVerificat
     }
     after = Number(rows[rows.length - 1].chain_seq);
   }
-  const unsealed = (await one<{ n: number }>(`SELECT count(*)::int AS n FROM audit_events WHERE chain_seq IS NULL`))!.n;
-  const lastRow = prev ? await one<any>(`SELECT id, chain_seq, at, hash FROM audit_events WHERE chain_seq = $1`, [prev.seq]) : null;
+  const unsealed = (await one<{ n: number }>(`SELECT count(*)::int AS n FROM audit_events WHERE chain_seq IS NULL`, [], db))!.n;
+  const lastRow = prev ? await one<any>(`SELECT id, chain_seq, at, hash FROM audit_events WHERE chain_seq = $1`, [prev.seq], db) : null;
   return {
     ok: problems.length === 0,
     checked,
@@ -149,6 +151,21 @@ export async function verifyAudit(retentionDays: number): Promise<AuditVerificat
     problems,
     verifiedAt: new Date().toISOString(),
   };
+}
+
+/**
+ * Schlüssel der Kette aus einer anderen Datenbank lesen (Probe-Wiederherstellung, ops/drill.ts) – ohne ihn anzulegen.
+ * null, wenn dort keiner liegt oder er sich mit dem aktuellen Master-Schlüssel nicht entschlüsseln lässt.
+ */
+export async function chainKeyFrom(db: Queryable): Promise<Buffer | null> {
+  const row = await one<{ id: string }>(`SELECT id FROM secrets WHERE owner_type = 'setting' AND owner_id = $1 AND revoked_at IS NULL ORDER BY version ASC LIMIT 1`, [KEY_OWNER], db);
+  if (!row) return null;
+  try {
+    const raw = await readSecret(row.id, db);
+    return raw ? Buffer.from(raw, 'utf8') : null;
+  } catch {
+    return null;
+  }
 }
 
 /** Nur für Tests. */

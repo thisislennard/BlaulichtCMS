@@ -80,6 +80,16 @@ const handlers: Record<string, (job: Job) => Promise<void>> = {
   'notify.deliver': async (job) => {
     await deliverNotification(Number(job.payload.id));
   },
+  // Sicherung außer Haus (#212): mit Wiederholung; Fehler werden erst beim letzten Versuch gemeldet
+  'backup.offsite': async (job) => {
+    const { uploadBackup } = await import('./ops/offsite.js');
+    await uploadBackup(String(job.payload.backupId), { final: job.attempts >= job.max_attempts });
+  },
+  // Probe-Wiederherstellung (#212): genau ein Versuch, Ergebnis im Protokoll der Probe
+  'backup.drill': async (job) => {
+    const { runDrill } = await import('./ops/drill.js');
+    await runDrill(String(job.payload.drillId));
+  },
 };
 
 async function processJob(job: Job) {
@@ -268,6 +278,14 @@ async function maintenance(isLeader: boolean) {
     if (now.getHours() === s['backup.hour']) {
       const today = await one(`SELECT 1 FROM backups WHERE trigger = 'schedule' AND started_at > now() - interval '20 hours'`);
       if (!today) await runBackup('schedule', null).catch(() => {});
+    }
+  }
+  // Probe-Wiederherstellung nach Zeitplan (#212): eine Stunde nach der Sicherungszeit, wöchentlich oder monatlich
+  if (due('backup-drill', 10 * 60_000)) {
+    const now = new Date(new Date().toLocaleString('en-US', { timeZone: s['general.timezone'] }));
+    if (now.getHours() === (s['backup.hour'] + 1) % 24) {
+      const { drillDue, scheduleDrill } = await import('./ops/drill.js');
+      if (await drillDue().catch(() => false)) await scheduleDrill('schedule', null).catch((e) => log('warn', 'backup', `Probe-Wiederherstellung nicht eingeplant: ${(e as Error).message}`));
     }
   }
 }

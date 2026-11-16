@@ -12,7 +12,10 @@
 # Wiederherstellung in eine Wegwerf-Instanz ohne Netz läuft nach BLAULICHTCMS_RESTORE_TEST: woechentlich (Standard,
 # sonntags), taeglich oder aus. Ergebnis und Fehler meldet das Skript an BlaulichtCMS (Systemprotokoll, Benachrichtigung
 # an „System verwalten“) und mit Exit-Code ≠ 0 an Cron (MAILTO in /etc/cron.d/blaulichtcms setzen für eine Mail).
-# Ziel möglichst auf einem anderen Datenträger oder Host (z. B. eingebundenes NAS).
+# Ziel möglichst auf einem anderen Datenträger oder Host (z. B. eingebundenes NAS). Ist in BlaulichtCMS unter
+# Einstellungen → Sicherung außer Haus ein Ziel (WebDAV) eingeschaltet, geht jede neue Sicherung zusätzlich dorthin
+# (cli.js offsite-volume, Datei per Standardeingabe; Zugangsdaten bleiben im Container). Ein Fehler dabei meldet
+# BlaulichtCMS selbst; die lokale Sicherung bleibt gültig.
 set -euo pipefail
 umask 077
 TARGET="${1:?Aufruf: scripts/backup-cron.sh <zielordner>}"
@@ -90,6 +93,21 @@ if [ -d "$TARGET/vor-update" ] && [ "$PRE_UPDATE_MAX_DAYS" -gt 0 ]; then
 fi
 count() { archives "$1" | wc -l; }
 summary="$(count "$TARGET/taeglich") täglich, $(count "$TARGET/woechentlich") wöchentlich"
+
+# Sicherung außer Haus (#212): nur mit verschlüsseltem Archiv und wenn BlaulichtCMS ein Ziel eingeschaltet hat
+STEP="Übertragung außer Haus"
+if [ -f "$file.sha256" ] && [ "${file%.enc}" != "$file" ]; then
+  for i in $(seq 1 40); do docker compose exec -T blaulichtcms true >/dev/null 2>&1 && break; sleep 3; done
+  set +e
+  offsite_out="$(docker compose exec -T blaulichtcms node server/dist/cli.js offsite-volume "$(basename "$file")" "$(stat -c %s "$file")" "$(cut -d' ' -f1 "$file.sha256")" < "$file" 2>&1)"
+  offsite_rc=$?
+  set -e
+  case "$offsite_rc" in
+    0) echo "$offsite_out"; summary="$summary, außer Haus übertragen" ;;
+    3) ;; # kein Ziel eingeschaltet
+    *) echo "Übertragung außer Haus fehlgeschlagen (BlaulichtCMS meldet den Fehler): $offsite_out" >&2; summary="$summary, Übertragung außer Haus FEHLGESCHLAGEN" ;;
+  esac
+fi
 echo "Aufbewahrung: $summary"
 if [ ${#VERIFY_OPT[@]} -gt 0 ]; then
   report ok "$(basename "$file") erstellt, geprüft und testweise wiederhergestellt ($summary)."

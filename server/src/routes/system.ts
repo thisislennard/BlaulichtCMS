@@ -17,6 +17,7 @@ const SETTINGS_CHANGE_PERMISSIONS = [...PERMISSIONS.filter((p) => p.module === '
 import { DEFAULT_SETTINGS, getSettings, SETTING_RANGES, SETTING_TEXT_MAX, setSettings, type SettingKey } from '../lib/settings.js';
 import { queueStats } from '../jobs/queue.js';
 import { backupPath, BackupRunningError, runBackup } from '../ops/backup.js';
+import { backupHealth } from './backup-offsite.js';
 import { normalizePublicUrl } from '../lib/urls.js';
 import { CATALOGS, STATE_IDS, stateName } from '../keywords/catalog.js';
 import { syncCatalog } from '../keywords/store.js';
@@ -42,6 +43,49 @@ const INTERNAL_KEYS = new Set<SettingKey>([
  * Anmeldung nur mit TLS, Testpostfach, Server für den Echtbetrieb) – hier abgewiesen (#100). Lesen bleibt möglich.
  */
 const DEDICATED_KEYS = new Set<string>(['smtp.host', 'smtp.port', 'smtp.security', 'smtp.user', 'smtp.from', 'warnings.test_mode', 'warnings.test_recipient']);
+
+const ageH = (d: Date | string | null | undefined) => (d ? (Date.now() - new Date(d).getTime()) / 3_600_000 : Infinity);
+
+/** Karten „Sicherung außer Haus“ und „Probe-Wiederherstellung“ im Systemstatus (#212). */
+export function backupServices(b: Awaited<ReturnType<typeof backupHealth>>) {
+  const out: { id: string; name: string; state: string; detail: string; ms: null }[] = [];
+  const o = b.offsite;
+  if (o.enabled) {
+    const failedLater = o.last_error_at && (!o.last_ok_at || new Date(o.last_error_at) > new Date(o.last_ok_at));
+    const age = ageH(o.last_ok_at);
+    out.push({
+      id: 'offsite',
+      name: 'Sicherung außer Haus',
+      state: failedLater ? 'error' : age > 50 ? 'warning' : 'ok',
+      detail: failedLater
+        ? `Fehlgeschlagen: ${String(o.last_error ?? '').slice(0, 160)}`
+        : o.last_ok_at
+          ? `zuletzt erfolgreich vor ${age < 1 ? 'unter 1' : Math.round(age)} Std.${o.pending ? ` · ${o.pending} ausstehend` : ''}`
+          : o.pending
+            ? `${o.pending} Übertragung(en) ausstehend`
+            : 'noch keine Sicherung übertragen',
+      ms: null,
+    });
+  }
+  const d = b.drill;
+  if (d || b.drill_interval !== 'off') {
+    const limit = b.drill_interval === 'monthly' ? 24 * 35 : 24 * 9;
+    out.push({
+      id: 'drill',
+      name: 'Probe-Wiederherstellung',
+      state: !d ? 'warning' : d.status === 'failed' ? 'error' : ['queued', 'running'].includes(d.status) ? 'ok' : b.drill_interval !== 'off' && ageH(d.finished_at) > limit ? 'warning' : 'ok',
+      detail: !d
+        ? 'noch keine Probe – unter Einstellungen → Sicherung außer Haus starten'
+        : d.status === 'failed'
+          ? `Fehlgeschlagen: ${String(d.error ?? '').slice(0, 160)}`
+          : ['queued', 'running'].includes(d.status)
+            ? 'läuft gerade'
+            : `bestanden vor ${Math.max(1, Math.round(ageH(d.finished_at)))} Std. (${d.source === 'offsite' ? 'Kopie außer Haus' : 'lokale Sicherung'})`,
+      ms: null,
+    });
+  }
+  return out;
+}
 
 export async function systemStatus() {
   const t0 = Date.now();
@@ -70,6 +114,8 @@ export async function systemStatus() {
     disk = null;
   }
   const settings = await getSettings();
+  // Sicherung außer Haus und Probe-Wiederherstellung (#212)
+  const backup = await backupHealth().catch(() => null);
   const services = [
     { id: 'api', name: 'API', state: 'ok', detail: `läuft seit ${Math.round((Date.now() - startedAt) / 60000)} Min.`, ms: null },
     { id: 'db', name: 'Datenbank', state: dbOk ? 'ok' : 'error', detail: dbOk ? `PostgreSQL ${dbVersion}` : 'nicht erreichbar', ms: dbMs },
@@ -103,11 +149,12 @@ export async function systemStatus() {
     },
     // Proxy-Kette (#192): X-Forwarded-For von einer Adresse außerhalb von TRUSTED_PROXIES
     proxyService(),
+    ...(backup ? backupServices(backup) : []),
   ];
   // Wartungsmodus für die eigene Karte im Systemstatus (Recht system.maintenance, unabhängig von update.install)
   const m = settings['system.maintenance'] as { since: string; byName: string; reason: string } | null | undefined;
   const maintenance = m ? { since: m.since, byName: m.byName, reason: m.reason } : null;
-  return { services, workers, queue, sites, lastBackup, disk, dbSize, maintenance, version: config.version, uptimeSec: Math.round((Date.now() - startedAt) / 1000), node: process.version };
+  return { services, workers, queue, sites, lastBackup, backup, disk, dbSize, maintenance, version: config.version, uptimeSec: Math.round((Date.now() - startedAt) / 1000), node: process.version };
 }
 
 export async function systemRoutes(app: FastifyInstance) {

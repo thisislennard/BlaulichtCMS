@@ -68,7 +68,12 @@
     },
     "backup": {
       "created": "Sicherung erstellt",
-      "downloaded": "Sicherung heruntergeladen"
+      "downloaded": "Sicherung heruntergeladen",
+      "offsite_changed": "Sicherung außer Haus geändert",
+      "offsite_tested": "Sicherungsziel getestet",
+      "offsite_fetched": "Sicherung vom Ziel geholt",
+      "offsite_requested": "Übertragung außer Haus angestoßen",
+      "drill_started": "Probe-Wiederherstellung gestartet"
     },
     "post": {
       "created": "Beitrag angelegt",
@@ -319,7 +324,12 @@
     },
     "backup": {
       "created": "hat eine Sicherung erstellt",
-      "downloaded": "hat die Sicherung „{o}“ heruntergeladen"
+      "downloaded": "hat die Sicherung „{o}“ heruntergeladen",
+      "offsite_changed": "hat die Sicherung außer Haus geändert",
+      "offsite_tested": "hat das Sicherungsziel „{o}“ getestet",
+      "offsite_fetched": "hat die Sicherung „{o}“ vom Ziel außer Haus geholt",
+      "offsite_requested": "hat die Übertragung von „{o}“ außer Haus angestoßen",
+      "drill_started": "hat eine Probe-Wiederherstellung von „{o}“ gestartet"
     },
     "post": {
       "created": "hat den Beitrag „{o}“ angelegt",

@@ -47,7 +47,7 @@ export const NOTIFY_CATEGORIES: NotifyCategory[] = [
   C('automation', 'Workflow fehlgeschlagen', 'Ein Lauf eines Workflows ist fehlgeschlagen oder wurde gebremst.', ['automation.manage'], ['mail']),
   C('automation_message', 'Benachrichtigungen aus Workflows', 'Ein Workflow benachrichtigt das Konto ausdrücklich (Ausgang „Benachrichtigen“).', [], ['push']),
   C('update', 'Update verfügbar und installiert', 'Eine neue Version von BlaulichtCMS steht bereit bzw. ein Update wurde abgeschlossen.', ['update.install'], ['mail']),
-  C('system', 'Sicherung fehlgeschlagen', 'Eine Datenbank- oder Volume-Sicherung ist fehlgeschlagen.', ['backup.manage'], ['mail']),
+  C('system', 'Sicherung fehlgeschlagen', 'Eine Datenbank- oder Volume-Sicherung, die Übertragung außer Haus oder eine Probe-Wiederherstellung ist fehlgeschlagen.', ['backup.manage'], ['mail']),
   C('security', 'Sicherheitsmeldungen', 'Sicherheitsrelevante Ereignisse für die Administration. Die E-Mail dazu regeln die Sicherheitseinstellungen.', ['settings.security', 'user.assign_roles', 'channel.sites', 'connection.configure', 'media.admin', 'update.install', 'automation.publish', 'audit.view'], ['push'], { channels: ['push'] }),
   C('account', 'Eigenes Konto', 'Änderungen am eigenen Konto (Passwort, Zwei-Faktor, Sperre). Die E-Mail dazu regeln die Sicherheitseinstellungen.', [], ['push'], { channels: ['push'] }),
 ];

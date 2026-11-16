@@ -274,7 +274,7 @@ flowchart LR
 - **Ein Container, ein Skript:** Das Installationsskript führt durch die Einrichtung und prüft am Ende die Adresse.
 - **Updates aus der App:** neue Versionen unter *Einstellungen → Updates*, nur mit gültiger Signatur, mit Sicherung
   vorab und automatischem Rückweg.
-- **Sicherung:** täglich, verschlüsselt, mit regelmäßiger Probe-Wiederherstellung.
+- **Sicherung:** täglich, verschlüsselt, auf Wunsch zusätzlich **außer Haus** auf ein NAS (WebDAV, mit Prüfsummenkontrolle und Aufbewahrung je Tag/Woche/Monat); **Probe-Wiederherstellung** in eine Wegwerf-Datenbank auf Knopfdruck und nach Zeitplan, mit Ergebnisprotokoll im Systemstatus.
 - **Systemstatus:** Dienste, Speicher, Sicherungen, Audit-Integrität, Wartungsmodus und Vorabprüfung vor Updates.
 
 ---

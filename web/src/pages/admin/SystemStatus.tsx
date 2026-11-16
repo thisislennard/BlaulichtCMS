@@ -80,6 +80,8 @@ const SERVICE_ICON: Record<string, string> = {
   media: "Images",
   disk: "HardDrive",
   proxy: "Globe",
+  offsite: "UploadCloud",
+  drill: "FlaskConical",
 };
 
 export function useSystemStatus(refetchInterval: number | false = 15_000, enabled = true) {

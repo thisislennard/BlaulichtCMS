@@ -37,6 +37,7 @@ import { AppearanceFields, FieldGrid, LoadError, SectionCard } from "./shared";
 import { fmtUptime, useSystemStatus } from "./SystemStatus";
 import { UpdatesSection } from "./Updates";
 import { NotifySettingsSection } from "./NotifySettings";
+import { OffsiteBackupSection } from "./OffsiteBackup";
 
 type Values = Record<string, any>;
 interface SettingsResponse {
@@ -58,6 +59,9 @@ interface Backup {
   error: string | null;
   trigger: string;
   created_by_name: string | null;
+  /** Sicherung außer Haus (#212) */
+  offsite_status?: "pending" | "ok" | "failed" | null;
+  offsite_error?: string | null;
 }
 
 const SECTIONS = [
@@ -70,6 +74,7 @@ const SECTIONS = [
   "sicherheit",
   "benachrichtigungen",
   "sicherung",
+  "sicherung-ausser-haus",
   "updates",
   "ueber",
 ] as const;
@@ -155,7 +160,7 @@ export default function Settings() {
   const { can, canAny } = useAuth();
   const canChange = canAny("settings.general", "settings.security", "settings.privacy", "settings.media", "settings.editorial", "settings.system", "backup.manage");
   // Abschnitte, deren Inhalt ein eigenes Leserecht braucht, erscheinen nur mit diesem Recht
-  const sections = SECTIONS.filter((s) => (s === "betrieb" ? can("system.status") : s === "updates" ? can("update.view") : true));
+  const sections = SECTIONS.filter((s) => (s === "betrieb" ? can("system.status") : s === "updates" ? can("update.view") : s === "sicherung-ausser-haus" ? can("backup.manage") : true));
   const qc = useQueryClient();
   const toast = useToast();
   const q = useQuery({
@@ -816,6 +821,9 @@ export default function Settings() {
                   </p>
                 )}
               </SectionCard>
+
+              {/* Sicherung außer Haus und Probe-Wiederherstellung (#212) */}
+              {can("backup.manage") && <OffsiteBackupSection />}
 
               {can("update.view") && <UpdatesSection manage={can("update.install")} />}
 
@@ -1516,12 +1524,26 @@ function BackupList() {
                         {b.error}
                       </span>
                     )}
+                    {b.offsite_status && (
+                      <span
+                        className={`block text-[11px] mt-0.5 ${b.offsite_status === "failed" ? "text-err" : "text-fg-muted"}`}
+                        title={b.offsite_error ?? undefined}
+                      >
+                        {b.offsite_status === "ok"
+                          ? "außer Haus abgelegt"
+                          : b.offsite_status === "pending"
+                            ? "außer Haus: wird übertragen"
+                            : "außer Haus fehlgeschlagen"}
+                      </span>
+                    )}
                   </Td>
                   <Td className="text-meta text-fg-muted whitespace-nowrap">
                     {b.trigger === "manual"
                       ? (b.created_by_name ??
                         t("admin.settings.backupTrigger.manual"))
-                      : t("admin.settings.backupTrigger.schedule")}
+                      : b.trigger === "offsite"
+                        ? "vom Ziel außer Haus geholt"
+                        : t("admin.settings.backupTrigger.schedule")}
                   </Td>
                   <Td align="right">
                     {b.status === "ok" && mayDownload && (
