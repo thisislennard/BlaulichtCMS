@@ -56,9 +56,12 @@ export default function WarningConfig() {
   const s = smtp ?? { ...c.smtp, password: '', testMode: c.testMode.active, testRecipient: c.testMode.recipient };
   const smtpKey = (x: any) => JSON.stringify([String(x.host ?? '').trim().toLowerCase(), Number(x.port), x.security, String(x.user ?? '').trim(), String(x.from ?? '').trim(), x.password ?? '']);
   const smtpDirty = smtpKey(s) !== smtpKey({ ...c.smtp, password: '' });
-  const verified = verifiedKey === smtpKey(s);
+  // Versandweg Microsoft 365 (#191): Nachweis ist die Testmail unter Einstellungen → Benachrichtigungen und E-Mail
+  const viaM365 = c.transport?.kind === 'm365';
+  const m365Fresh = viaM365 && !!c.transport.verified_at && Date.now() - Date.parse(c.transport.verified_at) <= 60 * 60_000;
+  const verified = viaM365 ? m365Fresh : verifiedKey === smtpKey(s);
   // Testmodus ausschalten bzw. im Echtbetrieb Versandeinstellungen ändern: nur nach erfolgreicher Testmail mit diesen Werten
-  const needsTestMail = !s.testMode && (c.testMode.active || smtpDirty) && !verified;
+  const needsTestMail = viaM365 ? !s.testMode && c.testMode.active && !m365Fresh : !s.testMode && (c.testMode.active || smtpDirty) && !verified;
 
   /** Bedingungen als Zeilen „frage = antwort1 | antwort2“ */
   const parseConditions = (txt: string) =>
@@ -269,6 +272,11 @@ export default function WarningConfig() {
       {tab === 'versand' && can('warning.settings') && (
         <Card title="E-Mail-Versand (SMTP)" subtitle="Zugangsdaten werden verschlüsselt gespeichert und nie wieder angezeigt.">
           <div className="flex flex-col gap-4">
+            {viaM365 && (
+              <Notice icon="Mail" title="Versand über Microsoft 365">
+                Alle E-Mails gehen über das Postfach {c.transport.sender} (Einstellungen → Benachrichtigungen und E-Mail); die SMTP-Angaben unten werden derzeit nicht verwendet. Den Testmodus ausschalten lässt sich nach einer Testmail über Microsoft 365 (gilt 60 Minuten){m365Fresh ? ' – liegt vor.' : '.'}
+              </Notice>
+            )}
             <Switch
               checked={s.testMode}
               disabled={s.testMode && c.testMode.active && !verified}
@@ -317,7 +325,7 @@ export default function WarningConfig() {
             </div>
             {needsTestMail && (
               <Notice tone="warning">
-                {c.testMode.active ? 'Der Testmodus lässt sich erst ausschalten,' : 'Im Echtbetrieb lassen sich die Versandeinstellungen erst speichern,'} nachdem mit genau diesen Einstellungen eine Testmail erfolgreich versendet wurde (unten „Testmail senden“, gilt 60 Minuten).
+                {viaM365 ? 'Der Testmodus lässt sich erst ausschalten, nachdem unter Einstellungen → Benachrichtigungen und E-Mail eine Testmail über Microsoft 365 erfolgreich versendet wurde (gilt 60 Minuten).' : <>{c.testMode.active ? 'Der Testmodus lässt sich erst ausschalten,' : 'Im Echtbetrieb lassen sich die Versandeinstellungen erst speichern,'} nachdem mit genau diesen Einstellungen eine Testmail erfolgreich versendet wurde (unten „Testmail senden“, gilt 60 Minuten).</>}
               </Notice>
             )}
             <div className="flex flex-wrap gap-2 items-end border-t border-line pt-4">

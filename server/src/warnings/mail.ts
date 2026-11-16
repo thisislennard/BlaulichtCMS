@@ -7,6 +7,7 @@ import { notify } from '../lib/notify.js';
 import { readSecret } from '../lib/secrets.js';
 import { deriveKey } from '../lib/crypto.js';
 import { getSettings } from '../lib/settings.js';
+import { m365ConfigProblem, m365Transport, storedM365Settings } from '../lib/mail.js';
 
 /**
  * SMTP-Versand eines freigegebenen Warnentwurfs (PDF als Anhang).
@@ -63,7 +64,26 @@ export function smtpFingerprint(c: SmtpSettings): string {
 /** So lange gilt eine erfolgreiche Testmail als Nachweis für das Ausschalten des Testmodus bzw. Änderungen im Echtbetrieb. */
 export const SMTP_VERIFY_MAX_AGE_MS = 60 * 60_000;
 
-export async function smtpTransport(override?: SmtpSettings) {
+/** Gemeinsame Form der Transporte (Nodemailer bzw. Microsoft Graph, lib/mail.ts). */
+export interface MailTransport {
+  sendMail(m: Record<string, any>): Promise<{ messageId?: string; response?: string }>;
+  close(): void;
+}
+
+/**
+ * Transport für ausgehende Mails. Ohne `override` gilt der eingestellte Weg (`mail.transport`): Microsoft 365 über
+ * Microsoft Graph oder SMTP. Mit `override` immer SMTP mit genau diesen Werten (Testmail aus dem SMTP-Formular).
+ */
+export async function smtpTransport(override?: SmtpSettings): Promise<{ from: string; transport: MailTransport }> {
+  if (!override) {
+    const s = await getSettings(true);
+    if (s['mail.transport'] === 'm365') {
+      const m = await storedM365Settings(s);
+      const problem = m365ConfigProblem(m);
+      if (problem) throw new Error(`Microsoft 365 ist nicht vollständig eingerichtet (Einstellungen → Benachrichtigungen und E-Mail): ${problem}`);
+      return { from: m.sender, transport: m365Transport(m) };
+    }
+  }
   const c = override ?? (await storedSmtpSettings());
   if (!c.host || !c.from) throw new Error('SMTP ist nicht eingerichtet (Einstellungen → E-Mail-Versand).');
   // Auch hier prüfen – z. B. Altbestand aus der Zeit vor der Prüfung (#100)

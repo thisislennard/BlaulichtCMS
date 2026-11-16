@@ -21,6 +21,7 @@ import { fmtRelative } from "../lib/format";
 import { MfaSetupPage } from "./auth/AuthPages";
 import { AppearanceFields, LoadError, SectionCard } from "./admin/shared";
 import { MediaNoticePrefs } from "./media/NoticePrefs";
+import { NotifyPrefsCard } from "./NotifyPrefs";
 
 interface Session {
   id: string;
@@ -83,6 +84,7 @@ export default function Profile() {
           <MediaNoticePrefs />
         </div>
         <div className="flex flex-col gap-5 min-w-0">
+          <NotifyPrefsCard />
           <MfaCard />
           <SessionsCard />
           {me.user.totp_enabled && <TrustedDevicesCard />}

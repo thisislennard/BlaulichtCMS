@@ -35,6 +35,7 @@ import {
 import { AppearanceFields, FieldGrid, LoadError, SectionCard } from "./shared";
 import { fmtUptime, useSystemStatus } from "./SystemStatus";
 import { UpdatesSection } from "./Updates";
+import { NotifySettingsSection } from "./NotifySettings";
 
 type Values = Record<string, any>;
 interface SettingsResponse {
@@ -66,6 +67,7 @@ const SECTIONS = [
   "medien",
   "betrieb",
   "sicherheit",
+  "benachrichtigungen",
   "sicherung",
   "updates",
   "ueber",
@@ -702,6 +704,9 @@ export default function Settings() {
                   <NumField k="security.alert_downloads" label="Meldung ab Downloads" help="Originale oder Exportdateien einer Person pro Stunde; 0 = aus." unit="pro Std." v={v} set={set} ro={ro("security.alert_downloads")} />
                 </FieldGrid>
               </SectionCard>
+
+              {/* Benachrichtigungen und E-Mail (#191) */}
+              <NotifySettingsSection manage={can("settings.mail")} />
 
               {/* Sicherung */}
               <SectionCard

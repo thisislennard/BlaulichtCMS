@@ -1,9 +1,13 @@
 import { pool } from '../db/pool.js';
+import { maskValue } from './mask.js';
 
 type Level = 'debug' | 'info' | 'warn' | 'error';
 
 /** Strukturiertes Protokoll: Konsole (JSON) + Tabelle app_logs (ohne Geheimnisse/Inhalte). */
 export function log(level: Level, source: string, message: string, details: Record<string, unknown> = {}, correlationId?: string) {
+  // Zugangsdaten nie ins Protokoll (#190): sensible Schlüssel und Bearer-/Basic-Werte maskieren (lib/mask.ts)
+  details = maskValue(details) as Record<string, unknown>;
+  message = String(maskValue(message));
   const line = JSON.stringify({
     t: new Date().toISOString(),
     level,

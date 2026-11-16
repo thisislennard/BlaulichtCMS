@@ -54,6 +54,7 @@ export const GROUPS: ChapterGroup[] = [
   G('admin', [
     ['benutzer-rollen', 'Users'],
     ['einrichtung', 'Settings'],
+    ['benachrichtigungen', 'Bell'],
     ['sicherheit', 'Lock'],
     ['sicherung', 'HardDrive'],
     ['updates', 'Download'],

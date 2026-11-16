@@ -1,0 +1,247 @@
+import type { FastifyInstance } from 'fastify';
+import { z } from 'zod';
+import { many, one, pool, tx } from '../db/pool.js';
+import { assertRecentAuth, requireAuth } from '../auth/context.js';
+import { audit, settingsDiff } from '../lib/audit.js';
+import { sha256Hex } from '../lib/crypto.js';
+import { AppError, badRequest, conflict, notFound } from '../lib/errors.js';
+import { m365ConfigProblem, m365Fingerprint, m365Send, mailReady, mailRouteLabel, resetM365TokenCache, storedM365Settings, type M365Settings } from '../lib/mail.js';
+import { categoriesFor, chosenChannels, NOTIFY_CHANNELS } from '../lib/notify-categories.js';
+import { pushSubject, rotateVapidKeys, sendTestPush, vapidKeys } from '../lib/notify-channels.js';
+import { revokeSecret, storeSecret } from '../lib/secrets.js';
+import { getSettings, setSettings, type Settings } from '../lib/settings.js';
+import { checkPushEndpoint } from '../lib/webpush.js';
+import { securityAlert } from '../lib/security-alerts.js';
+
+/**
+ * Benachrichtigungen per Push und E-Mail (#191):
+ *  - „Mein Konto → Benachrichtigungen“: Kanäle je Art, Push-Abos dieses und weiterer Geräte, Testnachricht.
+ *  - „Einstellungen → Benachrichtigungen und E-Mail“ (Recht settings.mail): Versandweg SMTP oder Microsoft 365,
+ *    Microsoft-365-Zugang mit Verbindungstest, Kanäle global, Push-Schlüssel erneuern.
+ */
+export const M365_SECRET_OWNER = '00000000-0000-0000-0000-00000000a365';
+const VERIFY_MAX_AGE_MS = 60 * 60_000;
+
+const subscriptionSchema = z.object({
+  endpoint: z.string().max(1024),
+  keys: z.object({ p256dh: z.string().min(40).max(200), auth: z.string().min(10).max(64) }),
+});
+
+export async function notifyChannelRoutes(app: FastifyInstance) {
+  /* ------------------------------------------------------------------ Mein Konto */
+
+  app.get('/notify/preferences', { preHandler: requireAuth() }, async (req) => {
+    const a = req.auth!;
+    if (!a.user) return { categories: [], channels: { push: false, mail: false }, subscriptions: [], vapidPublicKey: null };
+    const s = await getSettings(true);
+    const u = await one<{ email: string; preferences: any }>('SELECT email, preferences FROM users WHERE id = $1', [a.user.id]);
+    const prefs = u?.preferences?.notifyChannels;
+    const pushOn = !!s['notify.push_enabled'];
+    const subs = await many<any>(
+      `SELECT id, label, created_at, last_success_at, last_error, last_error_at, endpoint FROM push_subscriptions WHERE user_id = $1 ORDER BY created_at`,
+      [a.user.id],
+    );
+    return {
+      categories: categoriesFor(a.permissions).map((c) => ({ id: c.id, label: c.label, description: c.description, channels: c.channels, chosen: chosenChannels(c, prefs) })),
+      channels: { push: pushOn, mail: !!s['notify.mail_enabled'] && mailReady(s) },
+      email: u?.email ?? '',
+      // Adresse beim Push-Dienst nie ausgeben – nur ein Kennwert, an dem der Browser sein eigenes Abo wiedererkennt
+      subscriptions: subs.map(({ endpoint, ...r }) => ({ ...r, endpoint_hash: sha256Hex(endpoint).slice(0, 16) })),
+      vapidPublicKey: pushOn ? (await vapidKeys(true))!.publicKey : null,
+    };
+  });
+
+  app.put('/notify/preferences', { preHandler: requireAuth() }, async (req) => {
+    const a = req.auth!;
+    if (!a.user) throw badRequest('Nur für Benutzerkonten.');
+    const b = z.object({ choices: z.record(z.string().max(40), z.array(z.enum(['push', 'mail'])).max(2)) }).parse(req.body);
+    const offered = new Map(categoriesFor(a.permissions).map((c) => [c.id, c]));
+    const u = await one<{ preferences: any }>('SELECT preferences FROM users WHERE id = $1', [a.user.id]);
+    const next: Record<string, string[]> = { ...(u?.preferences?.notifyChannels ?? {}) };
+    for (const [id, list] of Object.entries(b.choices)) {
+      const cat = offered.get(id);
+      if (!cat) continue; // nicht angebotene Arten still übergehen
+      next[id] = NOTIFY_CHANNELS.filter((ch) => cat.channels.includes(ch) && list.includes(ch));
+    }
+    await pool.query(`UPDATE users SET preferences = preferences || jsonb_build_object('notifyChannels', $2::jsonb) WHERE id = $1`, [a.user.id, JSON.stringify(next)]);
+    return { ok: true };
+  });
+
+  /** Push auf diesem Gerät einschalten: Abo des Browsers speichern. Ein Abo gehört genau einem Konto (wie LiFeOS #956). */
+  app.post('/notify/push/subscriptions', { preHandler: requireAuth(), config: { rateLimit: { max: 20, timeWindow: '1 minute' } } }, async (req) => {
+    const a = req.auth!;
+    if (!a.user) throw badRequest('Nur für Benutzerkonten.');
+    const s = await getSettings(true);
+    if (!s['notify.push_enabled']) throw conflict('Push-Benachrichtigungen sind in den Einstellungen abgeschaltet.');
+    const b = z.object({ subscription: subscriptionSchema, label: z.string().trim().max(80).default('') }).parse(req.body);
+    if (!checkPushEndpoint(b.subscription.endpoint)) throw badRequest('Die Push-Adresse des Browsers gehört zu keinem bekannten Push-Dienst.');
+    const keys = await vapidKeys(true);
+    const count = await one<{ n: number }>('SELECT count(*)::int AS n FROM push_subscriptions WHERE user_id = $1', [a.user.id]);
+    if (count!.n >= 20 && !(await one('SELECT 1 FROM push_subscriptions WHERE endpoint = $1 AND user_id = $2', [b.subscription.endpoint, a.user.id]))) {
+      throw conflict('Höchstens 20 Geräte je Konto – bitte ein altes Gerät entfernen.');
+    }
+    const row = await one<{ id: string }>(
+      `INSERT INTO push_subscriptions (user_id, endpoint, p256dh, auth, label, vapid_key) VALUES ($1,$2,$3,$4,$5,$6)
+       ON CONFLICT (endpoint) DO UPDATE SET user_id = EXCLUDED.user_id, p256dh = EXCLUDED.p256dh, auth = EXCLUDED.auth, label = EXCLUDED.label,
+         vapid_key = EXCLUDED.vapid_key, failures = 0, last_error = NULL, last_error_at = NULL
+       RETURNING id`,
+      [a.user.id, b.subscription.endpoint, b.subscription.keys.p256dh, b.subscription.keys.auth, b.label || 'Gerät', keys!.publicKey],
+    );
+    await audit(a.actor, 'notify.push_subscribed', { type: 'user', id: a.user.id, label: b.label || 'Gerät' });
+    return { id: row!.id, endpoint_hash: sha256Hex(b.subscription.endpoint).slice(0, 16) };
+  });
+
+  app.delete('/notify/push/subscriptions/:id', { preHandler: requireAuth() }, async (req) => {
+    const a = req.auth!;
+    const { id } = z.object({ id: z.uuid() }).parse(req.params);
+    const r = await pool.query('DELETE FROM push_subscriptions WHERE id = $1 AND user_id = $2 RETURNING label', [id, a.user?.id ?? null]);
+    if (!r.rowCount) throw notFound('Gerät nicht gefunden.');
+    await audit(a.actor, 'notify.push_unsubscribed', { type: 'user', id: a.user!.id, label: r.rows[0].label });
+    return { ok: true };
+  });
+
+  app.post('/notify/push/test', { preHandler: requireAuth(), config: { rateLimit: { max: 6, timeWindow: '1 minute' } } }, async (req) => {
+    const a = req.auth!;
+    if (!a.user) throw badRequest('Nur für Benutzerkonten.');
+    const b = z.object({ id: z.uuid().optional() }).parse(req.body ?? {});
+    const results = await sendTestPush(a.user.id, b.id);
+    if (!results.length) throw badRequest('Für dieses Konto ist kein Gerät für Push eingerichtet.');
+    return { results };
+  });
+
+  /* ------------------------------------------------------------------ Administration */
+
+  const view = async (s: Settings) => ({
+    transport: s['mail.transport'],
+    route: mailRouteLabel(s),
+    ready: mailReady(s),
+    smtp: { host: s['smtp.host'], from: s['smtp.from'], configured: !!(s['smtp.host'] && s['smtp.from']) },
+    m365: {
+      tenant_id: s['m365.tenant_id'],
+      client_id: s['m365.client_id'],
+      sender: s['m365.sender'],
+      save_sent: s['m365.save_sent'],
+      secret_set: !!s['m365.secret_id'],
+      verified_at: s['m365.verified']?.at ?? null,
+    },
+    push_enabled: s['notify.push_enabled'],
+    mail_enabled: s['notify.mail_enabled'],
+    push: {
+      key_set: !!s['push.vapid_public_key'],
+      subscriptions: (await one<{ n: number }>('SELECT count(*)::int AS n FROM push_subscriptions'))!.n,
+      subject: pushSubject(s),
+    },
+  });
+
+  app.get('/notify/settings', { preHandler: requireAuth('settings.view') }, async () => view(await getSettings(true)));
+
+  /** Kandidat aus Formularwerten; gespeichertes Geheimnis nur für dieselbe Anwendung im selben Verzeichnis. */
+  const candidate = (b: { tenantId: string; clientId: string; sender: string; clientSecret?: string; saveSent: boolean }, stored: M365Settings): M365Settings => {
+    const same = b.tenantId.trim().toLowerCase() === stored.tenantId.trim().toLowerCase() && b.clientId.trim().toLowerCase() === stored.clientId.trim().toLowerCase();
+    if (!b.clientSecret && !same && stored.clientSecret) throw badRequest('Verzeichnis oder Anwendung wurden geändert: Bitte das Client-Geheimnis erneut eingeben.');
+    return { tenantId: b.tenantId.trim(), clientId: b.clientId.trim(), sender: b.sender.trim(), saveSent: b.saveSent, clientSecret: b.clientSecret || (same ? stored.clientSecret : '') };
+  };
+
+  const m365Body = {
+    tenantId: z.string().trim().max(200).default(''),
+    clientId: z.string().trim().max(60).default(''),
+    sender: z.string().trim().max(200).default(''),
+    clientSecret: z.string().max(500).optional(),
+    saveSent: z.boolean().default(true),
+  };
+
+  app.put('/notify/settings', { preHandler: requireAuth('settings.mail') }, async (req) => {
+    const b = z.object({ transport: z.enum(['smtp', 'm365']), pushEnabled: z.boolean(), mailEnabled: z.boolean(), ...m365Body }).parse(req.body);
+    const before = await getSettings(true);
+    const stored = await storedM365Settings(before);
+    const touched = !!(b.tenantId || b.clientId || b.sender || b.clientSecret);
+    if (b.transport === 'm365' || touched) {
+      const problem = m365ConfigProblem({ ...b, clientSecret: b.clientSecret || stored.clientSecret }, b.transport === 'm365');
+      if (problem) throw badRequest(problem);
+    }
+    const next = candidate(b, stored);
+    const fp = m365Fingerprint(next);
+    const m365Changed = fp !== m365Fingerprint(stored);
+    // Microsoft 365 erst nach bestandenem Verbindungstest aktiv (wie Verbindungen): Umschalten oder Ändern im Betrieb
+    // nur mit frischer Testmail genau dieser Angaben
+    if (b.transport === 'm365' && (before['mail.transport'] !== 'm365' || m365Changed)) {
+      const v = before['m365.verified'];
+      if (!v || v.fp !== fp || Date.now() - Date.parse(v.at) > VERIFY_MAX_AGE_MS) {
+        throw conflict('Microsoft 365 lässt sich erst verwenden, nachdem mit genau diesen Angaben eine Testmail erfolgreich versendet wurde (höchstens 60 Minuten alt). Bitte zuerst „Testmail senden“.');
+      }
+    }
+    if (b.transport === 'smtp' && before['mail.transport'] !== 'smtp' && !(before['smtp.host'] && before['smtp.from'])) {
+      throw badRequest('Es ist kein SMTP-Server eingerichtet (Warnentwürfe → Pflege → Versand). Bitte zuerst SMTP einrichten oder bei Microsoft 365 bleiben.');
+    }
+    // Warnversand im Echtbetrieb: zurück auf SMTP nur mit frischer SMTP-Testmail der gespeicherten Einstellungen
+    if (b.transport === 'smtp' && before['mail.transport'] !== 'smtp' && !before['warnings.test_mode']) {
+      const { smtpFingerprint, storedSmtpSettings } = await import('../warnings/mail.js');
+      const v = before['smtp.verified'];
+      if (!v || Date.now() - Date.parse(v.at) > VERIFY_MAX_AGE_MS || v.fp !== smtpFingerprint(await storedSmtpSettings())) {
+        throw conflict('Der Warnversand ist im Echtbetrieb: Zurück auf SMTP erst nach einer erfolgreichen SMTP-Testmail (Warnentwürfe → Pflege → Versand, höchstens 60 Minuten alt).');
+      }
+    }
+    const patch: Record<string, unknown> = {
+      'mail.transport': b.transport,
+      'm365.tenant_id': next.tenantId,
+      'm365.client_id': next.clientId,
+      'm365.sender': next.sender,
+      'm365.save_sent': b.saveSent,
+      'notify.push_enabled': b.pushEnabled,
+      'notify.mail_enabled': b.mailEnabled,
+    };
+    const changes = settingsDiff(before as any, patch);
+    const secretChange = !!b.clientSecret && b.clientSecret !== stored.clientSecret;
+    if (!Object.keys(changes).length && !secretChange) return { ok: true };
+    if (secretChange || changes['mail.transport'] || changes['m365.tenant_id'] || changes['m365.client_id'] || changes['m365.sender']) assertRecentAuth(req);
+    await tx(async (db) => {
+      if (secretChange) {
+        // Neues Geheimnis: neue Version anlegen und die bisherige im selben Schritt widerrufen (#172)
+        const prev = await one<{ value: unknown }>(`SELECT value FROM settings WHERE key = 'm365.secret_id' FOR UPDATE`, [], db);
+        const sec = await storeSecret('setting', M365_SECRET_OWNER, b.clientSecret!, req.auth!.user?.id ?? null, db);
+        patch['m365.secret_id'] = sec.id;
+        if (typeof prev?.value === 'string' && prev.value && prev.value !== sec.id) await revokeSecret(prev.value, db);
+      }
+      await setSettings(patch as any, req.auth!.user?.id ?? null, db);
+    });
+    resetM365TokenCache();
+    await audit(req.auth!.actor, 'notify.settings_changed', { type: 'settings', label: 'Benachrichtigungen und E-Mail' }, { aenderungen: Object.keys(changes).length ? changes : undefined, geheimnis_geaendert: secretChange || undefined });
+    if (changes['mail.transport'] || secretChange) {
+      await securityAlert('security_settings', {
+        title: `E-Mail-Versand geändert von ${req.auth!.actor.name}`,
+        body: `Versandweg: ${b.transport === 'm365' ? `Microsoft 365 (${next.sender})` : 'SMTP'}${secretChange ? '; Client-Geheimnis ersetzt' : ''}.`,
+        link: '/einstellungen#benachrichtigungen',
+        kind: 'info',
+      });
+    }
+    return { ok: true };
+  });
+
+  /** Verbindungstest Microsoft 365: Anmeldung der App und Testmail mit den Formularwerten (auch ungespeichert). */
+  app.post('/notify/settings/test-mail', { preHandler: requireAuth('settings.mail'), config: { rateLimit: { max: 5, timeWindow: '1 minute' } } }, async (req) => {
+    const b = z.object({ to: z.email(), ...m365Body }).parse(req.body);
+    const stored = await storedM365Settings();
+    const cand = candidate(b, stored);
+    const problem = m365ConfigProblem(cand);
+    if (problem) throw badRequest(problem);
+    try {
+      const info = await m365Send(cand, { to: b.to, subject: 'BlaulichtCMS: Testmail über Microsoft 365', text: 'Diese Testmail bestätigt, dass BlaulichtCMS E-Mails über Microsoft 365 (Microsoft Graph) versenden kann.' });
+      const at = new Date().toISOString();
+      await setSettings({ 'm365.verified': { fp: m365Fingerprint(cand), at } }, req.auth!.user?.id ?? null);
+      await audit(req.auth!.actor, 'notify.test_mail', { type: 'settings', label: 'Microsoft 365' }, { an: b.to, absender: cand.sender });
+      return { ok: true, response: info.response, verified_at: at };
+    } catch (e) {
+      await audit(req.auth!.actor, 'notify.test_mail', { type: 'settings', label: 'Microsoft 365' }, { an: b.to, absender: cand.sender, fehler: (e as Error).message.slice(0, 200) }, 'failed').catch(() => {});
+      throw new AppError(502, 'mail_failed', `Testmail fehlgeschlagen: ${(e as Error).message}`);
+    }
+  });
+
+  /** Neues Push-Schlüsselpaar (z. B. nach Verdacht auf Offenlegung): alle Geräte müssen Push neu einschalten. */
+  app.post('/notify/settings/push-rotate', { preHandler: requireAuth('settings.mail') }, async (req) => {
+    assertRecentAuth(req);
+    const removed = (await one<{ n: number }>('SELECT count(*)::int AS n FROM push_subscriptions'))!.n;
+    await rotateVapidKeys(req.auth!.user?.id ?? null);
+    await audit(req.auth!.actor, 'notify.push_keys_rotated', { type: 'settings', label: 'Push-Schlüssel' }, { entfernte_geraete: removed });
+    return { ok: true, removed };
+  });
+}

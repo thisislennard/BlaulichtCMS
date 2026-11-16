@@ -28,6 +28,9 @@ const INTERNAL_KEYS = new Set<SettingKey>([
   // In-App-Updates: eigene Seite und eigene Prüfung (routes/updates.ts) – Token nie in der allgemeinen Liste
   'updates.enabled', 'updates.repo', 'updates.api_url', 'updates.token_secret_id', 'updates.check_hours',
   'updates.latest', 'updates.last_check_at', 'updates.last_check_error', 'updates.notified_version',
+  // E-Mail-Weg, Microsoft 365 und Push: eigene Seite mit Verbindungstest (routes/notify-channels.ts)
+  'mail.transport', 'm365.tenant_id', 'm365.client_id', 'm365.sender', 'm365.secret_id', 'm365.save_sent', 'm365.verified',
+  'notify.push_enabled', 'notify.mail_enabled', 'push.vapid_public_key', 'push.vapid_secret_id',
 ]);
 /**
  * Versandeinstellungen werden nur über PUT /warning-settings geändert, das sie gemeinsam prüft (SMTP-Verschlüsselung,

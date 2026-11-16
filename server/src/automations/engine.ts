@@ -4,7 +4,7 @@ import { enqueue } from '../jobs/queue.js';
 import { audit, type Actor } from '../lib/audit.js';
 import { StepError } from '../lib/errors.js';
 import { log } from '../lib/log.js';
-import { notify } from '../lib/notify.js';
+import { notify, scheduleDelivery } from '../lib/notify.js';
 import { getSettings, type Settings } from '../lib/settings.js';
 import { bannerHash, enqueueBannerJob } from '../routes/banners.js';
 import { revisionHash } from '../routes/posts.js';
@@ -612,7 +612,11 @@ async function runOutput(ctx: Ctx, node: GraphNode, data: Data, prev: StepRow | 
       const users = [...new Map([...(await usersWithRoles(c.roles ?? [])), ...(c.userIds?.length ? await many<any>(`SELECT id, email, name FROM users WHERE id = ANY($1::uuid[]) AND status = 'active'`, [c.userIds]) : [])].map((u) => [u.id, u])).values()];
       if (ctx.test) return done({ ports: ['out'], info: `Testlauf: würde ${users.length} Person(en) benachrichtigen: „${title}“.`, log: { titel: title, text: body, link: safeLink, personen: users.length } });
       return tx(async (db) => {
-        for (const u of users) await db.query('INSERT INTO notifications (kind, title, body, link, user_id) VALUES ($1,$2,$3,$4,$5)', [c.kind === 'warning' ? 'warning' : 'info', title.slice(0, 200), body.slice(0, 1000), safeLink, u.id]);
+        for (const u of users) {
+          const n = await db.query<{ id: number }>(`INSERT INTO notifications (kind, title, body, link, user_id, category) VALUES ($1,$2,$3,$4,$5,'automation_message') RETURNING id`, [c.kind === 'warning' ? 'warning' : 'info', title.slice(0, 200), body.slice(0, 1000), safeLink, u.id]);
+          // Push/E-Mail nach Wahl der Person (#191) – im selben Vorgang eingeplant, Rücknahme nimmt auch den Auftrag zurück
+          await scheduleDelivery(n.rows[0].id, db);
+        }
         return done({ ports: ['out'], info: `${users.length} Person(en) benachrichtigt.`, log: { titel: title, personen: users.length } }, db);
       });
     }

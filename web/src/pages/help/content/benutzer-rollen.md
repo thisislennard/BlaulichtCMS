@@ -208,6 +208,7 @@ Alle Rechte, nach Bereichen. Die Tabelle entspricht dem Rollen-Editor; „Setzt 
 | Datenschutzeinstellungen ändern | kritisch | Löschfristen, Aufbewahrung der Protokolle, Angaben zu Verantwortlichen, Datenschutzhinweise, Datenschutzerklärung und Impressum. | Einstellungen ansehen |
 | Medieneinstellungen ändern | ändern | Dateigrößen, erlaubte Dateitypen, Vorgaben für Upload-Links, Prüftiefe und Speichergrenzen. | Einstellungen ansehen |
 | Redaktionseinstellungen ändern | kritisch | Vier-Augen-Prinzip und weitere Vorgaben für Redaktion und Freigabe. | Einstellungen ansehen |
+| E-Mail-Versand und Push einstellen | kritisch | Weg für E-Mails wählen (SMTP oder Microsoft 365), Microsoft 365 einrichten und prüfen, Push- und E-Mail-Benachrichtigungen global schalten. | Einstellungen ansehen |
 | Systemeinstellungen ändern | ändern | Parallele Aufträge, Ausführung der Automationen und weitere technische Einstellungen. | Einstellungen ansehen |
 
 <!-- rechte:ende -->

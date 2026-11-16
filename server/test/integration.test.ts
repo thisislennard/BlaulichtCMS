@@ -6066,3 +6066,19 @@ describe('In-App-Updates aus GitHub-Releases', () => {
     }
   });
 });
+
+describe('Zugangsdaten nie im Klartext (#190)', () => {
+  it('nach allen Verbindungen, Einstellungen und Quellen dieser Suite liegt kein Zugangsdatum im Klartext', async () => {
+    const { findPlaintextSecrets } = await import('../src/lib/secret-audit.js');
+    // Eigene Verbindung: der Pool wurde beim Zurückspielen der Sicherung getrennt
+    const pg = (await import('pg')).default;
+    const c = new pg.Client({ connectionString: process.env.DATABASE_URL });
+    await c.connect();
+    try {
+      expect((await c.query(`SELECT count(*)::int AS n FROM connections`)).rows[0].n).toBeGreaterThan(0);
+      expect(await findPlaintextSecrets(c as any)).toEqual([]);
+    } finally {
+      await c.end();
+    }
+  });
+});

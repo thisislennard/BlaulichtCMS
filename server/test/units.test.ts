@@ -135,7 +135,7 @@ describe('Feine Rechte und Rollen (0.3.0)', () => {
     }
     // Neue Rechte ohne Vorgänger: nur für die Administration (alle Rechte) oder eigene Rollen
     const mapped = new Set(Object.values(P.LEGACY_PERMISSIONS).flat());
-    expect(ids.filter((p) => !mapped.has(p)).sort()).toEqual(['connection.private_targets', 'role.manage', 'warning.delete_sent']);
+    expect(ids.filter((p) => !mapped.has(p)).sort()).toEqual(['connection.private_targets', 'role.manage', 'settings.mail', 'warning.delete_sent']);
   });
 
   it('bestehende Rollen behalten genau ihre bisherigen Rechte (alt gegen neu)', () => {
@@ -1509,5 +1509,108 @@ describe('Einfache Rückmeldeseite (#194)', () => {
     expect(html).toContain('&quot;Text&quot; &amp; &lt;b&gt;mehr&lt;/b&gt;');
     expect(html).toContain('href="/&quot;onmouseover=&quot;x"');
     expect(html).not.toMatch(/<script|<style/);
+  });
+});
+
+describe('Web Push und Benachrichtigungen (#191)', () => {
+  const SUB = { p256dh: 'BCVxsr7N_eNgVRqvHtD0zTZsEc6-VV-JvLexhqUzORcxaOzi6-AYWXvTBHm4bjyPjs7Vd8pZGH6SRpkNtoIAiw4', auth: 'BTBZMqHH6r4Tts7J_aSIgg' };
+  it('verschlüsselt exakt nach RFC 8291 (Abschnitt 5 und Anhang A)', async () => {
+    const { encryptPayload } = await import('../src/lib/webpush.js');
+    const out = encryptPayload(Buffer.from('When I grow up, I want to be a watermelon'), SUB, {
+      asPrivate: Buffer.from('yfWPiYE-n46HLnH0KqZOF1fJJU3MYrct3AELtAQ-oRw', 'base64url'),
+      salt: Buffer.from('DGv6ra1nlYgDCS1FRnbzlw', 'base64url'),
+    });
+    // Kopf (86 Byte: Salz, Satzgröße 4096, Schlüssellänge, as_public) und Chiffrat aus Anhang A
+    expect(out.subarray(0, 86).toString('base64url')).toBe('DGv6ra1nlYgDCS1FRnbzlwAAEABBBP4z9KsN6nGRTbVYI_c7VJSPQTBtkgcy27mlmlMoZIIgDll6e3vCYLocInmYWAmS6TlzAC8wEqKK6PBru3jl7A8');
+    expect(out.subarray(86).toString('base64url')).toBe('8pfeW0KbunFT06SuDKoJH9Ql87S1QUrdirN6GcG7sFz1y1sqLgVi1VhjVkHsUoEsbI_0LpXMuGvnzQ');
+    // Gesamte Nachricht aus Abschnitt 5
+    expect(out.toString('base64url')).toBe(
+      'DGv6ra1nlYgDCS1FRnbzlwAAEABBBP4z9KsN6nGRTbVYI_c7VJSPQTBtkgcy27mlmlMoZIIgDll6e3vCYLocInmYWAmS6TlzAC8wEqKK6PBru3jl7A_yl95bQpu6cVPTpK4Mqgkf1CXztLVBSt2Ks3oZwbuwXPXLWyouBWLVWGNWQexSgSxsj_Qulcy4a-fN',
+    );
+    // Ohne feste Werte: zufälliges Salz und Schlüssel, zwei Nachrichten nie gleich
+    expect(encryptPayload(Buffer.from('x'), SUB).equals(encryptPayload(Buffer.from('x'), SUB))).toBe(false);
+    expect(() => encryptPayload(Buffer.from('x'), { ...SUB, auth: 'kurz' })).toThrow();
+  });
+
+  it('VAPID-JWT (ES256) ist mit dem öffentlichen Schlüssel prüfbar', async () => {
+    const crypto = await import('node:crypto');
+    const { generateVapidKeys, vapidAuthorization } = await import('../src/lib/webpush.js');
+    const k = generateVapidKeys();
+    const now = Date.UTC(2026, 10, 16);
+    const h = vapidAuthorization('https://fcm.googleapis.com/fcm/send/abc', k, 'mailto:a@example.org', now);
+    const [, t, key] = /^vapid t=([^,]+), k=(.+)$/.exec(h)!;
+    expect(key).toBe(k.publicKey);
+    const [hd, cl, sig] = t.split('.');
+    expect(JSON.parse(Buffer.from(cl, 'base64url').toString())).toEqual({ aud: 'https://fcm.googleapis.com', exp: now / 1000 + 12 * 3600, sub: 'mailto:a@example.org' });
+    const pub = Buffer.from(k.publicKey, 'base64url');
+    const pk = crypto.createPublicKey({ key: { kty: 'EC', crv: 'P-256', x: pub.subarray(1, 33).toString('base64url'), y: pub.subarray(33).toString('base64url') }, format: 'jwk' });
+    expect(crypto.verify('sha256', Buffer.from(`${hd}.${cl}`), { key: pk, dsaEncoding: 'ieee-p1363' }, Buffer.from(sig, 'base64url'))).toBe(true);
+  });
+
+  it('Push-Adressen nur bei bekannten Push-Diensten', async () => {
+    const { checkPushEndpoint } = await import('../src/lib/webpush.js');
+    for (const ok of ['https://fcm.googleapis.com/fcm/send/x', 'https://updates.push.services.mozilla.com/wpush/v2/x', 'https://web.push.apple.com/Q', 'https://wns2-par02p.notify.windows.com/w/?token=x']) expect(checkPushEndpoint(ok), ok).toBe(true);
+    for (const bad of ['http://fcm.googleapis.com/x', 'https://fcm.googleapis.com:8443/x', 'https://user:pw@fcm.googleapis.com/x', 'https://evilfcm.googleapis.com.example.org/x', 'https://10.0.0.1/x', 'https://localhost/x', '', 42]) expect(checkPushEndpoint(bad), String(bad)).toBe(false);
+  });
+
+  it('Arten nur mit passendem Recht; Wahl der Person oder Vorgabe, beschränkt auf angebotene Kanäle', async () => {
+    const { categoriesFor, categoryFor, chosenChannels, notifyCategory, NOTIFY_CATEGORIES } = await import('../src/lib/notify-categories.js');
+    expect(categoriesFor(permissionsFor(['editor'])).map((c) => c.id)).not.toContain('approval');
+    expect(categoriesFor(permissionsFor(['approver'])).map((c) => c.id)).toContain('approval');
+    expect(categoriesFor(new Set()).map((c) => c.id).sort()).toEqual(['account', 'automation_message']);
+    expect(categoryFor(undefined, 'approval.banner')).toBe('approval');
+    expect(categoryFor('incident', 'post.edit')).toBe('incident');
+    expect(categoryFor('unbekannt', null)).toBeNull();
+    expect(chosenChannels(notifyCategory('security')!, { security: ['push', 'mail'] })).toEqual(['push']);
+    expect(chosenChannels(notifyCategory('incident')!, {})).toEqual(['push']);
+    expect(chosenChannels(notifyCategory('incident')!, { incident: [] })).toEqual([]);
+    const ids = new Set(PERMISSIONS.map((p) => p.id));
+    for (const c of NOTIFY_CATEGORIES) for (const p of c.permissions) expect(ids.has(p), `${c.id}: ${p}`).toBe(true);
+  });
+
+  it('Microsoft-365-Angaben werden formal geprüft', async () => {
+    const { m365ConfigProblem } = await import('../src/lib/mail.js');
+    const ok = { tenantId: '11111111-2222-3333-4444-555555555555', clientId: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee', sender: 'x@example.org', clientSecret: 's' };
+    expect(m365ConfigProblem(ok)).toBeNull();
+    expect(m365ConfigProblem({ ...ok, tenantId: 'contoso.onmicrosoft.com' })).toBeNull();
+    expect(m365ConfigProblem({ ...ok, tenantId: '../evil' })).toMatch(/Tenant/);
+    expect(m365ConfigProblem({ ...ok, clientId: 'abc' })).toMatch(/Client-ID/);
+    expect(m365ConfigProblem({ ...ok, sender: 'kein-postfach' })).toMatch(/Absender/);
+    expect(m365ConfigProblem({ ...ok, clientSecret: '' })).toMatch(/Geheimnis/);
+    expect(m365ConfigProblem({ ...ok, clientSecret: '' }, false)).toBeNull();
+  });
+});
+
+describe('Zugangsdaten nie im Klartext (#190)', () => {
+  it('erkennt Feldnamen von Zugangsdaten, aber keine Verweise und Zeitpunkte', async () => {
+    const { isSecretKey } = await import('../src/lib/secret-audit.js');
+    for (const k of ['apiKey', 'appSecret', 'pageToken', 'token', 'password', 'client_secret', 'privateKey', 'auth']) expect(isSecretKey(k), k).toBe(true);
+    for (const k of ['password_secret_id', 'token_secret_id', 'secret_id', 'inboundTokenHash', 'tokenExpiresAt', 'keyInPath', 'vapid_public_key', 'oauthState', 'secret_set']) expect(isSecretKey(k), k).toBe(false);
+  });
+  it('Adressen mit Zugangsdaten werden erkannt', async () => {
+    const { noUrlCredentials } = await import('../src/lib/urls.js');
+    expect(noUrlCredentials('https://feed.example.org/rss')).toBe(true);
+    expect(noUrlCredentials('')).toBe(true);
+    expect(noUrlCredentials('https://nutzer:pw@feed.example.org/rss')).toBe(false);
+    expect(noUrlCredentials('https://nutzer@feed.example.org/rss')).toBe(false);
+  });
+  it('das Systemprotokoll maskiert Zugangsdaten in Details und Text', async () => {
+    const { log } = await import('../src/lib/log.js');
+    const lines: string[] = [];
+    const orig = console.warn;
+    const quiet = process.env.LOG_QUIET;
+    delete process.env.LOG_QUIET;
+    console.warn = (l: string) => lines.push(l);
+    try {
+      log('warn', 'test', 'Fehler mit Bearer abcdefghijklmnopqrstuvwxyz', { clientSecret: 'geheim-wert', nested: { apiKey: 'k-123456' }, ok: 'sichtbar' });
+    } finally {
+      console.warn = orig;
+      if (quiet !== undefined) process.env.LOG_QUIET = quiet;
+    }
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).not.toContain('geheim-wert');
+    expect(lines[0]).not.toContain('k-123456');
+    expect(lines[0]).not.toContain('abcdefghijklmnopqrstuvwxyz');
+    expect(lines[0]).toContain('sichtbar');
   });
 });

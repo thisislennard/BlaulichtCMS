@@ -5,6 +5,7 @@ import { log } from './log.js';
 import { getSettings } from './settings.js';
 import { freeBytes } from '../media/storage.js';
 import { emitUpload } from '../automations/events.js';
+import { scheduleDelivery } from './notify.js';
 
 /*
  * Benachrichtigungen der Medien wie in LiFeOS (Paket 5), über die vorhandenen In-App-Benachrichtigungen:
@@ -62,10 +63,12 @@ export async function mediaNotice(n: {
       await pool.query(`DELETE FROM notification_reads WHERE notification_id = $1`, [existing.id]);
       return;
     }
-    await pool.query(
-      `INSERT INTO notifications (kind, title, body, link, permission, user_id, category, group_key, count, updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,1,now())`,
+    // Push/E-Mail (#191) nur für den ersten Eintrag eines Bündels – Folgedateien erhöhen nur den Zähler in der Glocke
+    const created = await one<{ id: number }>(
+      `INSERT INTO notifications (kind, title, body, link, permission, user_id, category, group_key, count, updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,1,now()) RETURNING id`,
       [n.kind, n.title(1).slice(0, 200), (n.body ?? '').slice(0, 1000), n.link ?? null, n.userId ? null : n.permission, n.userId ?? null, n.category, n.groupKey],
     );
+    if (created) await scheduleDelivery(created.id);
   } catch (e) {
     log('warn', 'notify', `Medien-Benachrichtigung fehlgeschlagen: ${(e as Error).message}`);
   }

@@ -11,7 +11,7 @@ import { randomToken, safeEqual, sha256Hex } from '../lib/crypto.js';
 import { AppError, badRequest, conflict, notFound } from '../lib/errors.js';
 import { assertMediaPresent } from '../lib/approval.js';
 import { enqueue } from '../jobs/queue.js';
-import { publicBase } from '../lib/urls.js';
+import { noUrlCredentials, publicBase, URL_CREDENTIALS_MSG } from '../lib/urls.js';
 import { revokeSecret } from '../lib/secrets.js';
 import { postState } from './posts.js';
 import { publicFileFor } from './media.js';
@@ -68,8 +68,8 @@ const configSchema: Record<ConnectionKind, z.ZodType<any>> = {
   warnfeed: z.object({
     format: z.enum(['nina', 'cap']).default('nina'),
     ars: z.string().max(12).default(''),
-    url: z.union([z.literal(''), z.url({ protocol: /^https?$/, error: 'Bitte eine http(s)-Adresse angeben.' })]).default(''),
-    baseUrl: z.union([z.literal(''), z.url({ protocol: /^https?$/, error: 'Bitte eine https-Adresse angeben.' }).max(200)]).optional(),
+    url: z.union([z.literal(''), z.url({ protocol: /^https?$/, error: 'Bitte eine http(s)-Adresse angeben.' }).refine(noUrlCredentials, URL_CREDENTIALS_MSG)]).default(''),
+    baseUrl: z.union([z.literal(''), z.url({ protocol: /^https?$/, error: 'Bitte eine https-Adresse angeben.' }).max(200).refine(noUrlCredentials, URL_CREDENTIALS_MSG)]).optional(),
     areaFilter: z.object({ codes: z.array(z.string().max(12)).max(50).default([]), names: z.array(z.string().max(80)).max(50).default([]) }).default({ codes: [], names: [] }),
     intervalMinutes: z.number().int().min(2).max(120).default(5),
     autoBanner: z.boolean().default(false),

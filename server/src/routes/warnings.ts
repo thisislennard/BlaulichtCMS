@@ -14,6 +14,7 @@ import { getSettings, setSettings } from '../lib/settings.js';
 import { enqueue } from '../jobs/queue.js';
 import { evaluate, activeQuestions, type Suggestion } from '../warnings/levels.js';
 import { KIND_LABEL, renderWarningPdf } from '../warnings/pdf.js';
+import { m365Fingerprint, storedM365Settings } from '../lib/mail.js';
 import { SMTP_VERIFY_MAX_AGE_MS, smtpConfigProblem, smtpFingerprint, smtpTransport, storedSmtpSettings, type SmtpSettings } from '../warnings/mail.js';
 import { sendFileResponse } from './files.js';
 import { deleteWarnings, removeWarningFiles } from '../lib/retention.js';
@@ -583,6 +584,8 @@ export async function warningRoutes(app: FastifyInstance) {
       questions: await many<any>(`SELECT q.*, u.name AS approved_by_name FROM keyword_questions q LEFT JOIN users u ON u.id = q.approved_by ORDER BY q.keyword_id, q.sort`),
       rules: await many<any>(`SELECT r.*, u.name AS approved_by_name, c.name AS created_by_name FROM warning_rules r LEFT JOIN users u ON u.id = r.approved_by LEFT JOIN users c ON c.id = r.created_by ORDER BY r.keyword_id, r.name, r.version DESC`),
       smtp: { host: s['smtp.host'], port: s['smtp.port'], security: s['smtp.security'], user: s['smtp.user'], from: s['smtp.from'], password_set: !!s['smtp.password_secret_id'], verified_at: s['smtp.verified']?.at ?? null },
+      // Gewählter Versandweg (#191): bei Microsoft 365 gilt dessen Testmail als Nachweis für den Echtbetrieb
+      transport: { kind: s['mail.transport'], sender: s['m365.sender'], verified_at: s['m365.verified']?.at ?? null },
       testMode: { active: s['warnings.test_mode'], recipient: s['warnings.test_recipient'] },
     };
   });
@@ -745,7 +748,8 @@ export async function warningRoutes(app: FastifyInstance) {
         testRecipient: z.union([z.email(), z.literal('')]),
       })
       .parse(req.body);
-    if (!b.testMode && !b.host) throw badRequest('Für den Echtbetrieb muss ein SMTP-Server eingetragen sein.');
+    // Echtbetrieb braucht einen Versandweg: SMTP-Server oder – wenn gewählt – Microsoft 365 (Einstellungen → Benachrichtigungen und E-Mail)
+    if (!b.testMode && !b.host && (await getSettings(true))['mail.transport'] !== 'm365') throw badRequest('Für den Echtbetrieb muss ein SMTP-Server eingetragen sein.');
     const problem = smtpConfigProblem({ security: b.security, user: b.user, password: b.password });
     if (problem) throw badRequest(problem);
     const before = await getSettings(true);
@@ -754,7 +758,16 @@ export async function warningRoutes(app: FastifyInstance) {
     // Echtbetrieb nur mit nachweislich funktionierenden Einstellungen: Testmodus ausschalten oder Versandeinstellungen im
     // Echtbetrieb ändern verlangt eine erfolgreiche Testmail mit genau diesen Werten (höchstens 60 Minuten alt).
     const smtpChanged = !!b.password || (['host', 'port', 'security', 'user', 'from'] as const).some((k) => String((stored as any)[k] ?? '').trim() !== String((next as any)[k] ?? '').trim());
-    if (!b.testMode && (before['warnings.test_mode'] || smtpChanged)) {
+    if (!b.testMode && before['mail.transport'] === 'm365') {
+      // Versand über Microsoft 365: Nachweis ist eine frische Testmail mit den gespeicherten Microsoft-365-Angaben
+      if (before['warnings.test_mode']) {
+        const v = before['m365.verified'];
+        const fresh = !!v && Date.now() - Date.parse(v.at) <= SMTP_VERIFY_MAX_AGE_MS;
+        if (!fresh || v!.fp !== m365Fingerprint(await storedM365Settings(before))) {
+          throw conflict('Der Testmodus lässt sich erst ausschalten, nachdem über Microsoft 365 eine Testmail erfolgreich versendet wurde (höchstens 60 Minuten alt). Bitte unter Einstellungen → Benachrichtigungen und E-Mail „Testmail senden“.');
+        }
+      }
+    } else if (!b.testMode && (before['warnings.test_mode'] || smtpChanged)) {
       const v = before['smtp.verified'];
       const fresh = !!v && Date.now() - Date.parse(v.at) <= SMTP_VERIFY_MAX_AGE_MS;
       if (!fresh || v!.fp !== smtpFingerprint(next)) {

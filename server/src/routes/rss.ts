@@ -11,6 +11,7 @@ import { getSettings } from '../lib/settings.js';
 import { log } from '../lib/log.js';
 import { revisionHash } from './posts.js';
 import { emitRssItem } from '../automations/events.js';
+import { noUrlCredentials, URL_CREDENTIALS_MSG } from '../lib/urls.js';
 
 /**
  * RSS- und Atom-Quellen. Abruf nur über den geschützten HTTP-Client (keine internen Adressen,
@@ -159,7 +160,7 @@ export async function probeFeed(url: string) {
 
 export async function rssRoutes(app: FastifyInstance) {
   app.post('/rss/preview', { preHandler: requireAuth('source.manage'), config: { rateLimit: { max: 20, timeWindow: '1 minute' } } }, async (req) => {
-    const { url } = z.object({ url: z.url().max(1000) }).parse(req.body);
+    const { url } = z.object({ url: z.url().max(1000).refine(noUrlCredentials, URL_CREDENTIALS_MSG) }).parse(req.body);
     const r = await fetchFeed(url);
     if (r.notModified) throw badRequest('Keine Daten.');
     return { title: r.feed.title, siteUrl: r.feed.siteUrl, count: r.feed.items.length, items: r.feed.items.slice(0, 5).map((i) => ({ title: i.title, link: i.link, published: i.published, summary: i.summary.slice(0, 200) })) };
@@ -170,7 +171,7 @@ export async function rssRoutes(app: FastifyInstance) {
   );
 
   app.post('/rss/feeds', { preHandler: requireAuth('source.manage') }, async (req) => {
-    const b = z.object({ url: z.url().max(1000), title: z.string().trim().max(200).optional(), intervalMin: z.number().int().min(5).max(1440).default(30) }).parse(req.body);
+    const b = z.object({ url: z.url().max(1000).refine(noUrlCredentials, URL_CREDENTIALS_MSG), title: z.string().trim().max(200).optional(), intervalMin: z.number().int().min(5).max(1440).default(30) }).parse(req.body);
     if (await one('SELECT 1 FROM rss_feeds WHERE url = $1', [b.url])) throw new AppError(409, 'feed_exists', 'Diese Quelle ist bereits eingetragen.');
     const r = await probeFeed(b.url);
     const f = await one<any>(
@@ -185,7 +186,7 @@ export async function rssRoutes(app: FastifyInstance) {
   /** Name, Adresse und Abrufintervall ändern. Eine neue Adresse gilt erst nach erfolgreichem Probeabruf. */
   app.put('/rss/feeds/:id', { preHandler: requireAuth('source.manage') }, async (req) => {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
-    const b = z.object({ url: z.url().max(1000), title: z.string().trim().min(1).max(200), intervalMin: z.number().int().min(5).max(1440) }).parse(req.body);
+    const b = z.object({ url: z.url().max(1000).refine(noUrlCredentials, URL_CREDENTIALS_MSG), title: z.string().trim().min(1).max(200), intervalMin: z.number().int().min(5).max(1440) }).parse(req.body);
     const f = await one<any>('SELECT * FROM rss_feeds WHERE id = $1', [id]);
     if (!f) throw notFound();
     const urlChanged = b.url !== f.url;

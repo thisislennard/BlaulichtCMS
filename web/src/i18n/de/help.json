@@ -95,6 +95,10 @@
       "title": "Einrichtung und Einstellungen",
       "summary": "Ersteinrichtung, öffentliche Adresse, Einstellungen im Überblick, HTTPS."
     },
+    "benachrichtigungen": {
+      "title": "Benachrichtigungen, Push und E-Mail",
+      "summary": "Push auf Geräte, E-Mail je Art, Versand über SMTP oder Microsoft 365 samt App-Registrierung."
+    },
     "sicherheit": {
       "title": "Sicherheit",
       "summary": "Wie BlaulichtCMS Konten, Uploads, Medien und Websites schützt."

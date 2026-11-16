@@ -67,6 +67,7 @@ Warnfeeds (amtliche Warnungen) ◀──Abruf───────────�
 | Audit (`audit_events`) | alle Handelnden, Hochladende (IP) | Name, E-Mail, Aktion, Objekt, IP | **365 Tage**; IP ohne Konto **30 Tage** | `retention.audit_days`, `privacy.upload_ip_retention_days` |
 | Systemprotokoll (`app_logs`) | Handelnde (selten) | technische Meldungen | **30 Tage** | `retention.log_days` |
 | Benachrichtigungen | Empfänger | Text, Link | 60 Tage | – |
+| Push-Geräte (`push_subscriptions`, Wahl je Art in `users.preferences`) | Konten mit eingeschaltetem Push | Adresse beim Push-Dienst des Browsers, öffentliche Geräteschlüssel, Gerätebezeichnung (Browser/Betriebssystem), Zeitpunkte und letzter Fehler der Zustellung | bis zum Entfernen durch die Person, bei erloschenem Abo (404/410) bzw. nach 10 Fehlschlägen in Folge sofort; mit dem Konto | *Mein Konto → Benachrichtigungen* |
 | Sicherungen (Volume, Datenbank) | alle | Kopie aller Daten | rund **4 Monate** (siehe [Löschung und Sicherungen](betrieb.md#löschung-und-sicherungen)) | Host-Cron, *Einstellungen → Sicherung* |
 | Zugriffsprotokoll des Proxys | alle Aufrufenden | IP, Adresse (ggf. Token), Browser | abschalten bzw. **7 Tage** | am Proxy |
 
@@ -92,7 +93,7 @@ verschwindet nach der kurzen Frist von selbst.
 **Automationen** (Automation → Automationen) verarbeiten nur, was ihr Eingang liefert – es gibt keine Abfrage
 fremder Daten und keine freien Empfängeradressen: E-Mails gehen nur an Konten mit gewählten Rollen und an gepflegte
 Zuständigkeiten (diese nur nach Freigabe oder mit ausdrücklich erlaubtem Direktversand, im Testmodus nur an das
-Testpostfach), Benachrichtigungen nur innerhalb von BlaulichtCMS. Laufprotokolle sehen nur Personen mit
+Testpostfach), Benachrichtigungen innerhalb von BlaulichtCMS und – nach Wahl der Person – per Push oder E-Mail an das eigene Konto. Laufprotokolle sehen nur Personen mit
 „Automationen ansehen“; sie sind nicht Teil der Datenschutzsuche (keine Namen oder Adressen außer gekürzten
 E-Mail-Adressen; Einsatzbezug nur über die Allowlist) und verschwinden mit `privacy.automation_run_days`. Entwürfe, die
 eine Automation anlegt (Beiträge, Banner, Warnentwürfe), gehören danach zum jeweiligen Bereich und folgen dessen
@@ -109,6 +110,8 @@ was fällig ist. Jeder Lauf steht im Audit (`retention.run`).
 | WordPress-Hoster *[Name]* | dasselbe | Auftragsverarbeiter | AV-Vertrag (Art. 28), Standort, Unterauftragnehmer |
 | Meta Platforms Ireland / Meta Platforms Inc. (USA) | freigegebene Beiträge und Dateien für Facebook/Instagram | eigener Verantwortlicher; für Seiten-Insights gemeinsame Verantwortung (Art. 26) | Seiten-Insights-Ergänzung, Drittlandübermittlung (EU-US Data Privacy Framework), Datenschutzerklärung der Seite |
 | Mailserver/Provider *[Name]* | Warnmails mit PDF, Benachrichtigungen | Auftragsverarbeiter (falls extern) | AV-Vertrag |
+| Push-Dienste der Browserhersteller (Google FCM, Mozilla, Apple, Microsoft WNS) | nur bei eingeschaltetem Push: Ende-zu-Ende-verschlüsselte Kurzmitteilung (Titel, kurzer Text, Link; ohne Einsatzdetails), Adresse des Geräts | Übermittlung durch den Browser des Kontos; Inhalt für den Dienst nicht lesbar (RFC 8291) | Hinweis in der Datenschutzinformation für Beschäftigte; Push ist freiwillig |
+| Microsoft 365 (optional, Versandweg „Microsoft 365“) | alle ausgehenden E-Mails | Auftragsverarbeiter (bestehender Vertrag der Organisation) | AV-Vertrag/Online Services DPA, Postfach-Beschränkung für die App |
 | Zuständige Stellen (Warnempfänger) | Warnentwurf, PDF, Rückrufkontakt | eigene Verantwortliche | Übermittlungsgrundlage |
 | Hosting des Docker-Hosts *[Name]* | alle Daten (verschlüsselte Sicherungen getrennt) | Auftragsverarbeiter (falls extern) | AV-Vertrag, TOMs |
 | Zentrale Protokollierung (optional, `AUDIT_FORWARD`) | Audit-Einträge | intern bzw. Auftragsverarbeiter | Frist und Zugriff dort |

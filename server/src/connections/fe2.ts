@@ -282,7 +282,7 @@ export async function handleIncident(c: Connection, source: IncidentSource, inpu
         postId = p.id;
         await audit(actor, `${source}.draft_created`, { type: 'post', id: p.id, label: title }, { ref }, 'ok', db);
       }
-      await notify({ kind: 'info', title: `Neuer Einsatzentwurf aus ${label}: ${title}`.slice(0, 200), link: postId ? `/beitraege/${postId}` : '/verbindungen', permission: 'post.edit' });
+      await notify({ kind: 'info', title: `Neuer Einsatzentwurf aus ${label}: ${title}`.slice(0, 200), link: postId ? `/beitraege/${postId}` : '/verbindungen', permission: 'post.edit', category: 'incident' });
       await emitIncident(c, source, { eventId, sequence: 1, phase: closed ? 'beendet' : 'neu', fields, postId }, db);
       log('info', source, `Einsatz angelegt (Ref ${ref})`);
       return { outcome: 'created' as const, fe2EventId: ev.id, postId, sequence: 1 };
@@ -305,7 +305,7 @@ export async function handleIncident(c: Connection, source: IncidentSource, inpu
         await db.query(`UPDATE post_revisions SET title = $2, body = $3, content_hash = $4, change_note = $5 WHERE post_id = $1 AND number = 1`, [existing.post_id, title, rev.body, revisionHash(rev), `Automatisch aus ${label} (Meldung ${seq})`]);
         await db.query(`UPDATE posts SET title = $2, updated_at = now() WHERE id = $1`, [existing.post_id, title]);
       } else {
-        await notify({ kind: 'info', title: `${label}-Aktualisierung zu „${existing.title}“${closed ? ' – Einsatz beendet' : ''}`.slice(0, 200), body: 'Der Entwurf wurde bereits bearbeitet und bleibt unverändert.', link: `/beitraege/${existing.post_id}`, permission: 'post.edit' });
+        await notify({ kind: 'info', title: `${label}-Aktualisierung zu „${existing.title}“${closed ? ' – Einsatz beendet' : ''}`.slice(0, 200), body: 'Der Entwurf wurde bereits bearbeitet und bleibt unverändert.', link: `/beitraege/${existing.post_id}`, permission: 'post.edit', category: 'incident' });
       }
     }
     await emitIncident(c, source, { eventId, sequence: seq, phase: closed ? 'beendet' : 'aktualisierung', fields, postId: existing.post_id }, db);

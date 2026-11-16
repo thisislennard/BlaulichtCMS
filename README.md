@@ -178,12 +178,15 @@ flowchart LR
 - **Dashboard:** Kennzahlen-Reihe und Kacheln in bis zu vier Spalten (offene Freigaben, bestätigter Stand der
   Veröffentlichungen, neue Uploads, Banner, Websites); per Drag-and-drop mit Maus, Finger oder Tastatur anpassbar,
   eigene Reihenfolge fürs Handy, Vorlagen für alle oder je Rolle.
-- **Live:** neue Uploads, Freigaben und Veröffentlichungen erscheinen ohne Neuladen; Benachrichtigungen in der App
-  und auf Wunsch per E-Mail.
+- **Live:** neue Uploads, Freigaben und Veröffentlichungen erscheinen ohne Neuladen; Benachrichtigungen in der App.
+- **Push und E-Mail:** je Person und Art wählbar (Freigabe angefordert, Entscheidung, Einsatz-Eingang, neue Fotos,
+  amtliche Warnungen, Verbindungsfehler, fehlgeschlagene Automationen, Updates …) – nur Arten, für die das Konto Rechte
+  hat. Push an Browser und installierte App (Web Push, ohne Fremddienst); E-Mail über SMTP oder Microsoft 365
+  (Microsoft Graph als Anwendung, aktivierbar erst nach bestandener Testmail).
 - **App fürs Handy:** installierbar (PWA) mit Schnellzugriffen auf Neuer Beitrag, Medien sammeln und Freigaben.
 - **Schnell bedienbar:** Suche und Schnellaktionen mit `Strg` + `K`, vollständig per Tastatur nutzbar, heller und
   dunkler Modus, Design „Leitstand“ für draußen und nachts.
-- **Hilfe-Center:** 25 Kapitel mit Volltextsuche direkt in der App.
+- **Hilfe-Center:** 26 Kapitel mit Volltextsuche direkt in der App.
 
 ### Benutzer und Sicherheit
 
@@ -232,7 +235,7 @@ flowchart LR
   </tr>
   <tr>
     <td colspan="2"><b>Auf der Website</b><br/>veröffentlicht von der BlaulichtCMS Bridge<br/><br/><img src="docs/bilder/wordpress-beitrag.webp" alt="Beitrag auf WordPress"/></td>
-    <td><b>Hilfe-Center</b><br/>25 Kapitel mit Volltextsuche<br/><br/><img src="docs/bilder/hilfe.webp" alt="Hilfe-Center"/></td>
+    <td><b>Hilfe-Center</b><br/>26 Kapitel mit Volltextsuche<br/><br/><img src="docs/bilder/hilfe.webp" alt="Hilfe-Center"/></td>
   </tr>
   <tr>
     <td><b>Warnentwurf am Handy</b><br/>Stichwort, Lagefragen, Vorschlag<br/><br/><img src="docs/bilder/warnentwurf-handy.webp" alt="Warnentwurf-Assistent am Handy"/></td>
@@ -275,7 +278,7 @@ Optionen, Updates, Sicherung, WordPress: **[Installation und Betrieb](docs/insta
 | [docs/sicherheitspruefung.md](docs/sicherheitspruefung.md) | Ergebnis der Sicherheitsprüfung mit Nachweisen |
 | [docs/datenschutz.md](docs/datenschutz.md) | Datenschutz: Datenkategorien, Empfänger, Löschfristen, TOMs, Vorlagen für Verarbeitungsverzeichnis und DSFA |
 | [docs/entwicklung.md](docs/entwicklung.md) | Entwicklungsumgebung |
-| Hilfe-Center in der App (`/hilfe`) | 25 Kapitel für Redaktion und Administration |
+| Hilfe-Center in der App (`/hilfe`) | 26 Kapitel für Redaktion und Administration |
 
 ---
 

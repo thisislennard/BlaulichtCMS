@@ -397,7 +397,7 @@ export async function postRoutes(app: FastifyInstance) {
       return { a, title: st.current.title, author: st.current.submitted_by ?? st.current.created_by };
     });
     if (res.author) {
-      await notify({ kind: body.decision === 'approved' ? 'success' : 'warning', title: `${body.decision === 'approved' ? 'Freigegeben' : 'Zurückgewiesen'}: ${res.title}`.slice(0, 200), body: body.note, link: `/beitraege/${id}`, userId: res.author });
+      await notify({ kind: body.decision === 'approved' ? 'success' : 'warning', title: `${body.decision === 'approved' ? 'Freigegeben' : 'Zurückgewiesen'}: ${res.title}`.slice(0, 200), body: body.note, link: `/beitraege/${id}`, userId: res.author, category: 'decision' });
     }
     return { ok: true, approvalId: res.a.id };
   });

@@ -178,6 +178,28 @@ export const DEFAULT_SETTINGS = {
   'smtp.verified': null as null | { fp: string; at: string },
 
   /**
+   * E-Mail-Versand (#191, lib/mail.ts): Weg für alle Mails (Warnversand, Sicherheitsmeldungen, Automationen,
+   * Benachrichtigungen) – 'smtp' (Einstellungen oben) oder 'm365' (Microsoft 365 über Microsoft Graph als Anwendung,
+   * Client-Credentials wie LiFeOS). Das Client-Geheimnis liegt verschlüsselt in `secrets`, nie in den Einstellungen.
+   * Umschalten auf Microsoft 365 nur nach erfolgreicher Testmail mit genau diesen Werten (`m365.verified`).
+   */
+  'mail.transport': 'smtp' as 'smtp' | 'm365',
+  'm365.tenant_id': '',
+  'm365.client_id': '',
+  'm365.sender': '',
+  'm365.secret_id': '',
+  'm365.save_sent': true,
+  'm365.verified': null as null | { fp: string; at: string },
+  /**
+   * Benachrichtigungen per Push und E-Mail (#191, lib/notify-channels.ts): Kanäle global an/aus. VAPID-Schlüssel für
+   * Web Push werden beim ersten Bedarf erzeugt; der private Schlüssel liegt verschlüsselt in `secrets`.
+   */
+  'notify.push_enabled': true,
+  'notify.mail_enabled': true,
+  'push.vapid_public_key': '',
+  'push.vapid_secret_id': '',
+
+  /**
    * In-App-Updates aus GitHub-Releases (updates/github.ts): Prüfung im Worker alle `check_hours` Stunden, Installation
    * nur von Hand. Token optional (öffentliches Repository braucht keinen), verschlüsselt in `secrets`, nie an die
    * Oberfläche. Zwischenstand der letzten Prüfung in `latest`/`last_check_*`.

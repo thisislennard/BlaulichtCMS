@@ -27,3 +27,18 @@ export async function publicBase(req?: FastifyRequest): Promise<string> {
   if (req) return `${req.protocol}://${req.headers.host}`;
   return 'http://localhost:7310';
 }
+
+/**
+ * Adressen mit eingebetteten Zugangsdaten (https://benutzer:passwort@host/…) würden im Klartext in Konfiguration, Audit
+ * und Protokollen landen (#190) – sie werden abgewiesen. Für zod: `.refine(noUrlCredentials, URL_CREDENTIALS_MSG)`.
+ */
+export function noUrlCredentials(u: string): boolean {
+  if (!u) return true;
+  try {
+    const url = new URL(u);
+    return !url.username && !url.password;
+  } catch {
+    return true;
+  }
+}
+export const URL_CREDENTIALS_MSG = 'Die Adresse darf keine Zugangsdaten (Benutzer/Passwort vor dem @) enthalten.';

@@ -4,6 +4,7 @@ import { ensureRolesFresh } from '../auth/roles.js';
 import { log } from './log.js';
 import { notify } from './notify.js';
 import { getSettings } from './settings.js';
+import { mailReady } from './mail.js';
 
 /**
  * Meldungen bei sicherheitsrelevanten Ereignissen (#101, BSI DER.1, Art. 33 DSGVO).
@@ -81,7 +82,8 @@ async function sendMail(to: string[], subject: string, text: string) {
   }
 }
 
-const smtpReady = (s: Awaited<ReturnType<typeof getSettings>>) => !!(s['smtp.host'] && s['smtp.from']);
+/** E-Mail-Weg eingerichtet (SMTP oder Microsoft 365, lib/mail.ts). */
+const smtpReady = mailReady;
 
 /** Meldung an die Administration (Recht `permission`). Gibt false zurück, wenn gedrosselt oder abgeschaltet. */
 export async function securityAlert(
@@ -94,7 +96,7 @@ export async function securityAlert(
     const permission = msg.permission ?? 'settings.security';
     log('warn', 'security', msg.title, { ereignis: event, ...(msg.body ? { text: msg.body.slice(0, 500) } : {}) });
     if (s['security.alert_inapp']) {
-      await notify({ kind: msg.kind ?? 'warning', title: msg.title, body: msg.body, link: msg.link ?? '/protokolle', permission });
+      await notify({ kind: msg.kind ?? 'warning', title: msg.title, body: msg.body, link: msg.link ?? '/protokolle', permission, category: 'security' });
     }
     if (s['security.alert_mail_admins'] && smtpReady(s)) {
       await ensureRolesFresh();
@@ -112,7 +114,7 @@ export async function securityAlert(
 /** Meldung an die betroffene Person (In-App immer, E-Mail nach Einstellung). */
 export async function notifyAffectedUser(userId: string, title: string, body: string) {
   try {
-    await notify({ kind: 'warning', title, body, userId });
+    await notify({ kind: 'warning', title, body, userId, category: 'account' });
     const s = await getSettings();
     if (s['security.alert_mail_user'] && smtpReady(s)) {
       const u = await one<{ email: string; status: string }>('SELECT email, status FROM users WHERE id = $1', [userId]);

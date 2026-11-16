@@ -1,7 +1,7 @@
 /* BlaulichtCMS Service Worker: hält nur die App-Oberfläche offline bereit.
    API-Aufrufe, Uploads und Medien werden nie zwischengespeichert – Freigaben und
    Veröffentlichungen bestätigt ausschließlich der Server. */
-const CACHE = 'blaulichtcms-shell-v2';
+const CACHE = 'blaulichtcms-shell-v3';
 const MAX_ASSETS = 150;
 // Nur vollständige, eigene Antworten speichern – keine 502/404-Seiten als Offline-Oberfläche (#88)
 const cacheable = (res) => res && res.ok && res.type === 'basic';
@@ -57,4 +57,59 @@ self.addEventListener('fetch', (e) => {
       ),
     );
   }
+});
+
+/* Push-Benachrichtigungen (#191): Inhalt ist mit den Schlüsseln dieses Browsers verschlüsselt (RFC 8291) und wird vom
+   Browser entschlüsselt. Ein Klick öffnet bzw. fokussiert BlaulichtCMS auf der verlinkten Seite (nur eigene Pfade). */
+self.addEventListener('push', (e) => {
+  let d = {};
+  try {
+    d = e.data ? e.data.json() : {};
+  } catch {
+    d = { title: 'BlaulichtCMS', body: e.data ? e.data.text() : '' };
+  }
+  const link = typeof d.link === 'string' && d.link.startsWith('/') && !d.link.startsWith('//') ? d.link : '/benachrichtigungen';
+  e.waitUntil(
+    self.registration.showNotification(String(d.title || d.app || 'BlaulichtCMS').slice(0, 200), {
+      body: String(d.body || '').slice(0, 500),
+      tag: d.tag || undefined,
+      renotify: !!d.tag,
+      icon: '/icon-192.png',
+      badge: '/icon-192.png',
+      lang: 'de',
+      data: { link },
+    }),
+  );
+});
+
+self.addEventListener('notificationclick', (e) => {
+  e.notification.close();
+  const target = new URL((e.notification.data && e.notification.data.link) || '/', self.location.origin).href;
+  e.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
+      for (const c of list) {
+        if (new URL(c.url).origin === self.location.origin && 'focus' in c) {
+          return c.focus().then((w) => (w && 'navigate' in w ? w.navigate(target) : undefined));
+        }
+      }
+      return self.clients.openWindow(target);
+    }),
+  );
+});
+
+/* Abo vom Browser erneuert (z. B. abgelaufen): neues Abo mit demselben Schlüssel beim Server hinterlegen. Gelingt das
+   nicht (abgemeldet), schaltet die Person Push unter „Mein Konto“ erneut ein. */
+self.addEventListener('pushsubscriptionchange', (e) => {
+  const key = e.oldSubscription && e.oldSubscription.options && e.oldSubscription.options.applicationServerKey;
+  if (!key) return;
+  e.waitUntil(
+    self.registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key }).then((sub) =>
+      fetch('/api/v1/notify/push/subscriptions', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'content-type': 'application/json', 'x-blaulichtcms-request': '1' },
+        body: JSON.stringify({ subscription: sub.toJSON(), label: 'Gerät (erneuert)' }),
+      }),
+    ).catch(() => {}),
+  );
 });

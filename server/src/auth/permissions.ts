@@ -151,7 +151,8 @@ export const PERMISSIONS: PermissionDef[] = [
   P('settings.privacy', 'settings', 'critical', 'Datenschutzeinstellungen ändern', 'Löschfristen, Aufbewahrung der Protokolle, Angaben zu Verantwortlichen, Datenschutzhinweise, Datenschutzerklärung und Impressum.', ['settings.view'], true),
   P('settings.media', 'settings', 'write', 'Medieneinstellungen ändern', 'Dateigrößen, erlaubte Dateitypen, Vorgaben für Upload-Links, Prüftiefe und Speichergrenzen.', ['settings.view'], true),
   P('settings.editorial', 'settings', 'critical', 'Redaktionseinstellungen ändern', 'Vier-Augen-Prinzip und weitere Vorgaben für Redaktion und Freigabe.', ['settings.view'], true),
-  P('settings.system', 'settings', 'write', 'Systemeinstellungen ändern', 'Parallele Aufträge, Ausführung der Automationen und weitere technische Einstellungen.', ['settings.view'], true),
+  P('settings.mail', 'settings', 'critical', 'E-Mail-Versand und Push einstellen', 'Weg für E-Mails wählen (SMTP oder Microsoft 365), Microsoft 365 einrichten und prüfen, Push- und E-Mail-Benachrichtigungen global schalten.', ['settings.view'], true),
+  P('settings.system','settings', 'write', 'Systemeinstellungen ändern', 'Parallele Aufträge, Ausführung der Automationen und weitere technische Einstellungen.', ['settings.view'], true),
 ];
 
 export const PERMISSION_IDS = PERMISSIONS.map((p) => p.id);
@@ -335,6 +336,11 @@ export function settingPermission(key: string): string {
       return 'settings.system';
     case 'backup':
       return 'backup.manage';
+    case 'mail':
+    case 'm365':
+    case 'notify':
+    case 'push':
+      return 'settings.mail';
     // Sicherheit, Einladungen und alles Unbekannte: das strengste Recht
     default:
       return 'settings.security';

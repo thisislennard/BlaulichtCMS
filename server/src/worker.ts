@@ -32,6 +32,8 @@ import { cleanupDesignImages } from './routes/media-design.js';
 import { checkForUpdate, updateCheckDue } from './updates/github.js';
 import { executeRun } from './automations/engine.js';
 import { automationTick } from './automations/events.js';
+import { deliverNotification } from './lib/notify-channels.js';
+import { migratePlaintextSecrets } from './lib/secret-audit.js';
 
 process.env.BLAULICHTCMS_ROLE ??= 'worker';
 
@@ -68,6 +70,10 @@ const handlers: Record<string, (job: Job) => Promise<void>> = {
   // Automationen: ein Lauf je Auftrag; Wiederholung überspringt erledigte Schritte (automations/engine.ts)
   'automation.run': async (job) => {
     await executeRun(String(job.payload.runId), job);
+  },
+  // Benachrichtigungen per Push/E-Mail (#191); Fehler einzelner Geräte/Postfächer werden protokolliert, nicht wiederholt
+  'notify.deliver': async (job) => {
+    await deliverNotification(Number(job.payload.id));
   },
 };
 
@@ -234,6 +240,8 @@ async function main() {
   masterKey();
   await migrate((m) => log('info', 'migrate', m));
   ensureMediaDirs();
+  // Zugangsdaten im Klartext (Altbestand, Import) in den verschlüsselten Speicher verschieben bzw. melden (#190)
+  await migratePlaintextSecrets().catch((e) => log('warn', 'security', `Prüfung auf Zugangsdaten im Klartext fehlgeschlagen: ${e.message}`));
   const startedAt = new Date();
   log('info', 'worker', `Worker ${WORKER_ID} gestartet (BlaulichtCMS ${config.version})`);
 
