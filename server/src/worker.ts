@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import pg from 'pg';
 import { config } from './config.js';
@@ -105,18 +106,41 @@ async function processJob(job: Job) {
   }
 }
 
-async function pump() {
+/**
+ * Freie Plätze mit wartenden Aufträgen füllen. Nach jedem fertigen Auftrag sofort nachziehen (#192): vorher wartete der
+ * Worker bis zum nächsten 2-s-Takt – kurze Aufträge (Benachrichtigungen, Standortbereinigung) kamen so auf höchstens
+ * „Parallele Aufträge ÷ 2“ pro Sekunde, 1 000 Aufträge dauerten über 8 Minuten. Überlappende Aufrufe werden zu einem
+ * zusammengefasst, damit nie mehr als die eingestellte Zahl Aufträge läuft.
+ */
+let pumping = false;
+let pumpAgain = false;
+async function pump(): Promise<void> {
   if (stopping) return;
-  const s = await getSettings();
-  // Wartungsmodus: laufende Aufträge zu Ende führen, aber keine neuen beginnen
-  // (abgestürzte Aufträge trotzdem freigeben, sonst blockieren sie die Update-Vorabprüfung dauerhaft)
-  if (s['system.maintenance']) return requeueExpiredLeases();
-  const free = Math.max(0, Math.min(32, s['jobs.concurrency']) - running.size);
-  if (!free) return;
-  const jobs = await claimJobs(free, [...running.keys()]);
-  for (const job of jobs) {
-    const p = processJob(job).finally(() => running.delete(job.id));
-    running.set(job.id, p);
+  if (pumping) {
+    pumpAgain = true;
+    return;
+  }
+  pumping = true;
+  try {
+    do {
+      pumpAgain = false;
+      const s = await getSettings();
+      // Wartungsmodus: laufende Aufträge zu Ende führen, aber keine neuen beginnen
+      // (abgestürzte Aufträge trotzdem freigeben, sonst blockieren sie die Update-Vorabprüfung dauerhaft)
+      if (s['system.maintenance']) return await requeueExpiredLeases();
+      const free = Math.max(0, Math.min(32, s['jobs.concurrency']) - running.size);
+      if (!free) return;
+      const jobs = await claimJobs(free, [...running.keys()]);
+      for (const job of jobs) {
+        const p = processJob(job).finally(() => {
+          running.delete(job.id);
+          if (!stopping) pump().catch((e) => log('error', 'worker', e.message));
+        });
+        running.set(job.id, p);
+      }
+    } while (pumpAgain && !stopping);
+  } finally {
+    pumping = false;
   }
 }
 
@@ -239,8 +263,24 @@ async function maintenance(isLeader: boolean) {
   }
 }
 
+/**
+ * Niedrigere CPU-Priorität für den Worker (#192): Medienprüfung (sharp, ffmpeg), ZIP-Exporte und Sicherungen laufen
+ * im selben Container wie die API (Standard 2 CPUs). Mit nice 10 bekommt die API bei Volllast zuerst Rechenzeit –
+ * Seiten und Anmeldungen bleiben flüssig, die Hintergrundarbeit dauert nur etwas länger. ffmpeg, pg_dump und die
+ * sharp-Threads erben die Priorität. Erhöhen der nice-Stufe braucht keine besonderen Rechte.
+ */
+const WORKER_NICE = 10;
+function lowerPriority() {
+  try {
+    if (os.getPriority() < WORKER_NICE) os.setPriority(WORKER_NICE);
+  } catch (e) {
+    log('warn', 'worker', `CPU-Priorität nicht gesenkt: ${(e as Error).message}`);
+  }
+}
+
 async function main() {
   masterKey();
+  lowerPriority();
   await migrate((m) => log('info', 'migrate', m));
   ensureMediaDirs();
   // Zugangsdaten im Klartext (Altbestand, Import) in den verschlüsselten Speicher verschieben bzw. melden (#190)

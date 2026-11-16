@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { config } from '../config.js';
+import { proxyService } from '../lib/proxy-check.js';
 import { many, one, pool } from '../db/pool.js';
 import { assertRecentAuth, requireAnyAuth, requireAuth } from '../auth/context.js';
 import { audit, settingsDiff } from '../lib/audit.js';
@@ -61,7 +62,7 @@ export async function systemStatus() {
   const lastBackup = await one<any>(`SELECT file_name, status, started_at, finished_at, size_bytes, error FROM backups ORDER BY started_at DESC LIMIT 1`);
   let disk: { free: number; total: number } | null = null;
   try {
-    const st = fs.statfsSync(config.dataDir);
+    const st = await fs.promises.statfs(config.dataDir);
     disk = { free: st.bavail * st.bsize, total: st.blocks * st.bsize };
   } catch {
     disk = null;
@@ -98,6 +99,8 @@ export async function systemStatus() {
       detail: disk ? `${de1(disk.free / 1024 ** 3)} GB frei von ${de1(disk.total / 1024 ** 3)} GB` : 'unbekannt',
       ms: null,
     },
+    // Proxy-Kette (#192): X-Forwarded-For von einer Adresse außerhalb von TRUSTED_PROXIES
+    proxyService(),
   ];
   // Wartungsmodus für die eigene Karte im Systemstatus (Recht system.maintenance, unabhängig von update.install)
   const m = settings['system.maintenance'] as { since: string; byName: string; reason: string } | null | undefined;

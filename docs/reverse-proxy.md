@@ -36,6 +36,11 @@ veröffentlichten Port `127.0.0.1:7310` zugreift, erscheint mit der Gateway-Adre
 Zusätzlich empfohlen: Der Proxy ersetzt den Header, statt ihn zu ergänzen (`proxy_set_header X-Forwarded-For
 $remote_addr;`). Dann kommt ein vom Client mitgeschickter Wert gar nicht erst an.
 
+**Falsch eingetragen?** Kommen Anfragen mit `X-Forwarded-For` von einer Adresse, die nicht in `TRUSTED_PROXIES` steht,
+zeigt der Systemstatus unter „Reverse Proxy“ einen Hinweis mit genau dieser Adresse (und das Systemprotokoll eine
+Warnung). Ohne Korrektur erscheinen alle Personen mit der IP des Proxys: Rate-Limits (10 Anmeldungen pro Minute) und
+Sperren treffen dann alle gleichzeitig – Anmeldungen scheitern scheinbar zufällig.
+
 Ältere `.env` mit `TRUST_PROXY=true` (vertraute bis Version 0.1 jedem Header) wirken wie `TRUSTED_PROXIES=private`;
 BlaulichtCMS schreibt dann beim Start eine Warnung, `install.sh` ergänzt `TRUSTED_PROXIES` beim nächsten Update.
 

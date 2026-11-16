@@ -8,6 +8,16 @@ import { useQueryClient } from '@tanstack/react-query';
 type LiveState = 'connecting' | 'live' | 'reconnecting' | 'off';
 const Ctx = createContext<LiveState>('off');
 
+/**
+ * Leistung (#192): Änderungen höchstens einmal pro Sekunde in Neuladen umsetzen – bei vielen Uploads meldet der Server
+ * mehrere Änderungen pro Sekunde, und jede Person lud sonst Dashboard und Sammlungen jedes Mal neu. Verborgene Tabs
+ * schließen die Live-Verbindung nach einer Minute: Ohne HTTP/2 erlaubt der Browser nur 6 Verbindungen je Server, und
+ * jeder offene Tab hielte eine davon dauerhaft – ab dem sechsten Tab hinge die Oberfläche. Beim Zurückkehren wird neu
+ * verbunden und alles neu geladen.
+ */
+const INVALIDATE_DELAY_MS = 1000;
+const HIDDEN_CLOSE_MS = 60_000;
+
 const MAP: Record<string, string[][]> = {
   posts: [['posts'], ['post'], ['dashboard']],
   post_revisions: [['posts'], ['post'], ['dashboard']],
@@ -40,7 +50,16 @@ export function LiveProvider({ children, enabled }: { children: ReactNode; enabl
     let es: EventSource | null = null;
     let wasDown = false;
     let retry: ReturnType<typeof setTimeout> | null = null;
+    let hiddenTimer: ReturnType<typeof setTimeout> | null = null;
+    let flushTimer: ReturnType<typeof setTimeout> | null = null;
+    const pendingKeys = new Set<string>();
+    const flush = () => {
+      flushTimer = null;
+      for (const k of pendingKeys) qc.invalidateQueries({ queryKey: JSON.parse(k) });
+      pendingKeys.clear();
+    };
     const open = () => {
+      retry = null;
       setState(wasDown ? 'reconnecting' : 'connecting');
       es = new EventSource('/api/v1/events');
       es.addEventListener('hello', () => {
@@ -52,14 +71,14 @@ export function LiveProvider({ children, enabled }: { children: ReactNode; enabl
       es.addEventListener('change', (e) => {
         try {
           const { tables } = JSON.parse((e as MessageEvent).data) as { tables: string[] };
-          const keys = new Set<string>();
-          for (const t of tables) for (const k of MAP[t] ?? []) keys.add(JSON.stringify(k));
-          for (const k of keys) qc.invalidateQueries({ queryKey: JSON.parse(k) });
+          for (const t of tables) for (const k of MAP[t] ?? []) pendingKeys.add(JSON.stringify(k));
+          if (pendingKeys.size && !flushTimer) flushTimer = setTimeout(flush, INVALIDATE_DELAY_MS);
         } catch {
           /* ungültiges Ereignis */
         }
       });
       es.onerror = () => {
+        if (!es) return;
         wasDown = true;
         setState('reconnecting');
         es?.close();
@@ -78,14 +97,38 @@ export function LiveProvider({ children, enabled }: { children: ReactNode; enabl
       es?.close();
       open();
     };
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') {
+        if (!hiddenTimer) {
+          hiddenTimer = setTimeout(() => {
+            hiddenTimer = null;
+            wasDown = true;
+            if (retry) clearTimeout(retry);
+            retry = null;
+            const old = es;
+            es = null;
+            old?.close();
+            setState('reconnecting');
+          }, HIDDEN_CLOSE_MS);
+        }
+        return;
+      }
+      if (hiddenTimer) clearTimeout(hiddenTimer);
+      hiddenTimer = null;
+      if (!es && !retry && navigator.onLine !== false) open();
+    };
     window.addEventListener('offline', onOffline);
     window.addEventListener('online', onOnline);
+    document.addEventListener('visibilitychange', onVisibility);
     open();
     return () => {
       window.removeEventListener('offline', onOffline);
       window.removeEventListener('online', onOnline);
+      document.removeEventListener('visibilitychange', onVisibility);
       es?.close();
       if (retry) clearTimeout(retry);
+      if (hiddenTimer) clearTimeout(hiddenTimer);
+      if (flushTimer) clearTimeout(flushTimer);
       setState('off');
     };
   }, [enabled, qc]);

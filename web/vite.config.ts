@@ -17,16 +17,20 @@ export default defineConfig({
     target: 'es2022',
     cssCodeSplit: true,
     chunkSizeWarningLimit: 600,
-    rollupOptions: {
+    rolldownOptions: {
       output: {
-        // Stabile Bibliotheks-Chunks: ändern sich selten und bleiben im Browser-Cache
-        manualChunks: (id) => {
-          if (!id.includes('node_modules')) return undefined;
-          if (/[\\/](react|react-dom|scheduler|react-router)[\\/]/.test(id)) return 'react';
-          if (id.includes('@tanstack')) return 'query';
-          if (id.includes('lucide-react')) return 'icons';
-          if (/react-markdown|remark|micromark|mdast|unified|hast|unist|vfile|property-information|decode-named|character-entities/.test(id)) return 'markdown';
-          return undefined;
+        // Stabile Bibliotheks-Chunks: ändern sich selten und bleiben im Browser-Cache. Gruppen mit Priorität (#192):
+        // Rolldown nimmt die Abhängigkeiten eines Moduls mit in seine Gruppe – ohne Vorrang landete die React-JSX-Laufzeit
+        // im Markdown-Chunk (der dadurch auf jeder Seite geladen wurde) und React Flow (@xyflow/react) samt CSS im
+        // React-Chunk. Editoren (React Flow, dagre, dnd-kit) und Markdown bleiben so in den Chunks ihrer Seiten.
+        codeSplitting: {
+          groups: [
+            { name: 'react', test: /node_modules[\/](react|react-dom|scheduler|react-router)[\/]/, priority: 40 },
+            { name: 'query', test: /node_modules[\/]@tanstack[\/]/, priority: 30 },
+            { name: 'icons', test: /node_modules[\/]lucide-react[\/]/, priority: 20 },
+            { name: 'flow', test: /node_modules[\/](@xyflow|@dagrejs|d3-[a-z-]+|classcat|zustand)[\/]/, priority: 10 },
+            { name: 'markdown', test: /node_modules[\/](react-markdown|remark-[a-z-]+|micromark[a-z-]*|mdast-[a-z-]+|unified|hast-[a-z-]+|unist-[a-z-]+|vfile[a-z-]*|property-information|decode-named-character-reference|character-entities[a-z-]*|devlop|bail|trough|is-plain-obj|zwitch|longest-streak|markdown-table|ccount|escape-string-regexp|comma-separated-tokens|space-separated-tokens|html-url-attributes|estree-util-is-identifier-name|style-to-js|style-to-object|inline-style-parser|trim-lines)[\/]/, priority: 10 },
+          ],
         },
       },
     },

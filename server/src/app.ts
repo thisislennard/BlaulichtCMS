@@ -79,6 +79,7 @@ import { automationRoutes } from './routes/automations.js';
 import { legalRoutes } from './routes/legal.js';
 import { notifyChannelRoutes } from './routes/notify-channels.js';
 import { keywordRoutes } from './routes/keywords.js';
+import { observeProxy } from './lib/proxy-check.js';
 import { healthStatus, isLocalHealthRequest, publicHealth } from './routes/health.js';
 
 export const PERMISSIONS_POLICY = [
@@ -170,8 +171,9 @@ export async function buildApp(): Promise<FastifyInstance> {
   });
   // Browser-Funktionen, die BlaulichtCMS nicht braucht, für die eigene Seite und eingebettete Inhalte abschalten (#132).
   // Kamera bleibt aus: Fotos kommen über das Dateifeld (Kamera-App des Geräts), nicht über getUserMedia.
-  app.addHook('onRequest', async (_req, reply) => {
+  app.addHook('onRequest', async (req, reply) => {
     reply.header('permissions-policy', PERMISSIONS_POLICY);
+    observeProxy(req);
   });
   // Komprimierung für API-Antworten (JSON, SVG); Medien sind bereits komprimiert und bleiben unangetastet
   await app.register(compress, { global: true, threshold: 1024, encodings: ['br', 'gzip'], customTypes: /^(application\/json|image\/svg\+xml|text\/(html|plain|css|javascript))/, brotliOptions: { params: { 1: 4 } } as any });

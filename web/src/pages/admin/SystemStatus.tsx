@@ -79,6 +79,7 @@ const SERVICE_ICON: Record<string, string> = {
   queue: "ListChecks",
   media: "Images",
   disk: "HardDrive",
+  proxy: "Globe",
 };
 
 export function useSystemStatus(refetchInterval: number | false = 15_000, enabled = true) {
@@ -353,7 +354,9 @@ export default function SystemStatus() {
                     <span className="font-medium text-sm">{s.name}</span>
                     <span
                       className={cx(
-                        "text-meta truncate",
+                        "text-meta",
+                        // Hinweise mit Handlungsanweisung (z. B. Proxy) vollständig zeigen
+                        s.state === "ok" && "truncate",
                         s.state === "error" ? "text-err" : "text-fg-muted",
                       )}
                     >

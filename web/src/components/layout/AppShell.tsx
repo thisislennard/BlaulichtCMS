@@ -34,9 +34,12 @@ export function usePageMeta(m: PageMeta) {
 
 function useCounts() {
   const { me, can } = useAuth();
-  const notif = useQuery({ queryKey: ['notifications'], queryFn: () => get('/notifications'), enabled: !!me, refetchInterval: 30_000 });
+  // Mit Live-Verbindung melden Ereignisse jede Änderung an Benachrichtigungen und Dashboard – dann nur selten zur
+  // Sicherheit nachfragen (#192: das Dashboard ist die teuerste Abfrage und lief sonst alle 30 s in jedem Tab)
+  const fallback = useLive() === 'live' ? 120_000 : 30_000;
+  const notif = useQuery({ queryKey: ['notifications'], queryFn: () => get('/notifications'), enabled: !!me, refetchInterval: fallback });
   const status = useQuery({ queryKey: ['system-status-mini'], queryFn: () => get('/system/status'), enabled: can('system.status'), refetchInterval: 30_000 });
-  const dash = useQuery({ queryKey: ['dashboard'], queryFn: () => get<any>('/dashboard'), enabled: can('post.view') && (can('approval.post') || can('publish.website')), refetchInterval: 30_000 });
+  const dash = useQuery({ queryKey: ['dashboard'], queryFn: () => get<any>('/dashboard'), enabled: can('post.view') && (can('approval.post') || can('publish.website')), refetchInterval: fallback });
   const approvals = (can('approval.post') ? (dash.data?.pendingApprovals?.length ?? 0) : 0) + (can('publish.website') ? (dash.data?.readyToPublish?.length ?? 0) : 0);
   return { notif: notif.data, status: status.data, approvals };
 }

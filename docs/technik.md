@@ -112,6 +112,54 @@ melden** – Vorgehen in [SECURITY.md](../SECURITY.md).
 - Beitragsliste und Dashboard brauchen je eine Datenbankabfrage. PostgreSQL ist für SSD eingestellt.
 - Lasttest (Produktions-Build, 50 gleichzeitige Verbindungen): Dashboard rund 1 000 Anfragen/s bei p99 52 ms, Startseite rund 3 750 Anfragen/s, ohne Fehler ([docs/betrieb.md](betrieb.md)).
 
+### Leistungsprüfung (#192, 16.11.2026)
+
+Messung mit realistischem Datenbestand (6 000 Beiträge mit 18 000 Fassungen, 300 Sammlungen mit 36 000 Medien,
+150 000 Audit-Einträge, 80 000 Protokollzeilen, 60 000 Aufträge, 6 000 Empfangsprotokolle mit 30 000 Einträgen,
+3 000 alte Sitzungen), Produktions-Build, API und Worker auf **2 CPU-Kerne** begrenzt (wie `cpus: 2` im Compose),
+PostgreSQL 18, Windows-Entwicklungsrechner. Antwortzeiten um 16 ms sind dort die Timer-Auflösung, nicht Server-Zeit.
+
+**Hauptbefund – „hängt“ bei vielen Anmeldungen:** Argon2id (m = 64 MiB, t = 3, p = 4) läuft asynchron, blockiert also
+nicht die Ereignisschleife (Verzögerung auch bei 120 gleichzeitigen Anmeldungen ≤ 20 ms). Es belegt aber den
+libuv-Threadpool (4 Threads), über den auch Dateien (Oberfläche, Vorschaubilder, Uploads) und die Brotli-Komprimierung
+der API-Antworten laufen. Ergebnis: Während einer Anmeldewelle warteten Seiten und Bilder sekundenlang.
+
+| während gleichzeitiger Anmeldungen | vorher (p95) | nachher (p95) |
+|---|---|---|
+| 40 Anmeldungen – Skriptdatei der Oberfläche | 1 520 ms (max. 1 964) | 33 ms (max. 50) |
+| 40 Anmeldungen – Beitragsliste (JSON, komprimiert) | 1 929 ms | 34 ms |
+| 120 Anmeldungen – Skriptdatei / Beitragsliste | 5 731 ms / 5 699 ms | 25 ms / 26 ms |
+| Arbeitsspeicher der API (Spitze) | 447 MB | 409 MB |
+
+Seither rechnen höchstens **2** Argon2-Prüfungen gleichzeitig (`ARGON2_SLOTS` in `server/src/auth/passwords.ts`), weitere
+warten in einer Schlange (höchstens 100; darüber sofort „Anmeldung ausgelastet“, 503). Eine einzelne Anmeldung dauert
+unverändert rund 90 ms. Unit-Test: Prüfungen laufen asynchron, nie mehr als `ARGON2_SLOTS` gleichzeitig, volle Schlange → 503.
+
+**Weitere Änderungen**
+
+| Bereich | Befund | Änderung |
+|---|---|---|
+| Sammlungsübersicht | vier Zähl-Unterabfragen und ein sortiertes Titelbild je Sammlung: 57 ms Datenbankzeit für 200 Sammlungen | ein Zähldurchlauf je Sammlung über `media_collection_state_idx` (Index-Only-Scan), Titelbild über `media_cover_pick_idx`, erst die Seite wählen, dann zählen (Migration 105): **5 ms**; Antwortzeit p50 45 → 17 ms |
+| Reihenfolge in Sammlungen | bis zu 2 000 einzelne `UPDATE` in einer Transaktion | eine Anweisung (`unnest … WITH ORDINALITY`) |
+| Worker | nach einem Auftrag bis zum nächsten 2-s-Takt gewartet: kurze Aufträge nur rund 2 je Sekunde | freie Plätze sofort neu füllen: über 130 je Sekunde (1 000 Aufträge in Sekunden statt über 8 Minuten) |
+| Worker-Priorität | Medienprüfung (sharp, ffmpeg), ZIP und Sicherung konkurrieren mit der API um 2 Kerne | Worker mit `nice 10`; Kindprozesse erben das, die API bekommt bei Volllast zuerst Rechenzeit |
+| Datenbankverbindungen | eine hängende Abfrage oder offene Transaktion hält eine der 10 API-Verbindungen dauerhaft | API: `statement_timeout` und `idle_in_transaction_session_timeout` je 60 s (Worker und Kommandozeile ohne Grenze); Pool API 10 + Worker 10 + 1 Ereignisverbindung bei `max_connections` 100 |
+| Ereignisschleife | `statSync`/`statfsSync` bei Dateiauslieferung und Systemstatus | asynchron (`fs.promises`) |
+| Live-Aktualisierung | jede Änderungsmeldung (bei Uploads mehrere je Sekunde) lud Dashboard und Sammlungen sofort in jedem Tab neu; Kopfzeile fragte das Dashboard alle 30 s ab | Neuladen höchstens einmal je Sekunde gebündelt; mit Live-Verbindung Kopfzeile nur alle 2 Minuten; verborgene Tabs schließen die Live-Verbindung nach 1 Minute (ohne HTTP/2 sonst ab 6 Tabs Stillstand) |
+| Oberfläche (Bundle) | React Flow samt CSS steckte im React-Chunk, die JSX-Laufzeit im Markdown-Chunk – beides lud auf jeder Seite | Chunk-Gruppen mit Vorrang (`web/vite.config.ts`): erster Aufruf **976 → 622 KB** (Brotli **256 → 163 KB**); React Flow/dagre nur im Workflow-Editor, Markdown nur in Hilfe und Hilfetexten |
+| Proxy | falsches `TRUSTED_PROXIES` ließ alle Personen eine IP teilen (Rate-Limit 10 Anmeldungen/min für alle) | Systemstatus zeigt „Reverse Proxy“ mit Adresse und Abhilfe, Warnung im Systemprotokoll |
+
+**Geprüft, in Ordnung:** Sitzungsprüfung je Anfrage (eine Abfrage über den eindeutigen Token-Index, 0,04 ms; Rollen und
+Einstellungen im Speicher zwischengespeichert), Beitragsliste (2,6 ms, auf 300 begrenzt), Audit und Systemprotokoll
+(Blättern über `id`, höchstens 500), Empfangsprotokolle, Medienauslieferung (Stream, Vorschauen ein Jahr privat
+cachebar), statische Dateien (Hash-Dateien `immutable`, `index.html`/`sw.js` `no-cache`, Brotli vorkomprimiert),
+Komprimierung der API ab 1 KB, sharp mit begrenzten Threads und ohne Cache. Gemischte Last (20 Clients): p95 128 → 96 ms,
+364 → 476 Anfragen/s.
+
+**Grenzen:** Gemessen auf einem Entwicklungsrechner, nicht auf der Zielhardware; die Wirkung von `nice` auf die API
+unter Video-Last ist nicht gemessen (Windows). Das Dashboard berechnet „bereit zur Veröffentlichung“ weiterhin über alle
+nicht archivierten Beiträge (bei 4 800 Beiträgen ohne Freigaben 46 ms) – Beiträge archivieren hält es schnell.
+
 ---
 
 ## Teststand und Grenzen

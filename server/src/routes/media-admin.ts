@@ -47,7 +47,7 @@ export async function mediaAdminRoutes(app: FastifyInstance) {
     const s = await getSettings();
     let disk: { free: number; total: number } | null = null;
     try {
-      const st = fs.statfsSync(config.dataDir);
+      const st = await fs.promises.statfs(config.dataDir);
       disk = { free: st.bavail * st.bsize, total: st.blocks * st.bsize };
     } catch {
       disk = null;

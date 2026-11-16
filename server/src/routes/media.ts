@@ -520,18 +520,23 @@ export async function mediaRoutes(app: FastifyInstance) {
                    AND ($3::text IS NULL OR c.title ILIKE $3 OR c.purpose ILIKE $3 OR c.note ILIKE $3)`;
     const params = [status, q.postId ?? null, like];
     const rows = await many<any>(
-      `SELECT c.*, p.title AS post_title,
-              (SELECT count(*)::int FROM media m WHERE m.collection_id = c.id AND m.deleted_at IS NULL AND m.status = 'ready') AS media_count,
-              (SELECT count(*)::int FROM media m WHERE m.collection_id = c.id AND m.deleted_at IS NULL AND m.status = 'quarantine') AS quarantine_count,
-              (SELECT count(*)::int FROM media m WHERE m.collection_id = c.id AND m.deleted_at IS NULL AND m.selection = 'selected' AND m.status = 'ready') AS selected_count,
-              (SELECT count(*)::int FROM media m WHERE m.collection_id = c.id AND m.deleted_at IS NULL AND m.selection = 'pending' AND m.status = 'ready') AS pending_count,
+      // Zähler in einem Durchlauf je Sammlung (Index media_collection_state_idx) statt vier Unterabfragen, Titelbild
+      // über media_cover_pick_idx; erst die Seite auswählen, dann zählen (#192: 200 Sammlungen 57 ms → 4 ms)
+      `SELECT c.*, p.title AS post_title, mc.media_count, mc.quarantine_count, mc.selected_count, mc.pending_count,
               (SELECT count(*)::int FROM upload_links l WHERE l.collection_id = c.id AND l.revoked_at IS NULL AND l.expires_at > now()) AS active_links,
               COALESCE(
                 (SELECT m.id FROM media m WHERE m.id = c.cover_media_id AND m.deleted_at IS NULL AND m.status = 'ready' AND m.has_preview),
                 (SELECT m.id FROM media m WHERE m.collection_id = c.id AND m.deleted_at IS NULL AND m.status = 'ready' AND m.has_preview ORDER BY (m.selection = 'selected') DESC, m.sort_order LIMIT 1)) AS cover_id
-         FROM collections c LEFT JOIN posts p ON p.id = c.post_id
-        WHERE ${where}
-        ORDER BY COALESCE(c.event_date::timestamptz, c.created_at) DESC, c.created_at DESC LIMIT $4 OFFSET $5`,
+         FROM (SELECT c.* FROM collections c WHERE ${where}
+                ORDER BY COALESCE(c.event_date::timestamptz, c.created_at) DESC, c.created_at DESC LIMIT $4 OFFSET $5) c
+         LEFT JOIN posts p ON p.id = c.post_id
+         LEFT JOIN LATERAL (
+           SELECT count(*) FILTER (WHERE m.status = 'ready')::int AS media_count,
+                  count(*) FILTER (WHERE m.status = 'quarantine')::int AS quarantine_count,
+                  count(*) FILTER (WHERE m.status = 'ready' AND m.selection = 'selected')::int AS selected_count,
+                  count(*) FILTER (WHERE m.status = 'ready' AND m.selection = 'pending')::int AS pending_count
+             FROM media m WHERE m.collection_id = c.id AND m.deleted_at IS NULL) mc ON true
+        ORDER BY COALESCE(c.event_date::timestamptz, c.created_at) DESC, c.created_at DESC`,
       [...params, q.paged ? q.perPage : 200, q.paged ? (q.page - 1) * q.perPage : 0],
     );
     if (!q.paged) return rows;
@@ -864,9 +869,11 @@ export async function mediaRoutes(app: FastifyInstance) {
   app.post('/collections/:id/order', { preHandler: requireAuth('media.organize') }, async (req) => {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
     const { ids } = z.object({ ids: z.array(z.uuid()).min(1).max(2000) }).parse(req.body);
-    await tx(async (db) => {
-      for (let i = 0; i < ids.length; i++) await db.query('UPDATE media SET sort_order = $3 WHERE id = $1 AND collection_id = $2', [ids[i], id, i + 1]);
-    });
+    // Eine Anweisung statt einer je Datei (#192: bis zu 2 000 Einzel-UPDATEs unter Sperre)
+    await pool.query(
+      `UPDATE media m SET sort_order = o.pos FROM unnest($2::uuid[]) WITH ORDINALITY AS o(id, pos) WHERE m.id = o.id AND m.collection_id = $1`,
+      [id, ids],
+    );
     return { ok: true };
   });
 

@@ -1664,3 +1664,53 @@ describe('Soziale Kanäle: OAuth 1.0a, Zeichenzählung, Texte (#188, #189)', asy
     expect(ch.shareTarget({ kind: 'whatsapp', config: { channelUrl: 'javascript:alert(1)' } }, 'x').openUrl).toBe('https://web.whatsapp.com/');
   });
 });
+
+describe('Leistung (#192)', () => {
+  it('Argon2 läuft asynchron und höchstens ARGON2_SLOTS-mal gleichzeitig (Threadpool bleibt frei)', async () => {
+    const pw = await import('../src/auth/passwords.js');
+    // Nur die asynchronen Funktionen: hashSync/verifySync würden die Ereignisschleife je Anmeldung blockieren
+    const src = fs.readFileSync(new URL('../src/auth/passwords.ts', import.meta.url), 'utf8');
+    expect(src).not.toMatch(/\b(hashSync|verifySync|hashRawSync)\b/);
+    const stored = await pw.hashPassword('ein langes Testpasswort');
+    pw.resetArgon2Peak();
+    // Ereignisschleife reagiert, während 7 Prüfungen laufen
+    let ticks = 0;
+    const timer = setInterval(() => ticks++, 5);
+    const results = await Promise.all(Array.from({ length: 7 }, (_, i) => pw.verifyPassword(stored, i === 3 ? 'ein langes Testpasswort' : 'falsch')));
+    clearInterval(timer);
+    expect(results.filter(Boolean)).toHaveLength(1);
+    expect(results[3]).toBe(true);
+    expect(pw.argon2Stats().peak).toBeLessThanOrEqual(pw.ARGON2_SLOTS);
+    expect(pw.argon2Stats()).toMatchObject({ active: 0, waiting: 0 });
+    expect(ticks).toBeGreaterThan(0);
+  });
+
+  it('volle Warteschlange: Anmeldung antwortet sofort mit 503 statt zu blockieren', async () => {
+    const pw = await import('../src/auth/passwords.js');
+    const stored = await pw.hashPassword('ein langes Testpasswort');
+    const n = pw.ARGON2_SLOTS + pw.ARGON2_MAX_WAITING + 3;
+    const settled = await Promise.allSettled(Array.from({ length: n }, () => pw.verifyPassword(stored, 'falsch')));
+    const rejected = settled.filter((r) => r.status === 'rejected') as PromiseRejectedResult[];
+    expect(rejected).toHaveLength(3);
+    expect(rejected[0].reason).toMatchObject({ status: 503, code: 'busy' });
+    expect(pw.argon2Stats()).toMatchObject({ active: 0, waiting: 0 });
+  }, 60_000);
+
+  it('erkennt X-Forwarded-For von einem nicht eingetragenen Proxy', async () => {
+    const { observeProxy, proxyService, resetProxyObservation } = await import('../src/lib/proxy-check.js');
+    resetProxyObservation();
+    const req = (remote: string, ip: string, xff?: string) => ({ headers: xff ? { 'x-forwarded-for': xff } : {}, socket: { remoteAddress: remote }, ip }) as any;
+    observeProxy(req('172.18.0.5', '172.18.0.5'));
+    expect(proxyService().state).toBe('ok');
+    // vertrauenswürdig: req.ip ist die Client-Adresse
+    observeProxy(req('172.18.0.5', '203.0.113.7', '203.0.113.7'));
+    expect(proxyService()).toMatchObject({ state: 'ok', detail: expect.stringContaining('vertrauenswürdigen') });
+    // nicht eingetragen: Header ignoriert, alle erscheinen als Proxy-Adresse
+    observeProxy(req('::ffff:172.18.0.5', '::ffff:172.18.0.5', '203.0.113.7'));
+    const s = proxyService();
+    expect(s.state).toBe('warning');
+    expect(s.detail).toContain('TRUSTED_PROXIES=172.18.0.5');
+    expect(proxyService(Date.now() + 25 * 3600_000).state).toBe('ok');
+    resetProxyObservation();
+  });
+});

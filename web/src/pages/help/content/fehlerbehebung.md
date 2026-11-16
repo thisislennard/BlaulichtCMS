@@ -41,9 +41,15 @@ BlaulichtCMS sagt immer, warum etwas nicht geht und was zu tun ist – mit Symbo
 | **Kein Zugriff** | Für diesen Bereich fehlt ein Recht. | Eine Person mit „Rollen verwalten“ um das Recht bitten. |
 | **Seite nicht gefunden** | Die Adresse gibt es nicht (mehr) oder der Eintrag wurde gelöscht. | Link prüfen, über die Übersicht oder die Suche weiter. |
 | **Wartung oder Update läuft** | Der Wartungsmodus ist an; Ansehen geht, Ändern nicht. | Ein paar Minuten warten. Beenden: [Systemstatus](/system) → Wartungsmodus. |
-| **Zu viele Versuche** | Schutz vor Missbrauch, z. B. viele Anmeldeversuche in kurzer Zeit. | Die angezeigte Wartezeit abwarten (zählt herunter). |
+| **Zu viele Versuche** | Schutz vor Missbrauch, z. B. viele Anmeldeversuche in kurzer Zeit. | Die angezeigte Wartezeit abwarten (zählt herunter). Trifft es mehrere Personen gleichzeitig, ist oft der Reverse Proxy nicht eingetragen – siehe [Systemstatus](/system), Zeile „Reverse Proxy“. |
+| **Anmeldung ausgelastet** | Sehr viele Anmeldungen in derselben Sekunde (die Passwortprüfung ist absichtlich rechenintensiv). | Einige Sekunden warten und erneut anmelden. |
 | **Unerwarteter Fehler** | Ein Programmfehler beim Anzeigen. | Seite neu laden; tritt er wieder auf, unter „Details anzeigen“ die Angaben an die Administration geben. |
 | **Neue Version verfügbar** | Nach einem Update fehlen alte Programmteile. | Seite neu laden. |
+
+### Oberfläche hängt, Anmeldung klappt nur manchmal
+
+- **Systemstatus → Reverse Proxy** prüfen. Steht dort ein Hinweis, kommen alle Anfragen mit der Adresse des Proxys an, weil sie nicht in `TRUSTED_PROXIES` eingetragen ist: Alle Personen teilen sich dann die Grenze von 10 Anmeldungen pro Minute und die Sperren nach Fehlversuchen. Die angezeigte Adresse (oder das Netz des Proxys) in der `.env` eintragen und den Container neu starten.
+- Ohne HTTP/2 am Proxy erlaubt der Browser nur sechs gleichzeitige Verbindungen je Adresse. Im Nginx Proxy Manager beim Proxy Host *HTTP/2* einschalten. BlaulichtCMS schließt die Live-Verbindung verborgener Tabs nach einer Minute selbst.
 
 In der installierten App zeigt BlaulichtCMS auch dann die eigene Meldung „Server nicht erreichbar“, wenn statt des Servers nur der Proxy mit einer Fehlerseite (502/503/504) antwortet.
 

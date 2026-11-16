@@ -1,5 +1,6 @@
 import { hash, verify, Algorithm } from '@node-rs/argon2';
 import { COMMON_PASSWORD_CORES, COMMON_PASSWORDS_LONG } from './common-passwords.js';
+import { AppError } from '../lib/errors.js';
 
 /**
  * Argon2id nach RFC 9106, zweite empfohlene Option (für Systeme mit begrenztem Speicher): m = 64 MiB, t = 3, p = 4.
@@ -9,17 +10,58 @@ import { COMMON_PASSWORD_CORES, COMMON_PASSWORDS_LONG } from './common-passwords
 export const ARGON2_PARAMS = { memoryCost: 65_536, timeCost: 3, parallelism: 4 };
 const OPTIONS = { algorithm: Algorithm.Argon2id, ...ARGON2_PARAMS };
 
+/**
+ * Begrenzung gleichzeitiger Argon2-Rechnungen (#192). hash/verify laufen asynchron im libuv-Threadpool (Standard: 4
+ * Threads) – den teilen sie mit Dateizugriffen (Oberfläche, Vorschaubilder, Uploads) und der Brotli/gzip-Komprimierung.
+ * Ohne Grenze belegten 10 gleichzeitige Anmeldungen alle Threads: Seiten und Bilder warteten im Lasttest bis 1,5 s, auf
+ * einem Server mit 2 Kernen entsprechend länger („hängt“). Mit höchstens ARGON2_SLOTS Rechnungen bleiben Threads frei;
+ * weitere Anmeldungen warten kurz in einer Schlange (je Rechnung 64 MiB Speicher statt beliebig vieler). Ist die
+ * Schlange voll (Ansturm, Passwort-Raten über viele IPs), antwortet die Anmeldung sofort mit 503 statt den Server zu
+ * blockieren.
+ */
+export const ARGON2_SLOTS = 2;
+export const ARGON2_MAX_WAITING = 100;
+let active = 0;
+let peak = 0;
+const waiting: (() => void)[] = [];
+
+async function withArgon2Slot<T>(fn: () => Promise<T>): Promise<T> {
+  if (active >= ARGON2_SLOTS) {
+    if (waiting.length >= ARGON2_MAX_WAITING) throw new AppError(503, 'busy', 'Die Anmeldung ist gerade ausgelastet. Bitte in einigen Sekunden erneut versuchen.');
+    await new Promise<void>((resolve) => waiting.push(resolve));
+  } else active++;
+  peak = Math.max(peak, active);
+  try {
+    return await fn();
+  } finally {
+    // Platz direkt an den Nächsten in der Schlange weitergeben (active bleibt dann gleich)
+    const next = waiting.shift();
+    if (next) next();
+    else active--;
+  }
+}
+
+/** Für Tests und Diagnose: laufende, wartende und höchstens gleichzeitig gelaufene Argon2-Rechnungen. */
+export function argon2Stats() {
+  return { active, waiting: waiting.length, peak };
+}
+export function resetArgon2Peak() {
+  peak = active;
+}
+
 export function hashPassword(password: string): Promise<string> {
-  return hash(password, OPTIONS);
+  return withArgon2Slot(() => hash(password, OPTIONS));
 }
 
 export async function verifyPassword(stored: string | null | undefined, password: string): Promise<boolean> {
   if (!stored) return false;
-  try {
-    return await verify(stored, password);
-  } catch {
-    return false;
-  }
+  return withArgon2Slot(async () => {
+    try {
+      return await verify(stored, password);
+    } catch {
+      return false;
+    }
+  });
 }
 
 /** Stammt der Hash von einem anderen Verfahren oder schwächeren Parametern als den aktuellen? */
