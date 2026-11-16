@@ -232,7 +232,7 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
                     <div className="min-w-0 flex flex-col gap-0.5">
                       <span className="font-medium text-sm">{a.finalName}</span>
                       {a.finalName !== a.name && <span className="text-meta text-fg-muted">Name „{a.name}“ ist schon vergeben.</span>}
-                      <span className="text-meta text-fg-muted">{a.steps.map((s) => `${s.count}× ${s.label}`).join(' · ')} · {a.edges} Verbindungen</span>
+                      <span className="text-meta text-fg-muted">{a.steps.length ? `${a.steps.map((s) => `${s.count}× ${s.label}`).join(' · ')} · ${a.edges} ${a.edges === 1 ? 'Verbindung' : 'Verbindungen'}` : 'Leerer Ablauf'}</span>
                     </div>
                   </li>
                 ))}

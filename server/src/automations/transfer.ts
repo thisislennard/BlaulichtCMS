@@ -113,6 +113,17 @@ export class TransferError extends Error {
   }
 }
 
+const PATH_WORDS: Record<string, string> = { name: 'Name', description: 'Beschreibung', graph: 'Ablauf', nodes: 'Knoten', edges: 'Verbindung', data: 'Einstellungen', references: 'Bezüge', inputs: 'Eingang', outputs: 'Ausgang', automations: 'Automation', schemaVersion: 'Formatversion', kind: 'Art', type: 'Typ' };
+/** Lesbarer Ort eines Prüffehlers, z. B. „Automation 1 › Knoten 2 › Einstellungen“. */
+function pathLabel(p: PropertyKey[]): string {
+  const out: string[] = [];
+  for (const k of p) {
+    if (typeof k === 'number' && out.length) out[out.length - 1] += ` ${k + 1}`;
+    else if (typeof k === 'string') out.push(PATH_WORDS[k] ?? k);
+  }
+  return out.filter((x) => x !== 'Ablauf').join(' › ');
+}
+
 /** Datei prüfen (Format, Version, Aufbau, Daten je Knoten, Bezüge). Wirft TransferError mit verständlichen Meldungen. */
 export function parseTransferFile(raw: unknown): TransferFile {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new TransferError('Die Datei enthält kein gültiges JSON-Objekt.');
@@ -123,7 +134,7 @@ export function parseTransferFile(raw: unknown): TransferFile {
   }
   const parsed = transferFileSchema.safeParse(raw);
   if (!parsed.success) {
-    const details = parsed.error.issues.slice(0, 20).map((i) => ({ path: i.path.join('.'), message: i.message }));
+    const details = parsed.error.issues.slice(0, 20).map((i) => ({ path: i.path.join('.'), message: i.path.length ? `${pathLabel(i.path)}: ${i.message}` : i.message }));
     throw new TransferError('Die Datei ist unvollständig oder beschädigt.', details);
   }
   const file = parsed.data;
