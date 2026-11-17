@@ -288,8 +288,10 @@ flowchart LR
 
 ### Datenschutz
 
-- **Auskunft und Löschung je Person:** Suche über alle personenbezogenen Daten, Export als ZIP, Löschen oder
-  Pseudonymisieren je Treffer.
+- **Auskunft und Löschung je Person:** Suche über alle personenbezogenen Daten – auch Presse-Mails (inkl. CC und
+  Anhangnamen), Versandprotokolle, Kalender, Einsatzliste und Vorlagen –, Export als ZIP mit Originalen sowie
+  Presseanfragen samt Mails und Anhängen, Löschen oder Pseudonymisieren je Treffer. Ein Test stellt sicher, dass jede
+  neue Tabelle mit Personenbezug abgedeckt oder begründet ausgenommen ist.
 - **Löschfristen** für Sammlungen, Upload-Links, Warnvorgänge, Einsatzmeldungen (FE2, Feuersoftware Connect), Presseanfragen und Protokolle – mit Vorschau „Was würde
   gelöscht?“.
 - **Vorlagen** für Verarbeitungsverzeichnis und Datenschutz-Folgenabschätzung, Hinweise zu Empfängern wie Meta.

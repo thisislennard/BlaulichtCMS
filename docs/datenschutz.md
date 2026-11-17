@@ -153,8 +153,25 @@ was fällig ist. Jeder Lauf steht im Audit (`retention.run`).
   Upload-Seite und Aushang dann die Seite `/datenschutz`. Die eingebaute Vorlage ist nur eine Gliederung mit
   Platzhaltern und ersetzt keine rechtliche Prüfung.
 - **Auskunft und Löschung (Art. 15, 17):** *Verwaltung → Datenschutzanfragen* (Recht „Datenschutzanfragen
-  bearbeiten“): Suche nach Name, E-Mail, Telefon, Dateiname, Hinweistext, Vorgangsnummer oder IP über alle Bereiche,
-  Export als ZIP, Löschen/Pseudonymisieren je Treffer. Hochladende erhalten nach dem Upload eine Vorgangsnummer.
+  bearbeiten“): Suche nach Name, E-Mail, Telefon, Text, Dateiname, Vorgangsnummer oder IP, Export als ZIP,
+  Löschen/Pseudonymisieren je Treffer. Hochladende erhalten nach dem Upload eine Vorgangsnummer. Durchsucht werden
+  Uploads (samt Sammlungen, Ordnern, Schlagwörtern, Upload-Links), Presseanfragen mit allen Mails (Absender, Empfänger,
+  CC, Betreff, Text, Namen der Anhänge), das Empfangsprotokoll des Presse-Postfachs, Presseverteiler und
+  Versandprotokolle (auch Adressen gelöschter oder geänderter Kontakte), Pressemitteilungen und Textbausteine,
+  Warnvorgänge, Zuständigkeiten, Einsatzmeldungen, die Einsatzliste (samt Kopien in Aufträgen an die Website, die noch
+  unterwegs sind), Kalender (eigene und eingelesene Termine), Beiträge (alle Fassungen), Banner, Vorlagen, Workflow-
+  Definitionen, Benachrichtigungen, Konten (samt Sitzungen, Geräten, Kalender-Abo), Sicherheitsereignisse der
+  Upload-Seiten (über den HMAC der gesuchten IP), Systemprotokoll, Update-Verlauf und Audit. Welche Tabelle wie
+  abgedeckt ist, steht in `server/src/lib/privacy-coverage.ts`; ein Test prüft bei jeder Änderung, dass jede Tabelle
+  dort eingetragen ist – neue Tabellen mit Personenbezug fallen so nicht unbemerkt aus der Suche.
+- **Kopie (Art. 15 Abs. 3):** Die ZIP-Datei enthält alle Treffer (`auskunft.json`), die hochgeladenen Originale und
+  je Presseanfrage Anfrage und Verlauf, jede Mail als Text und die Anhänge im Original. Vor der Herausgabe Daten Dritter
+  prüfen und ggf. schwärzen (Art. 15 Abs. 4; z. B. weitere Personen auf Fotos, andere Empfänger einer Mail).
+- **Bewusst nicht durchsucht:** Empfangsprotokoll der Verbindungen (Einsatzdaten nur geschwärzt, Frist
+  `privacy.receipt_days`) und Laufprotokolle der Workflows (Eingangsdaten nur über die Allowlist, gekürzt, Frist
+  `privacy.automation_run_days`) – Begründung in den Absätzen oben; technische Tabellen ohne Daten Betroffener
+  (Warteschlange, Prüfsummen, Konfiguration, Statistik nur als Summen). Bilder und Anhänge werden nicht inhaltlich
+  durchsucht, nur ihre Namen und Texte.
 - **Grenzen:** Audit-Einträge bleiben bis zur Audit-Frist unverändert (Nachweispflicht, Art. 17 Abs. 3 lit. b/e;
   die Hash-Kette verbietet Änderungen), IP-Adressen ohne Konto werden nach 30 Tagen entfernt. Gelöschte Daten bleiben
   bis zu rund 4 Monate in Sicherungen; nach einer Wiederherstellung Löschungen nachholen

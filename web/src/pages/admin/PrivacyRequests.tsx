@@ -5,7 +5,25 @@ import { Badge, Button, Card, EmptyState, ErrorBox, Input, Notice, PageHeader } 
 import { useConfirm, useErrorToast, useToast } from "../../components/ui/overlays";
 import { fmtDateTime } from "../../lib/format";
 
-type HitKind = "user" | "media" | "upload_session" | "warning" | "responsibility" | "fe2_event" | "post" | "session" | "audit";
+type HitKind =
+  | "user"
+  | "media"
+  | "upload_session"
+  | "warning"
+  | "responsibility"
+  | "fe2_event"
+  | "post"
+  | "session"
+  | "audit"
+  | "press_request"
+  | "press_mailbox_log"
+  | "press_contact"
+  | "press_recipient"
+  | "calendar_event"
+  | "incident_entry"
+  | "notification"
+  | "security_event"
+  | "text";
 interface Hit {
   kind: HitKind;
   id: string;
@@ -27,8 +45,50 @@ const KIND_LABEL: Record<HitKind, string> = {
   post: "Beiträge",
   session: "Sitzungen",
   audit: "Audit-Protokoll",
+  press_request: "Presseanfragen (Kontaktdaten, Text, Verlauf, Mails, Anhänge)",
+  press_mailbox_log: "Empfangsprotokoll des Presse-Postfachs",
+  press_contact: "Presseverteiler",
+  press_recipient: "Versandprotokolle der Pressemitteilungen",
+  calendar_event: "Kalender",
+  incident_entry: "Einsatzliste",
+  notification: "Benachrichtigungen",
+  security_event: "Sicherheitsereignisse der Upload-Seiten",
+  text: "Weitere Texte (Vorlagen, Sammlungen, Banner, Workflows, Protokolle …)",
 };
-const ORDER: HitKind[] = ["media", "upload_session", "warning", "responsibility", "fe2_event", "post", "user", "session", "audit"];
+const ORDER: HitKind[] = [
+  "media",
+  "upload_session",
+  "press_request",
+  "press_mailbox_log",
+  "press_contact",
+  "press_recipient",
+  "warning",
+  "responsibility",
+  "fe2_event",
+  "incident_entry",
+  "calendar_event",
+  "post",
+  "text",
+  "notification",
+  "user",
+  "session",
+  "security_event",
+  "audit",
+];
+
+/** Bestätigungstext je Aktion und Art */
+function confirmText(h: Hit, action: "delete" | "pseudonymize"): string {
+  if (action === "pseudonymize") {
+    if (h.kind === "press_recipient") return "Adresse und Name werden in allen Versandprotokollen durch neutrale Angaben ersetzt; Zähler und Stand bleiben.";
+    return "Dateiname und Hinweis werden durch neutrale Angaben ersetzt; die Datei selbst bleibt.";
+  }
+  if (h.kind === "warning") return "Der ganze Vorgang wird mit Aktualisierungen, Entwarnung, PDF und Versandnachweisen endgültig gelöscht.";
+  if (h.kind === "press_request") return "Die Anfrage wird samt Verlauf, Mails und Anhängen endgültig gelöscht. In Sicherungen bleibt sie bis zu deren Ablauf.";
+  if (h.kind === "press_contact") return "Der Kontakt wird gelöscht und seine Adresse in den Versandprotokollen pseudonymisiert. In Sicherungen bleibt er bis zu deren Ablauf.";
+  if (h.kind === "calendar_event") return "Der Termin wird endgültig gelöscht (bei einer Serie alle Termine). In Sicherungen bleibt er bis zu deren Ablauf.";
+  if (h.kind === "media") return "Die Datei wird endgültig gelöscht (samt aller Fassungen). In Sicherungen bleibt sie bis zu deren Ablauf.";
+  return "Der Eintrag wird endgültig gelöscht. In Sicherungen bleibt er bis zu deren Ablauf.";
+}
 
 function fieldText(v: unknown): string {
   if (v == null || v === "") return "–";
@@ -65,12 +125,7 @@ export default function PrivacyRequests() {
   };
 
   const act = async (h: Hit, action: "delete" | "pseudonymize") => {
-    const text =
-      action === "pseudonymize"
-        ? "Dateiname und Hinweis werden durch neutrale Angaben ersetzt; die Datei selbst bleibt."
-        : h.kind === "warning"
-          ? "Der ganze Vorgang wird mit Aktualisierungen, Entwarnung, PDF und Versandnachweisen endgültig gelöscht."
-          : "Der Eintrag wird endgültig gelöscht (Dateien samt aller Fassungen). In Sicherungen bleibt er bis zu deren Ablauf.";
+    const text = confirmText(h, action);
     if (!(await ask({ title: action === "delete" ? "Endgültig löschen?" : "Pseudonymisieren?", text, confirmLabel: action === "delete" ? "Löschen" : "Pseudonymisieren" }))) return;
     try {
       await post("/privacy/action", { kind: h.kind, id: h.id, action });
@@ -81,7 +136,9 @@ export default function PrivacyRequests() {
     }
   };
 
-  const groups = ORDER.map((k) => ({ kind: k, items: (hits ?? []).filter((h) => h.kind === k) })).filter((g) => g.items.length);
+  // Unbekannte Arten (neuer Server, alte Oberfläche) erscheinen am Ende statt zu verschwinden
+  const kinds = [...ORDER, ...[...new Set((hits ?? []).map((h) => h.kind))].filter((k) => !ORDER.includes(k))];
+  const groups = kinds.map((k) => ({ kind: k, items: (hits ?? []).filter((h) => h.kind === k) })).filter((g) => g.items.length);
 
   return (
     <div className="flex flex-col gap-5">
@@ -105,13 +162,13 @@ export default function PrivacyRequests() {
           )}
         </form>
         <p className="m-0 mt-3 text-sm text-fg-muted">
-          Gesucht wird in Uploads (Hinweis, Dateiname, Vorgangsnummer), Warnvorgängen (Rückrufkontakt, Empfänger), Zuständigkeiten, Einsatzmeldungen aus FE2 und Feuersoftware Connect, Beiträgen, Konten, Sitzungen und im Audit. Suche, Export und jede Löschung werden protokolliert. Die ZIP-Datei enthält alle Treffer und die hochgeladenen Originale – vor der Herausgabe prüfen, ob sie Daten anderer Personen enthält.
+          Gesucht wird in Uploads, Presseanfragen (auch Mails mit Absender, Empfänger, CC, Text und Anhangnamen), Empfangsprotokoll des Presse-Postfachs, Presseverteiler und Versandprotokollen, Warnvorgängen, Zuständigkeiten, Einsatzmeldungen, Einsatzliste (auch Aufträge an die Website), Kalender, Beiträgen (alle Fassungen), Vorlagen und weiteren Texten, Benachrichtigungen, Konten, Sitzungen und im Audit. Suche, Export und jede Löschung werden protokolliert. Die ZIP-Datei enthält alle Treffer, die hochgeladenen Originale und je Presseanfrage Anfrage, Verlauf, Mails und Anhänge – vor der Herausgabe prüfen, ob sie Daten anderer Personen enthält.
         </p>
       </Card>
       {error && <ErrorBox title="Suche nicht möglich">{error}</ErrorBox>}
       {hits && hits.length === 0 && <EmptyState icon="SearchX" title="Keine Treffer" text={`Zu „${searched}“ sind keine Daten gespeichert. Sicherungen enthalten gelöschte Daten noch bis zu deren Ablauf.`} />}
       {groups.map((g) => (
-        <Card key={g.kind} title={KIND_LABEL[g.kind]} subtitle={`${g.items.length} Treffer${g.items.length >= 200 ? " (gekürzt – Suche genauer fassen)" : ""}`}>
+        <Card key={g.kind} title={KIND_LABEL[g.kind] ?? g.kind} subtitle={`${g.items.length} Treffer${g.items.length >= 200 ? " (gekürzt – Suche genauer fassen)" : ""}`}>
           <ul className="m-0 p-0 list-none flex flex-col divide-y divide-line">
             {g.items.map((h) => (
               <li key={`${h.kind}-${h.id}`} className="py-3 flex flex-col gap-2">
@@ -147,7 +204,7 @@ export default function PrivacyRequests() {
       ))}
       {hits && hits.length > 0 && (
         <Notice>
-          Was nicht gelöscht wird: Audit-Einträge bleiben bis zum Ablauf der Audit-Frist (Nachweispflicht), IP-Adressen ohne Konto werden nach der eingestellten Frist entfernt. Bereits veröffentlichte Inhalte auf Website und sozialen Medien im Beitrag zurückziehen. Einzelheiten: Hilfe → Sicherheit.
+          Was nicht gelöscht wird: Audit-Einträge bleiben bis zum Ablauf der Audit-Frist (Nachweispflicht), IP-Adressen ohne Konto werden nach der eingestellten Frist entfernt. Bereits veröffentlichte Inhalte auf Website und sozialen Medien im Beitrag bzw. in der Einsatzliste zurückziehen; versandte Pressemitteilungen, Antworten und Benachrichtigungen sind bei den Empfängern nicht erreichbar. Bewusst nicht durchsucht: Empfangsprotokoll der Verbindungen und Laufprotokolle der Workflows (nur geschwärzte bzw. gekürzte Daten, kurze Fristen). Einzelheiten: Hilfe → Sicherheit.
         </Notice>
       )}
     </div>
