@@ -33,7 +33,18 @@ So läuft es ab:
 2. Er liest sie vom Ziel zurück und vergleicht die Prüfsumme (SHA-256) mit der lokalen Datei. Erst wenn sie stimmt,
    erhält die Datei ihren endgültigen Namen.
 3. Danach räumt er auf dem Ziel auf: Behalten wird je Tag, je Woche und je Monat die neueste Sicherung (einstellbar,
-   Standard 7 Tage, 4 Wochen, 6 Monate). Andere Dateien im Ordner rührt BlaulichtCMS nie an.
+   Standard 7 Tage, 4 Wochen, 3 Monate). Andere Dateien im Ordner rührt BlaulichtCMS nie an.
+
+Unter den Feldern steht, wie lange gelöschte Daten damit höchstens auf dem Ziel bleiben (z. B. „rund 3 Monate“). Die
+Datenschutzhinweise nennen für Sicherungen rund 4 Monate – eine längere Aufbewahrung (höchstens 90 Tage, 52 Wochen,
+24 Monate) lässt sich nur mit einer Bestätigung speichern und gehört dann ins Verzeichnis der Verarbeitungstätigkeiten.
+
+**Ausschalten oder Ziel wechseln:** BlaulichtCMS fragt, was mit den Sicherungen auf dem bisherigen Ziel geschehen soll.
+**Löschen** entfernt alle Sicherungen von BlaulichtCMS dort (auch im Unterordner `volume/`; verlangt das eigene
+Passwort). **Behalten** lässt sie liegen – dann räumt dort niemand mehr auf, und der **Systemstatus** erinnert unter
+„Frühere Sicherungsziele“ daran. Bei ausgeschalteter Sicherung außer Haus löscht **Sicherungen auf dem Ziel löschen**
+sie später; bei einem früheren Ziel (Zugangsdaten nicht mehr gespeichert) die Dateien am Gerät löschen und den Hinweis
+entfernen.
 
 Die Dateien bleiben **verschlüsselt** (mit dem Sicherungsschlüssel aus dem Master-Schlüssel) – das NAS sieht nur
 unlesbare Daten. Benutzername und Passwort des Ziels werden verschlüsselt gespeichert und nie wieder angezeigt.
@@ -82,7 +93,8 @@ nach der Sicherungszeit und nimmt die **neueste Kopie außer Haus** – genau di
 eine Probe fehl, erhalten alle mit „Sicherungen erstellen“ eine Benachrichtigung.
 
 Die Probe braucht vorübergehend freien Speicher etwa in Höhe der Datenbank. Medien prüft sie nicht – dafür gibt es den
-wöchentlichen Wiederherstellungstest der Volume-Sicherung am Docker-Host.
+wöchentlichen Wiederherstellungstest der Volume-Sicherung am Docker-Host. Bricht eine Probe ab (z. B. Neustart), entfernt
+der Hintergrunddienst die Wegwerf-Datenbank innerhalb einer Stunde – auch wenn Proben nach Zeitplan ausgeschaltet sind.
 
 ## Notfall: Wiederherstellen aus der Sicherung außer Haus
 

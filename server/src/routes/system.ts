@@ -69,6 +69,24 @@ export function backupServices(b: Awaited<ReturnType<typeof backupHealth>>) {
       ms: null,
     });
   }
+  // Frühere Ziele, auf denen noch Sicherungen liegen können (#246): dort greift keine Aufbewahrung mehr
+  const left = o.leftovers ?? [];
+  if (left.length) {
+    const host = (u: string) => {
+      try {
+        return new URL(u).host;
+      } catch {
+        return u;
+      }
+    };
+    out.push({
+      id: 'offsite-leftovers',
+      name: 'Frühere Sicherungsziele',
+      state: 'warning',
+      detail: `Auf ${left.length === 1 ? `dem früheren Ziel ${host(left[0].url)}` : `${left.length} früheren Zielen (${left.map((l) => host(l.url)).join(', ')})`} liegen noch Sicherungen ohne Aufbewahrung – unter Einstellungen → Sicherung außer Haus löschen bzw. den Hinweis entfernen.`,
+      ms: null,
+    });
+  }
   const d = b.drill;
   if (d || b.drill_interval !== 'off') {
     const limit = b.drill_interval === 'monthly' ? 24 * 35 : 24 * 9;

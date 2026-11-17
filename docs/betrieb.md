@@ -453,7 +453,9 @@ Datenbanksicherung zusätzlich auf einem WebDAV-Ziel ab (z. B. Synology „WebDA
 | | |
 |---|---|
 | Ablauf | PUT `<name>.part` → GET und SHA-256 mit der lokalen Prüfsumme vergleichen → MOVE auf den endgültigen Namen → Aufbewahrung |
-| Aufbewahrung auf dem Ziel | je Tag/ISO-Woche/Monat die neueste Sicherung für die letzten N Tage/Wochen/Monate (Standard 7/4/6); die neueste und die eben übertragene bleiben immer; gelöscht werden nur Dateien mit dem Namensmuster `blaulichtcms-…bcbk` bzw. im Unterordner `volume/` `blaulichtcms-…tar.gz.enc` |
+| Aufbewahrung auf dem Ziel | je Tag/ISO-Woche/Monat die neueste Sicherung für die letzten N Tage/Wochen/Monate (Standard **7/4/3**, höchstens 90/52/24; bis 0.6.x Standard 7/4/6 – unveränderte Standardwerte stellt Migration 200 auf 7/4/3, höhere Werte auf die neuen Grenzen); die Oberfläche zeigt die resultierende Frist („gelöschte Daten bleiben bis zu rund N Monate“), mehr als rund 4 Monate nur mit Bestätigung (Audit); die neueste und die eben übertragene bleiben immer; gelöscht werden nur Dateien mit dem Namensmuster `blaulichtcms-…bcbk` bzw. im Unterordner `volume/` `blaulichtcms-…tar.gz.enc` |
+| Ausschalten, Zielwechsel | Vorher wählen: Sicherungen auf dem bisherigen Ziel **löschen** (mit Passwortbestätigung, nur Dateien nach Namensmuster samt `.part`, auch `volume/`; scheitert das, wird nichts gespeichert) oder **behalten** – dann erinnert der Systemstatus („Frühere Sicherungsziele“, gelb), bis sie über *Sicherungen auf dem Ziel löschen* entfernt sind oder der Hinweis entfernt wird (am Gerät von Hand aufgeräumt). Nach einem Zielwechsel gilt der Stand „zuletzt übertragen“ nur für das neue Ziel |
+| Übertragung | Gesamtfrist 10 Minuten plus Zuschlag nach Größe (rund 1 Mbit/s); beim Zurücklesen und Holen kommt höchstens die erwartete Größe (Ordnerliste bzw. lokale Datei), sonst Abbruch – ein fehlerhaftes Ziel füllt den Datenträger nicht |
 | Verschlüsselung | Dateien bleiben BCBK1 (AES-256-GCM, Schlüssel aus dem Master-Schlüssel) bzw. Volume-Archive mit `/etc/blaulichtcms/backup.key` – das Ziel sieht nur Chiffrat |
 | Zugangsdaten | Passwort verschlüsselt in `secrets` (Besitzer `setting`), nie in der API; das gespeicherte Passwort wird nur für denselben Host und Benutzer weiterverwendet |
 | Netz | nur `https`; SSRF-Schutz bleibt aktiv, freigegeben ist genau der eingetragene Host (auch im internen Netz), keine Weiterleitungen; selbst signierte Zertifikate nur per fest hinterlegtem SHA-256-Fingerabdruck (geprüft vor dem Senden) |
@@ -473,8 +475,10 @@ PostgreSQL-Instanz anlegen (Verbindung `DATABASE_ADMIN_URL` bzw. eingebetteter S
 dann prüfen: Tabellen ≥ 10, `schema_migrations` vorhanden, Benutzerkonten vorhanden, Hash-Kette des Audits mit dem
 Schlüssel aus der Sicherung, Ende der Kette gleich dem laufenden Protokoll. Danach wird sie gelöscht – erst wenn die eigenen
 Verbindungen wirklich getrennt sind, `WITH (FORCE)` nur als letzter Schritt und nur für genau diese Probedatenbank; die
-laufende Datenbank und andere Verbindungen bleiben immer unberührt. Reste abgebrochener Proben entfernt die nächste
-Probe, sofern niemand mehr mit ihnen verbunden ist. Ergebnis in `restore_drills` (Oberfläche, Systemstatus),
+laufende Datenbank und andere Verbindungen bleiben immer unberührt. Reste abgebrochener Proben (z. B. Neustart während
+einer Probe) entfernt die stündliche Wartung des Workers – auch gleich nach dem Start und auch, wenn Proben nach
+Zeitplan ausgeschaltet sind – sowie jede neue Probe, sofern niemand mehr mit ihnen verbunden ist und gerade keine Probe
+läuft. Ergebnis in `restore_drills` (Oberfläche, Systemstatus),
 Fehlschlag als Benachrichtigung. Zeitplan: wöchentlich (Standard) oder monatlich eine Stunde nach der Sicherungszeit (fehlt diese Stunde, z. B. bei der Umstellung auf Sommerzeit, bis zu drei Stunden später; höchstens ein Versuch je Tag),
 bevorzugt mit der neuesten Kopie außer Haus. Platzbedarf: etwa die Datenbankgröße; zu wenig freier Speicher bricht
 mit klarer Meldung ab. Eine Sicherung von vor einem Wechsel des Master-Schlüssels lässt die Audit-Kette nicht prüfen
@@ -491,10 +495,11 @@ Gelöschte Daten (Medien, Konten, abgelaufene Inhalte) leben in Sicherungen weit
 | Sicherung vor Updates (`vor-update/`) | letzte **3**, höchstens **90 Tage** alt | `BLAULICHTCMS_KEEP_PRE_UPDATE`, `BLAULICHTCMS_PRE_UPDATE_MAX_DAYS` (in `/etc/cron.d/blaulichtcms` bzw. beim Aufruf von `install.sh`) |
 | Datenbanksicherung im Volume | 14 Stände | *Einstellungen → Sicherung* |
 | Kopie außer Haus (Vorschlag) | monatlich, höchstens **3 Monate** aufbewahren, dann vernichten bzw. überschreiben | Betrieb |
-| Sicherung außer Haus (WebDAV) | je Tag/Woche/Monat die neueste, Standard 7 Tage, 4 Wochen, **6 Monate** | *Einstellungen → Sicherung außer Haus* |
+| Sicherung außer Haus (WebDAV) | je Tag/Woche/Monat die neueste, Standard 7 Tage, 4 Wochen, **3 Monate** (höchstens 90 Tage, 52 Wochen, 24 Monate; mehr als rund 4 Monate nur mit Bestätigung); nach Ausschalten oder Zielwechsel alte Dateien löschen (Abschnitt oben) | *Einstellungen → Sicherung außer Haus* |
 
-Damit sind gelöschte Daten spätestens nach rund **4 Monaten** aus allen Sicherungen verschwunden (2 Monate wöchentliche
-Stände bzw. 3 Monate außer Haus plus ein Monat Kopierabstand). Diese Frist gehört ins Verzeichnis der
+Damit sind gelöschte Daten mit den Standardwerten spätestens nach rund **4 Monaten** aus allen Sicherungen verschwunden
+(2 Monate wöchentliche Stände, 3 Monate außer Haus bzw. 3 Monate Kopie außer Haus plus ein Monat Kopierabstand). Wer
+außer Haus länger aufbewahrt, trägt die längere Frist ein (die Oberfläche nennt sie). Diese Frist gehört ins Verzeichnis der
 Verarbeitungstätigkeiten bzw. in die Auskunft nach Art. 15/17 DSGVO (Vorlage: [datenschutz.md](datenschutz.md)).
 Das gilt auch für Löschungen nach den Löschfristen (*Einstellungen → Datenschutz*), für „Sammlung löschen“ und für
 Löschungen über *Verwaltung → Datenschutzanfragen*.

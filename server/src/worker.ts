@@ -208,6 +208,8 @@ async function cleanup() {
   // Widerrufene Geheimnisse (alte SMTP-Passwörter, rotierte Verbindungs-Tokens) nach 30 Tagen endgültig löschen (#172).
   await q(`DELETE FROM secrets WHERE revoked_at < now() - interval '30 days' AND NOT EXISTS (SELECT 1 FROM connections c WHERE c.secret_id = secrets.id)`);
   await q(`UPDATE backups SET status = 'failed', finished_at = now(), error = 'Abgebrochen (Prozess beendet)' WHERE status = 'running' AND started_at < now() - interval '1 hour'`);
+  // Reste abgebrochener Probe-Wiederherstellungen – auch wenn Proben nach Zeitplan ausgeschaltet sind (#246)
+  await import('./ops/drill.js').then((m) => m.cleanupProbeDatabases()).catch((e) => log('warn', 'cleanup', `Probedatenbanken: ${(e as Error).message}`));
   await cleanupUploadSessions().catch((e) => log('warn', 'cleanup', e.message));
   await cleanupExports().catch((e) => log('warn', 'cleanup', e.message));
   await cleanupMediaTokens().catch((e) => log('warn', 'cleanup', e.message));

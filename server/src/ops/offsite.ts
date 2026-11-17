@@ -55,6 +55,33 @@ export interface OffsiteRow {
   last_error: string | null;
   last_error_at: Date | null;
   updated_at: Date;
+  /** Frühere Ziele, auf denen noch Sicherungen liegen können (#246) */
+  leftovers: Leftover[];
+}
+
+export interface Leftover {
+  url: string;
+  since: string;
+}
+
+/** Grenzen der Aufbewahrung auf dem Ziel (#246, vorher bis 365 Tage / 260 Wochen / 120 Monate). */
+export const KEEP_LIMITS = { daily: [1, 90], weekly: [0, 52], monthly: [0, 24] } as const;
+/** Dokumentierte Frist für gelöschte Daten in Sicherungen (docs/datenschutz.md: rund 4 Monate). */
+export const DOCUMENTED_RETENTION_DAYS = 124;
+
+/**
+ * Wie lange gelöschte Daten mit dieser Aufbewahrung höchstens auf dem Ziel bleiben (in Tagen, aufgerundet): Eine
+ * Sicherung vom Ende eines Monats bleibt als Monatsstand bis zu N Monate, entsprechend Wochen und Tage.
+ */
+export function retentionDays(keep: { daily: number; weekly: number; monthly: number }): number {
+  return Math.max(keep.daily, keep.weekly * 7, keep.monthly * 31);
+}
+
+/** Frist lesbar: „rund 3 Monate“, „rund 4 Wochen“, „7 Tage“. */
+export function retentionLabel(days: number): string {
+  if (days < 28) return `${days} ${days === 1 ? 'Tag' : 'Tage'}`;
+  if (days < 62) return `rund ${Math.round(days / 7)} Wochen`;
+  return `rund ${Math.round(days / 31)} Monate`;
 }
 
 export async function offsiteConfig(): Promise<OffsiteRow> {
@@ -236,6 +263,59 @@ async function moveFile(t: DavTarget, from: string, to: string) {
 async function deleteFile(t: DavTarget, name: string) {
   const res = await davRequest(t, 'DELETE', fileUrl(t, name));
   if (res.status !== 204 && res.status !== 200 && res.status !== 404) throw davError(res, 'Löschen');
+}
+
+/** Muster plus vorläufige Namen (`….part` aus abgebrochenen Übertragungen) – zum vollständigen Aufräumen. */
+const withPart = (re: RegExp) => new RegExp(`${re.source.slice(0, -1)}(?:[.]part)?$`);
+
+/**
+ * Alle Sicherungen von BlaulichtCMS auf einem Ziel löschen (#246: beim Ausschalten bzw. Zielwechsel oder später):
+ * Datenbanksicherungen im Ordner und Volume-Sicherungen im Unterordner `volume/`, jeweils auch vorläufige `.part`.
+ * Andere Dateien bleiben unberührt. Liefert gelöschte und nicht löschbare Dateien.
+ */
+export async function purgeTarget(t: DavTarget): Promise<{ removed: number; failed: string[] }> {
+  let removed = 0;
+  const failed: string[] = [];
+  const del = async (target: DavTarget, names: string[]) => {
+    for (const n of names) {
+      try {
+        await deleteFile(target, n);
+        removed++;
+      } catch (e) {
+        failed.push(n);
+        log('warn', 'backup', `Sicherung außer Haus: ${n} ließ sich nicht löschen: ${(e as Error).message}`);
+      }
+    }
+  };
+  await del(t, (await listRemote(t, withPart(BACKUP_NAME))).map((f) => f.name));
+  const v = { ...t, url: new URL('volume/', t.url).toString() };
+  let volumes: RemoteFile[] = [];
+  try {
+    volumes = await listRemote(v, withPart(VOLUME_NAME));
+  } catch (e) {
+    if (!(e instanceof StepError && /404/.test(e.message))) throw e;
+  }
+  await del(v, volumes.map((f) => f.name));
+  return { removed, failed };
+}
+
+/** Früheres Ziel vormerken (Hinweis im Systemstatus), sofern nicht schon vermerkt. */
+export async function addLeftover(url: string) {
+  await pool.query(
+    `UPDATE backup_offsite SET leftovers = leftovers || jsonb_build_array(jsonb_build_object('url', $1::text, 'since', now()))
+      WHERE id = 1 AND NOT EXISTS (SELECT 1 FROM jsonb_array_elements(leftovers) x WHERE x->>'url' = $1::text)`,
+    [url],
+  );
+}
+
+/** Vermerk zu einem früheren Ziel entfernen (aufgeräumt, wieder aktiv oder von Hand erledigt). */
+export async function removeLeftover(url: string): Promise<boolean> {
+  const r = await pool.query(
+    `UPDATE backup_offsite SET leftovers = COALESCE((SELECT jsonb_agg(x) FROM jsonb_array_elements(leftovers) x WHERE x->>'url' <> $1::text), '[]'::jsonb)
+      WHERE id = 1 AND EXISTS (SELECT 1 FROM jsonb_array_elements(leftovers) x WHERE x->>'url' = $1::text)`,
+    [url],
+  );
+  return (r.rowCount ?? 0) > 0;
 }
 
 /** Zeitpunkt (UTC) aus dem Dateinamen. */

@@ -82,7 +82,7 @@ Warnfeeds (amtliche Warnungen) ◀──Abruf───────────�
 | Systemprotokoll (`app_logs`) | Handelnde (selten) | technische Meldungen | **30 Tage** | `retention.log_days` |
 | Benachrichtigungen | Empfänger | Text, Link | 60 Tage | – |
 | Push-Geräte (`push_subscriptions`, Wahl je Art in `users.preferences`) | Konten mit eingeschaltetem Push | Adresse beim Push-Dienst des Browsers, öffentliche Geräteschlüssel, Gerätebezeichnung (Browser/Betriebssystem), Zeitpunkte und letzter Fehler der Zustellung | bis zum Entfernen durch die Person, bei erloschenem Abo (404/410) bzw. nach 10 Fehlschlägen in Folge sofort; mit dem Konto | *Mein Konto → Benachrichtigungen* |
-| Sicherungen (Volume, Datenbank) | alle | Kopie aller Daten | rund **4 Monate** (siehe [Löschung und Sicherungen](betrieb.md#löschung-und-sicherungen)) | Host-Cron, *Einstellungen → Sicherung* |
+| Sicherungen (Volume, Datenbank), auch auf dem Ziel außer Haus | alle | Kopie aller Daten | rund **4 Monate** mit den Standardwerten (siehe [Löschung und Sicherungen](betrieb.md#löschung-und-sicherungen)); Sicherung außer Haus Standard 7 Tage/4 Wochen/3 Monate, höchstens 90 Tage/52 Wochen/24 Monate – längere Aufbewahrung als 4 Monate nur mit Bestätigung, dann hier und im VVT anpassen | Host-Cron, *Einstellungen → Sicherung*, *Einstellungen → Sicherung außer Haus* |
 | Zugriffsprotokoll des Proxys | alle Aufrufenden | IP, Adresse (ggf. Token), Browser | abschalten bzw. **7 Tage** | am Proxy |
 
 **Cookies** (nur technisch notwendig, keine Einwilligung nötig, aber in der Datenschutzerklärung zu nennen):
@@ -132,6 +132,7 @@ was fällig ist. Jeder Lauf steht im Audit (`retention.run`).
 | Microsoft 365 (optional, Versandweg „Microsoft 365“) | alle ausgehenden E-Mails | Auftragsverarbeiter (bestehender Vertrag der Organisation) | AV-Vertrag/Online Services DPA, Postfach-Beschränkung für die App |
 | Zuständige Stellen (Warnempfänger) | Warnentwurf, PDF, Rückrufkontakt | eigene Verantwortliche | Übermittlungsgrundlage |
 | Hosting des Docker-Hosts *[Name]* | alle Daten (verschlüsselte Sicherungen getrennt) | Auftragsverarbeiter (falls extern) | AV-Vertrag, TOMs |
+| Sicherungsziel außer Haus *[NAS/zweiter Standort bzw. Dienstleister]* – nur mit *Sicherung außer Haus* bzw. Volume-Sicherung | verschlüsselte Datenbank- und Volume-Sicherungen (alle Daten, nur als Chiffrat; Schlüssel bleiben beim Verantwortlichen) | intern bzw. Auftragsverarbeiter (externer Speicher) | AV-Vertrag bei externem Speicher, Standort, Zugriff; Aufbewahrung laut Einstellung; nach Ausschalten oder Zielwechsel alte Sicherungen dort löschen (Systemstatus erinnert) |
 | Zentrale Protokollierung (optional, `AUDIT_FORWARD`) | Audit-Einträge | intern bzw. Auftragsverarbeiter | Frist und Zugriff dort |
 
 ## Rechtsgrundlagen (Vorschlag zur Prüfung)

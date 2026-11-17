@@ -8,7 +8,26 @@ import { StepError } from '../lib/errors.js';
 import { normalizeFingerprint } from '../lib/http.js';
 import { readSecret, revokeSecret, storeSecret } from '../lib/secrets.js';
 import { DrillRunningError, recentDrills, scheduleDrill } from '../ops/drill.js';
-import { fetchRemoteBackup, listRemote, listRemoteVolumes, normalizeDavUrl, OFFSITE_SECRET_OWNER, offsiteConfig, scheduleUpload, targetFromConfig, testTarget, type DavTarget, type OffsiteRow } from '../ops/offsite.js';
+import {
+  addLeftover,
+  DOCUMENTED_RETENTION_DAYS,
+  fetchRemoteBackup,
+  KEEP_LIMITS,
+  listRemote,
+  listRemoteVolumes,
+  normalizeDavUrl,
+  OFFSITE_SECRET_OWNER,
+  offsiteConfig,
+  purgeTarget,
+  removeLeftover,
+  retentionDays,
+  retentionLabel,
+  scheduleUpload,
+  targetFromConfig,
+  testTarget,
+  type DavTarget,
+  type OffsiteRow,
+} from '../ops/offsite.js';
 
 /**
  * Sicherung außer Haus und Probe-Wiederherstellung (#212) – Einstellungen → Sicherung außer Haus.
@@ -32,6 +51,7 @@ const view = (c: OffsiteRow) => ({
   last_ok_file: c.last_ok_file,
   last_error: c.last_error,
   last_error_at: c.last_error_at,
+  leftovers: c.leftovers ?? [],
 });
 
 const targetInput = z.object({
@@ -44,10 +64,14 @@ const targetInput = z.object({
 
 const configInput = targetInput.extend({
   enabled: z.boolean(),
-  keepDaily: z.number().int().min(1).max(365),
-  keepWeekly: z.number().int().min(0).max(260),
-  keepMonthly: z.number().int().min(0).max(120),
+  keepDaily: z.number().int().min(KEEP_LIMITS.daily[0]).max(KEEP_LIMITS.daily[1]),
+  keepWeekly: z.number().int().min(KEEP_LIMITS.weekly[0]).max(KEEP_LIMITS.weekly[1]),
+  keepMonthly: z.number().int().min(KEEP_LIMITS.monthly[0]).max(KEEP_LIMITS.monthly[1]),
   drillInterval: z.enum(['off', 'weekly', 'monthly']),
+  /** Aufbewahrung über der dokumentierten Frist bewusst bestätigt (#246) */
+  acknowledgeRetention: z.boolean().optional(),
+  /** Ausschalten bzw. anderes Ziel: Sicherungen auf dem bisherigen Ziel löschen oder (Standard) behalten (#246) */
+  oldTarget: z.enum(['keep', 'delete']).optional(),
 });
 
 function cleanFingerprint(v: string): string {
@@ -106,12 +130,34 @@ export async function backupOffsiteRoutes(app: FastifyInstance) {
     if (!b.url && b.enabled) throw badRequest('Bitte zuerst die Adresse des Ziels eintragen.');
     const t = b.url ? await targetFrom(b, c) : { url: '', username: b.username, password: '', fingerprint: cleanFingerprint(b.fingerprint) };
     if (targetChanged(b, t, c)) assertRecentAuth(req);
+    // Aufbewahrung über der dokumentierten Frist (#246): nur mit ausdrücklicher Bestätigung (Art. 5 Abs. 1 lit. e DSGVO)
+    const keep = { daily: b.keepDaily, weekly: b.keepWeekly, monthly: b.keepMonthly };
+    const keepChanged = keep.daily !== c.keep_daily || keep.weekly !== c.keep_weekly || keep.monthly !== c.keep_monthly;
+    const days = retentionDays(keep);
+    if (keepChanged && days > DOCUMENTED_RETENTION_DAYS && !b.acknowledgeRetention) {
+      throw new AppError(400, 'offsite_retention_confirm', `Mit dieser Aufbewahrung bleiben gelöschte Daten bis zu ${retentionLabel(days)} auf dem Ziel – länger als die in den Datenschutzhinweisen genannten rund 4 Monate. Bitte bestätigen und die Frist im Verzeichnis der Verarbeitungstätigkeiten anpassen.`, { days });
+    }
     // Einschalten bzw. geändertes Ziel nur nach bestandenem Verbindungstest mit genau diesen Angaben
     let tested = false;
     if (b.enabled && t.url && targetChanged(b, t, c)) {
       const r = await testTarget(t);
       if (!r.ok) throw new AppError(400, 'offsite_test_failed', `Verbindungstest fehlgeschlagen: ${r.error ?? 'unbekannter Fehler'}`, { test: r });
       tested = true;
+    }
+    // Ausschalten oder anderes Ziel (#246): Sicherungen auf dem bisherigen Ziel löschen (vor dem Speichern, mit den
+    // bisherigen Zugangsdaten) oder als „frühere Sicherungen“ vormerken – sonst lägen sie unbegrenzt dort
+    const leaving = !!c.url && (t.url !== c.url || (c.enabled && !b.enabled));
+    let purged: number | null = null;
+    if (leaving && b.oldTarget === 'delete') {
+      assertRecentAuth(req);
+      try {
+        const r = await purgeTarget(await targetFromConfig(c));
+        if (r.failed.length) throw new Error(`${r.failed.length} Datei(en) ließen sich nicht löschen`);
+        purged = r.removed;
+      } catch (e) {
+        await audit(req.auth!.actor, 'backup.offsite_purged', { type: 'backup', label: new URL(c.url).host }, { fehler: stepMessage(e).message.slice(0, 300) }, 'failed');
+        throw new AppError(502, 'offsite_cleanup_failed', `Sicherungen auf dem bisherigen Ziel ließen sich nicht löschen: ${stepMessage(e).message} – nichts gespeichert. Zum Speichern „Behalten“ wählen und die Dateien später entfernen.`);
+      }
     }
     await tx(async (db) => {
       let secretId = c.secret_id;
@@ -123,19 +169,58 @@ export async function backupOffsiteRoutes(app: FastifyInstance) {
       await db.query(
         `UPDATE backup_offsite SET enabled = $1, url = $2, username = $3, secret_id = $4, tls_fingerprint = $5, keep_daily = $6, keep_weekly = $7,
                 keep_monthly = $8, drill_interval = $9, tested_at = CASE WHEN $10 THEN now() ELSE tested_at END,
-                last_error = CASE WHEN $11 THEN NULL ELSE last_error END, updated_at = now(), updated_by = $12 WHERE id = 1`,
+                last_error = CASE WHEN $11 THEN NULL ELSE last_error END,
+                last_ok_at = CASE WHEN $11 THEN NULL ELSE last_ok_at END, last_ok_file = CASE WHEN $11 THEN NULL ELSE last_ok_file END,
+                updated_at = now(), updated_by = $12 WHERE id = 1`,
         [b.enabled && !!t.url, t.url, t.username, secretId, t.fingerprint, b.keepDaily, b.keepWeekly, b.keepMonthly, b.drillInterval, tested, t.url !== c.url, req.auth!.user?.id ?? null],
       );
     });
+    if (leaving) {
+      if (purged !== null) await removeLeftover(c.url);
+      else if (c.last_ok_at) await addLeftover(c.url);
+    }
+    // Wieder auf ein früheres Ziel umgestellt: dort greift die Aufbewahrung wieder
+    if (b.enabled && t.url) await removeLeftover(t.url);
     const changes: Record<string, unknown> = {};
     if (b.enabled !== c.enabled) changes.eingeschaltet = b.enabled;
     if (t.url !== c.url) changes.ziel = { vorher: c.url || null, nachher: t.url || null };
     if (t.username !== c.username) changes.benutzer = t.username;
     if (b.password) changes.passwort = 'neu gesetzt';
     if (t.fingerprint !== c.tls_fingerprint) changes.zertifikat = t.fingerprint ? `Fingerabdruck ${t.fingerprint.slice(0, 23)}…` : 'normale Prüfung';
-    if (b.keepDaily !== c.keep_daily || b.keepWeekly !== c.keep_weekly || b.keepMonthly !== c.keep_monthly) changes.aufbewahrung = `${b.keepDaily}/${b.keepWeekly}/${b.keepMonthly}`;
+    if (keepChanged) changes.aufbewahrung = `${b.keepDaily}/${b.keepWeekly}/${b.keepMonthly} (bis ${retentionLabel(days)}${days > DOCUMENTED_RETENTION_DAYS ? ', über der dokumentierten Frist bestätigt' : ''})`;
+    if (leaving) changes.bisheriges_ziel = purged !== null ? `${purged} Sicherung(en) gelöscht` : c.last_ok_at ? 'Sicherungen behalten (Hinweis im Systemstatus)' : 'nichts übertragen';
     if (b.drillInterval !== c.drill_interval) changes.probe = b.drillInterval;
     await audit(req.auth!.actor, 'backup.offsite_changed', { type: 'backup', label: 'Sicherung außer Haus' }, changes);
+    return { ok: true, config: view(await offsiteConfig()) };
+  });
+
+  /**
+   * Sicherungen auf dem eingetragenen, ausgeschalteten Ziel löschen (#246) – z. B. nach „Ausschalten, Sicherungen
+   * behalten“. Löscht nur Dateien mit dem Namensmuster von BlaulichtCMS; verlangt eine frische Passwortbestätigung.
+   */
+  app.post('/backups/offsite/purge', { preHandler: requireAuth('backup.manage'), config: { rateLimit: { max: 6, timeWindow: '1 minute' } } }, async (req) => {
+    const c = await offsiteConfig();
+    if (!c.url) throw badRequest('Kein Ziel eingetragen.');
+    if (c.enabled) throw badRequest('Die Sicherung außer Haus ist eingeschaltet – erst ausschalten, dann die Sicherungen auf dem Ziel löschen.');
+    assertRecentAuth(req);
+    const host = new URL(c.url).host;
+    try {
+      const r = await purgeTarget(await targetFromConfig(c));
+      if (!r.failed.length) await removeLeftover(c.url);
+      await audit(req.auth!.actor, 'backup.offsite_purged', { type: 'backup', label: host }, { geloescht: r.removed, fehlgeschlagen: r.failed.length }, r.failed.length ? 'failed' : 'ok');
+      return { removed: r.removed, failed: r.failed.length, config: view(await offsiteConfig()) };
+    } catch (e) {
+      const m = stepMessage(e);
+      await audit(req.auth!.actor, 'backup.offsite_purged', { type: 'backup', label: host }, { fehler: m.message.slice(0, 300) }, 'failed');
+      throw new AppError(502, 'offsite_unreachable', m.message, m.hint ? { hint: m.hint } : undefined);
+    }
+  });
+
+  /** Hinweis auf ein früheres Ziel entfernen – die Dateien dort wurden anders entfernt (z. B. am NAS von Hand). */
+  app.post('/backups/offsite/leftovers/dismiss', { preHandler: requireAuth('backup.manage') }, async (req) => {
+    const { url } = z.object({ url: z.string().max(500) }).parse(req.body);
+    if (!(await removeLeftover(url))) throw notFound('Kein solcher Hinweis.');
+    await audit(req.auth!.actor, 'backup.offsite_leftover_dismissed', { type: 'backup', label: url.slice(0, 200) });
     return { ok: true, config: view(await offsiteConfig()) };
   });
 
@@ -196,7 +281,7 @@ export async function backupHealth() {
   const drill = await one<any>(`SELECT id, source, file_name, trigger, status, created_at, finished_at, error, result->'durationMs' AS duration_ms FROM restore_drills ORDER BY created_at DESC LIMIT 1`);
   const pending = await one<{ n: number }>(`SELECT count(*)::int AS n FROM backups WHERE offsite_status = 'pending'`);
   return {
-    offsite: { enabled: c.enabled, last_ok_at: c.last_ok_at, last_ok_file: c.last_ok_file, last_error: c.last_error, last_error_at: c.last_error_at, pending: pending?.n ?? 0 },
+    offsite: { enabled: c.enabled, last_ok_at: c.last_ok_at, last_ok_file: c.last_ok_file, last_error: c.last_error, last_error_at: c.last_error_at, pending: pending?.n ?? 0, leftovers: c.leftovers ?? [] },
     drill,
     drill_interval: c.drill_interval,
   };

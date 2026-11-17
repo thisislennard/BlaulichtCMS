@@ -81,6 +81,7 @@ const SERVICE_ICON: Record<string, string> = {
   disk: "HardDrive",
   proxy: "Globe",
   offsite: "UploadCloud",
+  "offsite-leftovers": "Archive",
   drill: "FlaskConical",
 };
 

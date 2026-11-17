@@ -17,8 +17,8 @@ import { claimJobs, completeJob } from '../src/jobs/queue.js';
 import { httpRequest, normalizeFingerprint, peekCertificate } from '../src/lib/http.js';
 import { sealAudit } from '../src/lib/audit-chain.js';
 import { backupDir } from '../src/ops/backup.js';
-import { normalizeDavUrl, parseMultistatus, retentionPlan, uploadBackup, uploadVolumeStream } from '../src/ops/offsite.js';
-import { dropProbeDatabase, openProbePool, probeUrl, runDrill, scheduleDrill } from '../src/ops/drill.js';
+import { normalizeDavUrl, parseMultistatus, retentionDays, retentionLabel, retentionPlan, uploadBackup, uploadVolumeStream } from '../src/ops/offsite.js';
+import { cleanupProbeDatabases, dropProbeDatabase, openProbePool, probeUrl, runDrill, scheduleDrill } from '../src/ops/drill.js';
 import { systemStatus } from '../src/routes/system.js';
 import { config } from '../src/config.js';
 
@@ -49,6 +49,15 @@ describe('Sicherung außer Haus: Bausteine', () => {
     expect(plan.keep.length + plan.remove.length).toBe(121);
     // Nur eine Sicherung: bleibt immer
     expect(retentionPlan([n('2020-01-01')], { daily: 1, weekly: 0, monthly: 0 }).remove).toEqual([]);
+  });
+
+  it('resultierende Aufbewahrung aus Tagen, Wochen und Monaten (#246)', () => {
+    expect(retentionDays({ daily: 7, weekly: 4, monthly: 3 })).toBe(93);
+    expect(retentionLabel(93)).toBe('rund 3 Monate');
+    expect(retentionDays({ daily: 7, weekly: 4, monthly: 0 })).toBe(28);
+    expect(retentionLabel(28)).toBe('rund 4 Wochen');
+    expect(retentionLabel(7)).toBe('7 Tage');
+    expect(retentionDays({ daily: 1, weekly: 52, monthly: 2 })).toBe(364);
   });
 
   it('Adresse: nur https, ohne Zugangsdaten, Abfrage oder Anker; Pfad endet auf /', () => {
@@ -517,12 +526,136 @@ describe('Sicherung außer Haus (WebDAV) und Probe-Wiederherstellung', () => {
     await su.end();
   });
 
+  it('Reste abgebrochener Proben werden auch ohne neue Probe entfernt – nie bei laufender Probe oder offener Verbindung (#246)', async () => {
+    const su = new pg.Client({ connectionString: config.adminDatabaseUrl });
+    await su.connect();
+    const a = 'blaulichtcms_probe_a1a1a1a1';
+    const b = 'blaulichtcms_probe_b2b2b2b2';
+    const names = async () => (await many<{ datname: string }>(`SELECT datname FROM pg_database WHERE datname LIKE 'blaulichtcms_probe_%' ORDER BY 1`)).map((r) => r.datname);
+    try {
+      await su.query(`CREATE DATABASE ${a}`);
+      await su.query(`CREATE DATABASE ${b}`);
+      // laufende Probe: nichts anfassen
+      const run = await one(`INSERT INTO restore_drills (source, file_name, trigger, status, started_at) VALUES ('local','x.bcbk','manual','running', now()) RETURNING id`);
+      expect(await cleanupProbeDatabases()).toBe(0);
+      expect(await names()).toEqual([a, b]);
+      await pool.query(`UPDATE restore_drills SET status = 'failed', finished_at = now() WHERE id = $1`, [run.id]);
+      // offene Verbindung zu b: bleibt; a wird entfernt
+      const other = new pg.Client({ connectionString: probeUrl(config.adminDatabaseUrl, b) });
+      await other.connect();
+      expect(await cleanupProbeDatabases()).toBe(1);
+      expect(await names()).toEqual([b]);
+      await other.end();
+      expect(await cleanupProbeDatabases()).toBe(1);
+      expect(await names()).toEqual([]);
+    } finally {
+      await su.query(`DROP DATABASE IF EXISTS ${a}`).catch(() => {});
+      await su.query(`DROP DATABASE IF EXISTS ${b}`).catch(() => {});
+      await su.end();
+    }
+  });
+
+  it('Aufbewahrung: Standard 3 Monate, niedrigere Grenzen, Bestätigung über der dokumentierten Frist (#246)', async () => {
+    const def = await one(`SELECT column_default AS d FROM information_schema.columns WHERE table_name = 'backup_offsite' AND column_name = 'keep_monthly'`);
+    expect(def.d).toBe('3');
+    expect((await admin.put('/backups/offsite', cfg({ password: undefined, keepMonthly: 25 }))).status).toBe(400);
+    expect((await admin.put('/backups/offsite', cfg({ password: undefined, keepDaily: 91 }))).status).toBe(400);
+    expect((await admin.put('/backups/offsite', cfg({ password: undefined, keepWeekly: 53 }))).status).toBe(400);
+    const r1 = await admin.put('/backups/offsite', cfg({ password: undefined, keepMonthly: 6 }));
+    expect(r1.status).toBe(400);
+    expect(r1.json.error).toBe('offsite_retention_confirm');
+    expect(r1.json.message).toMatch(/rund 6 Monate/);
+    expect((await one(`SELECT keep_monthly FROM backup_offsite`)).keep_monthly).toBe(0);
+    const r2 = await admin.put('/backups/offsite', cfg({ password: undefined, keepMonthly: 6, acknowledgeRetention: true }));
+    expect(r2.status, JSON.stringify(r2.json)).toBe(200);
+    expect(r2.json.config.keep_monthly).toBe(6);
+    const a = await one(`SELECT details FROM audit_events WHERE action = 'backup.offsite_changed' ORDER BY at DESC LIMIT 1`);
+    expect(JSON.stringify(a.details)).toMatch(/bestätigt/);
+    // unverändert gespeichert (z. B. nur Probe-Zeitplan): keine erneute Bestätigung nötig
+    expect((await admin.put('/backups/offsite', cfg({ password: undefined, keepMonthly: 6, drillInterval: 'monthly' }))).status).toBe(200);
+    // innerhalb der dokumentierten Frist: ohne Bestätigung
+    expect((await admin.put('/backups/offsite', cfg({ password: undefined, keepMonthly: 4 }))).status).toBe(200);
+    expect((await admin.put('/backups/offsite', cfg({ password: undefined }))).status).toBe(200);
+  });
+
   it('Ausschalten: keine weiteren Übertragungen', async () => {
     const r = await admin.put('/backups/offsite', cfg({ enabled: false, password: undefined }));
     expect(r.status, JSON.stringify(r.json)).toBe(200);
+    // ohne Wahl: Sicherungen bleiben auf dem Ziel, der Systemstatus erinnert daran (#246)
+    expect(r.json.config.leftovers.map((l: any) => l.url)).toEqual([target()]);
+    expect((await systemStatus()).services.find((s: any) => s.id === 'offsite-leftovers')).toMatchObject({ state: 'warning' });
     const b = await admin.post('/backups', {});
     expect((await one(`SELECT offsite_status FROM backups WHERE id = $1`, [b.json.id])).offsite_status).toBeNull();
     expect(await uploadVolumeStream('blaulichtcms-2026-11-17-023000.tar.gz.enc', 3, 'b'.repeat(64), Readable.from([Buffer.from('abc')]))).toBeNull();
     expect((await systemStatus()).services.find((s: any) => s.id === 'offsite')).toBeUndefined();
+  });
+
+  it('Ausgeschaltet: Sicherungen auf dem Ziel löschen – nur Dateien von BlaulichtCMS, mit Passwortbestätigung (#246)', async () => {
+    const dir = '/sicherung/blaulichtcms/';
+    files.set(`${dir}blaulichtcms-2026-02-01-03-00-00-bbbbbb.bcbk.part`, Buffer.from('halb'));
+    const before = [...files.keys()].filter((f) => f.startsWith(dir));
+    expect(before.some((f) => /\.bcbk$/.test(f))).toBe(true);
+    expect(before.some((f) => f.startsWith(`${dir}volume/`))).toBe(true);
+    await pool.query(`UPDATE sessions SET reauth_at = now() - interval '1 hour'`);
+    expect((await admin.post('/backups/offsite/purge', {})).json.error).toBe('reauth_required');
+    await freshReauth();
+    const r = await admin.post('/backups/offsite/purge', {});
+    expect(r.status, JSON.stringify(r.json)).toBe(200);
+    expect(r.json.failed).toBe(0);
+    expect(r.json.removed).toBe(before.filter((f) => /blaulichtcms-[^/]+\.(bcbk|enc)(\.part)?$/.test(f)).length);
+    expect([...files.keys()].filter((f) => f.startsWith(dir))).toEqual([`${dir}notizen.txt`]);
+    expect(r.json.config.leftovers).toEqual([]);
+    expect((await systemStatus()).services.find((s: any) => s.id === 'offsite-leftovers')).toBeUndefined();
+    expect(await one(`SELECT 1 FROM audit_events WHERE action = 'backup.offsite_purged' AND result = 'ok'`)).toBeTruthy();
+  });
+
+  it('Zielwechsel: bisheriges Ziel löschen oder behalten; Hinweis entfernen (#246)', async () => {
+    const other = `${base}/sicherung/zweites/`;
+    const inA = () => [...files.keys()].filter((f) => f.startsWith('/sicherung/blaulichtcms/') && f.endsWith('.bcbk'));
+    const inB = () => [...files.keys()].filter((f) => f.startsWith('/sicherung/zweites/') && f.endsWith('.bcbk'));
+    await freshReauth();
+    // eingeschaltet ist die Löschfunktion gesperrt
+    expect((await admin.put('/backups/offsite', cfg())).status).toBe(200);
+    expect((await admin.post('/backups/offsite/purge', {})).status).toBe(400);
+    await admin.post('/backups', {});
+    await drain();
+    expect(inA().length).toBe(1);
+    // Wechsel auf B mit „Löschen“: A ist danach leer, der Stand der Übertragung gehört zu B
+    const toB = await admin.put('/backups/offsite', cfg({ url: other, oldTarget: 'delete' }));
+    expect(toB.status, JSON.stringify(toB.json)).toBe(200);
+    expect(inA()).toEqual([]);
+    expect(files.has('/sicherung/blaulichtcms/notizen.txt')).toBe(true);
+    expect(toB.json.config).toMatchObject({ url: other, last_ok_file: null, leftovers: [] });
+    await admin.post('/backups', {});
+    await drain();
+    expect(inB().length).toBe(1);
+    // zurück auf A ohne Wahl: B bleibt liegen und wird vorgemerkt
+    const toA = await admin.put('/backups/offsite', cfg());
+    expect(toA.status, JSON.stringify(toA.json)).toBe(200);
+    expect(inB().length).toBe(1);
+    expect(toA.json.config.leftovers.map((l: any) => l.url)).toEqual([other]);
+    expect((await systemStatus()).services.find((s: any) => s.id === 'offsite-leftovers')?.detail).toMatch(/127\.0\.0\.1/);
+    // Hinweis entfernen (am NAS von Hand aufgeräumt)
+    expect((await admin.post('/backups/offsite/leftovers/dismiss', { url: 'https://unbekannt.example/' })).status).toBe(404);
+    expect((await editor.post('/backups/offsite/leftovers/dismiss', { url: other })).status).toBe(403);
+    const d = await admin.post('/backups/offsite/leftovers/dismiss', { url: other });
+    expect(d.status).toBe(200);
+    expect(d.json.config.leftovers).toEqual([]);
+    expect(await one(`SELECT 1 FROM audit_events WHERE action = 'backup.offsite_leftover_dismissed'`)).toBeTruthy();
+    // Wechsel mit „Löschen“, aber das bisherige Ziel ist nicht erreichbar: nichts gespeichert
+    const prev = server.listeners('request')[0] as any;
+    server.removeAllListeners('request');
+    files.set('/sicherung/blaulichtcms/blaulichtcms-2026-03-01-03-00-00-cccccc.bcbk', Buffer.from('alt'));
+    server.on('request', (req, res) => (req.method === 'DELETE' && String(req.url).startsWith('/sicherung/blaulichtcms/') ? res.writeHead(500).end() : prev(req, res)));
+    try {
+      const fail = await admin.put('/backups/offsite', cfg({ url: other, oldTarget: 'delete' }));
+      expect(fail.status).toBe(502);
+      expect(fail.json.error).toBe('offsite_cleanup_failed');
+      expect((await one(`SELECT url FROM backup_offsite`)).url).toBe(target());
+    } finally {
+      server.removeAllListeners('request');
+      server.on('request', prev);
+    }
+    expect((await admin.put('/backups/offsite', cfg({ enabled: false, password: undefined, oldTarget: 'delete' }))).status).toBe(200);
   });
 });

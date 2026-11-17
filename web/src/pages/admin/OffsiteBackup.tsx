@@ -3,9 +3,9 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ApiError, get, post, put } from '../../api/client';
 import { Badge, Button, FieldWrap, Input, Notice, Select, Switch, Table, Td, Th } from '../../components/ui/core';
 import { Icon } from '../../components/ui/Icon';
-import { SecretField, useConfirm, useToast } from '../../components/ui/overlays';
+import { Dialog, SecretField, useConfirm, useToast } from '../../components/ui/overlays';
 import { HelpTip } from '../../components/ui/HelpTip';
-import { fmtBytes, fmtDateTime, fmtDuration, fmtNumber, fmtRelative } from '../../lib/format';
+import { fmtBytes, fmtDate, fmtDateTime, fmtDuration, fmtNumber, fmtRelative } from '../../lib/format';
 import { FieldGrid, LoadError, SectionCard } from './shared';
 
 interface OffsiteConfig {
@@ -23,6 +23,8 @@ interface OffsiteConfig {
   last_ok_file: string | null;
   last_error: string | null;
   last_error_at: string | null;
+  /** frühere Ziele, auf denen noch Sicherungen liegen können */
+  leftovers: { url: string; since: string }[];
 }
 interface TestResult {
   ok: boolean;
@@ -64,6 +66,23 @@ const fromConfig = (c: OffsiteConfig): Form => ({ enabled: c.enabled, url: c.url
 /** Ganze Zahl im Bereich, sonst null (Eingabe bleibt beim Tippen unverändert, geprüft wird beim Speichern). */
 const intIn = (v: string, lo: number, hi: number) => (/^\d+$/.test(v.trim()) && Number(v) >= lo && Number(v) <= hi ? Number(v) : null);
 
+/** Grenzen der Aufbewahrung wie auf dem Server (ops/offsite.ts, KEEP_LIMITS). */
+const KEEP = { daily: [1, 90], weekly: [0, 52], monthly: [0, 24] } as const;
+/** Dokumentierte Frist für gelöschte Daten in Sicherungen (Datenschutzhinweise: rund 4 Monate). */
+const DOCUMENTED_RETENTION_DAYS = 124;
+/** Längste Aufbewahrung auf dem Ziel in Tagen – wie retentionDays() auf dem Server. */
+const retentionDays = (k: { daily: number; weekly: number; monthly: number }) => Math.max(k.daily, k.weekly * 7, k.monthly * 31);
+const retentionLabel = (days: number) => (days < 28 ? `${days} ${days === 1 ? 'Tag' : 'Tage'}` : days < 62 ? `rund ${Math.round(days / 7)} Wochen` : `rund ${Math.round(days / 31)} Monate`);
+const hostOf = (u: string) => {
+  try {
+    return new URL(u).host;
+  } catch {
+    return u;
+  }
+};
+/** Adresse wie der Server vergleichen (Pfad endet auf „/“). */
+const sameUrl = (a: string, b: string) => a.trim().replace(/\/*$/, '/') === b.trim().replace(/\/*$/, '/');
+
 const DRILL_STATUS: Record<Drill['status'], { tone: 'success' | 'error' | 'primary' | 'neutral'; label: string }> = {
   queued: { tone: 'neutral', label: 'eingeplant' },
   running: { tone: 'primary', label: 'läuft' },
@@ -101,6 +120,8 @@ export function OffsiteBackupSection() {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [editingPassword, setEditingPassword] = useState(false);
+  /** Frage beim Ausschalten bzw. Zielwechsel: Sicherungen auf dem bisherigen Ziel löschen oder behalten (#246) */
+  const [leaveAsk, setLeaveAsk] = useState<{ host: string; disabling: boolean; resolve: (v: 'keep' | 'delete' | null) => void } | null>(null);
   const c = q.data?.config;
   useEffect(() => {
     if (c && !form) setForm(fromConfig(c));
@@ -112,7 +133,11 @@ export function OffsiteBackupSection() {
   const set = (p: Partial<Form>) => setForm({ ...form, ...p });
   const dirty = JSON.stringify({ ...form, password: '' }) !== JSON.stringify(fromConfig(c)) || !!form.password;
   const target = { url: form.url.trim(), username: form.username.trim(), fingerprint: form.fingerprint.trim(), ...(form.password ? { password: form.password } : {}) };
-  const keepInvalid = intIn(form.keepDaily, 1, 365) === null || intIn(form.keepWeekly, 0, 260) === null || intIn(form.keepMonthly, 0, 120) === null;
+  const keepVals = { daily: intIn(form.keepDaily, ...KEEP.daily), weekly: intIn(form.keepWeekly, ...KEEP.weekly), monthly: intIn(form.keepMonthly, ...KEEP.monthly) };
+  const keepInvalid = keepVals.daily === null || keepVals.weekly === null || keepVals.monthly === null;
+  const keepDays = keepInvalid ? null : retentionDays(keepVals as { daily: number; weekly: number; monthly: number });
+  const keepChanged = keepVals.daily !== c.keep_daily || keepVals.weekly !== c.keep_weekly || keepVals.monthly !== c.keep_monthly;
+  const tooLong = keepDays !== null && keepDays > DOCUMENTED_RETENTION_DAYS;
   const failedLater = c.last_error_at && (!c.last_ok_at || new Date(c.last_error_at) > new Date(c.last_ok_at));
 
   const runTest = async () => {
@@ -128,11 +153,30 @@ export function OffsiteBackupSection() {
     }
   };
   const save = async () => {
-    setBusy('save');
     setError(null);
+    // Aufbewahrung über der dokumentierten Frist nur mit Bestätigung (Speicherbegrenzung, Art. 5 Abs. 1 lit. e DSGVO)
+    if (keepChanged && tooLong) {
+      const ok = await ask({
+        title: 'Längere Aufbewahrung bestätigen?',
+        text: `Gelöschte Daten (z. B. nach einer Datenschutzanfrage entfernte Fotos) bleiben damit bis zu ${retentionLabel(keepDays!)} auf dem Ziel – länger als die in den Datenschutzhinweisen genannten rund 4 Monate. Die Frist dann im Verzeichnis der Verarbeitungstätigkeiten und in Auskünften entsprechend angeben.`,
+        confirmLabel: 'Bestätigen und speichern',
+        danger: false,
+      });
+      if (!ok) return;
+    }
+    // Ausschalten oder anderes Ziel: Was passiert mit den Sicherungen auf dem bisherigen Ziel?
+    const disabling = c.enabled && !form.enabled;
+    let oldTarget: 'keep' | 'delete' | undefined;
+    if (c.url && c.last_ok_at && (disabling || !sameUrl(form.url, c.url))) {
+      const choice = await new Promise<'keep' | 'delete' | null>((resolve) => setLeaveAsk({ host: hostOf(c.url), disabling, resolve }));
+      setLeaveAsk(null);
+      if (!choice) return;
+      oldTarget = choice;
+    }
+    setBusy('save');
     try {
-      const r = await put<{ config: OffsiteConfig }>('/backups/offsite', { ...target, enabled: form.enabled, keepDaily: intIn(form.keepDaily, 1, 365), keepWeekly: intIn(form.keepWeekly, 0, 260), keepMonthly: intIn(form.keepMonthly, 0, 120), drillInterval: form.drillInterval });
-      toast({ tone: 'success', title: 'Gespeichert', text: r.config.enabled ? 'Neue Sicherungen gehen ab jetzt zusätzlich außer Haus.' : undefined });
+      const r = await put<{ config: OffsiteConfig }>('/backups/offsite', { ...target, enabled: form.enabled, keepDaily: keepVals.daily, keepWeekly: keepVals.weekly, keepMonthly: keepVals.monthly, drillInterval: form.drillInterval, ...(keepChanged && tooLong ? { acknowledgeRetention: true } : {}), ...(oldTarget ? { oldTarget } : {}) });
+      toast({ tone: 'success', title: 'Gespeichert', text: r.config.enabled ? 'Neue Sicherungen gehen ab jetzt zusätzlich außer Haus.' : oldTarget === 'delete' ? 'Die Sicherungen auf dem bisherigen Ziel wurden gelöscht.' : undefined });
       setForm(fromConfig(r.config));
       setEditingPassword(false);
       qc.setQueryData(['backup-offsite'], (old: any) => (old ? { ...old, config: r.config } : old));
@@ -213,16 +257,26 @@ export function OffsiteBackupSection() {
       <fieldset className="m-0 p-0 border-0 flex flex-col gap-2">
         <legend className="text-sm font-medium mb-1">Aufbewahrung auf dem Ziel</legend>
         <FieldGrid className="grid-cols-[repeat(auto-fit,minmax(min(160px,100%),1fr))]">
-          <FieldWrap label="Tage (je Tag die neueste)" htmlFor="os-kd" error={intIn(form.keepDaily, 1, 365) === null ? '1 bis 365' : undefined}>
-            <Input id="os-kd" type="number" min={1} max={365} value={form.keepDaily} invalid={intIn(form.keepDaily, 1, 365) === null} onChange={(e) => set({ keepDaily: e.target.value })} />
+          <FieldWrap label="Tage (je Tag die neueste)" htmlFor="os-kd" error={keepVals.daily === null ? `${KEEP.daily[0]} bis ${KEEP.daily[1]}` : undefined}>
+            <Input id="os-kd" type="number" min={KEEP.daily[0]} max={KEEP.daily[1]} value={form.keepDaily} invalid={keepVals.daily === null} onChange={(e) => set({ keepDaily: e.target.value })} />
           </FieldWrap>
-          <FieldWrap label="Wochen (je Woche die neueste)" htmlFor="os-kw" error={intIn(form.keepWeekly, 0, 260) === null ? '0 bis 260' : undefined}>
-            <Input id="os-kw" type="number" min={0} max={260} value={form.keepWeekly} invalid={intIn(form.keepWeekly, 0, 260) === null} onChange={(e) => set({ keepWeekly: e.target.value })} />
+          <FieldWrap label="Wochen (je Woche die neueste)" htmlFor="os-kw" error={keepVals.weekly === null ? `${KEEP.weekly[0]} bis ${KEEP.weekly[1]}` : undefined}>
+            <Input id="os-kw" type="number" min={KEEP.weekly[0]} max={KEEP.weekly[1]} value={form.keepWeekly} invalid={keepVals.weekly === null} onChange={(e) => set({ keepWeekly: e.target.value })} />
           </FieldWrap>
-          <FieldWrap label="Monate (je Monat die neueste)" htmlFor="os-km" error={intIn(form.keepMonthly, 0, 120) === null ? '0 bis 120' : undefined}>
-            <Input id="os-km" type="number" min={0} max={120} value={form.keepMonthly} invalid={intIn(form.keepMonthly, 0, 120) === null} onChange={(e) => set({ keepMonthly: e.target.value })} />
+          <FieldWrap label="Monate (je Monat die neueste)" htmlFor="os-km" error={keepVals.monthly === null ? `${KEEP.monthly[0]} bis ${KEEP.monthly[1]}` : undefined}>
+            <Input id="os-km" type="number" min={KEEP.monthly[0]} max={KEEP.monthly[1]} value={form.keepMonthly} invalid={keepVals.monthly === null} onChange={(e) => set({ keepMonthly: e.target.value })} />
           </FieldWrap>
         </FieldGrid>
+        {keepDays !== null &&
+          (tooLong ? (
+            <Notice tone="warning" title={`Gelöschte Daten bleiben bis zu ${retentionLabel(keepDays)} auf dem Ziel`}>
+              Das ist länger als die in den Datenschutzhinweisen genannten rund 4 Monate für Sicherungen. Speichern verlangt eine Bestätigung; die Frist gehört dann ins Verzeichnis der Verarbeitungstätigkeiten und in Auskünfte.
+            </Notice>
+          ) : (
+            <p className="m-0 text-sm" role="status">
+              Gelöschte Daten bleiben damit bis zu <strong>{retentionLabel(keepDays)}</strong> auf dem Ziel.
+            </p>
+          ))}
         <p className="m-0 text-meta text-fg-muted">Ältere Sicherungen löscht BlaulichtCMS nach jeder Übertragung auf dem Ziel. Andere Dateien im Ordner bleiben unberührt. Gelöschte Daten leben in Sicherungen bis zum Ablauf dieser Fristen weiter (Datenschutz).</p>
       </fieldset>
 
@@ -275,8 +329,111 @@ export function OffsiteBackupSection() {
       </div>
 
       {c.url && <RemoteFiles />}
+      <Leftovers config={c} onChanged={(nc) => qc.setQueryData(['backup-offsite'], (old: any) => (old ? { ...old, config: nc } : old))} />
       <DrillPanel offsite={c.enabled && !!c.last_ok_file} />
+      <Dialog
+        open={!!leaveAsk}
+        onClose={() => leaveAsk?.resolve(null)}
+        title={leaveAsk?.disabling ? 'Sicherung außer Haus ausschalten' : 'Ziel wechseln'}
+        width={520}
+        footer={
+          <>
+            <Button onClick={() => leaveAsk?.resolve(null)}>Abbrechen</Button>
+            <Button icon="Archive" onClick={() => leaveAsk?.resolve('keep')}>
+              Behalten
+            </Button>
+            <Button variant="danger" icon="Trash2" onClick={() => leaveAsk?.resolve('delete')}>
+              Löschen
+            </Button>
+          </>
+        }
+      >
+        <div className="flex flex-col gap-2 text-sm">
+          <p className="m-0">
+            Auf dem bisherigen Ziel <strong>{leaveAsk?.host}</strong> liegen Sicherungen von BlaulichtCMS. Danach räumt BlaulichtCMS dort nicht mehr auf – sie blieben unbegrenzt liegen, auch mit inzwischen gelöschten Daten.
+          </p>
+          <p className="m-0 text-fg-muted">
+            <strong>Löschen</strong> entfernt jetzt alle Sicherungen von BlaulichtCMS dort (auch im Unterordner <code>volume/</code>); andere Dateien bleiben. <strong>Behalten</strong> lässt sie liegen – der Systemstatus erinnert daran, bis sie gelöscht sind.
+          </p>
+        </div>
+      </Dialog>
     </SectionCard>
+  );
+}
+
+/**
+ * Frühere Ziele mit Sicherungen (#246): Hinweis mit „Löschen“ (nur für das eingetragene, ausgeschaltete Ziel – dafür
+ * liegen die Zugangsdaten noch vor) bzw. „Hinweis entfernen“ (am NAS von Hand aufgeräumt).
+ */
+function Leftovers({ config: c, onChanged }: { config: OffsiteConfig; onChanged: (c: OffsiteConfig) => void }) {
+  const toast = useToast();
+  const ask = useConfirm();
+  const qc = useQueryClient();
+  const [busy, setBusy] = useState<string | null>(null);
+  const canPurge = !c.enabled && !!c.url;
+  const others = c.leftovers.filter((l) => !canPurge || !sameUrl(l.url, c.url));
+  const current = canPurge ? c.leftovers.find((l) => sameUrl(l.url, c.url)) : undefined;
+  if (!canPurge && !others.length) return null;
+  const purge = async () => {
+    if (!(await ask({ title: 'Sicherungen auf dem Ziel löschen?', text: `Alle Sicherungen von BlaulichtCMS auf ${hostOf(c.url)} werden gelöscht (Datenbank- und Volume-Sicherungen). Andere Dateien im Ordner bleiben. Das lässt sich nicht rückgängig machen.`, confirmLabel: 'Löschen' }))) return;
+    setBusy('purge');
+    try {
+      const r = await post<{ removed: number; failed: number; config: OffsiteConfig }>('/backups/offsite/purge', {});
+      onChanged(r.config);
+      qc.invalidateQueries({ queryKey: ['backup-offsite-files'] });
+      qc.invalidateQueries({ queryKey: ['system-status'] });
+      if (r.failed) toast({ tone: 'error', title: 'Nicht alles gelöscht', text: `${r.removed} gelöscht, ${r.failed} ließen sich nicht löschen (Systemprotokoll).` });
+      else toast({ tone: 'success', title: r.removed ? `${r.removed} Sicherung(en) gelöscht` : 'Keine Sicherungen auf dem Ziel' });
+    } catch (e) {
+      toast({ tone: 'error', title: 'Löschen fehlgeschlagen', text: (e as Error).message });
+    } finally {
+      setBusy(null);
+    }
+  };
+  const dismiss = async (url: string) => {
+    if (!(await ask({ title: 'Hinweis entfernen?', text: `Nur entfernen, wenn die Sicherungen auf ${hostOf(url)} anders gelöscht wurden (z. B. am NAS von Hand) oder das Gerät nicht mehr existiert.`, confirmLabel: 'Hinweis entfernen', danger: false }))) return;
+    setBusy(url);
+    try {
+      const r = await post<{ config: OffsiteConfig }>('/backups/offsite/leftovers/dismiss', { url });
+      onChanged(r.config);
+      qc.invalidateQueries({ queryKey: ['system-status'] });
+    } catch (e) {
+      toast({ tone: 'error', title: 'Nicht entfernt', text: (e as Error).message });
+    } finally {
+      setBusy(null);
+    }
+  };
+  return (
+    <div className="flex flex-col gap-2">
+      {canPurge && (
+        <Notice tone={current ? 'warning' : 'info'} title={current ? `Auf ${hostOf(c.url)} liegen noch Sicherungen` : 'Sicherung außer Haus ist ausgeschaltet'}>
+          <div className="flex flex-col gap-2">
+            <span>{current ? `Seit ${fmtDate(current.since)} räumt BlaulichtCMS dort nicht mehr auf.` : 'Liegen auf dem eingetragenen Ziel noch Sicherungen, lassen sie sich hier löschen.'}</span>
+            <div>
+              <Button size="sm" variant="danger" icon="Trash2" loading={busy === 'purge'} disabled={!!busy} onClick={purge}>
+                Sicherungen auf dem Ziel löschen
+              </Button>
+            </div>
+          </div>
+        </Notice>
+      )}
+      {others.length > 0 && (
+        <Notice tone="warning" title="Frühere Ziele mit Sicherungen">
+          <ul className="m-0 p-0 list-none flex flex-col gap-2">
+            {others.map((l) => (
+              <li key={l.url} className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                <span>
+                  <strong>{hostOf(l.url)}</strong> <span className="text-fg-muted">– seit {fmtDate(l.since)}, dort am Gerät löschen</span>
+                </span>
+                <Button size="sm" loading={busy === l.url} disabled={!!busy} onClick={() => dismiss(l.url)} aria-label={`Hinweis zu ${hostOf(l.url)} entfernen`}>
+                  Hinweis entfernen
+                </Button>
+              </li>
+            ))}
+          </ul>
+        </Notice>
+      )}
+    </div>
   );
 }
 
