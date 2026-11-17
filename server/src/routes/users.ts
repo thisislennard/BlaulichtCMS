@@ -148,6 +148,12 @@ export async function userRoutes(app: FastifyInstance) {
       const user = await one<any>('SELECT * FROM users WHERE id = $1 FOR UPDATE', [id], db);
       if (!user) throw notFound();
       if (body.status === 'active' && user.status === 'invited') throw badRequest('Eingeladene Konten werden durch Annehmen der Einladung aktiv.');
+      // Reaktivieren gibt dem Konto alle Rechte seiner Rollen zurück: dieselbe Obergrenze wie beim Sperren und bei der
+      // Rollenvergabe (geprüft an den Rollen nach der Änderung) und frische Passwortbestätigung (#238)
+      if (body.status === 'active' && user.status === 'disabled') {
+        assertRolesWithinOwn(req, body.roles ?? user.roles, ABOVE);
+        assertRecentAuth(req);
+      }
       // Ein Konto ohne Passwort (Einladung nie angenommen) wird beim Reaktivieren wieder „eingeladen“, nicht „aktiv“
       if (body.status === 'active' && !user.password_hash) body.status = 'invited' as any;
       if (body.status === 'disabled') assertRolesWithinOwn(req, user.roles, ABOVE);
@@ -173,7 +179,11 @@ export async function userRoutes(app: FastifyInstance) {
     if (body.roles && !hasAdminPermissions(body.roles) && hasAdminPermissions(result.before.roles)) {
       await securityAlert('admin_removed', { title: `Verwaltungsrechte entzogen: ${result.updated.email}`, body: `Entzogen von ${req.auth!.actor.name}.`, link: '/benutzer', permission: 'user.assign_roles', kind: 'info' });
     }
-    if (body.status) await audit(req.auth!.actor, body.status === 'disabled' ? 'user.disabled' : 'user.enabled', { type: 'user', id, label: result.updated.email });
+    const reenabled = body.status !== 'disabled' && result.before.status === 'disabled' && result.updated.status !== 'disabled';
+    if (body.status) await audit(req.auth!.actor, body.status === 'disabled' ? 'user.disabled' : 'user.enabled', { type: 'user', id, label: result.updated.email }, reenabled ? { rollen: result.updated.roles, status: result.updated.status } : {});
+    if (reenabled && hasAdminPermissions(result.updated.roles)) {
+      await securityAlert('admin_granted', { title: `Konto mit Verwaltungsrechten reaktiviert: ${result.updated.email}`, body: `Reaktiviert von ${req.auth!.actor.name}. Rollen: ${result.updated.roles.map(roleLabel).join(', ')}.`, link: '/benutzer', permission: 'user.lock' });
+    }
     if (body.name) await audit(req.auth!.actor, 'user.renamed', { type: 'user', id, label: result.updated.email });
     return result.updated;
   });
@@ -212,9 +222,15 @@ export async function userRoutes(app: FastifyInstance) {
     return { sessions: r.rowCount ?? 0, trustedDevices: devices };
   });
 
-  /** Sperre nach Fehlversuchen vorzeitig aufheben (Passwort und 2FA). */
+  /**
+   * Sperre nach Fehlversuchen vorzeitig aufheben (Passwort und 2FA). Wie beim Sperren nur für Konten innerhalb der
+   * eigenen Rechte (#238) – sonst ließe sich die Bremse gegen das Erraten eines Admin-Passworts lösen.
+   */
   app.post('/users/:id/unlock', { preHandler: requireAuth('user.lock') }, async (req) => {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
+    const target = await one<any>('SELECT roles FROM users WHERE id = $1', [id]);
+    if (!target) throw notFound();
+    assertRolesWithinOwn(req, target.roles, ABOVE);
     const user = await one<any>(`UPDATE users SET locked_until = NULL, failed_logins = 0, mfa_failed = 0 WHERE id = $1 RETURNING email`, [id]);
     if (!user) throw notFound();
     await pool.query('DELETE FROM auth_throttle WHERE user_id = $1', [id]);

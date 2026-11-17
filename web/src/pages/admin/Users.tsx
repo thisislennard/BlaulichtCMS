@@ -807,7 +807,7 @@ function UserTable({
                             icon: "Ban",
                             onClick: () => revokeLink(u),
                           },
-                          can("user.lock") && !!u.locked_until && {
+                          can("user.lock") && !above(u) && !!u.locked_until && {
                             label: "Sperre aufheben",
                             icon: "LockOpen",
                             onClick: async () => {
@@ -843,7 +843,8 @@ function UserTable({
                             onClick: () => setStatus(u, "disabled"),
                             disabled: isMe,
                           },
-                          can("user.lock") && u.status === "disabled" && {
+                          // Reaktivieren gibt alle Rechte zurück: nur innerhalb der eigenen Rechte (#238)
+                          can("user.lock") && !above(u) && u.status === "disabled" && {
                             label: t("admin.users.enable"),
                             icon: "Power",
                             onClick: () => setStatus(u, "active"),

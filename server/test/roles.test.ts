@@ -432,6 +432,24 @@ describe('Rollen und feine Rechte', () => {
     expect((await pfleger.patch(`/users/${adminId}`, { roles: ['viewer'] })).status).toBe(403);
     expect((await pfleger.raw('DELETE', `/users/${adminId}`, { confirm: 'admin@example.org' })).status).toBe(403);
     expect((await one<any>(`SELECT roles, status FROM users WHERE id = $1`, [adminId]))).toMatchObject({ roles: ['platform_admin'], status: 'active' });
+    // Reaktivieren und Sperre aufheben (#238): dieselbe Obergrenze, Reaktivieren nur mit frischer Passwortbestätigung
+    const oldAdmin = await one<any>(`INSERT INTO users (email, name, password_hash, roles, status) VALUES ('alt-admin@example.org', 'Alt-Admin', $1, '{platform_admin}', 'disabled') RETURNING id`, [passwordHash]);
+    expect((await pfleger.patch(`/users/${oldAdmin.id}`, { status: 'active' })).status).toBe(403);
+    expect((await one<any>(`SELECT status FROM users WHERE id = $1`, [oldAdmin.id]))!.status).toBe('disabled');
+    await pool.query(`UPDATE users SET locked_until = now() + interval '1 hour', failed_logins = 5 WHERE id = $1`, [oldAdmin.id]);
+    expect((await pfleger.post(`/users/${oldAdmin.id}/unlock`)).status).toBe(403);
+    expect((await one<any>(`SELECT failed_logins FROM users WHERE id = $1`, [oldAdmin.id]))!.failed_logins).toBe(5);
+    const low = await one<any>(`INSERT INTO users (email, name, password_hash, roles, status) VALUES ('ruhend@example.org', 'Ruhend', $1, $2, 'disabled') RETURNING id`, [passwordHash, [small.json.id]]);
+    await pool.query(`UPDATE sessions SET reauth_at = now() - interval '11 minutes' WHERE user_id = $1`, [pflegerId]);
+    expect((await pfleger.patch(`/users/${low.id}`, { status: 'active' })).json.error).toBe('reauth_required');
+    await pfleger.reauth();
+    expect((await pfleger.patch(`/users/${low.id}`, { status: 'active' })).json.status).toBe('active');
+    expect((await one<any>(`SELECT details FROM audit_events WHERE action = 'user.enabled' AND object_id = $1`, [low.id]))!.details).toMatchObject({ rollen: [small.json.id] });
+    expect((await pfleger.post(`/users/${low.id}/unlock`)).status).toBe(200);
+    // Die Administration darf das höher berechtigte Konto reaktivieren – mit Sicherheitsmeldung
+    expect((await admin.patch(`/users/${oldAdmin.id}`, { status: 'active' })).json.status).toBe('active');
+    expect((await one<any>(`SELECT count(*)::int AS n FROM notifications WHERE title = 'Konto mit Verwaltungsrechten reaktiviert: alt-admin@example.org'`))!.n).toBeGreaterThan(0);
+    expect((await admin.raw('DELETE', `/users/${oldAdmin.id}`, { confirm: 'alt-admin@example.org' })).status).toBe(200);
 
     // Rollen pflegen: keine fremden Rechte vergeben oder entziehen
     expect((await pfleger.post('/roles', { label: 'Hintertür', permissions: ['settings.security'] })).status).toBe(403);

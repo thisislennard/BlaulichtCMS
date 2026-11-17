@@ -175,8 +175,9 @@ voraus“), Rollen kombinierbar.
   Arbeitsspeicher (`auth/roles.ts`). Der ändernde Prozess lädt sofort neu, andere Prozesse über NOTIFY bzw. nach
   höchstens 3 Sekunden. Änderungen gelten damit ab der nächsten Anfrage, ohne neue Anmeldung.
 - **Keine Rechteausweitung.** Rollen zuweisen, entziehen, anlegen und ändern kann man nur innerhalb der eigenen
-  Rechte; Konten mit mehr Rechten lassen sich nicht übernehmen (Passwort-Link, Zwei-Faktor zurücksetzen), sperren
-  oder löschen. Rollenpflege verlangt eine frische Passwortbestätigung und ist per API-Schlüssel nicht möglich.
+  Rechte; Konten mit mehr Rechten lassen sich nicht übernehmen (Passwort-Link, Zwei-Faktor zurücksetzen), sperren,
+  reaktivieren, entsperren oder löschen. Rollenpflege und Reaktivieren verlangen eine frische Passwortbestätigung und
+  sind per API-Schlüssel nicht möglich.
 - **Zugriffsangabe je Route.** `requireAuth('recht')` ist zugleich die Deklaration; `app.routeAccess` listet alle
   Routen. Tests schlagen fehl, wenn eine Route weder ein Recht nennt noch in `PUBLIC_ROUTES` steht, und prüfen für
   jede Route 401 ohne Anmeldung, 403 ohne Rechte und 403 mit allen Rechten außer dem genannten.
