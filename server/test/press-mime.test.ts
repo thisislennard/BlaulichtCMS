@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { decodeWords, htmlToText, parseAddressList, parseMail, parseParams, sanitizeHtml } from '../src/press/mime.js';
+import { cleanLine, cleanText, decodeWords, htmlToText, parseAddressList, parseMail, parseParams, sanitizeHtml } from '../src/press/mime.js';
 import { imapSearchDate, parseImapDate } from '../src/press/imap.js';
 import { ignoreReason } from '../src/press/mailbox.js';
 
@@ -126,5 +126,68 @@ describe('Einordnen: automatische Antworten, Spam, Massenmails', () => {
     expect(ignoreReason(mail('List-Unsubscribe: <https://x>'), [])?.outcome).toBe('bulk');
     expect(ignoreReason(mail('Precedence: bulk'), [])?.outcome).toBe('bulk');
     expect(ignoreReason(mail('', 'Frage', 'presse@feuerwehr.example'), ['presse@feuerwehr.example'])?.outcome).toBe('own');
+  });
+});
+
+describe('Kodierte Namen mit Komma (#229)', () => {
+  it('erst aufteilen, dann dekodieren', () => {
+    expect(parseAddressList('=?iso-8859-1?Q?M=FCller=2C_Hans?= <h@x.de>, b@c.de')).toEqual([
+      { name: 'Müller, Hans', address: 'h@x.de' },
+      { name: '', address: 'b@c.de' },
+    ]);
+    expect(parseAddressList('=?UTF-8?Q?M=C3=BCller=2C_Hans?= <h@x.de>, b@c.de')).toEqual([
+      { name: 'Müller, Hans', address: 'h@x.de' },
+      { name: '', address: 'b@c.de' },
+    ]);
+    // auch ;, <, ", ( im kodierten Namen; Base64; kodiertes Wort (regelwidrig) in Anführungszeichen
+    const b64 = Buffer.from('Redaktion; Lokales <Info>').toString('base64');
+    expect(parseAddressList(`=?UTF-8?B?${b64}?= <r@x.de>; "=?UTF-8?Q?Nach=2C_Vor?=" <n@x.de>`)).toEqual([
+      { name: 'Redaktion; Lokales <Info>', address: 'r@x.de' },
+      { name: 'Nach, Vor', address: 'n@x.de' },
+    ]);
+    expect(parseAddressList('r@x.de (=?UTF-8?Q?Radio=2C_Musterstadt?=)')).toEqual([{ name: 'Radio, Musterstadt', address: 'r@x.de' }]);
+  });
+
+  it('From-Kopf in parseMail', () => {
+    const m = parseMail(Buffer.from(crlf('From: =?UTF-8?Q?M=C3=BCller=2C_Hans?= <hans@zeitung.example>\nTo: =?iso-8859-1?Q?Presse=2C_Feuerwehr?= <presse@feuerwehr.example>, b@c.de\nSubject: Frage\n\nText')));
+    expect(m.from).toEqual({ name: 'Müller, Hans', address: 'hans@zeitung.example' });
+    expect(m.to.map((a) => a.address)).toEqual(['presse@feuerwehr.example', 'b@c.de']);
+  });
+});
+
+describe('Steuerzeichen aus Fremdtext (#237)', () => {
+  it('NUL aus Betreff, Text, HTML, Namen und Dateinamen entfernt', () => {
+    const html = Buffer.from('<p>A\u0000B</p>').toString('base64');
+    const raw = crlf(`From: =?UTF-8?Q?Pa=00ula?= <paula@zeitung.example>
+Subject: =?UTF-8?Q?Test=00X?=
+Message-ID: <nul@zeitung.example>
+Content-Type: multipart/mixed; boundary="b1"
+
+--b1
+Content-Type: text/plain; charset=utf-8
+Content-Transfer-Encoding: quoted-printable
+
+Hallo=00Welt=07!
+--b1
+Content-Type: text/html; charset=utf-8
+Content-Transfer-Encoding: base64
+
+${html}
+--b1
+Content-Type: application/pdf
+Content-Disposition: attachment; filename*=UTF-8''Datei%00.pdf
+
+JVBERi0=
+--b1--
+`);
+    const m = parseMail(Buffer.from(raw, 'utf8'));
+    expect(m.subject).toBe('TestX');
+    expect(m.from).toEqual({ name: 'Paula', address: 'paula@zeitung.example' });
+    expect(m.text).toBe('HalloWelt!');
+    expect(m.html).toBe('<p>AB</p>');
+    expect(m.attachments[0].filename).toBe('Datei_.pdf');
+    expect(JSON.stringify({ ...m, headers: [...m.headers], attachments: [] })).not.toMatch(/\\u0000/);
+    expect(cleanText('a\u0000b\tc\r\nd\u001f\u007f')).toBe('ab\tc\r\nd');
+    expect(cleanLine('a\r\nb\u0000')).toBe('a b');
   });
 });

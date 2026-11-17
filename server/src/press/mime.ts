@@ -62,6 +62,20 @@ export function decodeCharset(buf: Buffer, charset?: string | null): string {
 
 const bin = (s: string) => Buffer.from(s, 'latin1');
 
+/**
+ * Steuerzeichen aus Fremdtext entfernen (#237): NUL (U+0000) lehnt PostgreSQL in text-Spalten grundsätzlich ab – ein
+ * `=00` (quoted-printable), ein Base64-Teil oder ein RFC-2047-Wort ergäbe sonst einen Fehler beim Speichern. Die übrigen
+ * C0-Steuerzeichen außer Tab, Zeilenumbruch und Wagenrücklauf sowie DEL haben in Mailtexten keine Bedeutung.
+ */
+export function cleanText(s: string): string {
+  return s.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, '');
+}
+
+/** Einzeiliger Fremdtext (Betreff, Namen, Adressen, Kopfzeilen): zusätzlich Tab und Zeilenumbrüche als Leerzeichen. */
+export function cleanLine(s: string): string {
+  return cleanText(s).replace(/[\t\r\n]+/g, ' ');
+}
+
 /** Rohe 8-Bit-Bytes in Kopfzeilen: UTF-8, falls gültig, sonst Windows-1252. */
 function decodeRawHeader(s: string): string {
   if (!/[\x80-\xff]/.test(s)) return s;
@@ -150,7 +164,7 @@ export function parseHeaderBlock(block: string): Map<string, string[]> {
     const name = l.slice(0, i).trim().toLowerCase();
     if (!/^[\x21-\x39\x3b-\x7e]+$/.test(name)) continue;
     const list = map.get(name) ?? [];
-    list.push(l.slice(i + 1).trim());
+    list.push(cleanLine(l.slice(i + 1)).trim());
     map.set(name, list);
   }
   return map;
@@ -211,10 +225,19 @@ export function parseParams(value: string): { value: string; params: Record<stri
   return { value: main, params };
 }
 
-/** Adressliste: „Name <a@b>, "Nach, Vor" <c@d>, e@f (Kommentar)“. Gruppen werden aufgelöst. */
+/** Ein RFC-2047-Wort an dieser Stelle (wird beim Aufteilen als Ganzes übernommen). */
+const ENCODED_WORD = /=\?[^?\s]+\?[BbQq]\?[^?]*\?=/y;
+
+/**
+ * Adressliste: „Name <a@b>, "Nach, Vor" <c@d>, e@f (Kommentar)“. Gruppen werden aufgelöst.
+ *
+ * Aufgeteilt wird auf dem Rohtext (Anführungszeichen, Kommentare, spitze Klammern und kodierte Wörter beachtet); erst
+ * danach wird je Eintrag der Name dekodiert (RFC 2047 Abschn. 5, #229). Ein kodierter Name mit Komma wie
+ * `=?iso-8859-1?Q?M=FCller=2C_Hans?=` („Müller, Hans“) bleibt so ein Name.
+ */
 export function parseAddressList(raw: string | null): MailAddress[] {
   if (!raw) return [];
-  const text = decodeWords(raw);
+  const text = raw;
   const items: string[] = [];
   let cur = '';
   let quoted = false;
@@ -222,6 +245,15 @@ export function parseAddressList(raw: string | null): MailAddress[] {
   let paren = 0;
   for (let i = 0; i < text.length; i++) {
     const c = text[i];
+    if (c === '=' && text[i + 1] === '?') {
+      ENCODED_WORD.lastIndex = i;
+      const w = ENCODED_WORD.exec(text);
+      if (w) {
+        cur += w[0];
+        i += w[0].length - 1;
+        continue;
+      }
+    }
     if (c === '"' && text[i - 1] !== '\\' && !paren) quoted = !quoted;
     else if (!quoted && c === '(') paren++;
     else if (!quoted && c === ')' && paren) paren--;
@@ -234,17 +266,19 @@ export function parseAddressList(raw: string | null): MailAddress[] {
   }
   items.push(cur);
   const out: MailAddress[] = [];
+  // Name erst jetzt dekodieren – auch in Anführungszeichen, wie es verbreitete Mailprogramme (regelwidrig) schreiben
+  const name = (s: string) => cleanLine(decodeWords(s.trim().replace(/^"|"$/g, '').replace(/\\(.)/g, '$1'))).replace(/\s+/g, ' ').trim();
   for (let item of items) {
     item = item.replace(/^[^:<"]*:\s*/, (g) => (g.includes('@') ? g : '')).trim(); // Gruppenname „Team: …“
     if (!item) continue;
     const m = /^(.*?)<\s*([^<>\s]+@[^<>\s]+)\s*>/.exec(item);
     if (m) {
-      out.push({ name: m[1].trim().replace(/^"|"$/g, '').replace(/\\(.)/g, '$1').trim(), address: m[2].toLowerCase() });
+      out.push({ name: name(m[1]), address: cleanLine(decodeRawHeader(m[2])).toLowerCase() });
       continue;
     }
-    const comment = /\(([^)]*)\)/.exec(item)?.[1]?.trim() ?? '';
+    const comment = /\(([^)]*)\)/.exec(item)?.[1] ?? '';
     const addr = /([^\s<>()"]+@[^\s<>()",;]+)/.exec(item)?.[1];
-    if (addr) out.push({ name: comment, address: addr.toLowerCase() });
+    if (addr) out.push({ name: name(comment), address: cleanLine(decodeRawHeader(addr)).toLowerCase() });
   }
   return out;
 }
@@ -307,7 +341,7 @@ function walk(p: Part, depth: number, acc: Collected, inAlternative = false) {
   }
   const isAttachment = disp.value === 'attachment' || (!!filename && !type.startsWith('text/')) || (!!filename && disp.value === 'attachment');
   if (!isAttachment && (type === 'text/plain' || type === 'text/html')) {
-    const content = decodeCharset(decodeTransfer(p.body, cte), ct.params.charset);
+    const content = cleanText(decodeCharset(decodeTransfer(p.body, cte), ct.params.charset));
     (type === 'text/plain' ? acc.text : acc.html).push(content);
     return;
   }
@@ -333,13 +367,13 @@ export function parseMail(raw: Buffer): ParsedMail {
   const dateRaw = first(h, 'date');
   const date = dateRaw ? new Date(dateRaw.replace(/\s*\([^)]*\)\s*$/, '')) : null;
   const html = acc.html.length ? acc.html.join('\n<hr>\n') : null;
-  const text = acc.text.length ? acc.text.join('\n\n') : html ? htmlToText(html) : '';
+  const text = acc.text.length ? acc.text.join('\n\n') : html ? cleanText(htmlToText(html)) : '';
   return {
     headers: h,
     messageId: messageIds(first(h, 'message-id'))[0] ?? null,
     inReplyTo: messageIds(first(h, 'in-reply-to'))[0] ?? null,
     references: messageIds(first(h, 'references')).slice(-50),
-    subject: decodeWords(first(h, 'subject') ?? '').replace(/\s+/g, ' ').trim(),
+    subject: cleanLine(decodeWords(first(h, 'subject') ?? '')).replace(/\s+/g, ' ').trim(),
     from: parseAddressList(first(h, 'from'))[0] ?? null,
     to: parseAddressList((h.get('to') ?? []).join(', ')),
     cc: parseAddressList((h.get('cc') ?? []).join(', ')),
