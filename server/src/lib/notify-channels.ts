@@ -101,6 +101,21 @@ async function pushTo(sub: SubRow, payload: Record<string, unknown>, keys: Vapid
 /** Freigabe-Ansicht eines Beitrags (#216): `/freigabe/beitrag/<id>?fassung=<n>` */
 const REVIEW_LINK = /^\/freigabe\/beitrag\/([0-9a-f-]{36})(?:\?fassung=\d+)?$/;
 
+/** Hinweis statt Einzelheiten, wenn Push bzw. E-Mail nur die Art der Benachrichtigung tragen (#247). */
+export const DETAILS_HIDDEN_TEXT = 'Einzelheiten nach der Anmeldung in BlaulichtCMS.';
+
+/**
+ * Titel und Text für Push bzw. E-Mail (#247): Ohne `notify.push_details` bzw. `notify.mail_details` nur der knappe
+ * Titel der Art (z. B. „Neuer Einsatz-Eingang“) – Stichwort und Ort eines Einsatzes, Betreff einer Presse-Mail oder
+ * Vorlagentexte eines Workflows bleiben in BlaulichtCMS (Sperrbildschirm, Postfach außerhalb der Organisation).
+ * Testnachrichten (`test`) haben festen Text und kommen immer vollständig.
+ */
+export function externalContent(n: { title: string; body?: string | null }, category: string, details: boolean) {
+  const cat = notifyCategory(category);
+  if (details || !cat) return { title: n.title, body: String(n.body ?? '') };
+  return { title: cat.short, body: DETAILS_HIDDEN_TEXT };
+}
+
 /**
  * Inhalt einer Push-Mitteilung. Freigabe-Anfragen (#216) bekommen je Beitrag ein eigenes Kennzeichen (eine neue
  * Fassung ersetzt die alte Mitteilung) und – wo der Browser es kann (Chrome, Edge, Android) – Aktionsknöpfe. Beide
@@ -109,9 +124,10 @@ const REVIEW_LINK = /^\/freigabe\/beitrag\/([0-9a-f-]{36})(?:\?fassung=\d+)?$/;
 export function pushPayload(n: { title: string; body?: string; link?: string | null; kind?: string }, category: string, s: Settings) {
   const link = n.link && n.link.startsWith('/') ? n.link : '/benachrichtigungen';
   const review = category === 'approval' ? REVIEW_LINK.exec(link) : null;
+  const c = externalContent(n, category, !!s['notify.push_details']);
   return {
-    title: n.title.slice(0, 200),
-    body: String(n.body ?? '').slice(0, 500),
+    title: c.title.slice(0, 200),
+    body: c.body.slice(0, 500),
     link,
     tag: review ? `blaulichtcms-freigabe-${review[1]}` : `blaulichtcms-${category}`,
     kind: n.kind ?? 'info',
@@ -182,6 +198,8 @@ async function deliverMail(n: { title: string; body: string; link: string | null
   const instance = String(s['general.instance_name'] || 'BlaulichtCMS');
   const link = absolute(s, n.link);
   const prefs = absolute(s, '/profil#benachrichtigungen');
+  // Mails sind nicht Ende-zu-Ende-verschlüsselt und landen ggf. in privaten Postfächern: standardmäßig ohne Einzelheiten
+  const c = externalContent(n, cat.id, !!s['notify.mail_details']);
   let failed = 0;
   try {
     // Einzeln senden: Empfänger sehen einander nicht
@@ -190,8 +208,8 @@ async function deliverMail(n: { title: string; body: string; link: string | null
         await transport.sendMail({
           from,
           to: u.email,
-          subject: `[${instance}] ${n.title}`.slice(0, 250),
-          text: [n.body, link ? `Öffnen: ${link}` : '', '—', `Benachrichtigung „${cat.label}“ von ${instance}.`, `Einstellen unter Mein Konto → Benachrichtigungen${prefs.startsWith('http') ? `: ${prefs}` : ''}.`].filter(Boolean).join('\n\n'),
+          subject: `[${instance}] ${c.title}`.slice(0, 250),
+          text: [c.body, link ? `Öffnen: ${link}` : '', '—', `Benachrichtigung „${cat.label}“ von ${instance}.`, `Einstellen unter Mein Konto → Benachrichtigungen${prefs.startsWith('http') ? `: ${prefs}` : ''}.`].filter(Boolean).join('\n\n'),
         });
       } catch (e) {
         failed++;

@@ -238,9 +238,23 @@ describe('Benachrichtigungen: Push', () => {
     await notify({ kind: 'info', title: 'Freigabe erbeten: Testbeitrag', permission: 'approval.post' });
     await drain();
     expect(pushes.map((p) => p.device).sort()).toEqual(['robin-handy', 'sam-tablet']);
+    // Standard (#247): nur die Art und ein Link – kein Stichwort, kein Ort, kein Titel des Beitrags
     const toRobin = decrypt(ed(), pushes.find((p) => p.device === 'robin-handy')!.body);
-    expect(toRobin).toMatchObject({ title: 'Neuer Einsatzentwurf aus FE2: Brand', link: '/beitraege/1', tag: 'blaulichtcms-incident' });
-    expect(decrypt(devices.approver, pushes.find((p) => p.device === 'sam-tablet')!.body).title).toBe('Freigabe erbeten: Testbeitrag');
+    expect(toRobin).toMatchObject({ title: 'Neuer Einsatz-Eingang', body: 'Einzelheiten nach der Anmeldung in BlaulichtCMS.', link: '/beitraege/1', tag: 'blaulichtcms-incident' });
+    expect(JSON.stringify(toRobin)).not.toContain('Brand');
+    expect(decrypt(devices.approver, pushes.find((p) => p.device === 'sam-tablet')!.body).title).toBe('Freigabe angefordert');
+
+    // Mit „Einzelheiten in Push-Mitteilungen“ kommen Titel und Text wie in der Glocke
+    expect((await admin.put('/notify/settings', { transport: 'smtp', pushEnabled: true, mailEnabled: true, pushDetails: true })).status).toBe(200);
+    expect((await admin.get('/notify/settings')).json).toMatchObject({ push_details: true, mail_details: false });
+    pushes.length = 0;
+    await notify({ kind: 'info', title: 'Neuer Einsatzentwurf aus FE2: Brand', body: 'B3 in Musterdorf', link: '/beitraege/1', permission: 'post.edit', category: 'incident' });
+    await drain();
+    expect(decrypt(ed(), pushes.find((p) => p.device === 'robin-handy')!.body)).toMatchObject({ title: 'Neuer Einsatzentwurf aus FE2: Brand', body: 'B3 in Musterdorf' });
+    // Ohne Angabe (ältere Oberfläche) bleibt die Einstellung
+    expect((await admin.put('/notify/settings', { transport: 'smtp', pushEnabled: true, mailEnabled: true })).status).toBe(200);
+    expect((await getSettings(true))['notify.push_details']).toBe(true);
+    expect((await admin.put('/notify/settings', { transport: 'smtp', pushEnabled: true, mailEnabled: true, pushDetails: false })).status).toBe(200);
 
     // Person schaltet Push für Einsätze ab → keine Zustellung mehr; nicht angebotene Arten werden übergangen
     expect((await editor.put('/notify/preferences', { choices: { incident: [], approval: ['push'] } })).status).toBe(200);
@@ -326,8 +340,16 @@ describe('E-Mail über Microsoft 365', () => {
     await drain();
     expect(graphMails).toHaveLength(1);
     expect(graphMails[0].body.message.toRecipients).toEqual([{ emailAddress: { address: 'redaktion@example.org' } }]);
-    expect(graphMails[0].body.message.subject).toBe('[BlaulichtCMS] Neuer Einsatzentwurf aus Feuersoftware Connect: TH');
+    // Standard (#247): Betreff und Text ohne Einzelheiten
+    expect(graphMails[0].body.message.subject).toBe('[BlaulichtCMS] Neuer Einsatz-Eingang');
     expect(graphMails[0].body.message.body.content).toContain('https://blaulichtcms.example.org/beitraege/2');
+    expect(graphMails[0].body.message.body.content).not.toContain('Feuersoftware Connect: TH');
+    await setSettings({ 'notify.mail_details': true });
+    graphMails.length = 0;
+    await notify({ kind: 'info', title: 'Neuer Einsatzentwurf aus Feuersoftware Connect: TH', link: '/beitraege/2', permission: 'post.edit', category: 'incident' });
+    await drain();
+    expect(graphMails[0].body.message.subject).toBe('[BlaulichtCMS] Neuer Einsatzentwurf aus Feuersoftware Connect: TH');
+    await setSettings({ 'notify.mail_details': false });
 
     // Kontomeldung an die betroffene Person (security.alert_mail_user) geht denselben Weg
     graphMails.length = 0;

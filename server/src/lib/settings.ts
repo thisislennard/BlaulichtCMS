@@ -243,6 +243,13 @@ export const DEFAULT_SETTINGS = {
    */
   'notify.push_enabled': true,
   'notify.mail_enabled': true,
+  /**
+   * Inhalt von Push und E-Mail (#247): standardmäßig nur die Art der Benachrichtigung und ein Link (z. B. „Neuer
+   * Einsatz-Eingang“) – Stichwort, Ort, Betreff von Presse-Mails oder Vorlagentexte stehen nur in BlaulichtCMS.
+   * Eingeschaltet tragen Push bzw. E-Mail Titel und Text wie die Glocke (Sperrbildschirm, unverschlüsseltes Postfach).
+   */
+  'notify.push_details': false,
+  'notify.mail_details': false,
   'push.vapid_public_key': '',
   'push.vapid_secret_id': '',
 

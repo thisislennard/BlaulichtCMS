@@ -265,8 +265,10 @@ flowchart LR
 - **Live:** neue Uploads, Freigaben und Veröffentlichungen erscheinen ohne Neuladen; Benachrichtigungen in der App.
 - **Push und E-Mail:** je Person und Art wählbar (Freigabe angefordert, Entscheidung, Einsatz-Eingang, neue Fotos,
   amtliche Warnungen, Verbindungsfehler, fehlgeschlagene Workflows, Updates …) – nur Arten, für die das Konto Rechte
-  hat. Push an Browser und installierte App (Web Push, ohne Fremddienst); E-Mail über SMTP oder Microsoft 365
-  (Microsoft Graph als Anwendung, aktivierbar erst nach bestandener Testmail).
+  hat. Push an Browser und installierte App (Web Push über den Push-Dienst des Browsers, Inhalt Ende-zu-Ende-verschlüsselt,
+  kein zusätzlicher Anbieter); E-Mail über SMTP oder Microsoft 365 (Microsoft Graph als Anwendung, aktivierbar erst nach
+  bestandener Testmail). Push und E-Mail tragen standardmäßig nur die Art der Benachrichtigung und einen Link –
+  Stichwort, Ort oder Betreff bleiben in BlaulichtCMS, Einzelheiten lassen sich je Kanal zuschalten.
 - **App für Handy und Computer:** installierbar (PWA) auf Android, iPhone/iPad und am Computer (Chrome, Edge, Safari am Mac – „Zum Dock hinzufügen“), mit eigenem Fenster, Push-Mitteilungen des Betriebssystems, Zähler ungelesener Benachrichtigungen am App-Symbol und Schnellzugriffen auf Neuer Beitrag, Medien sammeln und Freigaben; „App installieren“ im Benutzermenü.
 - **Schnell bedienbar:** Suche und Schnellaktionen mit `Strg` + `K`, vollständig per Tastatur nutzbar, heller und
   dunkler Modus, Design „Leitstand“ für draußen und nachts.
@@ -296,7 +298,9 @@ flowchart LR
   neue Tabelle mit Personenbezug abgedeckt oder begründet ausgenommen ist.
 - **Löschfristen** für Sammlungen, Upload-Links, Warnvorgänge, Einsatzmeldungen (FE2, Feuersoftware Connect), Presseanfragen und Protokolle – mit Vorschau „Was würde
   gelöscht?“.
-- **Vorlagen** für Verarbeitungsverzeichnis und Datenschutz-Folgenabschätzung, Hinweise zu Empfängern wie Meta.
+- **Vorlagen** für Verarbeitungsverzeichnis und Datenschutz-Folgenabschätzung mit allen Modulen, Empfängern und
+  Drittlandübermittlungen (Meta, X, Bluesky, Mastodon, Microsoft 365, Push-Dienste, GitHub) und Rechtsgrundlagen zur
+  Prüfung durch die oder den Datenschutzbeauftragten.
 - **Datenschutzerklärung und Impressum** als eigene öffentliche Seiten (`/datenschutz`, `/impressum`), gepflegt in den
   Einstellungen mit Vorschau und neutraler Vorlage; verlinkt auf Anmeldung, Upload-Seite und in der App.
 

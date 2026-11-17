@@ -16,11 +16,13 @@ interface NotifySettingsView {
   m365: { tenant_id: string; client_id: string; sender: string; save_sent: boolean; secret_set: boolean; verified_at: string | null };
   push_enabled: boolean;
   mail_enabled: boolean;
+  push_details: boolean;
+  mail_details: boolean;
   push: { key_set: boolean; subscriptions: number; subject: string };
 }
-type Form = { transport: 'smtp' | 'm365'; tenantId: string; clientId: string; sender: string; clientSecret: string; saveSent: boolean; pushEnabled: boolean; mailEnabled: boolean };
+type Form = { transport: 'smtp' | 'm365'; tenantId: string; clientId: string; sender: string; clientSecret: string; saveSent: boolean; pushEnabled: boolean; mailEnabled: boolean; pushDetails: boolean; mailDetails: boolean };
 
-const fromView = (d: NotifySettingsView): Form => ({ transport: d.transport, tenantId: d.m365.tenant_id, clientId: d.m365.client_id, sender: d.m365.sender, clientSecret: '', saveSent: d.m365.save_sent, pushEnabled: d.push_enabled, mailEnabled: d.mail_enabled });
+const fromView = (d: NotifySettingsView): Form => ({ transport: d.transport, tenantId: d.m365.tenant_id, clientId: d.m365.client_id, sender: d.m365.sender, clientSecret: '', saveSent: d.m365.save_sent, pushEnabled: d.push_enabled, mailEnabled: d.mail_enabled, pushDetails: d.push_details, mailDetails: d.mail_details });
 const m365Key = (f: Form) => JSON.stringify([f.tenantId.trim().toLowerCase(), f.clientId.trim().toLowerCase(), f.sender.trim().toLowerCase(), f.clientSecret]);
 
 /**
@@ -55,7 +57,8 @@ export function NotifySettingsSection({ manage }: { manage: boolean }) {
   const m365Body = { tenantId: form.tenantId.trim(), clientId: form.clientId.trim(), sender: form.sender.trim(), saveSent: form.saveSent, ...(form.clientSecret ? { clientSecret: form.clientSecret } : {}) };
 
   const refresh = async () => {
-    const fresh = await qc.fetchQuery({ queryKey: ['notify-settings'], queryFn: () => get<NotifySettingsView>('/notify/settings') });
+    // staleTime 0: sonst liefert der Cache (Standard 10 s) den Stand von vor dem Speichern und das Formular springt zurück
+    const fresh = await qc.fetchQuery({ queryKey: ['notify-settings'], queryFn: () => get<NotifySettingsView>('/notify/settings'), staleTime: 0 });
     setForm(fromView(fresh));
     qc.invalidateQueries({ queryKey: ['notify-prefs'] });
   };
@@ -63,7 +66,7 @@ export function NotifySettingsSection({ manage }: { manage: boolean }) {
     setBusy('save');
     setError(null);
     try {
-      await put('/notify/settings', { transport: form.transport, pushEnabled: form.pushEnabled, mailEnabled: form.mailEnabled, ...m365Body });
+      await put('/notify/settings', { transport: form.transport, pushEnabled: form.pushEnabled, mailEnabled: form.mailEnabled, pushDetails: form.pushDetails, mailDetails: form.mailDetails, ...m365Body });
       toast({ tone: 'success', title: 'Gespeichert' });
       await refresh();
     } catch (e) {
@@ -112,6 +115,17 @@ export function NotifySettingsSection({ manage }: { manage: boolean }) {
       <div className="flex flex-col gap-1">
         <Switch checked={form.pushEnabled} disabled={ro} onChange={(v) => set({ pushEnabled: v })} label="Push-Benachrichtigungen" description={`Mitteilungen an Browser und installierte App (Web Push). ${d.push.subscriptions} Gerät(e) eingerichtet.`} />
         <Switch checked={form.mailEnabled} disabled={ro} onChange={(v) => set({ mailEnabled: v })} label="E-Mail-Benachrichtigungen" description="Benachrichtigungen per E-Mail über den gewählten Versandweg. Warnversand und Sicherheitsmeldungen sind davon unabhängig." />
+      </div>
+
+      <div className="flex flex-col gap-1">
+        <div className="flex items-center gap-1">
+          <h3 className="m-0 text-sm font-semibold">Inhalt außerhalb von BlaulichtCMS</h3>
+          <HelpTip title="Einzelheiten in Push und E-Mail" more="/hilfe/benachrichtigungen#inhalt-von-push-und-e-mail">
+            <p className="m-0">Ausgeschaltet tragen Push-Mitteilungen und E-Mails nur die Art der Benachrichtigung (z. B. „Neuer Einsatz-Eingang“) und einen Link. Eingeschaltet enthalten sie Titel und Text wie die Glocke – z. B. Stichwort und Ort eines Einsatzes oder den Betreff einer Presse-Mail. Push-Mitteilungen erscheinen auf dem Sperrbildschirm; E-Mails sind nicht Ende-zu-Ende-verschlüsselt und gehen ggf. an private Postfächer.</p>
+          </HelpTip>
+        </div>
+        <Switch checked={form.pushDetails} disabled={ro} onChange={(v) => set({ pushDetails: v })} label="Einzelheiten in Push-Mitteilungen" description="Titel und Text der Benachrichtigung statt nur der Art. Erscheint ggf. auf dem Sperrbildschirm." />
+        <Switch checked={form.mailDetails} disabled={ro} onChange={(v) => set({ mailDetails: v })} label="Einzelheiten in E-Mail-Benachrichtigungen" description="Titel und Text der Benachrichtigung im Betreff und in der Mail. Nur einschalten, wenn die Konten dienstliche Adressen haben." />
       </div>
 
       <FieldWrap label="Versandweg für alle E-Mails" htmlFor="n-transport" help="Gilt für Warnversand, Sicherheitsmeldungen, Workflows und Benachrichtigungen." labelAction={

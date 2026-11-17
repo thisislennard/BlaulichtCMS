@@ -7,7 +7,9 @@ import { getSettings } from './settings.js';
 
 /**
  * In-App-Benachrichtigung an alle Benutzer mit einem Recht (oder an eine Person).
- * Inhalte bleiben knapp und enthalten keine Einsatzdetails.
+ * Titel und Text bleiben knapp, können aber Stichwort und Ort eines Einsatzes, den Betreff einer Presse-Mail oder
+ * Vorlagentext eines Workflows enthalten. Nach außen (Push, E-Mail) gehen sie nur mit notify.push_details bzw.
+ * notify.mail_details, sonst nur die Art und ein Link (lib/notify-channels.ts, #247).
  *
  * Push und E-Mail (#191): Jede Benachrichtigung gehört zu einer Art (`category`, sonst aus dem Recht abgeleitet,
  * lib/notify-categories.ts). Ist ein Kanal überhaupt möglich (Push-Abo vorhanden bzw. E-Mail-Versand eingerichtet),

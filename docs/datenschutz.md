@@ -17,12 +17,21 @@ und Mailservern in der Hilfe (Verbindungen, WordPress, Warnentwurf).
 Bürgerinnen/Bürger, Helfende ──Upload-Link/QR──▶ BlaulichtCMS (Quarantäne → Prüfung → Sichtung)
                                                    │
 Redaktion (Konten) ──Beitrag, Fassung, Freigabe────┤
-                                                   ├──▶ WordPress (BlaulichtCMS Bridge, ruft selbst ab) ──▶ öffentlich
-                                                   ├──▶ Facebook-Seite / Instagram (Meta, auch USA) ──▶ öffentlich
+                                                   ├──▶ WordPress (BlaulichtCMS Bridge, ruft selbst ab): Beiträge,
+                                                   │    Banner, Einsatzliste ──▶ öffentlich
+                                                   ├──▶ Facebook/Instagram/Threads (Meta), X, Bluesky (USA),
+                                                   │    Mastodon-Instanz ──▶ öffentlich
+Journalist/innen ──Mail──▶ Presse-Postfach ◀─Abruf─┤
 FE2 (Einsatzdaten, Allowlist) ──HTTP──────────────▶│
 Feuersoftware Connect (Einsätze) ◀──Abruf──────────┤
 Warnfeeds (amtliche Warnungen) ◀──Abruf────────────┤
-                                                   └──▶ Mailserver (Warnentwurf an zuständige Stellen)
+iCal-Quellen (Kalender) ◀──Abruf───────────────────┤
+GitHub (Update-Prüfung, Updates) ◀──Abruf──────────┤
+                                                   ├──▶ Mailserver bzw. Microsoft 365: Warnentwurf, Antworten
+                                                   │    und Pressemitteilungen, E-Mail-Benachrichtigungen
+                                                   ├──▶ Push-Dienste der Browserhersteller (Ende-zu-Ende-
+                                                   │    verschlüsselt; standardmäßig nur Art und Link)
+                                                   └──▶ Sicherungsziel außer Haus (WebDAV, verschlüsselt)
 ```
 
 - **Upload:** Datei, Dateiname, optionaler Hinweis, Vorgangsnummer, IP-Adresse (Audit, nach 30 Tagen entfernt). Die
@@ -51,6 +60,39 @@ Warnfeeds (amtliche Warnungen) ◀──Abruf───────────�
   die Abfrage selbst. Von der Antwort bleiben nur die Felder der Allowlist; Lagemeldungen (Freitext, ggf.
   Gesundheitsdaten nach Art. 9 DSGVO) ruft BlaulichtCMS nicht ab. Für die Nutzung von Connect selbst gilt der Vertrag
   der Organisation mit Feuersoftware.
+- **Presseanfragen und Presse-Postfach (#204–#206):** Anfragen per Telefon, Mail oder über das Presse-Postfach. Das
+  Postfach ruft BlaulichtCMS per IMAP beim Mailanbieter oder über Microsoft Graph (Microsoft 365) ab und speichert je
+  Mail Absender, Empfänger, CC, Betreff, Text, entschärftes HTML und Anhänge – auch Daten Dritter, die in einer Mail
+  genannt sind. Antworten gehen über den Versandweg (SMTP bzw. Microsoft 365) an die anfragende Person.
+- **Presseverteiler und Pressemitteilungen (#207):** Kontakte von Redaktionen mit Herkunft und Rechtsgrundlage; jede
+  Pressemitteilung geht einzeln adressiert mit Abmeldelink an die Kontakte der gewählten Listen, je Empfänger bleibt ein
+  Versandprotokoll.
+- **Einsatzliste (#213):** Einträge (Alarmzeit, Stichwort, Ort nur als Ortsteil bzw. Gemeinde, Kurzbericht, Fahrzeuge,
+  Bilder) werden nach Freigabe über die Bridge auf der Website veröffentlicht. Aufträge an die Website tragen nur,
+  solange sie unterwegs sind, eine Kopie des Eintrags.
+- **Kalender (#200, #202):** eigene Termine (Titel, Beschreibung, Ort); iCal-Quellen ruft der Server beim Betreiber der
+  Quelle ab (Server-IP; die Adresse der Quelle liegt verschlüsselt); je Konto ein persönlicher Abo-Link (gespeichert
+  nur die Prüfsumme und der letzte Abruf).
+- **Designvorlagen und Bilder aus Vorlagen:** hochgeladene Bilder, Schriften und Vorlagendateien; aus Vorlagen erzeugte
+  Bilder erben die Datenschutz-Markierungen ihrer Quellbilder.
+- **Reichweite (#218):** BlaulichtCMS ruft bei Meta, X, der Mastodon-Instanz und Bluesky nur Summen je eigenem Beitrag
+  ab (Aufrufe, Interaktionen) – keine Personen.
+- **Benachrichtigungen:** In der Glocke steht die ganze Benachrichtigung, je nach Art z. B. **Stichwort und
+  Gemeinde/Ortsteil** eines Einsatzes, der **Betreff** einer Mail an das Presse-Postfach, der Titel eines Beitrags oder
+  der Text eines Workflows (bis 1 000 Zeichen). Per Push und E-Mail (Wahl jeder Person) gehen **standardmäßig nur die
+  Art der Benachrichtigung und ein Link** hinaus (#247). Mit *Einstellungen → Benachrichtigungen und E-Mail →
+  „Einzelheiten in Push-Mitteilungen“* bzw. *„… in E-Mail-Benachrichtigungen“* (`notify.push_details`,
+  `notify.mail_details`) tragen sie Titel und Text. Push ist auf dem Weg über den Push-Dienst Ende-zu-Ende-verschlüsselt
+  (RFC 8291), erscheint aber auf dem Gerät (ggf. Sperrbildschirm); die **E-Mail ist nicht Ende-zu-Ende-verschlüsselt** und
+  geht an die Kontoadresse, ggf. ein privates Postfach Ehrenamtlicher – Einzelheiten per Mail nur bei dienstlichen
+  Adressen einschalten.
+- **Updates:** Der Worker fragt alle `updates.check_hours` Stunden (Standard 6) bei GitHub (`api.github.com`) nach
+  neuen Versionen; dabei erhält GitHub die IP-Adresse des Servers und die eingesetzte Version (im User-Agent).
+  Installation, Update-Pakete und der Host-Update-Helfer laden Code von GitHub, der Bau des Images die Basis-Images aus
+  den Container-Registries. Abschaltbar unter *Updates* (`updates.enabled`).
+- **Sicherung außer Haus und Probe-Wiederherstellung (#212):** verschlüsselte Sicherungen der Datenbank und – je nach
+  Einstellung – des Volumes mit allen Originaldateien gehen per WebDAV an ein zweites Ziel (z. B. NAS); die
+  Probe-Wiederherstellung spielt eine Sicherung in eine vorübergehende Probedatenbank ein und löscht sie danach.
 - **Betrieb:** Konten, Sitzungen (IP, Browser), Audit, Systemprotokoll, Sicherungen.
 
 ## Datenkategorien je Bereich
@@ -66,6 +108,13 @@ Warnfeeds (amtliche Warnungen) ◀──Abruf───────────�
 | Beiträge (`posts`, `post_revisions`, `approvals`, `publications`, `social_publications`) | Redaktion, im Text genannte Personen, Abgebildete | Texte, Fassungen, Freigaben, Veröffentlichungsstatus | keine automatische Löschung (redaktionelles Archiv); von Hand bearbeiten/zurückziehen | – |
 | Einsatzliste: Einträge (`incident_entries`) | ggf. Betroffene eines Einsatzes (indirekt über Ort/Zeit), Abgebildete; Redaktion | Alarmzeit, Stichwort, Kategorie, Einsatzmeldung, Ort nur als Ortsteil/Gemeinde, Kurzbericht, Fahrzeuge, weitere Kräfte, Bild-IDs, wer angelegt/eingereicht/freigegeben hat | keine automatische Löschung (öffentliches Einsatzarchiv); von Hand zurückziehen bzw. löschen | – |
 | Einsatzliste: Aufträge an die Website (`incident_jobs`) | wie die Einträge | solange unterwegs eine Momentaufnahme des Eintrags; erledigte, fehlgeschlagene und abgebrochene Aufträge nur noch Kennung, Fassung, Bild-IDs, Stand, Fehlermeldung, Adresse auf der Website | Inhalte beim Abschluss des Auftrags; Aufträge **30 Tage** danach (der letzte Stand je Eintrag und Website bleibt, solange es den Eintrag gibt); mit dem Eintrag gelöscht | fest |
+| Banner (`banners`, `banner_jobs`) | ggf. im Text genannte Personen; Redaktion | Titel, Text, Link, Zeitraum, Freigabe, wer angelegt/freigegeben hat; Aufträge an die Website mit Kopie des Banners | keine automatische Löschung; von Hand beenden bzw. löschen | – |
+| Kalender (`calendar_events`, `calendar_categories`) | in Terminen genannte Personen; Redaktion | Titel, Beschreibung, Ort, Zeit, Wiederholung, Schlagwörter, wer angelegt/geändert hat | eigene Termine: **keine automatische Löschung** (von Hand löschen; *[Frist für vergangene Termine organisatorisch festlegen]*) | – |
+| Kalender: iCal-Quellen (`calendar_sources`, `calendar_source_log`, eingelesene `calendar_events`) | in eingelesenen Terminen genannte Personen | Bezeichnung und Host der Quelle (Adresse verschlüsselt in `secrets`), eingelesene Termine wie oben; Abrufprotokoll nur mit Zählern und technischen Meldungen | eingelesene Termine, solange die Quelle sie liefert (mit der Quelle gelöscht); Abrufprotokoll höchstens 200 Einträge je Quelle | – |
+| Kalender-Abo (`calendar_feeds`) | Konten | Prüfsumme des persönlichen Abo-Links, gewählte Kategorien, mit/ohne Beschreibung, Zeitpunkt des letzten Abrufs | bis zum Widerruf durch die Person; mit dem Konto | *Kalender → Abonnieren* |
+| Designvorlagen (`design_templates`, `design_template_versions`, `design_template_files`, `design_template_assets`, `design_fonts`, `template_categories`) | ggf. auf Bildern Abgebildete; Redaktion | Vorlagendateien, hochgeladene Bilder und Schriften, Titel, Beschreibung, Hinweise, Versionen, Downloadzähler, wer hochgeladen/geändert hat | bis zum Löschen | – |
+| Beitragsvorlagen und Textbausteine (`post_templates`, `press_snippets`) | ggf. im Text genannte Personen (z. B. Ansprechperson) | Texte der Redaktion | bis zum Löschen | – |
+| Reichweite (`social_publications.insights`, `social_insights`) | – | **keine personenbezogenen Daten:** nur Summen je eigenem Beitrag (Aufrufe, Interaktionen) | mit dem Beitrag | – |
 | Warnvorgänge (`warnings`, `warning_revisions`, `warning_approvals`, `warning_sends`) | Rückrufkontakte, Redaktion, Empfänger | Name, Telefon, E-Mail-Adressen, PDF, SMTP-Antworten | **365 Tage** nach dem letzten Bearbeitungsschritt | `privacy.warning_days` |
 | Zuständigkeiten (`responsibilities`) | Ansprechstellen | Funktionsadressen | solange gepflegt | – |
 | Einsatzmeldungen aus FE2 und Feuersoftware Connect (`fe2_events`, Spalte `source`) | ggf. Betroffene eines Einsatzes (indirekt über Ort/Zeit) | Stichwort, Einsatzart, Ort bzw. Ort mit Ortsteil, Zeit, Einheiten (Allowlist; keine Alarmtexte, kein Sachverhalt, keine Straße/Hausnummer, keine meldende Person, keine Telefonnummern, keine Lagemeldungen) | **90 Tage** | `privacy.fe2_event_days` |
@@ -80,8 +129,10 @@ Warnfeeds (amtliche Warnungen) ◀──Abruf───────────�
 | Konten (`users`, `sessions`, `invitations`, `trusted_devices`) | Redaktion, Administration | Name, E-Mail, Rollen, Passwort-Hash, TOTP (verschlüsselt), letzte Anmeldung, Sitzungen mit IP und Browser, gemerkte Geräte der Zwei-Faktor-Anmeldung (Browser-Kennung, Zeitpunkte, Hash der Gerätekennung, keine IP) | Konto bis zur Löschung; Sitzungen und gemerkte Geräte 7 Tage nach Ende bzw. Ablauf; Einladungen 30 Tage nach Ablauf | `security.remember_days`, `security.mfa_remember_days` |
 | Audit (`audit_events`) | alle Handelnden, Hochladende (IP) | Name, E-Mail, Aktion, Objekt, IP | **365 Tage**; IP ohne Konto **30 Tage** | `retention.audit_days`, `privacy.upload_ip_retention_days` |
 | Systemprotokoll (`app_logs`) | Handelnde (selten) | technische Meldungen | **30 Tage** | `retention.log_days` |
-| Benachrichtigungen | Empfänger | Text, Link | 60 Tage | – |
+| Benachrichtigungen (`notifications`, `notification_reads`) | Konten mit dem passenden Recht; im Text genannte Personen | Titel und Text (je nach Art Stichwort und Gemeinde/Ortsteil eines Einsatzes, Betreff einer Presse-Mail, Titel eines Beitrags, Text eines Workflows), Link, Lesestatus; Kopie per Push bzw. E-Mail nach Wahl der Person – standardmäßig nur Art und Link | **60 Tage**; zugestellte Push-Mitteilungen und Mails liegen danach auf den Geräten bzw. in den Postfächern | `notify.push_details`, `notify.mail_details` |
+| Update-Verlauf (`update_history`) | Administration | Versionen, Zeitpunkt, Ergebnis, handelnde Person | keine automatische Löschung | – |
 | Push-Geräte (`push_subscriptions`, Wahl je Art in `users.preferences`) | Konten mit eingeschaltetem Push | Adresse beim Push-Dienst des Browsers, öffentliche Geräteschlüssel, Gerätebezeichnung (Browser/Betriebssystem), Zeitpunkte und letzter Fehler der Zustellung | bis zum Entfernen durch die Person, bei erloschenem Abo (404/410) bzw. nach 10 Fehlschlägen in Folge sofort; mit dem Konto | *Mein Konto → Benachrichtigungen* |
+| Sicherung außer Haus und Probe-Wiederherstellung (`backup_offsite`, `restore_drills`, Probedatenbanken `blaulichtcms_probe_*`) | alle (Kopie) | Ziel, Benutzername (Passwort verschlüsselt), Stand der Übertragungen; Ergebnis der Proben mit Zählern; die Probedatenbank ist während der Probe eine vollständige Kopie einer Sicherung | Probedatenbank nach der Probe gelöscht (Reste nach einem Abbruch räumt der Worker auf); Aufbewahrung auf dem Ziel siehe nächste Zeile | *Einstellungen → Sicherung außer Haus* |
 | Sicherungen (Volume, Datenbank), auch auf dem Ziel außer Haus | alle | Kopie aller Daten | rund **4 Monate** mit den Standardwerten (siehe [Löschung und Sicherungen](betrieb.md#löschung-und-sicherungen)); Sicherung außer Haus Standard 7 Tage/4 Wochen/3 Monate, höchstens 90 Tage/52 Wochen/24 Monate – längere Aufbewahrung als 4 Monate nur mit Bestätigung, dann hier und im VVT anpassen | Host-Cron, *Einstellungen → Sicherung*, *Einstellungen → Sicherung außer Haus* |
 | Zugriffsprotokoll des Proxys | alle Aufrufenden | IP, Adresse (ggf. Token), Browser | abschalten bzw. **7 Tage** | am Proxy |
 
@@ -107,7 +158,7 @@ verschwindet nach der kurzen Frist von selbst.
 **Workflows** (Workflows → Alle Workflows) verarbeiten nur, was ihr Eingang liefert – es gibt keine Abfrage
 fremder Daten und keine freien Empfängeradressen: E-Mails gehen nur an Konten mit gewählten Rollen und an gepflegte
 Zuständigkeiten (diese nur nach Freigabe oder mit ausdrücklich erlaubtem Direktversand, im Testmodus nur an das
-Testpostfach), Benachrichtigungen innerhalb von BlaulichtCMS und – nach Wahl der Person – per Push oder E-Mail an das eigene Konto. Laufprotokolle sehen nur Personen mit
+Testpostfach), Benachrichtigungen innerhalb von BlaulichtCMS und – nach Wahl der Person – per Push oder E-Mail an das eigene Konto (nach außen standardmäßig ohne den Text, siehe Benachrichtigungen oben). Laufprotokolle sehen nur Personen mit
 „Workflows ansehen“; sie sind nicht Teil der Datenschutzsuche (keine Namen oder Adressen außer gekürzten
 E-Mail-Adressen; Einsatzbezug nur über die Allowlist) und verschwinden mit `privacy.automation_run_days`. Entwürfe, die
 ein Workflow anlegt (Beiträge, Banner, Warnentwürfe), gehören danach zum jeweiligen Bereich und folgen dessen
@@ -120,41 +171,79 @@ was fällig ist. Jeder Lauf steht im Audit (`retention.run`).
 
 | Empfänger | Was | Rolle | Zu prüfen |
 |---|---|---|---|
-| Öffentlichkeit (Website) | freigegebene Beiträge, öffentliche Fassungen | – | Einwilligung/Interessenabwägung für Abgebildete |
+| Öffentlichkeit (Website) | freigegebene Beiträge, öffentliche Fassungen, Banner, Einträge der Einsatzliste (Ort nur als Ortsteil/Gemeinde, Kurzbericht, Bilder); mit „Autorenname übertragen“ (je Website, `wp_sites.send_author`) zusätzlich der Name der Person, die den Beitrag angelegt hat | – | Einwilligung/Interessenabwägung für Abgebildete; Namen der Redaktion nur mit deren Wissen veröffentlichen |
 | WordPress-Hoster *[Name]* | dasselbe | Auftragsverarbeiter | AV-Vertrag (Art. 28), Standort, Unterauftragnehmer |
 | Meta Platforms Ireland / Meta Platforms Inc. (USA) | freigegebene Beiträge und Dateien für Facebook/Instagram/Threads (auch Storys) | eigener Verantwortlicher; für Seiten-Insights gemeinsame Verantwortung (Art. 26) | Seiten-Insights-Ergänzung, Drittlandübermittlung (EU-US Data Privacy Framework), Datenschutzerklärung der Seite |
 | X Corp. (USA) – nur mit „Über die X-API posten“ | freigegebene Beiträge und Bilder für X | eigener Verantwortlicher | Drittlandübermittlung, Präsenz in der Datenschutzerklärung; beim Teilen von Hand überträgt die Person selbst |
 | Betreiber der gewählten Mastodon-Instanz (und föderierte Instanzen) – nur mit Mastodon-Verbindung | freigegebene Beiträge, Bilder, Alternativtexte | eigener Verantwortlicher | Standort und Betreiber der Instanz, Präsenz in der Datenschutzerklärung; Löschungen setzt jede Instanz selbst um |
 | Bluesky Social PBC (USA) – nur mit Bluesky-Verbindung | freigegebene Beiträge, Bilder, Alternativtexte (über das offene Protokoll öffentlich abrufbar) | eigener Verantwortlicher | Drittlandübermittlung, Präsenz in der Datenschutzerklärung |
 | (Abruf, keine Übermittlung) Statistik-Schnittstellen von Meta, X, Mastodon-Instanz und Bluesky | BlaulichtCMS ruft nur Summen je eigenem Beitrag ab (Aufrufe, Interaktionen), speichert keine Personen | – | bei Meta: Seiten-Insights und gemeinsame Verantwortung (Art. 26) wie bisher; X-Abruf ist kostenpflichtig und standardmäßig aus |
-| Mailserver/Provider *[Name]* | Warnmails mit PDF, Benachrichtigungen | Auftragsverarbeiter (falls extern) | AV-Vertrag |
-| Push-Dienste der Browserhersteller (Google FCM, Mozilla, Apple, Microsoft WNS) | nur bei eingeschaltetem Push: Ende-zu-Ende-verschlüsselte Kurzmitteilung (Titel, kurzer Text, Link; ohne Einsatzdetails), Adresse des Geräts | Übermittlung durch den Browser des Kontos; Inhalt für den Dienst nicht lesbar (RFC 8291) | Hinweis in der Datenschutzinformation für Beschäftigte; Push ist freiwillig |
-| Microsoft 365 (optional, Versandweg „Microsoft 365“) | alle ausgehenden E-Mails | Auftragsverarbeiter (bestehender Vertrag der Organisation) | AV-Vertrag/Online Services DPA, Postfach-Beschränkung für die App |
+| Mailserver/Provider *[Name]* | Warnmails mit PDF, E-Mail-Benachrichtigungen (standardmäßig ohne Einzelheiten), Antworten auf Presseanfragen, Pressemitteilungen | Auftragsverarbeiter (falls extern) | AV-Vertrag |
+| Mailanbieter des Presse-Postfachs *[Name]* (IMAP) – nur mit eingerichtetem Postfach | eingehende Presse-Mails samt Anhängen (BlaulichtCMS ruft ab) | Auftragsverarbeiter (falls extern) | AV-Vertrag, Standort |
+| Journalistinnen und Journalisten, Redaktionen | Antworten auf ihre Presseanfragen; Pressemitteilungen (einzeln adressiert, mit Abmeldelink) | eigene Verantwortliche | Inhalt der Antwort (keine Daten Dritter ohne Grundlage), Art. 14 bei Adressen aus fremden Quellen |
+| Push-Dienste der Browserhersteller: Google (Firebase Cloud Messaging – Chrome, Android), Mozilla (Firefox), Apple (Safari, iOS), Microsoft (Edge, Windows) – nur bei eingeschaltetem Push | Ende-zu-Ende-verschlüsselte Mitteilung (RFC 8291): **standardmäßig nur die Art der Benachrichtigung und ein Link**; mit „Einzelheiten in Push-Mitteilungen“ Titel und Text wie in der Glocke (z. B. Stichwort und Gemeinde/Ortsteil eines Einsatzes, Betreff einer Presse-Mail, Text eines Workflows); dazu Adresse des Geräts beim Dienst, Zeitpunkt, Server-IP | Dienst des jeweiligen Browserherstellers; Inhalt für den Dienst nicht lesbar, Metadaten schon | Drittland (USA), Hinweis in der Datenschutzinformation für Beschäftigte und Ehrenamtliche; Push ist freiwillig |
+| Microsoft 365 (optional: Versandweg „Microsoft 365“ und/oder Presse-Postfach über Microsoft 365) | alle ausgehenden E-Mails (Warnversand, Benachrichtigungen, Antworten, Pressemitteilungen); beim Presse-Postfach über Microsoft Graph auch die **eingehenden** Presse-Mails samt Anhängen | Auftragsverarbeiter (bestehender Vertrag der Organisation) | AV-Vertrag/Online Services DPA, Speicherort des Mandanten, Drittland (Unterauftragsverarbeiter), Postfach-Beschränkung für die App |
+| Betreiber der iCal-Quellen *[Name]* – nur mit eingerichteter Quelle | Abruf der Termine: Server-IP, Zeitpunkt, ggf. Zugangstoken in der Adresse | eigener Verantwortlicher | Vertrauenswürdigkeit der Quelle, Inhalte der Termine |
+| GitHub Inc. (USA) | Update-Prüfung alle 6 Stunden (abschaltbar): Server-IP und eingesetzte Version; Bezug von Code und Update-Paketen (Installation, In-App-Update, Host-Update-Helfer) | eigener Verantwortlicher | Drittland; keine Daten Betroffener außer der Server-IP |
+| Feuersoftware (Connect) – nur mit Verbindung | nur API-Schlüssel und Abfrage (Server-IP); BlaulichtCMS ruft Einsätze ab | Vertrag der Organisation mit Feuersoftware | – |
 | Zuständige Stellen (Warnempfänger) | Warnentwurf, PDF, Rückrufkontakt | eigene Verantwortliche | Übermittlungsgrundlage |
 | Hosting des Docker-Hosts *[Name]* | alle Daten (verschlüsselte Sicherungen getrennt) | Auftragsverarbeiter (falls extern) | AV-Vertrag, TOMs |
 | Sicherungsziel außer Haus *[NAS/zweiter Standort bzw. Dienstleister]* – nur mit *Sicherung außer Haus* bzw. Volume-Sicherung | verschlüsselte Datenbank- und Volume-Sicherungen (alle Daten, nur als Chiffrat; Schlüssel bleiben beim Verantwortlichen) | intern bzw. Auftragsverarbeiter (externer Speicher) | AV-Vertrag bei externem Speicher, Standort, Zugriff; Aufbewahrung laut Einstellung; nach Ausschalten oder Zielwechsel alte Sicherungen dort löschen (Systemstatus erinnert) |
 | Zentrale Protokollierung (optional, `AUDIT_FORWARD`) | Audit-Einträge | intern bzw. Auftragsverarbeiter | Frist und Zugriff dort |
 
+### Drittlandübermittlungen
+
+Übermittlungen in Drittländer entstehen nur mit den jeweils eingeschalteten Funktionen. Für die USA kommt der
+Angemessenheitsbeschluss zum EU-US Data Privacy Framework in Betracht
+([Durchführungsbeschluss (EU) 2023/1795](https://eur-lex.europa.eu/eli/dec_impl/2023/1795/oj)) – aber nur, wenn der
+Empfänger in der [Data Privacy Framework List](https://www.dataprivacyframework.gov/) zertifiziert ist. Die
+Zertifizierung ändert sich; sie ist vor der Inbetriebnahme und regelmäßig zu prüfen, sonst ist eine andere Grundlage
+(Art. 46 bzw. Art. 49 DSGVO) festzulegen.
+
+| Empfänger | Land | wann | zu prüfen |
+|---|---|---|---|
+| Meta Platforms Inc. | USA | Facebook-, Instagram- oder Threads-Verbindung | DPF-Zertifizierung, Seiten-Insights (Art. 26) |
+| X Corp. | USA | „Über die X-API posten“ bzw. Reichweite für X | Grundlage festlegen (DPF-Liste prüfen) |
+| Bluesky Social PBC | USA | Bluesky-Verbindung | Grundlage festlegen (DPF-Liste prüfen); Beiträge sind über das offene Protokoll weltweit abrufbar |
+| Betreiber der Mastodon-Instanz | je nach Instanz; föderierte Instanzen weltweit | Mastodon-Verbindung | Standort der gewählten Instanz (möglichst EU) |
+| Microsoft (Microsoft 365) | EU-Vertragspartner; Unterauftragsverarbeiter auch in Drittländern | Versandweg oder Presse-Postfach über Microsoft 365 | Online Services DPA, Speicherort des Mandanten, DPF |
+| Google, Apple, Microsoft, Mozilla (Push-Dienste) | USA | Push von mindestens einer Person eingeschaltet | Inhalt Ende-zu-Ende-verschlüsselt, standardmäßig nur Art und Link; Metadaten beim Dienst |
+| GitHub Inc. | USA | Update-Prüfung (Standard an), Installation, Updates | nur Server-IP und Version; Prüfung unter *Updates* abschaltbar |
+| Hoster, Mailanbieter, Sicherungsziel *[…]* | je nach Anbieter | – | Standort, AV-Vertrag |
+
 ## Rechtsgrundlagen (Vorschlag zur Prüfung)
+
+Beispiele für Hessen sind am 17.11.2026 an amtlichen Fassungen geprüft (HDSIG: Gesetz- und Verordnungsblatt 2018 S. 82
+und Ausgabe des HBDI; HBKG und Hessisches Pressegesetz: Wiedergaben der Hessischen Landesfeuerwehrschule). Fassung und
+Anwendbarkeit klärt die verantwortliche Stelle mit der oder dem Datenschutzbeauftragten (**[DSB prüfen]**); für andere
+Länder gelten deren Gesetze.
 
 | Verarbeitung | mögliche Grundlage |
 |---|---|
-| Öffentlichkeitsarbeit/Krisenkommunikation einer öffentlichen Stelle | Art. 6 Abs. 1 lit. e DSGVO i. V. m. *[Landesrecht, z. B. Brandschutz-/Katastrophenschutzgesetz, Kommunalrecht]* |
+| Öffentlichkeitsarbeit/Krisenkommunikation einer öffentlichen Stelle (Website, Einsatzliste, soziale Kanäle) | Art. 6 Abs. 1 lit. e DSGVO i. V. m. *[Landesrecht, z. B. Brandschutz-/Katastrophenschutzgesetz, Kommunalrecht]*. Beispiel Hessen: § 3 Abs. 1 HDSIG (Verarbeitung durch eine öffentliche Stelle, wenn zur Erfüllung der Aufgabe in ihrer Zuständigkeit erforderlich) i. V. m. der Aufgabe aus dem Fachrecht, etwa § 3 Abs. 1 Nr. 6 HBKG (Brandschutzerziehung und Brandschutzaufklärung) **[DSB prüfen]** |
+| Presseanfragen beantworten (Kontaktdaten der Anfragenden, Anfrage, Mailverlauf) | Art. 6 Abs. 1 lit. c bzw. lit. e DSGVO i. V. m. dem Auskunftsanspruch der Presse nach Landespressegesetz und dem Landesdatenschutzgesetz (Beispiel Hessen: § 3 Abs. 1 HDSIG). Beispiel Hessen: § 3 Abs. 1 Hessisches Pressegesetz (Behörden sind verpflichtet, der Presse Auskünfte zu erteilen; Verweigerung u. a., soweit Auskünfte über persönliche Angelegenheiten Einzelner verlangt werden, an deren öffentlicher Bekanntgabe kein berechtigtes Interesse besteht) **[DSB prüfen]**. In Mails genannte Dritte: nur soweit für die Beantwortung erforderlich |
+| Presseverteiler und Pressemitteilungen | öffentliche Redaktionsadressen: Art. 6 Abs. 1 lit. e DSGVO i. V. m. *[Landesrecht]* (Beispiel Hessen: § 3 Abs. 1 HDSIG); persönliche Adressen: Einwilligung (Art. 6 Abs. 1 lit. a, Datum je Kontakt); Information nach Art. 14 spätestens mit der ersten Mitteilung (Fußzeile jeder Mitteilung und Datenschutzerklärung), Widerspruch/Abmeldung jederzeit (Art. 21) über den Link in jeder Mail – *[festlegen]* |
+| Konten, Benachrichtigungen per Push/E-Mail, Kalender-Abo von Beschäftigten und Ehrenamtlichen | Art. 6 Abs. 1 lit. c/e DSGVO i. V. m. dem Beschäftigtendatenschutz des Landes. Beispiel Hessen: § 23 Abs. 1 HDSIG für Beschäftigte – nach dem Urteil des EuGH vom 30.03.2023 (C-34/21) ist die Anwendbarkeit strittig ([Handreichung des HBDI](https://datenschutz.hessen.de/sites/datenschutz.hessen.de/files/2023-05/handreichung_beschaeftigtendatenschutz_eugh-urteil.pdf)); Ehrenamtliche nennt die Begriffsbestimmung in § 23 Abs. 8 HDSIG nicht ausdrücklich, für Angehörige der Feuerwehr regelt § 55 Abs. 2 HBKG die Verarbeitung für Einsätze sowie Aus- und Fortbildung (mit abschließender Liste der Daten) **[DSB prüfen]**. Push und E-Mail-Benachrichtigungen wählt jede Person selbst |
+| Kalender (eigene und eingelesene Termine) | Art. 6 Abs. 1 lit. e DSGVO (Organisation von Dienstbetrieb und Öffentlichkeitsarbeit) i. V. m. *[Landesrecht]*; Personen in Terminen nur soweit erforderlich |
 | Hochladen durch Bürgerinnen und Bürger | freiwillig; Einwilligung (Art. 6 Abs. 1 lit. a) bzw. lit. e – *[festlegen]*; die Upload-Seite informiert nach Art. 13 (*Einstellungen → Datenschutz*) |
-| Veröffentlichung von Fotos mit erkennbaren Personen | Einwilligung bzw. KUG/Art. 85 DSGVO i. V. m. *[Landespresse-/Datenschutzgesetz]*; bei Verletzten (Gesundheitsdaten, Art. 9) nur mit ausdrücklicher Einwilligung |
+| Veröffentlichung von Fotos mit erkennbaren Personen | Einwilligung bzw. [§§ 22, 23 KunstUrhG](https://www.gesetze-im-internet.de/kunsturhg/) (Ausnahmen z. B. für Bildnisse aus dem Bereich der Zeitgeschichte und Bilder von Versammlungen – nicht bei entgegenstehendem berechtigtem Interesse der Abgebildeten)/Art. 85 DSGVO i. V. m. *[Landespresse-/Datenschutzgesetz]*; bei Verletzten (Gesundheitsdaten, Art. 9) nur mit ausdrücklicher Einwilligung |
 | Warnentwurf an zuständige Stellen | Art. 6 Abs. 1 lit. c/e i. V. m. *[Fachrecht]* |
-| Presseanfragen beantworten | Art. 6 Abs. 1 lit. e i. V. m. *[Landespressegesetz – Auskunftsanspruch der Presse, Landesdatenschutzgesetz, z. B. § 3 HDSIG]* |
-| Presseverteiler und Pressemitteilungen | öffentliche Redaktionsadressen: Art. 6 Abs. 1 lit. e i. V. m. *[Landesdatenschutzgesetz, z. B. § 3 HDSIG]*; persönliche Adressen: Einwilligung (Art. 6 Abs. 1 lit. a, Datum je Kontakt); Information nach Art. 14 über die Fußzeile jeder Mitteilung und die Datenschutzerklärung, Widerspruch/Abmeldung jederzeit (Art. 21) |
-| Konten, Audit, Sicherheit | Art. 6 Abs. 1 lit. c/e (Art. 32 DSGVO), Beschäftigtendaten nach *[Landes-/Bundesrecht]* |
+| Konten, Audit, Sicherheit, Update-Prüfung, Sicherungen | Art. 6 Abs. 1 lit. c/e (Art. 32 DSGVO), Beschäftigtendaten nach *[Landes-/Bundesrecht]* (siehe oben) |
+
+Amtliche Sammlung des hessischen Landesrechts: [Bürgerservice Hessenrecht](https://www.rv.hessenrecht.hessen.de/); HDSIG
+auch als [Ausgabe des HBDI](https://datenschutz.hessen.de/sites/datenschutz.hessen.de/files/2023-06/HDSIG_digital.pdf).
 
 ## Betroffenenrechte
 
 - **Information (Art. 13):** Abschnitt „Datenschutz“ auf der Upload-Seite, Zeile auf dem Aushang; Angaben unter
-  *Einstellungen → Datenschutz*. Die Datenschutzerklärung der Website muss Upload, Veröffentlichung, Meta und
-  Cookies abdecken. Alternativ lassen sich Datenschutzerklärung und Impressum direkt in BlaulichtCMS hinterlegen
+  *Einstellungen → Datenschutz*. Die Datenschutzerklärung der Website muss Upload, Veröffentlichung (Website,
+  Einsatzliste, soziale Kanäle wie Meta, X, Mastodon, Bluesky), Presseanfragen, Presseverteiler (Art. 13/14, Abmeldung)
+  und Cookies abdecken. Beschäftigte und Ehrenamtliche gesondert informieren (Konten, Protokolle, Benachrichtigungen per
+  Push über die Push-Dienste der Browserhersteller und per E-Mail, Kalender-Abo). Alternativ lassen sich Datenschutzerklärung und Impressum direkt in BlaulichtCMS hinterlegen
   (*Einstellungen → Datenschutz*, öffentlich unter `/datenschutz` und `/impressum`); ohne eigene Adresse verlinken
   Upload-Seite und Aushang dann die Seite `/datenschutz`. Die eingebaute Vorlage ist nur eine Gliederung mit
-  Platzhaltern und ersetzt keine rechtliche Prüfung.
+  Platzhaltern (Upload-Seite, Website und Einsatzliste, soziale Kanäle, Presseanfragen, Presseverteiler, Anmeldung,
+  Empfänger und Drittländer) und ersetzt keine rechtliche Prüfung.
 - **Auskunft und Löschung (Art. 15, 17):** *Verwaltung → Datenschutzanfragen* (Recht „Datenschutzanfragen
   bearbeiten“): Suche nach Name, E-Mail, Telefon, Text, Dateiname, Vorgangsnummer oder IP, Export als ZIP,
   Löschen/Pseudonymisieren je Treffer. Hochladende erhalten nach dem Upload eine Vorgangsnummer. Durchsucht werden
@@ -207,14 +296,14 @@ Meldeweg bei Datenpannen (Art. 33/34, [betrieb.md](betrieb.md#protokollierung-un
 
 | Feld | Eintrag |
 |---|---|
-| Bezeichnung | Öffentlichkeitsarbeit und Krisenkommunikation mit BlaulichtCMS (Foto-Links, Redaktion, Veröffentlichung, Warnentwurf) |
+| Bezeichnung | Öffentlichkeitsarbeit und Krisenkommunikation mit BlaulichtCMS (Foto-Links, Redaktion, Veröffentlichung auf Website und sozialen Kanälen, Einsatzliste, Presseanfragen und Presseverteiler, Kalender, Warnentwurf) |
 | Verantwortlicher | *[Name, Anschrift, Kontakt]* |
 | Datenschutzbeauftragte/r | *[Kontakt]* |
-| Zwecke | Sammeln von Fotos/Videos zu Einsätzen und Veranstaltungen; Erstellen, Freigeben und Veröffentlichen von Beiträgen auf Website und sozialen Medien; Entwürfe für Warnungen an zuständige Stellen; Nachvollziehbarkeit und Sicherheit |
-| Kategorien betroffener Personen | Hochladende; abgebildete Personen (auch Unbeteiligte, Verletzte, Minderjährige möglich); Redaktion und Administration; Rückrufkontakte; Empfänger von Warnungen; Aufrufende der Upload-Seite |
+| Zwecke | Sammeln von Fotos/Videos zu Einsätzen und Veranstaltungen; Erstellen, Freigeben und Veröffentlichen von Beiträgen, Bannern und der Einsatzliste auf Website und sozialen Medien; Beantworten von Presseanfragen und Versand von Pressemitteilungen; Planung von Terminen; Entwürfe für Warnungen an zuständige Stellen; Benachrichtigung der Mitwirkenden; Nachvollziehbarkeit, Sicherheit, Sicherung und Aktualisierung des Systems |
+| Kategorien betroffener Personen | Hochladende; abgebildete Personen (auch Unbeteiligte, Verletzte, Minderjährige möglich); in Texten, Einsatzberichten und Terminen genannte Personen; Journalistinnen und Journalisten (Anfragende, Kontakte im Presseverteiler); in Mails an das Presse-Postfach genannte Dritte; Redaktion und Administration (Beschäftigte, Ehrenamtliche); Rückrufkontakte; Empfänger von Warnungen; Aufrufende der Upload-Seite |
 | Kategorien personenbezogener Daten | siehe [Datenkategorien je Bereich](#datenkategorien-je-bereich); ggf. besondere Kategorien (Gesundheit auf Fotos, Art. 9) |
 | Empfänger | siehe [Empfänger](#empfänger) |
-| Drittlandübermittlung | Meta Platforms Inc. (USA) bei Facebook/Instagram; Grundlage: *[z. B. Angemessenheitsbeschluss EU-US Data Privacy Framework]*; ggf. Hoster *[…]* |
+| Drittlandübermittlung | je nach eingeschalteten Funktionen (siehe [Drittlandübermittlungen](#drittlandübermittlungen)): Meta Platforms Inc., X Corp., Bluesky Social PBC (USA), Betreiber der Mastodon-Instanz *[Standort]*, Microsoft (Microsoft 365), Google, Apple, Microsoft und Mozilla als Push-Dienste (USA), GitHub Inc. (USA, nur Server-IP und Version); Grundlage: *[z. B. Angemessenheitsbeschluss EU-US Data Privacy Framework für zertifizierte Empfänger, sonst Art. 46/49]*; ggf. Hoster, Mailanbieter, Sicherungsziel *[…]* |
 | Löschfristen | siehe Tabelle oben; Sicherungen rund 4 Monate |
 | TOMs | siehe [Technische und organisatorische Maßnahmen](#technische-und-organisatorische-maßnahmen-art-32) |
 | Rechtsgrundlagen | *[aus der Tabelle „Rechtsgrundlagen“ festlegen]* |
@@ -230,8 +319,8 @@ DSK-Muss-Liste – zutreffend bei BlaulichtCMS:
 |---|---|---|
 | Sensible Daten / Art. 9 | Fotos von Einsätzen können Verletzte oder Gesundheitsdaten zeigen | **zutreffend** (möglich) |
 | Daten schutzbedürftiger Personen | Minderjährige, Verletzte, Personen in Notlagen auf Fotos | **zutreffend** |
-| Veröffentlichung / Übermittlung an Dritte und Drittland | Website und Meta (USA) | **zutreffend** |
-| Datenerhebung bei Dritten ohne deren Wissen | Abgebildete wissen oft nicht vom Upload | **zutreffend** |
+| Veröffentlichung / Übermittlung an Dritte und Drittland | Website (Beiträge, Banner, Einsatzliste), soziale Kanäle (Meta, X, Bluesky – USA; Mastodon-Instanz je nach Standort), Pressemitteilungen und Antworten an Redaktionen; Drittland außerdem Microsoft 365, Push-Dienste (Inhalt verschlüsselt, standardmäßig ohne Einzelheiten) und GitHub (nur Server-IP) | **zutreffend** |
+| Datenerhebung bei Dritten ohne deren Wissen | Abgebildete wissen oft nicht vom Upload; in Mails an das Presse-Postfach genannte Personen | **zutreffend** |
 | Umfangreiche Verarbeitung | abhängig vom Einsatzgebiet *[bewerten]* | offen |
 | Systematische Überwachung, Profiling, automatisierte Entscheidungen | nein | nicht zutreffend |
 | Neue Technologien | übliche Web-Anwendung; Gesichtsvorschläge mit einem lokalen Erkennungsmodell (nur Lage im Bild, keine Identifizierung, abschaltbar, Ergebnis nur Vorschlag) | *[bewerten]*, eher nicht zutreffend |
@@ -248,11 +337,15 @@ sozialen Medien. Grundlage dafür sind die Abschnitte dieser Seite.
 3. **Risiken für Betroffene** *[bewerten: Eintrittswahrscheinlichkeit × Schwere]*:
    - Veröffentlichung von Verletzten oder Unbeteiligten ohne Einwilligung → Bloßstellung, Persönlichkeitsrecht
    - Standort auf Originalen → Wohnort/Bewegungsprofil der Hochladenden
-   - Weiterverbreitung bei Meta und Dritten, Drittlandzugriff
-   - unbefugter Zugriff auf ungesichtete Uploads oder Warnvorgänge
+   - Weiterverbreitung bei Meta, X, Bluesky, Mastodon und Dritten, Drittlandzugriff
+   - unbefugter Zugriff auf ungesichtete Uploads, Presse-Mails oder Warnvorgänge
+   - Daten Dritter (ggf. Gesundheitsdaten) in unaufgefordert eingehenden Mails an das Presse-Postfach
+   - Einsatz- oder Personendaten in Benachrichtigungen auf Sperrbildschirmen und in privaten Postfächern
    - zu lange Speicherung
 4. **Abhilfemaßnahmen:** Sichtung vor jeder Verwendung, Markierung sensibler Inhalte mit Prüfung vor der Freigabe,
    Unkenntlichmachen und Zuschnitt, Vier-Augen-Freigabe (`editorial.four_eyes`), Standortbereinigung, Rechte und
-   Zwei-Faktor, Löschfristen, Zurückziehen von Website und sozialen Kanälen, Schulung *[…]*.
+   Zwei-Faktor, Löschfristen (auch für nicht erledigte Presseanfragen), Push und E-Mail standardmäßig ohne
+   Einzelheiten, Datenschutzsuche über alle Bereiche (Abdeckung jeder Tabelle per Test geprüft), Zurückziehen von
+   Website und sozialen Kanälen, Schulung *[…]*.
 5. **Restrisiko und Ergebnis:** *[Bewertung, Freigabe durch Verantwortliche, Stellungnahme der/des DSB, Datum,
    Überprüfung z. B. jährlich oder bei wesentlichen Änderungen]*.

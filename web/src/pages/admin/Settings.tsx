@@ -1003,13 +1003,21 @@ ${who}
 
 [Hochgeladene Dateien, abgefragte Angaben, IP-Adresse zur Missbrauchsabwehr]
 
+### Veröffentlichungen auf der Website und Einsatzliste
+
+[Beiträge, Banner und Einträge der Einsatzliste (Alarmzeit, Stichwort, Ort nur als Ortsteil bzw. Gemeinde, Kurzbericht, Fotos) nach Freigabe auf der Website; ggf. Name der Autorin bzw. des Autors; Umgang mit Abgebildeten, Widerspruch und Zurückziehen]
+
+### Soziale Kanäle
+
+[Nur die tatsächlich genutzten Kanäle nennen, z. B. Facebook/Instagram (Meta), X, Mastodon (Instanz und Betreiber), Bluesky: welche Inhalte dort veröffentlicht werden, eigene Verantwortung der Betreiber, Drittland (USA), gemeinsame Verantwortung für Seiten-Statistiken bei Meta, Link zur Datenschutzerklärung der Präsenz]
+
 ### Anmeldung in BlaulichtCMS
 
-[Konten der Mitarbeitenden, Anmelde- und Aktivitätsprotokoll]
+[Konten der Mitarbeitenden, Anmelde- und Aktivitätsprotokoll; Beschäftigte und Ehrenamtliche ggf. gesondert informieren: Push-Benachrichtigungen über die Push-Dienste der Browserhersteller, E-Mail-Benachrichtigungen, Kalender-Abo]
 
 ### Presseanfragen
 
-[Kontaktdaten und Anfragen von Redaktionen, Mails an das Presse-Postfach samt Anhängen; Zweck: Beantwortung; Löschung nach der Erledigung bzw. nach der letzten Aktivität, siehe Speicherdauer]
+[Anfragen von Journalistinnen und Journalisten per Telefon, E-Mail oder über das Presse-Postfach: Name, Medium, Kontaktdaten, Anfrage, Mails an das Presse-Postfach samt Anhängen; Zweck: Beantwortung (Auskunftsanspruch der Presse nach Landespressegesetz); Löschung nach der Erledigung bzw. nach der letzten Aktivität, siehe Speicherdauer]
 
 ### Presseverteiler und Pressemitteilungen
 
@@ -1017,11 +1025,11 @@ ${who}
 
 ## Zwecke und Rechtsgrundlagen
 
-[Zweck je Verarbeitung und Rechtsgrundlage]
+[Zweck je Verarbeitung und Rechtsgrundlage – z. B. Öffentlichkeitsarbeit als öffentliche Aufgabe (Art. 6 Abs. 1 lit. e DSGVO i. V. m. Landesrecht), Auskünfte an die Presse (Art. 6 Abs. 1 lit. c DSGVO i. V. m. Landespressegesetz), Einwilligung]
 
 ## Empfänger und Übermittlung in Drittländer
 
-[z. B. Veröffentlichung auf der Website und in sozialen Medien, Dienstleister]
+[z. B. Öffentlichkeit (Website), Hoster der Website, Betreiber der sozialen Kanäle (Meta, X, Bluesky – USA; Mastodon-Instanz je nach Standort), Redaktionen als Empfänger von Pressemitteilungen, Mail- bzw. Microsoft-365-Dienstleister, Hosting- und Sicherungsdienstleister; Grundlage einer Übermittlung in die USA, z. B. EU-US Data Privacy Framework]
 
 ## Speicherdauer
 
@@ -1029,7 +1037,7 @@ ${who}
 
 ## Ihre Rechte
 
-[Rechte der Betroffenen und zuständige Aufsichtsbehörde]
+[Auskunft, Berichtigung, Löschung, Einschränkung, Widerspruch (z. B. gegen Veröffentlichung oder Aufnahme in den Presseverteiler), Beschwerde bei der zuständigen Aufsichtsbehörde (Landesbeauftragte bzw. Landesbeauftragter für den Datenschutz)]
 
 ## Stand
 

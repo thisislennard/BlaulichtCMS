@@ -31,6 +31,17 @@ Unter [Mein Konto → Benachrichtigungen](/profil#benachrichtigungen):
 
 Neue Dateien über Foto-Links werden gebündelt: höchstens eine Push-Nachricht bzw. E-Mail je Sammlung und Stunde, weitere Dateien erhöhen nur den Zähler in der Glocke.
 
+## Inhalt von Push und E-Mail
+
+In der Glocke steht die ganze Benachrichtigung – je nach Art z. B. **Stichwort und Ort** eines Einsatzes („Neuer Einsatzentwurf aus FE2: B3 in Musterdorf – Ortsteil“), der **Betreff** einer Mail an das Presse-Postfach oder der Text eines Workflows. **Push-Mitteilungen und E-Mails tragen standardmäßig nur die Art** und einen Link, z. B. „Neuer Einsatz-Eingang – Einzelheiten nach der Anmeldung in BlaulichtCMS“. So erscheinen keine Einsatz- oder Personendaten auf Sperrbildschirmen und in Postfächern außerhalb der Organisation.
+
+Die Administration kann unter [Einstellungen → Benachrichtigungen und E-Mail](/einstellungen#benachrichtigungen) getrennt einschalten:
+
+- **Einzelheiten in Push-Mitteilungen:** Titel und Text wie in der Glocke. Der Inhalt ist auf dem Weg über den Push-Dienst des Browsers (Google, Mozilla, Apple, Microsoft) Ende-zu-Ende-verschlüsselt, erscheint aber auf dem Gerät – je nach Einstellung des Geräts auch auf dem Sperrbildschirm.
+- **Einzelheiten in E-Mail-Benachrichtigungen:** Titel im Betreff, Text in der Mail. E-Mails sind nicht Ende-zu-Ende-verschlüsselt; nur einschalten, wenn die Konten **dienstliche Adressen** haben (nicht die privaten Postfächer Ehrenamtlicher).
+
+Testnachrichten haben einen festen Text. Warnversand, Pressemitteilungen, Antworten auf Presseanfragen und die E-Mails der Sicherheitseinstellungen sind davon nicht betroffen.
+
 ### iPhone und iPad
 
 Auf iPhone und iPad funktioniert Push nur in der **installierten App** (Safari → Teilen → „Zum Home-Bildschirm“, ab iOS 16.4). Danach die App öffnen und dort Push einschalten.
@@ -56,6 +67,7 @@ Push funktioniert auch am Computer – im Browser (Chrome, Edge, Firefox, Safari
 Unter [Einstellungen → Benachrichtigungen und E-Mail](/einstellungen#benachrichtigungen) (Recht „E-Mail-Versand und Push einstellen“):
 
 - **Push- und E-Mail-Benachrichtigungen** global ein- oder ausschalten.
+- **Inhalt außerhalb von BlaulichtCMS:** ob Push-Mitteilungen bzw. E-Mails Einzelheiten tragen oder nur die Art (Standard), siehe [Inhalt von Push und E-Mail](#inhalt-von-push-und-e-mail).
 - **Versandweg für alle E-Mails:** SMTP oder Microsoft 365. Er gilt für Warnversand, Sicherheitsmeldungen, Workflows und Benachrichtigungen. Die SMTP-Angaben stehen unter [Warnentwürfe → Pflege → Versand](/warnungen/pflege).
 - **Push-Schlüssel:** BlaulichtCMS erzeugt das Schlüsselpaar für Web Push (VAPID) selbst; der private Schlüssel liegt verschlüsselt auf dem Server. „Schlüssel erneuern“ macht alle Push-Abos ungültig – alle Geräte müssen Push neu einschalten.
 

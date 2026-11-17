@@ -126,6 +126,8 @@ export async function notifyChannelRoutes(app: FastifyInstance) {
     },
     push_enabled: s['notify.push_enabled'],
     mail_enabled: s['notify.mail_enabled'],
+    push_details: s['notify.push_details'],
+    mail_details: s['notify.mail_details'],
     push: {
       key_set: !!s['push.vapid_public_key'],
       subscriptions: (await one<{ n: number }>('SELECT count(*)::int AS n FROM push_subscriptions'))!.n,
@@ -151,7 +153,7 @@ export async function notifyChannelRoutes(app: FastifyInstance) {
   };
 
   app.put('/notify/settings', { preHandler: requireAuth('settings.mail') }, async (req) => {
-    const b = z.object({ transport: z.enum(['smtp', 'm365']), pushEnabled: z.boolean(), mailEnabled: z.boolean(), ...m365Body }).parse(req.body);
+    const b = z.object({ transport: z.enum(['smtp', 'm365']), pushEnabled: z.boolean(), mailEnabled: z.boolean(), pushDetails: z.boolean().optional(), mailDetails: z.boolean().optional(), ...m365Body }).parse(req.body);
     const before = await getSettings(true);
     const stored = await storedM365Settings(before);
     const touched = !!(b.tenantId || b.clientId || b.sender || b.clientSecret);
@@ -189,6 +191,9 @@ export async function notifyChannelRoutes(app: FastifyInstance) {
       'm365.save_sent': b.saveSent,
       'notify.push_enabled': b.pushEnabled,
       'notify.mail_enabled': b.mailEnabled,
+      // Einzelheiten in Push/E-Mail (#247): fehlt der Wert (ältere Oberfläche), bleibt die Einstellung unverändert
+      'notify.push_details': b.pushDetails ?? before['notify.push_details'],
+      'notify.mail_details': b.mailDetails ?? before['notify.mail_details'],
     };
     const changes = settingsDiff(before as any, patch);
     const secretChange = !!b.clientSecret && b.clientSecret !== stored.clientSecret;

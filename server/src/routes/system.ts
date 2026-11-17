@@ -36,7 +36,7 @@ const INTERNAL_KEYS = new Set<SettingKey>([
   'updates.host_requested_at', 'updates.host_recorded_request',
   // E-Mail-Weg, Microsoft 365 und Push: eigene Seite mit Verbindungstest (routes/notify-channels.ts)
   'mail.transport', 'm365.tenant_id', 'm365.client_id', 'm365.sender', 'm365.secret_id', 'm365.save_sent', 'm365.verified',
-  'notify.push_enabled', 'notify.mail_enabled', 'push.vapid_public_key', 'push.vapid_secret_id',
+  'notify.push_enabled', 'notify.mail_enabled', 'notify.push_details', 'notify.mail_details', 'push.vapid_public_key', 'push.vapid_secret_id',
   // Presse-Postfach: eigene Seite mit Verbindungstest (routes/press-mailbox.ts)
   'press.mailbox', 'press.mailbox_state',
 ]);
