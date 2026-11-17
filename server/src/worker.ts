@@ -34,6 +34,7 @@ import { runRetention } from './lib/retention.js';
 import { checkExpiringLinks, checkStorage } from './lib/media-notify.js';
 import { cleanupDesignImages } from './routes/media-design.js';
 import { checkForUpdate, updateCheckDue } from './updates/github.js';
+import { recordHostResult } from './updates/host-helper.js';
 import { executeRun } from './automations/engine.js';
 import { refreshDueCalendarSources } from './calendar/sources.js';
 import { calendarTriggerTick } from './calendar/triggers.js';
@@ -281,6 +282,8 @@ async function maintenance(isLeader: boolean) {
   if (due('rss', 60_000)) await refreshDueFeeds().catch((e) => log('warn', 'rss', e.message));
   // In-App-Updates: neues Release im eingestellten Abstand prüfen (installiert wird nur von Hand)
   if (due('update-check', 10 * 60_000) && (await updateCheckDue())) await checkForUpdate();
+  // Update-Helfer am Host (#226): abgeschlossene Image-Updates ins Protokoll übernehmen und melden
+  if (due('host-update', 30_000)) await recordHostResult().catch((e) => log('warn', 'updates', `Update-Helfer: ${e.message}`));
   // Kalender: eingelesene iCal-Quellen in ihrem Abstand (#202)
   if (due('calendar-sources', 60_000)) await refreshDueCalendarSources().catch((e) => log('warn', 'calendar', e.message));
   if (due('warnfeed', 60_000)) await refreshDueWarnfeeds().catch((e) => log('warn', 'warnfeed', e.message));

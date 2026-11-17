@@ -69,6 +69,17 @@ Manche Versionen bringen geänderte Abhängigkeiten oder Änderungen am Containe
 3. Das Skript holt die neue Version, baut das Image (einige Minuten), schaltet den Wartungsmodus ein, sichert alles und wechselt – bei einem Fehler automatisch zurück. Daten, Einstellungen und `.env` bleiben erhalten; beim Wechsel ist BlaulichtCMS etwa eine Minute nicht erreichbar.
 4. Danach die Seite neu laden: Unter Einstellungen → Updates steht die neue Version „aus dem Image“. Folgende Versionen ohne neues Image lassen sich wieder in der Oberfläche installieren.
 
+### Image-Update über den Update-Helfer
+
+Ist am Docker-Host der **Update-Helfer** eingerichtet (fragt `install.sh`, Standard: einrichten), steht in der Karte „Neues Docker-Image nötig“ der Knopf **„Image-Update auf X anstoßen“** (Recht „Updates einstellen und installieren“, Bestätigung mit dem Passwort):
+
+1. BlaulichtCMS legt nur eine **Anfrage** im Datenvolume ab (Version, Zeitpunkt, wer) – der Container bekommt dafür keinen Zugriff auf Docker.
+2. Der Helfer am Host prüft die Anfrage, ermittelt selbst das neueste Release und prüft dessen **Signatur** – eine ältere oder gleiche Version installiert er nie.
+3. Dann läuft der bekannte Weg: Image bauen (einige Minuten), Wartungsmodus, Sicherung, Wechsel, Prüfung, bei einem Fehler automatisch zurück. Während Sicherung und Wechsel ist BlaulichtCMS einige Minuten nicht erreichbar; die Seite zeigt die Schritte und aktualisiert sich von selbst.
+4. Ergebnis (abgeschlossen, zurückgenommen, abgebrochen, abgelehnt) und ein **Protokollauszug** stehen oben auf der Seite und im Update-Protokoll; die Administration wird benachrichtigt.
+
+Höchstens eine Anfrage je 10 Minuten. Nimmt der Helfer eine Anfrage nicht innerhalb von 2 Minuten an, zeigt die Seite das und bietet **„Anfrage zurückziehen“** an – dann am Host nachsehen (`systemctl status blaulichtcms-update.path`). Ohne Helfer zeigt die Karte wie bisher die Schritte am Host. Einrichten: am Host `sudo bash /opt/apps/blaulichtcms/install.sh` ausführen und die Frage nach dem Update-Helfer bejahen (kommt keine Frage, weil das Skript beim Update noch die alte Fassung ausführte, einfach noch einmal ausführen); abschalten mit `--remove-helper`.
+
 Ohne neuen Programmstand **monatlich** `sudo bash /opt/apps/blaulichtcms/install.sh --rebuild` ausführen: Das Image wird mit aktuellen Basis-Images (Sicherheitsupdates von Betriebssystem, Node.js und PostgreSQL) neu gebaut und mit Sicherung und Rückweg gewechselt.
 
 ## Wenn BlaulichtCMS nicht startet

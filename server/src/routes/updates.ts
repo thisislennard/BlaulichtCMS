@@ -9,6 +9,7 @@ import { securityAlert } from '../lib/security-alerts.js';
 import { getSettings, setSettings } from '../lib/settings.js';
 import { compareVersions } from '../updates/core.js';
 import { checkForUpdate, imageUpdateNeeded, normalizeApiUrl, REPO_RE, UpdateSourceError } from '../updates/github.js';
+import { cancelHostRequest, hostHelperView, requestHostUpdate } from '../updates/host-helper.js';
 import { imageInfo, installState, startInstall, supervised, updateHistory } from '../updates/installer.js';
 import { readPointer } from '../updates/releases.js';
 import { publicKeyStatus } from '../updates/signing.js';
@@ -51,11 +52,13 @@ export async function updateRoutes(app: FastifyInstance) {
       },
       signingKey: publicKeyStatus(),
       state: installState(),
+      // Update-Helfer am Host (#226): Image-Updates aus der App anstoßen, wenn er eingerichtet ist
+      hostHelper: await hostHelperView(),
       history: await updateHistory(),
     };
   });
 
-  app.get('/updates/status', { preHandler: requireAuth('update.view') }, async () => ({ current: config.version, state: installState() }));
+  app.get('/updates/status', { preHandler: requireAuth('update.view') }, async () => ({ current: config.version, state: installState(), hostHelper: await hostHelperView() }));
 
   app.put('/updates/settings', { preHandler: requireAuth('update.install') }, async (req) => {
     const b = z
@@ -114,6 +117,39 @@ export async function updateRoutes(app: FastifyInstance) {
     const r = await checkForUpdate();
     await audit(req.auth!.actor, 'updates.checked', { type: 'update', label: r.latest?.version ?? null }, { ergebnis: r.ok ? (r.available ? 'verfügbar' : 'aktuell') : 'fehler', ...(r.error ? { fehler: r.error } : {}) }, r.ok ? 'ok' : 'failed');
     return r;
+  });
+
+  /**
+   * Image-Update beim Update-Helfer am Host anfragen (#226). Schreibt nur die Anfrage-Datei; prüfen, bauen und
+   * wechseln macht der Helfer selbst (signiertes Release, nie Downgrade, eigenes Rate-Limit).
+   */
+  app.post('/updates/host-request', { preHandler: requireAuth('update.install'), config: { rateLimit: { max: INSTALL_RATE, timeWindow: '1 minute' } } }, async (req, reply) => {
+    const b = z.object({ version: z.string().trim().min(5).max(20) }).strict().parse(req.body ?? {});
+    assertRecentAuth(req);
+    const s = await getSettings(true);
+    const latest = s['updates.latest'] as any;
+    const image = await imageInfo();
+    try {
+      const r = await requestHostUpdate({ version: b.version, userId: req.auth!.user?.id ?? null, latestVersion: latest?.version ?? null, imageUpdateNeeded: !!latest && !!imageUpdateNeeded(latest, image.version) });
+      await audit(req.auth!.actor, 'update.host_requested', { type: 'update', label: r.version }, { von: config.version, image: image.version, anfrage: r.id });
+      await securityAlert('update_install', {
+        kind: 'info',
+        title: `Image-Update auf Version ${r.version} angestoßen von ${req.auth!.actor.name}`,
+        body: `Laufende Version ${config.version} (Image ${image.version}). Der Update-Helfer am Host prüft das signierte Release, baut das Image und wechselt mit Sicherung und automatischem Rückweg.`,
+        link: '/einstellungen#updates',
+      });
+      return reply.status(202).send({ requested: true, id: r.id, version: r.version });
+    } catch (e) {
+      if (e instanceof AppError) throw e;
+      await audit(req.auth!.actor, 'update.host_requested', { type: 'update', label: b.version }, { von: config.version, fehler: (e as Error).message.slice(0, 500) }, 'failed');
+      throw badRequest((e as Error).message);
+    }
+  });
+
+  app.delete('/updates/host-request', { preHandler: requireAuth('update.install') }, async (req) => {
+    const r = cancelHostRequest();
+    if (r.removed) await audit(req.auth!.actor, 'update.host_request_cancelled', { type: 'update', label: r.request?.version ?? null }, { anfrage: r.request?.id ?? null });
+    return { ok: true, cancelled: r.removed };
   });
 
   app.post('/updates/install', { preHandler: requireAuth('update.install'), config: { rateLimit: { max: INSTALL_RATE, timeWindow: '1 minute' } } }, async (req, reply) => {

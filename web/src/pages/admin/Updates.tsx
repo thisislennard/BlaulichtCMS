@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { HelpLink, HelpTip } from "../../components/ui/HelpTip";
 import { Link } from "react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { get, post, put } from "../../api/client";
+import { del, get, post, put } from "../../api/client";
 import { Badge, Button, ErrorBox, FieldWrap, Input, Notice, Switch, Table, Td, Th, cx } from "../../components/ui/core";
 import { CopyButton, useConfirm, useToast } from "../../components/ui/overlays";
 import { Icon } from "../../components/ui/Icon";
@@ -46,8 +46,48 @@ interface UpdatesInfo {
   settings: { enabled: boolean; repo: string; apiUrl: string; checkHours: number; tokenSet: boolean };
   signingKey: "ok" | "missing" | "invalid";
   state: InstallState;
+  hostHelper: HostHelper;
   history: HistoryRow[];
 }
+
+/** Update-Helfer am Host (#226): Image-Updates aus der App anstoßen. */
+type HostState = "running" | "success" | "failed" | "rolled_back" | "aborted" | "rejected";
+type HostPhase = "verify" | "prepare" | "build" | "backup" | "switch" | "check" | "rollback" | "finish" | "done";
+interface HostStatus {
+  requestId: string | null;
+  state: HostState;
+  phase: HostPhase;
+  step: string;
+  targetVersion: string | null;
+  fromVersion: string | null;
+  image: string;
+  backupFile: string;
+  message: string;
+  startedAt: string | null;
+  updatedAt: string | null;
+  finishedAt: string | null;
+  logTail: string;
+  silent: boolean;
+}
+export interface HostHelper {
+  installed: boolean;
+  helperVersion: number | null;
+  installedAt: string | null;
+  request: { id: string; version: string; requestedAt: string; stale: boolean } | null;
+  status: HostStatus | null;
+  busy: boolean;
+  nextRequestAt: string | null;
+}
+
+const HOST_STEPS: { id: HostPhase; label: string }[] = [
+  { id: "verify", label: "Anfrage und signiertes Release prüfen" },
+  { id: "prepare", label: "Programmcode holen" },
+  { id: "build", label: "Image bauen (einige Minuten)" },
+  { id: "backup", label: "Wartungsmodus und Sicherung" },
+  { id: "switch", label: "Wechsel auf das neue Image" },
+  { id: "check", label: "Prüfung (Healthcheck und Selbsttest)" },
+  { id: "finish", label: "Abschluss" },
+];
 
 const STEPS: { id: Phase; label: string }[] = [
   { id: "download", label: "Release laden" },
@@ -67,7 +107,14 @@ const STATUS_TEXT: Record<HistoryRow["status"], { label: string; tone: "success"
 };
 
 export function useUpdatesInfo(enabled = true) {
-  return useQuery({ queryKey: ["updates"], queryFn: () => get<UpdatesInfo>("/updates"), enabled, refetchInterval: 60_000 });
+  // Während ein Image-Update über den Helfer läuft, öfter nachfragen (Fortschritt, Neustart)
+  return useQuery({
+    queryKey: ["updates"],
+    queryFn: () => get<UpdatesInfo>("/updates"),
+    enabled,
+    refetchInterval: (q) => (q.state.data?.hostHelper?.busy ? 5_000 : 60_000),
+    retry: (n) => n < 2,
+  });
 }
 
 /** Hinweis „Update verfügbar“ (Systemstatus). */
@@ -79,7 +126,7 @@ export function UpdateAvailableNotice() {
   return (
     <Notice tone="info" icon="Download" title={`Update verfügbar: Version ${d.latest.version}`}>
       <p className="m-0">
-        Installiert ist {d.current}.{d.imageUpdate && " Braucht ein neues Docker-Image – Installation am Docker-Host."} {can("settings.view") && <Link to="/einstellungen#updates">Zu den Updates</Link>}
+        Installiert ist {d.current}.{d.imageUpdate && (d.hostHelper?.installed ? " Braucht ein neues Docker-Image – über den Update-Helfer in den Updates anstoßen." : " Braucht ein neues Docker-Image – Installation am Docker-Host.")} {can("settings.view") && <Link to="/einstellungen#updates">Zu den Updates</Link>}
       </p>
     </Notice>
   );
@@ -106,7 +153,8 @@ export function UpdatesSection({ manage }: { manage: boolean }) {
     if (d?.state.busy && !progress && d.state.version) setProgress({ version: d.state.version, from: d.state.from, historyId: d.history[0]?.id ?? 0 });
   }, [d, progress]);
 
-  if (q.isError) return <SectionCard id="updates" title="Updates"><LoadError error={q.error} onRetry={() => q.refetch()} /></SectionCard>;
+  // Mit vorhandenen Daten (z. B. Neustart während eines Image-Updates) weiter anzeigen statt nur den Fehler
+  if (q.isError && !d) return <SectionCard id="updates" title="Updates"><LoadError error={q.error} onRetry={() => q.refetch()} /></SectionCard>;
   if (!d || !form) return <SectionCard id="updates" title="Updates"><p className="m-0 text-sm text-fg-muted">Wird geladen …</p></SectionCard>;
 
   const dirty = form.enabled !== d.settings.enabled || form.repo !== d.settings.repo || form.apiUrl !== d.settings.apiUrl || form.checkHours !== d.settings.checkHours || !!form.token;
@@ -204,6 +252,7 @@ export function UpdatesSection({ manage }: { manage: boolean }) {
       {blockers.map((b) => (
         <Notice key={b} tone="warning">{b}</Notice>
       ))}
+      <HostUpdateProgress helper={d.hostHelper} current={d.current} offline={q.isError} manage={manage} onChanged={() => q.refetch()} />
 
       {d.available && d.latest && (
         <div className="border border-line rounded-card p-4 flex flex-col gap-3">
@@ -217,7 +266,7 @@ export function UpdatesSection({ manage }: { manage: boolean }) {
           </div>
           {d.latest.notes ? <Markdown source={d.latest.notes} className="text-sm max-h-[320px] overflow-auto" /> : <p className="m-0 text-sm text-fg-muted">Keine Versionshinweise.</p>}
           {d.imageUpdate ? (
-            <ImageUpdateSteps version={d.latest.version} need={d.imageUpdate} />
+            <ImageUpdateSteps version={d.latest.version} need={d.imageUpdate} helper={d.hostHelper} manage={manage} onRequested={() => q.refetch()} />
           ) : manage && (
             <div>
               <Button variant="primary" icon="Download" onClick={install} disabled={blockers.length > 0 || d.state.busy}>
@@ -293,14 +342,36 @@ export function UpdatesSection({ manage }: { manage: boolean }) {
 
 const INSTALL_CMD = "sudo bash /opt/apps/blaulichtcms/install.sh";
 
-/** Das Release braucht ein neueres Image: nicht in der Oberfläche installierbar – Schritte am Docker-Host. */
-function ImageUpdateSteps({ version, need }: { version: string; need: { minImageVersion: string; imageVersion: string } }) {
-  return (
-    <Notice tone="warning" title="Neues Docker-Image nötig">
-      <p className="m-0">
-        Version {version} braucht mindestens Image {need.minImageVersion}, der Container läuft mit Image {need.imageVersion}. Geänderte Abhängigkeiten und Änderungen am Container kommen nur mit einem neu gebauten Image an – in der Oberfläche lässt sich dieses Update deshalb nicht installieren.
-      </p>
-      <ol className="m-0 mt-2 pl-5 list-decimal flex flex-col gap-1.5">
+/**
+ * Das Release braucht ein neueres Image: Mit eingerichtetem Update-Helfer (#226) lässt es sich hier anstoßen, sonst
+ * Schritte am Docker-Host.
+ */
+function ImageUpdateSteps({ version, need, helper, manage, onRequested }: { version: string; need: { minImageVersion: string; imageVersion: string }; helper: HostHelper; manage: boolean; onRequested: () => void }) {
+  const ask = useConfirm();
+  const toast = useToast();
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const request = async () => {
+    const ok = await ask({
+      title: `Image-Update auf Version ${version} anstoßen?`,
+      text: "Der Update-Helfer am Docker-Host prüft das signierte Release, baut das neue Image (einige Minuten), schaltet den Wartungsmodus ein, sichert alles und wechselt. Startet die neue Version nicht sauber, geht er automatisch auf den bisherigen Stand zurück. Während Sicherung und Wechsel ist BlaulichtCMS einige Minuten nicht erreichbar.",
+      confirmLabel: "Image-Update anstoßen",
+    });
+    if (!ok) return;
+    setSending(true);
+    setError(null);
+    try {
+      await post("/updates/host-request", { version });
+      toast({ tone: "success", title: "Image-Update angestoßen", text: "Der Fortschritt erscheint oben auf dieser Seite." });
+      onRequested();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setSending(false);
+    }
+  };
+  const steps = (
+    <ol className="m-0 mt-2 pl-5 list-decimal flex flex-col gap-1.5">
         <li>Am Docker-Host anmelden (z. B. per SSH).</li>
         <li>
           Das Installationsskript ausführen (bei einem anderen Installationsordner dessen <code className="font-mono">install.sh</code>):
@@ -311,11 +382,159 @@ function ImageUpdateSteps({ version, need }: { version: string; need: { minImage
         </li>
         <li>Das Skript holt Version {version}, baut das Image (einige Minuten), schaltet den Wartungsmodus ein, sichert alles und wechselt – bei einem Fehler automatisch zurück. Daten, Einstellungen und .env bleiben erhalten; beim Wechsel ist BlaulichtCMS etwa eine Minute nicht erreichbar.</li>
         <li>Danach diese Seite neu laden: Als laufende Version steht {version} „aus dem Image“.</li>
-      </ol>
+    </ol>
+  );
+  const wait = helper.nextRequestAt ? Math.max(1, Math.ceil((Date.parse(helper.nextRequestAt) - Date.now()) / 60_000)) : 0;
+  return (
+    <Notice tone="warning" title="Neues Docker-Image nötig">
+      <p className="m-0">
+        Version {version} braucht mindestens Image {need.minImageVersion}, der Container läuft mit Image {need.imageVersion}. Geänderte Abhängigkeiten und Änderungen am Container kommen nur mit einem neu gebauten Image an.
+      </p>
+      {helper.installed ? (
+        <>
+          <p className="m-0 mt-2">
+            Der <strong className="text-fg">Update-Helfer</strong> am Docker-Host ist eingerichtet: Er prüft das signierte Release, baut das Image, sichert alles und wechselt – bei einem Fehler automatisch zurück. Daten, Einstellungen und .env bleiben erhalten.
+          </p>
+          {error && <ErrorBox className="mt-2" title="Anfrage nicht gestellt">{error}</ErrorBox>}
+          {manage && (
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <Button variant="primary" icon="Box" loading={sending} disabled={helper.busy || wait > 0} onClick={request}>
+                Image-Update auf {version} anstoßen
+              </Button>
+              {helper.busy && <span className="text-sm">Es läuft bereits ein Image-Update.</span>}
+              {!helper.busy && wait > 0 && <span className="text-sm">Höchstens eine Anfrage je 10 Minuten – wieder möglich in {wait} Minute(n).</span>}
+            </div>
+          )}
+          <details className="mt-2">
+            <summary className="cursor-pointer">Alternativ von Hand am Docker-Host</summary>
+            {steps}
+          </details>
+        </>
+      ) : (
+        <>
+          <p className="m-0 mt-1">In der Oberfläche lässt sich dieses Update nicht installieren – bitte am Docker-Host:</p>
+          {steps}
+          <p className="m-0 mt-2">
+            Tipp: Mit dem Update-Helfer lassen sich solche Updates künftig hier anstoßen, ohne dem Container Zugriff auf Docker zu geben. Einrichten einmalig am Host: das Installationsskript ausführen und die Frage nach dem Update-Helfer bejahen (kommt keine Frage, das Skript nach dem Update noch einmal ausführen).
+          </p>
+        </>
+      )}
       <p className="m-0 mt-2">
         <Link to="/hilfe/updates#wenn-ein-update-ein-neues-image-braucht">Ablauf in der Hilfe</Link>
       </p>
     </Notice>
+  );
+}
+
+const HOST_RESULT: Record<Exclude<HostState, "running">, { tone: "success" | "warning" | "error"; title: (v: string) => string }> = {
+  success: { tone: "success", title: (v) => `Image-Update auf Version ${v} abgeschlossen` },
+  rolled_back: { tone: "warning", title: (v) => `Image-Update auf Version ${v} zurückgenommen – es läuft wieder die bisherige Version` },
+  aborted: { tone: "warning", title: (v) => `Image-Update auf Version ${v} abgebrochen – die bisherige Version läuft weiter` },
+  rejected: { tone: "warning", title: () => "Image-Update vom Update-Helfer abgelehnt" },
+  failed: { tone: "error", title: (v) => `Image-Update auf Version ${v} fehlgeschlagen – Handeln am Host nötig` },
+};
+
+/** Fortschritt und Ergebnis eines Image-Updates über den Update-Helfer (Statusdatei des Helfers, #226). */
+function HostUpdateProgress({ helper, current, offline, manage, onChanged }: { helper: HostHelper; current: string; offline: boolean; manage: boolean; onChanged: () => void }) {
+  const [cancelling, setCancelling] = useState(false);
+  const st = helper.status;
+  const req = helper.request;
+  // Ergebnisse bleiben einen Tag sichtbar (danach steht es im Update-Protokoll)
+  const recent = st && st.state !== "running" && st.finishedAt && Date.now() - Date.parse(st.finishedAt) < 24 * 3600_000;
+  const showStatus = st && (st.state === "running" || recent) && !(req && st.requestId !== req.id);
+  if (!req && !showStatus) return null;
+  const cancel = async () => {
+    setCancelling(true);
+    try {
+      await del("/updates/host-request");
+    } finally {
+      setCancelling(false);
+      onChanged();
+    }
+  };
+  const log = st?.logTail ? (
+    <details className="mt-2">
+      <summary className="cursor-pointer text-sm">Protokollauszug</summary>
+      <pre className="m-0 mt-1 p-3 rounded-control bg-raised border border-line text-[12px] font-mono whitespace-pre-wrap break-all max-h-72 overflow-auto">{st.logTail}</pre>
+    </details>
+  ) : null;
+
+  if (req && (!st || st.requestId !== req.id)) {
+    return req.stale ? (
+      <Notice tone="warning" title="Der Update-Helfer hat die Anfrage nicht angenommen">
+        <p className="m-0">
+          Die Anfrage für Version {req.version} liegt seit {fmtRelative(req.requestedAt)} bereit. Läuft der Helfer am Host? Prüfen mit <code className="font-mono">systemctl status blaulichtcms-update.path</code>, Protokoll in <code className="font-mono">/var/log/blaulichtcms-update.log</code>.
+        </p>
+        {manage && (
+          <div className="mt-2">
+            <Button size="sm" icon="X" loading={cancelling} onClick={cancel}>
+              Anfrage zurückziehen
+            </Button>
+          </div>
+        )}
+      </Notice>
+    ) : (
+      <Notice tone="info" icon="Hourglass" title={`Image-Update auf Version ${req.version} angefragt`}>
+        <p className="m-0">Der Update-Helfer am Host übernimmt die Anfrage in wenigen Sekunden.</p>
+      </Notice>
+    );
+  }
+  if (!st) return null;
+  const target = st.targetVersion ?? "?";
+  if (st.state !== "running") {
+    const r = HOST_RESULT[st.state];
+    const body = (
+      <>
+        <p className="m-0">{st.message}</p>
+        <p className="m-0 mt-1 text-meta">
+          {st.finishedAt && `Beendet ${fmtDateTime(st.finishedAt)}`}
+          {st.backupFile && ` · Sicherung vor dem Update: ${st.backupFile}`}
+        </p>
+        {st.state === "success" && current !== target && <p className="m-0 mt-1">Die neue Version startet gerade – gleich die Seite neu laden.</p>}
+        {log}
+      </>
+    );
+    return r.tone === "error" ? (
+      <ErrorBox title={r.title(target)}>{body}</ErrorBox>
+    ) : (
+      <Notice tone={r.tone} title={r.title(target)}>
+        {body}
+        {st.state === "success" && (
+          <div className="mt-2">
+            <Button size="sm" icon="RefreshCw" onClick={() => location.reload()}>
+              Seite neu laden
+            </Button>
+          </div>
+        )}
+      </Notice>
+    );
+  }
+  const idx = st.phase === "rollback" ? HOST_STEPS.length : HOST_STEPS.findIndex((s) => s.id === st.phase);
+  return (
+    <div className="border border-line rounded-card p-4 flex flex-col gap-3" aria-live="polite">
+      <strong>Image-Update auf Version {target} läuft</strong>
+      <ol className="m-0 p-0 list-none flex flex-col gap-1.5 text-sm">
+        {HOST_STEPS.map((s, i) => (
+          <li key={s.id} className={cx("flex items-center gap-2", i > idx && "text-fg-muted")}>
+            <Icon name={i < idx ? "CheckCircle2" : i === idx ? "Hourglass" : "CircleDashed"} size={15} className={i < idx ? "text-ok" : i === idx ? "text-primary" : ""} />
+            {s.label}
+          </li>
+        ))}
+        {st.phase === "rollback" && (
+          <li className="flex items-center gap-2 text-warn">
+            <Icon name="Undo2" size={15} />
+            Rückweg: bisheriges Image und Datenstand von vor dem Update
+          </li>
+        )}
+      </ol>
+      <p className="m-0 text-sm text-fg-muted">
+        Aktueller Schritt: {st.step || "–"}
+        {st.updatedAt && ` (Stand ${fmtRelative(st.updatedAt)})`}
+      </p>
+      {offline && <Notice tone="info">BlaulichtCMS ist während Sicherung und Wechsel kurz nicht erreichbar – die Anzeige aktualisiert sich von selbst.</Notice>}
+      {st.silent && <Notice tone="warning">Der Update-Helfer meldet sich seit über 10 Minuten nicht. Am Host prüfen: <code className="font-mono">systemctl status blaulichtcms-update</code> und /var/log/blaulichtcms-update.log.</Notice>}
+      {log}
+    </div>
   );
 }
 

@@ -6,6 +6,13 @@
 #    sudo bash install.sh --yes      ohne Rückfragen (Werte aus Umgebungsvariablen bzw. Standard)
 #    sudo bash install.sh --rebuild  Image auch ohne neuen Code neu bauen (aktuelle Basis-Images mit
 #                                    Sicherheitsupdates von Debian, Node.js und PostgreSQL) – monatlich empfohlen
+#    sudo bash install.sh --remove-helper   Update-Helfer (Image-Updates aus der App) abschalten und entfernen
+#
+#  Update-Helfer (#226): systemd-Dienst blaulichtcms-update, mit dem sich Updates mit neuem Image in der App unter
+#  Einstellungen → Updates anstoßen lassen – ohne dem Container Zugriff auf Docker zu geben. Beim ersten Lauf wird
+#  gefragt (Standard: einrichten); --with-helper bzw. --no-helper entscheiden ohne Rückfrage (in .env gemerkt).
+#  --unattended ist der nicht-interaktive Update-Modus, den der Helfer aufruft (nur Update einer bestehenden
+#  Installation, keine Rückfragen, keine Nachinstallation von Programmen, keine neuen Einrichtungen).
 #
 #  Erstinstallation: fehlende Programme anbieten, Code nach /opt/apps/blaulichtcms holen, .env anlegen (fragt nur
 #  Adresse und Art des Reverse Proxys), Docker-Netz proxy-net anlegen, Image bauen, starten, beim Einrichten des
@@ -49,11 +56,18 @@ CONTAINER="blaulichtcms"
 ASSUME_YES=0
 WITH_CRON=1
 REBUILD=0
+UNATTENDED=0
+HELPER_CHOICE=""
+ORIG_ARGS=("$@")
 for a in "$@"; do
   case "$a" in
     -y|--yes) ASSUME_YES=1 ;;
     --no-cron) WITH_CRON=0 ;;
     --rebuild) REBUILD=1 ;;
+    --unattended) UNATTENDED=1; ASSUME_YES=1 ;;
+    --with-helper) HELPER_CHOICE=1 ;;
+    --no-helper) HELPER_CHOICE=0 ;;
+    --remove-helper) HELPER_CHOICE=remove ;;
     -h|--help) sed -n '2,/^set -euo/p' "$0" | sed '$d'; exit 0 ;;
     *) echo "Unbekannte Option: $a (siehe --help)" >&2; exit 2 ;;
   esac
@@ -65,6 +79,7 @@ step() { echo; echo "${B}== $*${N}"; }
 ok()   { echo "  ${G}✔${N} $*"; }
 warn() { echo "  ${Y}!${N} $*"; }
 die()  { echo; echo "${R}✘ $*${N}" >&2; exit 1; }
+die_rc() { local rc="$1"; shift; echo; echo "${R}✘ $*${N}" >&2; exit "$rc"; } # mit Exit-Code für den Update-Helfer
 # Gibt es ein Terminal für Rückfragen? -r /dev/tty reicht nicht: ohne steuerndes Terminal (Cron, Automatisierung)
 # ist die Datei lesbar, das Öffnen scheitert aber – Rückfragen kämen dann sofort leer zurück.
 HAS_TTY=0
@@ -86,14 +101,140 @@ envset() { # Schlüssel in .env setzen oder anhängen
 }
 envget() { [ -f "$APP_DIR/.env" ] || return 0; sed -n "s/^$1=//p" "$APP_DIR/.env" | tail -1; }
 
+# ------------------------------------------------------------------------------------------------ Update-Helfer (#226)
+# Der Helfer (scripts/host-update-helper.sh) reagiert auf eine Anfrage-Datei im Datenvolume und ruft dieses Skript
+# mit --unattended auf. Der Container bekommt keine zusätzlichen Rechte; Austausch nur über host-update/ im Volume.
+HELPER_UNIT=/etc/systemd/system/blaulichtcms-update
+HELPER_ENV=/etc/blaulichtcms/update-helper.env
+helper_installed() { [ -f "$HELPER_UNIT.path" ]; }
+helper_prereq() { # Gründe, warum der Helfer hier nicht geht (leer = geht)
+  local miss=() c
+  { [ -d /run/systemd/system ] && command -v systemctl >/dev/null; } || miss+=("systemd")
+  for c in setpriv flock timeout realpath; do command -v "$c" >/dev/null || miss+=("$c"); done
+  echo "${miss[*]}"
+}
+helper_remove() {
+  if systemctl is-active -q blaulichtcms-update.service 2>/dev/null; then
+    die "Der Update-Helfer führt gerade ein Update aus – bitte das Ende abwarten (systemctl status blaulichtcms-update)."
+  fi
+  local ex=""
+  [ -f "$HELPER_UNIT.path" ] && ex="$(sed -n 's/^PathExists=//p' "$HELPER_UNIT.path")" && ex="${ex%/request.json}"
+  if [ -n "$ex" ] && [ -f "$APP_DIR/scripts/host-update-helper.sh" ]; then
+    BLAULICHTCMS_DIR="$APP_DIR" BLAULICHTCMS_HELPER_EXCHANGE="$ex" bash "$APP_DIR/scripts/host-update-helper.sh" retract >/dev/null 2>&1 || true
+  fi
+  systemctl disable --now blaulichtcms-update.path >/dev/null 2>&1 || true
+  rm -f "$HELPER_UNIT.path" "$HELPER_UNIT.service" "$HELPER_ENV"
+  systemctl daemon-reload 2>/dev/null || true
+  rm -rf /var/lib/blaulichtcms-update
+}
+# Unit-Dateien und Umgebung schreiben; Rückgabe 0, wenn sich etwas geändert hat
+helper_write_files() {
+  local exchange="$1/host-update" tmp changed v val
+  tmp="$(mktemp -d)"
+  {
+    echo "# BlaulichtCMS Update-Helfer – erzeugt von install.sh, nicht von Hand ändern (Werte des letzten Aufrufs)"
+    printf 'BLAULICHTCMS_DIR="%s"\nBLAULICHTCMS_HELPER_EXCHANGE="%s"\nBLAULICHTCMS_BACKUP_DIR="%s"\nBLAULICHTCMS_BACKUP_KEY_FILE="%s"\nBLAULICHTCMS_BRANCH="%s"\n' \
+      "$APP_DIR" "$exchange" "$BACKUP_DIR" "$BACKUP_KEY" "$BRANCH"
+    # Einstellungen aus der Umgebung dieses Aufrufs übernehmen (Proxy für den Build, Signaturprüfung, Aufbewahrung …)
+    for v in BLAULICHTCMS_ALLOWED_SIGNERS BLAULICHTCMS_REQUIRE_SIGNED BLAULICHTCMS_REQUIRE_CI BLAULICHTCMS_BACKUP_UNENCRYPTED \
+             BLAULICHTCMS_KEEP_PRE_UPDATE BLAULICHTCMS_PRE_UPDATE_MAX_DAYS BLAULICHTCMS_BUILD_CA \
+             HTTPS_PROXY HTTP_PROXY NO_PROXY https_proxy http_proxy no_proxy; do
+      val="${!v:-}"
+      [ -n "$val" ] || continue
+      case "$val" in *$'\n'*) continue ;; esac
+      val="${val//\\/\\\\}"; val="${val//\"/\\\"}"
+      printf '%s="%s"\n' "$v" "$val"
+    done
+  } > "$tmp/env"
+  cat > "$tmp/service" <<UNIT
+# BlaulichtCMS: Image-Update auf Anfrage aus der App (install.sh). Läuft als root nur für den festen Ablauf in
+# scripts/host-update-helper.sh. Abschalten: sudo bash $APP_DIR/install.sh --remove-helper
+[Unit]
+Description=BlaulichtCMS: Image-Update auf Anfrage aus der App
+Documentation=https://github.com/thisislennard/BlaulichtCMS/blob/main/docs/betrieb.md
+After=docker.service network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=10min
+StartLimitBurst=5
+
+[Service]
+Type=oneshot
+EnvironmentFile=$HELPER_ENV
+Environment=HOME=/root
+ExecStart=/bin/bash "$APP_DIR/scripts/host-update-helper.sh" run
+TimeoutStartSec=4h
+StateDirectory=blaulichtcms-update
+StateDirectoryMode=0700
+UMask=0077
+Nice=5
+# Härtung, ohne Docker-CLI, git und den Image-Build zu stören (Build und Container laufen im Docker-Dienst)
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=true
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+UNIT
+  cat > "$tmp/path" <<UNIT
+# BlaulichtCMS: wartet auf eine Update-Anfrage der App im Datenvolume (install.sh)
+[Unit]
+Description=BlaulichtCMS: auf Update-Anfragen aus der App achten
+
+[Path]
+PathExists=$exchange/request.json
+Unit=blaulichtcms-update.service
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+  if cmp -s "$tmp/env" "$HELPER_ENV" && cmp -s "$tmp/service" "$HELPER_UNIT.service" && cmp -s "$tmp/path" "$HELPER_UNIT.path"; then
+    changed=1
+  else
+    ( umask 077; mkdir -p "$(dirname "$HELPER_ENV")" )
+    install -m 600 "$tmp/env" "$HELPER_ENV"
+    install -m 644 "$tmp/service" "$HELPER_UNIT.service"
+    install -m 644 "$tmp/path" "$HELPER_UNIT.path"
+    changed=0
+  fi
+  rm -rf "$tmp"
+  return "$changed"
+}
+
+if [ "$HELPER_CHOICE" = remove ]; then
+  step "Update-Helfer entfernen"
+  [ "$(id -u)" = 0 ] || die "Bitte als root ausführen: sudo bash install.sh --remove-helper"
+  helper_remove
+  [ -f "$APP_DIR/.env" ] && envset BLAULICHTCMS_UPDATE_HELPER 0
+  ok "Update-Helfer entfernt. Image-Updates wieder nur am Host: sudo bash $APP_DIR/install.sh (erneut einrichten: --with-helper)"
+  exit 0
+fi
+
 # ------------------------------------------------------------------------------------------------ 1. Voraussetzungen
 step "1/8 Voraussetzungen"
 [ "$(id -u)" = 0 ] || die "Bitte als root ausführen: sudo bash install.sh"
+# Nie zwei Läufe gleichzeitig (auch nicht mit dem Update-Helfer); nach dem Neustart des Skripts mit der neuen Fassung
+# (siehe Schritt 2) gilt die geerbte Sperre weiter
+LOCK_FILE=/run/lock/blaulichtcms-install.lock
+[ -d /run/lock ] || LOCK_FILE=/var/lock/blaulichtcms-install.lock
+if [ -z "${BLAULICHTCMS_REEXEC:-}" ] && command -v flock >/dev/null; then
+  exec 9>"$LOCK_FILE"
+  flock -n 9 || die "install.sh läuft bereits (z. B. ein Update über den Update-Helfer) – bitte das Ende abwarten."
+fi
 # Fehlende Werkzeuge auf Debian/Ubuntu auf Wunsch gleich installieren
 missing=()
 command -v git >/dev/null || missing+=(git)
 command -v curl >/dev/null || missing+=(curl)
 if [ ${#missing[@]} -gt 0 ]; then
+  [ "$UNATTENDED" = 1 ] && die "Es fehlt: ${missing[*]} – im nicht-interaktiven Modus wird nichts nachinstalliert."
   if command -v apt-get >/dev/null && yes_no "Es fehlt: ${missing[*]}. Jetzt installieren (apt-get)?" "j"; then
     apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "${missing[@]}" >/dev/null || die "Installation von ${missing[*]} fehlgeschlagen."
     ok "installiert: ${missing[*]}"
@@ -102,6 +243,7 @@ if [ ${#missing[@]} -gt 0 ]; then
   fi
 fi
 if ! command -v docker >/dev/null; then
+  [ "$UNATTENDED" = 1 ] && die "Docker ist nicht installiert."
   echo "  Docker ist nicht installiert. Das offizielle Installationsskript von Docker (get.docker.com) richtet"
   echo "  Docker Engine und Compose ein."
   if yes_no "Docker jetzt installieren?" "j"; then
@@ -196,6 +338,10 @@ select_release() { # setzt TARGET_REF auf den zu installierenden Stand
       ok "Signatur des Commits geprüft"
     fi
   fi
+  # Update-Helfer: genau der Tag, den er geprüft hat – erscheint inzwischen ein anderer, lieber abbrechen
+  if [ -n "${BLAULICHTCMS_EXPECT_TAG:-}" ] && [ "$TARGET_REF" != "refs/tags/$BLAULICHTCMS_EXPECT_TAG" ]; then
+    die "Erwartet war Release $BLAULICHTCMS_EXPECT_TAG, gefunden $TARGET_LABEL – Update abgebrochen (in der App erneut prüfen)."
+  fi
   if [ "${BLAULICHTCMS_REQUIRE_CI:-0}" = 1 ]; then
     ci_green "$(git rev-parse "$TARGET_REF^{commit}")" || die "Für $TARGET_LABEL liegt kein vollständig erfolgreicher CI-Lauf auf GitHub vor – Update abgelehnt."
     ok "CI auf GitHub für $TARGET_LABEL erfolgreich"
@@ -207,6 +353,7 @@ checkout_target() {
   if [ "$target" = "$cur" ]; then return 0; fi
   # Nie auf einen älteren Stand zurück (z. B. Wechsel vom Kanal main auf release): der Datenstand passt sonst nicht
   if git merge-base --is-ancestor "$target" "$cur"; then
+    [ -n "${BLAULICHTCMS_EXPECT_TAG:-}" ] && die "Der installierte Stand ist neuer als $TARGET_LABEL – kein Rückschritt."
     warn "Der installierte Stand ist neuer als $TARGET_LABEL – er bleibt, bis ein neuerer Release-Tag erscheint."
     TARGET_REF=HEAD; TARGET_LABEL="bisheriger Stand"
     return 0
@@ -222,10 +369,12 @@ mkdir -p "$(dirname "$APP_DIR")"
 if [ -d "$APP_DIR/.git" ]; then
   MODE=update
   [ -z "$(git -C "$APP_DIR" status --porcelain --untracked-files=no)" ] || die "In $APP_DIR gibt es lokale Änderungen am Code. Bitte prüfen (git -C $APP_DIR status) – das Skript überschreibt nichts."
+  OLD_HEAD="$(git -C "$APP_DIR" rev-parse HEAD)"
   # Tags ohne --force: ein nachträglich verschobener Tag lässt den Abruf scheitern, statt still übernommen zu werden
   fetch_tags() { git_try -C "$APP_DIR" fetch --tags origin "$BRANCH" 2>&1; }
   moved_tag() { printf '%s' "$1" | grep -qiE 'clobber|would overwrite|\(already exists\)'; }
-  if ! ferr="$(fetch_tags)"; then
+  # Nach dem Neustart des Skripts (unten) ist bereits abgerufen
+  if [ -z "${BLAULICHTCMS_REEXEC:-}" ] && ! ferr="$(fetch_tags)"; then
     moved_tag "$ferr" && die "Ein bereits geholter Release-Tag wurde auf dem Server verschoben – Update abgelehnt. Vor dem Update klären (git -C $APP_DIR fetch --tags origin)."
     git_auth
     if ! ferr="$(fetch_tags)"; then
@@ -237,9 +386,18 @@ if [ -d "$APP_DIR/.git" ]; then
   select_release
   checkout_target
   ok "Stand: $(git log -1 --format='%h %s' | cut -c1-70) ($TARGET_LABEL)"
+  # Bringt der neue Stand ein geändertes install.sh mit, gleich mit diesem weitermachen (#226) – sonst liefe der Rest
+  # dieses Laufs noch mit dem alten Skript (die Shell liest die bereits geöffnete alte Datei weiter)
+  if [ -z "${BLAULICHTCMS_REEXEC:-}" ] && [ "$(realpath -e -- "$0" 2>/dev/null || true)" = "$(realpath -e -- "$APP_DIR/install.sh")" ] \
+     && ! git diff --quiet "$OLD_HEAD" HEAD -- install.sh; then
+    ok "install.sh wurde aktualisiert – weiter mit der neuen Fassung"
+    export BLAULICHTCMS_REEXEC=1
+    exec bash "$APP_DIR/install.sh" "${ORIG_ARGS[@]}"
+  fi
 elif [ -e "$APP_DIR" ] && [ -n "$(ls -A "$APP_DIR" 2>/dev/null)" ]; then
   die "$APP_DIR existiert und ist nicht leer (kein Git-Stand von BlaulichtCMS). Anderen Ordner wählen: BLAULICHTCMS_DIR=…"
 else
+  [ "$UNATTENDED" = 1 ] && die "Kein bestehender Stand in $APP_DIR – der nicht-interaktive Modus aktualisiert nur bestehende Installationen."
   MODE=install
   git_try ls-remote -q "$REPO" "$BRANCH" >/dev/null 2>&1 || git_auth
   git_try clone -q --branch "$BRANCH" "$REPO" "$APP_DIR"
@@ -270,6 +428,7 @@ port_busy() { # belegt durch etwas anderes als BlaulichtCMS?
 }
 NEW_ENV=0
 if [ ! -f .env ]; then
+  [ "$UNATTENDED" = 1 ] && die "Keine .env in $APP_DIR – der nicht-interaktive Modus richtet nichts neu ein."
   cp .env.example .env
   chmod 600 .env
   NEW_ENV=1
@@ -381,7 +540,9 @@ if [ "${PROXY_MODE:-}" = 1 ]; then
   for p in $proxies; do
     case "$connected" in
       *" $p "*) ok "Reverse Proxy „$p“ ist mit $PROXY_NET verbunden" ;;
-      *) if yes_no "Container „$p“ sieht wie ein Reverse Proxy aus. Mit dem Netz $PROXY_NET verbinden?" "j"; then
+      *) if [ "$UNATTENDED" = 1 ]; then
+           warn "Container „$p“ ist nicht mit $PROXY_NET verbunden (nicht-interaktiv: unverändert)."
+         elif yes_no "Container „$p“ sieht wie ein Reverse Proxy aus. Mit dem Netz $PROXY_NET verbinden?" "j"; then
            docker network connect "$PROXY_NET" "$p" && ok "„$p“ mit $PROXY_NET verbunden"
          fi ;;
     esac
@@ -452,9 +613,9 @@ if [ "$HAS_DATA" = 1 ] && [ "$(envget BLAULICHTCMS_IMAGE)" != "$IMAGE" ]; then
   rc=0; scripts/update.sh "$IMAGE" "$BACKUP_DIR/vor-update" --rollback || rc=$?
   case "$rc" in
     0) ;;
-    3) die "Update vor dem Imagewechsel abgebrochen – BlaulichtCMS läuft weiter mit dem vorherigen Stand, Wartungsmodus beendet (Ausgabe oben)." ;;
-    4) die "Das neue Image startete nicht sauber – automatischer Rückweg erfolgreich: vorheriges Image mit dem Datenstand von vor dem Update (Ausgabe oben)." ;;
-    *) die "Update fehlgeschlagen und nicht automatisch zurückgenommen – BlaulichtCMS läuft womöglich NICHT oder steht im Wartungsmodus. Anleitung in der Ausgabe oben, Rückweg auch in docs/betrieb.md." ;;
+    3) die_rc 3 "Update vor dem Imagewechsel abgebrochen – BlaulichtCMS läuft weiter mit dem vorherigen Stand, Wartungsmodus beendet (Ausgabe oben)." ;;
+    4) die_rc 4 "Das neue Image startete nicht sauber – automatischer Rückweg erfolgreich: vorheriges Image mit dem Datenstand von vor dem Update (Ausgabe oben)." ;;
+    *) die_rc 5 "Update fehlgeschlagen und nicht automatisch zurückgenommen – BlaulichtCMS läuft womöglich NICHT oder steht im Wartungsmodus. Anleitung in der Ausgabe oben, Rückweg auch in docs/betrieb.md." ;;
   esac
   ok "Update auf $IMAGE abgeschlossen"
 elif [ -n "$RUNNING" ]; then
@@ -503,6 +664,8 @@ if [ "$WITH_CRON" = 0 ]; then
   ok "übersprungen (--no-cron)"
 elif [ -f "$CRON" ]; then
   ok "eingerichtet ($CRON)"
+elif [ "$UNATTENDED" = 1 ]; then
+  warn "nicht eingerichtet (nicht-interaktiv) – einrichten mit: sudo bash $APP_DIR/install.sh"
 elif [ ! -w /etc/cron.d ]; then
   warn "keine Schreibrechte für /etc/cron.d – Sicherung bitte selbst einplanen: $APP_DIR/scripts/backup-cron.sh $BACKUP_DIR"
 elif yes_no "Täglich um 02:30 nach $BACKUP_DIR sichern (14 tägliche + 8 wöchentliche Stände, Container hält dafür kurz an)?" "j"; then
@@ -516,6 +679,48 @@ CRONTAB
   ok "eingerichtet: $CRON (Protokoll /var/log/blaulichtcms-backup.log)"
 else
   warn "nicht eingerichtet – später: $APP_DIR/scripts/backup-cron.sh $BACKUP_DIR"
+fi
+
+# ------------------------------------------------------------------------------------------------ Update-Helfer
+step "Update-Helfer (Image-Updates aus der App)"
+HELPER_WANT="$HELPER_CHOICE"
+[ -n "$HELPER_WANT" ] || HELPER_WANT="$(envget BLAULICHTCMS_UPDATE_HELPER)"
+helper_why="$(helper_prereq)"
+if [ "$UNATTENDED" = 1 ]; then
+  # Aufruf durch den Helfer selbst: nur die Unit-Dateien auf den neuen Stand bringen, nichts ein- oder ausschalten
+  if helper_installed && [ -z "$helper_why" ]; then
+    mp="$(sed -n 's/^PathExists=//p' "$HELPER_UNIT.path")"; mp="${mp%/host-update/request.json}"
+    if helper_write_files "$mp"; then systemctl daemon-reload && ok "Update-Helfer aktualisiert"; else ok "Update-Helfer unverändert"; fi
+  fi
+elif [ "$HELPER_WANT" = 0 ]; then
+  if helper_installed; then helper_remove; ok "Update-Helfer entfernt (--no-helper)"; else ok "nicht eingerichtet (abgewählt; einrichten mit --with-helper)"; fi
+  envset BLAULICHTCMS_UPDATE_HELPER 0
+elif [ -n "$helper_why" ]; then
+  warn "auf diesem Host nicht möglich (es fehlt: $helper_why) – Image-Updates weiter mit: sudo bash $APP_DIR/install.sh"
+else
+  if [ "$HELPER_WANT" != 1 ] && ! helper_installed; then
+    echo "  Mit dem Update-Helfer lassen sich auch Updates, die ein neues Docker-Image brauchen, in der App unter"
+    echo "  Einstellungen → Updates anstoßen. Ein kleiner systemd-Dienst führt dann genau diesen Ablauf aus (signiertes"
+    echo "  Release prüfen, bauen, sichern, wechseln, bei Fehler zurück). Der Container erhält keinen Zugriff auf Docker."
+    if yes_no "Update-Helfer einrichten?" "j"; then HELPER_WANT=1; else HELPER_WANT=0; fi
+  fi
+  if [ "$HELPER_WANT" = 0 ]; then
+    envset BLAULICHTCMS_UPDATE_HELPER 0
+    ok "nicht eingerichtet (später: sudo bash $APP_DIR/install.sh --with-helper)"
+  else
+    mp="$(docker volume inspect -f '{{.Mountpoint}}' blaulichtcms_data 2>/dev/null || true)"
+    if [ -z "$mp" ] || [ ! -d "$mp" ] || [ "$(stat -c %u "$mp")" = 0 ]; then
+      warn "Datenvolume blaulichtcms_data nicht gefunden oder noch nicht eingerichtet – Helfer beim nächsten Lauf einrichten."
+    else
+      helper_write_files "$mp" || true
+      systemctl daemon-reload
+      { systemctl enable blaulichtcms-update.path && systemctl restart blaulichtcms-update.path; } >/dev/null 2>&1 || die "blaulichtcms-update.path ließ sich nicht starten (systemctl status blaulichtcms-update.path)."
+      BLAULICHTCMS_DIR="$APP_DIR" BLAULICHTCMS_HELPER_EXCHANGE="$mp/host-update" bash "$APP_DIR/scripts/host-update-helper.sh" announce >/dev/null 2>&1 || warn "Der Helfer konnte sich in der App nicht bekannt machen."
+      envset BLAULICHTCMS_UPDATE_HELPER 1
+      ok "eingerichtet: blaulichtcms-update.path (Anfragen aus $mp/host-update), Protokoll /var/log/blaulichtcms-update.log"
+      ok "abschalten: sudo bash $APP_DIR/install.sh --remove-helper"
+    fi
+  fi
 fi
 
 # ------------------------------------------------------------------------------------------------ Reverse Proxy
@@ -600,7 +805,8 @@ if [ "$NEW_BACKUP_KEY" = 1 ] && [ "$INTERACTIVE" = 1 ]; then
 fi
 
 # ------------------------------------------------------------------------------------------------ Abschluss
-TOKEN="$(docker compose exec -T blaulichtcms sh -c 'cat /data/setup-token.txt 2>/dev/null' 2>/dev/null || true)"
+TOKEN=""
+[ "$UNATTENDED" = 1 ] || TOKEN="$(docker compose exec -T blaulichtcms sh -c 'cat /data/setup-token.txt 2>/dev/null' 2>/dev/null || true)"
 echo
 echo "${B}════════════════════════════════════════════════════════════════════════════${N}"
 echo "${G}${B}  BlaulichtCMS $VERSION läuft.${N}"

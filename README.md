@@ -295,7 +295,9 @@ flowchart LR
 - **Ein Container, ein Skript:** Das Installationsskript führt durch die Einrichtung und prüft am Ende die Adresse.
 - **Updates aus der App:** neue Versionen unter *Einstellungen → Updates*, nur mit gültiger Signatur, mit Sicherung
   vorab und automatischem Rückweg. Braucht eine Version ein neues Docker-Image, zeigt die Seite das schon bei der
-  Prüfung und nennt die Schritte am Host (ein Aufruf des Installationsskripts).
+  Prüfung – mit eingerichtetem **Update-Helfer** lässt sich auch dieses Update in der App anstoßen (prüft das signierte
+  Release, baut, sichert, wechselt, bei Fehler zurück; Fortschritt und Protokollauszug in der App), ohne dem Container
+  Zugriff auf Docker zu geben. Ohne Helfer nennt die Seite die Schritte am Host (ein Aufruf des Installationsskripts).
 - **Sicherung:** täglich, verschlüsselt, auf Wunsch zusätzlich **außer Haus** auf ein NAS (WebDAV, mit Prüfsummenkontrolle und Aufbewahrung je Tag/Woche/Monat); **Probe-Wiederherstellung** in eine Wegwerf-Datenbank auf Knopfdruck und nach Zeitplan, mit Ergebnisprotokoll im Systemstatus.
 - **Systemstatus:** Dienste, Speicher, Sicherungen, Probe-Wiederherstellung, Audit-Integrität, Wartungsmodus und
   Vorabprüfung vor Updates.

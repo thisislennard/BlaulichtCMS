@@ -742,6 +742,61 @@ Installation bisher über die Oberfläche aktualisiert wurde:
 5. **Danach:** Einstellungen → Updates zeigt „Laufende Version X (aus dem Image)“. Folgende Releases ohne neues Image
    lassen sich wieder in der Oberfläche installieren.
 
+### Image-Updates aus der App (Update-Helfer)
+
+Mit dem **Update-Helfer** lassen sich auch Releases, die ein neues Image brauchen, unter *Einstellungen → Updates*
+anstoßen – ohne dem Container Zugriff auf Docker (`docker.sock`) oder andere Rechte am Host zu geben (#226).
+
+**Einrichten:** `install.sh` fragt nach dem Update (Standard: einrichten); ohne Rückfrage mit `--with-helper` bzw.
+`--no-helper` (die Wahl steht als `BLAULICHTCMS_UPDATE_HELPER` in `.env`). Abschalten und entfernen:
+`sudo bash /opt/apps/blaulichtcms/install.sh --remove-helper`. Voraussetzungen: systemd, `setpriv`, `flock` (util-linux).
+Eingerichtet werden:
+
+| Datei | Zweck |
+|---|---|
+| `/etc/systemd/system/blaulichtcms-update.path` | wartet auf `<Datenvolume>/host-update/request.json` (Pfad aus `docker volume inspect blaulichtcms_data`) |
+| `/etc/systemd/system/blaulichtcms-update.service` | führt `scripts/host-update-helper.sh run` aus (root, gehärtet: `NoNewPrivileges`, `PrivateTmp`, `PrivateDevices`, `ProtectSystem`, `ProtectKernel*` …) |
+| `/etc/blaulichtcms/update-helper.env` | Installationsordner, Sicherungsziel, Schlüsseldatei und die beim Einrichten gesetzten Variablen (Proxy für den Build, `BLAULICHTCMS_ALLOWED_SIGNERS` …), nur für root lesbar |
+| `/var/log/blaulichtcms-update.log` | Protokoll aller Läufe; Zustand des letzten Laufs in `/var/lib/blaulichtcms-update/` |
+
+**Ablauf:**
+
+1. Die App (Recht „Updates einstellen und installieren“, Passwortbestätigung, Audit, Sicherheitsmeldung) schreibt
+   `host-update/request.json` ins Datenvolume: eine Zeile mit Version, Zeitpunkt, Kennung der Anfrage und des Kontos –
+   **keine Befehle**. Möglich nur, wenn das zuletzt geprüfte Release neuer ist, ein neueres Image braucht und nichts
+   läuft; höchstens eine Anfrage je 10 Minuten.
+2. Der Helfer liest die Anfrage mit der Benutzerkennung des Volumes (nie als root), entfernt sie und prüft: höchstens
+   1 KB, genau das feste Schema, nicht älter als 15 Minuten, höchstens ein Lauf je 10 Minuten, kein gleichzeitiges
+   `install.sh`. Dann holt er die Tags (`git fetch --tags` ohne `--force`), bestimmt **selbst** den neuesten
+   Release-Tag und bricht ab, wenn der nicht genau der angefragten Version entspricht oder nicht neuer als das
+   laufende Image ist (nie Downgrade). Den Kanal `main` bedient er nicht.
+3. **Echtheit:** Das Release-Paket des Tags (`blaulichtcms-update-v<version>.zip` und `.sig` von GitHub) muss eine
+   gültige Ed25519-Signatur gegen den angehefteten Schlüssel des installierten Stands (`server/update-signing-key.pub`)
+   tragen, und das signierte `manifest.json` muss genau diese Version und den Commit des Tags nennen. Geprüft wird
+   ohne Netz und ohne Rechte im bisherigen Image (`scripts/host-update-verify.mjs`). Ist
+   `/etc/blaulichtcms/allowed_signers` hinterlegt, muss zusätzlich die Tag-Signatur stimmen. Ohne Release-Paket (z. B.
+   privates Repository) und ohne `allowed_signers` lehnt der Helfer ab.
+4. Danach läuft `install.sh --unattended` mit genau diesem Tag (`BLAULICHTCMS_EXPECT_TAG`): keine Rückfragen, nichts
+   wird nachinstalliert oder neu eingerichtet (keine Proxy-Verbindung, kein Cron), sonst der bekannte Weg – bauen,
+   Wartungsmodus, Sicherung, Wechsel, Prüfung, bei Fehler automatischer Rückweg.
+5. Fortschritt (Phase, Schritt, alle 30 Sekunden ein Lebenszeichen) und Ergebnis schreibt der Helfer – wieder mit der
+   Kennung des Volumes – nach `host-update/status.json`: `success`, `rolled_back` (Rückweg erfolgreich), `aborted` (vor
+   dem Wechsel abgebrochen, bisherige Version läuft), `failed` (Handeln nötig) oder `rejected`, dazu ein
+   Protokollauszug ohne Zugangsdaten. Die App zeigt Schritte und Auszug, übernimmt das Ergebnis ins Update-Protokoll
+   und benachrichtigt die Verwaltung (Rückweg und Fehler als Sicherheitsmeldung).
+
+Liegt eine Anfrage länger als 2 Minuten unbearbeitet, zeigt die App „Der Update-Helfer hat die Anfrage nicht
+angenommen“ und bietet an, sie zurückzuziehen; meldet sich ein laufender Helfer über 10 Minuten nicht, einen Hinweis.
+Prüfen am Host: `systemctl status blaulichtcms-update.path blaulichtcms-update`, `tail -100 /var/log/blaulichtcms-update.log`.
+
+**Grenzen:** Ein privates Repository braucht für `install.sh` ein `GITHUB_TOKEN`, das der Helfer nicht hat – dort Updates
+weiter von Hand. Der Helfer verwendet die Umgebung vom Einrichten (z. B. `HTTPS_PROXY`); ändert sie sich, `install.sh`
+erneut mit den neuen Werten aufrufen. Die Unit-Dateien bringt jeder Lauf von `install.sh` auf den neuen Stand.
+
+**Neue Fassung von `install.sh`:** Holt `install.sh` einen Stand mit geänderter `install.sh`, startet es sich ab dieser
+Version selbst neu und läuft mit der neuen Fassung weiter. Bis 0.5.0 lief der Rest eines Updates noch mit der alten
+Fassung – wer von 0.5.0 kommt, bekommt die Frage nach dem Helfer deshalb beim **nächsten** Aufruf von `install.sh`.
+
 ### In-App-Update: Rückweg von Hand
 
 Scheitert auch der automatische Rückweg (die vorige Version startet nach dem Zurückspielen nicht), zeigt der Webport

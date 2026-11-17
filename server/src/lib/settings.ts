@@ -246,6 +246,9 @@ export const DEFAULT_SETTINGS = {
   'updates.last_check_error': null as null | string,
   /** Version, zu der die Administration bereits benachrichtigt wurde (eine Meldung je neuer Version). */
   'updates.notified_version': '',
+  /** Update-Helfer am Host (#226): Zeitpunkt der letzten Anfrage (Rate-Limit) und zuletzt protokollierter Lauf. */
+  'updates.host_requested_at': null as null | string,
+  'updates.host_recorded_request': '',
 
   'backup.enabled': true,
   'backup.hour': 3,
