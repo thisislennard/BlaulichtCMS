@@ -141,7 +141,8 @@ async function storeItems(feedId: string, items: FeedItem[], emit = false): Prom
 export function skippedNote(skipped: string[]): string | null {
   if (!skipped.length) return null;
   const names = skipped.slice(0, 3).map((t) => `„${t}“`).join(', ');
-  return `${skipped.length} Eintrag/Einträge konnten nicht übernommen werden und wurden übersprungen: ${names}${skipped.length > 3 ? ' …' : ''}. Details im Systemprotokoll.`.slice(0, 500);
+  const head = skipped.length === 1 ? '1 Eintrag konnte nicht übernommen werden und wurde' : `${skipped.length} Einträge konnten nicht übernommen werden und wurden`;
+  return `${head} übersprungen: ${names}${skipped.length > 3 ? ' …' : ''}. Details im Systemprotokoll.`.slice(0, 500);
 }
 
 /** Fälliger Abruf aller aktiven Quellen (vom Worker aufgerufen). */

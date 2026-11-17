@@ -85,7 +85,7 @@ describe('RSS-Quellen: Fremdtext und einzelne fehlerhafte Einträge (#249)', () 
       const f = await feed();
       expect(f.last_error).toBeNull();
       expect(f.last_success_at).not.toBeNull();
-      expect(f.last_warning).toMatch(/^1 Eintrag\/Einträge konnten nicht übernommen werden und wurden übersprungen: „Kaputt“\. Details im Systemprotokoll\.$/);
+      expect(f.last_warning).toBe('1 Eintrag konnte nicht übernommen werden und wurde übersprungen: „Kaputt“. Details im Systemprotokoll.');
     } finally {
       await pool.query('ALTER TABLE rss_items DROP CONSTRAINT test_kaputt');
     }
