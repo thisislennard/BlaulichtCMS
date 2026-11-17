@@ -252,6 +252,7 @@ export default function Sources() {
                   {f.item_count} Einträge · {f.last_success_at ? `aktualisiert ${fmtRelative(f.last_success_at)}` : 'noch nicht abgerufen'} · alle {f.interval_min} Min.
                 </span>
                 {f.last_error && <span className="text-meta text-err">{f.last_error}</span>}
+                {!f.last_error && f.last_warning && <span className="text-meta text-warn">{f.last_warning}</span>}
                 {manage && (
                   <span className="flex gap-2">
                     <Button size="sm" icon="RefreshCw" onClick={async () => (await post(`/rss/feeds/${f.id}/refresh`).catch(toastError), refresh())}>

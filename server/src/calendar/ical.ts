@@ -1,3 +1,4 @@
+import { CONTROL_CHARS } from '../lib/text.js';
 import { localDate, parseIcalDateTime, parseRrule, resolveTzid, RruleError, toCivil, type Rrule } from './recurrence.js';
 
 /**
@@ -45,13 +46,9 @@ interface Line {
 }
 
 /**
- * Steuerzeichen außer Tab, Zeilenvorschub und Wagenrücklauf. RFC 5545 erlaubt sie in keinem Wert; NUL (U+0000) lehnt
- * PostgreSQL in Textspalten sogar ab – ein einziges solches Zeichen in einer Fremddatei ließe sonst den Abgleich der
- * ganzen Quelle bei jedem Abruf scheitern (#237).
+ * Gefaltete Zeilen zusammenführen (CRLF/LF + Leerzeichen oder Tab). Steuerzeichen außer Tab/Zeilenumbruch erlaubt
+ * RFC 5545 in keinem Wert; sie entfallen (NUL ließe sonst den Abgleich der ganzen Quelle scheitern, #237).
  */
-const CONTROL_CHARS = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g;
-
-/** Gefaltete Zeilen zusammenführen (CRLF/LF + Leerzeichen oder Tab); unzulässige Steuerzeichen entfallen. */
 export function unfold(text: string): string[] {
   return text
     .replace(/^\uFEFF/, '')

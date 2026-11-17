@@ -17,6 +17,8 @@ Ein Feed ist eine maschinenlesbare Liste der neuesten Meldungen einer Website (R
 
 Übernommen wird eine Quelle **nur nach einem erfolgreichen Abruf**: BlaulichtCMS lädt die Adresse beim Hinzufügen selbst und prüft, ob ein lesbarer RSS- oder Atom-Feed kommt. Sonst erscheint der Grund (nicht erreichbar, interne Adresse gesperrt, kein Feed) und es wird nichts eingetragen. Doppelte Einträge werden erkannt und nicht erneut angelegt.
 
+Unzulässige Steuerzeichen in Titeln und Texten (etwa ein NUL-Zeichen) entfallen beim Einlesen. Lässt sich ein **einzelner Eintrag** nicht übernehmen, wird er übersprungen – die übrigen kommen trotzdem an, und unter **Eingetragene Quellen** steht ein gelber Hinweis mit seinem Titel (Einzelheiten im Systemprotokoll). Beim nächsten Abruf wird er erneut versucht.
+
 ## Quelle bearbeiten
 
 Über den Stift in **Eingetragene Quellen** lassen sich Name, Adresse und Abrufintervall ändern. Eine **neue Adresse** ruft BlaulichtCMS beim Speichern ab; liefert sie keinen lesbaren Feed, bleibt die alte Adresse bestehen.

@@ -4,6 +4,7 @@ import { audit } from '../lib/audit.js';
 import { httpRequest } from '../lib/http.js';
 import { log } from '../lib/log.js';
 import { notify } from '../lib/notify.js';
+import { stripControlChars } from '../lib/text.js';
 import { bannerHash, enqueueBannerJob } from '../routes/banners.js';
 import { allowedPrivateHosts, type Connection, type TestStep } from './common.js';
 import { emitOfficialWarning } from '../automations/events.js';
@@ -74,7 +75,8 @@ export interface CapWarning {
 }
 
 const arr = <T>(v: T | T[] | undefined | null): T[] => (v == null ? [] : Array.isArray(v) ? v : [v]);
-const str = (v: any) => (v == null ? '' : typeof v === 'object' ? String(v['#text'] ?? '') : String(v)).trim();
+/** Textwert aus CAP (XML oder JSON); Steuerzeichen (u. a. NUL, das PostgreSQL ablehnt) entfallen (#249). */
+const str = (v: any) => stripControlChars(v == null ? '' : typeof v === 'object' ? String(v['#text'] ?? '') : String(v)).trim();
 
 /** CAP 1.2 (als geparstes XML- oder JSON-Objekt) in eine flache Struktur bringen; deutsche Info bevorzugt. */
 export function normalizeCap(alert: any): CapWarning | null {
@@ -219,8 +221,16 @@ export async function fetchWarningsRaw(c: Connection, rec?: Receipt): Promise<Fe
         out.push({ w: null, raw: item, problem: 'Eintrag im Dashboard ohne Kennung – nicht abrufbar.' });
         continue;
       }
-      const detail = JSON.parse(await get(c, `${base}/warnings/${encodeURIComponent(id)}.json`, rec));
-      const w = normalizeCap(detail);
+      // Jede Meldung für sich: Eine nicht abrufbare oder nicht lesbare Meldung darf die übrigen nicht verhindern (#249)
+      let detail: any;
+      let w: CapWarning | null;
+      try {
+        detail = JSON.parse(await get(c, `${base}/warnings/${encodeURIComponent(id)}.json`, rec));
+        w = normalizeCap(detail);
+      } catch (e: any) {
+        out.push({ w: null, raw: item, problem: `Meldung ${String(id).slice(0, 100)} nicht abrufbar oder nicht lesbar: ${String(e?.message ?? e).slice(0, 200)}` });
+        continue;
+      }
       if (!w) {
         out.push({ w: null, raw: detail, problem: 'Meldung ohne Kennung (identifier) – nicht lesbar.' });
         continue;
@@ -234,7 +244,12 @@ export async function fetchWarningsRaw(c: Connection, rec?: Receipt): Promise<Fe
     return out;
   }
   return parseCapDocument(await get(c, c.config.url, rec)).map((raw) => {
-    const w = normalizeCap(raw);
+    let w: CapWarning | null;
+    try {
+      w = normalizeCap(raw);
+    } catch (e: any) {
+      return { w: null, raw, problem: `Meldung nicht lesbar: ${String(e?.message ?? e).slice(0, 200)}` };
+    }
     return w ? { w, raw } : { w: null, raw, problem: 'Meldung ohne Kennung (identifier) – nicht lesbar.' };
   });
 }
@@ -303,7 +318,15 @@ async function processWarnfeed(c: Connection, rec: Receipt) {
   // Noch gelieferte Warnungen als gesehen markieren (#180): die Löschfrist greift erst, wenn die Quelle sie nicht mehr liefert
   const known = new Map<string, { dismissed: boolean }>();
   if (all.length) {
-    const rows = await many<any>(`UPDATE official_warnings SET last_seen_at = now() WHERE connection_id = $1 AND identifier = ANY($2) RETURNING identifier, dismissed_at`, [c.id, all.map((w) => w.identifier)]);
+    const seen = `UPDATE official_warnings SET last_seen_at = now() WHERE connection_id = $1 AND identifier = ANY($2) RETURNING identifier, dismissed_at`;
+    let rows: any[] = [];
+    try {
+      rows = await many<any>(seen, [c.id, all.map((w) => w.identifier)]);
+    } catch (e: any) {
+      // Gemeinsam gescheitert: je Meldung einzeln, damit eine einzelne den Abruf nicht verhindert (#249)
+      log('warn', 'warnfeed', `Verbindung ${c.id}: „gesehen“ gemeinsam nicht gespeichert, einzeln weiter – ${e?.message ?? e}`);
+      for (const w of all) rows.push(...(await many<any>(seen, [c.id, [w.identifier]]).catch(() => [])));
+    }
     for (const r of rows) known.set(r.identifier, { dismissed: !!r.dismissed_at });
   }
   // Älteste zuerst, damit Aktualisierungen und Entwarnungen nach ihrem Original verarbeitet werden (#63)

@@ -9,6 +9,7 @@ import { AppError, badRequest, notFound } from '../lib/errors.js';
 import { httpRequest } from '../lib/http.js';
 import { getSettings } from '../lib/settings.js';
 import { log } from '../lib/log.js';
+import { stripControlChars } from '../lib/text.js';
 import { revisionHash } from './posts.js';
 import { emitRssItem } from '../automations/events.js';
 import { noUrlCredentials, URL_CREDENTIALS_MSG } from '../lib/urls.js';
@@ -33,10 +34,11 @@ export interface ParsedFeed {
 
 const parser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: '@', textNodeName: '#text', processEntities: true, htmlEntities: true, isArray: (name) => ['item', 'entry', 'link'].includes(name) });
 
+/** Textwert aus dem XML; Steuerzeichen (u. a. NUL, das PostgreSQL ablehnt) entfallen (#249). */
 const text = (v: any): string => {
   if (v == null) return '';
-  if (typeof v === 'string' || typeof v === 'number') return String(v);
-  if (typeof v === 'object' && '#text' in v) return String(v['#text']);
+  if (typeof v === 'string' || typeof v === 'number') return stripControlChars(String(v));
+  if (typeof v === 'object' && '#text' in v) return stripControlChars(String(v['#text']));
   return '';
 };
 const stripHtml = (s: string) => s.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
@@ -106,18 +108,40 @@ async function fetchFeed(url: string, cache: { etag?: string | null; lastModifie
   return { notModified: false as const, feed: parseFeed(res.text()), etag: res.headers['etag'] ?? null, lastModified: res.headers['last-modified'] ?? null };
 }
 
-/** `emit`: neue Einträge an Automationen melden (nur beim regulären Abruf, nicht beim ersten Einlesen einer Quelle). */
-async function storeItems(feedId: string, items: FeedItem[], emit = false) {
+/**
+ * Einträge speichern. `emit`: neue Einträge an Automationen melden (nur beim regulären Abruf, nicht beim ersten Einlesen
+ * einer Quelle). Jeder Eintrag für sich: Lässt sich einer nicht speichern, wird er übersprungen und gemeldet – die
+ * übrigen kommen trotzdem an, und der nächste Abruf bleibt nicht an derselben Stelle hängen (#249).
+ */
+async function storeItems(feedId: string, items: FeedItem[], emit = false): Promise<{ added: number; skipped: string[] }> {
   let added = 0;
+  const skipped: string[] = [];
   for (const it of items) {
-    const r = await pool.query(
-      `INSERT INTO rss_items (feed_id, dedup_key, title, link, summary, published_at) VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT (feed_id, dedup_key) DO NOTHING`,
-      [feedId, it.key, it.title.slice(0, 300), it.link && /^https?:\/\//i.test(it.link) ? it.link.slice(0, 1000) : null, it.summary, it.published],
-    );
-    added += r.rowCount ?? 0;
-    if (r.rowCount && emit) await emitRssItem(feedId, it);
+    let inserted = false;
+    try {
+      const r = await pool.query(
+        `INSERT INTO rss_items (feed_id, dedup_key, title, link, summary, published_at) VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT (feed_id, dedup_key) DO NOTHING`,
+        [feedId, it.key, it.title.slice(0, 300), it.link && /^https?:\/\//i.test(it.link) ? it.link.slice(0, 1000) : null, it.summary, it.published],
+      );
+      inserted = !!r.rowCount;
+    } catch (e) {
+      skipped.push(it.title.slice(0, 80));
+      log('warn', 'rss', `Feed ${feedId}: Eintrag übersprungen – ${(e as Error).message}`);
+      continue;
+    }
+    if (inserted) {
+      added++;
+      if (emit) await emitRssItem(feedId, it);
+    }
   }
-  return added;
+  return { added, skipped };
+}
+
+/** Hinweis zur Quelle, wenn Einträge übersprungen wurden (Liste der Quellen); null = alles übernommen. */
+export function skippedNote(skipped: string[]): string | null {
+  if (!skipped.length) return null;
+  const names = skipped.slice(0, 3).map((t) => `„${t}“`).join(', ');
+  return `${skipped.length} Eintrag/Einträge konnten nicht übernommen werden und wurden übersprungen: ${names}${skipped.length > 3 ? ' …' : ''}. Details im Systemprotokoll.`.slice(0, 500);
 }
 
 /** Fälliger Abruf aller aktiven Quellen (vom Worker aufgerufen). */
@@ -131,8 +155,8 @@ export async function refreshFeed(f: any) {
   try {
     const r = await fetchFeed(f.url, { etag: f.etag, lastModified: f.last_modified });
     if (!r.notModified) {
-      await storeItems(f.id, r.feed.items, true);
-      await pool.query('UPDATE rss_feeds SET etag = $2, last_modified = $3 WHERE id = $1', [f.id, r.etag, r.lastModified]);
+      const s = await storeItems(f.id, r.feed.items, true);
+      await pool.query('UPDATE rss_feeds SET etag = $2, last_modified = $3, last_warning = $4 WHERE id = $1', [f.id, r.etag, r.lastModified, skippedNote(s.skipped)]);
     }
     await pool.query('UPDATE rss_feeds SET last_success_at = now(), last_error = NULL WHERE id = $1', [f.id]);
   } catch (e) {
@@ -178,7 +202,9 @@ export async function rssRoutes(app: FastifyInstance) {
       `INSERT INTO rss_feeds (url, title, site_url, interval_min, etag, last_modified, last_fetch_at, last_success_at, created_by) VALUES ($1,$2,$3,$4,$5,$6, now(), now(), $7) RETURNING *`,
       [b.url, b.title || r.feed.title, r.feed.siteUrl, b.intervalMin, r.etag, r.lastModified, req.auth!.user?.id ?? null],
     );
-    const added = await storeItems(f.id, r.feed.items);
+    const s = await storeItems(f.id, r.feed.items);
+    const added = s.added;
+    if (s.skipped.length) f.last_warning = (await one<any>('UPDATE rss_feeds SET last_warning = $2 WHERE id = $1 RETURNING last_warning', [f.id, skippedNote(s.skipped)]))!.last_warning;
     await audit(req.auth!.actor, 'rss.feed_added', { type: 'rss_feed', id: f.id, label: f.title }, { url: b.url, eintraege: added });
     return { feed: f, added };
   });
@@ -198,7 +224,9 @@ export async function rssRoutes(app: FastifyInstance) {
         `UPDATE rss_feeds SET url = $2, site_url = $3, etag = $4, last_modified = $5, last_fetch_at = now(), last_success_at = now(), last_error = NULL WHERE id = $1`,
         [id, b.url, r.feed.siteUrl, r.etag, r.lastModified],
       );
-      added = await storeItems(id, r.feed.items);
+      const s = await storeItems(id, r.feed.items);
+      added = s.added;
+      await pool.query('UPDATE rss_feeds SET last_warning = $2 WHERE id = $1', [id, skippedNote(s.skipped)]);
     }
     const row = await one<any>('UPDATE rss_feeds SET title = $2, interval_min = $3 WHERE id = $1 RETURNING *', [id, b.title, b.intervalMin]);
     await audit(req.auth!.actor, 'rss.feed_updated', { type: 'rss_feed', id, label: b.title }, { url: urlChanged ? { vorher: f.url, nachher: b.url } : undefined, intervall: b.intervalMin !== f.interval_min ? b.intervalMin : undefined, eintraege: urlChanged ? added : undefined });

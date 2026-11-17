@@ -31,7 +31,7 @@ Bei **amtlichen Warnungen**, **FE2** und **Feuersoftware Connect** zeigt die Ver
 | ausgeblendet | unter „Amtliche Warnungen“ ausgeblendet, wird nicht erneut angezeigt |
 | gesperrt | Einsatz wurde früher übernommen und inzwischen gelöscht – wird nicht neu angelegt |
 | Test | Verbindungstest bzw. Testmeldung – nichts angelegt |
-| Fehler | Meldung nicht lesbar oder Verarbeitung fehlgeschlagen |
+| Fehler | Meldung nicht lesbar, nicht abrufbar oder Verarbeitung fehlgeschlagen – nur diese eine; die übrigen Meldungen des Abrufs werden trotzdem verarbeitet |
 
 - **Rohdaten anzeigen** öffnet die Meldung als JSON (mit Kopieren-Knopf). Amtliche Warnungen stehen vollständig da, wie die Quelle sie liefert. Bei FE2 und Feuersoftware sind die Rohdaten **geschwärzt**: Stichwort, Einsatzart, Ort, Zeiten, Status, RIC, Einheiten und die Felder der Feldzuordnung bleiben lesbar; Straße, Hausnummer, Koordinaten, Namen, Telefonnummern, meldende Person und Freitext erscheinen nur als „‹ausgeblendet …›“.
 - Der Filter **Anzeigen** beschränkt die Liste auf übernommene, herausgefilterte oder fehlerhafte Einträge.
@@ -406,7 +406,7 @@ Die letzte Störung steht in der Verbindung und in der Übersicht. Nach **drei F
 
 ## Amtliche Warnungen
 
-Quelle: Warn-App-Schnittstelle des Bundes (Regionalschlüssel des Kreises) oder eine eigene CAP-Adresse. Gebietsfilter über Geocode-Präfixe oder Ortsnamen. Die Schnittstelle liefert Meldungen auf Kreisebene; sie gelten auch für jede Gemeinde im Kreis. Banner nennen nur Orte, die zum Ortsnamen-Filter passen, und immer die Quelle (z. B. „Quelle: Deutscher Wetterdienst“). Die Meldungen erscheinen unter [Amtliche Warnungen](/amtliche-warnungen) – getrennt vom eigenen Warnentwurf.
+Quelle: Warn-App-Schnittstelle des Bundes (Regionalschlüssel des Kreises) oder eine eigene CAP-Adresse. Unzulässige Steuerzeichen (etwa ein NUL-Zeichen) in Kennung und Texten einer Meldung entfallen beim Einlesen; eine einzelne Meldung, die sich nicht abrufen oder speichern lässt, steht als **Fehler** im Empfangsprotokoll und hält die übrigen nicht auf. Gebietsfilter über Geocode-Präfixe oder Ortsnamen. Die Schnittstelle liefert Meldungen auf Kreisebene; sie gelten auch für jede Gemeinde im Kreis. Banner nennen nur Orte, die zum Ortsnamen-Filter passen, und immer die Quelle (z. B. „Quelle: Deutscher Wetterdienst“). Die Meldungen erscheinen unter [Amtliche Warnungen](/amtliche-warnungen) – getrennt vom eigenen Warnentwurf.
 
 ### Warnung ausblenden
 

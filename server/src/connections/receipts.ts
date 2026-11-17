@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import { many, one, pool, tx } from '../db/pool.js';
 import { log } from '../lib/log.js';
+import { stripControlChars, stripControlCharsDeep } from '../lib/text.js';
 
 /**
  * Empfangsprotokoll der eingehenden Verbindungen (Warnfeeds, FE2, Feuersoftware Connect).
@@ -91,7 +92,8 @@ export class Receipt {
       this.dropped++;
       return;
     }
-    this.items.push({ ...item, reason: String(item.reason ?? '').slice(0, 1000) });
+    // NUL in Grund oder Angaben ließe das Speichern des ganzen Eintrags (jsonb) scheitern (#249)
+    this.items.push({ ...item, reason: stripControlChars(String(item.reason ?? '')).slice(0, 1000), info: stripControlCharsDeep(item.info ?? {}) });
   }
 
   get size() {
