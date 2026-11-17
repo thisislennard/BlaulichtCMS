@@ -271,8 +271,18 @@ export interface IcsOutEvent {
   lastModified?: number;
 }
 
+/**
+ * TEXT-Werte maskieren (RFC 5545, 3.3.11): `\`, `;` und `,` mit Backslash; jeder Zeilenumbruch – CRLF, LF und ein
+ * einzelnes CR – wird zu `\n`. Übrige Steuerzeichen außer Tab sind in TEXT nicht erlaubt und entfallen, damit kein
+ * Wert die Zeilenstruktur der Datei stört.
+ */
 export function escapeText(v: string): string {
-  return v.replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\r?\n/g, '\\n');
+  return v
+    .replace(/\\/g, '\\\\')
+    .replace(/;/g, '\\;')
+    .replace(/,/g, '\\,')
+    .replace(/\r\n|\r|\n/g, '\\n')
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '');
 }
 
 /** Zeile nach RFC 5545 auf höchstens 75 Bytes falten (UTF-8, ohne Zeichen zu zerteilen). */

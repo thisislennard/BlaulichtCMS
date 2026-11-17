@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildIcs, foldLine, parseDuration, parseIcal, unfold, unescapeText } from '../src/calendar/ical.js';
+import { buildIcs, escapeText, foldLine, parseDuration, parseIcal, unfold, unescapeText } from '../src/calendar/ical.js';
 import { expand, formatRrule, fromCivil, localDate, midnight, parseRrule, resolveTzid, seriesEnd, toCivil, type SeriesSource } from '../src/calendar/recurrence.js';
 
 /** Kalender (#200, #202): Wiederholungsregeln, Zeitzonen und iCal-Lesen/-Schreiben – reine Unit-Tests ohne Datenbank. */
@@ -249,5 +249,19 @@ describe('iCal schreiben (Abo)', () => {
     expect(back.events[1].description).toBe('Zeile 1\nZeile 2');
     expect(back.events[1].allDay).toBe(true);
     expect(back.events[0].start).toBe(start);
+  });
+
+  it('maskiert jeden Zeilenumbruch (auch ein einzelnes CR) und lässt Steuerzeichen weg (#238)', () => {
+    expect(escapeText('a\rb\r\nc\nd')).toBe('a\\nb\\nc\\nd');
+    expect(escapeText('Tab\tbleibt\u0007\u001b weg\u007f')).toBe('Tab\tbleibt weg');
+    const start = berlin('2026-11-07 10:00');
+    const ics = buildIcs('Name\rmit CR', [{ uid: 'cr@x', start, end: start + 3600_000, allDay: false, summary: 'Übung\rEND:VEVENT', description: 'Zeile 1\rZeile 2\r\nZeile 3', location: 'Ort\u000bA' }], TZ);
+    // CR nur als Teil des Zeilenendes CRLF – keine eingeschleuste Zeile
+    expect(ics.replace(/\r\n/g, '')).not.toMatch(/[\r\n]/);
+    expect(unfold(ics).filter((l) => l === 'END:VEVENT')).toHaveLength(1);
+    const back = parseIcal(ics, TZ);
+    expect(back.name).toBe('Name\nmit CR');
+    expect(back.events).toHaveLength(1);
+    expect(back.events[0]).toMatchObject({ summary: 'Übung\nEND:VEVENT', description: 'Zeile 1\nZeile 2\nZeile 3', location: 'OrtA' });
   });
 });
