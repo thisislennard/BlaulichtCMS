@@ -384,6 +384,7 @@ export default function Settings() {
                   <FieldWrap
                     label={t("admin.settings.timezone")}
                     htmlFor="s-tz"
+                    help="Gilt für alle Zeitangaben: Anzeige und Eingabe von Datum und Uhrzeit, Verläufe, Kalender, Benachrichtigungen, Vorgangsnummern und zeitgesteuerte Abläufe. Gespeichert wird zeitzonenneutral, ein Wechsel stellt auch ältere Einträge um."
                   >
                     <Select
                       id="s-tz"

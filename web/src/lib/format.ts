@@ -27,6 +27,19 @@ export function fmtTime(v: string | number | Date | null | undefined, seconds = 
   return new Intl.DateTimeFormat('de-DE', { timeZone, hour: '2-digit', minute: '2-digit', ...(seconds ? { second: '2-digit' } : {}) }).format(d);
 }
 
+/**
+ * ISO-Zeitpunkte in gespeicherten Texten (z. B. Verlauf einer Presseanfrage: „Frist: 2026-11-15T22:26:51.000Z → …“)
+ * lesbar in der eingestellten Zeitzone. Der Server speichert bewusst ISO (zeitzonenneutral), damit ältere Einträge
+ * nach einem Wechsel der Zeitzone ebenfalls richtig erscheinen. Nur vollständige Zeitpunkte mit Zeitzone (Z oder ±hh:mm).
+ */
+export function fmtIsoInText(text: string | null | undefined): string {
+  if (!text) return '';
+  return text.replace(/(?<![\w-])\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,9})?)?(?:Z|[+-]\d{2}:?\d{2})(?![\w:])/g, (m) => {
+    const d = new Date(m);
+    return Number.isNaN(d.getTime()) ? m : fmtDateTime(d);
+  });
+}
+
 /** „vor 12 Sekunden“, „vor 2 Std.“, „Gestern, 19:42“, sonst Datum */
 export function fmtRelative(v: string | number | Date | null | undefined): string {
   const d = toDate(v);

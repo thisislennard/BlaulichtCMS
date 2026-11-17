@@ -7,7 +7,7 @@ import { Button, Card, cx, ErrorBox, FieldWrap, Input, KeyValue, PageHeader, Sel
 import { Icon } from '../../components/ui/Icon';
 import { DeleteDialog, useErrorToast } from '../../components/ui/overlays';
 import { useAuth } from '../../lib/auth';
-import { fmtDateTime, fromLocalInput, toLocalInput } from '../../lib/format';
+import { fmtDateTime, fmtIsoInText, fromLocalInput, toLocalInput } from '../../lib/format';
 import { CHANNEL_LABEL, PressStatusBadge, RequestDialog, STATUS_LABEL, usePressOptions, type PressRequest, type PressStatus } from './shared';
 import { PressMessages, type PressDetailExtras } from './Messages';
 
@@ -94,7 +94,7 @@ export default function PressRequestPage() {
                       {e.actor_name} · {fmtDateTime(e.at)}
                       {e.kind === 'note' ? ' · interne Notiz' : ''}
                     </div>
-                    <div className={cx('break-words', e.kind === 'note' && 'whitespace-pre-wrap')}>{e.text}</div>
+                    <div className={cx('break-words', e.kind === 'note' && 'whitespace-pre-wrap')}>{e.kind === 'note' ? e.text : fmtIsoInText(e.text)}</div>
                   </div>
                 </li>
               ))}

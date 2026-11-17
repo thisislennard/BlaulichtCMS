@@ -5,7 +5,7 @@ import { get, put } from '../api/client';
 import { Button, EmptyState, ErrorBox, Notice, PageHeader, SkeletonRows } from '../components/ui/core';
 import { UnsavedChangesGuard, useErrorToast, useToast } from '../components/ui/overlays';
 import { useAuth } from '../lib/auth';
-import { fmtTime } from '../lib/format';
+import { fmtTime, getTimeZone } from '../lib/format';
 import { useLive } from '../lib/live';
 import { NewCollectionDialog } from './media/Collections';
 import { NewPostDialog } from './posts/Posts';
@@ -38,7 +38,8 @@ function useIsMobile() {
 }
 
 function greeting(name?: string) {
-  const h = new Date().getHours();
+  // Stunde in der Zeitzone der Instanz (wie alle Zeitangaben der Oberfläche)
+  const h = Number(new Intl.DateTimeFormat('en-GB', { timeZone: getTimeZone(), hour: '2-digit', hourCycle: 'h23' }).format(new Date()));
   const g = h < 11 ? 'Guten Morgen' : h < 18 ? 'Guten Tag' : 'Guten Abend';
   return name ? `${g}, ${name}.` : 'Übersicht';
 }

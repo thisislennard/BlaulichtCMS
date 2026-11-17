@@ -1851,3 +1851,26 @@ describe('Einsatzliste: Ort nur grob, CSV und Datum (#213)', () => {
     expect(r.rows[0].alarmAt.toISOString()).toBe('2026-02-01T06:05:00.000Z');
   });
 });
+
+describe('Zeitangaben in der eingestellten Zeitzone (#224)', async () => {
+  const f = await import('../../web/src/lib/format.js');
+  it('ISO-Zeitpunkte im Verlaufstext werden lesbar – auch nach einem Wechsel der Zeitzone', () => {
+    f.setTimeZone('Europe/Berlin');
+    expect(f.fmtIsoInText('Frist: 2026-11-15T22:26:51.000Z → 2026-07-01T08:00:00.000Z')).toBe('Frist: 15.11.2026, 23:26 → 01.07.2026, 10:00');
+    expect(f.fmtIsoInText('Frist: – → 2026-11-15T22:26:51Z')).toBe('Frist: – → 15.11.2026, 23:26');
+    f.setTimeZone('America/New_York');
+    expect(f.fmtIsoInText('Frist: 2026-11-15T22:26:51.000Z → –')).toBe('Frist: 15.11.2026, 17:26 → –');
+    f.setTimeZone('Europe/Berlin');
+    // Keine Zeitpunkte: unverändert (Datum ohne Uhrzeit, Uhrzeit ohne Zeitzone, Kennungen)
+    for (const s of ['Status: neu → in Bearbeitung', 'Termin 2026-11-15', 'lokal 2026-11-15T10:00', 'id-2026-11-15T10:00:00Zx', '']) expect(f.fmtIsoInText(s)).toBe(s);
+    expect(f.fmtIsoInText(null)).toBe('');
+  });
+  it('Eingabefelder rechnen in der Zeitzone der Instanz (z. B. Ablauf eines Upload-Links)', () => {
+    f.setTimeZone('Europe/Berlin');
+    expect(f.fromLocalInput('2026-11-20T18:00')).toBe('2026-11-20T17:00:00.000Z');
+    expect(f.toLocalInput('2026-07-01T08:00:00.000Z')).toBe('2026-07-01T10:00');
+    f.setTimeZone('Europe/London');
+    expect(f.fromLocalInput('2026-11-20T18:00')).toBe('2026-11-20T18:00:00.000Z');
+    f.setTimeZone('Europe/Berlin');
+  });
+});

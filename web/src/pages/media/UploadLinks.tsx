@@ -6,7 +6,7 @@ import { ShareActions } from '../../components/share';
 import { Badge, Button, Card, FieldWrap, Input, Notice, Select, StatusBadge, Textarea } from '../../components/ui/core';
 import { Dialog, Menu, useConfirm, useErrorToast, useToast } from '../../components/ui/overlays';
 import { useAuth } from '../../lib/auth';
-import { fmtBytes, fmtDateTime, fmtRelative } from '../../lib/format';
+import { fmtBytes, fmtDateTime, fmtRelative, fromLocalInput, toLocalInput } from '../../lib/format';
 import { FolderOptions, folderPath, type Folder } from './organize';
 import { LinkOptionsFields, optsFromLink, optsPayload, optsValid, type LinkOpts } from './LinkOptions';
 
@@ -29,7 +29,7 @@ export type ValidityMode = '6' | '24' | '72' | '168' | 'days' | 'date';
 export interface Validity {
   mode: ValidityMode;
   days: number;
-  /** Wert eines datetime-local-Felds (Ortszeit des Geräts) */
+  /** Wert eines datetime-local-Felds (Zeitzone der Instanz) */
   date: string;
 }
 
@@ -37,15 +37,12 @@ export const DEFAULT_VALIDITY: Validity = { mode: '168', days: 14, date: '' };
 
 /** Gültigkeit als API-Felder: feste Dauer in Stunden/Tagen oder Termin (ISO). */
 export function validityPayload(v: Validity): { hours?: number; days?: number; expiresAt?: string } {
-  if (v.mode === 'date') return v.date ? { expiresAt: new Date(v.date).toISOString() } : {};
+  if (v.mode === 'date') {
+    const at = fromLocalInput(v.date);
+    return at ? { expiresAt: at } : {};
+  }
   if (v.mode === 'days') return { days: Math.max(1, Math.round(v.days || 1)) };
   return { hours: Number(v.mode) };
-}
-
-/** Lokaler Zeitpunkt für <input type="datetime-local"> */
-export function toLocalInput(d: Date): string {
-  const p = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
 /** Auswahl wie in LiFeOS: 6 h, 24 h, 3 Tage, 7 Tage, eigene Dauer in Tagen oder „Bis Termin“. */
@@ -204,7 +201,7 @@ function DeadlineDialog({ link, onClose, onSaved }: { link: UploadLink; onClose:
             onClick={async () => {
               setBusy(true);
               try {
-                await patch(`/upload-links/${link.id}`, { expiresAt: new Date(date).toISOString() });
+                await patch(`/upload-links/${link.id}`, { expiresAt: fromLocalInput(date) });
                 onSaved();
               } catch (e) {
                 toastError(e);

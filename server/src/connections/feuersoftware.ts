@@ -4,7 +4,7 @@ import { StepError } from '../lib/errors.js';
 import { log } from '../lib/log.js';
 import { notify } from '../lib/notify.js';
 import { connectionSecrets, type Connection, type TestStep } from './common.js';
-import { draftTitle, handleIncident, incidentDecision, incidentInfo, normalizeTime, type Fe2Field } from './fe2.js';
+import { draftTitle, handleIncident, incidentDecision, incidentInfo, normalizeTime, showTime, type Fe2Field } from './fe2.js';
 import { Receipt, redactIncidentPayload, type ReceiptTrigger } from './receipts.js';
 import { getSettings } from '../lib/settings.js';
 
@@ -341,7 +341,7 @@ async function runPoll(c: Connection, rec: Receipt): Promise<PollResult & { rece
   const received = ops.length;
   // Jeder gelieferte Einsatz steht mit Entscheidung im Empfangsprotokoll – auch ältere und nicht passende
   const note = (op: any, decision: Parameters<Receipt['add']>[0]['decision'], reason: string) => rec.add({ decision, reason, info: opInfo(op, tz), raw: opRaw(op) });
-  for (const op of ops.filter((x) => !isRecent(x))) note(op, 'filtered', `Älter als ${MAX_AGE_HOURS} Stunden (Alarm ${text(op.Start ?? op.CreatedAt, 40) || 'unbekannt'}) – wird nie übernommen.`);
+  for (const op of ops.filter((x) => !isRecent(x))) note(op, 'filtered', `Älter als ${MAX_AGE_HOURS} Stunden (Alarm ${showTime(normalizeTime(text(op.Start ?? op.CreatedAt, 40), tz), tz) || 'unbekannt'}) – wird nie übernommen.`);
   ops = ops.filter((op) => isRecent(op));
   for (const op of ops) {
     const m = matchReason(op, f);

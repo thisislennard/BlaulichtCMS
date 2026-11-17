@@ -24,6 +24,10 @@ Die öffentliche Adresse steht in Einladungen, Upload-Links und QR-Codes. Späte
 | Sicherheit | Zwei-Faktor-Pflicht, Sitzungsdauer, Sperre nach Fehlversuchen, Passwortlänge |
 | Sicherung | Tägliche Sicherung, Uhrzeit, Anzahl |
 
+## Zeitzone
+
+Unter **Einstellungen → Allgemein → Zeitzone** (Standard Europe/Berlin) wird festgelegt, in welcher Zeitzone BlaulichtCMS Zeiten anzeigt und Eingaben versteht: Datum und Uhrzeit in Listen, Verläufen und Dialogen, Eingabefelder (z. B. Frist, Ablauf eines Upload-Links, geplante Veröffentlichung), Kalender und Serientermine, Benachrichtigungen, Vorgangsnummern, Zeitpläne von Workflows und die Uhrzeit der täglichen Sicherung. Sommer- und Winterzeit werden automatisch berücksichtigt. Gespeichert werden Zeitpunkte zeitzonenneutral – ein Wechsel stellt deshalb auch ältere Einträge um; nach dem Speichern gilt die neue Zeitzone sofort.
+
 ## HTTPS
 
 BlaulichtCMS selbst spricht HTTP auf Port 7310. Für den Betrieb gehört ein Reverse Proxy mit HTTPS davor (z. B. Caddy, nginx, Traefik, HAProxy). Die Anleitung steht in `docs/reverse-proxy.md` im Repository.

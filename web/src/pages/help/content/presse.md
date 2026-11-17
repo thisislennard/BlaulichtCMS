@@ -140,7 +140,7 @@ Das **Versandprotokoll** zeigt je Empfänger *Gesendet*, *Fehlgeschlagen* (mit G
 - **Beitrag:** z. B. die Pressemitteilung oder der Einsatzbericht zum Thema.
 - **Interne Notiz:** nur in BlaulichtCMS sichtbar, nie Teil einer Antwort.
 
-Der **Verlauf** zeigt jede Änderung mit Person und Zeitpunkt (Status, Zuständigkeit, Frist, Verknüpfungen, Notizen, Mails). Geänderte Kontaktdaten stehen dort nur als „geändert“, nicht mit Wert.
+Der **Verlauf** zeigt jede Änderung mit Person und Zeitpunkt (Status, Zuständigkeit, Frist, Verknüpfungen, Notizen, Mails). Geänderte Kontaktdaten stehen dort nur als „geändert“, nicht mit Wert. Fristen erscheinen als Datum und Uhrzeit in der [Zeitzone der Instanz](/hilfe/einrichtung#zeitzone) – nach einem Wechsel der Zeitzone auch bei älteren Einträgen.
 
 ## Übersicht und Dashboard
 

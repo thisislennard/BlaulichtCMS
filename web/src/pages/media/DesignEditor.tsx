@@ -197,9 +197,9 @@ export default function DesignEditor() {
     }),
     [q.data],
   );
-  const eventDate = q.data?.link?.event_date ? new Date(q.data.link.event_date) : null;
-  const resolve = (t: string) =>
-    (t ?? '').replaceAll('{thema}', info.collection.title).replaceAll('{datum}', eventDate ? `${String(eventDate.getDate()).padStart(2, '0')}.${String(eventDate.getMonth() + 1).padStart(2, '0')}.${eventDate.getFullYear()}` : '');
+  // Veranstaltungsdatum ist ein reines Datum (JJJJ-MM-TT) – ohne Umrechnung in eine Zeitzone lesen
+  const eventDay = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(q.data?.link?.event_date ?? ''));
+  const resolve = (t: string) => (t ?? '').replaceAll('{thema}', info.collection.title).replaceAll('{datum}', eventDay ? `${eventDay[3]}.${eventDay[2]}.${eventDay[1]}` : '');
   const previewDesign = design ? { ...design, blocks: design.blocks.map((b) => ({ ...b, ...(b.text !== undefined ? { text: resolve(b.text) } : {}), ...(b.caption !== undefined ? { caption: resolve(b.caption) } : {}) })) } : null;
 
   const move = (i: number, d: -1 | 1) => {
