@@ -361,7 +361,8 @@ Ergebnisse je Verbindung: [docs/integrationen.md](integrationen.md).
 - Update-Helfer für Image-Updates aus der App (#226): Anfrage, Statusauswertung, Rate-Limit und Protokoll mit Tests
   (`server/test/host-update.test.ts`); Helfer und `install.sh --unattended` mit Docker-Stellvertreter trocken getestet
   (Erfolg, Rückweg, Abbruch vor dem Wechsel, abgelehnte Anfragen, falsche Signatur, Neustart mit neuer `install.sh`).
-  systemd-Units, `setpriv` und die Härtung auf dem echten Host noch prüfen.
+  Der Helfer ist noch nicht auf einem echten Host mit systemd gelaufen: systemd-Units, Path-Unit, `setpriv`, die Härtung
+  und ein Image-Update aus der App mit echtem Docker-Build auf dem Zielhost noch prüfen.
 - Sicherung außer Haus und Probe-Wiederherstellung (#212): gegen einen WebDAV-Stellvertreter mit echtem TLS getestet;
   mit dem echten NAS (z. B. Synology „WebDAV Server“) und die zeitgesteuerte Probe auf dem Zielhost noch prüfen.
 - Freigabe aus der Push-Mitteilung (#216): Ob ein Gerät Aktionsknöpfe zeigt, entscheidet der Browser; auf echten

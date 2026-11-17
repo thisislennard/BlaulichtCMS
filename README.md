@@ -9,7 +9,7 @@ Fotos per Link vom Handy sammeln · sichten · Beiträge schreiben · Fassung fr
 [![CI](https://github.com/thisislennard/BlaulichtCMS/actions/workflows/ci.yml/badge.svg)](https://github.com/thisislennard/BlaulichtCMS/actions/workflows/ci.yml)
 [![Sicherheitsprüfung](https://github.com/thisislennard/BlaulichtCMS/actions/workflows/security.yml/badge.svg)](https://github.com/thisislennard/BlaulichtCMS/actions/workflows/security.yml)
 [![Lizenz: GPL-3.0](https://img.shields.io/badge/Lizenz-GPL--3.0--or--later-blue)](LICENSE)
-![Version](https://img.shields.io/badge/Version-0.5.0-D21F3C)
+![Version](https://img.shields.io/badge/Version-0.6.0-D21F3C)
 ![TypeScript](https://img.shields.io/badge/TypeScript-7-3178C6?logo=typescript&logoColor=white)
 ![Node.js](https://img.shields.io/badge/Node.js-26-5FA04E?logo=nodedotjs&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-18-4169E1?logo=postgresql&logoColor=white)
@@ -22,7 +22,7 @@ Fotos per Link vom Handy sammeln · sichten · Beiträge schreiben · Fassung fr
 ![Dashboard von BlaulichtCMS](docs/bilder/dashboard.webp)
 
 > [!NOTE]
-> **Version 0.5.0 – noch vor dem ersten Produktivbetrieb.** Der Funktionsumfang ist vollständig und automatisiert
+> **Version 0.6.0 – noch vor dem ersten Produktivbetrieb.** Der Funktionsumfang ist vollständig und automatisiert
 > getestet; was mit echten Fremdsystemen geprüft ist und was noch nicht, steht unter
 > [Teststand und Grenzen](docs/technik.md#teststand-und-grenzen). Alle Screenshots stammen aus einer Testinstanz mit fiktiven Daten.
 
@@ -93,11 +93,11 @@ flowchart LR
   mit Warnschwelle; Frist und Höchstgröße der ZIP-Downloads einstellbar.
 - **Abgebildete Personen:** Markierungen für erkennbare Personen, Verletzte, Kennzeichen und sensible Inhalte;
   markierte Medien verlangen vor der Freigabe eine bewusste Datenschutz-Prüfung.
-- **Unkenntlich machen:** Bereiche verpixeln, weichzeichnen oder abdecken, Kennzeichen mit einem Klick, Bilder zuschneiden, Videos ohne Ton
+- **Unkenntlich machen:** Bereiche verpixeln, weichzeichnen oder abdecken, Kennzeichen mit einem Klick (Werkzeug „Kennzeichen anklicken“: Bereich in Kennzeichenform, Größe wählbar), Bilder zuschneiden, Videos ohne Ton
   veröffentlichen – das Original bleibt unverändert.
 - **Gesichter automatisch vorschlagen:** lokale Gesichtssuche (YuNet, MIT) schlägt Bereiche zum Unkenntlichmachen vor –
   einzeln oder alle übernehmen bzw. verwerfen; nichts wird ohne Bestätigung unkenntlich, offene Vorschläge verlangen
-  die Datenschutz-Prüfung bei der Freigabe. Keine Wiedererkennung, nur Rechtecke; Kennzeichen und Videos bleiben Handarbeit.
+  die Datenschutz-Prüfung bei der Freigabe. Keine Wiedererkennung, nur Rechtecke; Kennzeichen (ein Klick je Kennzeichen) und Videos bleiben Handarbeit.
 - **Herunterladen:** einzelne Dateien oder als ZIP (ausgewählte, markierte, ein Ordner oder sammlungsübergreifend) mit
   Ordnerstruktur und optional `metadaten.csv`; Originale nur mit dem Recht „Originale herunterladen“.
 
@@ -114,7 +114,7 @@ flowchart LR
 - **Quellen:** RSS- und Atom-Feeds als Anregung für eigene Beiträge.
 - **Kalender:** eigene Termine und Serien (täglich, wöchentlich, monatlich auch „jeden 1. Samstag“, jährlich; Ende nach
   Datum oder Anzahl, einzelne Termine ändern oder auslassen), Kategorien mit Farben, Ansichten Monat, Woche und Liste
-  (am Handy Liste), Filter nach Kategorie und Quelle; Zeitzone Europe/Berlin inklusive Sommer-/Winterzeit. Geplante
+  (am Handy Liste), Filter nach Kategorie und Quelle; in der eingestellten Zeitzone inklusive Sommer-/Winterzeit. Geplante
   Beiträge mit Status und Kanälen erscheinen im Kalender und lassen sich per Ziehen (oder Datum/Uhrzeit) verschieben –
   mit Hinweis und neuer Freigabe, wenn der Termin zur freigegebenen Fassung gehört; Fristen von Presseanfragen,
   überfällige hervorgehoben. iCal-Kalender (Outlook, Google, Wehr-Kalender) einlesen – mit Verbindungstest,
@@ -265,6 +265,9 @@ flowchart LR
 - **App für Handy und Computer:** installierbar (PWA) auf Android, iPhone/iPad und am Computer (Chrome, Edge, Safari am Mac – „Zum Dock hinzufügen“), mit eigenem Fenster, Push-Mitteilungen des Betriebssystems, Zähler ungelesener Benachrichtigungen am App-Symbol und Schnellzugriffen auf Neuer Beitrag, Medien sammeln und Freigaben; „App installieren“ im Benutzermenü.
 - **Schnell bedienbar:** Suche und Schnellaktionen mit `Strg` + `K`, vollständig per Tastatur nutzbar, heller und
   dunkler Modus, Design „Leitstand“ für draußen und nachts.
+- **Eine Zeitzone für alles:** Anzeigen und Eingaben (Listen, Verläufe, Fristen, Ablauf von Upload-Links, geplante
+  Veröffentlichung, Kalender, Begrüßung, Platzhalter `{datum}`, Zeitpläne) folgen der Zeitzone unter *Einstellungen →
+  Allgemein* (Standard Europe/Berlin), nicht der des Geräts; Sommer-/Winterzeit automatisch.
 - **Hilfe-Center:** 31 Kapitel mit Volltextsuche direkt in der App.
 
 ### Benutzer und Sicherheit
