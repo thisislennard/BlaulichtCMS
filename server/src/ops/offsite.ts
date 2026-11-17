@@ -4,6 +4,7 @@ import path from 'node:path';
 import { Transform, Writable } from 'node:stream';
 import { many, one, pool } from '../db/pool.js';
 import { classifyStatus, httpRequest, normalizeFingerprint, peekCertificate, transferAllowanceMs, type HttpRequest, type PeerCertificate } from '../lib/http.js';
+import { sha256File } from '../lib/crypto.js';
 import { StepError } from '../lib/errors.js';
 import { log } from '../lib/log.js';
 import { notify } from '../lib/notify.js';
@@ -389,7 +390,7 @@ export async function uploadBackup(backupId: string, attempt: { final: boolean }
   }
   try {
     const t = await targetFromConfig(c);
-    const sha = b.sha256 ?? crypto.createHash('sha256').update(fs.readFileSync(local)).digest('hex');
+    const sha = b.sha256 ?? (await sha256File(local));
     const part = `${b.file_name}.part`;
     await putFile(t, local, part);
     const back = await fetchFile(t, part, { expectedSize: fs.statSync(local).size });

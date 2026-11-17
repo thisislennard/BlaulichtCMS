@@ -11,7 +11,7 @@ import { notify } from './lib/notify.js';
 import { securityAlert } from './lib/security-alerts.js';
 import { getSettings } from './lib/settings.js';
 import { claimForSlots, completeJob, failJob, heartbeatJob, HEARTBEAT_MS, requeueExpiredLeases, WORKER_ID, type Job } from './jobs/queue.js';
-import { runBackup } from './ops/backup.js';
+import { dailyRunDue, localDayHour, runBackup } from './ops/backup.js';
 import { toStepError } from './lib/errors.js';
 import { enqueuePendingLocationStrips, processMedia, removeDerivedFiles, stripStoredOriginal } from './media/process.js';
 import { logPublicEvent } from './lib/public-security.js';
@@ -248,6 +248,8 @@ async function requeueQuarantine() {
 }
 
 const timers: Record<string, number> = {};
+/** Kalendertag des letzten Versuchs, eine Probe-Wiederherstellung nach Zeitplan einzuplanen */
+let drillTriedOn = '';
 function due(name: string, everyMs: number) {
   const now = Date.now();
   if (!timers[name] || now - timers[name] >= everyMs) {
@@ -306,19 +308,23 @@ async function maintenance(isLeader: boolean) {
   // großen Mails hält die übrigen Aufgaben nicht auf; zwei Durchgänge gleichzeitig verhindert die Sperre im Abruf.
   if (due('press-mailbox', 30_000)) void pollPressMailbox().catch((e) => log('warn', 'press', `Presse-Postfach: ${e.message}`));
   if (due('press-deadlines', 60_000)) await checkPressDeadlines().catch((e) => log('warn', 'press', `Fristen: ${e.message}`));
+  const tz = s['general.timezone'] || 'Europe/Berlin';
+  // Geplante Sicherung: ab der eingestellten Stunde einmal je Kalendertag – auch wenn es die Stunde wegen der
+  // Sommerzeit-Umstellung nicht gibt oder der Worker zu der Zeit nicht lief (#248)
   if (s['backup.enabled'] && due('backup-check', 10 * 60_000)) {
-    const now = new Date(new Date().toLocaleString('en-US', { timeZone: s['general.timezone'] }));
-    if (now.getHours() === s['backup.hour']) {
-      const today = await one(`SELECT 1 FROM backups WHERE trigger = 'schedule' AND started_at > now() - interval '20 hours'`);
-      if (!today) await runBackup('schedule', null).catch(() => {});
-    }
+    const last = await one<{ at: Date | null }>(`SELECT max(started_at) AS at FROM backups WHERE trigger = 'schedule'`);
+    if (dailyRunDue(new Date(), tz, s['backup.hour'], last?.at ?? null)) await runBackup('schedule', null).catch(() => {});
   }
-  // Probe-Wiederherstellung nach Zeitplan (#212): eine Stunde nach der Sicherungszeit, wöchentlich oder monatlich
+  // Probe-Wiederherstellung nach Zeitplan (#212): eine Stunde nach der Sicherungszeit (fehlt die Stunde wegen der
+  // Sommerzeit, bis zu drei Stunden später), wöchentlich oder monatlich; höchstens ein Versuch je Tag
   if (due('backup-drill', 10 * 60_000)) {
-    const now = new Date(new Date().toLocaleString('en-US', { timeZone: s['general.timezone'] }));
-    if (now.getHours() === (s['backup.hour'] + 1) % 24) {
+    const today = localDayHour(new Date(), tz).day;
+    if (drillTriedOn !== today && dailyRunDue(new Date(), tz, (s['backup.hour'] + 1) % 24, null, 3)) {
       const { drillDue, scheduleDrill } = await import('./ops/drill.js');
-      if (await drillDue().catch(() => false)) await scheduleDrill('schedule', null).catch((e) => log('warn', 'backup', `Probe-Wiederherstellung nicht eingeplant: ${(e as Error).message}`));
+      if (await drillDue().catch(() => false)) {
+        drillTriedOn = today;
+        await scheduleDrill('schedule', null).catch((e) => log('warn', 'backup', `Probe-Wiederherstellung nicht eingeplant: ${(e as Error).message}`));
+      }
     }
   }
 }

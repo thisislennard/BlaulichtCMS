@@ -4,6 +4,7 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 import pg from 'pg';
 import { config } from '../config.js';
+import { sha256File } from '../lib/crypto.js';
 import { backupDir, decryptBackup } from './backup.js';
 
 /**
@@ -55,7 +56,7 @@ export async function restoreBackupForRollback(file: string, say: (m: string) =>
     // Die Sicherung wurde erstellt, während ihr eigener Eintrag noch „läuft“ – nach dem Zurückspielen stünde sie
     // sonst dauerhaft als laufend da und sperrte weitere Sicherungen. Sie ist geprüft und vollständig.
     const size = fs.statSync(src).size;
-    const sha = crypto.createHash('sha256').update(fs.readFileSync(src)).digest('hex');
+    const sha = await sha256File(src);
     await client.query(`UPDATE backups SET status = 'ok', finished_at = now(), size_bytes = $2, sha256 = $3 WHERE file_name = $1 AND status = 'running'`, [path.basename(src), size, sha]);
     await client.query(`UPDATE backups SET status = 'failed', finished_at = now(), error = 'Abgebrochen (Rückweg eines Updates)' WHERE status = 'running'`);
   } catch (e) {

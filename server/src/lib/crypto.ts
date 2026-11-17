@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import fs from 'node:fs';
 import { config } from '../config.js';
 
 /**
@@ -61,6 +62,17 @@ export function decrypt(blob: string, aad: string, key: Buffer = masterKey()): s
 
 export function sha256Hex(data: string | Buffer): string {
   return crypto.createHash('sha256').update(data).digest('hex');
+}
+
+/** SHA-256 einer Datei, gestreamt (#248: Sicherungen können mehrere GB groß sein – nie ganz in den Speicher laden). */
+export function sha256File(file: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const h = crypto.createHash('sha256');
+    fs.createReadStream(file)
+      .on('data', (c) => h.update(c))
+      .on('end', () => resolve(h.digest('hex')))
+      .on('error', reject);
+  });
 }
 
 export function hmacHex(secret: string | Buffer, data: string | Buffer): string {

@@ -185,7 +185,7 @@ Standardwerte und der Lasttest unten. Abweichungen hier eintragen, damit Betrieb
 | Zwei-Faktor auf einem Gerät merken | an, **30 Tage** (1–90) | `security.mfa_remember_enabled`, `security.mfa_remember_days` | Code nur auf neuen Geräten bzw. einmal im Monat; nur nach einem Code aus der App, serverseitig widerrufbar |
 | Systemprotokoll / Audit | **30 Tage / 365 Tage** (Standard) | `retention.log_days`, `retention.audit_days` | Fehlersuche bzw. Nachvollziehbarkeit von Freigaben |
 | IP-Adressen ohne Benutzerkonto im Audit | **30 Tage** (1–365) | `privacy.upload_ip_retention_days` (Einstellungen → Redaktion) | Missbrauchsabwehr bei öffentlichen Uploads, Anmeldeversuchen mit unbekanntem Konto und Bridge-/FE2-Fehlversuchen; danach ersetzt der Worker die Adresse durch „entfernt“, der Eintrag selbst bleibt. Kein „0 = nie“: die Adresse wird immer gekürzt |
-| Datenbanksicherung im Volume | täglich 03:00, **14** behalten (Standard) | *Einstellungen → Sicherung* | schneller Rückweg nach Bedienfehlern |
+| Datenbanksicherung im Volume | täglich 03:00, **14** behalten (Standard); ab der eingestellten Stunde einmal je Kalendertag – fällt die Stunde aus (Umstellung auf Sommerzeit, Worker gestoppt), läuft sie beim nächsten Takt desselben Tages | *Einstellungen → Sicherung* | schneller Rückweg nach Bedienfehlern |
 | **Backup-Ziel außerhalb** | täglich `scripts/backup-volume.sh` (verschlüsselt) auf NAS/zweiten Host, **14 tägliche + 8 wöchentliche** Stände, vor Updates die letzten 3 (max. 90 Tage); einmal im Monat Kopie außer Haus, höchstens 3 Monate aufbewahrt; Sicherungsschlüssel getrennt im Tresor | Host-Cron | Schutz bei Ausfall des Datenträgers oder Hosts; gelöschte Daten nach spätestens ≈ 4 Monaten aus allen Sicherungen |
 | Wiederanlauf (RTO) | **4 Stunden** bis BlaulichtCMS wieder bereit ist | Betrieb | Restore aus Volume-Sicherung dauert Minuten; Rest ist Hardware/Netz |
 | Datenverlust (RPO) | **24 Stunden** (eine Nacht) | Backup-Takt | Uploads des Tages lassen sich notfalls neu einsammeln |
@@ -428,7 +428,7 @@ Jede Sicherung wird nach dem Schreiben automatisch geprüft:
 |---|---|---|
 | Volume-Sicherung (`backup-cron.sh`) | Prüfsumme, vollständiges Entschlüsseln (Echtheit, Vollständigkeit), tar-Inhaltsverzeichnis; Datenbank und Schlüsselmaterial enthalten | nach jeder täglichen Sicherung |
 | Volume-Sicherung, Wiederherstellungstest | echte Wiederherstellung in ein Wegwerf-Volume und Start einer Wegwerf-Instanz **ohne Netzwerk** (keine Mails, keine Veröffentlichungen); bestanden bei `/healthz` bereit und Selbsttest in Ordnung; danach wird alles entfernt | sonntags (`BLAULICHTCMS_RESTORE_TEST=woechentlich`, Standard), `taeglich` oder `aus` |
-| Datenbanksicherung im Volume | entschlüsseln (Auth-Tag) und `pg_restore --list` | nach jeder Sicherung; besteht sie die Prüfung nicht, gilt sie als fehlgeschlagen und wird entfernt |
+| Datenbanksicherung im Volume | entschlüsseln (Auth-Tag) und `pg_restore --list`; die SHA-256 entsteht schon beim Schreiben (gestreamt, auch bei mehreren GB) | nach jeder Sicherung; besteht sie die Prüfung nicht, gilt sie als fehlgeschlagen und wird entfernt. Scheitert das Schreiben (z. B. Datenträger voll), wird `pg_dump` sofort beendet – kein hängender Prozess mit offener Transaktion |
 
 Fehlschläge erscheinen in BlaulichtCMS als Benachrichtigung für alle mit „Sicherungen erstellen“ und im Systemprotokoll
 (Quelle `backup`); `backup-cron.sh` endet zusätzlich mit Fehlercode (Protokoll `/var/log/blaulichtcms-backup.log`, für eine
@@ -475,7 +475,7 @@ Schlüssel aus der Sicherung, Ende der Kette gleich dem laufenden Protokoll. Dan
 Verbindungen wirklich getrennt sind, `WITH (FORCE)` nur als letzter Schritt und nur für genau diese Probedatenbank; die
 laufende Datenbank und andere Verbindungen bleiben immer unberührt. Reste abgebrochener Proben entfernt die nächste
 Probe, sofern niemand mehr mit ihnen verbunden ist. Ergebnis in `restore_drills` (Oberfläche, Systemstatus),
-Fehlschlag als Benachrichtigung. Zeitplan: wöchentlich (Standard) oder monatlich eine Stunde nach der Sicherungszeit,
+Fehlschlag als Benachrichtigung. Zeitplan: wöchentlich (Standard) oder monatlich eine Stunde nach der Sicherungszeit (fehlt diese Stunde, z. B. bei der Umstellung auf Sommerzeit, bis zu drei Stunden später; höchstens ein Versuch je Tag),
 bevorzugt mit der neuesten Kopie außer Haus. Platzbedarf: etwa die Datenbankgröße; zu wenig freier Speicher bricht
 mit klarer Meldung ab. Eine Sicherung von vor einem Wechsel des Master-Schlüssels lässt die Audit-Kette nicht prüfen
 (Hinweis im Protokoll, kein Fehler).

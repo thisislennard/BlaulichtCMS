@@ -18,6 +18,8 @@ dieses Schlüssels gehört getrennt verwahrt (Passwortmanager oder Tresor): Ohne
 
 Unter **Einstellungen → Sicherung** erstellt BlaulichtCMS täglich eine verschlüsselte Datenbanksicherung unter `/data/backups`. Sie liegt im selben Volume – für den Ernstfall gehört eine Kopie **außerhalb** des Volumes: am einfachsten mit der **Sicherung außer Haus** (unten).
 
+Die Sicherung läuft ab der eingestellten Uhrzeit einmal am Tag. Fällt die Stunde aus – etwa 02:00 am Tag der Umstellung auf Sommerzeit oder weil der Dienst zu der Zeit nicht lief –, holt BlaulichtCMS sie im Lauf desselben Tages nach. Ist der Datenträger voll, schlägt die Sicherung mit einer Benachrichtigung fehl, ohne Prozesse oder Datenbankverbindungen hängen zu lassen.
+
 ## Sicherung außer Haus
 
 Unter **Einstellungen → Sicherung außer Haus** legt BlaulichtCMS jede Datenbanksicherung zusätzlich auf einem Ziel

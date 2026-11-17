@@ -1,12 +1,12 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import { spawn } from 'node:child_process';
-import { Transform } from 'node:stream';
+import { spawn, type ChildProcess, type ChildProcessByStdio } from 'node:child_process';
+import { Transform, type Readable, type Writable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { config } from '../config.js';
 import { many, one, pool } from '../db/pool.js';
-import { deriveKey } from '../lib/crypto.js';
+import { deriveKey, sha256File } from '../lib/crypto.js';
 import { getSettings } from '../lib/settings.js';
 import { log } from '../lib/log.js';
 import { notify } from '../lib/notify.js';
@@ -41,43 +41,39 @@ export async function runBackup(trigger: 'schedule' | 'manual', userId: string |
     [fileName, trigger, userId],
   );
   if (!row) throw new BackupRunningError();
+  let sha256 = '';
+  let dump: ChildProcessByStdio<null, Readable, Readable> | null = null;
   try {
-    const iv = crypto.randomBytes(12);
-    const cipher = crypto.createCipheriv('aes-256-gcm', deriveKey('backup'), iv);
-    const out = fs.createWriteStream(part, { mode: 0o600 });
-    out.write(Buffer.concat([MAGIC, iv]));
-    const dump = spawn(process.env.PG_DUMP ?? 'pg_dump', ['--format=custom', '--no-owner', '--no-privileges', `--dbname=${config.databaseUrl}`], { stdio: ['ignore', 'pipe', 'pipe'] });
+    dump = spawn(process.env.PG_DUMP ?? 'pg_dump', ['--format=custom', '--no-owner', '--no-privileges', `--dbname=${config.databaseUrl}`], { stdio: ['ignore', 'pipe', 'pipe'] });
     let stderr = '';
-    dump.stderr.on('data', (d) => (stderr += d.toString()));
+    dump.stderr.on('data', (d) => (stderr = (stderr + d.toString()).slice(-4000)));
     // Fehler beim Start (z. B. pg_dump nicht installiert) sofort abfangen – sonst unbehandelte Ablehnung
     let spawnError: Error | null = null;
     const exited = new Promise<number>((resolve) => {
-      dump.on('error', (e: NodeJS.ErrnoException) => {
+      dump!.on('error', (e: NodeJS.ErrnoException) => {
         spawnError = e.code === 'ENOENT' ? new Error('pg_dump ist nicht installiert oder nicht im PATH (PG_DUMP setzen).') : e;
         resolve(-1);
       });
-      dump.on('close', (code) => resolve(code ?? 1));
+      dump!.on('close', (code) => resolve(code ?? 1));
     });
-    const tap = new Transform({ transform: (chunk, _e, cb) => cb(null, chunk) });
-    dump.stdout.pipe(cipher).pipe(tap);
-    tap.pipe(out, { end: false });
-    await new Promise<void>((resolve, reject) => {
-      dump.on('error', () => resolve());
-      tap.on('end', () => resolve());
-      tap.on('error', reject);
-      cipher.on('error', reject);
-      out.on('error', reject);
-    });
+    let written: { sha256: string; bytes: number };
+    try {
+      written = await encryptToFile(dump, part, deriveKey('backup'));
+    } catch (e) {
+      // Startfehler verständlich melden statt „premature close“
+      await Promise.race([exited, new Promise((r) => setTimeout(r, 2_000))]);
+      throw spawnError ?? e;
+    }
     const code = await exited;
     if (spawnError) throw spawnError;
     if (code !== 0) throw new Error(`pg_dump beendet mit Code ${code}: ${stderr.slice(0, 500)}`);
-    const tag = cipher.getAuthTag();
-    await new Promise<void>((resolve, reject) => out.end(tag, () => resolve()).on('error', reject));
+    sha256 = written.sha256;
     fs.renameSync(part, target);
     // Wiederherstellbarkeit prüfen (#113): entschlüsseln (Auth-Tag) und Inhaltsverzeichnis mit pg_restore lesen
     const entries = await verifyBackup(target);
     const size = fs.statSync(target).size;
-    await pool.query(`UPDATE backups SET status = 'ok', finished_at = now(), size_bytes = $2, sha256 = $3 WHERE id = $1`, [row!.id, size, crypto.createHash('sha256').update(fs.readFileSync(target)).digest('hex')]);
+    // Prüfsumme wurde beim Schreiben gebildet (#248) – kein zweites Einlesen der ganzen Datei
+    await pool.query(`UPDATE backups SET status = 'ok', finished_at = now(), size_bytes = $2, sha256 = $3 WHERE id = $1`, [row!.id, size, sha256]);
     await prune();
     log('info', 'backup', `Sicherung erstellt und geprüft: ${fileName} (${Math.round(size / 1024)} KB, ${entries} Einträge)`);
     // Sicherung außer Haus (#212): Übertragung im Worker einplanen; ein Fehler dabei macht die Sicherung nicht ungültig
@@ -89,6 +85,8 @@ export async function runBackup(trigger: 'schedule' | 'manual', userId: string |
     }
     return { id: row!.id, fileName, size };
   } catch (e) {
+    // pg_dump nie hängen lassen (#248): ein blockierter Kindprozess hielte Verbindung, Snapshot und Sperren offen
+    if (dump) stopProcess(dump);
     fs.rmSync(part, { force: true });
     // Eine Sicherung, die die Prüfung nicht besteht, ist unbrauchbar – nicht als Rückweg stehen lassen
     fs.rmSync(target, { force: true });
@@ -96,6 +94,82 @@ export async function runBackup(trigger: 'schedule' | 'manual', userId: string |
     await pool.query(`UPDATE backups SET status = 'failed', finished_at = now(), error = $2 WHERE id = $1`, [row!.id, msg.slice(0, 1000)]);
     log('error', 'backup', `Sicherung fehlgeschlagen: ${msg}`);
     await notify({ kind: 'error', title: 'Sicherung fehlgeschlagen', body: msg.slice(0, 300), link: '/einstellungen#sicherung', permission: 'backup.manage' });
+    throw e;
+  }
+}
+
+/** Kalendertag (JJJJ-MM-TT) und Stunde (0–23) eines Zeitpunkts in der Zeitzone. */
+export function localDayHour(d: Date, timeZone: string): { day: string; hour: number } {
+  const p = Object.fromEntries(
+    new Intl.DateTimeFormat('en-US', { timeZone, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit' })
+      .formatToParts(d)
+      .map((x) => [x.type, x.value]),
+  );
+  return { day: `${p.year}-${p.month}-${p.day}`, hour: Number(p.hour) };
+}
+
+/**
+ * Tägliche Aufgabe (geplante Sicherung) fällig? Ab der eingestellten Stunde in Ortszeit, einmal je Kalendertag (#248).
+ * Mit „genau diese Stunde“ fiel sie aus, wenn es die Stunde nicht gibt (02:00 am Tag der Umstellung auf Sommerzeit)
+ * oder der Worker zu dieser Zeit nicht lief – jetzt läuft sie dann beim nächsten Takt desselben Tages.
+ * `windowHours` begrenzt das Nachholen auf so viele Stunden ab der eingestellten (Probe-Wiederherstellung: 3).
+ */
+export function dailyRunDue(now: Date, timeZone: string, hour: number, lastRun: Date | null, windowHours = 24): boolean {
+  const cur = localDayHour(now, timeZone);
+  if (cur.hour < hour || cur.hour >= hour + windowHours) return false;
+  return !lastRun || localDayHour(lastRun, timeZone).day !== cur.day;
+}
+
+/** Kindprozess beenden: erst SIGTERM, nach `graceMs` SIGKILL (wartet nicht). */
+export function stopProcess(p: ChildProcess, graceMs = 5_000) {
+  if (p.exitCode !== null || p.signalCode !== null || p.killed) return;
+  p.kill('SIGTERM');
+  const t = setTimeout(() => {
+    if (p.exitCode === null && p.signalCode === null) p.kill('SIGKILL');
+  }, graceMs);
+  t.unref();
+  p.once('exit', () => clearTimeout(t));
+}
+
+/**
+ * Ausgabe eines Kindprozesses (pg_dump) verschlüsselt in eine Datei schreiben: "BCBK1" | IV | Chiffrat | Auth-Tag.
+ * Alle Stufen hängen in einer `pipeline` (#248): Scheitert eine (typisch ENOSPC bei vollem Datenträger), werden alle
+ * zerstört und der Kindprozess beendet – mit `pipe()` blieb er sonst blockiert beim Schreiben hängen. Die SHA-256 der
+ * geschriebenen Datei entsteht dabei mit. `out` nur für Tests (Ziel, das einen Schreibfehler simuliert).
+ */
+export async function encryptToFile(proc: ChildProcessByStdio<null, Readable, Readable>, file: string, key: Buffer, out: Writable = fs.createWriteStream(file, { mode: 0o600 })): Promise<{ sha256: string; bytes: number }> {
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+  const hash = crypto.createHash('sha256');
+  let bytes = 0;
+  const count = (b: Buffer) => {
+    hash.update(b);
+    bytes += b.length;
+  };
+  const tap = new Transform({
+    transform(chunk: Buffer, _e, cb) {
+      count(chunk);
+      cb(null, chunk);
+    },
+  });
+  try {
+    const head = Buffer.concat([MAGIC, iv]);
+    count(head);
+    out.write(head);
+    await pipeline(proc.stdout, cipher, tap, out, { end: false });
+    const tag = cipher.getAuthTag();
+    count(tag);
+    await new Promise<void>((resolve, reject) => {
+      out.once('error', reject);
+      out.end(tag, () => resolve());
+    });
+    return { sha256: hash.digest('hex'), bytes };
+  } catch (e) {
+    stopProcess(proc);
+    proc.stdout.destroy();
+    out.destroy();
+    // Datei erst nach dem Schließen entfernen lassen (Windows: offene Datei lässt sich nicht löschen)
+    if (!(out as fs.WriteStream).closed) await new Promise<void>((r) => (out.once('close', () => r()), setTimeout(r, 2_000).unref()));
     throw e;
   }
 }
@@ -187,7 +261,7 @@ export async function reencryptBackup(file: string, oldBackupKey: Buffer, newBac
     await pipeline(fs.createReadStream(plain), cipher, out, { end: false });
     await new Promise<void>((resolve, reject) => out.end(cipher.getAuthTag(), () => resolve()).on('error', reject));
     fs.renameSync(part, file);
-    return crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
+    return await sha256File(file);
   } finally {
     fs.rmSync(plain, { force: true });
     fs.rmSync(part, { force: true });

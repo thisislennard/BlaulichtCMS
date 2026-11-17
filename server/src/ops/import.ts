@@ -1,10 +1,9 @@
-import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { z } from 'zod';
 import { one, pool, tx } from '../db/pool.js';
 import { audit, SYSTEM_ACTOR } from '../lib/audit.js';
-import { sha256Hex } from '../lib/crypto.js';
+import { sha256File, sha256Hex } from '../lib/crypto.js';
 import { enqueue } from '../jobs/queue.js';
 import { mediaPaths, ensureMediaDirs } from '../media/storage.js';
 import { createUploadLink } from '../routes/media.js';
@@ -80,13 +79,6 @@ export interface ImportReport {
   links: { total: number; stillValid: number; expiredOrRevoked: number; capped: number };
   problems: string[];
   created?: { collections: number; media: number; links: number; skippedExisting: number };
-}
-
-function sha256File(file: string): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const h = crypto.createHash('sha256');
-    fs.createReadStream(file).on('data', (c) => h.update(c)).on('end', () => resolve(h.digest('hex'))).on('error', reject);
-  });
 }
 
 /** Datei innerhalb des Importordners auflösen (keine Pfade nach außen). */

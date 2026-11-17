@@ -6,6 +6,7 @@ import pg from 'pg';
 import { config } from '../config.js';
 import { many, one, pool } from '../db/pool.js';
 import { chainKeyFrom, verifyAudit } from '../lib/audit-chain.js';
+import { sha256File } from '../lib/crypto.js';
 import { log } from '../lib/log.js';
 import { notify } from '../lib/notify.js';
 import { getSettings } from '../lib/settings.js';
@@ -170,7 +171,7 @@ export async function runDrill(drillId: string) {
     } else {
       file = path.join(backupDir(), d.file_name);
       if (!fs.existsSync(file)) throw new Error('Die lokale Sicherungsdatei ist nicht mehr vorhanden.');
-      sha = crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
+      sha = await sha256File(file);
       const known = await one<{ sha256: string | null }>(`SELECT sha256 FROM backups WHERE file_name = $1 AND status = 'ok'`, [d.file_name]);
       if (known?.sha256 && known.sha256 !== sha) throw new Error('Die lokale Sicherungsdatei wurde verändert (Prüfsumme).');
       checks.push({ step: 'Lokale Datei gelesen', ok: true });
