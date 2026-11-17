@@ -7,7 +7,7 @@ import { deriveKey } from '../lib/crypto.js';
 import { badRequest, notFound } from '../lib/errors.js';
 import { log } from '../lib/log.js';
 import { notify } from '../lib/notify.js';
-import { getSettings } from '../lib/settings.js';
+import { getSettings, privacyInfo, type Settings } from '../lib/settings.js';
 import { classifySmtpError } from '../warnings/mail.js';
 import { htmlToText } from './mime.js';
 import { pressMessageId, pressSender, sendPressMail } from './send.js';
@@ -44,6 +44,20 @@ export function contactFromToken(token: string): string | null {
   return expected.length === given.length && crypto.timingSafeEqual(expected, given) ? id : null;
 }
 
+/**
+ * Fußzeile jeder Pressemitteilung (#244): Hinweis auf den Verteiler, verantwortliche Stelle und Datenschutzhinweise
+ * (Informationspflicht nach Art. 14 DSGVO bei Adressen aus anderen Quellen, spätestens mit der ersten Mitteilung) und der
+ * persönliche Abmeldelink. `complete` = verantwortliche Stelle und Datenschutzerklärung sind eingetragen.
+ */
+export function releaseFooter(s: Settings, unsubscribeLink: string): { text: string; complete: boolean } {
+  const p = privacyInfo(s);
+  const lines = ['—', 'Sie erhalten diese Pressemitteilung als Kontakt unseres Presseverteilers.'];
+  if (p.controller) lines.push(`Verantwortlich: ${p.controller}`);
+  if (p.policy_url) lines.push(`Datenschutzhinweise (auch zur Herkunft Ihrer Adresse und zu Ihren Rechten): ${p.policy_url}`);
+  if (unsubscribeLink) lines.push(`Abmelden: ${unsubscribeLink}`);
+  return { text: lines.join('\n'), complete: !!p.controller && !!p.policy_url };
+}
+
 export async function publicBase(): Promise<string> {
   const s = await getSettings();
   return String(s['general.public_url'] || config.publicUrl || '').replace(/\/+$/, '');
@@ -53,8 +67,8 @@ export async function publicBase(): Promise<string> {
 
 /** Empfänger aus Listen: je Adresse einmal, ohne abgemeldete Kontakte. */
 export async function recipientsFor(listIds: string[], db: Queryable = pool) {
-  return many<{ id: string; email: string; name: string }>(
-    `SELECT DISTINCT ON (lower(c.email)) c.id, c.email, c.name FROM press_contacts c JOIN press_list_members m ON m.contact_id = c.id
+  return many<{ id: string; email: string; name: string; legal_basis: string | null }>(
+    `SELECT DISTINCT ON (lower(c.email)) c.id, c.email, c.name, c.legal_basis FROM press_contacts c JOIN press_list_members m ON m.contact_id = c.id
       WHERE m.list_id = ANY($1::uuid[]) AND c.unsubscribed_at IS NULL ORDER BY lower(c.email), c.created_at`,
     [listIds],
     db,
@@ -98,6 +112,7 @@ export async function deliverRelease(id: string): Promise<void> {
   await pool.query(`UPDATE press_release_recipients SET status = 'unknown', error = 'Versand wurde unterbrochen – Ergebnis unbekannt.' WHERE release_id = $1 AND status = 'sending'`, [id]);
   const base = await publicBase();
   const sender = await pressSender();
+  const settings = await getSettings(true);
   const pause = process.env.VITEST ? 0 : 300; // Mailserver nicht fluten
   for (;;) {
     const c = await one<any>(`UPDATE press_release_recipients SET status = 'sending' WHERE id = (SELECT id FROM press_release_recipients WHERE release_id = $1 AND status = 'queued' ORDER BY lower(email) LIMIT 1) RETURNING *`, [id]);
@@ -114,7 +129,7 @@ export async function deliverRelease(id: string): Promise<void> {
       await sendPressMail({
         to: [c.email],
         subject: r.subject,
-        text: `${r.body}\n\n—\nSie erhalten diese Pressemitteilung als Kontakt unseres Presseverteilers.${link ? `\nAbmelden: ${link}` : ''}`,
+        text: `${r.body}\n\n${releaseFooter(settings, link).text}`,
         messageId,
         headers: { ...(api ? { 'List-Unsubscribe': `<${api}>`, 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' } : {}), 'X-BlaulichtCMS-Pressemitteilung': id },
       });

@@ -1,4 +1,4 @@
-import { many, one, pool } from '../db/pool.js';
+import { many, one, pool, tx } from '../db/pool.js';
 import { notify } from '../lib/notify.js';
 import type { RetentionCategory } from '../lib/retention.js';
 import type { Settings } from '../lib/settings.js';
@@ -77,6 +77,39 @@ export async function pressRequestRetention(dryRun: boolean, s: Settings): Promi
     }
   }
   return [done, open];
+}
+
+/**
+ * Versandprotokolle der Pressemitteilungen (#244): `privacy.press_release_log_months` Monate nach dem Versand werden die
+ * Empfängerzeilen (Adresse, Name, Stand, Fehlermeldung des Mailservers) gelöscht; Zahl der Empfänger, gesendet und nicht
+ * erreicht bleiben an der Pressemitteilung. Laufende Versände bleiben unberührt.
+ */
+export async function pressReleaseLogRetention(dryRun: boolean, s: Settings): Promise<RetentionCategory> {
+  const months = whole(s['privacy.press_release_log_months']);
+  const cat: RetentionCategory = { key: 'press_release_logs', label: 'Versandprotokolle der Pressemitteilungen (Empfängeradressen, Stand, Fehlermeldungen – die Zähler bleiben)', days: months * 30, count: 0 };
+  if (!months) return cat;
+  const where = `r.status IN ('sent','partial') AND r.log_purged_at IS NULL AND COALESCE(r.sent_at, r.updated_at) < now() - make_interval(months => $1)`;
+  if (dryRun) {
+    const q = (await one<{ n: number; rows: number }>(`SELECT count(*)::int AS n, COALESCE(sum((SELECT count(*) FROM press_release_recipients x WHERE x.release_id = r.id)), 0)::int AS rows FROM press_releases r WHERE ${where}`, [months]))!;
+    cat.count = q.n;
+    cat.detail = `${q.rows} Empfängerzeile(n)`;
+    return cat;
+  }
+  const res = await tx(async (db) => {
+    const done = await many<{ id: string }>(
+      `UPDATE press_releases p SET log_purged_at = now(), recipients_total = c.total, recipients_sent = c.sent, recipients_failed = c.bad
+         FROM (SELECT r.id, count(x.id)::int AS total, count(x.id) FILTER (WHERE x.status = 'sent')::int AS sent, count(x.id) FILTER (WHERE x.status IN ('failed','unknown'))::int AS bad
+                 FROM (SELECT r.id FROM press_releases r WHERE ${where} ORDER BY r.sent_at LIMIT 500 FOR UPDATE) r LEFT JOIN press_release_recipients x ON x.release_id = r.id GROUP BY r.id) c
+        WHERE p.id = c.id RETURNING p.id`,
+      [months],
+      db,
+    );
+    const rows = done.length ? ((await db.query(`DELETE FROM press_release_recipients WHERE release_id = ANY($1::uuid[])`, [done.map((d) => d.id)])).rowCount ?? 0) : 0;
+    return { n: done.length, rows };
+  });
+  cat.count = res.n;
+  cat.detail = `${res.rows} Empfängerzeile(n)`;
+  return cat;
 }
 
 /** Geplante Löschung einer Anfrage für die Detailansicht – nur, wenn sie angekündigt ist (sonst null). */

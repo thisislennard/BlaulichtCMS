@@ -10,7 +10,7 @@ import { conflict, notFound } from './errors.js';
 import { log } from './log.js';
 import { getSettings, type Settings } from './settings.js';
 import { purgeOrphanRaws } from '../connections/receipts.js';
-import { pressRequestRetention } from '../press/retention.js';
+import { pressReleaseLogRetention, pressRequestRetention } from '../press/retention.js';
 
 /*
  * Löschfristen (#97, Art. 5 Abs. 1 lit. e, Art. 17, Art. 25 Abs. 2 DSGVO).
@@ -351,6 +351,8 @@ export async function runRetention(opts: { dryRun: boolean; actor?: Actor; setti
   // Presseanfragen samt Kontaktdaten, Verlauf, Mails und Anhängen (#204): erledigte nach der Erledigung, nicht erledigte
   // nach der letzten Aktivität mit Ankündigung (#243, press/retention.ts)
   report.categories.push(...(await pressRequestRetention(opts.dryRun, s)));
+  // Versandprotokolle der Pressemitteilungen (#244)
+  report.categories.push(await pressReleaseLogRetention(opts.dryRun, s));
   // Laufprotokolle der Automationen (Eingangsdaten, Schritte, Freigaben) – offene Läufe bleiben
   report.categories.push(
     await simpleCategory(opts.dryRun, {

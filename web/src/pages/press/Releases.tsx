@@ -22,6 +22,7 @@ interface ReleaseRow {
   recipients: number;
   sent: number;
   failed: number;
+  log_purged_at: string | null;
 }
 
 const STATUS: Record<string, { label: string; tone: Tone }> = {
@@ -148,7 +149,26 @@ function Protocol({ id, onClose, onChange }: { id: string; onClose: () => void; 
             </span>
           </div>
           <p className="m-0 whitespace-pre-wrap text-sm rounded-node border border-line p-3 max-h-60 overflow-auto">{r.body}</p>
-          {(r.status === 'draft' || (r.status === 'partial' && q.data.recipients.some((x: any) => x.status === 'queued'))) && (
+          <div>
+            <div className="text-meta text-fg-muted mb-1">Fußzeile jeder Mail</div>
+            <p className="m-0 whitespace-pre-wrap text-meta text-fg-muted rounded-node border border-line p-3">{q.data.footer}</p>
+          </div>
+          {r.status === 'draft' && !q.data.footerComplete && (
+            <Notice tone="warning" title="Verantwortliche Stelle oder Datenschutzerklärung fehlt">
+              Bei Adressen aus anderen Quellen (Import, Visitenkarte, Redaktionsliste) verlangt Art. 14 DSGVO spätestens mit der ersten Mitteilung Angaben zur verantwortlichen Stelle und einen Datenschutzhinweis. Bitte unter Einstellungen → Datenschutz eintragen – die Fußzeile übernimmt sie dann.
+            </Notice>
+          )}
+          {r.status === 'draft' && q.data.missingBasis > 0 && (
+            <Notice tone="warning" title={`${q.data.missingBasis} Empfänger ohne vermerkte Rechtsgrundlage`}>
+              Bitte im Presseverteiler ergänzen (Filter „Zu prüfen“). Gesendet wird trotzdem an alle angemeldeten Kontakte der Listen.
+            </Notice>
+          )}
+          {r.log_purged_at && (
+            <Notice title={`Versandprotokoll nach der Löschfrist entfernt (${fmtDateTime(r.log_purged_at)})`}>
+              {r.recipients_sent ?? 0} von {r.recipients_total ?? 0} Empfängern erreicht{r.recipients_failed ? `, ${r.recipients_failed} nicht erreicht` : ''}. Adressen und Fehlermeldungen sind gelöscht (Einstellungen → Datenschutz → Versandprotokolle).
+            </Notice>
+          )}
+          {(r.status === 'draft' || (r.status === 'partial' && !r.log_purged_at && q.data.recipients.some((x: any) => x.status === 'queued'))) && (
             <div>
               <Button variant="primary" icon="Send" onClick={send}>
                 {r.status === 'draft' ? 'Jetzt senden' : 'Rest senden'}

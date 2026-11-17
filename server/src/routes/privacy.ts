@@ -15,6 +15,7 @@ import { mediaPaths, removeMediaFiles } from '../media/storage.js';
 import { invalidateExportsFor, removeExportFiles } from '../media/exports.js';
 import { PRESS_CHANNEL_LABEL, PRESS_STATUS_LABEL } from '../press/common.js';
 import { UPLOAD_REF_RE } from './media.js';
+import { LEGAL_BASIS_LABEL, type LegalBasis } from '../press/contacts.js';
 
 /*
  * Auskunft und Löschung je Person (#141, #245, Art. 15, 16, 17, 12 Abs. 3 DSGVO) – Verwaltung → Datenschutzanfragen.
@@ -280,7 +281,7 @@ export async function privacySearch(term: string): Promise<PrivacyHit[]> {
 
   // Presseverteiler (#207): Kontakt samt Listen und Pressemitteilungen an diese Adresse
   for (const c of await many<any>(
-    `SELECT c.id, c.name, c.outlet, c.email, c.phone, c.note, c.origin, c.consent, c.unsubscribed_at, c.created_at,
+    `SELECT c.id, c.name, c.outlet, c.email, c.phone, c.note, c.origin, c.consent, c.legal_basis, to_char(c.consent_at, 'YYYY-MM-DD') AS consent_at, c.unsubscribed_at, c.created_at,
             (SELECT coalesce(array_agg(l.name ORDER BY l.name), '{}') FROM press_list_members lm JOIN press_lists l ON l.id = lm.list_id WHERE lm.contact_id = c.id) AS lists,
             (SELECT count(*)::int FROM press_release_recipients x WHERE lower(x.email) = lower(c.email) OR x.contact_id = c.id) AS mailings
        FROM press_contacts c WHERE c.name ILIKE $1 OR c.email ILIKE $1 OR c.phone ILIKE $1 OR c.note ILIKE $1 OR c.outlet ILIKE $1 ORDER BY c.created_at DESC LIMIT ${LIMIT}`,
@@ -291,7 +292,7 @@ export async function privacySearch(term: string): Promise<PrivacyHit[]> {
       id: c.id,
       title: `Presseverteiler: ${c.name || c.email}`,
       at: iso(c.created_at),
-      fields: { name: c.name, medium: c.outlet, email: c.email, telefon: c.phone, notiz: c.note || undefined, herkunft: c.origin, einwilligung: c.consent, listen: c.lists, abgemeldet: iso(c.unsubscribed_at), pressemitteilungen: c.mailings },
+      fields: { name: c.name, medium: c.outlet, email: c.email, telefon: c.phone, notiz: c.note || undefined, herkunft: c.origin, rechtsgrundlage: c.legal_basis ? LEGAL_BASIS_LABEL[c.legal_basis as LegalBasis] : undefined, einwilligung_am: c.consent_at ?? undefined, nachweis: c.consent || undefined, listen: c.lists, abgemeldet: iso(c.unsubscribed_at), pressemitteilungen: c.mailings },
       actions: ['delete'],
       note: 'Löschen entfernt den Kontakt und pseudonymisiert seine Adresse in den Versandprotokollen.',
       link: '/presse/verteiler',

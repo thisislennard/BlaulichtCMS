@@ -65,6 +65,16 @@ export const DEFAULT_SETTINGS = {
    * letzten Aktivität löschen – 30 Tage vorher angekündigt an „Presseanfragen bearbeiten“. 0 = nie.
    */
   'privacy.press_open_months': 12,
+  /**
+   * Presseverteiler (#244, press/retention.ts): Versandprotokolle (Empfängeradresse, Stand, Fehlermeldung) gesendeter
+   * Pressemitteilungen so viele Monate nach dem Versand löschen; die Zähler bleiben. 0 = nie.
+   */
+  'privacy.press_release_log_months': 12,
+  /**
+   * Wiedervorlage im Presseverteiler (#244, routes/press-distribution.ts): Kontakte ohne Versand, Änderung oder
+   * „Geprüft“ seit so vielen Monaten erscheinen als „zu prüfen“ – keine automatische Löschung. 0 = aus.
+   */
+  'privacy.press_contact_review_months': 24,
   'privacy.controller': '',
   'privacy.dpo_contact': '',
   'privacy.policy_url': '',
@@ -355,6 +365,8 @@ export const SETTING_RANGES: Record<string, [number, number]> = {
   'privacy.uploader_months': [0, 120],
   'privacy.press_request_months': [0, 120],
   'privacy.press_open_months': [0, 120],
+  'privacy.press_release_log_months': [0, 120],
+  'privacy.press_contact_review_months': [0, 120],
   'press.reminder_hours': [0, 72],
   'privacy.automation_run_days': [1, 3650],
   'automations.max_runs_per_minute': [1, 600],

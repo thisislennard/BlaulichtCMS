@@ -5,12 +5,19 @@ import { assertRecentAuth, requireAnyAuth, requireAuth } from '../auth/context.j
 import { audit } from '../lib/audit.js';
 import { csvCell } from '../lib/csv.js';
 import { badRequest, conflict, notFound } from '../lib/errors.js';
+import { getSettings } from '../lib/settings.js';
 import { EMAIL_RE } from '../press/common.js';
-import { contactFromToken, parseCsv, postAsRelease, startRelease } from '../press/releases.js';
+import { basisProblem, CONTACT_LAST_ACTIVITY, deletePressContact, LEGAL_BASES, LEGAL_BASIS_SHORT, legalBasisFromCsv, parseConsentDate, unsubscribeContact, type LegalBasis } from '../press/contacts.js';
+import { contactFromToken, parseCsv, postAsRelease, releaseFooter, recipientsFor, startRelease } from '../press/releases.js';
 
 /*
  * Presseverteiler und Pressemitteilungen (#207): Kontakte (mit Herkunft/Einwilligung und Abmeldung), Verteilerlisten,
  * Import/Export als CSV, Pressemitteilungen mit Versandprotokoll und die öffentliche Abmeldung.
+ *
+ * #244: Herkunft und Rechtsgrundlage sind beim Anlegen, Ändern und Importieren Pflicht (Einwilligung mit Datum); die
+ * Grundlage steht im Audit. Abgemeldete Kontakte werden auf einen Sperrvermerk reduziert (press/contacts.ts) und lassen
+ * sich nur mit neuer Einwilligung wieder anmelden. Wiedervorlage: Kontakte ohne Grundlage oder seit
+ * privacy.press_contact_review_months ohne Versand/Änderung erscheinen als „zu prüfen“ (keine stille Löschung).
  */
 
 const contactInput = z.object({
@@ -20,16 +27,34 @@ const contactInput = z.object({
   phone: z.string().trim().max(60).default(''),
   note: z.string().trim().max(2000).default(''),
   origin: z.string().trim().max(500).default(''),
+  /** Nachweis bzw. Bemerkung zur Grundlage (Freitext) */
   consent: z.string().trim().max(500).default(''),
+  legalBasis: z.enum(LEGAL_BASES).nullable().default(null),
+  /** Datum der Einwilligung (JJJJ-MM-TT oder TT.MM.JJJJ) */
+  consentAt: z.string().trim().max(20).nullable().default(null),
   listIds: z.array(z.uuid()).max(100).default([]),
 });
+
+/** Herkunft/Grundlage prüfen; liefert das Datum der Einwilligung normalisiert. */
+function checkBasis(v: z.infer<typeof contactInput>): string | null {
+  const consentAt = v.consentAt ? parseConsentDate(v.consentAt) : null;
+  if (v.consentAt && !consentAt) throw badRequest('Datum der Einwilligung ungültig (TT.MM.JJJJ, nicht in der Zukunft).');
+  const problem = basisProblem({ origin: v.origin, legalBasis: v.legalBasis, consentAt, consent: v.consent });
+  if (problem) throw badRequest(problem);
+  return v.legalBasis === 'consent' ? consentAt : null;
+}
+
+const basisLabel = (b: string | null) => (b ? (LEGAL_BASIS_SHORT[b as LegalBasis] ?? b) : 'nicht angegeben');
+
+const CONTACT_COLS = `c.id, c.name, c.outlet, c.email, c.phone, c.note, c.origin, c.consent, c.legal_basis, to_char(c.consent_at, 'YYYY-MM-DD') AS consent_at, c.unsubscribed_at, c.reviewed_at, c.created_at, c.updated_at`;
 
 async function setMemberships(db: any, contactId: string, listIds: string[]) {
   await db.query(`DELETE FROM press_list_members WHERE contact_id = $1 AND NOT (list_id = ANY($2::uuid[]))`, [contactId, listIds]);
   if (listIds.length) await db.query(`INSERT INTO press_list_members (list_id, contact_id) SELECT l, $1 FROM unnest($2::uuid[]) AS l WHERE EXISTS (SELECT 1 FROM press_lists WHERE id = l) ON CONFLICT DO NOTHING`, [contactId, listIds]);
 }
 
-const CSV_HEADER = ['name', 'medium', 'email', 'telefon', 'notiz', 'herkunft', 'einwilligung', 'listen', 'abgemeldet'];
+const CSV_HEADER = ['name', 'medium', 'email', 'telefon', 'notiz', 'herkunft', 'einwilligung', 'listen', 'abgemeldet', 'rechtsgrundlage', 'einwilligung_am'];
+const CSV_BASIS: Record<LegalBasis, string> = { public: 'oeffentlich', consent: 'einwilligung', other: 'andere' };
 
 export async function pressDistributionRoutes(app: FastifyInstance) {
   const contacts = requireAuth('press.contacts');
@@ -37,21 +62,31 @@ export async function pressDistributionRoutes(app: FastifyInstance) {
 
   /* ------------------------------------------------------------------ Kontakte */
 
-  app.get('/press/contacts', { preHandler: contacts }, async () =>
-    many<any>(
-      `SELECT c.id, c.name, c.outlet, c.email, c.phone, c.note, c.origin, c.consent, c.unsubscribed_at, c.created_at, c.updated_at,
+  app.get('/press/contacts', { preHandler: contacts }, async () => {
+    const months = Math.max(0, Math.floor(Number((await getSettings())['privacy.press_contact_review_months']) || 0));
+    return many<any>(
+      `SELECT ${CONTACT_COLS}, ${CONTACT_LAST_ACTIVITY} AS last_activity,
+              CASE WHEN c.unsubscribed_at IS NOT NULL THEN NULL
+                   WHEN c.legal_basis IS NULL THEN 'basis'
+                   WHEN $1 > 0 AND ${CONTACT_LAST_ACTIVITY} < now() - make_interval(months => $1) THEN 'inactive' END AS review,
               COALESCE(array_agg(m.list_id) FILTER (WHERE m.list_id IS NOT NULL), '{}') AS list_ids
          FROM press_contacts c LEFT JOIN press_list_members m ON m.contact_id = c.id GROUP BY c.id ORDER BY lower(c.outlet), lower(c.name), lower(c.email) LIMIT 5000`,
-    ),
-  );
+      [months],
+    );
+  });
 
   app.post('/press/contacts', { preHandler: contacts }, async (req) => {
     const v = contactInput.parse(req.body);
+    const consentAt = checkBasis(v);
     if (await one(`SELECT 1 FROM press_contacts WHERE lower(email) = lower($1)`, [v.email])) throw conflict('Diese E-Mail-Adresse steht schon im Verteiler.');
     const id = await tx(async (db) => {
-      const r = await one<any>(`INSERT INTO press_contacts (name, outlet, email, phone, note, origin, consent, created_by) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`, [v.name, v.outlet, v.email.toLowerCase(), v.phone, v.note, v.origin, v.consent, req.auth!.user?.id ?? null], db);
+      const r = await one<any>(
+        `INSERT INTO press_contacts (name, outlet, email, phone, note, origin, consent, legal_basis, consent_at, created_by) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id`,
+        [v.name, v.outlet, v.email.toLowerCase(), v.phone, v.note, v.origin, v.consent, v.legalBasis, consentAt, req.auth!.user?.id ?? null],
+        db,
+      );
       await setMemberships(db, r.id, v.listIds);
-      await audit(req.auth!.actor, 'press.contact_created', { type: 'press_contact', id: r.id, label: v.outlet || 'Kontakt' }, {}, 'ok', db);
+      await audit(req.auth!.actor, 'press.contact_created', { type: 'press_contact', id: r.id, label: v.outlet || 'Kontakt' }, { grundlage: basisLabel(v.legalBasis), einwilligung_am: consentAt ?? undefined }, 'ok', db);
       return r.id as string;
     });
     return { id };
@@ -60,34 +95,58 @@ export async function pressDistributionRoutes(app: FastifyInstance) {
   app.put('/press/contacts/:id', { preHandler: contacts }, async (req) => {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
     const v = contactInput.extend({ resubscribe: z.boolean().default(false) }).parse(req.body);
-    const cur = await one<any>(`SELECT * FROM press_contacts WHERE id = $1`, [id]);
+    const cur = await one<any>(`SELECT *, to_char(consent_at, 'YYYY-MM-DD') AS consent_day, to_char(unsubscribed_at AT TIME ZONE 'UTC', 'YYYY-MM-DD') AS unsub_day FROM press_contacts WHERE id = $1`, [id]);
     if (!cur) throw notFound('Kontakt nicht gefunden.');
+    // Abgemeldet: nur „Wieder anmelden“ mit neuer Einwilligung (Datum ab der Abmeldung) – sonst bleibt der Sperrvermerk
+    if (cur.unsubscribed_at && !v.resubscribe) throw conflict('Dieser Kontakt hat sich abgemeldet. Ändern lässt er sich nur zusammen mit „Wieder anmelden“ (mit neuer Einwilligung) – oder löschen.');
+    const consentAt = checkBasis(v);
+    if (v.resubscribe && cur.unsubscribed_at && (v.legalBasis !== 'consent' || !consentAt || consentAt < cur.unsub_day)) throw badRequest('Wieder anmelden nur mit einer Einwilligung, die nach der Abmeldung erteilt wurde (Rechtsgrundlage „Einwilligung“ mit Datum).');
     if (await one(`SELECT 1 FROM press_contacts WHERE lower(email) = lower($1) AND id <> $2`, [v.email, id])) throw conflict('Diese E-Mail-Adresse steht schon im Verteiler.');
-    if (v.resubscribe && cur.unsubscribed_at && !v.consent) throw badRequest('Wieder anmelden nur mit vermerkter Einwilligung (z. B. „erneut zugestimmt per Mail am …“).');
+    const basisChanged = cur.legal_basis !== v.legalBasis || (cur.consent_day ?? null) !== consentAt;
     await tx(async (db) => {
-      await db.query(`UPDATE press_contacts SET name = $2, outlet = $3, email = $4, phone = $5, note = $6, origin = $7, consent = $8, unsubscribed_at = CASE WHEN $9 THEN NULL ELSE unsubscribed_at END, updated_at = now() WHERE id = $1`, [id, v.name, v.outlet, v.email.toLowerCase(), v.phone, v.note, v.origin, v.consent, v.resubscribe]);
+      await db.query(
+        `UPDATE press_contacts SET name = $2, outlet = $3, email = $4, phone = $5, note = $6, origin = $7, consent = $8, legal_basis = $9, consent_at = $10,
+                unsubscribed_at = CASE WHEN $11 THEN NULL ELSE unsubscribed_at END, updated_at = now() WHERE id = $1`,
+        [id, v.name, v.outlet, v.email.toLowerCase(), v.phone, v.note, v.origin, v.consent, v.legalBasis, consentAt, v.resubscribe],
+      );
       await setMemberships(db, id, v.listIds);
-      await audit(req.auth!.actor, v.resubscribe && cur.unsubscribed_at ? 'press.contact_resubscribed' : 'press.contact_updated', { type: 'press_contact', id, label: v.outlet || 'Kontakt' }, {}, 'ok', db);
+      await audit(
+        req.auth!.actor,
+        v.resubscribe && cur.unsubscribed_at ? 'press.contact_resubscribed' : 'press.contact_updated',
+        { type: 'press_contact', id, label: v.outlet || 'Kontakt' },
+        basisChanged ? { grundlage: basisLabel(v.legalBasis), grundlage_vorher: basisLabel(cur.legal_basis), einwilligung_am: consentAt ?? undefined } : {},
+        'ok',
+        db,
+      );
     });
+    return { ok: true };
+  });
+
+  /** Wiedervorlage: Kontakt geprüft (Adresse stimmt, wird weiter gebraucht) – setzt die Frist zurück. */
+  app.post('/press/contacts/:id/reviewed', { preHandler: contacts }, async (req) => {
+    const { id } = z.object({ id: z.uuid() }).parse(req.params);
+    const c = await one<any>(`UPDATE press_contacts SET reviewed_at = now() WHERE id = $1 AND unsubscribed_at IS NULL RETURNING outlet, legal_basis`, [id]);
+    if (!c) throw notFound('Kontakt nicht gefunden oder abgemeldet.');
+    if (!c.legal_basis) throw badRequest('Bitte zuerst Herkunft und Rechtsgrundlage eintragen (Bearbeiten).');
+    await audit(req.auth!.actor, 'press.contact_reviewed', { type: 'press_contact', id, label: c.outlet || 'Kontakt' });
     return { ok: true };
   });
 
   app.delete('/press/contacts/:id', { preHandler: contacts }, async (req) => {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
-    const r = await one<any>(`DELETE FROM press_contacts WHERE id = $1 RETURNING outlet, email`, [id]);
+    // Adresse auch aus den Versandprotokollen entfernen – über Kontakt-ID und Adresse (#244)
+    const r = await deletePressContact(id);
     if (!r) throw notFound('Kontakt nicht gefunden.');
-    // Adresse auch aus den Versandprotokollen entfernen
-    await pool.query(`UPDATE press_release_recipients SET email = 'gelöscht:' || left(id::text, 8), name = '' WHERE lower(email) = lower($1)`, [r.email]);
     await audit(req.auth!.actor, 'press.contact_deleted', { type: 'press_contact', id, label: r.outlet || 'Kontakt' });
     return { ok: true };
   });
 
   app.get('/press/contacts/export', { preHandler: contacts }, async (req, reply) => {
     const rows = await many<any>(
-      `SELECT c.*, COALESCE(string_agg(l.name, '|' ORDER BY l.name), '') AS lists FROM press_contacts c
+      `SELECT c.*, to_char(c.consent_at, 'YYYY-MM-DD') AS consent_day, COALESCE(string_agg(l.name, '|' ORDER BY l.name), '') AS lists FROM press_contacts c
          LEFT JOIN press_list_members m ON m.contact_id = c.id LEFT JOIN press_lists l ON l.id = m.list_id GROUP BY c.id ORDER BY lower(c.email)`,
     );
-    const lines = [CSV_HEADER.join(';'), ...rows.map((c) => [c.name, c.outlet, c.email, c.phone, c.note, c.origin, c.consent, c.lists, c.unsubscribed_at ? new Date(c.unsubscribed_at).toISOString() : ''].map(csvCell).join(';'))];
+    const lines = [CSV_HEADER.join(';'), ...rows.map((c) => [c.name, c.outlet, c.email, c.phone, c.note, c.origin, c.consent, c.lists, c.unsubscribed_at ? new Date(c.unsubscribed_at).toISOString() : '', c.legal_basis ? CSV_BASIS[c.legal_basis as LegalBasis] : '', c.consent_day ?? ''].map(csvCell).join(';'))];
     await audit(req.auth!.actor, 'press.contacts_exported', { type: 'press_contact', label: 'Presseverteiler' }, { anzahl: rows.length });
     reply.header('content-type', 'text/csv; charset=utf-8').header('content-disposition', `attachment; filename="presseverteiler-${new Date().toISOString().slice(0, 10)}.csv"`).header('cache-control', 'no-store');
     return '﻿' + lines.join('\r\n') + '\r\n';
@@ -95,47 +154,79 @@ export async function pressDistributionRoutes(app: FastifyInstance) {
 
   /**
    * Import (CSV mit Kopfzeile wie beim Export). Vorhandene Adressen werden ergänzt, nicht verdoppelt; abgemeldete
-   * Kontakte bleiben abgemeldet. Listen werden über ihren Namen zugeordnet (mit | getrennt) und bei Bedarf angelegt.
+   * Kontakte bleiben abgemeldet und unverändert (Sperrvermerk). Listen werden über ihren Namen zugeordnet (mit | getrennt)
+   * und bei Bedarf angelegt. Herkunft und Rechtsgrundlage sind Pflicht – je Zeile oder als Vorgabe für Zeilen ohne
+   * Angabe (#244); eine Rechtsgrundlage aus der Datei ersetzt die vorhandene, die Vorgabe füllt nur fehlende.
    */
   app.post('/press/contacts/import', { preHandler: contacts, bodyLimit: 5 * 1024 * 1024 }, async (req) => {
-    const b = z.object({ csv: z.string().min(1).max(4_000_000), dryRun: z.boolean().default(false), origin: z.string().trim().max(500).default('') }).parse(req.body);
+    const b = z
+      .object({
+        csv: z.string().min(1).max(4_000_000),
+        dryRun: z.boolean().default(false),
+        origin: z.string().trim().max(500).default(''),
+        legalBasis: z.enum(LEGAL_BASES).nullable().default(null),
+        consentAt: z.string().trim().max(20).nullable().default(null),
+      })
+      .parse(req.body);
+    const defaultConsentAt = b.consentAt ? parseConsentDate(b.consentAt) : null;
+    if (b.consentAt && !defaultConsentAt) throw badRequest('Datum der Einwilligung ungültig (TT.MM.JJJJ, nicht in der Zukunft).');
     const rows = parseCsv(b.csv);
     if (rows.length < 2) throw badRequest('Die Datei enthält keine Kontakte (erste Zeile: Spaltennamen).');
-    const head = rows[0].map((h) => h.trim().toLowerCase().replace(/^e-?mail$/, 'email').replace(/^(telefonnummer|phone)$/, 'telefon').replace(/^(redaktion|outlet)$/, 'medium'));
+    const head = rows[0].map((h) => h.trim().toLowerCase().replace(/^e-?mail$/, 'email').replace(/^(telefonnummer|phone)$/, 'telefon').replace(/^(redaktion|outlet)$/, 'medium').replace(/^(grundlage|legal_basis)$/, 'rechtsgrundlage'));
     const col = (name: string) => head.indexOf(name);
     if (col('email') < 0) throw badRequest('Spalte „email“ fehlt.');
     const problems: string[] = [];
-    const items: { name: string; outlet: string; email: string; phone: string; note: string; origin: string; consent: string; lists: string[] }[] = [];
+    type Item = { name: string; outlet: string; email: string; phone: string; note: string; origin: string; consent: string; basis: LegalBasis; basisFromRow: boolean; consentAt: string | null; lists: string[] };
+    const items: Item[] = [];
     const seen = new Set<string>();
     rows.slice(1).forEach((r, i) => {
       const get = (n: string) => (col(n) >= 0 ? String(r[col(n)] ?? '').trim() : '');
       const email = get('email').toLowerCase();
       if (!EMAIL_RE.test(email)) return void problems.push(`Zeile ${i + 2}: keine gültige E-Mail-Adresse`);
       if (seen.has(email)) return void problems.push(`Zeile ${i + 2}: ${email} doppelt`);
+      const rowBasisRaw = get('rechtsgrundlage');
+      const rowBasis = legalBasisFromCsv(rowBasisRaw);
+      if (rowBasisRaw && !rowBasis) return void problems.push(`Zeile ${i + 2}: Rechtsgrundlage „${rowBasisRaw.slice(0, 40)}“ unbekannt (oeffentlich, einwilligung, andere)`);
+      const rowDateRaw = get('einwilligung_am');
+      const rowDate = rowDateRaw ? parseConsentDate(rowDateRaw) : null;
+      if (rowDateRaw && !rowDate) return void problems.push(`Zeile ${i + 2}: Datum der Einwilligung ungültig`);
+      const basis = rowBasis ?? b.legalBasis;
+      // Datum der Einwilligung: aus der Zeile, sonst die Vorgabe (nur bei Einwilligung von Belang)
+      const consentAt = basis === 'consent' ? (rowDate ?? defaultConsentAt) : null;
+      const origin = (get('herkunft') || b.origin).slice(0, 500);
+      const consent = get('einwilligung').slice(0, 500);
+      const problem = basisProblem({ origin, legalBasis: basis, consentAt, consent });
+      if (problem || !basis) return void problems.push(`Zeile ${i + 2}: ${(problem ?? '').replace(/ \(z\. B\.[^)]*\)/, '')}`);
       seen.add(email);
-      items.push({ name: get('name').slice(0, 200), outlet: get('medium').slice(0, 200), email, phone: get('telefon').slice(0, 60), note: get('notiz').slice(0, 2000), origin: (get('herkunft') || b.origin).slice(0, 500), consent: get('einwilligung').slice(0, 500), lists: get('listen').split('|').map((x) => x.trim()).filter(Boolean).slice(0, 20) });
+      items.push({ name: get('name').slice(0, 200), outlet: get('medium').slice(0, 200), email, phone: get('telefon').slice(0, 60), note: get('notiz').slice(0, 2000), origin, consent, basis, basisFromRow: !!rowBasis, consentAt, lists: get('listen').split('|').map((x) => x.trim()).filter(Boolean).slice(0, 20) });
     });
     if (items.length > 5000) throw badRequest('Höchstens 5 000 Kontakte je Import.');
-    const existing = new Set((await many<{ e: string }>(`SELECT lower(email) AS e FROM press_contacts WHERE lower(email) = ANY($1::text[])`, [items.map((x) => x.email)])).map((x) => x.e));
-    const summary = { neu: items.filter((x) => !existing.has(x.email)).length, aktualisiert: items.filter((x) => existing.has(x.email)).length, fehler: problems.length };
+    const existing = new Map((await many<{ e: string; unsub: boolean }>(`SELECT lower(email) AS e, unsubscribed_at IS NOT NULL AS unsub FROM press_contacts WHERE lower(email) = ANY($1::text[])`, [items.map((x) => x.email)])).map((x) => [x.e, x.unsub]));
+    const summary = { neu: items.filter((x) => !existing.has(x.email)).length, aktualisiert: items.filter((x) => existing.get(x.email) === false).length, abgemeldet: items.filter((x) => existing.get(x.email) === true).length, fehler: problems.length };
     if (b.dryRun) return { ...summary, problems: problems.slice(0, 50) };
     await tx(async (db) => {
       for (const it of items) {
+        // abgemeldete Kontakte: nichts ändern, keine Listen (Sperrvermerk)
         const c = await one<any>(
-          `INSERT INTO press_contacts (name, outlet, email, phone, note, origin, consent, created_by) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+          `INSERT INTO press_contacts (name, outlet, email, phone, note, origin, consent, legal_basis, consent_at, created_by) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
            ON CONFLICT (lower(email)) DO UPDATE SET name = COALESCE(NULLIF(EXCLUDED.name, ''), press_contacts.name), outlet = COALESCE(NULLIF(EXCLUDED.outlet, ''), press_contacts.outlet),
              phone = COALESCE(NULLIF(EXCLUDED.phone, ''), press_contacts.phone), note = COALESCE(NULLIF(EXCLUDED.note, ''), press_contacts.note),
-             origin = COALESCE(NULLIF(EXCLUDED.origin, ''), press_contacts.origin), consent = COALESCE(NULLIF(EXCLUDED.consent, ''), press_contacts.consent), updated_at = now()
+             origin = COALESCE(NULLIF(EXCLUDED.origin, ''), press_contacts.origin), consent = COALESCE(NULLIF(EXCLUDED.consent, ''), press_contacts.consent),
+             legal_basis = CASE WHEN $11 OR press_contacts.legal_basis IS NULL THEN EXCLUDED.legal_basis ELSE press_contacts.legal_basis END,
+             consent_at = CASE WHEN $11 OR press_contacts.legal_basis IS NULL THEN EXCLUDED.consent_at ELSE press_contacts.consent_at END,
+             updated_at = now()
+           WHERE press_contacts.unsubscribed_at IS NULL
            RETURNING id`,
-          [it.name, it.outlet, it.email, it.phone, it.note, it.origin, it.consent, req.auth!.user?.id ?? null],
+          [it.name, it.outlet, it.email, it.phone, it.note, it.origin, it.consent, it.basis, it.consentAt, req.auth!.user?.id ?? null, it.basisFromRow],
           db,
         );
+        if (!c) continue;
         for (const name of it.lists) {
           const l = await one<any>(`INSERT INTO press_lists (name) VALUES ($1) ON CONFLICT (lower(name)) DO UPDATE SET name = press_lists.name RETURNING id`, [name.slice(0, 120)], db);
           await db.query(`INSERT INTO press_list_members (list_id, contact_id) VALUES ($1,$2) ON CONFLICT DO NOTHING`, [l.id, c.id]);
         }
       }
-      await audit(req.auth!.actor, 'press.contacts_imported', { type: 'press_contact', label: 'Presseverteiler' }, summary, 'ok', db);
+      await audit(req.auth!.actor, 'press.contacts_imported', { type: 'press_contact', label: 'Presseverteiler' }, { ...summary, grundlage_vorgabe: b.legalBasis ? basisLabel(b.legalBasis) : undefined }, 'ok', db);
     });
     return { ...summary, problems: problems.slice(0, 50) };
   });
@@ -178,9 +269,10 @@ export async function pressDistributionRoutes(app: FastifyInstance) {
   app.get('/press/releases', { preHandler: releases }, async () =>
     many<any>(
       `SELECT r.id, r.subject, r.status, r.source, r.list_ids, r.post_id, r.created_at, r.sent_at, u.name AS sent_by_name,
-              (SELECT count(*)::int FROM press_release_recipients x WHERE x.release_id = r.id) AS recipients,
-              (SELECT count(*)::int FROM press_release_recipients x WHERE x.release_id = r.id AND x.status = 'sent') AS sent,
-              (SELECT count(*)::int FROM press_release_recipients x WHERE x.release_id = r.id AND x.status IN ('failed','unknown')) AS failed
+              COALESCE(r.recipients_total, (SELECT count(*)::int FROM press_release_recipients x WHERE x.release_id = r.id)) AS recipients,
+              COALESCE(r.recipients_sent, (SELECT count(*)::int FROM press_release_recipients x WHERE x.release_id = r.id AND x.status = 'sent')) AS sent,
+              COALESCE(r.recipients_failed, (SELECT count(*)::int FROM press_release_recipients x WHERE x.release_id = r.id AND x.status IN ('failed','unknown'))) AS failed,
+              r.log_purged_at
          FROM press_releases r LEFT JOIN users u ON u.id = r.sent_by ORDER BY r.created_at DESC LIMIT 200`,
     ),
   );
@@ -190,7 +282,10 @@ export async function pressDistributionRoutes(app: FastifyInstance) {
     const r = await one<any>(`SELECT r.*, u.name AS sent_by_name, p.title AS post_title FROM press_releases r LEFT JOIN users u ON u.id = r.sent_by LEFT JOIN posts p ON p.id = r.post_id WHERE r.id = $1`, [id]);
     if (!r) throw notFound('Pressemitteilung nicht gefunden.');
     const recipients = await many<any>(`SELECT id, email, name, status, error, sent_at FROM press_release_recipients WHERE release_id = $1 ORDER BY lower(email)`, [id]);
-    return { release: r, recipients };
+    // Fußzeile jeder Mail (Abmeldelink je Empfänger) und – vor dem Versand – Empfänger ohne vermerkte Rechtsgrundlage (#244)
+    const footer = releaseFooter(await getSettings(), '‹persönlicher Abmeldelink›');
+    const missingBasis = r.status === 'draft' && r.list_ids.length ? (await recipientsFor(r.list_ids)).filter((c) => !c.legal_basis).length : 0;
+    return { release: r, recipients, footer: footer.text, footerComplete: footer.complete, missingBasis };
   });
 
   const releaseInput = z.object({ subject: z.string().trim().min(2).max(300), body: z.string().trim().max(50_000).default(''), listIds: z.array(z.uuid()).max(20).default([]), postId: z.uuid().nullable().default(null) });
@@ -229,9 +324,10 @@ export async function pressDistributionRoutes(app: FastifyInstance) {
   /** Versenden (bzw. noch nicht versuchte Empfänger nachholen) – mit frischer Passwortbestätigung. */
   app.post('/press/releases/:id/send', { preHandler: releases, config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, async (req) => {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
-    const r = await one<any>(`SELECT status, body FROM press_releases WHERE id = $1`, [id]);
+    const r = await one<any>(`SELECT status, body, log_purged_at FROM press_releases WHERE id = $1`, [id]);
     if (!r) throw notFound('Pressemitteilung nicht gefunden.');
     if (r.status === 'sending') throw conflict('Der Versand läuft bereits.');
+    if (r.log_purged_at) throw conflict('Das Versandprotokoll dieser Pressemitteilung ist nach der Löschfrist gelöscht – bitte als neue Pressemitteilung senden.');
     if (r.status === 'draft' && !r.body.trim()) throw badRequest('Bitte einen Text eingeben.');
     assertRecentAuth(req);
     const open = await startRelease(id, req.auth!.actor, req.auth!.user?.id ?? null);
@@ -256,9 +352,10 @@ export async function pressDistributionRoutes(app: FastifyInstance) {
   /** Abmelden – auch als One-Click nach RFC 8058 (POST mit „List-Unsubscribe=One-Click“ aus dem Mailprogramm). */
   app.post('/public/press/unsubscribe/:token', { config: publicLimit }, async (req) => {
     const id = contactFromToken(tokenParam.parse(req.params).token);
-    const c = id ? await one<any>(`UPDATE press_contacts SET unsubscribed_at = COALESCE(unsubscribed_at, now()), updated_at = now() WHERE id = $1 RETURNING id, outlet`, [id]) : null;
+    // Sperrvermerk: nur Adresse, Zeitpunkt und Rechtsgrundlage bleiben (#244)
+    const c = id ? await tx(async (db) => unsubscribeContact(id, db)) : null;
     if (!c) throw notFound('Dieser Abmeldelink ist ungültig oder der Kontakt wurde bereits gelöscht.');
-    await audit({ id: null, name: 'Abmeldelink', type: 'system', ip: req.ip }, 'press.contact_unsubscribed', { type: 'press_contact', id: c.id, label: c.outlet || 'Kontakt' });
+    await audit({ id: null, name: 'Abmeldelink', type: 'system', ip: req.ip }, 'press.contact_unsubscribed', { type: 'press_contact', id: c.id, label: 'Kontakt' });
     return { ok: true };
   });
 }

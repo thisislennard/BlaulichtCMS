@@ -209,9 +209,11 @@ flowchart LR
 - **Antworten aus BlaulichtCMS:** Antwort-Editor in der Anfrage, Versand über SMTP oder Microsoft 365 mit richtigen
   Kopfzeilen für den Mail-Verlauf, Textbausteine mit Platzhaltern, optionale Freigabe durch eine zweite Person
   (Standard aus), Status automatisch „beantwortet“, nie automatischer Doppelversand.
-- **Presseverteiler und Pressemitteilungen:** Kontakte von Redaktionen mit Herkunft/Einwilligung, Verteilerlisten,
-  CSV-Import/-Export; Pressemitteilung frei oder aus einem Beitrag an Listen senden – jede Mail einzeln adressiert, mit
-  Abmeldelink (auch Ein-Klick), Versandprotokoll je Empfänger; Workflow-Ausgang „Pressemitteilung an Verteiler“
+- **Presseverteiler und Pressemitteilungen:** Kontakte von Redaktionen mit Pflichtangaben zu Herkunft und
+  Rechtsgrundlage (Einwilligung mit Datum), Verteilerlisten, CSV-Import/-Export, Wiedervorlage „zu prüfen“, nach der
+  Abmeldung nur Sperrvermerk; Pressemitteilung frei oder aus einem Beitrag an Listen senden – jede Mail einzeln
+  adressiert, Fußzeile mit verantwortlicher Stelle, Datenschutzhinweis und Abmeldelink (auch Ein-Klick),
+  Versandprotokoll je Empfänger mit Löschfrist; Workflow-Ausgang „Pressemitteilung an Verteiler“
   (Standard Entwurf, Direktversand nur mit den bestehenden Absicherungen).
 
 ### Verbindungen
