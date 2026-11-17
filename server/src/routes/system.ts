@@ -1,5 +1,6 @@
 import { de1 } from '../lib/num.js';
 import fs from 'node:fs';
+import net from 'node:net';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { config } from '../config.js';
@@ -272,6 +273,13 @@ export async function systemRoutes(app: FastifyInstance) {
       else if (Array.isArray(def)) patch[k] = Array.isArray(v) ? v.map(String).slice(0, 50) : [];
       else patch[k] = String(v ?? '').slice(0, SETTING_TEXT_MAX[k] ?? 200);
       if (k === 'general.instance_name' && !String(patch[k]).trim()) throw badRequest('Der Instanzname darf nicht leer sein.');
+    }
+    // Interne Ziele (SSRF-Freigabe für Feeds, Kalender, Update-Prüfung, IMAP): Hostnamen, *.domain oder IP-Adressen
+    if (patch['security.allowed_private_hosts'] != null) {
+      const hosts = [...new Set((patch['security.allowed_private_hosts'] as string[]).map((h) => h.trim().toLowerCase().replace(/\.$/, '')).filter(Boolean))];
+      const bad = hosts.find((h) => !/^(\*\.)?[a-z0-9-]+(\.[a-z0-9-]+)*$/.test(h) && !net.isIP(h));
+      if (bad) throw badRequest(`Interne Ziele: „${bad.slice(0, 80)}“ ist kein Hostname – erlaubt sind z. B. mail.intern.example, *.intern.example oder eine IP-Adresse.`);
+      patch['security.allowed_private_hosts'] = hosts;
     }
     // Sicherheitseinstellungen (2FA-Pflicht, Sperre, Passwortlänge, interne Ziele) nur mit frischer Bestätigung (#109)
     // (nur bei tatsächlicher Änderung – die Oberfläche speichert ganze Abschnitte)

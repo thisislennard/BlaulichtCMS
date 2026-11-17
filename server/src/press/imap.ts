@@ -32,7 +32,7 @@ export interface ImapOptions {
 export const IMAP_PORTS = [143, 993];
 
 /** Ausnahmen (interne Adresse, anderer Port) nur nach ausdrücklicher Freigabe durch die Administration. */
-const FREIGABE = 'Interne Mailserver und andere Ports muss die Administration ausdrücklich freigeben (Einstellung „security.allowed_private_hosts“, Hilfe → Presseanfragen).';
+const FREIGABE = 'Interne Mailserver und andere Ports muss die Administration ausdrücklich freigeben (Einstellungen → Sicherheit → „Interne Ziele freigeben“).';
 
 /** Einheitliche Meldung für alles vor der Begrüßung des Servers (keine Rückschlüsse auf offene Ports, #234). */
 const unreachable = (host: string, port: number) => `Keine IMAP-Verbindung zu ${host}:${port} – Servername, Port, Verschlüsselung und Zertifikat prüfen (Einzelheiten im Systemprotokoll).`;
@@ -314,6 +314,7 @@ export class ImapClient {
     } catch (e) {
       if (e instanceof ImapError && e.kind === 'config') throw e;
       this.socket?.destroy();
+      this.closed ??= new ImapError('Verbindung abgebrochen.', 'connect');
       log('warn', 'press', `IMAP: keine Verbindung zu ${host}:${port}`, { fehler: String((e as Error)?.message ?? e).slice(0, 200) });
       throw new ImapError(unreachable(host, port), 'connect');
     }

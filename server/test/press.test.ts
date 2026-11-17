@@ -393,8 +393,11 @@ describe('Presse-Postfach (#205)', () => {
     } finally {
       await other.close();
     }
-    // Interne Adresse ohne Freigabe gesperrt (wie lib/http.ts); andere Ports als 143/993 nur für freigegebene Hosts
-    await setSettings({ 'security.allowed_private_hosts': [] } as any);
+    // Interne Adresse ohne Freigabe gesperrt (wie lib/http.ts); andere Ports als 143/993 nur für freigegebene Hosts.
+    // Freigabe unter Einstellungen → Sicherheit: nur Hostnamen, *.domain oder IP-Adressen, bereinigt gespeichert
+    expect((await a2.patch('/settings', { 'security.allowed_private_hosts': ['mail intern'] })).status).toBe(400);
+    expect((await a2.patch('/settings', { 'security.allowed_private_hosts': [' Mail.Intern.Example. ', '', '*.intern.example', '10.0.0.5', 'mail.intern.example'] })).status).toBe(200);
+    expect((await one<any>(`SELECT value FROM settings WHERE key = 'security.allowed_private_hosts'`))!.value).toEqual(['mail.intern.example', '*.intern.example', '10.0.0.5']);
     try {
       const blocked = await a2.post('/press/mailbox/test', { ...cfg(), port: 993, password: 'Geheim-123' });
       expect(blocked.json).toMatchObject({ ok: false, error: expect.stringContaining('internes Netz') });

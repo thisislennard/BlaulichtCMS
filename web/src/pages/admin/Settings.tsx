@@ -697,6 +697,21 @@ export default function Settings() {
                     ro={ro("security.password_min_length")}
                   />
                 </FieldGrid>
+                <FieldWrap
+                  label="Interne Ziele freigeben"
+                  htmlFor="s-private-hosts"
+                  help="Ein Host je Zeile, z. B. mail.intern.example, *.intern.example oder eine IP-Adresse. Abrufe aus BlaulichtCMS (Feeds, Kalender-Abos, Update-Prüfung, IMAP des Presse-Postfachs) gehen sonst nur an öffentliche Adressen; der IMAP-Abruf darf zu diesen Hosts auch andere Ports als 993/143 nutzen. Nur eintragen, was wirklich intern erreichbar sein muss."
+                >
+                  <Textarea
+                    id="s-private-hosts"
+                    rows={3}
+                    spellCheck={false}
+                    autoComplete="off"
+                    disabled={ro("security.allowed_private_hosts")}
+                    value={((v["security.allowed_private_hosts"] as string[] | undefined) ?? []).join("\n")}
+                    onChange={(e) => set("security.allowed_private_hosts", e.target.value.split("\n"))}
+                  />
+                </FieldWrap>
                 <div className="flex flex-col gap-2">
                   <h3 className="m-0 text-sm font-semibold">Angemeldet bleiben und gemerkte Geräte</h3>
                   <p className="m-0 text-sm text-fg-muted">

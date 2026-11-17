@@ -33,4 +33,4 @@ Unzulässige Steuerzeichen in Titeln und Texten (etwa ein NUL-Zeichen) entfallen
 
 ## Sicherheit
 
-Feeds werden nur von öffentlichen Adressen geladen. Interne Adressen (z. B. im eigenen Netz) sind gesperrt, bis die Administration sie unter `security.allowed_private_hosts` ausdrücklich freigibt.
+Feeds werden nur von öffentlichen Adressen geladen. Interne Adressen (z. B. im eigenen Netz) sind gesperrt, bis die Administration sie unter [Einstellungen → Sicherheit](/einstellungen#sicherheit) → **Interne Ziele freigeben** ausdrücklich freigibt.
