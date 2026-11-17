@@ -43,7 +43,7 @@ export function StorageCard() {
   const low = d?.disk && d.warn_gb > 0 && d.disk.free < d.warn_gb * 1024 ** 3;
   const maxCol = Math.max(1, ...(d?.by_collection ?? []).map((c) => c.bytes));
   const row = (label: string, p: Part, extra?: React.ReactNode) => (
-    <div className="flex items-center gap-3 text-sm py-1">
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-sm py-1">
       <span className="w-44 shrink-0">{label}</span>
       <span className="font-mono text-meta w-28 shrink-0">{fmtBytes(p.bytes)}</span>
       <span className="text-meta text-fg-muted">{p.files} Datei(en)</span>

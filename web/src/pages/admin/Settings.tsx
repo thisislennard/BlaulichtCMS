@@ -1024,7 +1024,7 @@ function LegalTextField({ k, path, label, max, controller, v, set, ro }: { k: "l
       htmlFor={id}
       help={`Markdown (# Überschrift, **fett**, - Liste, [Link](https://…)); HTML wird nicht übernommen. Öffentlich ohne Anmeldung unter ${path}; leer = Seite und Links ausgeblendet. ${text.length.toLocaleString("de-DE")} / ${max.toLocaleString("de-DE")} Zeichen.`}
       labelAction={
-        <div className="flex items-center gap-1.5">
+        <div className="flex flex-wrap items-center gap-1.5">
           {!ro && (
             <Button size="sm" icon="FileText" onClick={insert}>
               Vorlage einfügen

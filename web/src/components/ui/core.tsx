@@ -195,7 +195,8 @@ export function FieldWrap({ label, help, error, required, children, htmlFor, cla
   return (
     <div className={cx('flex flex-col gap-1.5 min-w-0', className)}>
       {label && (
-        <div className="flex items-center justify-between gap-2">
+        // Schmale Bildschirme: Aktionen neben der Beschriftung rutschen in die nächste Zeile statt überzustehen
+        <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5">
           <label htmlFor={htmlFor} className="text-sm font-medium">
             {label}
             {required && (
