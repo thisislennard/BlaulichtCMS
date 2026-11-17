@@ -245,6 +245,17 @@ export function UpdatesSection({ manage }: { manage: boolean }) {
         </dd>
         <dt className="text-fg-muted">Letzte Prüfung</dt>
         <dd className="m-0">{d.lastCheckAt ? fmtRelative(d.lastCheckAt) : "noch nie"}</dd>
+        <dt className="text-fg-muted">Update-Helfer</dt>
+        <dd className="m-0">
+          {d.hostHelper?.installed ? (
+            <span className="inline-flex flex-wrap items-center gap-2">
+              <Badge tone="success">eingerichtet</Badge>
+              {d.hostHelper.installedAt && <span className="text-fg-muted">seit {fmtDateTime(d.hostHelper.installedAt)}</span>}
+            </span>
+          ) : (
+            <span className="text-fg-muted">nicht eingerichtet – Image-Updates am Docker-Host</span>
+          )}
+        </dd>
       </dl>
       {d.lastCheckError && <ErrorBox title="Letzte Prüfung fehlgeschlagen">{d.lastCheckError}</ErrorBox>}
       {error && <ErrorBox title="Aktion fehlgeschlagen">{error}</ErrorBox>}
