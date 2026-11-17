@@ -137,6 +137,8 @@ Im Beitrag unter **Soziale Kanäle** die Kanäle wählen (optional mit eigenem T
 | Ergebnis unbekannt | Verbindung brach ab; vor einem neuen Versuch prüft BlaulichtCMS, ob der Beitrag schon existiert |
 | Zum Teilen bereit | Kanal ohne Schnittstelle (X im Modus „Teilen von Hand“, WhatsApp-Kanal): Text und Dateien sind vorbereitet, siehe [Teilen von Hand](#teilen-von-hand) |
 
+Längen je Kanal: Instagram höchstens **2 200 Zeichen**, Facebook und WhatsApp-Kanal **60 000**; Threads, X, Mastodon und Bluesky siehe dort. Ist ein Text länger, kürzt BlaulichtCMS ihn mit „…“ an einer Zeichengrenze – nie mitten in einem Emoji – und der angehängte Link zur Website bleibt immer vollständig.
+
 ### Storys
 
 Für Facebook-Seiten und Instagram-Konten lässt sich je Kanal **Story** oder **Beitrag und Story** wählen. BlaulichtCMS nutzt dafür die offiziellen Schnittstellen von Meta – dieselbe Meta-App und dieselben Berechtigungen wie für Beiträge, nichts zusätzlich einzurichten ([Instagram: Content Publishing](https://developers.facebook.com/docs/instagram-platform/content-publishing/), [Facebook: Page Stories](https://developers.facebook.com/docs/page-stories-api/)).
@@ -232,7 +234,7 @@ Beim **Entfernen** löscht BlaulichtCMS den Beitrag über die Schnittstelle. Ein
 
 ## Bluesky
 
-Bluesky ist kostenlos und wird über das offene [AT Protocol](https://atproto.com/) angebunden. BlaulichtCMS meldet sich mit einem **App-Passwort** an – nie mit dem Kontopasswort. Veröffentlicht werden Text (höchstens **300 Zeichen**, gezählt werden sichtbare Zeichen; Adressen zählen voll), bis zu **4 Bilder mit Alternativtext** und der Link zur Website. Ohne Bilder zeigt Bluesky den Link als **Vorschaukarte** mit Titel, Kurzfassung und Titelbild des Beitrags – BlaulichtCMS ruft dafür die Website nicht ab. Videos überträgt BlaulichtCMS zu Bluesky nicht. Links und Hashtags im Text sind anklickbar.
+Bluesky ist kostenlos und wird über das offene [AT Protocol](https://atproto.com/) angebunden. BlaulichtCMS meldet sich mit einem **App-Passwort** an – nie mit dem Kontopasswort. Veröffentlicht werden Text (höchstens **300 Zeichen**, gezählt werden sichtbare Zeichen; Adressen zählen voll; zusätzlich höchstens 3 000 Byte – bei vielen Emojis greift diese Grenze zuerst, der Zähler im Beitrag berücksichtigt beides), bis zu **4 Bilder mit Alternativtext** und der Link zur Website. Ohne Bilder zeigt Bluesky den Link als **Vorschaukarte** mit Titel, Kurzfassung und Titelbild des Beitrags – BlaulichtCMS ruft dafür die Website nicht ab. Videos überträgt BlaulichtCMS zu Bluesky nicht. Links und Hashtags im Text sind anklickbar.
 
 **Einrichten**
 

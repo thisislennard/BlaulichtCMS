@@ -37,7 +37,8 @@ describe('Automationen: Vorlagen', () => {
     expect(renderTemplate('<b>{{x}}</b>', { x: '<script>alert("x")</script>' }, { escape: 'html' }).text).toBe('<b>&lt;script&gt;alert(&quot;x&quot;)&lt;/script&gt;</b>');
     expect(escapeHtml(`'&`)).toBe('&#39;&amp;');
     expect(renderTemplate('{{x}}', { x: 'a\u0000b\u0007c\nd' }).text).toBe('abc\nd');
-    expect(renderTemplate('{{x}}', { x: 'abcdef' }, { maxLength: 3 }).text).toBe('abc');
+    // gekürzt an einer Zeichengrenze mit „…“ (#232)
+    expect(renderTemplate('{{x}}', { x: 'abcdef' }, { maxLength: 3 }).text).toBe('ab…');
     expect(renderTemplate('{{t}}', { t: '2026-07-01T10:00:00.000Z' }, { timeZone: 'Europe/Berlin' }).text).toMatch(/01\.07\.2026, 12:00/);
     expect(renderTemplate('{{l}}', { l: ['a', 'b'] }).text).toBe('a, b');
   });

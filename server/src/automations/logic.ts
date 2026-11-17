@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import { fitText, utf16Length } from '../lib/text.js';
 import type { Operator } from './catalog.js';
 
 /*
@@ -40,7 +41,8 @@ export function valueText(v: unknown, timeZone = 'Europe/Berlin'): string {
 /**
  * Vorlage füllen. Fehlende oder leere Felder werden zu leerem Text und in `missing` gemeldet (der Lauf protokolliert
  * das). `escape: 'html'` maskiert eingesetzte Werte für Ziele, die HTML darstellen; die Vorlage selbst bleibt, wie sie
- * eingegeben wurde. Ergebnis höchstens `maxLength` Zeichen.
+ * eingegeben wurde. Ergebnis höchstens `maxLength` Zeichen (UTF-16); zu lange Texte enden an einer Zeichengrenze mit
+ * „…“ (#232 – nie mitten in einem Emoji).
  */
 export function renderTemplate(tpl: string | null | undefined, data: Data, opts: { escape?: 'html' | 'none'; maxLength?: number; timeZone?: string } = {}): { text: string; missing: string[] } {
   const missing: string[] = [];
@@ -50,7 +52,7 @@ export function renderTemplate(tpl: string | null | undefined, data: Data, opts:
     if (!v) missing.push(key);
     return opts.escape === 'html' ? escapeHtml(v) : v;
   });
-  return { text: opts.maxLength ? text.slice(0, opts.maxLength) : text, missing: [...new Set(missing)] };
+  return { text: opts.maxLength && text.length > opts.maxLength ? fitText(text, opts.maxLength, utf16Length) : text, missing: [...new Set(missing)] };
 }
 
 /* ------------------------------------------------------------------ Bedingungen */

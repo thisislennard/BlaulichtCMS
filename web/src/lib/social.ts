@@ -47,7 +47,13 @@ export function mastodonLength(text: string): number {
   return n + graphemes(rest).length;
 }
 
-/** Länge für Bluesky: Grapheme (höchstens 300); Adressen zählen voll. */
+/**
+ * Länge für Bluesky: höchstens 300 Grapheme und 3000 Bytes (UTF-8); Adressen zählen voll. Über 3000 Bytes gilt der
+ * Text wie auf dem Server als zu lang (#232) – sonst zeigte der Zähler „passt“, obwohl beim Senden gekürzt wird.
+ */
+export const BLUESKY_MAX = 300;
+export const BLUESKY_MAX_BYTES = 3000;
 export function blueskyLength(text: string): number {
-  return graphemes(text).length;
+  const n = graphemes(text).length;
+  return new TextEncoder().encode(text).length > BLUESKY_MAX_BYTES ? Math.max(BLUESKY_MAX + 1, n) : n;
 }

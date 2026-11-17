@@ -22,3 +22,31 @@ export function stripControlCharsDeep<T>(v: T): T {
   }
   return v;
 }
+
+/**
+ * Text kürzen, ohne Zeichen zu zerteilen (#232): Gekürzt wird an Graphem-Grenzen (Emoji samt Hautton oder Verbindung
+ * wie 🧑‍🚒, Flaggen, Buchstaben mit kombinierenden Zeichen) – nie mitten in einem Surrogatpaar, das beim Senden als
+ * „�“ ankäme oder von der Schnittstelle abgelehnt würde.
+ */
+
+const segmenter = new Intl.Segmenter('de', { granularity: 'grapheme' });
+
+export const graphemes = (s: string): string[] => Array.from(segmenter.segment(s), (x) => x.segment);
+
+/** Länge in UTF-16-Einheiten (wie `String.length`, Zählweise vieler Schnittstellen). */
+export const utf16Length = (s: string) => s.length;
+
+/** Kürzt auf `max` (mit „…“), ohne Zeichen zu zerteilen; `suffix` (z. B. Link) bleibt immer vollständig erhalten. */
+export function fitText(text: string, max: number, measure: (s: string) => number, suffix = ''): string {
+  const t = text.trim();
+  if (measure(t + suffix) <= max) return t + suffix;
+  const g = graphemes(t);
+  let lo = 0;
+  let hi = g.length;
+  while (lo < hi) {
+    const mid = Math.ceil((lo + hi) / 2);
+    if (measure(g.slice(0, mid).join('').trimEnd() + '…' + suffix) <= max) lo = mid;
+    else hi = mid - 1;
+  }
+  return (lo ? g.slice(0, lo).join('').trimEnd() + '…' : '') + suffix;
+}

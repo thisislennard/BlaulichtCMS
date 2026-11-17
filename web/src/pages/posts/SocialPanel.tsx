@@ -7,7 +7,7 @@ import { HelpTip } from '../../components/ui/HelpTip';
 import { CopyButton, Dialog, useErrorToast, useToast } from '../../components/ui/overlays';
 import { useAuth } from '../../lib/auth';
 import { fmtDateTime } from '../../lib/format';
-import { blueskyLength, mastodonLength, SOCIAL_KINDS, SOCIAL_LABEL, STORY_KINDS, threadsLength, xLength, type SocialKind } from '../../lib/social';
+import { BLUESKY_MAX, blueskyLength, mastodonLength, SOCIAL_KINDS, SOCIAL_LABEL, STORY_KINDS, threadsLength, xLength, type SocialKind } from '../../lib/social';
 import { safeHref } from '../../lib/url';
 import { MetricLine } from './Insights';
 
@@ -142,7 +142,7 @@ export function SocialTargetsCard({ draft, onChange, editable }: { draft: Social
           </>
         )}
         {chosen('bluesky').length > 0 && (
-          <FieldWrap label="Eigener Text für Bluesky (optional)" help={<>Höchstens 300 Zeichen inklusive des angehängten Links zur Website, sonst wird gekürzt. Ohne Bilder zeigt Bluesky den Link als Vorschaukarte. <Counter n={blueskyLength(draft.bs)} max={300} /></>} htmlFor="s-bs">
+          <FieldWrap label="Eigener Text für Bluesky (optional)" help={<>Höchstens {BLUESKY_MAX} Zeichen inklusive des angehängten Links zur Website (und höchstens 3000 Byte – Emojis und Sonderzeichen brauchen mehr als eins), sonst wird gekürzt. Ohne Bilder zeigt Bluesky den Link als Vorschaukarte. <Counter n={blueskyLength(draft.bs)} max={BLUESKY_MAX} /></>} htmlFor="s-bs">
             <Textarea id="s-bs" rows={3} disabled={!editable} value={draft.bs} onChange={(e) => onChange({ ...draft, bs: e.target.value })} maxLength={2000} />
           </FieldWrap>
         )}

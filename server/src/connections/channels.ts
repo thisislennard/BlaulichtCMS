@@ -1,6 +1,9 @@
 import crypto from 'node:crypto';
 import { one, type Queryable, pool } from '../db/pool.js';
+import { fitText, graphemes, utf16Length } from '../lib/text.js';
 import type { Connection, ConnectionKind } from './common.js';
+
+export { fitText };
 
 /**
  * Soziale Kanäle (#188, #189, #215): Facebook, Instagram, Threads, X, WhatsApp-Kanal, Mastodon und Bluesky. Gemeinsame
@@ -32,8 +35,6 @@ export function formatsFor(kind: ConnectionKind, choice: FormatChoice | undefine
 
 /* ------------------------------------------------------------------ Zeichen zählen */
 
-const segmenter = new Intl.Segmenter('de', { granularity: 'grapheme' });
-const graphemes = (s: string) => Array.from(segmenter.segment(s), (x) => x.segment);
 const PICTO = /\p{Extended_Pictographic}/u;
 export const URL_RE = /https?:\/\/[^\s]+/gi;
 
@@ -90,20 +91,10 @@ export function blueskyLength(text: string): number {
   return Buffer.byteLength(text, 'utf8') > 3000 ? Math.max(BLUESKY_MAX + 1, graphemes(text).length) : graphemes(text).length;
 }
 
-/** Kürzt auf `max` (mit „…“), ohne Zeichen zu zerteilen; `suffix` (z. B. Link) bleibt immer vollständig erhalten. */
-export function fitText(text: string, max: number, measure: (s: string) => number, suffix = ''): string {
-  const t = text.trim();
-  if (measure(t + suffix) <= max) return t + suffix;
-  const g = graphemes(t);
-  let lo = 0;
-  let hi = g.length;
-  while (lo < hi) {
-    const mid = Math.ceil((lo + hi) / 2);
-    if (measure(g.slice(0, mid).join('').trimEnd() + '…' + suffix) <= max) lo = mid;
-    else hi = mid - 1;
-  }
-  return (lo ? g.slice(0, lo).join('').trimEnd() + '…' : '') + suffix;
-}
+/** Höchstlängen in UTF-16-Einheiten: Instagram-Bildunterschrift, Facebook-Beitrag, WhatsApp-Kanal (Teilen von Hand). */
+export const INSTAGRAM_MAX = 2200;
+export const FACEBOOK_MAX = 60_000;
+export const WHATSAPP_MAX = 60_000;
 
 /* ------------------------------------------------------------------ Texte je Kanal */
 
@@ -143,10 +134,11 @@ const withLink = (text: string, link: string | null | undefined) => (link && !te
 export function socialText(rev: RevText, channel: SocialChannel, link?: string | null, limits: TextLimits = {}): string {
   const own = (rev.variants ?? {})[channel]?.body?.trim();
   switch (channel) {
+    // Kürzen an Zeichengrenzen mit „…“ (#232) – `slice` zerteilte Emojis (halbes Surrogatpaar → „�“)
     case 'instagram':
-      return (own || baseText(rev)).slice(0, 2200);
+      return fitText(own || baseText(rev), INSTAGRAM_MAX, utf16Length);
     case 'facebook':
-      return (own || baseText(rev)).slice(0, 60_000);
+      return fitText(own || baseText(rev), FACEBOOK_MAX, utf16Length);
     case 'threads':
       return fitText(own || baseText(rev), THREADS_MAX, threadsLength, withLink(own || baseText(rev), link));
     case 'x':
@@ -154,7 +146,8 @@ export function socialText(rev: RevText, channel: SocialChannel, link?: string |
     case 'whatsapp': {
       // WhatsApp-Formatierung: *fett* für den Titel
       const t = own || [rev.title ? `*${rev.title.replace(/\*/g, '')}*` : '', rev.excerpt?.trim() || rev.body].filter(Boolean).join('\n\n').trim();
-      return (t + withLink(t, link)).slice(0, 60_000);
+      // Der angehängte Link bleibt vollständig erhalten; gekürzt wird der Text davor
+      return fitText(t, WHATSAPP_MAX, utf16Length, withLink(t, link));
     }
     case 'mastodon': {
       // Die Inhaltswarnung zählt bei Mastodon zur Höchstlänge
@@ -174,7 +167,7 @@ export function socialTextTooLong(rev: RevText, channel: SocialChannel, link?: s
   if (channel === 'bluesky') return blueskyLength(t + withLink(t, link)) > BLUESKY_MAX;
   if (channel === 'x') return xLength(t + withLink(t, link)) > X_MAX;
   if (channel === 'threads') return threadsLength(t + withLink(t, link)) > THREADS_MAX;
-  if (channel === 'instagram') return t.length > 2200;
+  if (channel === 'instagram') return t.length > INSTAGRAM_MAX;
   return false;
 }
 
