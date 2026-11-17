@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { config } from '../config.js';
 import { proxyService } from '../lib/proxy-check.js';
 import { many, one, pool } from '../db/pool.js';
-import { assertRecentAuth, requireAnyAuth, requireAuth } from '../auth/context.js';
+import { assertRecentAuth, mustUse2fa, requireAnyAuth, requireAuth } from '../auth/context.js';
 import { audit, settingsDiff } from '../lib/audit.js';
 import { runRetention } from '../lib/retention.js';
 import { securityAlert } from '../lib/security-alerts.js';
@@ -306,6 +306,23 @@ export async function systemRoutes(app: FastifyInstance) {
       revoked.vertrauenswuerdige_geraete = r.rowCount ?? 0;
     }
     if (Object.keys(revoked).length) await audit(req.auth!.actor, 'settings.remember_revoked', { type: 'settings', label: 'Angemeldet bleiben / Zwei-Faktor merken' }, revoked);
+    // Zwei-Faktor-Pflicht eingeschaltet oder ausgeweitet (#235): Sitzungen – auch gemerkte – aller Konten ohne zweiten
+    // Faktor, für die sie jetzt gilt, sofort beenden; sie richten ihn bei der nächsten Anmeldung ein. Die eigene Sitzung
+    // wechselt beim nächsten Aufruf direkt zur Einrichtung (auth/context.ts, fromSession).
+    const MFA_KEYS = ['security.require_2fa_all', 'security.require_2fa_admins', 'security.require_2fa_media'] as const;
+    if (MFA_KEYS.some((k) => patch[k] === true && !current[k])) {
+      const next = { ...current, ...patch } as typeof current;
+      const users = await many<{ id: string; roles: string[] }>(`SELECT id, roles FROM users WHERE status = 'active' AND NOT totp_enabled`);
+      const ids = users.filter((u) => mustUse2fa(u.roles, next)).map((u) => u.id);
+      if (ids.length) {
+        const r = await one<{ users: number; sessions: number }>(
+          `WITH x AS (UPDATE sessions SET revoked_at = now() WHERE user_id = ANY($1::uuid[]) AND revoked_at IS NULL AND expires_at > now() AND ($2::uuid IS NULL OR id <> $2) RETURNING user_id)
+           SELECT count(DISTINCT user_id)::int AS users, count(*)::int AS sessions FROM x`,
+          [ids, req.auth!.sessionId ?? null],
+        );
+        await audit(req.auth!.actor, 'settings.mfa_enforced', { type: 'settings', label: 'Zwei-Faktor-Pflicht' }, { konten_ohne_zweiten_faktor: ids.length, abgemeldete_konten: r?.users ?? 0, beendete_sitzungen: r?.sessions ?? 0 });
+      }
+    }
     // Vorher/nachher je geändertem Schlüssel (#111) – z. B. abgeschaltete 2FA-Pflicht, erweiterte interne Ziele,
     // verkürzte Aufbewahrung. Geheimnisse stehen nicht in diesen Einstellungen (SMTP-Passwort separat).
     const changes = settingsDiff(current as any, patch);

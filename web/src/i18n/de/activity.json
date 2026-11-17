@@ -86,7 +86,8 @@
     },
     "settings": {
       "changed": "Einstellungen geändert",
-      "remember_revoked": "Gemerkte Sitzungen/Geräte beendet"
+      "remember_revoked": "Gemerkte Sitzungen/Geräte beendet",
+      "mfa_enforced": "Zwei-Faktor-Pflicht durchgesetzt"
     },
     "publication": {
       "requested": "Veröffentlichung beauftragt",
@@ -345,7 +346,8 @@
     },
     "settings": {
       "changed": "hat die Systemeinstellungen geändert",
-      "remember_revoked": "hat gemerkte Sitzungen bzw. Geräte durch Abschalten beendet"
+      "remember_revoked": "hat gemerkte Sitzungen bzw. Geräte durch Abschalten beendet",
+      "mfa_enforced": "hat mit der Zwei-Faktor-Pflicht Sitzungen von Konten ohne zweiten Faktor beendet"
     },
     "publication": {
       "requested": "hat die Veröffentlichung von „{o}“ beauftragt",

@@ -135,6 +135,17 @@ async function fromSession(req: FastifyRequest, reply?: FastifyReply): Promise<A
   } else if (sinceSeen > s['security.session_idle_minutes'] * 60_000) {
     return revoke();
   }
+  let stage: AuthContext['stage'] = row.stage;
+  // Zwei-Faktor-Pflicht bei jeder Anfrage, nicht nur bei der Anmeldung (#235): Gilt sie (inzwischen) für ein Konto ohne
+  // zweiten Faktor – Pflicht eingeschaltet oder ausgeweitet, Rechte erweitert –, endet eine volle Sitzung, auch eine
+  // gemerkte. Ist das Passwort in dieser Sitzung gerade erst bestätigt worden (z. B. von der Person, die die Pflicht
+  // eben eingeschaltet hat), geht es stattdessen direkt zur Einrichtung – wie nach einer Anmeldung, kurz befristet.
+  if (stage === 'full' && !row.totp_enabled && mustUse2fa(row.roles, s)) {
+    const fresh = !!row.reauth_at && Date.now() - new Date(row.reauth_at).getTime() < REAUTH_MINUTES * 60_000;
+    if (!fresh) return revoke();
+    await pool.query(`UPDATE sessions SET stage = 'mfa_setup', device_hash = NULL, expires_at = LEAST(expires_at, now() + interval '15 minutes') WHERE id = $1`, [row.session_id]);
+    stage = 'mfa_setup';
+  }
   // last_seen höchstens einmal pro Minute schreiben
   if (sinceSeen > 60_000) {
     pool.query('UPDATE sessions SET last_seen_at = now() WHERE id = $1', [row.session_id]).catch(() => {});
@@ -149,12 +160,12 @@ async function fromSession(req: FastifyRequest, reply?: FastifyReply): Promise<A
     totp_enabled: row.totp_enabled,
     preferences: row.preferences ?? {},
   };
-  const full = row.stage === 'full';
+  const full = stage === 'full';
   return {
     kind: 'session',
     user,
     sessionId: row.session_id,
-    stage: row.stage,
+    stage,
     remember: !!row.remember,
     reauthAt: row.reauth_at ? new Date(row.reauth_at) : null,
     permissions: full ? permissionsFor(user.roles) : new Set(),

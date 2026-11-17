@@ -32,6 +32,8 @@ Für Konten mit Verwaltungsrechten (mitgeliefert: Administration) und für Rolle
 
 Wer die Zwei-Faktor-Anmeldung später in [Mein Konto](/profil) einrichtet, bestätigt das mit dem Passwort, wenn die letzte Anmeldung länger als 10 Minuten her ist. Nach dem Einrichten werden alle anderen Sitzungen abgemeldet.
 
+Die Pflicht gilt **sofort, auch für bereits angemeldete Konten**: Wird sie eingeschaltet oder ausgeweitet (oder bekommt eine Rolle Rechte, für die sie gilt), enden alle Sitzungen von Konten ohne zweiten Faktor – auch mit „Angemeldet bleiben“ gemerkte. Bei der nächsten Anmeldung wird der zweite Faktor eingerichtet. Wer die Pflicht selbst gerade eingeschaltet hat und noch keinen zweiten Faktor hat, kommt direkt zur Einrichtung.
+
 ### Gerät für die Zwei-Faktor-Anmeldung merken
 
 Bei der Code-Abfrage gibt es das Feld **Auf diesem Gerät 30 Tage nicht nach dem Code fragen**. Mit Haken genügt auf diesem Gerät 30 Tage lang das Passwort, auf allen anderen Geräten bleibt der Code nötig.

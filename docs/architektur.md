@@ -185,8 +185,11 @@ voraus“), Rollen kombinierbar.
   Sammelbezeichnungen gültig (`LEGACY_PERMISSIONS`): Sie gelten nur, wenn alle enthaltenen feinen Rechte vorhanden
   sind. Alte Benachrichtigungen und Prüfungen funktionieren weiter, ohne mehr zu erlauben.
 - **Zwei-Faktor-Pflicht über Rechte.** `security.require_2fa_admins` gilt für Konten mit Verwaltungsrechten (im
-  Katalog markiert), `security.require_2fa_media` für „Originale herunterladen“. Erhält eine Rolle solche Rechte,
-  werden ihre Konten ohne zweiten Faktor abgemeldet und richten ihn bei der nächsten Anmeldung ein.
+  Katalog markiert), `security.require_2fa_media` für „Originale herunterladen“. Erhält eine Rolle solche Rechte
+  oder wird die Pflicht eingeschaltet, werden die betroffenen Konten ohne zweiten Faktor abgemeldet und richten ihn bei
+  der nächsten Anmeldung ein. Zusätzlich prüft jede Anfrage (`fromSession`): Eine volle Sitzung eines Kontos ohne
+  zweiten Faktor, für das die Pflicht gilt, endet – auch eine gemerkte; nur eine Sitzung mit Passwortbestätigung der
+  letzten 10 Minuten wechselt stattdessen direkt zur Einrichtung (#235).
 
 Vier-Augen-Prinzip optional (Einstellung `editorial.four_eyes`) für Beiträge, Banner und Warnentwürfe: nicht durch die
 einreichende Person (`post_revisions.submitted_by`, `banners.submitted_by`, `warning_revisions.submitted_by`) und nicht

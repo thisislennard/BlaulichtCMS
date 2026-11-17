@@ -78,7 +78,8 @@ function newRoleId(label: string): string {
 
 /**
  * Nach einer Rechteänderung: Wer jetzt unter die Zwei-Faktor-Pflicht fällt und noch keinen zweiten Faktor hat, wird
- * abgemeldet und richtet ihn bei der nächsten Anmeldung ein. Die eigene Sitzung bleibt.
+ * abgemeldet und richtet ihn bei der nächsten Anmeldung ein. Die eigene Sitzung wird hier nicht beendet; fällt die
+ * handelnde Person selbst darunter, wechselt sie beim nächsten Aufruf zur Einrichtung (auth/context.ts, #235).
  */
 async function enforceTwoFactor(req: FastifyRequest, roleId: string): Promise<number> {
   const s = await getSettings();

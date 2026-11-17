@@ -519,8 +519,10 @@ describe('Rollen und feine Rechte', () => {
     const r = await admin.post('/roles', { label: 'Sichtung', permissions: ['media.review'] });
     const { client, id } = await mkUser('sichtung@example.org', [r.json.id]);
     expect((await client.get('/collections')).status).toBe(200);
+    // Die handelnde Administration hat hier einen zweiten Faktor – ohne gälte die Pflicht sofort auch für ihre Sitzung
+    // (siehe „Einschalten der Zwei-Faktor-Pflicht …“)
+    await pool.query(`UPDATE users SET totp_enabled = true WHERE email = 'admin@example.org'`);
     await setSettings({ 'security.require_2fa_admins': true } as any);
-    // Admin selbst hat keinen zweiten Faktor: eigene Sitzung bleibt bestehen
     const upd = await admin.put(`/roles/${r.json.id}`, { permissions: ['media.review', 'user.view', 'user.lock'] });
     expect(upd.json.signedOut).toBe(1);
     expect((await client.get('/collections')).status).toBe(401);
@@ -542,6 +544,62 @@ describe('Rollen und feine Rechte', () => {
     expect((await admin.patch(`/users/${neu}`, { roles: ['viewer', r.json.id] })).status).toBe(200);
     expect((await one<any>(`SELECT count(*)::int AS n FROM notifications WHERE title LIKE 'Verwaltungsrechte vergeben%'`))!.n).toBe(before + 1);
     expect(id).toBeTruthy();
+    await pool.query(`UPDATE users SET totp_enabled = false WHERE email = 'admin@example.org'`);
+  });
+
+  it('Einschalten der Zwei-Faktor-Pflicht wirkt sofort auf bestehende, auch gemerkte Sitzungen (#235)', async () => {
+    // Eigenes Administrationskonto ohne zweiten Faktor schaltet die Pflicht ein (die Test-Administration behält ihre
+    // Sitzung: zweiter Faktor für die Dauer dieses Tests)
+    const { client: chef, id: chefId } = await mkUser('chef@example.org', ['platform_admin']);
+    await chef.reauth();
+    await pool.query(`UPDATE users SET totp_enabled = true WHERE email = 'admin@example.org'`);
+    await setSettings({ 'security.remember_enabled': true } as any);
+    // gemerkte Sitzung („Angemeldet bleiben“) und normale Sitzung, beide ohne zweiten Faktor
+    await one(`INSERT INTO users (email, name, password_hash, roles) VALUES ('gemerkt@example.org', 'gemerkt', $1, '{viewer}')`, [passwordHash]);
+    const remembered = new Client(app);
+    expect((await remembered.post('/auth/login', { email: 'gemerkt@example.org', password: PASSWORD, remember: true })).json.next).toBe('done');
+    const { client: normal } = await mkUser('normal-2fa@example.org', ['viewer']);
+    const { client: withMfa, id: withMfaId } = await mkUser('mit-2fa@example.org', ['viewer']);
+    await pool.query(`UPDATE users SET totp_enabled = true WHERE id = $1`, [withMfaId]);
+    expect((await one<any>(`SELECT count(*)::int AS n FROM sessions s JOIN users u ON u.id = s.user_id WHERE u.email = 'gemerkt@example.org' AND s.remember AND s.revoked_at IS NULL`))!.n).toBe(1);
+    for (const c of [remembered, normal, withMfa]) expect((await c.get('/collections')).status).toBe(200);
+
+    // Pflicht für alle über die Einstellungen: Konten ohne zweiten Faktor werden sofort abgemeldet, Audit mit Anzahl
+    expect((await chef.patch('/settings', { 'security.require_2fa_all': true })).status).toBe(200);
+    expect((await remembered.get('/collections')).status).toBe(401);
+    expect((await normal.get('/collections')).status).toBe(401);
+    expect((await withMfa.get('/collections')).status).toBe(200);
+    expect((await admin.get('/collections')).status).toBe(200);
+    expect((await one<any>(`SELECT count(*)::int AS n FROM sessions s JOIN users u ON u.id = s.user_id WHERE u.email IN ('gemerkt@example.org', 'normal-2fa@example.org') AND s.revoked_at IS NULL`))!.n).toBe(0);
+    const ev = await one<any>(`SELECT details FROM audit_events WHERE action = 'settings.mfa_enforced' ORDER BY at DESC LIMIT 1`);
+    expect(ev!.details.abgemeldete_konten).toBeGreaterThanOrEqual(2);
+    // Neue Anmeldung führt zur Einrichtung
+    const again = new Client(app);
+    expect((await again.post('/auth/login', { email: 'gemerkt@example.org', password: PASSWORD, remember: true })).json.next).toBe('mfa_setup');
+
+    // Die eigene Sitzung (Passwort gerade bestätigt) wechselt direkt zur Einrichtung – ohne Rechte bis dahin
+    expect((await chef.get('/collections')).status).toBe(401);
+    expect((await chef.get('/auth/me')).json).toMatchObject({ stage: 'mfa_setup', permissions: [] });
+    const { totpAt } = await import('../src/auth/totp.js');
+    const setup = await chef.get('/auth/mfa/setup');
+    expect(setup.status).toBe(200);
+    expect((await chef.post('/auth/mfa/setup', { code: totpAt(setup.json.secret, Math.floor(Date.now() / 30_000)) })).status).toBe(200);
+    expect((await chef.get('/collections')).status).toBe(200);
+
+    // Pflicht auf anderem Weg (z. B. Rechte per Update erweitert): eine länger nicht bestätigte – auch gemerkte –
+    // Sitzung endet beim nächsten Aufruf, statt ohne zweiten Faktor weiterzulaufen
+    await setSettings({ 'security.require_2fa_all': false } as any);
+    const late = new Client(app);
+    expect((await late.post('/auth/login', { email: 'gemerkt@example.org', password: PASSWORD, remember: true })).json.next).toBe('done');
+    await pool.query(`UPDATE sessions SET reauth_at = now() - interval '11 minutes' WHERE user_id = (SELECT id FROM users WHERE email = 'gemerkt@example.org') AND revoked_at IS NULL`);
+    await setSettings({ 'security.require_2fa_all': true } as any);
+    expect((await late.get('/collections')).status).toBe(401);
+    expect((await late.get('/auth/me')).status).toBe(401);
+    expect((await one<any>(`SELECT count(*)::int AS n FROM sessions s JOIN users u ON u.id = s.user_id WHERE u.email = 'gemerkt@example.org' AND s.stage = 'full' AND s.revoked_at IS NULL AND s.expires_at > now()`))!.n).toBe(0);
+
+    await setSettings({ 'security.require_2fa_all': false } as any);
+    await pool.query(`UPDATE users SET totp_enabled = false WHERE email IN ('admin@example.org', 'mit-2fa@example.org')`);
+    await pool.query(`UPDATE users SET status = 'disabled' WHERE id = $1`, [chefId]);
   });
 
   it('Warnvorgänge, Beiträge und Medien: getrennte Rechte je Aktion', async () => {
