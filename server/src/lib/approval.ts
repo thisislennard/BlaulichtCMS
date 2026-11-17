@@ -1,4 +1,4 @@
-import { one, pool, type Queryable } from '../db/pool.js';
+import { many, one, pool, type Queryable } from '../db/pool.js';
 import { AppError } from './errors.js';
 
 /**
@@ -42,4 +42,60 @@ export async function assertMediaPresent(rev: { media_ids?: string[] | null; cov
         'Bitte eine neue Fassung ohne diese Dateien speichern und erneut freigeben lassen.',
     );
   }
+}
+
+/* ------------------------------------------------------------------ Datenschutz-Prüfung */
+
+/**
+ * Befunde der Datenschutz-Prüfung (#118, #214, #241) für eine Menge von Dateien: markierte Medien (erkennbare
+ * Personen, Verletzte/Gesundheitsdaten, Kennzeichen, sensibel) und Bilder mit offenen Gesichtsvorschlägen. Gilt für
+ * jeden Weg, auf dem Bilder veröffentlicht werden (Beiträge, Einsatzliste) – neue Wege nutzen dieselbe Prüfung.
+ */
+export interface PrivacyFindings {
+  /** Anzahl Dateien mit mindestens einer Markierung */
+  flagged: number;
+  /** Anzahl Bilder mit offenen Gesichtsvorschlägen */
+  faces: number;
+  /** IDs aller Dateien mit Befund (sortiert) */
+  ids: string[];
+  /** Vorkommende Markierungen (ohne Doppelte) */
+  flags: string[];
+}
+
+export async function privacyFindings(mediaIds: readonly string[] | null | undefined, db: Queryable = pool): Promise<PrivacyFindings> {
+  const ids = [...new Set(mediaIds ?? [])];
+  if (!ids.length) return { flagged: 0, faces: 0, ids: [], flags: [] };
+  const rows = await many<{ id: string; flags: string[]; faces: boolean }>(
+    `SELECT id, sensitive_flags AS flags, jsonb_path_exists(face_proposals, '$[*] ? (@.status == "open")') AS faces
+       FROM media WHERE id = ANY($1::uuid[]) AND deleted_at IS NULL`,
+    [ids],
+    db,
+  );
+  const flagged = rows.filter((r) => (r.flags ?? []).length > 0);
+  return {
+    flagged: flagged.length,
+    faces: rows.filter((r) => r.faces).length,
+    ids: rows.filter((r) => (r.flags ?? []).length > 0 || r.faces).map((r) => r.id).sort(),
+    flags: [...new Set(flagged.flatMap((r) => r.flags))],
+  };
+}
+
+export const needsPrivacyCheck = (f: PrivacyFindings) => f.flagged > 0 || f.faces > 0;
+
+/** Freigabe bzw. Veröffentlichung nur mit ausdrücklich bestätigter Datenschutz-Prüfung, wenn es Befunde gibt. */
+export function assertPrivacyChecked(f: PrivacyFindings, checked: boolean, subject = 'Die Fassung') {
+  if (!needsPrivacyCheck(f) || checked) return;
+  throw new AppError(
+    400,
+    'privacy_check_required',
+    f.flagged > 0
+      ? `${subject} enthält markierte Medien (z. B. erkennbare Personen). Bitte die Datenschutz-Prüfung bestätigen.`
+      : `${subject} enthält Bilder mit offenen Gesichtsvorschlägen. Bitte die Datenschutz-Prüfung bestätigen.`,
+  );
+}
+
+/** Audit-Details einer bestätigten Datenschutz-Prüfung (leer ohne Befund). */
+export function privacyAudit(f: PrivacyFindings): Record<string, unknown> {
+  if (!needsPrivacyCheck(f)) return {};
+  return { datenschutz_geprueft: true, markierte_medien: f.flagged, ...(f.faces > 0 ? { bilder_mit_offenen_gesichtsvorschlaegen: f.faces } : {}) };
 }

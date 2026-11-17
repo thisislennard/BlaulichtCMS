@@ -340,6 +340,31 @@ describe('Befüllbare Bildvorlagen (#209)', () => {
     const files = await editor.post('/design-templates', { title: 'Nur Dateien' });
     expect((await editor.post(`/design-templates/${files.json.id}/generate`, { values: {} })).status).toBe(400);
   });
+
+  it('Datenschutz (#241): erzeugtes Bild erbt die Markierungen der Quellbilder, offene Gesichtsvorschläge gelten als „Personen erkennbar“', async () => {
+    const face = { id: 'ab12cd34', x: 0.1, y: 0.1, w: 0.2, h: 0.2, score: 0.9, status: 'open' };
+    await pool.query(`UPDATE media SET sensitive_flags = '{health}', face_proposals = $2 WHERE id = $1`, [photoId, JSON.stringify([face])]);
+    const g = await editor.post(`/design-templates/${tplId}/generate`, { values: { titel: 'Verkehrsunfall' }, images: { foto: { mediaId: photoId } } });
+    expect(g.status, JSON.stringify(g.json)).toBe(200);
+    expect(g.json.media.sensitive_flags).toEqual(['persons', 'health']);
+    const row = await one<any>(`SELECT sensitive_flags, derived_from, uploader_note, status FROM media WHERE id = $1`, [g.json.media.id]);
+    expect(row).toMatchObject({ sensitive_flags: ['persons', 'health'], derived_from: [photoId], status: 'ready' });
+    expect(row!.uploader_note).toMatch(/Markierungen der Quellbilder übernommen/);
+    const a = await one<any>(`SELECT details FROM audit_events WHERE action = 'design_template.image_generated' ORDER BY id DESC LIMIT 1`);
+    expect(a!.details).toMatchObject({ quellbilder: 1, markierungen_uebernommen: ['persons', 'health'] });
+    // Unmarkiertes Quellbild → unmarkiertes Bild; eine später ergänzte Markierung des Quellbilds geht auf beide über
+    await pool.query(`UPDATE media SET sensitive_flags = '{}', face_proposals = '[]' WHERE id = $1`, [photoId]);
+    const g2 = await editor.post(`/design-templates/${tplId}/generate`, { values: { titel: 'Übung' }, images: { foto: { mediaId: photoId } } });
+    expect(g2.json.media.sensitive_flags).toEqual([]);
+    const p = await admin.raw('PATCH', `/media/${photoId}/privacy`, { flags: ['plates'] });
+    expect(p.status, JSON.stringify(p.json)).toBe(200);
+    const flags = async (id: string) => (await one<any>(`SELECT sensitive_flags FROM media WHERE id = $1`, [id]))!.sensitive_flags;
+    expect(await flags(g2.json.media.id)).toEqual(['plates']);
+    expect(await flags(g.json.media.id)).toEqual(['persons', 'health', 'plates']);
+    // Entfernen am Quellbild entfernt nichts am erzeugten Bild (das prüft man dort selbst)
+    expect((await admin.raw('PATCH', `/media/${photoId}/privacy`, { flags: [] })).status).toBe(200);
+    expect(await flags(g2.json.media.id)).toEqual(['plates']);
+  });
 });
 
 describe('Workflows: Bild aus Vorlage erzeugen (#210)', () => {

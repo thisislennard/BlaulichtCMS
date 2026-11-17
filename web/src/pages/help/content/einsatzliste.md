@@ -19,6 +19,8 @@ Ein Eintrag enthält: Alarmzeit, laufende Nummer (leer = die Website zählt nach
 
 Jede Änderung ergibt eine neue Fassung, die wieder freigegeben werden muss; die bisherige bleibt so lange auf der Website. Mehrere Einträge lassen sich auswählen und gemeinsam **einreichen**, **freigeben** und **veröffentlichen** – praktisch nach einem Import.
 
+**Datenschutz-Prüfung bei Bildern:** Enthält ein Eintrag Bilder, die in der Sichtung markiert sind (**Personen erkennbar**, **Verletzte / Gesundheit**, **Kennzeichen / Adressen**, **Sonstiger sensibler Inhalt**) oder **offene Gesichtsvorschläge** haben, trägt er in der Liste das Kennzeichen **Datenschutz-Prüfung**. Freigeben geht dann nur einzeln über **Freigeben (mit Datenschutz-Prüfung) …** mit denselben Prüfpunkten wie bei Beiträgen (siehe [Freigabe](/hilfe/freigabe#datenschutz-pruefung-bei-markierten-medien)); die Sammelfreigabe überspringt solche Einträge. Wird ein Bild erst nach der Freigabe markiert (oder wurde der Eintrag vor dieser Prüfung freigegeben), verlangt **Auf Website veröffentlichen** die Bestätigung. Die Bestätigung steht im Audit-Protokoll.
+
 **Zurückziehen** entfernt den Eintrag beim nächsten Abruf von der Website, samt Bildern, die sonst nirgends verwendet werden. Danach lässt er sich erneut veröffentlichen oder **löschen**. Ein Eintrag, der auf der Website steht, lässt sich erst nach dem Zurückziehen löschen.
 
 Die Website braucht dafür die **BlaulichtCMS Bridge 0.9.0** oder neuer. Mit einer älteren Bridge warten die Aufträge, bis sie aktualisiert ist ([Updates](/hilfe/updates#blaulichtcms-bridge)).

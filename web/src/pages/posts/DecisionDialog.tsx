@@ -6,11 +6,25 @@ import { Dialog, useErrorToast, useToast } from '../../components/ui/overlays';
 import { openFaces, PrivacyChecklistHint, SENSITIVE_LABELS } from '../media/PrivacyDialog';
 
 /** Prüfpunkte bei markierten Medien (#118) – alle müssen bestätigt sein, bevor die Fassung freigegeben werden kann. */
-const PRIVACY_CHECKS = [
+export const PRIVACY_CHECKS = [
   'Erkennbare Personen: Einwilligung liegt vor, eine Ausnahme greift (z. B. Beiwerk, Versammlung) oder sie sind unkenntlich gemacht.',
   'Keine erkennbaren Verletzten, Betroffenen oder Gesundheitsangaben (Art. 9 DSGVO).',
   'Kennzeichen, Adressen und Namen sind unkenntlich, soweit sie Personen zuordenbar machen; bei Videos Ton geprüft.',
 ];
+
+/** Die Prüfpunkte als Kontrollkästchen (Beiträge und Einsatzliste, #241). */
+export function PrivacyCheckList({ checks, onChange }: { checks: boolean[]; onChange: (checks: boolean[]) => void }) {
+  return (
+    <>
+      {PRIVACY_CHECKS.map((text, i) => (
+        <label key={i} className="flex items-start gap-2 cursor-pointer">
+          <input type="checkbox" className="mt-0.5" checked={checks[i]} onChange={(e) => onChange(checks.map((x, j) => (j === i ? e.target.checked : x)))} />
+          <span>{text}</span>
+        </label>
+      ))}
+    </>
+  );
+}
 
 /**
  * Freigeben oder Zurückweisen genau einer Fassung (Prüfsumme). Genutzt im Beitrag und in der Freigabe-Ansicht (#216);
@@ -73,12 +87,7 @@ export function DecisionDialog({ decision, revision, hash, postId, flagged, face
                 {facesOpen.length === 1 ? 'Ein Bild hat' : `${facesOpen.length} Bilder haben`} noch ungeprüfte Vorschläge der Gesichtssuche ({facesOpen.reduce((n, m) => n + openFaces(m), 0)} insgesamt). Gefundene Gesichter sind nicht automatisch unkenntlich – vor der Freigabe in den Medien unter „Datenschutz und Unkenntlichmachen“ übernehmen oder verwerfen, sonst bewusst bestätigen.
               </Notice>
             )}
-            {PRIVACY_CHECKS.map((text, i) => (
-              <label key={i} className="flex items-start gap-2 cursor-pointer">
-                <input type="checkbox" className="mt-0.5" checked={checks[i]} onChange={(e) => setChecks((c) => c.map((x, j) => (j === i ? e.target.checked : x)))} />
-                <span>{text}</span>
-              </label>
-            ))}
+            <PrivacyCheckList checks={checks} onChange={setChecks} />
           </fieldset>
         )}
         {decision === 'approved' && altMissing > 0 && (

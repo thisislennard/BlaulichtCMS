@@ -14,7 +14,7 @@ import { enqueue } from '../jobs/queue.js';
 import { sendFileResponse } from './files.js';
 import { exportPath } from '../media/exports.js';
 import { publicFileName } from '../media/names.js';
-import { privacyInput, renderPublic } from '../media/privacy.js';
+import { privacyInput, renderPublic, SENSITIVE_FLAGS } from '../media/privacy.js';
 import { enqueueFaceDetection, faceDetectable, type FaceProposal } from '../media/faces.js';
 import { purgeCollection } from '../lib/retention.js';
 import { computeExpiry, extendExpiry, LINK_UNAVAILABLE, linkState } from '../media/links.js';
@@ -1004,6 +1004,11 @@ export async function mediaRoutes(app: FastifyInstance) {
         WHERE id = $1 RETURNING *`,
       [id, body.flags ?? null, body.redactions !== undefined ? JSON.stringify(body.redactions) : null, body.crop !== undefined, body.crop ? JSON.stringify(body.crop) : null, body.stripAudio ?? null, JSON.stringify(decisions)],
     );
+    // Bilder aus Vorlagen (#241) erben später ergänzte Markierungen ihres Quellbilds (nur hinzufügen, nie entfernen)
+    const added = (u.sensitive_flags ?? []).filter((f: string) => !(m.sensitive_flags ?? []).includes(f));
+    const derived = added.length
+      ? ((await pool.query(`UPDATE media SET sensitive_flags = ARRAY(SELECT f FROM unnest($3::text[]) f WHERE f = ANY(sensitive_flags || $2::text[])) WHERE $1::uuid = ANY(derived_from) AND deleted_at IS NULL`, [id, added, [...SENSITIVE_FLAGS]])).rowCount ?? 0)
+      : 0;
     let rendering = false;
     if (changesPublic) {
       if (m.kind === 'image') await renderPublic(id);
@@ -1022,6 +1027,7 @@ export async function mediaRoutes(app: FastifyInstance) {
       zuschnitt: !!u.crop,
       ohne_ton: u.strip_audio,
       neue_fassung: changesPublic,
+      ...(derived ? { abgeleitete_bilder_markiert: derived } : {}),
       ...(decisions.length
         ? { gesichtsvorschlaege_uebernommen: decisions.filter((d) => d.status === 'accepted').length, gesichtsvorschlaege_verworfen: decisions.filter((d) => d.status === 'rejected').length }
         : {}),

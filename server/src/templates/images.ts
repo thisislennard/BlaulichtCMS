@@ -9,6 +9,8 @@ import { log } from '../lib/log.js';
 import { getSettings } from '../lib/settings.js';
 import { config } from '../config.js';
 import { processMedia } from '../media/process.js';
+import { SENSITIVE_FLAGS, type SensitiveFlag } from '../media/privacy.js';
+import { privacyFindings } from '../lib/approval.js';
 import { mediaPaths } from '../media/storage.js';
 import { effectiveTypes } from '../media/types.js';
 import { createCollection, finalizeUpload, mediaPayload, uploadAllowance } from '../routes/media.js';
@@ -100,6 +102,17 @@ export async function resolveImages(layout: Layout, choices: Record<string, Imag
     out[e.id] = { file: mediaPaths.publicFile(m.id, 'jpg'), focusX: c.focusX, focusY: c.focusY, zoom: c.zoom };
   }
   return out;
+}
+
+/**
+ * Markierungen, die ein aus `sources` erzeugtes Bild erbt (#241): Vereinigung der Markierungen, dazu „Personen
+ * erkennbar“, wenn ein Quellbild offene Gesichtsvorschläge hat (in der Reihenfolge der Markierungsliste).
+ */
+export async function inheritedFlags(sources: string[]): Promise<{ flags: SensitiveFlag[] }> {
+  const f = await privacyFindings(sources);
+  const set = new Set<string>(f.flags);
+  if (f.faces > 0) set.add('persons');
+  return { flags: SENSITIVE_FLAGS.filter((x) => set.has(x)) };
 }
 
 /** Bild einer Vorlage rendern. */
@@ -194,7 +207,13 @@ export async function generateIntoMedia(g: GenerateInput) {
   const layout = layoutSchema.parse(t.layout);
   for (const e of layout.elements) if (e.type === 'image' && e.required && !g.images[e.id]?.mediaId) throw badRequest(`Bitte für „${e.label}“ ein Bild wählen.`);
   const values = cleanValues(layout, g.values);
-  const r = await renderFromTemplate(t.id, layout, values, await resolveImages(layout, g.images), false);
+  const images = await resolveImages(layout, g.images);
+  const r = await renderFromTemplate(t.id, layout, values, images, false);
+  // Datenschutz (#241): Das neue Bild zeigt die öffentliche Fassung der Quellbilder (Unkenntlichmachungen bleiben) und
+  // erbt deren Markierungen. Offene Gesichtsvorschläge sind ungeprüfte Gesichter – das neue Bild gilt dann als
+  // „Personen erkennbar“. So verlangt jede Freigabe mit diesem Bild dieselbe Datenschutz-Prüfung wie das Quellbild.
+  const sources = [...new Set(Object.keys(images).map((k) => g.images[k]!.mediaId))];
+  const inherited = await inheritedFlags(sources);
   const collection = await targetCollection({ collectionId: g.collectionId, postId: g.postId, actor: g.actor, userId: g.userId });
   // PNG, solange erlaubt (scharfe Schrift); sonst JPEG
   const types = effectiveTypes((await getSettings())['media.allowed_types'], null);
@@ -213,10 +232,12 @@ export async function generateIntoMedia(g: GenerateInput) {
     stored: { tmpPath, size: data.length, sha256: crypto.createHash('sha256').update(data).digest('hex') },
     name,
     declaredType: asPng ? 'image/png' : 'image/jpeg',
-    note: `Aus der Designvorlage „${t.title}“ erzeugt${g.source ? ` (${g.source})` : ''}.`,
+    note: `Aus der Designvorlage „${t.title}“ erzeugt${g.source ? ` (${g.source})` : ''}.${inherited.flags.length ? ' Markierungen der Quellbilder übernommen.' : ''}`,
     clientKey: null,
   });
   const mediaId = res.media.id as string;
+  // Vor der Verarbeitung: Das Bild ist erst danach „bereit“ und damit wählbar – nie ohne die geerbten Markierungen
+  if (sources.length) await pool.query(`UPDATE media SET sensitive_flags = $2, derived_from = $3 WHERE id = $1`, [mediaId, inherited.flags, sources]);
   // Gleich prüfen und verarbeiten, damit das Bild sofort im Beitrag nutzbar ist; sonst übernimmt der Worker
   try {
     await processMedia(mediaId);
@@ -228,6 +249,6 @@ export async function generateIntoMedia(g: GenerateInput) {
     `UPDATE media SET selection = 'selected', selection_by = $2, selection_at = now(), display_name = $3, alt_text = CASE WHEN $4 <> '' THEN $4 ELSE alt_text END WHERE id = $1 RETURNING *`,
     [mediaId, g.userId, t.title.slice(0, 200), alt],
   );
-  await audit(g.actor, 'design_template.image_generated', { type: 'design_template', id: t.id, label: t.title }, { datei: mediaId, sammlung: collection.id, ...(g.source ? { quelle: g.source } : {}) });
+  await audit(g.actor, 'design_template.image_generated', { type: 'design_template', id: t.id, label: t.title }, { datei: mediaId, sammlung: collection.id, ...(g.source ? { quelle: g.source } : {}), ...(sources.length ? { quellbilder: sources.length } : {}), ...(inherited.flags.length ? { markierungen_uebernommen: inherited.flags } : {}) });
   return { media: mediaPayload(row), collection: { id: collection.id, title: collection.title }, texts: r.texts };
 }

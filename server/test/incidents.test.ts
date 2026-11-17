@@ -10,6 +10,7 @@ import { setSettings } from '../src/lib/settings.js';
 import { claimJobs, completeJob, failJob } from '../src/jobs/queue.js';
 import { executeRun } from '../src/automations/engine.js';
 import { syncCatalog } from '../src/keywords/store.js';
+import { mediaPaths } from '../src/media/storage.js';
 
 /**
  * Einsatzliste (#213) gegen eine echte PostgreSQL-Datenbank: Rechte, Ort nur grob (Allowlist und Adressprüfung),
@@ -338,5 +339,89 @@ describe('Einsatzliste: Vorschläge, Import, Sammelaktionen, Workflow', () => {
     expect(rows[0]).toMatchObject({ title: 'Verkehrsunfall', location: 'Musterstadt', keyword: 'H 2', category: 'Hilfeleistung', site_id: siteId });
     expect(rows[0].submitted_at).not.toBeNull();
     expect(new Date(rows[0].alarm_at).toISOString()).toBe('2026-11-16T06:12:00.000Z');
+  });
+});
+
+describe('Einsatzliste: Datenschutz-Prüfung für Bilder (#241)', () => {
+  let colId = '';
+  /** Geprüftes Bild mit öffentlicher Fassung (Datei als Platzhalter), optional markiert bzw. mit Gesichtsvorschlägen */
+  const addImage = async (flags: string[] = [], faces: unknown[] = []) => {
+    const m = await one<any>(
+      `INSERT INTO media (collection_id, original_name, size_bytes, sha256, status, kind, has_preview, has_public, processed_at, sensitive_flags, face_proposals)
+       VALUES ($1, 'bild.jpg', 10, md5(random()::text) || md5(random()::text), 'ready', 'image', true, true, now(), $2, $3) RETURNING id`,
+      [colId, flags, JSON.stringify(faces)],
+    );
+    const f = mediaPaths.publicFile(m!.id, 'jpg');
+    fs.mkdirSync(path.dirname(f), { recursive: true });
+    fs.writeFileSync(f, 'x');
+    return m!.id as string;
+  };
+  const submitted = async (title: string, mediaIds: string[]) => {
+    const c = await editor.post('/incidents', { ...base, title, location: 'Nord', siteId, mediaIds });
+    expect(c.status, JSON.stringify(c.json)).toBe(200);
+    expect((await editor.post(`/incidents/${c.json.id}/submit`)).status).toBe(200);
+    return c.json as { id: string; content_hash: string };
+  };
+  const listed = async (id: string) => (await approver.get('/incidents?year=alle')).json.entries.find((e: any) => e.id === id);
+  const media = (id: string) => anonymous.get(`/bridge/media/${id}`, bridge());
+  const bridgeJobs = async () => (await anonymous.get('/bridge/jobs', bridge())).json.jobs.filter((j: any) => j.type.startsWith('incident.'));
+  const done = (jobId: string, url = 'https://wehr.example.org/einsatz/x/') => anonymous.post(`/bridge/jobs/${jobId}/result`, { status: 'published', remote_id: 7, url }, bridge());
+  let flaggedEntry = '';
+  let laterEntry = '';
+  let laterImage = '';
+
+  it('richtet eine Sammlung für die Bilder ein', async () => {
+    const col = await admin.post('/collections', { title: 'Einsatzfotos', createLink: false });
+    expect(col.status, JSON.stringify(col.json)).toBe(200);
+    colId = col.json.collection.id;
+  });
+
+  it('markiertes Bild: Freigabe nur mit bestätigter Datenschutz-Prüfung, Sammelfreigabe überspringt', async () => {
+    const img = await addImage(['health']);
+    const e = await submitted('Verkehrsunfall mit Foto', [img]);
+    flaggedEntry = e.id;
+    expect((await listed(e.id)).privacy).toMatchObject({ flagged: 1, faces: 0, flags: ['health'], approve_check: true });
+    const no = await approver.post(`/incidents/${e.id}/approve`, { contentHash: e.content_hash });
+    expect(no.status).toBe(400);
+    expect(no.json.error).toBe('privacy_check_required');
+    const bulk = await approver.post('/incidents/bulk/approve', { items: [{ id: e.id, contentHash: e.content_hash }] });
+    expect(bulk.json.done).toBe(0);
+    expect(bulk.json.skipped[0].reason).toMatch(/Datenschutz-Prüfung/);
+    const ok = await approver.post(`/incidents/${e.id}/approve`, { contentHash: e.content_hash, privacyChecked: true });
+    expect(ok.status, JSON.stringify(ok.json)).toBe(200);
+    const a = await one<any>(`SELECT details FROM audit_events WHERE action = 'incident.approved' AND object_id = $1::text ORDER BY id DESC LIMIT 1`, [e.id]);
+    expect(a!.details).toMatchObject({ datenschutz_geprueft: true, markierte_medien: 1 });
+    // Bestätigt bei der Freigabe → Veröffentlichen ohne erneute Nachfrage
+    expect((await listed(e.id)).privacy.publish_check).toBe(false);
+    expect((await publisher.post(`/incidents/${e.id}/publish`, { contentHash: e.content_hash })).status).toBe(200);
+  });
+
+  it('offene Gesichtsvorschläge verlangen dieselbe Prüfung', async () => {
+    const img = await addImage([], [{ id: 'ab12cd34', x: 0.1, y: 0.1, w: 0.2, h: 0.2, score: 0.9, status: 'open' }]);
+    const e = await submitted('Brand mit Gesichtern', [img]);
+    expect((await listed(e.id)).privacy).toMatchObject({ flagged: 0, faces: 1, approve_check: true });
+    const no = await approver.post(`/incidents/${e.id}/approve`, { contentHash: e.content_hash });
+    expect(no.status).toBe(400);
+    expect(no.json.message).toMatch(/Gesichtsvorschläge/);
+    expect((await approver.post(`/incidents/${e.id}/approve`, { contentHash: e.content_hash, privacyChecked: true })).status).toBe(200);
+  });
+
+  it('nach der Freigabe markiert: Veröffentlichen verlangt die Bestätigung (einzeln, Sammelaktion überspringt)', async () => {
+    laterImage = await addImage();
+    const e = await submitted('Kaminbrand mit Foto', [laterImage]);
+    laterEntry = e.id;
+    expect((await listed(e.id)).privacy.approve_check).toBe(false);
+    expect((await approver.post(`/incidents/${e.id}/approve`, { contentHash: e.content_hash })).status).toBe(200);
+    await pool.query(`UPDATE media SET sensitive_flags = '{persons}' WHERE id = $1`, [laterImage]);
+    expect((await listed(e.id)).privacy).toMatchObject({ approve_check: true, publish_check: true });
+    const no = await publisher.post(`/incidents/${e.id}/publish`, { contentHash: e.content_hash });
+    expect(no.status).toBe(400);
+    expect(no.json.error).toBe('privacy_check_required');
+    expect((await publisher.post('/incidents/bulk/publish', { items: [{ id: e.id, contentHash: e.content_hash }] })).json.done).toBe(0);
+    const ok = await publisher.post(`/incidents/${e.id}/publish`, { contentHash: e.content_hash, privacyChecked: true });
+    expect(ok.status, JSON.stringify(ok.json)).toBe(200);
+    const a = await one<any>(`SELECT details FROM audit_events WHERE action = 'incident.published' AND object_id = $1::text ORDER BY id DESC LIMIT 1`, [e.id]);
+    expect(a!.details).toMatchObject({ datenschutz_geprueft: true, markierte_medien: 1 });
+    expect((await listed(e.id)).privacy.publish_check).toBe(false);
   });
 });

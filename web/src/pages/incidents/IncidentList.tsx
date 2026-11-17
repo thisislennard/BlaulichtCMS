@@ -11,6 +11,8 @@ import { KeywordMeaning } from '../../components/KeywordMeaning';
 import { useAuth } from '../../lib/auth';
 import { fmtDate, fmtDateTime, fmtTime, fromLocalInput, toLocalInput } from '../../lib/format';
 import { MediaPicker } from '../posts/PostEditor';
+import { PRIVACY_CHECKS, PrivacyCheckList } from '../posts/DecisionDialog';
+import { SENSITIVE_LABELS } from '../media/PrivacyDialog';
 
 /** Einsatzliste der Website (#213): Einträge vorschlagen, bearbeiten, freigeben, veröffentlichen und zurückziehen. */
 
@@ -41,6 +43,8 @@ interface Entry {
   approved_by_name: string | null;
   rejected_note: string | null;
   state: 'draft' | 'in_review' | 'approved' | 'publishing' | 'live' | 'failed' | 'withdrawing' | 'withdrawn';
+  /** Datenschutz-Prüfung (#241): markierte Bilder bzw. offene Gesichtsvorschläge */
+  privacy: { flagged: number; faces: number; flags: string[]; approve_check: boolean; publish_check: boolean };
   job: { status: string; action: string; error: string | null; remote_url: string | null; result_at: string | null } | null;
 }
 interface ListResponse {
@@ -440,6 +444,68 @@ function ConfigDialog({ cfg, onClose }: { cfg: Config; onClose: (saved: boolean)
   );
 }
 
+/* ------------------------------------------------------------------ Datenschutz-Prüfung */
+
+/**
+ * Freigeben bzw. Veröffentlichen eines Eintrags mit markierten Bildern oder offenen Gesichtsvorschlägen (#241): wie bei
+ * Beiträgen nur mit ausdrücklich bestätigten Prüfpunkten. Der Server prüft dasselbe.
+ */
+function PrivacyConfirmDialog({ entry, action, onClose, onDone }: { entry: Entry; action: 'approve' | 'publish'; onClose: () => void; onDone: () => void }) {
+  const toast = useToast();
+  const toastError = useErrorToast();
+  const [checks, setChecks] = useState<boolean[]>(PRIVACY_CHECKS.map(() => false));
+  const [busy, setBusy] = useState(false);
+  const p = entry.privacy;
+  const submit = async () => {
+    setBusy(true);
+    try {
+      await post(`/incidents/${entry.id}/${action}`, { contentHash: entry.content_hash, privacyChecked: true });
+      toast({ tone: 'success', title: action === 'approve' ? 'Freigegeben' : 'Wird übertragen' });
+      onDone();
+      onClose();
+    } catch (e) {
+      toastError(e);
+      setBusy(false);
+    }
+  };
+  return (
+    <Dialog
+      open
+      onClose={onClose}
+      title={action === 'approve' ? 'Eintrag freigeben' : 'Auf der Website veröffentlichen'}
+      footer={
+        <>
+          <Button onClick={onClose}>Abbrechen</Button>
+          <Button variant="primary" loading={busy} disabled={checks.some((c) => !c)} onClick={submit}>
+            {action === 'approve' ? 'Freigeben' : 'Veröffentlichen'}
+          </Button>
+        </>
+      }
+    >
+      <div className="flex flex-col gap-3 text-sm">
+        <p className="m-0">
+          „{entry.title}“ (Fassung {entry.revision}) enthält Bilder, die vor der Veröffentlichung geprüft werden müssen.
+          {action === 'publish' && ' Bei der Freigabe war diese Prüfung noch nicht bestätigt (z. B. weil die Markierung erst danach gesetzt wurde).'}
+        </p>
+        <fieldset className="m-0 p-3 border border-warn rounded-node flex flex-col gap-2">
+          <legend className="px-1 font-medium">Datenschutz-Prüfung</legend>
+          {p.flagged > 0 && (
+            <p className="m-0">
+              {p.flagged === 1 ? 'Ein Bild ist' : `${p.flagged} Bilder sind`} markiert: {p.flags.map((f) => SENSITIVE_LABELS[f as keyof typeof SENSITIVE_LABELS] ?? f).join(', ')}.
+            </p>
+          )}
+          {p.faces > 0 && (
+            <Notice tone="warning" icon="ScanFace" title="Gesichtsvorschläge offen">
+              {p.faces === 1 ? 'Ein Bild hat' : `${p.faces} Bilder haben`} noch ungeprüfte Vorschläge der Gesichtssuche. Gefundene Gesichter sind nicht automatisch unkenntlich – vorher in den Medien unter „Datenschutz und Unkenntlichmachen“ übernehmen oder verwerfen, sonst bewusst bestätigen.
+            </Notice>
+          )}
+          <PrivacyCheckList checks={checks} onChange={setChecks} />
+        </fieldset>
+      </div>
+    </Dialog>
+  );
+}
+
 /* ------------------------------------------------------------------ Seite */
 
 export default function IncidentList() {
@@ -456,6 +522,7 @@ export default function IncidentList() {
   const [importing, setImporting] = useState(false);
   const [config, setConfig] = useState(false);
   const [reject, setReject] = useState<Entry | null>(null);
+  const [privacy, setPrivacy] = useState<{ entry: Entry; action: 'approve' | 'publish' } | null>(null);
   const [note, setNote] = useState('');
   const q = useQuery({ queryKey: ['incidents', year], queryFn: () => get<ListResponse>(`/incidents${year ? `?year=${year}` : ''}`), refetchInterval: 30_000 });
   const cfg = useQuery({ queryKey: ['incidents', 'config'], queryFn: () => get<Config>('/incidents/config') });
@@ -478,10 +545,15 @@ export default function IncidentList() {
   const chosen = list.filter((e) => sel.has(e.id));
   const toggle = (id: string) => setSel((s) => (s.has(id) ? new Set([...s].filter((x) => x !== id)) : new Set([...s, id])));
   const bulk = async (what: 'submit' | 'approve' | 'publish') => {
-    const items = chosen.filter((e) => (what === 'submit' ? ['draft', 'withdrawn'].includes(e.state) && !e.submitted_at : what === 'approve' ? e.state === 'in_review' : ['approved', 'failed'].includes(e.state)));
-    if (!items.length) return toast({ tone: 'warning', title: 'Keine passenden Einträge ausgewählt' });
+    const fitting = chosen.filter((e) => (what === 'submit' ? ['draft', 'withdrawn'].includes(e.state) && !e.submitted_at : what === 'approve' ? e.state === 'in_review' : ['approved', 'failed'].includes(e.state)));
+    // Datenschutz-Prüfung (#241) nur einzeln – die Sammelaktion überspringt solche Einträge (prüft auch der Server)
+    const needsCheck = (e: Entry) => (what === 'approve' ? e.privacy.approve_check : what === 'publish' ? e.privacy.publish_check : false);
+    const items = fitting.filter((e) => !needsCheck(e));
+    const held = fitting.length - items.length;
+    const heldText = held ? `${held === 1 ? 'Ein Eintrag enthält' : `${held} Einträge enthalten`} markierte Bilder oder offene Gesichtsvorschläge – bitte einzeln über das Aktionsmenü prüfen.` : undefined;
+    if (!items.length) return toast({ tone: 'warning', title: held ? 'Datenschutz-Prüfung nötig' : 'Keine passenden Einträge ausgewählt', text: heldText });
     const label = { submit: 'zur Freigabe einreichen', approve: 'freigeben', publish: 'auf der Website veröffentlichen' }[what];
-    if (!(await ask({ title: `${items.length} Einträge ${label}?`, confirmLabel: 'Ja', danger: false }))) return;
+    if (!(await ask({ title: `${items.length} Einträge ${label}?`, text: held ? `Übersprungen: ${heldText}` : undefined, confirmLabel: 'Ja', danger: false }))) return;
     try {
       const r = await post<any>(`/incidents/bulk/${what}`, what === 'submit' ? { ids: items.map((e) => e.id) } : { items: items.map((e) => ({ id: e.id, contentHash: e.content_hash })) });
       const skipped = Array.isArray(r.skipped) ? r.skipped.length : r.skipped;
@@ -621,6 +693,11 @@ export default function IncidentList() {
                       {e.featured && <span className="inline-flex items-center gap-1"><Icon name="Star" size={12} /> besonders</span>}
                       {e.false_alarm && <span>Fehlalarm</span>}
                       {e.media_ids.length > 0 && <span>{e.media_ids.length} Bild(er)</span>}
+                      {e.privacy.approve_check && (
+                        <span className="inline-flex items-center gap-1 text-warn" title="Markierte Bilder oder offene Gesichtsvorschläge: Freigabe und Veröffentlichung nur mit bestätigter Datenschutz-Prüfung">
+                          <Icon name="ShieldAlert" size={12} /> Datenschutz-Prüfung
+                        </span>
+                      )}
                       <span>{SOURCE[e.source]}</span>
                       <Rev n={e.revision} />
                     </div>
@@ -644,9 +721,9 @@ export default function IncidentList() {
                       items={[
                         can('incident.edit') && { label: 'Bearbeiten', icon: 'Pencil', onClick: () => setEdit(e) },
                         can('incident.edit') && ['draft', 'withdrawn'].includes(e.state) && !e.submitted_at && { label: 'Zur Freigabe einreichen', icon: 'Send', onClick: () => act(() => post(`/incidents/${e.id}/submit`), 'Eingereicht') },
-                        can('approval.incident') && e.state === 'in_review' && { label: 'Freigeben', icon: 'Check', onClick: () => act(() => post(`/incidents/${e.id}/approve`, { contentHash: e.content_hash }), 'Freigegeben') },
+                        can('approval.incident') && e.state === 'in_review' && { label: e.privacy.approve_check ? 'Freigeben (mit Datenschutz-Prüfung) …' : 'Freigeben', icon: 'Check', onClick: () => (e.privacy.approve_check ? setPrivacy({ entry: e, action: 'approve' }) : act(() => post(`/incidents/${e.id}/approve`, { contentHash: e.content_hash }), 'Freigegeben')) },
                         can('approval.incident') && e.state === 'in_review' && { label: 'Zurückweisen', icon: 'Undo2', onClick: () => (setNote(''), setReject(e)) },
-                        can('incident.publish') && ['approved', 'failed'].includes(e.state) && !!e.approved_at && { label: 'Auf Website veröffentlichen', icon: 'Globe', onClick: () => act(() => post(`/incidents/${e.id}/publish`, { contentHash: e.content_hash }), 'Wird übertragen') },
+                        can('incident.publish') && ['approved', 'failed'].includes(e.state) && !!e.approved_at && { label: e.privacy.publish_check ? 'Auf Website veröffentlichen (mit Datenschutz-Prüfung) …' : 'Auf Website veröffentlichen', icon: 'Globe', onClick: () => (e.privacy.publish_check ? setPrivacy({ entry: e, action: 'publish' }) : act(() => post(`/incidents/${e.id}/publish`, { contentHash: e.content_hash }), 'Wird übertragen')) },
                         can('incident.publish') &&
                           (['live', 'publishing'].includes(e.state) || (e.job?.action === 'upsert' && ['approved', 'in_review', 'draft'].includes(e.state) && e.job.status === 'done')) && {
                             label: 'Von Website zurückziehen',
@@ -676,6 +753,7 @@ export default function IncidentList() {
       {edit !== undefined && c && <EntryDialog entry={edit} cfg={c} onClose={(s) => (setEdit(undefined), s && refresh())} />}
       {importing && c && <ImportDialog cfg={c} onClose={(d) => (setImporting(false), d && refresh())} />}
       {config && c && <ConfigDialog cfg={c} onClose={(s) => (setConfig(false), s && refresh())} />}
+      {privacy && <PrivacyConfirmDialog entry={privacy.entry} action={privacy.action} onClose={() => setPrivacy(null)} onDone={refresh} />}
       {reject && (
         <Dialog
           open

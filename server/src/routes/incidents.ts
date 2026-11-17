@@ -6,6 +6,7 @@ import { audit } from '../lib/audit.js';
 import { AppError, badRequest, conflict, forbidden, notFound } from '../lib/errors.js';
 import { getSettings } from '../lib/settings.js';
 import { notify } from '../lib/notify.js';
+import { assertPrivacyChecked, privacyAudit, privacyFindings } from '../lib/approval.js';
 import {
   LIMITS,
   assertLocation,
@@ -91,6 +92,17 @@ function entryPayload(e: any) {
     rejected_note: e.rejected_note,
     withdrawn_at: e.withdrawn_at,
     state: entryState(e, job),
+    /**
+     * Datenschutz-Prüfung (#241): markierte Bilder bzw. Bilder mit offenen Gesichtsvorschlägen. `approve_check`: Freigabe
+     * nur mit Bestätigung; `publish_check`: Befunde, die bei der Freigabe noch nicht bestätigt wurden.
+     */
+    privacy: {
+      flagged: e.pv_flagged ?? 0,
+      faces: e.pv_faces ?? 0,
+      flags: e.pv_flags ?? [],
+      approve_check: (e.pv_flagged ?? 0) + (e.pv_faces ?? 0) > 0,
+      publish_check: (e.pv_unconfirmed ?? 0) > 0,
+    },
     job: job ? { ...job, error: e.job_error ?? null, remote_url: e.job_remote_url ?? null, result_at: e.job_result_at ?? null, site_id: e.job_site_id } : null,
   };
 }
@@ -98,12 +110,18 @@ function entryPayload(e: any) {
 const SELECT = `
   SELECT e.*, s.name AS site_name, cu.name AS created_by_name, au.name AS approved_by_name,
          j.status AS job_status, j.action AS job_action, j.revision AS job_revision, j.error AS job_error, j.remote_url AS job_remote_url,
-         j.result_at AS job_result_at, j.site_id AS job_site_id
+         j.result_at AS job_result_at, j.site_id AS job_site_id, pv.pv_flagged, pv.pv_faces, pv.pv_unconfirmed,
+         ARRAY(SELECT DISTINCT f FROM media fm, unnest(fm.sensitive_flags) f WHERE fm.id = ANY(e.media_ids) AND fm.deleted_at IS NULL ORDER BY f) AS pv_flags
     FROM incident_entries e
     LEFT JOIN wp_sites s ON s.id = e.site_id
     LEFT JOIN users cu ON cu.id = e.created_by
     LEFT JOIN users au ON au.id = e.approved_by
-    LEFT JOIN LATERAL (SELECT * FROM incident_jobs WHERE entry_id = e.id AND status <> 'canceled' ORDER BY created_at DESC LIMIT 1) j ON true`;
+    LEFT JOIN LATERAL (SELECT * FROM incident_jobs WHERE entry_id = e.id AND status <> 'canceled' ORDER BY created_at DESC LIMIT 1) j ON true
+    LEFT JOIN LATERAL (
+      SELECT count(*) FILTER (WHERE x.flagged)::int AS pv_flagged, count(*) FILTER (WHERE x.faces)::int AS pv_faces,
+             count(*) FILTER (WHERE (x.flagged OR x.faces) AND NOT (x.id = ANY(e.privacy_confirmed_ids)))::int AS pv_unconfirmed
+        FROM (SELECT m.id, cardinality(m.sensitive_flags) > 0 AS flagged, jsonb_path_exists(m.face_proposals, '$[*] ? (@.status == "open")') AS faces
+                FROM media m WHERE m.id = ANY(e.media_ids) AND m.deleted_at IS NULL) x) pv ON true`;
 
 async function loadEntry(id: string, db: Queryable = pool) {
   const e = await one<any>(`${SELECT} WHERE e.id = $1`, [id], db);
@@ -159,8 +177,12 @@ function versionAtLeast(v: string | null | undefined, min: string) {
   return true;
 }
 
-/** Freigabe einer Fassung (gemeinsam für einzeln und mehrere). */
-async function approveOne(req: FastifyRequest, id: string, contentHash: string, fourEyes: boolean) {
+/**
+ * Freigabe einer Fassung (gemeinsam für einzeln und mehrere). Markierte Bilder bzw. Bilder mit offenen
+ * Gesichtsvorschlägen verlangen wie bei Beiträgen die ausdrücklich bestätigte Datenschutz-Prüfung (#241); die
+ * Sammelfreigabe bestätigt nie und überspringt solche Einträge.
+ */
+async function approveOne(req: FastifyRequest, id: string, contentHash: string, fourEyes: boolean, privacyChecked = false) {
   const e = await one<any>('SELECT * FROM incident_entries WHERE id = $1', [id]);
   if (!e) throw notFound('Eintrag nicht gefunden.');
   if (e.content_hash !== contentHash) throw conflict('Der Eintrag wurde inzwischen geändert. Bitte die aktuelle Fassung prüfen.');
@@ -169,16 +191,21 @@ async function approveOne(req: FastifyRequest, id: string, contentHash: string, 
   if (fourEyes && me && [e.created_by, e.updated_by, e.submitted_by].includes(me)) {
     throw forbidden('Vier-Augen-Prinzip: Wer den Eintrag angelegt, geändert oder eingereicht hat, kann ihn nicht selbst freigeben.');
   }
+  const privacy = await privacyFindings(e.media_ids);
+  assertPrivacyChecked(privacy, privacyChecked, 'Der Eintrag');
   const upd = await pool.query(
-    `UPDATE incident_entries SET approved_hash = $3, approved_by = $2, approved_at = now(), rejected_note = NULL WHERE id = $1 AND content_hash = $3 AND submitted_at IS NOT NULL`,
-    [id, me, contentHash],
+    `UPDATE incident_entries SET approved_hash = $3, approved_by = $2, approved_at = now(), rejected_note = NULL, privacy_confirmed_ids = $4 WHERE id = $1 AND content_hash = $3 AND submitted_at IS NOT NULL`,
+    [id, me, contentHash, privacy.ids],
   );
   if (!upd.rowCount) throw conflict('Der Eintrag wurde inzwischen geändert oder nicht mehr zur Freigabe vorgelegt.');
-  await audit(req.auth!.actor, 'incident.approved', { type: 'incident', id, label: e.title }, { fassung: e.revision });
+  await audit(req.auth!.actor, 'incident.approved', { type: 'incident', id, label: e.title }, { fassung: e.revision, ...privacyAudit(privacy) });
 }
 
-/** Veröffentlichen (gemeinsam für einzeln und mehrere). */
-async function publishOne(req: FastifyRequest, id: string, contentHash: string) {
+/**
+ * Veröffentlichen (gemeinsam für einzeln und mehrere). Befunde der Datenschutz-Prüfung, die bei der Freigabe nicht
+ * bestätigt wurden (später markiert, neue Gesichtsvorschläge, Freigabe vor #241), verlangen die Bestätigung hier.
+ */
+async function publishOne(req: FastifyRequest, id: string, contentHash: string, privacyChecked = false) {
   return tx(async (db) => {
     const e = await one<any>('SELECT * FROM incident_entries WHERE id = $1 FOR UPDATE', [id], db);
     if (!e) throw notFound('Eintrag nicht gefunden.');
@@ -190,6 +217,17 @@ async function publishOne(req: FastifyRequest, id: string, contentHash: string) 
       const n = await one<{ n: number }>(`SELECT count(*)::int AS n FROM media WHERE id = ANY($1::uuid[]) AND status = 'ready' AND deleted_at IS NULL AND has_public`, [e.media_ids], db);
       if (n!.n !== e.media_ids.length) throw conflict('Mindestens ein Bild wurde inzwischen gelöscht. Bitte den Eintrag anpassen und erneut freigeben lassen.');
     }
+    const privacy = await privacyFindings(e.media_ids, db);
+    const confirmed = new Set<string>(e.privacy_confirmed_ids ?? []);
+    const unconfirmed = privacy.ids.filter((m) => !confirmed.has(m));
+    if (unconfirmed.length && !privacyChecked) {
+      const single = unconfirmed.length === 1;
+      throw new AppError(
+        400,
+        'privacy_check_required',
+        `${single ? 'Ein Bild' : `${unconfirmed.length} Bilder`} dieses Eintrags ${single ? 'ist' : 'sind'} markiert oder ${single ? 'hat' : 'haben'} offene Gesichtsvorschläge, ohne dass das bei der Freigabe geprüft wurde. Bitte die Datenschutz-Prüfung bestätigen.`,
+      );
+    }
     const open = await one<any>(`SELECT * FROM incident_jobs WHERE entry_id = $1 AND site_id = $2 AND revision = $3 AND action = 'upsert' AND status IN ('queued','sent','done') ORDER BY created_at DESC LIMIT 1`, [id, e.site_id, e.revision], db);
     const last = await one<any>(`SELECT action FROM incident_jobs WHERE entry_id = $1 AND site_id = $2 AND status IN ('queued','sent','done') ORDER BY created_at DESC LIMIT 1`, [id, e.site_id], db);
     if (open && last?.action === 'upsert') return { job: open, duplicate: true };
@@ -197,8 +235,8 @@ async function publishOne(req: FastifyRequest, id: string, contentHash: string) 
     const prev = await liveSite(id, db);
     if (prev && prev !== e.site_id) await enqueueIncidentJob(db, e, prev, 'delete', uid(req));
     const j = await enqueueIncidentJob(db, e, e.site_id, 'upsert', uid(req));
-    await db.query(`UPDATE incident_entries SET withdrawn_at = NULL WHERE id = $1`, [id]);
-    await audit(req.auth!.actor, 'incident.published', { type: 'incident', id, label: e.title }, { fassung: e.revision }, 'ok', db);
+    await db.query(`UPDATE incident_entries SET withdrawn_at = NULL, privacy_confirmed_ids = CASE WHEN $2 THEN $3::uuid[] ELSE privacy_confirmed_ids END WHERE id = $1`, [id, unconfirmed.length > 0, privacy.ids]);
+    await audit(req.auth!.actor, 'incident.published', { type: 'incident', id, label: e.title }, { fassung: e.revision, ...(unconfirmed.length ? privacyAudit(privacy) : {}) }, 'ok', db);
     return { job: j, duplicate: false };
   });
 }
@@ -408,8 +446,8 @@ export async function incidentRoutes(app: FastifyInstance) {
 
   app.post('/incidents/:id/approve', { preHandler: requireAuth('approval.incident') }, async (req) => {
     const { id } = idParam.parse(req.params);
-    const { contentHash } = z.object({ contentHash: z.string().length(64) }).parse(req.body);
-    await approveOne(req, id, contentHash, !!(await getSettings())['editorial.four_eyes']);
+    const { contentHash, privacyChecked } = z.object({ contentHash: z.string().length(64), privacyChecked: z.boolean().default(false) }).parse(req.body);
+    await approveOne(req, id, contentHash, !!(await getSettings())['editorial.four_eyes'], privacyChecked);
     return { ok: true };
   });
 
@@ -442,8 +480,8 @@ export async function incidentRoutes(app: FastifyInstance) {
 
   app.post('/incidents/:id/publish', { preHandler: requireAuth('incident.publish') }, async (req) => {
     const { id } = idParam.parse(req.params);
-    const { contentHash } = z.object({ contentHash: z.string().length(64) }).parse(req.body);
-    const r = await publishOne(req, id, contentHash);
+    const { contentHash, privacyChecked } = z.object({ contentHash: z.string().length(64), privacyChecked: z.boolean().default(false) }).parse(req.body);
+    const r = await publishOne(req, id, contentHash, privacyChecked);
     return { id: r.job.id, status: r.job.status, duplicate: r.duplicate };
   });
 

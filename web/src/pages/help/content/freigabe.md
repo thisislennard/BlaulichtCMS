@@ -52,6 +52,8 @@ Dasselbe gilt für Bilder mit **offenen Gesichtsvorschlägen** (Hilfe → Sichtu
 
 Die Bestätigung steht im Audit-Protokoll. Ohne Markierungen zeigt der Dialog dieselben Fragen als Hinweis. Nach der Freigabe lässt sich die öffentliche Fassung einer Datei nicht mehr ändern (erst Freigabe zurückziehen).
 
+Dieselbe Prüfung gilt für Bilder der [Einsatzliste](/hilfe/einsatzliste#freigabe-und-veroeffentlichung). Bilder, die aus einer [Bildvorlage](/hilfe/designvorlagen#befuellbare-bildvorlagen) erzeugt werden, übernehmen die Markierungen ihrer Quellbilder – ein Sharepic aus einem markierten Foto verlangt also ebenfalls die Datenschutz-Prüfung.
+
 Mit eingeschaltetem **Vier-Augen-Prinzip** (Einstellungen → Redaktion) darf niemand die eigene Fassung freigeben: Wer am Beitrag geschrieben hat (Text, Kanaltexte, Bilder und Videos – auch in einer früheren Fassung) oder die Fassung eingereicht hat, kann sie nicht freigeben. Nur den Termin oder den Zielkanal zu ändern zählt nicht als Schreiben. Bei Bannern sind die anlegende, die zuletzt ändernde und die einreichende Person ausgeschlossen, bei Warnentwürfen alle, die am Entwurf geschrieben oder ihn eingereicht haben. Die Bestätigung der Warnstufe darf die freigebende Person selbst vornehmen – sie gehört zu ihrer fachlichen Prüfung.
 
 **Freigabe zurückziehen** bricht noch nicht abgeholte Aufträge ab. Hat die Website den Auftrag schon abgeholt, lehnt BlaulichtCMS den Widerruf ab, bis das Ergebnis vorliegt – danach den Beitrag bei Bedarf zurückziehen. Widerruf und Abholung laufen nie gleichzeitig. Meldet eine Website trotzdem eine Veröffentlichung zu einer widerrufenen Freigabe, beauftragt BlaulichtCMS sofort den Rückzug und meldet das.
