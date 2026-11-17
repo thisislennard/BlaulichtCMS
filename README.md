@@ -93,7 +93,7 @@ flowchart LR
   mit Warnschwelle; Frist und Höchstgröße der ZIP-Downloads einstellbar.
 - **Abgebildete Personen:** Markierungen für erkennbare Personen, Verletzte, Kennzeichen und sensible Inhalte;
   markierte Medien verlangen vor der Freigabe eine bewusste Datenschutz-Prüfung.
-- **Unkenntlich machen:** Bereiche verpixeln, weichzeichnen oder abdecken, Bilder zuschneiden, Videos ohne Ton
+- **Unkenntlich machen:** Bereiche verpixeln, weichzeichnen oder abdecken, Kennzeichen mit einem Klick, Bilder zuschneiden, Videos ohne Ton
   veröffentlichen – das Original bleibt unverändert.
 - **Gesichter automatisch vorschlagen:** lokale Gesichtssuche (YuNet, MIT) schlägt Bereiche zum Unkenntlichmachen vor –
   einzeln oder alle übernehmen bzw. verwerfen; nichts wird ohne Bestätigung unkenntlich, offene Vorschläge verlangen

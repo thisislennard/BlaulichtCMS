@@ -1874,3 +1874,31 @@ describe('Zeitangaben in der eingestellten Zeitzone (#224)', async () => {
     f.setTimeZone('Europe/Berlin');
   });
 });
+
+describe('Kennzeichen von Hand anklicken (#223)', async () => {
+  const { plateBox, PLATE_WIDTH } = await import('../../web/src/pages/media/plateBox.js');
+  it('setzt einen Bereich in Kennzeichenform mittig auf den Klickpunkt', () => {
+    // Querformat 3:2 → Höhe = Breite · 1,5 / 4 (in Bildanteilen)
+    const b = plateBox({ x: 0.5, y: 0.5 }, 1.5, 'm');
+    expect(b.w).toBeCloseTo(PLATE_WIDTH.m);
+    expect(b.h).toBeCloseTo((PLATE_WIDTH.m * 1.5) / 4);
+    expect(b.x + b.w / 2).toBeCloseTo(0.5);
+    expect(b.y + b.h / 2).toBeCloseTo(0.5);
+    // Im Pixelmaß bleibt das Verhältnis 4:1 – auch im Hochformat
+    const t = plateBox({ x: 0.3, y: 0.7 }, 0.75, 'l');
+    expect((t.w * 0.75) / t.h).toBeCloseTo(4);
+  });
+  it('bleibt am Bildrand vollständig im Bild (gültig für den Server)', () => {
+    for (const at of [{ x: 0, y: 0 }, { x: 1, y: 1 }, { x: 0.99, y: 0.02 }]) {
+      for (const size of ['s', 'm', 'l'] as const) {
+        const b = plateBox(at, 1.5, size);
+        expect(b.x).toBeGreaterThanOrEqual(0);
+        expect(b.y).toBeGreaterThanOrEqual(0);
+        expect(b.x + b.w).toBeLessThanOrEqual(1.0001);
+        expect(b.y + b.h).toBeLessThanOrEqual(1.0001);
+        expect(b.w).toBeGreaterThan(0);
+      }
+    }
+    expect(plateBox({ x: 0.5, y: 0.5 }, NaN, 's').h).toBeGreaterThan(0);
+  });
+});

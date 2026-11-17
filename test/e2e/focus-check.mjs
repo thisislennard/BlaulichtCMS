@@ -410,8 +410,18 @@ async function freshSetup() {
   } catch (e) {
     console.log('  (Automation)', e.message);
   }
+  // Presseanfrage mit geänderter Frist (Verlauf, Notizfeld; #224)
+  let pressId = null;
+  try {
+    const pr = await admin.post('/press/requests', { topic: 'Rückfrage zur Übung', outlet: 'Testzeitung', dueAt: new Date(Date.now() + 86_400_000).toISOString() });
+    await admin.req('PATCH', `/press/requests/${pr.id}`, { dueAt: new Date(Date.now() + 2 * 86_400_000).toISOString() });
+    pressId = pr.id;
+  } catch (e) {
+    console.log('  (Presseanfrage)', e.message);
+  }
   console.log('✔ Testdaten');
   const st = {
+    pressId,
     adminSecret: mfa.secret,
     editor: { email: 'redaktion@example.org', password: 'Redaktion-Testkennwort-2026', secret: editor.totpSecret },
     token,
@@ -493,7 +503,7 @@ try {
   let n = 0;
   churn = setInterval(() => editor.post('/posts', { title: `Live-Ereignis ${++n}`, kind: 'news' }).catch(() => {}), 2000);
 
-  const routes = ['/', '/beitraege', `/beitraege/${post.id}`, `/beitraege/${sub.id}`, '/vorlagen', '/kalender', '/freigaben', '/medien', `/medien/${col.collection.id}`, '/medien/dateien', '/medien/papierkorb', '/medien/verwaltung', '/medien/gestaltung', ...(st.linkId ? [`/medien/gestaltung?link=${st.linkId}`] : []), '/designvorlagen', ...(st.designTemplateId ? [`/designvorlagen/${st.designTemplateId}`] : []), ...(st.imageTemplateId ? [`/designvorlagen/${st.imageTemplateId}`, `/designvorlagen/${st.imageTemplateId}/editor`] : []), '/quellen', '/presse', '/presse/verteiler', '/presse/mitteilungen', '/presse/einstellungen', '/banner', '/kanaele', '/warnungen', '/warnungen/pflege', ...(warn ? [`/warnungen/${warn.id}`] : []), '/verbindungen', ...(conn ? [`/verbindungen/${conn.id}`, `/verbindungen/${conn.id}?ansicht=empfangsprotokoll`] : []), ...(st.warnfeedId ? [`/verbindungen/${st.warnfeedId}`, `/verbindungen/${st.warnfeedId}?ansicht=empfangsprotokoll`] : []), ...(st.feuersoftwareId ? [`/verbindungen/${st.feuersoftwareId}`] : []), ...[st.threadsId, st.xApiId, st.whatsappId, st.mastodonId, st.blueskyId].filter(Boolean).map((x) => `/verbindungen/${x}`), '/amtliche-warnungen', '/reichweite', '/workflows', '/workflows/eingaenge', '/workflows/ausgaenge', ...(st.automationId ? [`/workflows/${st.automationId}`] : []), '/benutzer', '/system', '/protokolle', '/datenschutz-anfragen', '/einstellungen', '/profil', '/hilfe', '/aktivitaeten', '/benachrichtigungen'];
+  const routes = ['/', '/beitraege', `/beitraege/${post.id}`, `/beitraege/${sub.id}`, '/vorlagen', '/kalender', '/freigaben', '/medien', `/medien/${col.collection.id}`, '/medien/dateien', '/medien/papierkorb', '/medien/verwaltung', '/medien/gestaltung', ...(st.linkId ? [`/medien/gestaltung?link=${st.linkId}`] : []), '/designvorlagen', ...(st.designTemplateId ? [`/designvorlagen/${st.designTemplateId}`] : []), ...(st.imageTemplateId ? [`/designvorlagen/${st.imageTemplateId}`, `/designvorlagen/${st.imageTemplateId}/editor`] : []), '/quellen', '/presse', '/presse/verteiler', '/presse/mitteilungen', '/presse/einstellungen', ...(st.pressId ? [`/presse/${st.pressId}`] : []), '/banner', '/kanaele', '/warnungen', '/warnungen/pflege', ...(warn ? [`/warnungen/${warn.id}`] : []), '/verbindungen', ...(conn ? [`/verbindungen/${conn.id}`, `/verbindungen/${conn.id}?ansicht=empfangsprotokoll`] : []), ...(st.warnfeedId ? [`/verbindungen/${st.warnfeedId}`, `/verbindungen/${st.warnfeedId}?ansicht=empfangsprotokoll`] : []), ...(st.feuersoftwareId ? [`/verbindungen/${st.feuersoftwareId}`] : []), ...[st.threadsId, st.xApiId, st.whatsappId, st.mastodonId, st.blueskyId].filter(Boolean).map((x) => `/verbindungen/${x}`), '/amtliche-warnungen', '/reichweite', '/workflows', '/workflows/eingaenge', '/workflows/ausgaenge', ...(st.automationId ? [`/workflows/${st.automationId}`] : []), '/benutzer', '/system', '/protokolle', '/datenschutz-anfragen', '/einstellungen', '/profil', '/hilfe', '/aktivitaeten', '/benachrichtigungen'];
   // Freigabe-Ansicht aus der Push-Mitteilung (#216)
   routes.splice(4, 0, `/freigabe/beitrag/${sub.id}?fassung=2`);
   for (const r of routes) await scanRoute(page, r);
@@ -540,6 +550,7 @@ try {
       ['Neuer Upload-Link (erweitert)', async () => (await page.getByRole('button', { name: 'Neuer Link' }).click(), await sleep(300), await page.getByRole('button', { name: /Erweitert/ }).click())],
       ['Neuer Ordner', async () => page.getByRole('button', { name: 'Neuer Ordner' }).click()],
       ['Details einer Datei', async () => (await page.getByRole('tab', { name: /Alle/ }).click(), await sleep(300), await page.getByRole('button', { name: /^Aktionen für .*\.jpg$/ }).first().click(), await page.getByRole('menuitem', { name: 'Details' }).click())],
+      ['Datenschutz und Unkenntlichmachen', async () => (await page.getByRole('tab', { name: /Alle/ }).click(), await sleep(300), await page.getByRole('button', { name: /^Aktionen für .*\.jpg$/ }).first().click(), await page.getByRole('menuitem', { name: 'Datenschutz und Unkenntlichmachen' }).click(), await page.getByRole('button', { name: 'Kennzeichen anklicken' }).click())],
       ['Schlagworte einer Datei', async () => (await page.getByRole('tab', { name: /Alle/ }).click(), await sleep(300), await page.getByRole('button', { name: /^Aktionen für .*\.jpg$/ }).first().click(), await page.getByRole('menuitem', { name: 'Schlagworte' }).click())],
       ['Upload-Link bearbeiten (erweitert)', async () => (await page.getByRole('button', { name: /^Aktionen für Mit Optionen/ }).click(), await page.getByRole('menuitem', { name: 'Bearbeiten' }).click(), await sleep(300), await page.getByRole('button', { name: /Erweitert/ }).click())],
     ];

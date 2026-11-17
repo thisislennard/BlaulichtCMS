@@ -5,6 +5,7 @@ import { Badge, Button, cx, Notice, SegmentedControl, Select, Spinner, Switch } 
 import { Icon } from '../../components/ui/Icon';
 import { Dialog, useErrorToast, useToast } from '../../components/ui/overlays';
 import { fmtDateTime } from '../../lib/format';
+import { PLATE_SIZE_LABELS, plateBox, type PlateSize } from './plateBox';
 
 /** Markierungen aus der Sichtung (#118). */
 export const SENSITIVE_LABELS: Record<SensitiveFlag, string> = {
@@ -55,7 +56,8 @@ export function PrivacyDialog({ m, onClose, onSaved }: { m: MediaItem; onClose: 
   const [redactions, setRedactions] = useState<Redaction[]>(m.redactions ?? []);
   const [crop, setCrop] = useState<Region | null>(m.crop ?? null);
   const [stripAudio, setStripAudio] = useState(!!m.strip_audio);
-  const [tool, setTool] = useState<'redact' | 'crop'>('redact');
+  const [tool, setTool] = useState<'redact' | 'plate' | 'crop'>('redact');
+  const [plateSize, setPlateSize] = useState<PlateSize>('m');
   const [mode, setMode] = useState<Redaction['mode']>('pixelate');
   const [draft, setDraft] = useState<Region | null>(null);
   const [busy, setBusy] = useState(false);
@@ -183,10 +185,11 @@ export function PrivacyDialog({ m, onClose, onSaved }: { m: MediaItem; onClose: 
                 onChange={setTool}
                 options={[
                   { value: 'redact', label: 'Bereich unkenntlich machen' },
+                  { value: 'plate', label: 'Kennzeichen anklicken' },
                   { value: 'crop', label: 'Zuschneiden' },
                 ]}
               />
-              {tool === 'redact' && (
+              {tool !== 'crop' && (
                 <Select aria-label="Art der Unkenntlichmachung" value={mode} onChange={(e) => setMode(e.target.value as Redaction['mode'])} className="!w-auto">
                   {(Object.keys(MODE_LABELS) as Redaction['mode'][]).map((k) => (
                     <option key={k} value={k}>
@@ -195,8 +198,23 @@ export function PrivacyDialog({ m, onClose, onSaved }: { m: MediaItem; onClose: 
                   ))}
                 </Select>
               )}
+              {tool === 'plate' && (
+                <Select aria-label="Größe des Kennzeichens im Bild" value={plateSize} onChange={(e) => setPlateSize(e.target.value as PlateSize)} className="!w-auto">
+                  {(Object.keys(PLATE_SIZE_LABELS) as PlateSize[]).map((k) => (
+                    <option key={k} value={k}>
+                      {PLATE_SIZE_LABELS[k]}
+                    </option>
+                  ))}
+                </Select>
+              )}
             </div>
-            <p className="m-0 text-meta text-fg-muted">{tool === 'redact' ? 'Rechteck über Gesichter, Kennzeichen oder Schilder ziehen. Mehrere Bereiche möglich.' : 'Rechteck um den Ausschnitt ziehen, der veröffentlicht werden soll.'}</p>
+            <p className="m-0 text-meta text-fg-muted">
+              {tool === 'redact'
+                ? 'Rechteck über Gesichter, Kennzeichen oder Schilder ziehen. Mehrere Bereiche möglich.'
+                : tool === 'plate'
+                  ? 'Auf die Mitte eines Kennzeichens klicken – es wird in der gewählten Größe unkenntlich gemacht. Schräge oder ungewöhnlich große Schilder als Rechteck ziehen.'
+                  : 'Rechteck um den Ausschnitt ziehen, der veröffentlicht werden soll.'}
+            </p>
             <div className="flex justify-center bg-raised rounded-node p-2">
               <div
                 ref={area}
@@ -209,9 +227,16 @@ export function PrivacyDialog({ m, onClose, onSaved }: { m: MediaItem; onClose: 
                 onPointerMove={(e) => start.current && setDraft(rect(start.current, point(e)))}
                 onPointerUp={(e) => {
                   if (!start.current) return;
-                  const r = rect(start.current, point(e));
+                  const from = start.current;
+                  const r = rect(from, point(e));
                   start.current = null;
                   setDraft(null);
+                  if (tool === 'plate' && r.w < 0.01 && r.h < 0.01) {
+                    // Klick ohne Ziehen: Bereich in Kennzeichenform um den Klickpunkt
+                    const b = area.current!.getBoundingClientRect();
+                    setRedactions((cur) => [...cur, { ...plateBox(from, b.width / b.height, plateSize), mode }].slice(0, MAX_REDACTIONS));
+                    return;
+                  }
                   if (r.w < 0.01 || r.h < 0.01) return;
                   if (tool === 'crop') setCrop(r);
                   else setRedactions((cur) => [...cur, { ...r, mode }].slice(0, MAX_REDACTIONS));
