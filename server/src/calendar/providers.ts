@@ -139,7 +139,9 @@ registerCalendarProvider({
       id: d.id,
       seriesId: null,
       instance: null,
-      title: `Frist ${d.case_no}: ${d.topic}`,
+      // Thema zuerst (#272): in der Monatsansicht bleibt sonst nur „Frist P-2026-000…“ stehen; die Vorgangsnummer
+      // steht im Detail (meta.caseNo)
+      title: `Frist: ${d.topic}`,
       start: d.due_at,
       end: d.due_at,
       allDay: false,
@@ -157,5 +159,6 @@ registerCalendarProvider({
       statusLabel: PRESS_STATUS[d.status] ?? d.status,
       link: d.link,
       overdue: d.overdue,
+      meta: { caseNo: d.case_no },
     })),
 });

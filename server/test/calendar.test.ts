@@ -312,10 +312,11 @@ describe('Kalender: geplante Beiträge und Presse-Fristen (#201)', () => {
     const [from, to] = range();
     const press = (await entries(admin, from, to)).filter((e) => e.kind === 'press');
     expect(press.map((e) => [e.title, e.overdue, e.statusLabel])).toEqual([
-      ['Frist P-2026-0001: Nachfrage zum Brand', true, 'neu'],
-      ['Frist P-2026-0002: Interview Jugendfeuerwehr', false, 'in Bearbeitung'],
+      ['Frist: Nachfrage zum Brand', true, 'neu'],
+      ['Frist: Interview Jugendfeuerwehr', false, 'in Bearbeitung'],
     ]);
-    expect(press[0]).toMatchObject({ readOnly: true, color: 'press', link: expect.stringMatching(/^\/presse\//) });
+    // Thema zuerst, Vorgangsnummer im Detail (#272)
+    expect(press[0]).toMatchObject({ readOnly: true, color: 'press', link: expect.stringMatching(/^\/presse\//), meta: { caseNo: 'P-2026-0001' } });
     expect((await entries(viewer, from, to)).some((e) => e.kind === 'press')).toBe(false);
     expect((await entries(admin, from, to, '&sources=press')).every((e) => e.kind === 'press')).toBe(true);
   });

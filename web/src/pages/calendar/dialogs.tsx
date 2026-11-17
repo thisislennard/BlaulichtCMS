@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { del, get, post, put } from '../../api/client';
-import { Badge, Button, cx, FieldWrap, Input, Notice, Select, Spinner, Switch, Textarea } from '../../components/ui/core';
+import { Badge, Button, Chip, cx, FieldWrap, Input, Notice, Select, Spinner, Switch, Textarea } from '../../components/ui/core';
 import { Dialog, useConfirm, useErrorToast, useToast } from '../../components/ui/overlays';
 import { HelpTip } from '../../components/ui/HelpTip';
 import { Icon } from '../../components/ui/Icon';
@@ -374,6 +374,7 @@ export function EntryDialog({ entry, canManage, onClose, onEdit, onChanged, extr
       <div className="flex flex-col gap-3">
         <p className="m-0 font-mono text-[13px]">{rangeText(entry)}</p>
         <div className="flex flex-wrap gap-1.5">
+          {typeof entry.meta?.caseNo === 'string' && <Chip mono>{entry.meta.caseNo}</Chip>}
           {entry.category && <Badge>{entry.category.name}</Badge>}
           {entry.sourceName && <Badge>{entry.sourceName}</Badge>}
           {entry.statusLabel && <Badge tone={entry.status === 'published' ? 'success' : entry.status === 'in_review' ? 'warning' : 'neutral'}>{entry.statusLabel}</Badge>}

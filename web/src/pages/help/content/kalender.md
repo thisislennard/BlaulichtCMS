@@ -74,7 +74,7 @@ Nicht verschieben lassen sich Beiträge, deren Veröffentlichung **bereits beauf
 
 ## Fristen von Presseanfragen
 
-Offene [Presseanfragen](/presse) (neu oder in Bearbeitung) mit Frist erscheinen am Fristtermin – mit Vorgangsnummer, Thema, Medium und Zuständigkeit, ohne Kontaktdaten. **Überfällige** Fristen sind rot umrandet und mit Warnsymbol und dem Wort „überfällig“ markiert. Sichtbar nur mit **Presseanfragen ansehen**; die Frist selbst ändert man in der Anfrage.
+Offene [Presseanfragen](/presse) (neu oder in Bearbeitung) mit Frist erscheinen am Fristtermin als **„Frist: Thema“** – das Thema steht vorn, damit es auch in der Monatsansicht lesbar bleibt. Vorgangsnummer, Medium und Zuständigkeit stehen in den Details des Eintrags, Kontaktdaten nie. **Überfällige** Fristen sind rot umrandet und mit Warnsymbol und dem Wort „überfällig“ markiert. Sichtbar nur mit **Presseanfragen ansehen**; die Frist selbst ändert man in der Anfrage.
 
 ## Kalender einlesen
 
