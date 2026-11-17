@@ -445,6 +445,34 @@ describe('Kalender: iCal einlesen und als Abo anbieten (#202)', () => {
     expect(actions).toEqual(['calendar.feed_created', 'calendar.feed_updated', 'calendar.feed_renewed', 'calendar.feed_revoked']);
   });
 
+  it('NUL-Zeichen und ein einzelner fehlerhafter Termin blockieren die Quelle nicht (#237)', async () => {
+    const ev = (uid: string, summary: string, start: string) => ['BEGIN:VEVENT', `UID:${uid}`, `SUMMARY:${summary}`, 'DESCRIPTION:Text\u0000mit NUL', `DTSTART:${start}`, 'END:VEVENT'].join('\r\n');
+    const refresh = () => admin.post(`/calendar/sources/${sourceId}/refresh`);
+    const titles = async () => (await entries(admin, berlin(2026, 12, 1), berlin(2026, 12, 31), `&sources=ical:${sourceId}`)).map((e) => `${hm(e.start)} ${e.title}`);
+    ics = cal([SERIES, ev('nul@wehr', 'Funk\u0000übung', '20261210T180000Z')]);
+    const r = await refresh();
+    expect(r.status).toBe(200);
+    expect(r.json.warnings).toEqual([]);
+    expect(await titles()).toEqual(['2026-12-07 19:30 Dienstabend', '2026-12-10 19:00 Funkübung']);
+    expect((await one<any>(`SELECT description FROM calendar_events WHERE uid = 'nul@wehr'`))!.description).toBe('Textmit NUL');
+    // Ein Termin lässt sich nicht speichern (hier über eine Prüfregel der Datenbank nachgestellt): die übrigen
+    // werden trotzdem abgeglichen, der betroffene behält seinen bisherigen Stand, das Protokoll nennt ihn
+    await pool.query(`ALTER TABLE calendar_events ADD CONSTRAINT test_kaputt CHECK (title NOT LIKE 'Kaputt%')`);
+    try {
+      ics = cal([SERIES.replace('SUMMARY:Dienstabend', 'SUMMARY:Übungsabend'), ev('nul@wehr', 'Kaputt geändert', '20261210T180000Z'), ev('neu@wehr', 'Kaputt neu', '20261211T180000Z'), ev('ok@wehr', 'Grillabend', '20261212T180000Z')]);
+      const r2 = await refresh();
+      expect(r2.status).toBe(200);
+      expect(r2.json).toMatchObject({ added: 1, changed: 1, removed: 0 });
+      expect(r2.json.warnings).toEqual(['„Kaputt geändert“ konnte nicht gespeichert werden und wurde übersprungen.', '„Kaputt neu“ konnte nicht gespeichert werden und wurde übersprungen.']);
+      expect(await titles()).toEqual(['2026-12-07 19:30 Übungsabend', '2026-12-10 19:00 Funkübung', '2026-12-12 19:00 Grillabend']);
+      const log = (await admin.get(`/calendar/sources/${sourceId}/log`)).json;
+      expect(log[0]).toMatchObject({ ok: true, added: 1, changed: 1, warnings: r2.json.warnings });
+      expect((await admin.get('/calendar/sources')).json[0].lastError).toBeNull();
+    } finally {
+      await pool.query('ALTER TABLE calendar_events DROP CONSTRAINT test_kaputt');
+    }
+  });
+
   it('Quelle löschen entfernt Termine und die verschlüsselte Adresse', async () => {
     expect((await admin.del(`/calendar/sources/${sourceId}`)).status).toBe(200);
     expect(await one(`SELECT 1 FROM calendar_events WHERE source = 'ical'`)).toBeNull();

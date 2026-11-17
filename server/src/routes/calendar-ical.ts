@@ -98,7 +98,7 @@ export async function calendarIcalRoutes(app: FastifyInstance) {
       await db.query('UPDATE calendar_sources SET last_count = $2 WHERE id = $1', [s.id, res.events]);
       await db.query(
         `INSERT INTO calendar_source_log (source_id, trigger, ok, http_status, events, added, bytes, duration_ms, message, warnings) VALUES ($1,'test',true,$2,$3,$4,$5,0,'Verbindungstest und erster Abruf beim Anlegen',$6)`,
-        [s.id, r.status, res.events, res.added, r.bytes, JSON.stringify(r.cal.warnings.slice(0, 20))],
+        [s.id, r.status, res.events, res.added, r.bytes, JSON.stringify([...r.cal.warnings, ...res.warnings].slice(0, 20))],
       );
       await audit(req.auth!.actor, 'calendar.source_created', { type: 'calendar_source', id: s.id, label: v.name }, { host, termine: res.events }, 'ok', db);
       return { ...s, url_secret_id: secretId, last_count: res.events };

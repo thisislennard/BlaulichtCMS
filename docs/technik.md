@@ -224,7 +224,9 @@ iCal-Quellen (#202, Migration 111): `calendar_sources` (Adresse verschlüsselt i
 Last-Modified) im Worker, Abgleich je UID und RECURRENCE-ID in `server/src/calendar/sources.ts`, Empfangsprotokoll
 `calendar_source_log` (höchstens 200 Einträge je Quelle). Eigener Leser für RFC 5545 (`server/src/calendar/ical.ts`:
 Zeilenfaltung, Maskierung, TZID inkl. Windows-Zeitzonen, DATE/UTC/schwebende Zeiten, DURATION, EXDATE, RECURRENCE-ID,
-STATUS:CANCELLED). Abo: `calendar_feeds` speichert nur die SHA-256-Prüfsumme des Links; `GET /api/v1/public/calendar/:token`
+STATUS:CANCELLED; Steuerzeichen außer Tab/Zeilenumbruch entfallen, ein unlesbarer Termin wird mit Hinweis übersprungen).
+Der Abgleich speichert jeden Termin in einem eigenen Sicherungspunkt (SAVEPOINT): Scheitert einer, bleibt sein bisheriger
+Stand, der Hinweis landet im Empfangsprotokoll und die Quelle wird trotzdem abgeglichen (#237). Abo: `calendar_feeds` speichert nur die SHA-256-Prüfsumme des Links; `GET /api/v1/public/calendar/:token`
 liefert einzelne Termine (UTC bzw. Datum) für 60 Tage zurück bis 365 Tage voraus.
 
 Workflow-Eingang „Kalendereintrag“ (#203, `server/src/calendar/triggers.ts`): Der Worker (Leader) prüft alle 30 s

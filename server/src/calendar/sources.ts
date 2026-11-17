@@ -111,12 +111,32 @@ function toRow(e: IcalEvent, extraEx: number[] = []): Row {
 }
 
 /**
- * Termine einer Quelle mit dem Inhalt der Datei abgleichen (in einer Transaktion): neue anlegen, geänderte
- * aktualisieren, nicht mehr enthaltene löschen. Abgesagte Einzeltermine (STATUS:CANCELLED mit RECURRENCE-ID) werden
- * zu Ausnahmen der Serie, abgesagte Einzeltermine ohne Serie entfallen.
+ * Termine einer Quelle mit dem Inhalt der Datei abgleichen (in einer Transaktion – `db` muss ein Client innerhalb von
+ * `tx()` sein): neue anlegen, geänderte aktualisieren, nicht mehr enthaltene löschen. Abgesagte Einzeltermine
+ * (STATUS:CANCELLED mit RECURRENCE-ID) werden zu Ausnahmen der Serie, abgesagte Einzeltermine ohne Serie entfallen.
+ *
+ * Jeder Termin wird in einem eigenen Sicherungspunkt gespeichert: Scheitert ein einzelner Termin, bleibt sein
+ * bisheriger Stand erhalten, er erscheint als Hinweis im Empfangsprotokoll und der Abgleich der übrigen Termine läuft
+ * weiter (#237). Ein einziger fehlerhafter Eintrag in der Fremddatei blockiert so nie die ganze Quelle.
  */
-export async function syncEvents(sourceId: string, cal: ParsedCalendar, categoryId: string | null, db: Queryable): Promise<Omit<SyncResult, 'notModified' | 'warnings' | 'name'>> {
+export async function syncEvents(sourceId: string, cal: ParsedCalendar, categoryId: string | null, db: Queryable): Promise<Omit<SyncResult, 'notModified' | 'name'>> {
   await db.query(`SELECT pg_advisory_xact_lock(hashtext('calendar_source:' || $1))`, [sourceId]);
+  const warnings: string[] = [];
+  /** Einen Termin für sich speichern; bei einem Fehler zurückrollen, melden und weitermachen. */
+  const guarded = async <T>(title: string, fn: () => Promise<T>): Promise<T | undefined> => {
+    await db.query('SAVEPOINT calendar_event');
+    try {
+      const r = await fn();
+      await db.query('RELEASE SAVEPOINT calendar_event');
+      return r;
+    } catch (e) {
+      await db.query('ROLLBACK TO SAVEPOINT calendar_event');
+      await db.query('RELEASE SAVEPOINT calendar_event');
+      warnings.push(`„${title.slice(0, 80)}“ konnte nicht gespeichert werden und wurde übersprungen.`);
+      log('warn', 'calendar', `iCal-Quelle ${sourceId}: Termin übersprungen – ${(e as Error).message}`);
+      return undefined;
+    }
+  };
   const existing = await many<any>(`SELECT * FROM calendar_events WHERE source = 'ical' AND source_id = $1`, [sourceId], db);
   const key = (uid: string, rid: Date | number | null) => `${uid}|${rid == null ? '' : +rid}`;
   const byKey = new Map(existing.map((r) => [key(r.uid, r.recurrence_id), r]));
@@ -157,27 +177,35 @@ export async function syncEvents(sourceId: string, cal: ParsedCalendar, category
   };
 
   const masterIds = new Map<string, string>();
+  const failed = new Set<string>();
   for (const [uid, m] of masters) {
     if (m.cancelled) continue;
     const cancelled = overrides.filter((o) => o.uid === uid && o.cancelled).map((o) => o.recurrenceId!);
-    masterIds.set(uid, await upsert(key(uid, null), uid, toRow(m, cancelled), { seriesId: null, recurrenceId: null }));
+    const id = await guarded(m.summary, () => upsert(key(uid, null), uid, toRow(m, cancelled), { seriesId: null, recurrenceId: null }));
+    if (id) masterIds.set(uid, id);
+    else failed.add(uid);
   }
   for (const o of overrides) {
     if (o.cancelled) continue;
     const master = masters.get(o.uid);
     const masterId = masterIds.get(o.uid);
+    if (master?.rruleParsed && failed.has(o.uid)) {
+      // Serie nicht gespeichert: ihre geänderten Termine bleiben auf dem bisherigen Stand
+      seen.add(key(o.uid, o.recurrenceId));
+      continue;
+    }
     if (master?.rruleParsed && masterId) {
-      await upsert(key(o.uid, o.recurrenceId), o.uid, toRow(o), { seriesId: masterId, recurrenceId: new Date(o.recurrenceId!) });
+      await guarded(o.summary, () => upsert(key(o.uid, o.recurrenceId), o.uid, toRow(o), { seriesId: masterId, recurrenceId: new Date(o.recurrenceId!) }));
     } else {
       // Geänderter Termin ohne (wiederkehrenden) Haupttermin: als eigener Termin
       const uid = `${o.uid}#${o.recurrenceId}`;
-      await upsert(key(uid, null), uid, toRow(o), { seriesId: null, recurrenceId: null });
+      await guarded(o.summary, () => upsert(key(uid, null), uid, toRow(o), { seriesId: null, recurrenceId: null }));
     }
   }
   // Nicht mehr enthaltene Termine löschen (geänderte Einzeltermine zuerst, Serien löschen ihre per CASCADE)
   const gone = existing.filter((r) => !seen.has(key(r.uid, r.recurrence_id)));
   if (gone.length) await db.query(`DELETE FROM calendar_events WHERE id = ANY($1)`, [gone.map((r) => r.id)]);
-  return { events: masters.size + overrides.length, added, changed, removed: gone.length };
+  return { events: masters.size + overrides.length, added, changed, removed: gone.length, warnings };
 }
 
 async function writeLog(sourceId: string, trigger: 'schedule' | 'manual' | 'test', entry: { ok: boolean; status?: number | null; notModified?: boolean; events?: number; added?: number; changed?: number; removed?: number; bytes?: number | null; durationMs: number; message?: string | null; warnings?: string[] }) {
@@ -207,9 +235,10 @@ export async function refreshSource(src: any, trigger: 'schedule' | 'manual' = '
       return { events: src.last_count ?? 0, added: 0, changed: 0, removed: 0, notModified: true, warnings: [], name: null };
     }
     const res = await tx((db) => syncEvents(src.id, r.cal, src.category_id, db));
+    const warnings = [...r.cal.warnings, ...res.warnings];
     await pool.query('UPDATE calendar_sources SET last_success_at = now(), last_error = NULL, last_count = $2, etag = $3, last_modified = $4 WHERE id = $1', [src.id, res.events, r.etag, r.lastModified]);
-    await writeLog(src.id, trigger, { ok: true, status: r.status, events: res.events, added: res.added, changed: res.changed, removed: res.removed, bytes: r.bytes, durationMs: Date.now() - started, warnings: r.cal.warnings });
-    return { ...res, notModified: false, warnings: r.cal.warnings, name: r.cal.name };
+    await writeLog(src.id, trigger, { ok: true, status: r.status, events: res.events, added: res.added, changed: res.changed, removed: res.removed, bytes: r.bytes, durationMs: Date.now() - started, warnings });
+    return { ...res, notModified: false, warnings, name: r.cal.name };
   } catch (e) {
     const msg = (e as Error).message;
     await pool.query('UPDATE calendar_sources SET last_error = $2 WHERE id = $1', [src.id, msg.slice(0, 300)]);

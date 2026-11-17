@@ -220,6 +220,26 @@ describe('iCal lesen', () => {
     expect(cal.warnings.join(' ')).toMatch(/ohne Beginn/);
   });
 
+  it('entfernt NUL und andere Steuerzeichen aus allen Werten (#237)', () => {
+    const cal = parseIcal(
+      ['BEGIN:VCALENDAR', 'X-WR-CALNAME:Wehr\u0000-Kalender', 'BEGIN:VEVENT', 'UID:nul\u0000@x', 'SUMMARY:Übung\u0000X\u001b', 'DESCRIPTION:Zeile\u0000 1\\nZeile\t2', 'LOCATION:Geräte\u0000haus', 'CATEGORIES:Aus\u0000bildung,Übung', 'DTSTART:2026110\u00007T100000Z', 'END:VEVENT', 'END:VCALENDAR'].join('\r\n'),
+      TZ,
+    );
+    expect(cal.name).toBe('Wehr-Kalender');
+    expect(cal.events).toHaveLength(1);
+    expect(cal.events[0]).toMatchObject({ uid: 'nul@x', summary: 'ÜbungX', description: 'Zeile 1\nZeile\t2', location: 'Gerätehaus', categories: ['Ausbildung', 'Übung'] });
+    expect(new Date(cal.events[0].start).toISOString()).toBe('2026-11-07T10:00:00.000Z');
+    expect(JSON.stringify(cal)).not.toMatch(/\\u0000|\\u001b/);
+    expect(unescapeText('a\u0000b\u0007c')).toBe('abc');
+  });
+
+  it('ein unlesbarer Termin wird übersprungen und gemeldet, die übrigen bleiben (#237)', () => {
+    // ganztägig am 31.12.9999: das Ende läge im Jahr 10000 und ist nicht darstellbar
+    const cal = parseIcal(['BEGIN:VCALENDAR', 'BEGIN:VEVENT', 'UID:a', 'SUMMARY:Davor', 'DTSTART:20261107T100000Z', 'END:VEVENT', 'BEGIN:VEVENT', 'UID:kaputt', 'SUMMARY:Kaputt', 'DTSTART;VALUE=DATE:99991231', 'END:VEVENT', 'BEGIN:VEVENT', 'UID:b', 'SUMMARY:Danach', 'DTSTART:20261108T100000Z', 'END:VEVENT', 'END:VCALENDAR'].join('\r\n'), TZ);
+    expect(cal.events.map((e) => e.summary)).toEqual(['Davor', 'Danach']);
+    expect(cal.warnings).toEqual(['„Kaputt“ nicht lesbar – übersprungen.']);
+  });
+
   it('ganztägige Ausnahme bei einem Termin mit Uhrzeit trifft den Termin an diesem Tag', () => {
     const cal = parseIcal('BEGIN:VCALENDAR\nBEGIN:VEVENT\nUID:y\nSUMMARY:Dienst\nDTSTART;TZID=Europe/Berlin:20261102T190000\nRRULE:FREQ=WEEKLY;COUNT=3\nEXDATE;VALUE=DATE:20261109\nEND:VEVENT\nEND:VCALENDAR', TZ);
     expect(cal.events[0].exdates.map(fmt)).toEqual(['2026-11-09 19:00']);

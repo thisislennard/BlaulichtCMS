@@ -44,10 +44,18 @@ interface Line {
   value: string;
 }
 
-/** Gefaltete Zeilen zusammenführen (CRLF/LF + Leerzeichen oder Tab). */
+/**
+ * Steuerzeichen außer Tab, Zeilenvorschub und Wagenrücklauf. RFC 5545 erlaubt sie in keinem Wert; NUL (U+0000) lehnt
+ * PostgreSQL in Textspalten sogar ab – ein einziges solches Zeichen in einer Fremddatei ließe sonst den Abgleich der
+ * ganzen Quelle bei jedem Abruf scheitern (#237).
+ */
+const CONTROL_CHARS = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g;
+
+/** Gefaltete Zeilen zusammenführen (CRLF/LF + Leerzeichen oder Tab); unzulässige Steuerzeichen entfallen. */
 export function unfold(text: string): string[] {
   return text
     .replace(/^\uFEFF/, '')
+    .replace(CONTROL_CHARS, '')
     .replace(/\r\n/g, '\n')
     .replace(/\r/g, '\n')
     .replace(/\n[ \t]/g, '')
@@ -90,9 +98,9 @@ export function parseLine(raw: string): Line | null {
   return { name, params, value };
 }
 
-/** TEXT-Werte: \n, \, \; und \\ auflösen. */
+/** TEXT-Werte: \n, \, \; und \\ auflösen; unzulässige Steuerzeichen entfallen. */
 export function unescapeText(v: string): string {
-  return v.replace(/\\([\\;,nN])/g, (_m, c: string) => (c === 'n' || c === 'N' ? '\n' : c));
+  return v.replace(CONTROL_CHARS, '').replace(/\\([\\;,nN])/g, (_m, c: string) => (c === 'n' || c === 'N' ? '\n' : c));
 }
 
 /** Nicht maskierte Kommas trennen (CATEGORIES, EXDATE). */
@@ -152,8 +160,14 @@ export function parseIcal(text: string, tz = 'Europe/Berlin'): ParsedCalendar {
           cur = null;
           continue;
         }
-        const ev = toEvent(cur, calTz ?? tz, tz, warnings);
-        if (ev) events.push(ev);
+        // Ein einzelner unlesbarer Termin darf nie die ganze Datei (und damit die Quelle) scheitern lassen
+        try {
+          const ev = toEvent(cur, calTz ?? tz, tz, warnings);
+          if (ev) events.push(ev);
+        } catch {
+          const title = unescapeText(cur.find((x) => x.name === 'SUMMARY')?.value ?? '').trim().slice(0, 80) || '(ohne Titel)';
+          warnings.push(`„${title}“ nicht lesbar – übersprungen.`);
+        }
         cur = null;
       }
       continue;
@@ -282,7 +296,7 @@ export function escapeText(v: string): string {
     .replace(/;/g, '\\;')
     .replace(/,/g, '\\,')
     .replace(/\r\n|\r|\n/g, '\\n')
-    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '');
+    .replace(CONTROL_CHARS, '');
 }
 
 /** Zeile nach RFC 5545 auf höchstens 75 Bytes falten (UTF-8, ohne Zeichen zu zerteilen). */
