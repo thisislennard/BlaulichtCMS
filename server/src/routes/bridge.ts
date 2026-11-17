@@ -643,8 +643,16 @@ export async function bridgeRoutes(app: FastifyInstance) {
           WHERE pb.site_id = $1 AND pb.status IN ('sent','unknown','queued','published') AND rv.media_ids @> ARRAY[$2::uuid] LIMIT 1`,
         [site.id, id],
       )) ??
-      // Bilder eines Eintrags der Einsatzliste, der an diese Website übergeben wird oder dort steht (#213)
-      (await one(`SELECT 1 FROM incident_jobs j WHERE j.site_id = $1 AND j.action = 'upsert' AND j.status IN ('queued','sent','done') AND j.payload->'media_ids' ? $2 LIMIT 1`, [site.id, id]));
+      // Bilder eines Eintrags der Einsatzliste, der an diese Website übergeben wird oder dort steht (#213) – nur aus dem
+      // jeweils letzten Auftrag des Eintrags an diese Website, wenn das ein Veröffentlichen ist (kein späteres Entfernen,
+      // Eintrag nicht gelöscht oder zurückgezogen, Bild nicht in einer späteren Fassung entfernt; #242)
+      (await one(
+        `SELECT 1 FROM incident_jobs j JOIN incident_entries e ON e.id = j.entry_id AND e.withdrawn_at IS NULL
+          WHERE j.site_id = $1 AND j.action = 'upsert' AND j.status IN ('queued','sent','done') AND j.payload->'media_ids' ? $2
+            AND NOT EXISTS (SELECT 1 FROM incident_jobs k WHERE k.entry_id = j.entry_id AND k.site_id = j.site_id AND k.status IN ('queued','sent','done') AND k.created_at > j.created_at)
+          LIMIT 1`,
+        [site.id, id],
+      ));
     if (!allowed) throw notFound('Datei gehört zu keinem Auftrag dieser Website.');
     const m = await one<any>(`SELECT * FROM media WHERE id = $1 AND status = 'ready' AND deleted_at IS NULL`, [id]);
     const pf = m ? publicFileFor(m) : null;

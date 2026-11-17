@@ -418,9 +418,11 @@ export async function incidentRoutes(app: FastifyInstance) {
       if (await isOnWebsite(id, db)) throw conflict('Der Eintrag steht auf der Website (oder ist dorthin unterwegs). Bitte zuerst zurückziehen.');
       const pending = await one(`SELECT 1 FROM incident_jobs WHERE entry_id = $1 AND status = 'sent'`, [id], db);
       if (pending) throw conflict('Die Website verarbeitet gerade einen Auftrag zu diesem Eintrag. Bitte kurz warten.');
-      await db.query(`UPDATE incident_jobs SET status = 'canceled', result_at = now() WHERE entry_id = $1 AND status = 'queued'`, [id]);
+      // Aufträge an die Website mit löschen (#242): Sie enthielten Momentaufnahmen des Eintrags und geben sonst Bilder frei.
+      // Nichts ist unterwegs (siehe oben); noch nicht abgeholte Aufträge entfallen damit ebenfalls.
+      const jobs = await db.query(`DELETE FROM incident_jobs WHERE entry_id = $1`, [id]);
       await db.query(`DELETE FROM incident_entries WHERE id = $1`, [id]);
-      await audit(req.auth!.actor, 'incident.deleted', { type: 'incident', id, label: e.title }, {}, 'ok', db);
+      await audit(req.auth!.actor, 'incident.deleted', { type: 'incident', id, label: e.title }, { auftraege_geloescht: jobs.rowCount ?? 0 }, 'ok', db);
     });
     return { ok: true };
   });

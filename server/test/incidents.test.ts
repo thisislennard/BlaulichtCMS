@@ -11,6 +11,7 @@ import { claimJobs, completeJob, failJob } from '../src/jobs/queue.js';
 import { executeRun } from '../src/automations/engine.js';
 import { syncCatalog } from '../src/keywords/store.js';
 import { mediaPaths } from '../src/media/storage.js';
+import { runRetention } from '../src/lib/retention.js';
 
 /**
  * Einsatzliste (#213) gegen eine echte PostgreSQL-Datenbank: Rechte, Ort nur grob (Allowlist und Adressprüfung),
@@ -342,7 +343,7 @@ describe('Einsatzliste: Vorschläge, Import, Sammelaktionen, Workflow', () => {
   });
 });
 
-describe('Einsatzliste: Datenschutz-Prüfung für Bilder (#241)', () => {
+describe('Einsatzliste: Datenschutz-Prüfung für Bilder (#241) und Aufträge ohne Dauerkopie (#242)', () => {
   let colId = '';
   /** Geprüftes Bild mit öffentlicher Fassung (Datei als Platzhalter), optional markiert bzw. mit Gesichtsvorschlägen */
   const addImage = async (flags: string[] = [], faces: unknown[] = []) => {
@@ -423,5 +424,70 @@ describe('Einsatzliste: Datenschutz-Prüfung für Bilder (#241)', () => {
     const a = await one<any>(`SELECT details FROM audit_events WHERE action = 'incident.published' AND object_id = $1::text ORDER BY id DESC LIMIT 1`, [e.id]);
     expect(a!.details).toMatchObject({ datenschutz_geprueft: true, markierte_medien: 1 });
     expect((await listed(e.id)).privacy.publish_check).toBe(false);
+  });
+
+  it('Aufträge: Momentaufnahme nur solange unterwegs, danach nur Kennung, Fassung und Bild-IDs', async () => {
+    const jobs = await bridgeJobs();
+    const job = jobs.find((j: any) => j.incident?.id === laterEntry);
+    expect(job.media).toHaveLength(1);
+    // Unterwegs: Website darf das Bild abrufen
+    expect((await media(laterImage)).status).toBe(200);
+    for (const j of jobs) expect((await done(j.id)).status).toBe(200);
+    const row = await one<any>(`SELECT payload FROM incident_jobs WHERE id = $1`, [job.id]);
+    expect(row!.payload).toEqual({ id: laterEntry, revision: 1, media_ids: [laterImage] });
+    expect(await one(`SELECT 1 FROM incident_jobs WHERE status IN ('done','failed','canceled') AND payload ? 'title'`)).toBeNull();
+    // Steht auf der Website: weiterhin abrufbar
+    expect((await media(laterImage)).status).toBe(200);
+  });
+
+  it('Bildabruf nur für den aktuellen Stand: nach Entfernen des Bildes, Zurückziehen und Löschen nicht mehr', async () => {
+    // Neue Fassung ohne das Bild, freigegeben und veröffentlicht → das alte Bild ist nicht mehr abrufbar
+    const cur = (await editor.get(`/incidents/${laterEntry}`)).json;
+    const u = await editor.put(`/incidents/${laterEntry}`, { ...base, title: cur.title, location: 'Nord', siteId, mediaIds: [] });
+    expect(u.json.changed).toBe(true);
+    await editor.post(`/incidents/${laterEntry}/submit`);
+    expect((await approver.post(`/incidents/${laterEntry}/approve`, { contentHash: u.json.content_hash })).status).toBe(200);
+    expect((await publisher.post(`/incidents/${laterEntry}/publish`, { contentHash: u.json.content_hash })).status).toBe(200);
+    const gone = await media(laterImage);
+    expect(gone.status).toBe(404);
+    expect(gone.json.message).toMatch(/keinem Auftrag/);
+    // Zurückziehen: auch die Bilder anderer Einträge sind dann nicht mehr abrufbar
+    const flaggedImg = (await editor.get(`/incidents/${flaggedEntry}`)).json.media_ids[0];
+    expect((await media(flaggedImg)).status).toBe(200);
+    expect((await publisher.post(`/incidents/${flaggedEntry}/withdraw`)).status).toBe(200);
+    expect((await media(flaggedImg)).status).toBe(404);
+    for (const j of await bridgeJobs()) await done(j.id);
+    expect((await entry(editor, flaggedEntry)).state).toBe('withdrawn');
+    expect((await media(flaggedImg)).status).toBe(404);
+    // Löschen entfernt die Aufträge mit
+    expect(await one(`SELECT 1 FROM incident_jobs WHERE entry_id = $1`, [flaggedEntry])).not.toBeNull();
+    expect((await editor.del(`/incidents/${flaggedEntry}`)).status).toBe(200);
+    expect(await one(`SELECT 1 FROM incident_jobs WHERE entry_id = $1 OR payload->>'id' = $1::text`, [flaggedEntry])).toBeNull();
+  });
+
+  it('Löschfrist: abgeschlossene Aufträge nach 30 Tagen, der letzte Stand je Eintrag und Website bleibt', async () => {
+    const jobs = await many<any>(`SELECT id, status, action FROM incident_jobs WHERE entry_id = $1 ORDER BY created_at`, [laterEntry]);
+    expect(jobs.map((j) => j.status)).toEqual(['done', 'done']);
+    // Ältere Aufträge (u. a. ein abgebrochener und ein fehlgeschlagener) und alles altern lassen
+    for (const st of ['canceled', 'failed']) {
+      await pool.query(`INSERT INTO incident_jobs (entry_id, site_id, action, revision, payload, status, created_at, result_at) VALUES ($1, $2, 'upsert', 1, $3, $4, now() - interval '60 days', now() - interval '60 days')`, [laterEntry, siteId, JSON.stringify({ id: laterEntry, title: 'Alt', report: 'Text', media_ids: [] }), st]);
+    }
+    await pool.query(`UPDATE incident_jobs SET created_at = created_at - interval '40 days', result_at = result_at - interval '40 days' WHERE entry_id = $1`, [laterEntry]);
+    // Danach ein fehlgeschlagener Versuch: Der Eintrag steht weiter in der zuletzt erledigten Fassung auf der Website
+    const failed = await one<any>(
+      `INSERT INTO incident_jobs (entry_id, site_id, action, revision, payload, status, error, created_at, result_at) VALUES ($1, $2, 'upsert', 2, $3, 'failed', 'Zeitüberschreitung', now() - interval '35 days', now() - interval '35 days') RETURNING id`,
+      [laterEntry, siteId, JSON.stringify({ id: laterEntry, media_ids: [] })],
+    );
+    // Der Trigger hat auch die eingefügten Momentaufnahmen sofort reduziert
+    expect(await one(`SELECT 1 FROM incident_jobs WHERE entry_id = $1 AND (payload ? 'title' OR payload ? 'report')`, [laterEntry])).toBeNull();
+    const dry = await runRetention({ dryRun: true });
+    expect(dry.categories.find((c) => c.key === 'incident_jobs')).toMatchObject({ days: 30, count: 3 });
+    await runRetention({ dryRun: false });
+    const left = await many<any>(`SELECT id FROM incident_jobs WHERE entry_id = $1 ORDER BY created_at`, [laterEntry]);
+    expect(left.map((j) => j.id)).toEqual([jobs[1].id, failed!.id]);
+    // Zustand und Zurückziehen funktionieren weiter (der erledigte Auftrag zeigt, was auf der Website steht)
+    expect((await entry(editor, laterEntry)).state).toBe('failed');
+    expect((await publisher.post(`/incidents/${laterEntry}/withdraw`)).status).toBe(200);
+    expect((await bridgeJobs()).filter((j: any) => j.type === 'incident.delete' && j.incident.id === laterEntry)).toHaveLength(1);
   });
 });

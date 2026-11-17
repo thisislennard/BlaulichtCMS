@@ -362,6 +362,7 @@ export async function runRetention(opts: { dryRun: boolean; actor?: Actor; setti
     }),
   );
   if (!opts.dryRun) await pool.query(`DELETE FROM automation_dedup WHERE expires_at < now() - interval '1 day'`);
+  report.categories.push(await incidentJobs(opts.dryRun));
 
   if (!opts.dryRun) {
     const total = report.categories.reduce((n, c) => n + c.count, 0);
@@ -374,6 +375,30 @@ export async function runRetention(opts: { dryRun: boolean; actor?: Actor; setti
 }
 
 /** Löschfrist für eine Tabelle ohne Abhängigkeiten, die Dateien betreffen (Fremdschlüssel per Kaskade/SET NULL). */
+/** Abgeschlossene Bridge-Aufträge der Einsatzliste: nach dieser Frist gelöscht (#242). */
+export const INCIDENT_JOB_DAYS = 30;
+
+/**
+ * SQL-Bedingung (Alias `j`, Frist `$1`): abgeschlossene Aufträge der Einsatzliste, die nichts mehr tragen. Aufträge
+ * gelöschter Einträge sofort; sonst nach der Frist, außer dem jeweils letzten übergebenen bzw. erledigten Auftrag je
+ * Eintrag und Website (zeigt, was dort steht – fürs Zurückziehen) und dem letzten nicht abgebrochenen je Eintrag (Zustand).
+ */
+export const STALE_INCIDENT_JOBS = `j.status IN ('done','failed','canceled') AND (j.entry_id IS NULL OR (
+    COALESCE(j.result_at, j.created_at) < now() - make_interval(days => $1)
+    AND NOT (j.status = 'done' AND NOT EXISTS (SELECT 1 FROM incident_jobs k WHERE k.entry_id = j.entry_id AND k.site_id = j.site_id AND k.status IN ('sent','done') AND k.created_at > j.created_at))
+    AND NOT (j.status <> 'canceled' AND NOT EXISTS (SELECT 1 FROM incident_jobs k WHERE k.entry_id = j.entry_id AND k.status <> 'canceled' AND k.created_at > j.created_at))))`;
+
+/**
+ * Bridge-Aufträge der Einsatzliste (#242). Die Inhalte (Momentaufnahme des Eintrags) entfernt schon der Abschluss
+ * eines Auftrags (Migration 191: nur Kennung, Fassung, Bild-IDs bleiben); hier verschwinden die Aufträge selbst.
+ */
+async function incidentJobs(dryRun: boolean): Promise<RetentionCategory> {
+  const cat: RetentionCategory = { key: 'incident_jobs', label: 'Abgeschlossene Aufträge der Einsatzliste an die Website (ohne Inhalte; der jeweils letzte Stand bleibt)', days: INCIDENT_JOB_DAYS, count: 0 };
+  if (dryRun) cat.count = (await one<{ n: number }>(`SELECT count(*)::int AS n FROM incident_jobs j WHERE ${STALE_INCIDENT_JOBS}`, [INCIDENT_JOB_DAYS]))!.n;
+  else cat.count = (await pool.query(`DELETE FROM incident_jobs WHERE id IN (SELECT j.id FROM incident_jobs j WHERE ${STALE_INCIDENT_JOBS} LIMIT 5000)`, [INCIDENT_JOB_DAYS])).rowCount ?? 0;
+  return cat;
+}
+
 async function simpleCategory(dryRun: boolean, c: { key: string; label: string; days: number; table: string; where: string }): Promise<RetentionCategory> {
   const cat: RetentionCategory = { key: c.key, label: c.label, days: c.days, count: 0 };
   if (c.days <= 0) return cat;

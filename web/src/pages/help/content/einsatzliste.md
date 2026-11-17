@@ -23,6 +23,8 @@ Jede Änderung ergibt eine neue Fassung, die wieder freigegeben werden muss; die
 
 **Zurückziehen** entfernt den Eintrag beim nächsten Abruf von der Website, samt Bildern, die sonst nirgends verwendet werden. Danach lässt er sich erneut veröffentlichen oder **löschen**. Ein Eintrag, der auf der Website steht, lässt sich erst nach dem Zurückziehen löschen.
 
+Die Aufträge an die Website enthalten den Eintrag nur, solange sie unterwegs sind: Ist ein Auftrag erledigt, fehlgeschlagen oder abgebrochen, bleiben nur Kennung, Fassung und Bild-IDs; nach 30 Tagen wird er gelöscht (der jeweils letzte Stand je Eintrag bleibt, solange es den Eintrag gibt). Beim **Löschen** eines Eintrags verschwinden auch seine Aufträge. Bilder ruft die Website nur für Einträge ab, die gerade dort stehen bzw. dorthin unterwegs sind – nach dem Zurückziehen, Löschen oder Entfernen eines Bildes aus einer veröffentlichten Fassung nicht mehr.
+
 Die Website braucht dafür die **BlaulichtCMS Bridge 0.9.0** oder neuer. Mit einer älteren Bridge warten die Aufträge, bis sie aktualisiert ist ([Updates](/hilfe/updates#blaulichtcms-bridge)).
 
 ## Datenschutz: nur grob
