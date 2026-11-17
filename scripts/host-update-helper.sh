@@ -43,7 +43,7 @@ REQUEST_MAX=1024
 say() { printf '%s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*"; }
 fail() { # Abbruch; eine liegengebliebene Anfrage entfernen, damit systemd nicht erneut auslöst (als Benutzer des Volumes)
   say "FEHLER: $*" >&2
-  [ -n "${RUN_UID:-}" ] && [ ! -L "$EXCHANGE" ] && as_vol rm -f -- "$EXCHANGE/request.json" 2>/dev/null
+  [ -n "${EXCH_REAL:-}" ] && [ ! -L "$EXCHANGE" ] && as_vx rm -f -- request.json 2>/dev/null
   exit 1
 }
 now_iso() { date -u +%Y-%m-%dT%H:%M:%SZ; }
@@ -60,18 +60,29 @@ RUN_UID="$(stat -c %u "$VOLROOT")"
 RUN_GID="$(stat -c %g "$VOLROOT")"
 [ "$RUN_UID" != 0 ] || fail "Das Datenvolume gehört root – erwartet ist der Benutzer des Containers. Abbruch."
 
-# Befehl mit der Kennung des Volumes ausführen (ohne Zusatzgruppen, ohne neue Rechte)
-as_vol() { setpriv --reuid="$RUN_UID" --regid="$RUN_GID" --clear-groups --no-new-privs -- "$@"; }
+VOLROOT_REAL="$(realpath -e -- "$VOLROOT")"
+EXCH_REAL="$VOLROOT_REAL/host-update"
+
+# Befehl mit der Kennung des Volumes ausführen (ohne Zusatzgruppen, ohne neue Rechte) – mit dem Arbeitsverzeichnis
+# DIR, in das vorher root gewechselt ist. Grund: Auf manchen Systemen (z. B. RHEL: /var/lib/docker 0710 root:root)
+# darf die Kennung des Volumes den Pfad dorthin nicht durchlaufen; relative Pfade brauchen nur Rechte am Ordner selbst.
+# cd -P plus Vergleich mit dem erwarteten echten Pfad: kein Umweg über symbolische Links.
+as_vol_in() {
+  local dir="$1"; shift
+  ( cd -P -- "$dir" 2>/dev/null && [ "$(pwd -P)" = "$dir" ] && exec setpriv --reuid="$RUN_UID" --regid="$RUN_GID" --clear-groups --no-new-privs -- "$@" )
+}
+# … im Austauschordner (Dateinamen relativ angeben)
+as_vx() { as_vol_in "$EXCH_REAL" "$@"; }
 # Der Austauschordner darf kein symbolischer Link sein und muss genau dort liegen (Prüfung vor jedem Zugriff)
 exchange_ok() {
   [ -L "$EXCHANGE" ] && return 1
-  [ -d "$EXCHANGE" ] || as_vol mkdir -p -- "$EXCHANGE" 2>/dev/null || return 1
-  [ "$(realpath -e -- "$EXCHANGE" 2>/dev/null)" = "$(realpath -e -- "$VOLROOT")/host-update" ]
+  [ -d "$EXCHANGE" ] || as_vol_in "$VOLROOT_REAL" mkdir -- host-update 2>/dev/null || return 1
+  [ "$(realpath -e -- "$EXCHANGE" 2>/dev/null)" = "$EXCH_REAL" ]
 }
 # Datei atomar im Austauschordner ablegen (Inhalt von stdin) – mit der Kennung des Volumes
 put_file() {
   exchange_ok || { cat >/dev/null; return 1; }
-  as_vol sh -c 'umask 022; t="$1/.$2.$$"; cat > "$t" && mv -fT "$t" "$1/$2" || { rm -f "$t"; exit 1; }' sh "$EXCHANGE" "$1"
+  as_vx sh -c 'umask 022; t=".$1.$$"; cat > "$t" && mv -fT "$t" "$1" || { rm -f "$t"; exit 1; }' sh "$1"
 }
 
 json_str() { # JSON-String (ohne Anführungszeichen) – Steuerzeichen entfernt
@@ -86,7 +97,7 @@ case "${1:-}" in
     say "Helfer in der App bekannt gemacht ($EXCHANGE/helper.json)"
     exit 0 ;;
   retract)
-    if exchange_ok; then as_vol rm -f -- "$EXCHANGE/helper.json" "$EXCHANGE/request.json"; fi
+    if exchange_ok; then as_vx rm -f -- helper.json request.json; fi
     say "Bekanntmachung entfernt"
     exit 0 ;;
   run) ;;
@@ -140,9 +151,9 @@ if [ ! -e "$EXCHANGE/request.json" ] && [ ! -L "$EXCHANGE/request.json" ]; then 
 : > "$RUNLOG"
 REQ=""
 if [ -f "$EXCHANGE/request.json" ] && [ ! -L "$EXCHANGE/request.json" ]; then
-  REQ="$(as_vol timeout 10 head -c $((REQUEST_MAX + 1)) -- "$EXCHANGE/request.json" 2>/dev/null || true)"
+  REQ="$(as_vx timeout 10 head -c $((REQUEST_MAX + 1)) -- request.json 2>/dev/null || true)"
 fi
-as_vol rm -f -- "$EXCHANGE/request.json" || true
+as_vx rm -f -- request.json || true
 [ "${#REQ}" -le "$REQUEST_MAX" ] || reject "Anfrage zu groß."
 REQ="$(printf '%s' "$REQ" | tr -d '\n')"
 UUID='[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'
