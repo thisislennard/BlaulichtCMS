@@ -278,6 +278,8 @@ export const OPERATORS = {
   in: 'ist eines von (Liste)',
   gte: 'ist mindestens (Zahl)',
   lte: 'ist höchstens (Zahl)',
+  before: 'liegt vor (Zeitpunkt)',
+  after: 'liegt nach (Zeitpunkt)',
   exists: 'ist ausgefüllt',
   not_exists: 'ist leer',
 } as const;

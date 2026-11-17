@@ -328,7 +328,7 @@ interface Collected {
   count: number;
 }
 
-function walk(p: Part, depth: number, acc: Collected, inAlternative = false) {
+function walk(p: Part, depth: number, acc: Collected) {
   if (++acc.count > MAX_PARTS) return;
   const ct = parseParams(first(p.headers, 'content-type') ?? 'text/plain');
   const type = ct.value.includes('/') ? ct.value : 'text/plain';
@@ -336,7 +336,7 @@ function walk(p: Part, depth: number, acc: Collected, inAlternative = false) {
   const filename = disp.params.filename || ct.params.name || '';
   const cte = first(p.headers, 'content-transfer-encoding') ?? '7bit';
   if (type.startsWith('multipart/') && ct.params.boundary && depth < MAX_DEPTH) {
-    for (const sub of splitMultipart(p.body, ct.params.boundary)) walk(splitHead(sub), depth + 1, acc, type === 'multipart/alternative' || inAlternative);
+    for (const sub of splitMultipart(p.body, ct.params.boundary)) walk(splitHead(sub), depth + 1, acc);
     return;
   }
   const isAttachment = disp.value === 'attachment' || (!!filename && !type.startsWith('text/')) || (!!filename && disp.value === 'attachment');

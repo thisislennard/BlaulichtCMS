@@ -338,14 +338,24 @@ export interface ImportRow {
 
 /** CSV mit Trennzeichen , ; oder Tab, Anführungszeichen nach RFC 4180. */
 export function parseCsv(text: string): string[][] {
+  return parseCsvRecords(text).map((r) => r.cells);
+}
+
+/**
+ * Wie `parseCsv`, dazu je Datensatz die Zeile der Datei, in der er beginnt (ab 1). Zeilenumbrüche in Feldern mit
+ * Anführungszeichen und leere Zeilen zählen mit – Fehlermeldungen nennen so die Zeile, die man im Editor sieht (#233).
+ */
+export function parseCsvRecords(text: string): { cells: string[]; line: number }[] {
   const src = text.replace(/^﻿/, '');
   const firstLine = src.split(/\r?\n/, 1)[0] ?? '';
   const count = (ch: string) => firstLine.split(ch).length - 1;
   const delim = [';', ',', '\t'].sort((a, b) => count(b) - count(a))[0];
-  const rows: string[][] = [];
+  const rows: { cells: string[]; line: number }[] = [];
   let row: string[] = [];
   let cur = '';
   let quoted = false;
+  let line = 1;
+  let start = 1;
   for (let i = 0; i < src.length; i++) {
     const ch = src[i];
     if (quoted) {
@@ -354,7 +364,11 @@ export function parseCsv(text: string): string[][] {
           cur += '"';
           i++;
         } else quoted = false;
-      } else cur += ch;
+      } else {
+        cur += ch;
+        // Umbruch im Feld: physische Zeile weiterzählen (\r\n zählt einmal)
+        if (ch === '\n' || (ch === '\r' && src[i + 1] !== '\n')) line++;
+      }
       continue;
     }
     if (ch === '"' && cur === '') quoted = true;
@@ -365,12 +379,13 @@ export function parseCsv(text: string): string[][] {
       if (ch === '\r' && src[i + 1] === '\n') i++;
       row.push(cur);
       cur = '';
-      if (row.some((c) => c.trim() !== '')) rows.push(row);
+      if (row.some((c) => c.trim() !== '')) rows.push({ cells: row, line: start });
       row = [];
+      start = ++line;
     } else cur += ch;
   }
   row.push(cur);
-  if (row.some((c) => c.trim() !== '')) rows.push(row);
+  if (row.some((c) => c.trim() !== '')) rows.push({ cells: row, line: start });
   return rows;
 }
 
@@ -415,6 +430,8 @@ export function parseLocalDate(date: string, time: string, timeZone: string): Da
   const t = /^(\d{1,2}):(\d{2})/.exec(time.trim());
   if (t) [h, mi] = [+t[1], +t[2]];
   if (mo < 1 || mo > 12 || da < 1 || da > 31 || h > 23 || mi > 59 || y < 1900 || y > 2100) return null;
+  // Tag muss im Monat liegen: „31.04.“ oder „29.02.“ außerhalb von Schaltjahren nicht zum Folgemonat weiterrollen (#233)
+  if (da > new Date(Date.UTC(y, mo, 0)).getUTCDate()) return null;
   // Ortszeit → UTC: Versatz der Zeitzone zu diesem Zeitpunkt bestimmen
   const guess = Date.UTC(y, mo - 1, da, h, mi);
   const parts = new Intl.DateTimeFormat('en-US', { timeZone, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }).formatToParts(new Date(guess));
@@ -426,7 +443,8 @@ export function parseLocalDate(date: string, time: string, timeZone: string): Da
 const yes = (v: string) => /^(ja|yes|x|1|true|wahr)$/i.test(v.trim());
 
 export function parseIncidentCsv(text: string, timeZone: string): { rows: ImportRow[]; errors: string[]; columns: string[] } {
-  const all = parseCsv(text);
+  const records = parseCsvRecords(text);
+  const all = records.map((r) => r.cells);
   if (all.length < 2) return { rows: [], errors: ['Die Datei enthält keine Datenzeilen (erste Zeile = Spaltennamen).'], columns: [] };
   const header = all[0].map((h) => norm(h));
   const col: Record<string, number> = {};
@@ -441,20 +459,22 @@ export function parseIncidentCsv(text: string, timeZone: string): { rows: Import
   const val = (r: string[], k: string) => (col[k] === undefined ? '' : String(r[col[k]] ?? '').trim());
   for (let i = 1; i < all.length && rows.length < 5000; i++) {
     const r = all[i];
+    // Zeile der Datei, in der der Datensatz beginnt (mehrzeilige Felder, leere Zeilen; #233)
+    const line = records[i].line;
     const at = parseLocalDate(val(r, 'alarmAt'), val(r, 'time'), timeZone);
     if (!at) {
-      errors.push(`Zeile ${i + 1}: Datum „${val(r, 'alarmAt').slice(0, 30)}“ nicht lesbar – übersprungen.`);
+      errors.push(`Zeile ${line}: Datum „${val(r, 'alarmAt').slice(0, 30)}“ nicht lesbar oder ungültig – übersprungen.`);
       continue;
     }
     const nr = parseInt(val(r, 'number'), 10);
     const keyword = val(r, 'keyword');
     const title = val(r, 'title');
     if (!keyword && !title) {
-      errors.push(`Zeile ${i + 1}: weder Einsatzart noch Einsatzmeldung – übersprungen.`);
+      errors.push(`Zeile ${line}: weder Einsatzart noch Einsatzmeldung – übersprungen.`);
       continue;
     }
     rows.push({
-      line: i + 1,
+      line,
       alarmAt: at,
       number: Number.isInteger(nr) && nr > 0 && nr < 100000 ? nr : null,
       keyword,

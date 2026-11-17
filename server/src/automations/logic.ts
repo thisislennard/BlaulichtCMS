@@ -85,9 +85,63 @@ export function listOf(value: string | undefined): string[] {
     .filter(Boolean);
 }
 
-export function evaluateRule(rule: Rule, data: Data): boolean {
+/** Tage im Monat (Monat 1–12). */
+const daysIn = (y: number, m: number) => new Date(Date.UTC(y, m, 0)).getUTCDate();
+
+/**
+ * Zeitpunkt (ms) für die Vergleiche „liegt vor/nach“ (#233). Erkannt werden ISO-Zeitpunkte mit Zeitzone (so liefern
+ * Eingänge Datumsfelder), ein Datum „24.12.2026“ bzw. „2026-12-24“ (Mitternacht) und mit Uhrzeit „24.12.2026 18:00“,
+ * „24.12.2026, 18:00“ bzw. „2026-12-24T18:00“ (Ortszeit der Instanz). Mit `relative` (Vergleichswert der Regel) auch:
+ * leer oder „jetzt“, „heute“/„morgen“/„gestern“ (Mitternacht) und Abstände zu jetzt wie „jetzt + 2 h“, „- 30 min“,
+ * „+ 3 Tage“. Ungültige Angaben (z. B. 31.04.) ergeben null.
+ */
+export function parseWhen(v: unknown, opts: { timeZone?: string; now?: number; relative?: boolean } = {}): number | null {
+  const tz = opts.timeZone ?? 'Europe/Berlin';
+  if (typeof v !== 'string') return null;
+  const raw = v.trim();
+  const s = raw.toLocaleLowerCase('de-DE');
+  if (opts.relative) {
+    const now = opts.now ?? Date.now();
+    if (s === '' || s === 'jetzt') return now;
+    const day = ({ gestern: -1, heute: 0, morgen: 1 } as Record<string, number>)[s];
+    if (day !== undefined) {
+      const p = localParts(now, tz);
+      return zonedToUtc(p.y, p.m, p.d + day, 0, 0, tz);
+    }
+    const r = /^(?:jetzt\s*)?([+-])\s*(\d{1,5})\s*(min|minuten?|h|std|stunden?|d|t|tage?|tagen)\.?$/.exec(s);
+    if (r) {
+      const n = (r[1] === '-' ? -1 : 1) * Number(r[2]);
+      if (/^(d|t|tag)/.test(r[3])) {
+        // Kalendertage in Ortszeit (Sommer-/Winterzeit verschiebt die Uhrzeit nicht)
+        const p = localParts(now, tz);
+        return zonedToUtc(p.y, p.m, p.d + n, p.h, p.min, tz) + (now % 60_000);
+      }
+      return now + n * (r[3].startsWith('min') ? 60_000 : 3_600_000);
+    }
+  }
+  if (ISO.test(raw)) {
+    const t = Date.parse(raw);
+    return Number.isNaN(t) ? null : t;
+  }
+  const m = /^(\d{1,2})\.(\d{1,2})\.(\d{4})(?:[ ,]+(\d{1,2}):(\d{2}))?$/.exec(s) ?? /^(\d{4})-(\d{2})-(\d{2})(?:[ t](\d{2}):(\d{2}))?$/.exec(s);
+  if (!m) return null;
+  const [y, mo, d] = s.includes('.') ? [+m[3], +m[2], +m[1]] : [+m[1], +m[2], +m[3]];
+  const h = m[4] ? +m[4] : 0;
+  const mi = m[5] ? +m[5] : 0;
+  if (mo < 1 || mo > 12 || d < 1 || d > daysIn(y, mo) || h > 23 || mi > 59) return null;
+  return zonedToUtc(y, mo, d, h, mi, tz);
+}
+
+export interface EvalOptions {
+  /** Zeitzone der Instanz (Datumsangaben in Ortszeit, Darstellung von Zeitpunkten) */
+  timeZone?: string;
+  /** „jetzt“ für relative Zeitpunkte (Tests); Standard: Zeitpunkt der Auswertung */
+  now?: number;
+}
+
+export function evaluateRule(rule: Rule, data: Data, opts: EvalOptions = {}): boolean {
   const raw = data[rule.field];
-  const text = norm(valueText(raw));
+  const text = norm(valueText(raw, opts.timeZone));
   const want = norm(String(rule.value ?? ''));
   switch (rule.op) {
     case 'exists':
@@ -113,15 +167,23 @@ export function evaluateRule(rule: Rule, data: Data): boolean {
       if (a === null || b === null) return false;
       return rule.op === 'gte' ? a >= b : a <= b;
     }
+    case 'before':
+    case 'after': {
+      // Zeitpunkte statt Text vergleichen (#233): der Feldwert ist ein ISO-Zeitpunkt (z. B. alarmzeit, beginn, gueltig_bis)
+      const a = parseWhen(raw, { timeZone: opts.timeZone });
+      const b = parseWhen(rule.value ?? '', { timeZone: opts.timeZone, now: opts.now, relative: true });
+      if (a === null || b === null) return false;
+      return rule.op === 'before' ? a < b : a > b;
+    }
     default:
       return false;
   }
 }
 
 /** Gruppe auswerten: „und“ = alle Regeln, „oder“ = mindestens eine. Eine leere Gruppe trifft zu. */
-export function evaluateGroup(g: Group, data: Data): boolean {
+export function evaluateGroup(g: Group, data: Data, opts: EvalOptions = {}): boolean {
   if (!g.rules.length) return true;
-  const results = g.rules.map((r) => (isGroup(r) ? evaluateGroup(r, data) : evaluateRule(r, data)));
+  const results = g.rules.map((r) => (isGroup(r) ? evaluateGroup(r, data, opts) : evaluateRule(r, data, opts)));
   return g.combinator === 'or' ? results.some(Boolean) : results.every(Boolean);
 }
 

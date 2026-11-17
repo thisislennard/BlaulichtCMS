@@ -109,7 +109,7 @@ export function RuleRow({ r, fields, ops, onChange, onRemove, idp, disabled }: {
             ))}
           </Select>
           <label className="sr-only" htmlFor={`${idp}-v`}>Wert</label>
-          <Input id={`${idp}-v`} list={suggestions.length ? `${idp}-vl` : undefined} value={noValue ? '' : (r.value ?? '')} disabled={disabled || noValue} placeholder={r.op === 'in' ? 'a, b, c' : noValue ? '–' : 'Wert'} maxLength={500} onChange={(e) => onChange({ ...r, value: e.target.value })} />
+          <Input id={`${idp}-v`} list={suggestions.length ? `${idp}-vl` : undefined} value={noValue ? '' : (r.value ?? '')} disabled={disabled || noValue} placeholder={r.op === 'in' ? 'a, b, c' : noValue ? '–' : r.op === 'before' || r.op === 'after' ? 'jetzt, heute, jetzt + 2 h, 24.12.2026 18:00' : 'Wert'} maxLength={500} onChange={(e) => onChange({ ...r, value: e.target.value })} />
           {suggestions.length > 0 && (
             <datalist id={`${idp}-vl`}>
               {suggestions.map((o) => (
@@ -282,7 +282,7 @@ export function NodePanel({
         <>
           <GroupEditor g={{ combinator: d.combinator ?? 'and', rules: d.rules ?? [] }} fields={fields} ops={cat.operators} depth={0} idp={idp} disabled={readOnly} onChange={(g) => set({ combinator: g.combinator, rules: g.rules })} />
           <Notice>
-            Vergleiche ohne Groß-/Kleinschreibung. „ist mindestens/höchstens“ nur für Zahlen (z. B. Warnstufe). „ist eines von“: Werte mit Komma trennen.
+            Vergleiche ohne Groß-/Kleinschreibung. „ist mindestens/höchstens“ nur für Zahlen (z. B. Warnstufe). „ist eines von“: Werte mit Komma trennen. Datumsfelder mit „liegt vor/nach“, z. B. jetzt, heute, jetzt + 2 h oder 24.12.2026 18:00.
           </Notice>
         </>
       )}

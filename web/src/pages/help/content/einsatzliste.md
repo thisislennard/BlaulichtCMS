@@ -38,7 +38,7 @@ Die Liste ist öffentlich. Deshalb gilt:
 
 Wer bisher die WordPress-Erweiterung **„Einsatzverwaltung“** nutzt: dort unter **Werkzeuge → Einsatzberichte exportieren** das Format **CSV** wählen und die Datei hier importieren.
 
-1. Datei wählen, Website und Optionen festlegen, **Prüfen**: Die Vorschau zeigt die ersten Zeilen, wie viele schon vorhanden sind, bei wie vielen der Ort entfällt und welche Zeilen nicht lesbar waren.
+1. Datei wählen, Website und Optionen festlegen, **Prüfen**: Die Vorschau zeigt die ersten Zeilen, wie viele schon vorhanden sind, bei wie vielen der Ort entfällt und welche Zeilen nicht lesbar waren – mit der Zeilennummer der Datei (Felder mit Zeilenumbrüchen zählen mit). Ungültige Datumsangaben wie „31.04.“ werden nicht weitergerechnet, sondern als nicht lesbar gemeldet.
 2. **Importieren** legt die Einträge als Entwürfe an (wahlweise gleich eingereicht). Schon importierte Zeilen werden übersprungen – ein zweiter Import derselben Datei legt nichts doppelt an.
 3. Einträge auswählen, freigeben und veröffentlichen.
 

@@ -236,6 +236,8 @@ Eine Regel ist `{ "field": "stichwort", "op": "starts_with", "value": "B" }`. `c
 | `in` | ist eines von (Liste) – Werte mit Komma getrennt |
 | `gte` | ist mindestens (Zahl) |
 | `lte` | ist höchstens (Zahl) |
+| `before` | liegt vor (Zeitpunkt) – für Datumsfelder; `value`: `jetzt`, `heute`, `morgen`, `jetzt + 2 h`, `jetzt - 7 Tage`, `24.12.2026 18:00` oder `2026-12-24` |
+| `after` | liegt nach (Zeitpunkt) – für Datumsfelder; `value`: `jetzt`, `heute`, `morgen`, `jetzt + 2 h`, `jetzt - 7 Tage`, `24.12.2026 18:00` oder `2026-12-24` |
 | `exists` | ist ausgefüllt – ohne `value` |
 | `not_exists` | ist leer – ohne `value` |
 

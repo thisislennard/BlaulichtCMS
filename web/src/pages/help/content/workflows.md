@@ -80,7 +80,7 @@ Texte der Ausgänge enthalten `{{feld}}`-Platzhalter, z. B. `Einsatz {{stichwort
 
 | Baustein | Was er tut |
 |---|---|
-| Bedingung | Regeln „Feld – Vergleich – Wert“: ist gleich, enthält, beginnt mit, ist eines von (Liste), ist mindestens/höchstens (Zahl), ist ausgefüllt/leer. Mit UND/ODER und einer Ebene Untergruppen. Ausgänge **trifft zu** und **trifft nicht zu** |
+| Bedingung | Regeln „Feld – Vergleich – Wert“: ist gleich, enthält, beginnt mit, ist eines von (Liste), ist mindestens/höchstens (Zahl), liegt vor/nach (Zeitpunkt), ist ausgefüllt/leer. Mit UND/ODER und einer Ebene Untergruppen. Ausgänge **trifft zu** und **trifft nicht zu** |
 | Verzweigung | wählt den Weg nach dem Wert eines Feldes (je Fall ein Ausgang, dazu **sonst**) |
 | Felder setzen | legt neue Felder aus Textvorlagen an, z. B. `titel` = `{{stichwort_text}} in {{ort}}` |
 | Warten | hält den Lauf an (1 Minute bis 24 Stunden) |
@@ -90,6 +90,8 @@ Texte der Ausgänge enthalten `{{feld}}`-Platzhalter, z. B. `Einsatz {{stichwort
 | Bild aus Vorlage erzeugen | füllt eine [befüllbare Bildvorlage](/hilfe/designvorlagen): je Textfeld der Vorlage (z. B. `titel`) eine Textvorlage mit Platzhaltern wie `{{stichwort}}`, `{{titel}}` oder `{{beginn}}`, optional feste Bilder für Bild-Platzhalter, Alternativtext und Zielsammlung. Das Bild landet geprüft in den Medien (sonst in „Bilder aus Vorlagen“). Liefert die Felder `bild_id`, `bild_link` und `bilder`. Ein **Beitrags-Ausgang danach** übernimmt alle Bilder des Laufs (das erste als Titelbild, mit Alternativtext) – damit auch für die vorausgewählten sozialen Kanäle und **Storys** des Beitrags. Im **Testlauf** entsteht nur eine Vorschau beim Schritt, nichts in den Medien |
 
 Vergleiche ignorieren Groß- und Kleinschreibung. Nach einem Zusammenführen stehen nur Felder zur Verfügung, die auf allen eingehenden Wegen vorhanden sind.
+
+**Datumsfelder** (z. B. `alarmzeit`, `beginn`, `ende`, `gueltig_bis`, `jetzt`) vergleicht man mit **liegt vor** bzw. **liegt nach** als Zeitpunkt. Als Wert gehen `jetzt` (oder leer), `heute`, `morgen`, `gestern` (jeweils 0 Uhr), Abstände zu jetzt wie `jetzt + 2 h`, `jetzt - 30 min` oder `jetzt + 3 Tage` sowie ein festes Datum `24.12.2026` (0 Uhr) bzw. mit Uhrzeit `24.12.2026 18:00` – immer in der Zeitzone der Instanz. Beispiel: `beginn` *liegt vor* `jetzt + 24 h` trifft für Termine zu, die innerhalb eines Tages beginnen. Ungültige Angaben (etwa `31.04.2026`) lehnt die Prüfung des Workflows ab. Die Textvergleiche (ist gleich, enthält, beginnt mit) sehen ein Datumsfeld so, wie es in Texten erscheint: `24.12.2026, 18:00`.
 
 ## Erweiterter Editor
 

@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 import { z } from 'zod';
 import { FIELD_KEY, IMAGE_FIELDS, INPUT_KINDS, LIMITS, NODE_TYPES, OPERATORS, OUTPUT_KINDS, SYSTEM_FIELDS, hasInputPort, outputPorts, type FieldDef, type InputKind, type NodeType, type OutputKind } from './catalog.js';
-import { conditionFields, isGroup, placeholders, type Group } from './logic.js';
+import { conditionFields, isGroup, parseWhen, placeholders, type Group } from './logic.js';
 
 /*
  * Ablauf (Graph) einer Automation: Knoten mit Ports und Kanten. Prüfung ohne Datenbank (unit-testbar): Aufbau, Kreise,
@@ -247,6 +247,13 @@ export function validateGraph(g: Graph, ctx: { inputs: Map<string, InputRef>; ou
     if (n.type === 'condition') {
       const depthOk = (n.data.rules as any[]).every((r) => !isGroup(r) || (r.rules as any[]).every((x) => !isGroup(x)));
       if (!depthOk) errors.push({ nodeId: n.id, message: 'Bedingungen: höchstens eine Ebene Untergruppen.' });
+      // „liegt vor/nach“ (#233): Vergleichswert muss ein Zeitpunkt sein
+      const flat = (rs: any[]): any[] => rs.flatMap((r) => (isGroup(r) ? flat(r.rules) : [r]));
+      for (const r of flat(n.data.rules as any[])) {
+        if ((r.op === 'before' || r.op === 'after') && parseWhen(r.value ?? '', { relative: true }) === null) {
+          errors.push({ nodeId: n.id, message: `Bedingungen: „${String(r.value).slice(0, 40)}“ ist kein Zeitpunkt (z. B. jetzt, heute, jetzt + 2 h, 24.12.2026 18:00).` });
+        }
+      }
     }
   }
   if (!g.nodes.some((n) => n.type === 'input')) errors.push({ message: 'Der Workflow braucht mindestens einen Auslöser (Eingang).' });

@@ -575,6 +575,8 @@
                       "in",
                       "gte",
                       "lte",
+                      "before",
+                      "after",
                       "exists",
                       "not_exists"
                     ]
@@ -620,6 +622,8 @@
                             "in",
                             "gte",
                             "lte",
+                            "before",
+                            "after",
                             "exists",
                             "not_exists"
                           ]

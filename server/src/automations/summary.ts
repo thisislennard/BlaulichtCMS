@@ -91,6 +91,10 @@ function rulePhrase(r: Rule): string {
       return `${f} mindestens ${v} ist`;
     case 'lte':
       return `${f} höchstens ${v} ist`;
+    case 'before':
+      return `${f} vor ${v.trim() ? `„${v.trim()}“` : 'jetzt'} liegt`;
+    case 'after':
+      return `${f} nach ${v.trim() ? `„${v.trim()}“` : 'jetzt'} liegt`;
     default:
       return `${f} ${OPERATORS[r.op as Operator] ?? r.op} „${v}“`;
   }

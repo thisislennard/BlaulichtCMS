@@ -348,7 +348,7 @@ async function runNode(ctx: Ctx, node: GraphNode, data: Data, prev: StepRow | un
     case 'merge':
       return done({ ports: ['out'] });
     case 'condition': {
-      const ok = evaluateGroup(node.data as Group, data);
+      const ok = evaluateGroup(node.data as Group, data, { timeZone: ctx.tz });
       return done({ ports: [ok ? 'true' : 'false'], info: ok ? 'Bedingung trifft zu.' : 'Bedingung trifft nicht zu.' });
     }
     case 'switch': {

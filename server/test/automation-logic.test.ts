@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { graphHash, graphSchema, inputFields, outputNeeds, topoOrder, validateGraph, type Graph, type InputRef, type OutputRef } from '../src/automations/graph.js';
-import { dedupKey, escapeHtml, evaluateGroup, evaluateRule, lastDueSlot, placeholders, redactForLog, renderTemplate } from '../src/automations/logic.js';
+import { dedupKey, escapeHtml, evaluateGroup, evaluateRule, lastDueSlot, parseWhen, placeholders, redactForLog, renderTemplate } from '../src/automations/logic.js';
 import { INPUT_CONFIG, OUTPUT_CONFIG } from '../src/automations/configs.js';
 import { buildSnapshot, snapshotHash } from '../src/automations/engine.js';
 import { permissionsFor } from '../src/auth/permissions.js';
@@ -59,6 +59,45 @@ describe('Automationen: Bedingungen', () => {
     expect(evaluateRule({ field: 'leer', op: 'exists' }, d)).toBe(false);
     expect(evaluateRule({ field: 'gibtsnicht', op: 'not_exists' }, d)).toBe(true);
     expect(evaluateRule({ field: 'stichwort', op: 'contains', value: '' }, d)).toBe(false);
+  });
+  it('Datumsfelder als Zeitpunkt (#233): liegt vor/nach, relative und feste Angaben in Ortszeit', () => {
+    const tz = { timeZone: 'Europe/Berlin', now: Date.parse('2026-11-17T10:00:00.000Z') };
+    const t = { beginn: '2026-11-21T09:00:00.000Z', alarmzeit: '2026-11-17T09:30:00.000Z', text: 'kein Datum', leer: '' };
+    const r = (field: string, op: 'before' | 'after', value: string) => evaluateRule({ field, op, value }, t, tz);
+    // Der Textvergleich traf bisher nur zufällig („beginnt mit 21.11.“ geht, „vor dem 22.11.“ ging nicht)
+    expect(r('beginn', 'before', '22.11.2026')).toBe(true);
+    expect(r('beginn', 'before', '21.11.2026 10:00')).toBe(false); // 09:00 UTC = 10:00 Ortszeit, nicht davor
+    expect(r('beginn', 'before', '21.11.2026 10:01')).toBe(true);
+    expect(r('beginn', 'after', '2026-11-21')).toBe(true);
+    expect(r('beginn', 'after', 'jetzt')).toBe(true);
+    expect(r('beginn', 'after', '')).toBe(true);
+    expect(r('beginn', 'before', 'jetzt + 3 Tage')).toBe(false);
+    expect(r('beginn', 'before', 'jetzt + 5 tage')).toBe(true);
+    expect(r('alarmzeit', 'after', 'jetzt - 1 h')).toBe(true);
+    expect(r('alarmzeit', 'after', '-20 min')).toBe(false);
+    expect(r('alarmzeit', 'after', 'heute')).toBe(true);
+    expect(r('alarmzeit', 'before', 'morgen')).toBe(true);
+    expect(r('alarmzeit', 'after', 'gestern')).toBe(true);
+    // Kein Zeitpunkt → trifft nicht zu (wie Zahlenvergleiche mit Text)
+    expect(r('text', 'before', 'morgen')).toBe(false);
+    expect(r('leer', 'after', 'gestern')).toBe(false);
+    expect(r('beginn', 'before', '31.04.2027')).toBe(false);
+    expect(parseWhen('31.04.2027', { relative: true })).toBeNull();
+    expect(parseWhen('heute', { ...tz, relative: true })).toBe(Date.parse('2026-11-16T23:00:00.000Z'));
+    expect(parseWhen('jetzt + 1 Tag', { timeZone: 'Europe/Berlin', now: Date.parse('2026-10-24T22:30:00.000Z'), relative: true })).toBe(Date.parse('2026-10-25T23:30:00.000Z'));
+    // Feldwerte als Text eines Zeitpunkts (z. B. aus „Felder setzen“) werden ebenfalls gelesen
+    expect(evaluateRule({ field: 'x', op: 'before', value: '22.11.2026' }, { x: '21.11.2026, 10:00' }, tz)).toBe(true);
+    // Textvergleiche sehen Datumsfelder in der Zeitzone der Instanz
+    expect(evaluateRule({ field: 'beginn', op: 'starts_with', value: '21.11.2026, 04:00' }, t, { timeZone: 'America/New_York' })).toBe(true);
+  });
+  it('liegt vor/nach: Prüfung des Ablaufs verlangt einen Zeitpunkt als Wert', () => {
+    const g = base();
+    const cond = g.nodes.find((n) => n.type === 'condition');
+    if (!cond) return;
+    cond.data = { combinator: 'and', rules: [{ field: 'alarmzeit', op: 'after', value: 'übermorgen' }] };
+    expect(validateGraph(g, ctx).errors.map((e) => e.message).join(' ')).toMatch(/kein Zeitpunkt/);
+    cond.data = { combinator: 'and', rules: [{ field: 'alarmzeit', op: 'after', value: 'jetzt - 2 h' }] };
+    expect(validateGraph(g, ctx).errors.map((e) => e.message).join(' ')).not.toMatch(/kein Zeitpunkt/);
   });
   it('UND/ODER mit einer Ebene Untergruppen', () => {
     const g = { combinator: 'and' as const, rules: [{ field: 'stichwort', op: 'starts_with' as const, value: 'B' }, { combinator: 'or' as const, rules: [{ field: 'stufe', op: 'gte' as const, value: '4' }, { field: 'liste', op: 'eq' as const, value: 'x' }] }] };

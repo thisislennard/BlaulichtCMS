@@ -1850,6 +1850,20 @@ describe('Einsatzliste: Ort nur grob, CSV und Datum (#213)', () => {
     expect(r.rows[0]).toMatchObject({ keyword: 'F 1', title: 'Mülltonne', location: 'Nord', number: null });
     expect(r.rows[0].alarmAt.toISOString()).toBe('2026-02-01T06:05:00.000Z');
   });
+
+  it('CSV (#233): ungültige Tage rollen nicht in den Folgemonat, Zeilennummern zählen mehrzeilige Felder mit', async () => {
+    const { parseCsvRecords, parseLocalDate, parseIncidentCsv } = await import('../src/incidents/list.js');
+    for (const d of ['31.04.2026', '30.02.2028', '29.02.2026', '2026-04-31', '31.06.2026 10:00']) expect(parseLocalDate(d, '', 'Europe/Berlin'), d).toBeNull();
+    expect(parseLocalDate('29.02.2028', '', 'Europe/Berlin')!.toISOString()).toBe('2028-02-28T23:00:00.000Z');
+    expect(parseLocalDate('30.04.2026', '23:59', 'Europe/Berlin')!.toISOString()).toBe('2026-04-30T21:59:00.000Z');
+    // Datensatz-Anfang je physischer Zeile: Umbruch im Feld (LF und CRLF) und Leerzeilen zählen mit
+    expect(parseCsvRecords('a;b\r\n1;"zwei\r\nZeilen"\r\n\r\n3;x\n"vier\nfünf\nsechs";y\n7;z').map((r) => r.line)).toEqual([1, 2, 5, 6, 9]);
+    const csv = ['Datum;Stichwort;Einsatzmeldung;Bericht', '01.04.2026;F 1;Brand;"Zeile eins', 'Zeile zwei"', '31.04.2026;F 2;Brand;x', '02.04.2026;;;"a', 'b', 'c"', '03.04.2026;H 1;Hilfe;'].join('\n');
+    const r = parseIncidentCsv(csv, 'Europe/Berlin');
+    expect(r.errors).toEqual(['Zeile 4: Datum „31.04.2026“ nicht lesbar oder ungültig – übersprungen.', 'Zeile 5: weder Einsatzart noch Einsatzmeldung – übersprungen.']);
+    expect(r.rows.map((x) => x.line)).toEqual([2, 8]);
+    expect(r.rows[0].report).toBe('Zeile eins\nZeile zwei');
+  });
 });
 
 describe('Zeitangaben in der eingestellten Zeitzone (#224)', async () => {
