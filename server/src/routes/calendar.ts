@@ -1,10 +1,10 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { many, one, tx } from '../db/pool.js';
+import { many, one, tx, type Queryable } from '../db/pool.js';
 import { requireAuth } from '../auth/context.js';
 import { audit } from '../lib/audit.js';
 import { AppError, badRequest, notFound } from '../lib/errors.js';
-import { expand, formatRrule, localDate, midnight, parseRrule, toCivil, type Rrule } from '../calendar/recurrence.js';
+import { dayNumber, expand, formatRrule, fromCivil, fromDayNumber, localDate, midnight, parseRrule, toCivil, type Occurrence, type Rrule, type SeriesSource } from '../calendar/recurrence.js';
 import { addDays } from '../calendar/ical.js';
 import { reschedulePost } from '../calendar/providers.js';
 import { CATEGORY_COLORS, MAX_RANGE_DAYS, calendarProviders, calendarTimeZone, computeUntil, occurrences, safeRrule, toEntry, type CalendarEntry, type EventRow } from '../calendar/store.js';
@@ -156,8 +156,9 @@ const cleanTags = (tags: string[]) => [...new Set(tags.map((t) => t.trim()).filt
 
 /** Termin für die Bearbeitung (Hauptzeile einer Serie oder geänderter Einzeltermin). */
 async function eventDetail(id: string) {
-  const e = await one<EventRow & { created_by_name: string | null; updated_by_name: string | null }>(
-    `SELECT e.*, c.name AS cat_name, c.color AS cat_color, cu.name AS created_by_name, uu.name AS updated_by_name
+  const e = await one<EventRow & { created_by_name: string | null; updated_by_name: string | null; override_count: number }>(
+    `SELECT e.*, c.name AS cat_name, c.color AS cat_color, cu.name AS created_by_name, uu.name AS updated_by_name,
+            (SELECT count(*)::int FROM calendar_events o WHERE o.series_id = e.id) AS override_count
        FROM calendar_events e LEFT JOIN calendar_categories c ON c.id = e.category_id
        LEFT JOIN users cu ON cu.id = e.created_by LEFT JOIN users uu ON uu.id = e.updated_by WHERE e.id = $1`,
     [id],
@@ -184,6 +185,8 @@ async function eventDetail(id: string) {
     rruleText: describeRrule(e.rrule, e.tz),
     recurrence: recurrenceFromRrule(e.rrule, e.tz),
     exdates: (e.exdates ?? []).map((d) => new Date(d).toISOString()),
+    /** Zahl der einzeln geänderten Termine einer Serie */
+    overrideCount: e.override_count,
     seriesId: e.series_id,
     instance: e.recurrence_id ? new Date(e.recurrence_id).toISOString() : null,
     createdAt: e.created_at,
@@ -198,6 +201,107 @@ function isOccurrence(master: EventRow, instance: number): boolean {
   const rule = safeRrule(master.rrule, master.tz);
   if (!rule) return false;
   return expand({ start: +master.starts_at, end: +master.ends_at, allDay: master.all_day, tz: master.tz, rrule: rule }, instance - 1, instance + 1).some((o) => o.start === instance);
+}
+
+/** Termine einer Serie zu den angegebenen Beginn-Zeitpunkten (ohne Ausnahmen), je Beginn. */
+function occurrencesAt(src: SeriesSource, starts: number[]): Map<number, Occurrence> {
+  if (!starts.length) return new Map();
+  const list = expand({ ...src, exdates: [] }, Math.min(...starts) - 1, Math.max(...starts) + 1, Infinity);
+  const want = new Set(starts);
+  return new Map(list.filter((o) => want.has(o.start)).map((o) => [o.start, o]));
+}
+
+export interface RealignResult {
+  exdatesKept: number;
+  exdatesDropped: number;
+  overridesKept: number;
+  overridesDropped: number;
+}
+
+/**
+ * Ausnahmen (`exdates`) und geänderte Einzeltermine (`recurrence_id`) an eine geänderte Serie anpassen (#228). Beide
+ * verweisen auf den ursprünglichen Beginn eines Termins der Serie; nach „Serie bearbeiten“ mit anderem Beginn, anderer
+ * Uhrzeit oder anderer Regel passten sie sonst zu keinem Termin mehr – gelöschte Termine erschienen wieder, geänderte
+ * doppelt.
+ *
+ * Je Eintrag gilt der erste passende Termin der geänderten Serie: derselbe Zeitpunkt, wenn es ihn noch gibt (z. B.
+ * Serie beginnt eine Woche später, ein Wochentag kommt hinzu), sonst derselbe Abstand zum ersten Termin in Tagen mit
+ * der neuen Uhrzeit (z. B. 19:00 → 19:30, Montag → Dienstag, 1. → 2. Samstag). Was zu keinem Termin mehr passt,
+ * entfällt. Einzeltermine, deren eigene Zeit unverändert war (nur Titel, Ort …), bekommen die Zeit ihres neuen Termins.
+ */
+export async function realignSeries(db: Queryable, old: EventRow, next: { start: number; end: number; allDay: boolean; rrule: string }): Promise<RealignResult> {
+  const res: RealignResult = { exdatesKept: 0, exdatesDropped: 0, overridesKept: 0, overridesDropped: 0 };
+  const tz = old.tz;
+  const oldRule = safeRrule(old.rrule, tz);
+  const newRule = safeRrule(next.rrule, tz);
+  const exdates = [...new Set((old.exdates ?? []).map(Number))];
+  const overrides = await many<{ id: string; recurrence_id: Date; starts_at: Date; ends_at: Date; all_day: boolean }>('SELECT id, recurrence_id, starts_at, ends_at, all_day FROM calendar_events WHERE series_id = $1 ORDER BY recurrence_id', [old.id], db);
+  if ((!exdates.length && !overrides.length) || !newRule) return res;
+  const oc = toCivil(+old.starts_at, tz);
+  const nc = toCivil(next.start, tz);
+  const dayDelta = dayNumber(nc.y, nc.m, nc.d) - dayNumber(oc.y, oc.m, oc.d);
+  const shifted = (ms: number) => {
+    const c = toCivil(ms, tz);
+    const d = fromDayNumber(dayNumber(c.y, c.m, c.d) + dayDelta);
+    return fromCivil({ ...d, ...(next.allDay ? { h: 0, mi: 0, s: 0 } : { h: nc.h, mi: nc.mi, s: nc.s }) }, tz);
+  };
+  const newSrc: SeriesSource = { start: next.start, end: next.end, allDay: next.allDay, tz, rrule: newRule };
+  /** Neuer Beginn je ursprünglichem Beginn (oder fehlt, wenn kein freier Termin passt); jeder Termin höchstens einmal. */
+  const assign = (list: number[]) => {
+    const cand = new Map(list.map((x) => [x, [x, shifted(x)]]));
+    const occ = occurrencesAt(newSrc, [...cand.values()].flat());
+    const taken = new Set<number>();
+    const out = new Map<number, number>();
+    for (const pass of [0, 1]) {
+      for (const x of list) {
+        const c = cand.get(x)![pass];
+        if (out.has(x) || !occ.has(c) || taken.has(c)) continue;
+        out.set(x, c);
+        taken.add(c);
+      }
+    }
+    return { out, occ };
+  };
+
+  // Ausnahmen
+  const ex = assign(exdates);
+  const newEx = [...ex.out.values()].sort((a, b) => a - b);
+  res.exdatesKept = newEx.length;
+  res.exdatesDropped = exdates.length - newEx.length;
+  const oldSorted = [...exdates].sort((a, b) => a - b);
+  if (newEx.length !== oldSorted.length || newEx.some((v, i) => v !== oldSorted[i])) {
+    await db.query('UPDATE calendar_events SET exdates = $2 WHERE id = $1', [old.id, newEx.map((x) => new Date(x))]);
+  }
+
+  // Geänderte Einzeltermine
+  if (overrides.length) {
+    const rids = overrides.map((o) => +o.recurrence_id);
+    const ov = assign(rids);
+    const before = oldRule ? occurrencesAt({ start: +old.starts_at, end: +old.ends_at, allDay: old.all_day, tz, rrule: oldRule }, rids) : new Map<number, Occurrence>();
+    const drop = overrides.filter((o) => !ov.out.has(+o.recurrence_id)).map((o) => o.id);
+    if (drop.length) await db.query('DELETE FROM calendar_events WHERE id = ANY($1)', [drop]);
+    res.overridesDropped = drop.length;
+    const plans = overrides
+      .filter((o) => ov.out.has(+o.recurrence_id))
+      .map((o) => {
+        const rid = +o.recurrence_id;
+        const nr = ov.out.get(rid)!;
+        const was = before.get(rid);
+        // eigene Zeit unverändert (nur Titel, Ort …): wandert mit dem Termin der Serie
+        const follow = !!was && +o.starts_at === was.start && +o.ends_at === was.end && o.all_day === old.all_day;
+        const occ = ov.occ.get(nr)!;
+        return { id: o.id, rid, nr, times: follow && (occ.start !== +o.starts_at || occ.end !== +o.ends_at || o.all_day !== next.allDay) ? occ : null };
+      });
+    res.overridesKept = plans.length;
+    // Eindeutiger Index (series_id, recurrence_id): Ein Ziel ist nie der bisherige Termin eines anderen Einzeltermins –
+    // gäbe es ihn in der neuen Serie, wäre er im ersten Durchgang von `assign` an seinem Platz geblieben und belegt.
+    for (const p of plans) {
+      if (p.nr === p.rid && !p.times) continue;
+      if (p.times) await db.query('UPDATE calendar_events SET recurrence_id = $2, starts_at = $3, ends_at = $4, all_day = $5, updated_at = now() WHERE id = $1', [p.id, new Date(p.nr), new Date(p.times.start), new Date(p.times.end), next.allDay]);
+      else await db.query('UPDATE calendar_events SET recurrence_id = $2, updated_at = now() WHERE id = $1', [p.id, new Date(p.nr)]);
+    }
+  }
+  return res;
 }
 
 const csv = (s: string | undefined) => (s ?? '').split(',').map((x) => x.trim()).filter(Boolean);
@@ -350,7 +454,15 @@ export async function calendarRoutes(app: FastifyInstance) {
         await db.query(`UPDATE calendar_events SET exdates = '{}' WHERE id = $1`, [id]);
         await db.query(`DELETE FROM calendar_events WHERE series_id = $1`, [id]);
       }
-      await audit(req.auth!.actor, 'calendar.event_updated', { type: 'calendar_event', id, label: v.title }, { umfang: e.rrule ? 'serie' : 'termin', wiederholung: rrule }, 'ok', db);
+      // Serie bleibt Serie, aber Beginn, Dauer oder Regel ändern sich: Ausnahmen und Einzeltermine mitnehmen (#228)
+      let realigned: RealignResult | null = null;
+      if (e.rrule && rrule && (+e.starts_at !== t.start || +e.ends_at !== t.end || e.all_day !== t.allDay || e.rrule !== rrule)) {
+        realigned = await realignSeries(db, e, { start: t.start, end: t.end, allDay: t.allDay, rrule });
+      }
+      const angepasst = realigned && (realigned.exdatesKept || realigned.exdatesDropped || realigned.overridesKept || realigned.overridesDropped)
+        ? { ausnahmen: realigned.exdatesKept, ausnahmen_entfallen: realigned.exdatesDropped, einzeltermine: realigned.overridesKept, einzeltermine_entfallen: realigned.overridesDropped }
+        : undefined;
+      await audit(req.auth!.actor, 'calendar.event_updated', { type: 'calendar_event', id, label: v.title }, { umfang: e.rrule ? 'serie' : 'termin', wiederholung: rrule, ...(angepasst ? { angepasst } : {}) }, 'ok', db);
       return id;
     });
     return eventDetail(resultId);

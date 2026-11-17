@@ -157,7 +157,12 @@ function EventForm({ target, detail, categories, onClose, onSaved }: { target: E
     >
       <div className="flex flex-col gap-4">
         {target.instance && <Notice>Die Änderung gilt nur für den Termin am {rangeText(target.entry!)}. Die übrigen Termine der Serie bleiben unverändert.</Notice>}
-        {detail?.rrule && !target.instance && <Notice>Änderungen gelten für alle Termine der Serie. Beginn und Ende beziehen sich auf den ersten Termin.</Notice>}
+        {detail?.rrule && !target.instance && (
+          <Notice>
+            Änderungen gelten für alle Termine der Serie. Beginn und Ende beziehen sich auf den ersten Termin.
+            {(detail.exdates?.length ?? 0) + (detail.overrideCount ?? 0) > 0 && ' Gelöschte und einzeln geänderte Termine wandern mit, wenn sich Beginn, Uhrzeit oder Wiederholung ändern; was danach zu keinem Termin der Serie mehr passt, entfällt.'}
+          </Notice>
+        )}
         <FieldWrap label="Titel" htmlFor="ev-title" required>
           <Input id="ev-title" value={f.title} maxLength={300} onChange={(e) => set({ title: e.target.value })} />
         </FieldWrap>

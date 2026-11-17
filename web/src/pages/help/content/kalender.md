@@ -44,6 +44,8 @@ Ein Klick auf einen Termin einer Serie bietet:
 
 - **Diesen Termin bearbeiten** – nur dieser Termin bekommt neue Zeiten oder Texte; die übrigen bleiben, wie sie sind.
 - **Serie bearbeiten** – gilt für alle Termine. Beginn und Ende beziehen sich auf den **ersten** Termin der Serie. Wird die Wiederholung entfernt, bleibt nur der erste Termin; einzeln geänderte und gelöschte Termine entfallen dann.
+
+Ändern sich bei **Serie bearbeiten** Beginn, Uhrzeit oder Wiederholung, wandern gelöschte und einzeln geänderte Termine mit: Gibt es ihren Termin in der geänderten Serie noch (etwa wenn die Serie eine Woche später beginnt), bleiben sie dort; sonst verschieben sie sich wie die Serie – aus 19:00 wird 19:30, aus Montag Dienstag. Ein einzeln geänderter Termin behält dabei seine eigene Zeit; wurden an ihm nur Titel, Ort oder Beschreibung geändert, bekommt er die neue Zeit der Serie. Was danach zu keinem Termin der Serie mehr passt (z. B. nach einem früheren Ende), entfällt – ein gelöschter Termin erscheint also nicht wieder, und kein Termin erscheint doppelt.
 - **Diesen Termin löschen** – nur dieser Termin fällt aus (Ausnahme).
 - **Serie löschen** – alle Termine der Serie, auch einzeln geänderte.
 

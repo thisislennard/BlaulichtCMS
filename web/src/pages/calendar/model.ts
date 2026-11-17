@@ -66,6 +66,10 @@ export interface EventDetail {
   rrule: string | null;
   rruleText: string | null;
   recurrence: Recurrence | null;
+  /** ausgenommene (gelöschte) Termine einer Serie, ISO */
+  exdates?: string[];
+  /** einzeln geänderte Termine einer Serie */
+  overrideCount?: number;
   seriesId: string | null;
   instance: string | null;
   createdByName: string | null;

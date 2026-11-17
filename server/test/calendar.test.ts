@@ -172,6 +172,43 @@ describe('Kalender: Kategorien und Termine (#200)', () => {
     expect((await one<any>('SELECT cardinality(exdates) AS n FROM calendar_events WHERE id = $1', [serie]))!.n).toBe(2);
   });
 
+  it('Serie verschieben nimmt gelöschte und geänderte Termine mit, ohne Wiederkehr oder Doppel (#228)', async () => {
+    const weekly = (ends: object = { ends: 'never' }) => ({ freq: 'weekly', weekdays: [], ...ends });
+    const r = await admin.post('/calendar/events', { title: 'Wochendienst', start: berlin(2026, 11, 2, 19), end: berlin(2026, 11, 2, 21), recurrence: weekly() });
+    const id = r.json.id;
+    expect(r.json.rrule).toBe('FREQ=WEEKLY;BYDAY=MO');
+    // 23.11. löschen, 30.11. auf 18:00 verschieben, am 07.12. nur den Titel ändern
+    expect((await admin.del(`/calendar/events/${id}?scope=instance&instance=${encodeURIComponent(berlin(2026, 11, 23, 19))}`)).status).toBe(200);
+    expect((await admin.put(`/calendar/events/${id}`, { scope: 'instance', instance: berlin(2026, 11, 30, 19), title: 'Wochendienst (früher)', start: berlin(2026, 11, 30, 18), end: berlin(2026, 11, 30, 20) })).status).toBe(200);
+    expect((await admin.put(`/calendar/events/${id}`, { scope: 'instance', instance: berlin(2026, 12, 7, 19), title: 'Wochendienst (Gäste)', start: berlin(2026, 12, 7, 19), end: berlin(2026, 12, 7, 21) })).status).toBe(200);
+    expect((await admin.get(`/calendar/events/${id}`)).json).toMatchObject({ exdates: [berlin(2026, 11, 23, 19)], overrideCount: 2 });
+    const list = async () => (await entries(admin, berlin(2026, 11, 16), berlin(2026, 12, 16))).filter((e) => e.seriesId === id).map((e) => `${hm(e.start)} ${e.title}`);
+    const save = (start: string, end: string, rec: object = weekly()) => admin.put(`/calendar/events/${id}`, { scope: 'series', title: 'Wochendienst', start, end, recurrence: rec });
+
+    // Uhrzeit 19:00 → 19:30: der gelöschte Termin bleibt weg, der verschobene erscheint einmal, der umbenannte wandert mit
+    expect((await save(berlin(2026, 11, 2, 19, 30), berlin(2026, 11, 2, 21, 30))).status).toBe(200);
+    expect(await list()).toEqual(['2026-11-16 19:30 Wochendienst', '2026-11-30 18:00 Wochendienst (früher)', '2026-12-07 19:30 Wochendienst (Gäste)', '2026-12-14 19:30 Wochendienst']);
+    const rows = async () => (await many<any>('SELECT title, recurrence_id, starts_at FROM calendar_events WHERE series_id = $1 ORDER BY recurrence_id', [id])).map((o) => `${hm(o.recurrence_id.toISOString())} → ${hm(o.starts_at.toISOString())} ${o.title}`);
+    expect(await rows()).toEqual(['2026-11-30 19:30 → 2026-11-30 18:00 Wochendienst (früher)', '2026-12-07 19:30 → 2026-12-07 19:30 Wochendienst (Gäste)']);
+
+    // Montag → Dienstag: alles um einen Tag; der verschobene Termin behält seine eigene Zeit
+    expect((await save(berlin(2026, 11, 3, 19, 30), berlin(2026, 11, 3, 21, 30))).json.rrule).toBe('FREQ=WEEKLY;BYDAY=TU');
+    const tuesday = ['2026-11-17 19:30 Wochendienst', '2026-11-30 18:00 Wochendienst (früher)', '2026-12-08 19:30 Wochendienst (Gäste)', '2026-12-15 19:30 Wochendienst'];
+    expect(await list()).toEqual(tuesday);
+    expect((await one<any>('SELECT exdates FROM calendar_events WHERE id = $1', [id]))!.exdates.map((d: Date) => hm(d.toISOString()))).toEqual(['2026-11-24 19:30']);
+
+    // Beginn eine Woche später: Termine, die es weiter gibt, bleiben an ihrem Datum (nichts rutscht eine Woche weiter)
+    expect((await save(berlin(2026, 11, 10, 19, 30), berlin(2026, 11, 10, 21, 30))).status).toBe(200);
+    expect(await list()).toEqual(tuesday);
+
+    // Früheres Ende: Ausnahmen und Einzeltermine ohne passenden Termin entfallen, statt verwaist zu erscheinen
+    expect((await save(berlin(2026, 11, 10, 19, 30), berlin(2026, 11, 10, 21, 30), weekly({ ends: 'count', count: 3 }))).json).toMatchObject({ overrideCount: 0, exdates: [berlin(2026, 11, 24, 19, 30)] });
+    expect(await list()).toEqual(['2026-11-17 19:30 Wochendienst']);
+    const a = await one<any>(`SELECT details FROM audit_events WHERE action = 'calendar.event_updated' AND object_id = $1 ORDER BY id DESC LIMIT 1`, [id]);
+    expect(a!.details.angepasst).toEqual({ ausnahmen: 1, ausnahmen_entfallen: 0, einzeltermine: 0, einzeltermine_entfallen: 2 });
+    expect((await admin.del(`/calendar/events/${id}`)).status).toBe(200);
+  });
+
   it('wöchentliche Serie ohne Ende, Filter nach Kategorie und Quelle', async () => {
     const r = await admin.post('/calendar/events', { title: 'Dienstabend', start: berlin(2026, 1, 5, 19), end: berlin(2026, 1, 5, 21), recurrence: { freq: 'weekly', weekdays: [1, 4], ends: 'never' } });
     expect(r.json.rrule).toBe('FREQ=WEEKLY;BYDAY=MO,TH');
