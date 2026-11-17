@@ -41,6 +41,7 @@ startet PostgreSQL) ist für den Container gedacht, funktioniert aber auch lokal
 | Kernabläufe | `node test/e2e/core-flows.mjs` | Ersteinrichtung mit Zwei-Faktor, Anmeldung mit Code, Beitrag anlegen → einreichen → freigeben (Vier-Augen), Workflow aus Vorlage anlegen und testen (frische Instanz nötig; läuft in der CI) |
 | Fokus-Test | `node test/e2e/focus-check.mjs` | Tippen in alle Textfelder und Dialoge ohne Fokusverlust (laufende Instanz nötig) |
 | Dashboard anpassen | `node test/e2e/dashboard-dnd.mjs` | Verschieben mit Maus, Finger (Touch-Emulation) und Tastatur, Abbrechen, Speichern, Vorlagen (Instanz mit den Testdaten des Fokus-Tests nötig) |
+| Sichtung (Layout) | `node test/e2e/review-layout.mjs` | „Überspringen / Zurückstellen / Auswählen“ ohne Scrollen sichtbar bei 1366 × 768, 1440 × 900 und 390 × 844 für Quer-, Hochformat und Video; Tastatur und Wischen (nach dem Fokus-Test auf derselben Instanz; `REVIEW_SHOTS=<Ordner>` für Bildschirmfotos) |
 | Rollen-Kurztest | `node test/e2e/roles-smoke.mjs` | Eingeschränkte eigene Rolle im Browser: nur erlaubte Navigation und Schaltflächen, „Kein Zugriff“, keine abgelehnten Anfragen (nach dem Fokus-Test auf derselben Instanz) |
 | Abnahme M1 | `node test/e2e/m1-flow.mjs` | 34 Schritte über Container, Browser (Desktop + Handy) und WordPress inkl. Sicherung/Wiederherstellung |
 
@@ -109,7 +110,7 @@ Version aus `test/e2e/package-lock.json` und startet gegen einen PostgreSQL-18-D
 | Instanz | Port | Tests |
 |---|---|---|
 | Kernabläufe | 7310 | `core-flows.mjs` (Einrichtung über die Einrichtungsseite – braucht eine eigene, noch nicht eingerichtete Instanz) |
-| Fokus | 7311 | `focus-check.mjs` mit `FOCUS_ONLY` auf wichtige Ansichten (Einrichtung, Anmeldung mit Zwei-Faktor, Dashboard, Beiträge samt Editor, Freigaben, Medien, Workflows samt Editor; etwa 2 Minuten), danach `roles-smoke.mjs` und `dashboard-dnd.mjs` mit dessen Testdaten |
+| Fokus | 7311 | `focus-check.mjs` mit `FOCUS_ONLY` auf wichtige Ansichten (Einrichtung, Anmeldung mit Zwei-Faktor, Dashboard, Beiträge samt Editor, Freigaben, Medien, Workflows samt Editor; etwa 2 Minuten), danach `roles-smoke.mjs`, `dashboard-dnd.mjs` und `review-layout.mjs` mit dessen Testdaten |
 
 Schlägt ein Schritt fehl, laufen die übrigen trotzdem; der Job lädt dann `test/e2e/out/` als Artefakt
 `browsertests` hoch (Berichte als JSON, Bildschirmfotos und Playwright-Traces der Kernabläufe, Protokolle von API und

@@ -3,8 +3,8 @@ In der Sichtung entscheidet die Redaktion, welche Dateien verwendet werden. **Au
 ## Datei für Datei sichten
 
 1. Sammlung öffnen und auf **„… sichten“** klicken. Gibt es schon gesichtete Dateien, fragt BlaulichtCMS, womit es losgehen soll: **Offene fortsetzen**, **Alle erneut durchsehen**, **Nur ausgewählte** oder – falls vorhanden – **Zurückgestellte**.
-2. Große Vorschau, darunter Name, Größe, Eingang und Hinweis. Unter **Infos bearbeiten** lassen sich Anzeigename und Beschreibung direkt ergänzen.
-3. **Auswählen** oder **Überspringen** – beide Buttons sind gleichwertig. **Zurückstellen** merkt eine Datei für später vor.
+2. Große Vorschau mit Name, Größe, Eingang und Hinweis – am Rechner nebeneinander (Vorschau links, Angaben rechts), am Handy untereinander. Unter **Infos bearbeiten** lassen sich Anzeigename und Beschreibung direkt ergänzen.
+3. **Überspringen**, **Zurückstellen** oder **Auswählen** – die drei Buttons stehen fest unten im Fenster und sind ohne Scrollen erreichbar, egal ob Quer-, Hochformat oder Video. **Zurückstellen** merkt eine Datei für später vor.
 
 | Gerät | Auswählen | Überspringen |
 |---|---|---|

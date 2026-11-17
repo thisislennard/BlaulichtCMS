@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { patch } from '../../api/client';
 import type { MediaItem } from '../../api/types';
-import { Button, FieldWrap, Input, Textarea } from '../../components/ui/core';
+import { Button, cx, FieldWrap, Input, Kbd, Textarea, ToggleButton } from '../../components/ui/core';
 import { Icon } from '../../components/ui/Icon';
 import { Dialog, useErrorToast } from '../../components/ui/overlays';
 import { useAuth } from '../../lib/auth';
@@ -9,11 +9,19 @@ import { MediaInfo, MediaThumb } from './gallery';
 import { SENSITIVE_LABELS, SENSITIVE_ORDER } from './PrivacyDialog';
 
 export type Decision = 'selected' | 'skipped' | 'on_hold';
+
+/**
+ * Höhe der Vorschau: einspaltig höchstens 45 % der Fensterhöhe, zweispaltig (ab 1100 px) die ganze Höhe des Dialogs
+ * abzüglich Kopf, Fuß und Innenabstand – so bleiben die Entscheidungen im Fuß ohne Scrollen sichtbar.
+ */
+const PREVIEW_H = 'aspect-[4/3] max-h-[45vh] min-[1100px]:aspect-auto min-[1100px]:max-h-none min-[1100px]:h-[calc(90vh-170px)]';
+/** Entscheidungsknöpfe: am Handy drei gleich breite, 56 px hohe Felder (Symbol über Text), am Rechner nebeneinander. */
+const DECIDE = 'max-sm:!h-16 max-sm:flex-col max-sm:!gap-1 max-sm:!px-1 max-sm:text-meta sm:!h-11';
 type Start = 'open' | 'all' | 'selected' | 'on_hold';
 
 /**
- * Sichtung Datei für Datei: große Vorschau, Infos darunter, gleichwertige Buttons, Tastatur (→ auswählen, ← überspringen,
- * ↓ zurückstellen). Start wie in LiFeOS: offene fortsetzen, alle erneut durchsehen oder nur ausgewählte.
+ * Sichtung Datei für Datei: große Vorschau (ab 1100 px links, Infos rechts), Entscheidungen im festen Dialogfuß, Tastatur
+ * (→ auswählen, ← überspringen, ↓ zurückstellen), am Handy Wischen. Start wie in LiFeOS: offene fortsetzen, alle erneut durchsehen oder nur ausgewählte.
  */
 export function ReviewDialog({ ready, onClose, onDecide, onChanged }: { ready: MediaItem[]; onClose: () => void; onDecide: (m: MediaItem, s: Decision) => Promise<void>; onChanged: () => void }) {
   const toastError = useErrorToast();
@@ -111,8 +119,33 @@ export function ReviewDialog({ ready, onClose, onDecide, onChanged }: { ready: M
     );
   }
 
+  // Entscheidungen stehen im festen Dialogfuß (#261): immer sichtbar, unabhängig von Bildformat und Fensterhöhe.
+  // Reihenfolge wie die Tasten: ← überspringen · ↓ zurückstellen · → auswählen (Hauptaktion rechts).
+  const footer = m && (
+    <div className="w-full flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+      <p className="m-0 mr-auto hidden sm:flex flex-wrap items-center gap-x-2 gap-y-1 text-meta text-fg-muted" aria-hidden="true">
+        <span><Kbd>→</Kbd> auswählen</span>
+        <span><Kbd>←</Kbd> überspringen</span>
+        <span><Kbd>↓</Kbd> zurückstellen</span>
+        <span><Kbd>Esc</Kbd> schließen</span>
+      </p>
+      <p className="m-0 sm:hidden text-meta text-fg-muted text-center">Wischen: nach rechts auswählen, nach links überspringen</p>
+      <div className="grid grid-cols-3 gap-2 sm:flex">
+        <Button icon="SkipForward" className={DECIDE} aria-keyshortcuts="ArrowLeft" onClick={() => decide('skipped')}>
+          Überspringen
+        </Button>
+        <Button icon="Pause" className={DECIDE} aria-keyshortcuts="ArrowDown" onClick={() => decide('on_hold')}>
+          Zurückstellen
+        </Button>
+        <Button variant="primary" icon="Check" className={DECIDE} aria-keyshortcuts="ArrowRight" onClick={() => decide('selected')}>
+          Auswählen
+        </Button>
+      </div>
+    </div>
+  );
+
   return (
-    <Dialog open onClose={onClose} title={m ? `Sichten · ${idx + 1} von ${list.length}` : 'Sichtung abgeschlossen'} width={760}>
+    <Dialog open onClose={onClose} title={m ? `Sichten · ${idx + 1} von ${list.length}` : 'Sichtung abgeschlossen'} width={m ? 1180 : 760} footer={footer || undefined}>
       {!m ? (
         <div className="flex flex-col items-center gap-3 py-6 text-center">
           <Icon name="CheckCircle2" size={36} className="text-ok" />
@@ -122,9 +155,10 @@ export function ReviewDialog({ ready, onClose, onDecide, onChanged }: { ready: M
           </Button>
         </div>
       ) : (
-        <div className="flex flex-col gap-4">
+        // Ab 1100 px zweispaltig: Vorschau links in voller verfügbarer Höhe, Angaben rechts
+        <div className="flex flex-col gap-4 min-[1100px]:grid min-[1100px]:grid-cols-[minmax(0,1fr)_320px] min-[1100px]:items-start">
           <div
-            className="rounded-card overflow-hidden bg-raised touch-pan-y"
+            className="rounded-card overflow-hidden bg-raised touch-pan-y flex items-center justify-center"
             onTouchStart={(e) => (start.current = e.touches[0].clientX)}
             onTouchEnd={(e) => {
               if (start.current === null) return;
@@ -135,59 +169,44 @@ export function ReviewDialog({ ready, onClose, onDecide, onChanged }: { ready: M
             }}
           >
             {m.kind === 'video' && m.has_public ? (
-              <video src={`/api/v1/media/${m.id}/public?v=${m.public_rev ?? 0}`} poster={m.has_preview ? `/api/v1/media/${m.id}/preview` : undefined} controls className="w-full max-h-[55vh] bg-black" />
+              <video key={m.id} src={`/api/v1/media/${m.id}/public?v=${m.public_rev ?? 0}`} poster={m.has_preview ? `/api/v1/media/${m.id}/preview` : undefined} controls className={cx('w-full bg-black object-contain', PREVIEW_H)} />
             ) : (
-              <MediaThumb m={m} className="w-full max-h-[55vh] aspect-[4/3] [&_img]:object-contain" />
+              <MediaThumb m={m} className={cx('w-full [&_img]:object-contain', PREVIEW_H)} />
             )}
           </div>
-          <MediaInfo m={m} />
-          {can('media.organize') && (
-            <div>
-              <Button size="sm" variant="ghost" icon={editInfo ? 'ChevronDown' : 'ChevronRight'} aria-expanded={editInfo} onClick={() => setEditInfo((v) => !v)}>
-                Infos bearbeiten
-              </Button>
-              {editInfo && (
-                <div className="grid gap-3 sm:grid-cols-2 mt-2" key={m.id}>
-                  <FieldWrap label="Anzeigename" htmlFor="rv-name">
-                    <Input id="rv-name" defaultValue={m.display_name ?? ''} placeholder={m.original_name} maxLength={200} onBlur={(e) => void saveInfo('displayName', e.target.value)} />
-                  </FieldWrap>
-                  <FieldWrap label="Beschreibung" htmlFor="rv-desc">
-                    <Textarea id="rv-desc" rows={2} defaultValue={m.description ?? ''} maxLength={2000} onBlur={(e) => void saveInfo('description', e.target.value)} />
-                  </FieldWrap>
-                </div>
-              )}
-            </div>
-          )}
-          {can('media.redact') && (
-            <div className="flex flex-col gap-2">
-              <span className="text-label uppercase text-fg-muted">Hinweise zur Datei</span>
-              <div className="flex flex-wrap gap-2">
-                {SENSITIVE_ORDER.map((f) => {
-                  const on = (m.sensitive_flags ?? []).includes(f);
-                  return (
-                    <Button key={f} size="sm" variant={on ? 'primary' : 'secondary'} icon={on ? 'CheckSquare' : 'Square'} aria-pressed={on} onClick={() => void toggleFlag(f)}>
-                      {SENSITIVE_LABELS[f]}
-                    </Button>
-                  );
-                })}
+          <div className="flex flex-col gap-4 min-w-0">
+            <MediaInfo m={m} />
+            {can('media.organize') && (
+              <div>
+                <Button size="sm" variant="ghost" icon={editInfo ? 'ChevronDown' : 'ChevronRight'} aria-expanded={editInfo} onClick={() => setEditInfo((v) => !v)}>
+                  Infos bearbeiten
+                </Button>
+                {editInfo && (
+                  <div className="grid gap-3 sm:grid-cols-2 min-[1100px]:grid-cols-1 mt-2" key={m.id}>
+                    <FieldWrap label="Anzeigename" htmlFor="rv-name">
+                      <Input id="rv-name" defaultValue={m.display_name ?? ''} placeholder={m.original_name} maxLength={200} onBlur={(e) => void saveInfo('displayName', e.target.value)} />
+                    </FieldWrap>
+                    <FieldWrap label="Beschreibung" htmlFor="rv-desc">
+                      <Textarea id="rv-desc" rows={2} defaultValue={m.description ?? ''} maxLength={2000} onBlur={(e) => void saveInfo('description', e.target.value)} />
+                    </FieldWrap>
+                  </div>
+                )}
               </div>
-              <p className="m-0 text-meta text-fg-muted">Erkennbare Personen, Verletzte oder Kennzeichen? Markieren – unkenntlich machen lässt sich die Datei danach über ihr Menü („Datenschutz und Unkenntlichmachen“).</p>
-            </div>
-          )}
-          <div className="grid grid-cols-2 gap-3">
-            <Button size="md" icon="SkipForward" className="!h-12" onClick={() => decide('skipped')}>
-              Überspringen
-            </Button>
-            <Button size="md" variant="primary" icon="Check" className="!h-12" onClick={() => decide('selected')}>
-              Auswählen
-            </Button>
+            )}
+            {can('media.redact') && (
+              <div className="flex flex-col gap-2">
+                <span className="text-label uppercase text-fg-muted">Hinweise zur Datei</span>
+                <div className="flex flex-wrap gap-2">
+                  {SENSITIVE_ORDER.map((f) => (
+                    <ToggleButton key={f} size="sm" pressed={(m.sensitive_flags ?? []).includes(f)} onClick={() => void toggleFlag(f)}>
+                      {SENSITIVE_LABELS[f]}
+                    </ToggleButton>
+                  ))}
+                </div>
+                <p className="m-0 text-meta text-fg-muted">Erkennbare Personen, Verletzte oder Kennzeichen? Markieren – unkenntlich machen lässt sich die Datei danach über ihr Menü („Datenschutz und Unkenntlichmachen“).</p>
+              </div>
+            )}
           </div>
-          <Button size="sm" variant="ghost" icon="Pause" className="self-center" onClick={() => decide('on_hold')}>
-            Zurückstellen
-          </Button>
-          <p className="m-0 text-meta text-fg-muted text-center">
-            Tastatur: → auswählen · ← überspringen · ↓ zurückstellen · Esc schließen. Am Handy: nach rechts oder links wischen.
-          </p>
         </div>
       )}
     </Dialog>

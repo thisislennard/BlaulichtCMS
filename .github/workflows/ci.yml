@@ -137,6 +137,11 @@ jobs:
         env:
           BLAULICHTCMS_URL: http://127.0.0.1:7311
         run: node test/e2e/dashboard-dnd.mjs
+      - name: Sichtung – Entscheidungen ohne Scrollen sichtbar
+        if: ${{ !cancelled() }}
+        env:
+          BLAULICHTCMS_URL: http://127.0.0.1:7311
+        run: node test/e2e/review-layout.mjs
       - name: Protokolle der Instanzen sammeln
         if: failure()
         run: cp "$RUNNER_TEMP"/*-api.log "$RUNNER_TEMP"/*-worker.log test/e2e/out/ || true

@@ -47,6 +47,14 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
   );
 });
 
+/**
+ * Umschaltknopf (an/aus) im Auswahl-Muster: an = Rot zart mit rotem Rand und Haken, nie rot gefüllt – Rot gefüllt
+ * bleibt der Hauptaktion vorbehalten (docs/design-leitstand.md, „ein Akzent“).
+ */
+export function ToggleButton({ pressed, className, ...rest }: Omit<ButtonProps, 'variant' | 'icon'> & { pressed: boolean }) {
+  return <Button {...rest} variant="secondary" icon={pressed ? 'CheckSquare' : 'Square'} aria-pressed={pressed} className={cx(pressed && '!bg-primary-soft !border-primary', className)} />;
+}
+
 export function LinkButton({ to, variant = 'secondary', icon, children, size = 'md', className }: { to: string; variant?: Variant; icon?: string; children: ReactNode; size?: 'sm' | 'md'; className?: string }) {
   return (
     <Link to={to} className={cx('inline-flex items-center justify-center gap-2 rounded-control font-medium text-sm whitespace-nowrap px-3.5 transition-colors duration-fast', size === 'sm' ? 'h-ctl-sm' : 'h-ctl', VARIANTS[variant], variant === 'primary' && '!text-on-primary', className)}>
