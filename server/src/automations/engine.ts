@@ -6,7 +6,7 @@ import { StepError } from '../lib/errors.js';
 import { log } from '../lib/log.js';
 import { notify, scheduleDelivery } from '../lib/notify.js';
 import { getSettings, type Settings } from '../lib/settings.js';
-import { bannerHash, enqueueBannerJob } from '../routes/banners.js';
+import { bannerHash, bannerLink, enqueueBannerJob } from '../routes/banners.js';
 import { revisionHash } from '../routes/posts.js';
 import { warningHash } from '../routes/warnings.js';
 import { createEntry, parseLocalDate } from '../incidents/list.js';
@@ -513,9 +513,9 @@ async function runOutput(ctx: Ctx, node: GraphNode, data: Data, prev: StepRow | 
           ids.push(b.id);
           await audit(ctx.actor, direct ? 'automation.banner_published' : 'automation.banner_created', { type: 'banner', id: b.id, label: title }, { ...auditDetails, website: site.name }, 'ok', db);
         }
-        return done({ ports: ['out'], produced: { banner_link: '/banner' }, info: `Banner „${title}“ ${direct ? 'direkt veröffentlicht' : c.submit !== false ? 'angelegt und zur Freigabe eingereicht' : 'als Entwurf angelegt'} (${usable.length} Website(s)).`, log: { ...desc, banner: ids } }, db);
+        return done({ ports: ['out'], produced: { banner_link: ids.length === 1 ? bannerLink(ids[0]) : '/banner' }, info: `Banner „${title}“ ${direct ? 'direkt veröffentlicht' : c.submit !== false ? 'angelegt und zur Freigabe eingereicht' : 'als Entwurf angelegt'} (${usable.length} Website(s)).`, log: { ...desc, banner: ids } }, db);
       }).then(async (res) => {
-        if (!direct && c.submit !== false) await notify({ kind: 'info', title: `Banner zur Freigabe: ${title}`.slice(0, 200), body: `Aus dem Workflow „${ctx.run.automation_name}“.`, link: '/banner', permission: 'approval.banner' });
+        if (!direct && c.submit !== false) await notify({ kind: 'info', title: `Banner zur Freigabe: ${title}`.slice(0, 200), body: `Aus dem Workflow „${ctx.run.automation_name}“.`, link: (res.produced?.banner_link as string) || '/banner', permission: 'approval.banner' });
         return res;
       });
     }

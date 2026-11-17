@@ -9,6 +9,8 @@ Banner sind kurze, zeitgesteuerte Hinweise oben auf der Website – zum Beispiel
 
 Wie bei Beiträgen gilt die Freigabe für genau eine Fassung. Freigeben lässt sich nur ein eingereichtes Banner; jede Änderung setzt es auf Entwurf zurück und braucht eine neue Einreichung und Freigabe.
 
+Beim Einreichen bekommen alle Konten mit dem Recht **Banner freigeben** eine Benachrichtigung der Art **Freigabe angefordert** – in der Glocke und, je nach eigener Wahl, per Push oder E-Mail (siehe [Benachrichtigungen](/hilfe/benachrichtigungen)). Push und E-Mail nennen dabei standardmäßig nur die Art, nicht den Titel des Banners. Der Link öffnet die Banner-Seite und hebt das eingereichte Banner farbig hervor.
+
 ## Schweregrad, Farbe und Darstellung
 
 Der **Schweregrad** (Hinweis, Warnung, Gefahr) bestimmt, wie ein Hinweis auf der Website aussieht und erscheint. Eingestellt wird das **auf der Website** in WordPress unter **Einstellungen → BlaulichtCMS Bridge → Darstellung der Hinweise** – je Schweregrad:

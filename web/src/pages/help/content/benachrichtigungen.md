@@ -11,7 +11,7 @@ Unter [Mein Konto → Benachrichtigungen](/profil#benachrichtigungen):
 
 | Art | Wer sie bekommen kann | Vorgabe |
 |---|---|---|
-| Freigabe angefordert | Rechte zum Freigeben (Beiträge, Banner, Workflows, Warnentwürfe) – bei Beiträgen öffnet die Mitteilung die [Freigabe-Ansicht](/hilfe/freigabe#freigabe-unterwegs-aus-der-push-mitteilung) | Push |
+| Freigabe angefordert | Rechte zum Freigeben (Beiträge, Banner, Workflows, Warnentwürfe) – bei Beiträgen öffnet die Mitteilung die [Freigabe-Ansicht](/hilfe/freigabe#freigabe-unterwegs-aus-der-push-mitteilung), bei Bannern die Banner-Seite mit dem eingereichten Banner hervorgehoben | Push |
 | Eigene Fassung freigegeben oder zurückgewiesen | wer Fassungen einreicht | Push |
 | Einsatz-Eingang (FE2, Feuersoftware Connect) | Beiträge bearbeiten | Push |
 | Neue Entwürfe aus Workflows | Beiträge bearbeiten, Warnentwurf erstellen | – |

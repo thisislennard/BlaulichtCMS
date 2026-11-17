@@ -5,6 +5,7 @@ import { many, one, pool, tx } from '../db/pool.js';
 import { requireAuth } from '../auth/context.js';
 import { audit } from '../lib/audit.js';
 import { AppError, badRequest, conflict, forbidden, notFound } from '../lib/errors.js';
+import { notify } from '../lib/notify.js';
 import { getSettings } from '../lib/settings.js';
 
 /**
@@ -73,6 +74,9 @@ const input = z
 function assertEndsAfterStart(starts: string, ends: string) {
   if (new Date(ends) <= new Date(starts)) throw badRequest('Das Ende muss nach dem Start liegen.');
 }
+
+/** Link auf die Banner-Seite mit diesem Banner hervorgehoben (#252). */
+export const bannerLink = (id: string) => `/banner?banner=${encodeURIComponent(id)}`;
 
 export async function enqueueBannerJob(db: any, b: any, action: 'upsert' | 'delete', userId: string | null) {
   // Ältere, noch nicht abgeholte Aufträge desselben Banners sind überholt
@@ -153,6 +157,10 @@ export async function bannerRoutes(app: FastifyInstance) {
     const b = await one<any>(`UPDATE banners SET submitted_at = now(), submitted_by = $2 WHERE id = $1 AND ended_at IS NULL RETURNING *`, [id, req.auth!.user?.id ?? null]);
     if (!b) throw notFound();
     await audit(req.auth!.actor, 'banner.submitted', { type: 'banner', id, label: b.title }, { fassung: b.revision });
+    // Wie bei Beiträgen und der Einsatzliste (#252): Konten mit Freigaberecht erfahren davon (Glocke, Push/E-Mail nach
+    // Wahl der Person; nach außen ohne Titel, solange notify.push_details bzw. notify.mail_details aus ist)
+    const by = req.auth!.user?.name;
+    await notify({ kind: 'info', title: `Banner zur Freigabe: ${b.title}`.slice(0, 200), body: `Fassung ${b.revision}${by ? ` · eingereicht von ${by}` : ''}`, link: bannerLink(id), permission: 'approval.banner' });
     return { ok: true };
   });
 

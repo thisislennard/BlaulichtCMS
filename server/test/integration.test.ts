@@ -931,6 +931,18 @@ describe('Banner (M2)', () => {
     expect(early.status).toBe(409);
     expect(early.json.error).toBe('not_submitted');
     await editor.post(`/banners/${bid}/submit`);
+    // Einreichen meldet sich bei der Freigabe wie Beiträge und Einsatzliste (#252): Glocke für Konten mit approval.banner,
+    // Link hebt das Banner hervor; nach außen (Push/E-Mail) nur die Art, solange notify.push_details aus ist (#247)
+    const note = (await approver.get('/notifications')).json.notifications.find((n: any) => n.link === `/banner?banner=${bid}`);
+    expect(note).toMatchObject({ title: 'Banner zur Freigabe: Straßensperrung Hauptstraße', permission: 'approval.banner', category: 'approval', kind: 'info' });
+    expect(note.body).toMatch(/^Fassung 1 · eingereicht von /);
+    expect((await editor.get('/notifications')).json.notifications.some((n: any) => n.link === `/banner?banner=${bid}`)).toBe(false);
+    const { pushPayload } = await import('../src/lib/notify-channels.js');
+    const { getSettings } = await import('../src/lib/settings.js');
+    const push = pushPayload(note, 'approval', await getSettings());
+    expect(push).toMatchObject({ title: 'Freigabe angefordert', link: `/banner?banner=${bid}` });
+    expect(JSON.stringify(push)).not.toContain('Straßensperrung');
+    expect(pushPayload(note, 'approval', { ...(await getSettings()), 'notify.push_details': true }).title).toBe('Banner zur Freigabe: Straßensperrung Hauptstraße');
     expect((await editor.post(`/banners/${bid}/approve`, { contentHash: st.content_hash })).status).toBe(403);
     await approver.post(`/banners/${bid}/approve`, { contentHash: st.content_hash });
     st = await list();

@@ -5,6 +5,7 @@ import type { BannerDisplay, Site } from '../../api/types';
 import { Button, Card, cx, EmptyState, ErrorBox, FieldWrap, Input, Notice, PageHeader, Rev, Select, SkeletonRows, StatusBadge, Textarea } from '../../components/ui/core';
 import { Dialog, useErrorToast, useToast, useConfirm } from '../../components/ui/overlays';
 import { useAuth } from '../../lib/auth';
+import { useLinkedItem } from '../../lib/linked-item';
 import { fmtDateTime, fromLocalInput, toLocalInput } from '../../lib/format';
 
 interface Banner {
@@ -187,6 +188,9 @@ export default function Banners() {
     refresh();
   };
   const activeSites = (sites.data ?? []).filter((s) => s.status === 'active');
+  // Aus Benachrichtigung oder Aktivitäten: /banner?banner=<id> hebt dieses Banner hervor (#252)
+  const linked = useLinkedItem('banner', !!q.data);
+  const linkedMissing = !!linked.id && !!q.data && !q.data.some((b) => b.id === linked.id);
   return (
     <div className="flex flex-col gap-5">
       <PageHeader
@@ -196,10 +200,20 @@ export default function Banners() {
       {!activeSites.length && sites.data && <Notice>Für Banner muss zuerst eine Website gekoppelt sein (Einrichtung → Websites).</Notice>}
       {q.isLoading && <SkeletonRows rows={4} />}
       {q.error && <ErrorBox title="Banner konnten nicht geladen werden">{(q.error as Error).message}</ErrorBox>}
+      {linkedMissing && (
+        <Notice tone="warning" title="Banner nicht gefunden">
+          <div className="flex flex-col items-start gap-2">
+            Das verlinkte Banner gibt es nicht mehr oder es wurde vor mehr als 30 Tagen beendet.
+            <Button size="sm" onClick={linked.clear}>
+              Hinweis schließen
+            </Button>
+          </div>
+        </Notice>
+      )}
       {q.data && q.data.length === 0 && <EmptyState icon="Megaphone" title="Keine Banner" />}
       <div className="flex flex-col gap-4">
         {(q.data ?? []).map((b) => (
-          <Card key={b.id}>
+          <Card key={b.id} id={`banner-${b.id}`} className={cx(linked.id === b.id && 'ring-2 ring-primary')}>
             <div className="flex flex-col gap-3">
               <div className="flex flex-wrap items-center gap-2 text-sm">
                 <StatusBadge status={b.state} labels={LABELS} />
