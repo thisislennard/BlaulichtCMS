@@ -1,4 +1,4 @@
-import { forwardRef, useId, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from 'react';
+import { forwardRef, useId, useRef, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from 'react';
 import { Link } from 'react-router';
 import { Icon } from './Icon';
 import { usePageInfo } from '../layout/page';
@@ -54,6 +54,76 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
  */
 export function ToggleButton({ pressed, className, ...rest }: Omit<ButtonProps, 'variant' | 'icon'> & { pressed: boolean }) {
   return <Button {...rest} variant="secondary" icon={pressed ? 'CheckSquare' : 'Square'} aria-pressed={pressed} className={cx(pressed && '!bg-primary-soft !border-primary', className)} />;
+}
+
+/**
+ * Dateiauswahl als Knopf statt des nativen Felds („Datei auswählen / Keine ausgewählt“ je nach Browser, #272):
+ * Knopf, daneben Dateiname bzw. Vorschau und auf Wunsch „Entfernen“. Das native Feld bleibt unsichtbar im Dokument und
+ * trägt die `id` – `FieldWrap htmlFor={id}` beschriftet es also wie jedes andere Feld; bedient wird über den Knopf.
+ */
+export function FilePickButton({
+  id,
+  accept,
+  onPick,
+  label = 'Datei wählen …',
+  name,
+  fileName,
+  emptyText = 'Keine Datei gewählt',
+  preview,
+  onRemove,
+  busy,
+  disabled,
+  multiple,
+  icon = 'Upload',
+}: {
+  id: string;
+  accept?: string;
+  onPick: (files: File[]) => void;
+  label?: string;
+  /** Feldname für Bildschirmleser, z. B. „Hintergrundbild“ – ergänzt die Beschriftung des Knopfs */
+  name?: string;
+  fileName?: string | null;
+  emptyText?: string;
+  preview?: ReactNode;
+  onRemove?: () => void;
+  busy?: boolean;
+  disabled?: boolean;
+  multiple?: boolean;
+  icon?: string;
+}) {
+  const ref = useRef<HTMLInputElement>(null);
+  const has = !!fileName || !!preview;
+  return (
+    <div className="flex flex-wrap items-center gap-2 min-w-0">
+      <input
+        ref={ref}
+        id={id}
+        type="file"
+        accept={accept}
+        multiple={multiple}
+        className="sr-only"
+        tabIndex={-1}
+        disabled={disabled || busy}
+        onChange={(e) => {
+          const files = [...(e.target.files ?? [])];
+          e.target.value = '';
+          if (files.length) onPick(files);
+        }}
+      />
+      {preview}
+      <Button icon={icon} loading={busy} disabled={disabled} aria-label={name ? `${name}: ${label}` : undefined} aria-describedby={`${id}-name`} onClick={() => ref.current?.click()}>
+        {label}
+      </Button>
+      <span id={`${id}-name`} className={cx('min-w-0 max-w-full truncate', fileName ? 'text-sm' : 'text-meta text-fg-muted', !!preview && !fileName && 'sr-only')} title={fileName ?? undefined}>
+        {fileName || (preview ? 'Datei gewählt' : emptyText)}
+      </span>
+      {onRemove && has && (
+        <Button size="sm" variant="ghost" icon="X" disabled={disabled || busy} onClick={onRemove}>
+          Entfernen
+        </Button>
+      )}
+    </div>
+  );
 }
 
 export function LinkButton({ to, variant = 'secondary', icon, children, size = 'md', className }: { to: string; variant?: Variant; icon?: string; children: ReactNode; size?: 'sm' | 'md'; className?: string }) {

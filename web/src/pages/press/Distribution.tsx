@@ -1,7 +1,7 @@
-import { useMemo, useRef, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { del, download, get, post, put } from '../../api/client';
-import { Badge, Button, Card, EmptyState, FieldWrap, Input, Notice, PageHeader, Select, SkeletonRows, Switch, Table, Tabs, Td, Textarea, Th } from '../../components/ui/core';
+import { Badge, Button, Card, EmptyState, FieldWrap, FilePickButton, Input, Notice, PageHeader, Select, SkeletonRows, Switch, Table, Tabs, Td, Textarea, Th } from '../../components/ui/core';
 import { Dialog, useConfirm, useErrorToast, useToast } from '../../components/ui/overlays';
 import { useAuth } from '../../lib/auth';
 import { fmtDate } from '../../lib/format';
@@ -144,8 +144,8 @@ function ContactDialog({ contact, lists, onClose }: { contact: Contact | null; l
 function ImportDialog({ onClose }: { onClose: () => void }) {
   const toast = useToast();
   const toastError = useErrorToast();
-  const file = useRef<HTMLInputElement>(null);
   const [csv, setCsv] = useState('');
+  const [fileName, setFileName] = useState('');
   const [d, setD] = useState<{ origin: string; legalBasis: LegalBasis | ''; consentAt: string }>({ origin: '', legalBasis: '', consentAt: '' });
   const [preview, setPreview] = useState<{ neu: number; aktualisiert: number; abgemeldet: number; fehler: number; problems: string[] } | null>(null);
   const [busy, setBusy] = useState(false);
@@ -190,16 +190,16 @@ function ImportDialog({ onClose }: { onClose: () => void }) {
           Spalten (erste Zeile): <code>name; medium; email; telefon; notiz; herkunft; rechtsgrundlage; einwilligung_am; einwilligung; listen</code> – Pflicht sind <code>email</code> sowie Herkunft und Rechtsgrundlage (<code>oeffentlich</code>, <code>einwilligung</code> mit Datum, <code>andere</code> mit Nachweis in <code>einwilligung</code>) je Zeile oder als Vorgabe unten. Mehrere Listen mit <code>|</code> trennen (fehlende Listen werden angelegt). Vorhandene Adressen werden ergänzt, abgemeldete Kontakte bleiben unverändert abgemeldet.
         </p>
         <FieldWrap label="Datei" htmlFor="imp-file">
-          <input
-            ref={file}
+          <FilePickButton
             id="imp-file"
-            type="file"
+            name="Datei"
             accept=".csv,text/csv"
-            className="text-sm"
-            onChange={async (e) => {
-              const f = e.target.files?.[0];
+            label="CSV-Datei wählen …"
+            fileName={fileName || null}
+            onPick={async ([f]) => {
               setPreview(null);
-              setCsv(f ? await f.text() : '');
+              setFileName(f.name);
+              setCsv(await f.text());
             }}
           />
         </FieldWrap>

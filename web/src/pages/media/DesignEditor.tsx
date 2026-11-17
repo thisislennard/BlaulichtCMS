@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, get, put } from '../../api/client';
-import { Button, Card, cx, ErrorBox, FieldWrap, Input, Notice, PageHeader, SegmentedControl, Select, SkeletonRows, Switch, Textarea } from '../../components/ui/core';
+import { Button, Card, cx, ErrorBox, FieldWrap, FilePickButton, Input, Notice, PageHeader, SegmentedControl, Select, SkeletonRows, Switch, Textarea } from '../../components/ui/core';
 import { Icon } from '../../components/ui/Icon';
 import { UnsavedChangesGuard, useConfirm, useErrorToast, useToast } from '../../components/ui/overlays';
 import { useAuth } from '../../lib/auth';
@@ -43,29 +43,25 @@ function BlockFields({ b, onChange, idx }: { b: DesignBlock; onChange: (b: Desig
   const set = (k: string, v: string) => onChange({ ...b, [k]: v });
   const imageField = (
     <FieldWrap label="Bild" htmlFor={id('img')} help="JPEG, PNG oder WebP bis 15 MB; wird neu kodiert, Standort- und Kameradaten werden entfernt.">
-      <div className="flex flex-wrap items-center gap-2">
-        {b.image && <img src={`/api/v1/public/design-images/${b.image}`} alt="" className="h-12 w-auto rounded-chip border border-line" />}
-        <input
-          id={id('img')}
-          type="file"
-          accept="image/jpeg,image/png,image/webp"
-          className="text-sm"
-          disabled={busy}
-          onChange={async (e) => {
-            const f = e.target.files?.[0];
-            e.target.value = '';
-            if (!f) return;
-            setBusy(true);
-            try {
-              set('image', await uploadImage(f));
-            } catch (err) {
-              toastError(err);
-            } finally {
-              setBusy(false);
-            }
-          }}
-        />
-      </div>
+      <FilePickButton
+        id={id('img')}
+        name="Bild"
+        accept="image/jpeg,image/png,image/webp"
+        label={b.image ? 'Anderes Bild …' : 'Bild wählen …'}
+        emptyText="Kein Bild"
+        busy={busy}
+        preview={b.image ? <img src={`/api/v1/public/design-images/${b.image}`} alt="" className="h-12 w-auto rounded-chip border border-line" /> : undefined}
+        onPick={async ([f]) => {
+          setBusy(true);
+          try {
+            set('image', await uploadImage(f));
+          } catch (err) {
+            toastError(err);
+          } finally {
+            setBusy(false);
+          }
+        }}
+      />
     </FieldWrap>
   );
   const alt = (

@@ -1,9 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 import { del, get, patch, post, qs } from '../../api/client';
 import { api, del as apiDel } from '../../api/client';
-import { Badge, Button, Card, Chip, EmptyState, ErrorBox, FieldWrap, Input, PageHeader, SegmentedControl, Select, SkeletonRows, Switch, Textarea } from '../../components/ui/core';
+import { Badge, Button, Card, Chip, EmptyState, ErrorBox, FieldWrap, FilePickButton, Input, PageHeader, SegmentedControl, Select, SkeletonRows, Switch, Textarea } from '../../components/ui/core';
 import { Icon } from '../../components/ui/Icon';
 import { Dialog, useConfirm, useErrorToast, useToast } from '../../components/ui/overlays';
 import { useAuth } from '../../lib/auth';
@@ -241,7 +241,6 @@ function FontsDialog({ onClose }: { onClose: () => void }) {
   const [license, setLicense] = useState('');
   const [ok, setOk] = useState(false);
   const [busy, setBusy] = useState(false);
-  const fileRef = useRef<HTMLInputElement>(null);
   const refresh = () => qc.invalidateQueries({ queryKey: ['design-fonts'] });
   const upload = async () => {
     if (!file) return;
@@ -256,7 +255,6 @@ function FontsDialog({ onClose }: { onClose: () => void }) {
       setFile(null);
       setLicense('');
       setOk(false);
-      if (fileRef.current) fileRef.current.value = '';
       refresh();
     } catch (e) {
       toastError(e);
@@ -299,7 +297,7 @@ function FontsDialog({ onClose }: { onClose: () => void }) {
         <fieldset className="m-0 p-3 border border-line rounded-card flex flex-col gap-3">
           <legend className="px-1 text-sm font-medium">Eigene Schrift hinzufügen</legend>
           <FieldWrap label="Schriftdatei" htmlFor="font-file" help="TrueType (.ttf) oder OpenType (.otf), höchstens 10 MB; je Schnitt (z. B. Fett) eine Datei.">
-            <input ref={fileRef} id="font-file" type="file" accept=".ttf,.otf,font/ttf,font/otf" className="text-sm" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+            <FilePickButton id="font-file" name="Schriftdatei" accept=".ttf,.otf,font/ttf,font/otf" label="Schriftdatei wählen …" fileName={file?.name} onPick={([f]) => setFile(f)} onRemove={() => setFile(null)} />
           </FieldWrap>
           <FieldWrap label="Lizenz" required htmlFor="font-license" help="z. B. „SIL Open Font License 1.1“ oder „Hausschrift, Lizenz der Organisation bis 2028“.">
             <Input id="font-license" value={license} maxLength={500} onChange={(e) => setLicense(e.target.value)} />
@@ -406,7 +404,7 @@ export default function DesignTemplates() {
                   <div className="p-4 flex flex-col gap-1.5">
                     <div className="font-semibold truncate">{t.title}</div>
                     <div className="flex flex-wrap gap-1.5 items-center">
-                      {t.kind === 'image' && <Badge tone="primary">Befüllbar</Badge>}
+                      {t.kind === 'image' && <Badge>Befüllbar</Badge>}
                       {t.category && <Chip>{t.category.name}</Chip>}
                       {t.formats.map((f) => (
                         <Chip key={f.key} mono>

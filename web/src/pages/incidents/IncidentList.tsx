@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router';
 import { get, post, put, del } from '../../api/client';
 import type { MediaItem } from '../../api/types';
-import { Badge, Button, Card, Chip, EmptyState, ErrorBox, FieldWrap, Input, Notice, PageHeader, Rev, Select, SegmentedControl, SkeletonRows, StatusBadge, Switch, Table, Td, Textarea, Th } from '../../components/ui/core';
+import { Badge, Button, Card, Chip, EmptyState, ErrorBox, FieldWrap, FilePickButton, Input, Notice, PageHeader, Rev, SegmentedControl, Select, SkeletonRows, StatusBadge, Switch, Table, Td, Textarea, Th } from '../../components/ui/core';
 import { Icon } from '../../components/ui/Icon';
 import { HelpTip } from '../../components/ui/HelpTip';
 import { Dialog, Menu, useConfirm, useErrorToast, useToast } from '../../components/ui/overlays';
@@ -304,16 +304,15 @@ function ImportDialog({ cfg, onClose }: { cfg: Config; onClose: (done: boolean) 
         <p className="m-0 text-sm">
           CSV mit Spaltennamen in der ersten Zeile, z. B. der Export der WordPress-Erweiterung „Einsatzverwaltung“ (Werkzeuge → Einsatzberichte exportieren, Format CSV). Erkannt werden u. a. <Chip>Lfd.</Chip> <Chip>Alarmzeit</Chip>/<Chip>Datum</Chip> <Chip>Einsatzart</Chip>/<Chip>Stichwort</Chip> <Chip>Berichtstitel</Chip>/<Chip>Einsatzmeldung</Chip> <Chip>Einsatzort</Chip> <Chip>Fahrzeuge</Chip> <Chip>Externe Einsatzmittel</Chip> <Chip>Besonderer Einsatz</Chip> <Chip>Fehlalarm</Chip>. Einsatzleiter und Mannschaftsstärke werden nie übernommen.
         </p>
-        <FieldWrap label="Datei" htmlFor="imp-file" help={name ? `${name} · ${Math.round(csv.length / 1024)} KB` : 'Höchstens 5 MB, UTF-8.'}>
-          <input
+        <FieldWrap label="Datei" htmlFor="imp-file" help="CSV, höchstens 5 MB, UTF-8.">
+          <FilePickButton
             id="imp-file"
-            type="file"
+            name="Datei"
             accept=".csv,text/csv,text/plain"
-            className="text-sm"
-            onChange={async (e) => {
-              const f = e.target.files?.[0];
+            label="CSV-Datei wählen …"
+            fileName={name ? `${name} · ${Math.round(csv.length / 1024)} KB` : null}
+            onPick={async ([f]) => {
               setRes(null);
-              if (!f) return;
               if (f.size > 5 * 1024 * 1024) return toastError(new Error('Die Datei ist größer als 5 MB.'));
               setName(f.name);
               setCsv(await f.text());
@@ -339,7 +338,7 @@ function ImportDialog({ cfg, onClose }: { cfg: Config; onClose: (done: boolean) 
         {res && (
           <div className="flex flex-col gap-3">
             <div className="flex flex-wrap gap-2 text-sm">
-              <Badge tone="primary">{res.total} Zeilen gelesen</Badge>
+              <Badge>{res.total} Zeilen gelesen</Badge>
               {res.duplicates > 0 && <Badge tone="neutral">{res.duplicates} schon vorhanden</Badge>}
               {res.location_removed > 0 && <Badge tone="warning">Ort bei {res.location_removed} entfernt (Adresse bzw. nicht erlaubt)</Badge>}
               {res.errors.length > 0 && <Badge tone="error">{res.errors.length} Hinweise</Badge>}

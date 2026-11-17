@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, get, put } from '../../api/client';
-import { Button, Card, cx, ErrorBox, FieldWrap, Input, Notice, PageHeader, SegmentedControl, Select, SkeletonRows, Switch } from '../../components/ui/core';
+import { Button, Card, cx, ErrorBox, FieldWrap, FilePickButton, Input, Notice, PageHeader, SegmentedControl, Select, SkeletonRows, Switch } from '../../components/ui/core';
 import { usePageMeta } from '../../components/layout/AppShell';
 import { Icon } from '../../components/ui/Icon';
 import { UnsavedChangesGuard, useErrorToast, useToast } from '../../components/ui/overlays';
@@ -146,34 +146,26 @@ function AssetField({ id, label, templateId, assetId, onChange }: { id: string; 
   const [busy, setBusy] = useState(false);
   return (
     <FieldWrap label={label} htmlFor={id} help="PNG, JPEG, WebP oder SVG; SVG wird bereinigt, Fotos ohne Metadaten neu gespeichert.">
-      <div className="flex flex-wrap items-center gap-2">
-        {assetId && <img src={`/api/v1/design-templates/${templateId}/assets/${assetId}`} alt="" className="h-12 w-auto max-w-[120px] object-contain rounded-chip border border-line bg-raised" />}
-        <input
-          id={id}
-          type="file"
-          accept="image/png,image/jpeg,image/webp,image/svg+xml,.svg"
-          className="text-sm max-w-full"
-          disabled={busy}
-          onChange={async (e) => {
-            const f = e.target.files?.[0];
-            e.target.value = '';
-            if (!f) return;
-            setBusy(true);
-            try {
-              onChange(await uploadAsset(templateId, f));
-            } catch (err) {
-              toastError(err);
-            } finally {
-              setBusy(false);
-            }
-          }}
-        />
-        {assetId && (
-          <Button size="sm" icon="X" onClick={() => onChange(null)}>
-            Entfernen
-          </Button>
-        )}
-      </div>
+      <FilePickButton
+        id={id}
+        name={label}
+        accept="image/png,image/jpeg,image/webp,image/svg+xml,.svg"
+        label={assetId ? 'Anderes Bild …' : 'Bild wählen …'}
+        emptyText="Kein Bild"
+        busy={busy}
+        preview={assetId ? <img src={`/api/v1/design-templates/${templateId}/assets/${assetId}`} alt="" className="h-12 w-auto max-w-[120px] object-contain rounded-chip border border-line bg-raised" /> : undefined}
+        onRemove={() => onChange(null)}
+        onPick={async ([f]) => {
+          setBusy(true);
+          try {
+            onChange(await uploadAsset(templateId, f));
+          } catch (err) {
+            toastError(err);
+          } finally {
+            setBusy(false);
+          }
+        }}
+      />
     </FieldWrap>
   );
 }
