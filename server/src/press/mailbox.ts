@@ -11,6 +11,7 @@ import { getSettings, setSettings } from '../lib/settings.js';
 import { emitNewPressRequest, nextPressCaseNo, pressEvent } from './common.js';
 import { ImapClient, ImapError, imapSearchDate } from './imap.js';
 import { htmlToText, parseMail, sanitizeHtml, type ParsedMail } from './mime.js';
+import { ownSenderAddresses, parseMailbox } from '../lib/mail-address.js';
 
 /**
  * Abruf des Presse-Postfachs (#205): IMAP oder Microsoft 365 (Graph, gleiche App-Registrierung wie der Mailversand,
@@ -370,7 +371,7 @@ export async function pollPressMailbox(opts: { force?: boolean } = {}): Promise<
       const fresh = state.key !== key;
       let imported = 0;
       const s = await getSettings(true);
-      const own = [s['smtp.from'], s['m365.sender'], c.mailbox, c.user].map((x) => String(x ?? '').trim().toLowerCase()).filter((x) => x.includes('@'));
+      const own = [...new Set([...ownSenderAddresses(s), ...[c.mailbox, c.user].map((x) => parseMailbox(x)?.address.toLowerCase() ?? '')].filter(Boolean))];
       try {
         const password = c.mode === 'imap' ? ((await readSecret(c.secretId || null)) ?? '') : '';
         const { mails, next } = c.mode === 'm365' ? await fetchGraph(c, fresh ? {} : state, fresh) : await fetchImap(c, password, fresh ? {} : state, fresh);

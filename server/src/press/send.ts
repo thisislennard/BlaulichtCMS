@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import nodemailer from 'nodemailer';
 import { m365ConfigProblem, m365SendMime, storedM365Settings } from '../lib/mail.js';
+import { configuredSender, mailDomain } from '../lib/mail-address.js';
 import { getSettings } from '../lib/settings.js';
 import { smtpTransport } from '../warnings/mail.js';
 
@@ -21,18 +22,21 @@ export interface PressMail {
   attachments?: { filename: string; content: Buffer; contentType?: string }[];
 }
 
-/** Message-ID mit der Domain des Absenders (sonst „blaulichtcms.invalid“). */
+/** Message-ID mit der Domain des Absenders (auch „Name <adresse>“, #230; sonst „blaulichtcms.invalid“). */
 export function pressMessageId(from: string, prefix = 'press'): string {
-  const domain = /@([a-z0-9.-]+)$/i.exec(from.trim())?.[1] ?? 'blaulichtcms.invalid';
-  return `<${prefix}-${crypto.randomUUID()}@${domain.toLowerCase()}>`;
+  const domain = mailDomain(from);
+  return `<${prefix}-${crypto.randomUUID()}@${domain && /^[a-z0-9.-]+$/.test(domain) ? domain : 'blaulichtcms.invalid'}>`;
 }
 
-/** Absenderadresse des eingestellten Mailwegs. */
+/**
+ * Absender des eingestellten Mailwegs (#230): nackte Adresse; Anzeigename aus „Name <adresse>“ im Absenderfeld, sonst
+ * der Absendername bzw. die Organisation aus Einstellungen → Allgemein.
+ */
 export async function pressSender(): Promise<{ address: string; name: string }> {
   const s = await getSettings(true);
-  const address = s['mail.transport'] === 'm365' ? String(s['m365.sender'] ?? '') : String(s['smtp.from'] ?? '');
-  const name = String(s['general.sender_name'] || s['general.organization'] || s['general.instance_name'] || '').trim();
-  return { address: address.trim(), name };
+  const sender = configuredSender(s);
+  const name = String(sender?.name || s['general.sender_name'] || s['general.organization'] || s['general.instance_name'] || '').trim();
+  return { address: sender?.address ?? '', name };
 }
 
 export async function sendPressMail(m: PressMail): Promise<{ response: string }> {

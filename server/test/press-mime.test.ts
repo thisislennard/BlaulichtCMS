@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { cleanLine, cleanText, decodeWords, htmlToText, parseAddressList, parseMail, parseParams, sanitizeHtml } from '../src/press/mime.js';
 import { imapSearchDate, parseImapDate } from '../src/press/imap.js';
 import { ignoreReason } from '../src/press/mailbox.js';
+import { pressMessageId } from '../src/press/send.js';
+import { configuredSender, ownSenderAddresses, parseMailbox } from '../src/lib/mail-address.js';
 
 /** MIME-Leser und Einordnung des Presse-Postfachs (#205) – ohne Datenbank. */
 
@@ -189,5 +191,24 @@ JVBERi0=
     expect(JSON.stringify({ ...m, headers: [...m.headers], attachments: [] })).not.toMatch(/\\u0000/);
     expect(cleanText('a\u0000b\tc\r\nd\u001f\u007f')).toBe('ab\tc\r\nd');
     expect(cleanLine('a\r\nb\u0000')).toBe('a b');
+  });
+});
+
+describe('Absender mit Anzeigenamen (#230)', () => {
+  it('parseMailbox, Message-ID und eigene Adressen', () => {
+    expect(parseMailbox('Feuerwehr Musterstadt <Presse@Example.org>')).toEqual({ address: 'Presse@Example.org', name: 'Feuerwehr Musterstadt' });
+    expect(parseMailbox('"Feuerwehr, Presse" <presse@example.org>')).toEqual({ address: 'presse@example.org', name: 'Feuerwehr, Presse' });
+    expect(parseMailbox(' presse@example.org ')).toEqual({ address: 'presse@example.org', name: '' });
+    expect(parseMailbox('Feuerwehr Musterstadt')).toBeNull();
+    expect(parseMailbox('')).toBeNull();
+    expect(pressMessageId('Feuerwehr Musterstadt <presse@Example.org>', 'pm')).toMatch(/^<pm-[0-9a-f-]{36}@example\.org>$/);
+    expect(pressMessageId('presse@example.org')).toMatch(/@example\.org>$/);
+    expect(pressMessageId('kaputt')).toMatch(/@blaulichtcms\.invalid>$/);
+    expect(configuredSender({ 'mail.transport': 'smtp', 'smtp.from': 'Feuerwehr <presse@example.org>', 'm365.sender': '' })).toEqual({ address: 'presse@example.org', name: 'Feuerwehr' });
+    expect(configuredSender({ 'mail.transport': 'm365', 'smtp.from': 'x@y.de', 'm365.sender': 'm365@example.org' })?.address).toBe('m365@example.org');
+    const own = ownSenderAddresses({ 'smtp.from': 'Feuerwehr Musterstadt <Presse@Feuerwehr.example>', 'm365.sender': '' });
+    expect(own).toEqual(['presse@feuerwehr.example']);
+    const m = parseMail(Buffer.from(crlf('From: Feuerwehr Musterstadt <presse@feuerwehr.example>\nSubject: Pressemitteilung\n\nText')));
+    expect(ignoreReason(m, own)?.outcome).toBe('own');
   });
 });

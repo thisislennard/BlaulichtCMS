@@ -78,7 +78,7 @@ In der Anfrage unter **Mails und Antworten → Antworten** (Recht „Presseanfra
 3. **Textbaustein einfügen** (optional) und den Text schreiben.
 4. **Senden** bzw. – mit eingeschalteter Freigabe – **Zur Freigabe einreichen**.
 
-Gesendet wird über den eingestellten Mailweg (SMTP oder Microsoft 365, *Einstellungen → Benachrichtigungen und E-Mail*) mit der dort eingetragenen Absenderadresse. Die Mail trägt die richtigen Kopfzeilen für den Mail-Verlauf (`In-Reply-To`, `References`) – bei der Redaktion erscheint sie als Antwort auf deren Mail, und deren Rückfragen ordnet das [Presse-Postfach](#presse-postfach-abrufen) wieder der Anfrage zu. Bei Microsoft 365 liegt die Antwort zusätzlich in „Gesendete Elemente“ des Absenderpostfachs.
+Gesendet wird über den eingestellten Mailweg (SMTP oder Microsoft 365, *Einstellungen → Benachrichtigungen und E-Mail*) mit der dort eingetragenen Absenderadresse (ein Name im Absenderfeld wie `Feuerwehr Musterstadt <presse@example.org>` wird übernommen, sonst der Absendername aus *Einstellungen → Allgemein*). Die Mail trägt die richtigen Kopfzeilen für den Mail-Verlauf (`In-Reply-To`, `References`) – bei der Redaktion erscheint sie als Antwort auf deren Mail, und deren Rückfragen ordnet das [Presse-Postfach](#presse-postfach-abrufen) wieder der Anfrage zu. Bei Microsoft 365 liegt die Antwort zusätzlich in „Gesendete Elemente“ des Absenderpostfachs.
 
 Nach dem Versand steht die Antwort im Verlauf, und die Anfrage bekommt **automatisch den Status „Beantwortet“** (eine erledigte Anfrage bleibt erledigt).
 

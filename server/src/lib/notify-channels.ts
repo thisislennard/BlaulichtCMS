@@ -3,6 +3,7 @@ import { permissionsFor } from '../auth/permissions.js';
 import { ensureRolesFresh } from '../auth/roles.js';
 import { log } from './log.js';
 import { mailReady } from './mail.js';
+import { configuredSender } from './mail-address.js';
 import { categoryFor, chosenChannels, notifyCategory, type NotifyCategory } from './notify-categories.js';
 import { readSecret, revokeSecret, storeSecret } from './secrets.js';
 import { getSettings, setSettings, type Settings } from './settings.js';
@@ -63,7 +64,7 @@ export async function rotateVapidKeys(userId: string | null): Promise<string> {
 export function pushSubject(s: Settings): string {
   const url = String(s['general.public_url'] ?? '');
   if (/^https:\/\//i.test(url)) return url.replace(/\/+$/, '');
-  const from = String((s['mail.transport'] === 'm365' ? s['m365.sender'] : s['smtp.from']) ?? '').match(/[^\s<>"]+@[^\s<>"]+/)?.[0];
+  const from = configuredSender(s)?.address;
   return from ? `mailto:${from}` : 'mailto:blaulichtcms@example.org';
 }
 

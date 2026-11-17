@@ -460,6 +460,29 @@ describe('Antworten per Mail (#206)', () => {
     expect(back).toMatchObject({ outcome: 'assigned', requestId });
   });
 
+  it('Absender mit Anzeigenamen („Name <adresse>“): gültiger Umschlag, Message-ID mit Domain (#230)', async () => {
+    await setSettings({ 'smtp.from': 'Pressestelle Musterstadt <presse@feuerwehr.example>' } as any);
+    try {
+      const before = smtp.received.length;
+      const r = await editor.post(`/press/requests/${requestId}/replies`, { to: ['paula@zeitung.example'], subject: 'AW: Absender', body: 'Text' });
+      await deliverPressReply(r.json.id);
+      expect(smtp.received).toHaveLength(before + 1);
+      const m = smtp.received[before];
+      expect(m.from).toBe('presse@feuerwehr.example');
+      expect(m.raw).toMatch(/^From: Pressestelle Musterstadt <presse@feuerwehr\.example>\r?$/m);
+      expect(m.raw).toMatch(/^Message-ID: <press-[0-9a-f-]+@feuerwehr\.example>/m);
+      expect(await one<any>(`SELECT from_address, status FROM press_messages WHERE id = $1`, [r.json.id])).toEqual({ from_address: 'presse@feuerwehr.example', status: 'sent' });
+      // die eigene Mail (z. B. über einen Verteiler zurück im Presse-Postfach) wird erkannt
+      const { ingestPressMail } = await import('../src/press/mailbox.js');
+      const { ownSenderAddresses } = await import('../src/lib/mail-address.js');
+      const own = ownSenderAddresses({ 'smtp.from': 'Pressestelle Musterstadt <presse@feuerwehr.example>', 'm365.sender': '' });
+      const back = await ingestPressMail(Buffer.from(m.raw.replace(/^Message-ID: .*$/m, 'Message-ID: <eigen-kopie@feuerwehr.example>')), { source: 'imap', externalId: 'own1', receivedAt: null, maxAttachmentMb: 5, ownAddresses: own });
+      expect(back.outcome).toBe('own');
+    } finally {
+      await setSettings({ 'smtp.from': 'presse@feuerwehr.example' } as any);
+    }
+  });
+
   it('mit Freigabe: zweite Person nötig, Zurückweisen mit Begründung', async () => {
     await setSettings({ 'press.reply_approval': true } as any);
     const r = await admin.post(`/press/requests/${requestId}/replies`, { to: ['paula@zeitung.example'], subject: 'AW: Nachfrage', body: 'Entwurf' });

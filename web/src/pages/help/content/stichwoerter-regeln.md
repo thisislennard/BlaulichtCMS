@@ -74,7 +74,7 @@ Die Werte stellt die eigene **IT** bzw. der **E-Mail-Anbieter** der Organisation
 | Port und Verschlüsselung | meist 587 mit STARTTLS oder 465 mit TLS (siehe unten) |
 | Benutzer | Anmeldename des Postfachs, meist die vollständige E-Mail-Adresse |
 | Passwort | Passwort des Postfachs bzw. ein App-Passwort |
-| Absender | Adresse, die als Absender erscheint – muss zum Postfach passen bzw. für das Postfach freigegeben sein |
+| Absender | Adresse, die als Absender erscheint, optional mit Namen (`Feuerwehr Musterstadt <presse@example.org>`) – muss zum Postfach passen bzw. für das Postfach freigegeben sein. Antworten auf Presseanfragen und Pressemitteilungen verwenden dieselbe Adresse; der Name kommt von hier, sonst aus *Einstellungen → Allgemein → Absendername* |
 | Testpostfach | eigenes Postfach, an das im Testmodus alles geht |
 
 ### Port und Verschlüsselung

@@ -15,6 +15,7 @@ import { enqueue } from '../jobs/queue.js';
 import { evaluate, activeQuestions, type Suggestion } from '../warnings/levels.js';
 import { KIND_LABEL, renderWarningPdf } from '../warnings/pdf.js';
 import { m365Fingerprint, storedM365Settings } from '../lib/mail.js';
+import { parseMailbox } from '../lib/mail-address.js';
 import { SMTP_VERIFY_MAX_AGE_MS, smtpConfigProblem, smtpFingerprint, smtpTransport, storedSmtpSettings, type SmtpSettings } from '../warnings/mail.js';
 import { sendFileResponse } from './files.js';
 import { deleteWarnings, removeWarningFiles } from '../lib/retention.js';
@@ -746,6 +747,8 @@ export async function warningRoutes(app: FastifyInstance) {
   const candidate = (b: { host: string; port: number; security: string; user: string; from: string; password?: string }, stored: SmtpSettings): SmtpSettings => {
     const sameHost = b.host.trim().toLowerCase() === stored.host.trim().toLowerCase();
     if (!b.password && !sameHost && b.user.trim() && b.security !== 'none' && stored.password) throw badRequest('Der Server wurde geändert: Bitte das Passwort für den neuen Server erneut eingeben.');
+    // Absender: Adresse, optional mit Anzeigenamen – alle Stellen lesen ihn über parseMailbox (#230)
+    if (b.from.trim() && !parseMailbox(b.from)) throw badRequest('Absender: bitte eine E-Mail-Adresse eintragen, optional mit Namen – z. B. „presse@example.org“ oder „Feuerwehr Musterstadt <presse@example.org>“.');
     return { host: b.host.trim(), port: b.port, security: b.security, user: b.user, from: b.from.trim(), password: b.password || (sameHost ? stored.password : '') };
   };
 
