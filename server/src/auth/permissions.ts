@@ -129,7 +129,7 @@ export const PERMISSIONS: PermissionDef[] = [
 
   /* Presse (#204–#207) */
   P('press.view', 'press', 'read', 'Presseanfragen ansehen', 'Presseanfragen mit Kontaktdaten der Anfragenden, Verlauf, Mails und Anhängen ansehen.'),
-  P('press.manage', 'press', 'write', 'Presseanfragen bearbeiten', 'Presseanfragen von Hand erfassen, Status, Zuständigkeit und Frist ändern, mit Einsatz und Beitrag verknüpfen, interne Notizen schreiben und Anfragen löschen.', ['press.view']),
+  P('press.manage', 'press', 'write', 'Presseanfragen bearbeiten', 'Presseanfragen von Hand erfassen, Status, Zuständigkeit und Frist ändern, mit Einsatz und Beitrag verknüpfen, interne Notizen schreiben, mündliche Antworten festhalten und Anfragen löschen.', ['press.view']),
   P('press.reply', 'press', 'write', 'Presseanfragen beantworten', 'Antworten per E-Mail schreiben und senden (bei eingeschalteter Freigabe: zur Freigabe einreichen).', ['press.view']),
   P('press.approve', 'press', 'critical', 'Antworten an die Presse freigeben', 'Eingereichte Antworten auf Presseanfragen freigeben oder zurückweisen (nie die eigene).', ['press.view']),
   P('press.snippets', 'press', 'write', 'Textbausteine verwalten', 'Textbausteine für Antworten auf Presseanfragen anlegen, ändern und löschen.', ['press.view']),

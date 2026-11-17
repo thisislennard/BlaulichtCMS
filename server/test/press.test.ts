@@ -261,6 +261,29 @@ describe('Presseanfragen: Grundmodul (#204)', () => {
     expect(await one(`SELECT 1 FROM audit_events WHERE action = 'press.request_deleted'`)).not.toBeNull();
   });
 
+  it('mündliche Antwort festhalten: Antworttext im Verlauf und Status „beantwortet“ in einem Schritt (#272)', async () => {
+    const r = (await editor.post('/press/requests', { topic: 'Rückfrage Sperrung', channel: 'phone' })).json;
+    expect((await reader.post(`/press/requests/${r.id}/answer`, { text: 'x' })).status).toBe(403);
+    expect((await editor.post(`/press/requests/${r.id}/answer`, { text: '   ' })).status).toBe(400);
+    expect((await editor.post(`/press/requests/${r.id}/answer`, { text: 'Am Telefon: Sperrung bis 18 Uhr.' })).json).toMatchObject({ ok: true, status: 'answered' });
+    let d = (await editor.get(`/press/requests/${r.id}`)).json;
+    expect(d.request.status).toBe('answered');
+    expect((await one<any>(`SELECT answered_at FROM press_requests WHERE id = $1`, [r.id]))!.answered_at).not.toBeNull();
+    expect(d.events.map((e: any) => [e.kind, e.text])).toEqual([
+      ['created', expect.any(String)],
+      ['answer', 'Am Telefon: Sperrung bis 18 Uhr.'],
+      ['status', 'Status: neu → beantwortet'],
+    ]);
+    expect(await one(`SELECT 1 FROM audit_events WHERE action = 'press.answer_recorded' AND object_id = $1`, [r.id])).not.toBeNull();
+    // erledigt bleibt erledigt – ein Nachtrag landet nur im Verlauf
+    await editor.patch(`/press/requests/${r.id}`, { status: 'done' });
+    expect((await editor.post(`/press/requests/${r.id}/answer`, { text: 'Nachtrag: Umleitung über die B 3.' })).json.status).toBe('done');
+    d = (await editor.get(`/press/requests/${r.id}`)).json;
+    expect(d.request.status).toBe('done');
+    expect(d.events.filter((e: any) => e.kind === 'answer')).toHaveLength(2);
+    expect((await editor.del(`/press/requests/${r.id}`)).status).toBe(200);
+  });
+
   it('Workflow-Eingang „Neue Presseanfrage“ startet einen Lauf nur mit Feldern ohne Kontaktdaten', async () => {
     const input = await admin.post('/automation-inputs', { name: 'Presse', kind: 'press', config: { channels: ['phone'] } });
     expect(input.status).toBe(200);

@@ -18,7 +18,9 @@ interface Detail extends PressDetailExtras {
   deletion: { at: string } | null;
 }
 
-const EVENT_ICON: Record<string, string> = { created: 'Plus', status: 'CheckCircle2', assignee: 'User', due: 'Clock', link: 'Link2', note: 'NotebookPen', edit: 'Pencil', mail_in: 'Mail', mail_out: 'Send', reply: 'Reply' };
+const EVENT_ICON: Record<string, string> = { created: 'Plus', status: 'CheckCircle2', assignee: 'User', due: 'Clock', link: 'Link2', note: 'NotebookPen', answer: 'MessageSquareQuote', edit: 'Pencil', mail_in: 'Mail', mail_out: 'Send', reply: 'Reply' };
+/** Freitext aus der Redaktion (Notiz, festgehaltene Antwort) – unverändert mit Zeilenumbrüchen anzeigen */
+const FREE_TEXT = new Set(['note', 'answer']);
 
 /** Eine Presseanfrage (#204): Steuerung (Status, Zuständigkeit, Frist, Verknüpfungen), Kontakt, Mails und Verlauf. */
 export default function PressRequestPage() {
@@ -93,15 +95,15 @@ export default function PressRequestPage() {
             <ol className="m-0 p-0 list-none flex flex-col gap-3">
               {q.data!.events.map((e) => (
                 <li key={e.id} className="flex gap-3">
-                  <span className={cx('mt-0.5 shrink-0 w-7 h-7 rounded-full flex items-center justify-center', e.kind === 'note' ? 'bg-primary-soft text-fg-link' : 'bg-raised text-fg-muted')}>
+                  <span className={cx('mt-0.5 shrink-0 w-7 h-7 rounded-full flex items-center justify-center', FREE_TEXT.has(e.kind) ? 'bg-card border border-line text-fg' : 'bg-raised text-fg-muted')}>
                     <Icon name={EVENT_ICON[e.kind] ?? 'History'} size={14} />
                   </span>
                   <div className="min-w-0 flex-1">
                     <div className="text-meta text-fg-muted">
                       {e.actor_name} · {fmtDateTime(e.at)}
-                      {e.kind === 'note' ? ' · interne Notiz' : ''}
+                      {e.kind === 'note' ? ' · interne Notiz' : e.kind === 'answer' ? ' · Antwort festgehalten' : ''}
                     </div>
-                    <div className={cx('break-words', e.kind === 'note' && 'whitespace-pre-wrap')}>{e.kind === 'note' ? e.text : fmtIsoInText(e.text)}</div>
+                    <div className={cx('break-words', FREE_TEXT.has(e.kind) && 'whitespace-pre-wrap')}>{FREE_TEXT.has(e.kind) ? e.text : fmtIsoInText(e.text)}</div>
                   </div>
                 </li>
               ))}

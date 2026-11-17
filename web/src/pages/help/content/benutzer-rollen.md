@@ -178,7 +178,7 @@ Alle Rechte, nach Bereichen. Die Tabelle entspricht dem Rollen-Editor; „Setzt 
 | Recht | Stufe | Erlaubt | Setzt voraus |
 | --- | --- | --- | --- |
 | Presseanfragen ansehen | lesen | Presseanfragen mit Kontaktdaten der Anfragenden, Verlauf, Mails und Anhängen ansehen. | – |
-| Presseanfragen bearbeiten | ändern | Presseanfragen von Hand erfassen, Status, Zuständigkeit und Frist ändern, mit Einsatz und Beitrag verknüpfen, interne Notizen schreiben und Anfragen löschen. | Presseanfragen ansehen |
+| Presseanfragen bearbeiten | ändern | Presseanfragen von Hand erfassen, Status, Zuständigkeit und Frist ändern, mit Einsatz und Beitrag verknüpfen, interne Notizen schreiben, mündliche Antworten festhalten und Anfragen löschen. | Presseanfragen ansehen |
 | Presseanfragen beantworten | ändern | Antworten per E-Mail schreiben und senden (bei eingeschalteter Freigabe: zur Freigabe einreichen). | Presseanfragen ansehen |
 | Antworten an die Presse freigeben | kritisch | Eingereichte Antworten auf Presseanfragen freigeben oder zurückweisen (nie die eigene). | Presseanfragen ansehen |
 | Textbausteine verwalten | ändern | Textbausteine für Antworten auf Presseanfragen anlegen, ändern und löschen. | Presseanfragen ansehen |

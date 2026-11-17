@@ -245,6 +245,28 @@ export async function pressRoutes(app: FastifyInstance) {
     return { ok: true };
   });
 
+  // Mündliche Antwort festhalten (#272): bei Anfragen per Telefon oder vor Ort ist das der übliche nächste Schritt –
+  // Antworttext in den Verlauf und Status „beantwortet“ in einem Schritt (eine Transaktion). Erledigte Anfragen
+  // bleiben erledigt, schon beantwortete behalten Status und Zeitpunkt.
+  app.post('/press/requests/:id/answer', { preHandler: manage }, async (req) => {
+    const { id } = z.object({ id: z.uuid() }).parse(req.params);
+    const { text: answer } = z.object({ text: text(5000).min(1, 'Bitte die Antwort kurz festhalten.') }).parse(req.body);
+    const cur = await loadPressRequest(id);
+    const actor = actorOf(req);
+    const next: PressStatus = cur.status === 'done' ? 'done' : 'answered';
+    await tx(async (db) => {
+      await pressEvent(db, id, actor, 'answer', answer, { eingangsweg: cur.channel });
+      if (cur.status !== next) {
+        await db.query(`UPDATE press_requests SET status = $2, answered_at = now(), done_at = NULL, updated_at = now() WHERE id = $1`, [id, next]);
+        await pressEvent(db, id, actor, 'status', `Status: ${PRESS_STATUS_LABEL[cur.status as PressStatus]} → ${PRESS_STATUS_LABEL[next]}`, { status: next });
+      } else {
+        await db.query(`UPDATE press_requests SET updated_at = now() WHERE id = $1`, [id]);
+      }
+      await audit(actor, 'press.answer_recorded', { type: 'press_request', id, label: cur.case_no }, { status: next, eingangsweg: cur.channel }, 'ok', db);
+    });
+    return { ok: true, status: next };
+  });
+
   app.delete('/press/requests/:id', { preHandler: manage }, async (req) => {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
     const cur = await loadPressRequest(id);

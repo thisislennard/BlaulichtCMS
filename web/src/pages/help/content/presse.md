@@ -77,9 +77,13 @@ Verwendet wird **dieselbe App-Registrierung wie für den Mailversand** (siehe [B
 | Presse-Postfach nicht gefunden | Adresse prüfen; es muss ein Exchange-Online-Postfach sein |
 | Microsoft 365 ist noch nicht eingerichtet | zuerst die App-Registrierung unter *Einstellungen → Benachrichtigungen und E-Mail* eintragen |
 
+## Mündliche Antwort festhalten
+
+Kam die Anfrage per **Telefon** oder **persönlich**, ist der übliche nächste Schritt, die mündliche Antwort festzuhalten. Dafür steht in der Anfrage unter **Mails und Antworten** die Hauptaktion **Antwort festhalten** (Recht „Presseanfragen bearbeiten“): kurz notieren, was gesagt wurde, und speichern. Der Text steht danach im **Verlauf** („Antwort festgehalten“), der Status wird in einem Schritt **Beantwortet**. Eine erledigte Anfrage bleibt erledigt; ein Nachtrag landet nur im Verlauf. **Per E-Mail antworten** steht daneben als zweite Möglichkeit. Bei allen anderen Eingangswegen ist **Antworten** (per Mail) die Hauptaktion.
+
 ## Antworten per Mail
 
-In der Anfrage unter **Mails und Antworten → Antworten** (Recht „Presseanfragen beantworten“):
+In der Anfrage unter **Mails und Antworten → Antworten** bzw. **Per E-Mail antworten** (Recht „Presseanfragen beantworten“):
 
 1. **An** ist mit der E-Mail-Adresse der Anfrage vorbelegt, **Kopie an** optional (mehrere Adressen mit Komma).
 2. **Betreff** – BlaulichtCMS hängt die Vorgangsnummer `[P-…]` an, damit Rückfragen bei dieser Anfrage landen.
@@ -159,7 +163,7 @@ Das **Versandprotokoll** zeigt je Empfänger *Gesendet*, *Fehlgeschlagen* (mit G
 - **Beitrag:** z. B. die Pressemitteilung oder der Einsatzbericht zum Thema.
 - **Interne Notiz:** nur in BlaulichtCMS sichtbar, nie Teil einer Antwort.
 
-Der **Verlauf** zeigt jede Änderung mit Person und Zeitpunkt (Status, Zuständigkeit, Frist, Verknüpfungen, Notizen, Mails). Geänderte Kontaktdaten stehen dort nur als „geändert“, nicht mit Wert. Fristen erscheinen als Datum und Uhrzeit in der [Zeitzone der Instanz](/hilfe/einrichtung#zeitzone) – nach einem Wechsel der Zeitzone auch bei älteren Einträgen.
+Der **Verlauf** zeigt jede Änderung mit Person und Zeitpunkt (Status, Zuständigkeit, Frist, Verknüpfungen, Notizen, festgehaltene Antworten, Mails). Geänderte Kontaktdaten stehen dort nur als „geändert“, nicht mit Wert. Fristen erscheinen als Datum und Uhrzeit in der [Zeitzone der Instanz](/hilfe/einrichtung#zeitzone) – nach einem Wechsel der Zeitzone auch bei älteren Einträgen.
 
 ## Übersicht und Dashboard
 
@@ -174,7 +178,7 @@ Der Eingang **Neue Presseanfrage** startet einen [Workflow](/hilfe/workflows), s
 | Recht | Erlaubt |
 |---|---|
 | Presseanfragen ansehen | Anfragen mit Kontaktdaten, Verlauf, Mails und Anhängen lesen |
-| Presseanfragen bearbeiten | erfassen, Status, Zuständigkeit, Frist, Verknüpfungen, Notizen, löschen |
+| Presseanfragen bearbeiten | erfassen, Status, Zuständigkeit, Frist, Verknüpfungen, Notizen, mündliche Antwort festhalten, löschen |
 | Presse-Postfach einrichten | Abruf einrichten, testen, schalten, Empfangsprotokoll |
 | Presseanfragen beantworten | Antworten schreiben und senden bzw. zur Freigabe einreichen |
 | Antworten an die Presse freigeben | eingereichte Antworten anderer freigeben oder zurückweisen |

@@ -203,26 +203,75 @@ function MessageItem({ m, onChange }: { m: PressMessage; onChange: () => void })
   );
 }
 
-/** Antwort-Editor (#206): Empfänger, Betreff, Textbaustein, Text – senden bzw. zur Freigabe einreichen. */
+/** Eingangswege, auf die üblicherweise mündlich geantwortet wird (#272). */
+export const ORAL_CHANNELS = ['phone', 'in_person'];
+
+/** Mündliche Antwort festhalten (#272): Antworttext in den Verlauf und Status „beantwortet“ in einem Schritt. */
+function RecordAnswer({ request, onDone, onCancel }: { request: PressRequest; onDone: () => void; onCancel: () => void }) {
+  const toast = useToast();
+  const toastError = useErrorToast();
+  const [text, setText] = useState('');
+  const [busy, setBusy] = useState(false);
+  const save = async () => {
+    setBusy(true);
+    try {
+      const r = await post<{ status: string }>(`/press/requests/${request.id}/answer`, { text });
+      toast({ tone: 'success', title: 'Antwort festgehalten', text: r.status === 'answered' ? 'Status: Beantwortet' : undefined });
+      onDone();
+    } catch (e) {
+      toastError(e);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="flex flex-col gap-3 border-t border-line pt-4">
+      <FieldWrap label="Was wurde geantwortet?" required htmlFor="ra-text" help={`Kurz festhalten, was ${request.channel === 'phone' ? 'am Telefon' : 'vor Ort'} gesagt wurde. Steht im Verlauf; der Status wird „Beantwortet“.`}>
+        <Textarea id="ra-text" rows={4} value={text} maxLength={5000} onChange={(e) => setText(e.target.value)} />
+      </FieldWrap>
+      <div className="flex flex-wrap gap-2">
+        <Button variant="primary" icon="Check" loading={busy} disabled={!text.trim()} onClick={save}>
+          Antwort festhalten
+        </Button>
+        <Button onClick={onCancel}>Abbrechen</Button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Antwort-Editor (#206): Empfänger, Betreff, Textbaustein, Text – senden bzw. zur Freigabe einreichen. Die Hauptaktion
+ * richtet sich nach dem Eingangsweg (#272): bei Telefon und „persönlich“ „Antwort festhalten“, sonst „Antworten“.
+ */
 function ReplyEditor({ request, approval, onDone }: { request: PressRequest; approval: boolean; onDone: () => void }) {
   const { me, can } = useAuth();
   const toast = useToast();
   const toastError = useErrorToast();
-  const snippets = useQuery({ queryKey: ['press-snippets'], queryFn: () => get<{ id: string; title: string; body: string }[]>('/press/snippets') });
-  const [open, setOpen] = useState(false);
+  const snippets = useQuery({ queryKey: ['press-snippets'], queryFn: () => get<{ id: string; title: string; body: string }[]>('/press/snippets'), enabled: can('press.reply') });
+  const [open, setOpen] = useState<false | 'mail' | 'record'>(false);
   const [busy, setBusy] = useState(false);
   const [to, setTo] = useState(request.contact_email);
   const [cc, setCc] = useState('');
   const [subject, setSubject] = useState(`AW: ${request.topic}`);
   const [body, setBody] = useState('');
-  if (!can('press.reply')) return null;
+  const mayMail = can('press.reply');
+  const mayRecord = can('press.manage') && ORAL_CHANNELS.includes(request.channel);
+  if (!mayMail && !mayRecord) return null;
+  if (open === 'record') return <RecordAnswer request={request} onCancel={() => setOpen(false)} onDone={() => (setOpen(false), onDone())} />;
   if (!open)
     return (
-      <div>
-        <Button icon="Reply" variant="primary" onClick={() => setOpen(true)}>
-          Antworten
-        </Button>
-        {!request.contact_email && <span className="ml-3 text-meta text-fg-muted">Keine E-Mail-Adresse hinterlegt – bitte Empfänger eintragen.</span>}
+      <div className="flex flex-wrap items-center gap-2">
+        {mayRecord && (
+          <Button icon="NotebookPen" variant="primary" onClick={() => setOpen('record')}>
+            Antwort festhalten
+          </Button>
+        )}
+        {mayMail && (
+          <Button icon="Reply" variant={mayRecord ? 'secondary' : 'primary'} onClick={() => setOpen('mail')}>
+            {mayRecord ? 'Per E-Mail antworten' : 'Antworten'}
+          </Button>
+        )}
+        {mayMail && !request.contact_email && !mayRecord && <span className="ml-1 text-meta text-fg-muted">Keine E-Mail-Adresse hinterlegt – bitte Empfänger eintragen.</span>}
       </div>
     );
   const list = (s: string) => s.split(/[,;\s]+/).map((x) => x.trim()).filter(Boolean);
@@ -286,11 +335,12 @@ function ReplyEditor({ request, approval, onDone }: { request: PressRequest; app
   );
 }
 
-/** Mail-Verlauf einer Anfrage (#205) mit Antworten (#206). */
+/** Mail-Verlauf einer Anfrage (#205) mit Antworten (#206) bzw. „Antwort festhalten“ bei mündlichen Anfragen (#272). */
 export function PressMessages({ request, detail, onChange }: { request: PressRequest; detail: PressDetailExtras; onChange: () => void }) {
   const { can } = useAuth();
   const msgs = detail.messages ?? [];
-  if (!msgs.length && !can('press.reply')) return null;
+  const mayRecord = can('press.manage') && ORAL_CHANNELS.includes(request.channel);
+  if (!msgs.length && !can('press.reply') && !mayRecord) return null;
   return (
     <Card title="Mails und Antworten" action={msgs.length ? <Badge tone="neutral" dot={false}>{msgs.length}</Badge> : undefined}>
       <div className="flex flex-col gap-4">
@@ -301,7 +351,7 @@ export function PressMessages({ request, detail, onChange }: { request: PressReq
             ))}
           </ol>
         ) : (
-          <p className="m-0 text-sm text-fg-muted">Noch keine Mails zu dieser Anfrage.</p>
+          <p className="m-0 text-sm text-fg-muted">{mayRecord ? 'Noch keine Mails zu dieser Anfrage. Mündliche Antworten stehen im Verlauf.' : 'Noch keine Mails zu dieser Anfrage.'}</p>
         )}
         <ReplyEditor request={request} approval={!!detail.replyApproval} onDone={onChange} />
       </div>
