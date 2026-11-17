@@ -111,8 +111,10 @@ const MAX_BYTES_PER_RUN = 200 * 1024 * 1024;
 export const MAX_ATTEMPTS = 3;
 const maxMailBytes = (c: MailboxConfig) => Math.max(5, c.maxAttachmentMb * 3) * 1024 * 1024;
 
-function imapClient(c: MailboxConfig, password: string) {
-  return new ImapClient({ host: c.host.trim(), port: c.port, security: c.security, user: c.user.trim(), password, timeoutMs: 30_000, maxLiteralBytes: maxMailBytes(c) + 1024 * 1024, plainForTests: !!process.env.VITEST && process.env.BLAULICHTCMS_IMAP_TEST_PLAIN === '1' });
+/** IMAP-Client mit derselben Freigabe interner Ziele wie alle anderen ausgehenden Verbindungen (#234). */
+async function imapClient(c: MailboxConfig, password: string) {
+  const allowPrivateHosts = ((await getSettings())['security.allowed_private_hosts'] ?? []) as string[];
+  return new ImapClient({ host: c.host.trim(), port: c.port, security: c.security, user: c.user.trim(), password, timeoutMs: 30_000, maxLiteralBytes: maxMailBytes(c) + 1024 * 1024, allowPrivateHosts, plainForTests: !!process.env.VITEST && process.env.BLAULICHTCMS_IMAP_TEST_PLAIN === '1' });
 }
 
 /** Ein laufender Durchgang: Fortschritt wird nach jeder Mail gespeichert. */
@@ -181,7 +183,7 @@ async function processMail(run: Run, m: Candidate): Promise<void> {
 /** IMAP: neue UIDs seit dem letzten Stand (erster Abruf: 24 Stunden) einzeln holen. Gibt zurück, ob noch Mails warten. */
 async function runImap(run: Run, password: string): Promise<boolean> {
   const { c } = run;
-  const client = imapClient(c, password);
+  const client = await imapClient(c, password);
   try {
     await client.connect();
     const box = await client.examine(c.folder);
@@ -286,7 +288,7 @@ export async function testMailbox(c: MailboxConfig, password: string): Promise<s
     const r = (await graphGet(`/users/${box}/mailFolders/inbox?$select=totalItemCount,unreadItemCount`, 'application/json', 256 * 1024)).json() as any;
     return `Verbindung in Ordnung: Posteingang mit ${Number(r?.totalItemCount ?? 0)} Nachrichten.`;
   }
-  const client = imapClient(c, password);
+  const client = await imapClient(c, password);
   try {
     await client.connect();
     const box = await client.examine(c.folder);

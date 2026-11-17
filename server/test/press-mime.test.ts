@@ -270,7 +270,7 @@ describe('IMAP-Empfangspuffer (#239)', () => {
     });
     await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
     const port = (server.address() as net.AddressInfo).port;
-    const client = new ImapClient({ host: '127.0.0.1', port, security: 'tls', user: 'u', password: 'p', plainForTests: true, maxLiteralBytes: size + 1024 });
+    const client = new ImapClient({ host: '127.0.0.1', port, security: 'tls', user: 'u', password: 'p', plainForTests: true, maxLiteralBytes: size + 1024, allowPrivateHosts: ['127.0.0.1'] });
     let concatBytes = 0;
     const orig = Buffer.concat;
     const spy = vi.spyOn(Buffer, 'concat').mockImplementation((list: readonly Uint8Array[], total?: number) => {

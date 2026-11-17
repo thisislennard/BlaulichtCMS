@@ -244,7 +244,11 @@ Alles über Tokens in `web/src/theme/tokens.css` – das endgültige Design läs
   Auftrag (`social_publications`, eindeutiger Index); ein Versuch je Anstoß; „unbekannt“ wird vor jedem neuen Versuch
   über den Text-Marker beim Anbieter geprüft.
 - Meta ruft Medien über befristete, tokenisierte URLs `/api/v1/m/<token>` ab (24 h, nur öffentliche Fassungen).
-- Private Ziele (SSRF-Schutz) nur nach Freigabe durch die Plattform-Administration, gebunden an den Host.
+- Private Ziele (SSRF-Schutz) nur nach Freigabe durch die Plattform-Administration, gebunden an den Host. Dieselbe
+  Prüfung (eigene Auflösung, festgenagelte IP) gilt für den IMAP-Abruf des Presse-Postfachs, dort zusätzlich nur die
+  Ports 143/993 und eine einheitliche Fehlermeldung vor der Begrüßung des Servers (#234).
+- Gespeicherte Zugangsdaten gelten nur für ihr Ziel (SMTP, Sicherung außer Haus, Update-Token, Presse-Postfach,
+  Mastodon, Bluesky): Wer Server, Instanz oder Konto ändert, muss sie neu eingeben; sie gehen nie an ein neues Ziel.
 
 ### E16 – Betrieb: Updates und Rückweg (M4)
 

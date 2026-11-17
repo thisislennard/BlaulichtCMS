@@ -100,7 +100,7 @@ export function MailboxSettings() {
                     <option value="starttls">STARTTLS (143)</option>
                   </Select>
                 </FieldWrap>
-                <FieldWrap label="Port" htmlFor="mb-port">
+                <FieldWrap label="Port" htmlFor="mb-port" help="993 oder 143; andere Ports nur nach Freigabe durch die Administration.">
                   <Input id="mb-port" type="number" min={1} max={65535} value={v.port} onChange={(e) => set({ port: Number(e.target.value) })} />
                 </FieldWrap>
               </div>
@@ -116,7 +116,7 @@ export function MailboxSettings() {
                   setPassword(x);
                   setTest(null);
                 }}
-                help="Wird verschlüsselt gespeichert und nie wieder angezeigt. Bei Anbietern mit Zwei-Faktor-Anmeldung ein App-Passwort verwenden."
+                help="Wird verschlüsselt gespeichert und nie wieder angezeigt. Gilt nur für diesen Server, Port und Benutzer – bei einer Änderung neu eingeben. Bei Anbietern mit Zwei-Faktor-Anmeldung ein App-Passwort verwenden."
               />
               <FieldWrap label="Ordner" htmlFor="mb-folder" help="Meist INBOX. Der Ordner wird nur gelesen – nichts wird verschoben oder als gelesen markiert.">
                 <Input id="mb-folder" value={v.folder} onChange={(e) => set({ folder: e.target.value })} />

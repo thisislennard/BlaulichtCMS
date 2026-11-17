@@ -56,10 +56,12 @@ Steuerzeichen, die in Mails vorkommen können (z. B. ein Null-Zeichen aus einer 
 
 | Feld | Eintrag |
 |---|---|
-| IMAP-Server, Port | Angaben des Mailanbieters, z. B. `imap.example.org`, Port 993 |
+| IMAP-Server, Port | Angaben des Mailanbieters, z. B. `imap.example.org`, Port 993. Erlaubt sind die IMAP-Ports **993** und **143**. |
 | Verschlüsselung | **TLS** (Port 993) oder **STARTTLS** (Port 143). Ohne Verschlüsselung geht es nicht – das Passwort würde sonst im Klartext übertragen. Das Zertifikat des Servers muss gültig sein. |
-| Benutzername, Passwort | Zugang zum Presse-Postfach. Bei Zwei-Faktor-Anmeldung beim Anbieter ein **App-Passwort** verwenden. Das Passwort liegt verschlüsselt in BlaulichtCMS und wird nie wieder angezeigt. |
+| Benutzername, Passwort | Zugang zum Presse-Postfach. Bei Zwei-Faktor-Anmeldung beim Anbieter ein **App-Passwort** verwenden. Das Passwort liegt verschlüsselt in BlaulichtCMS und wird nie wieder angezeigt. Es gilt nur für **diesen Server, Port und Benutzer**: Wer eines davon ändert, muss das Passwort neu eingeben – ein gespeichertes Passwort geht nie an einen anderen Server. |
 | Ordner | meist `INBOX` |
+
+**Mailserver im eigenen Netz:** Wie alle Abrufe aus BlaulichtCMS (Feeds, Kalender, Verbindungen) verbindet sich der IMAP-Abruf nur mit öffentlichen Adressen. Ein interner Mailserver (oder ein anderer Port als 993/143) muss von der Administration ausdrücklich freigegeben werden: Einstellung `security.allowed_private_hosts` mit dem Namen des Servers (Recht „Sicherheitseinstellungen ändern“). Kommt keine Verbindung zustande, meldet BlaulichtCMS das immer gleich („Keine IMAP-Verbindung …“) – ob der Server nicht erreichbar ist, nicht antwortet, kein IMAP spricht oder das Zertifikat nicht passt, steht im Systemprotokoll.
 
 ### Microsoft 365 einrichten
 

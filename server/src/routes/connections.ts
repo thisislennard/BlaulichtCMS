@@ -114,6 +114,22 @@ const configSchema: Record<ConnectionKind, z.ZodType<any>> = {
   }),
 };
 
+/** Von BlaulichtCMS selbst gepflegte Angaben (App-Registrierung auf der Mastodon-Instanz) – nie aus dem Formular. */
+const SERVER_MANAGED_CONFIG = ['clientId', 'appInstance', 'appRedirect'];
+
+/** Zugangsdaten, die an ein frei wählbares Ziel gehen: Mastodon-Instanz bzw. Bluesky-Server (#234). */
+const TARGET_SECRETS: Partial<Record<ConnectionKind, string[]>> = { mastodon: ['token', 'clientSecret'], bluesky: ['appPassword'] };
+
+/**
+ * Ziel, für das gespeicherte Zugangsdaten gelten: Mastodon die Instanz, Bluesky Server (PDS) und Konto. null für Arten
+ * mit fest vorgegebenem Ziel (Meta, X, Feuersoftware …).
+ */
+function secretTarget(kind: ConnectionKind, cfg: any): string | null {
+  if (kind === 'mastodon') return normalizeInstance(cfg?.instance ?? '') ?? '';
+  if (kind === 'bluesky') return `${normalizeService(cfg?.service) ?? ''}|${String(cfg?.identifier ?? '').trim().replace(/^@/, '').toLowerCase()}`;
+  return null;
+}
+
 function hostOf(url: string) {
   try {
     return new URL(url).hostname;
@@ -224,7 +240,9 @@ export async function connectionRoutes(app: FastifyInstance) {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
     const c = await loadConnection(id);
     const b = z.object({ name: z.string().trim().min(2).max(100), config: z.record(z.string(), z.any()) }).parse(req.body);
-    const parsed = configSchema[c.kind].parse({ ...c.config, ...b.config });
+    // Angaben, die BlaulichtCMS selbst pflegt (App-Registrierung auf der Mastodon-Instanz), kommen nie vom Formular
+    const incoming = Object.fromEntries(Object.entries(b.config).filter(([k]) => !SERVER_MANAGED_CONFIG.includes(k)));
+    const parsed = configSchema[c.kind].parse({ ...c.config, ...incoming });
     // Warnfeed: Änderungen an Quelle oder Gebiet machen die fachliche Prüfung hinfällig (#55) – automatische Banner aus,
     // Verbindung zurück auf Entwurf (erneut testen)
     const SOURCE_KEYS = ['url', 'ars', 'format', 'areaFilter', 'baseUrl'];
@@ -243,18 +261,32 @@ export async function connectionRoutes(app: FastifyInstance) {
     const before = configSchema[c.kind].safeParse(c.config);
     const retest = retestRelevantConfig(config) !== retestRelevantConfig(before.success ? before.data : c.config);
     const target = c.kind === 'warnfeed' && config.format === 'cap' ? hostOf(config.url) : null;
-    await pool.query(
-      `UPDATE connections SET name = $2, config = $3,
-              private_target = $4, private_approved_at = CASE WHEN private_target IS DISTINCT FROM $4 THEN NULL ELSE private_approved_at END, updated_at = now() WHERE id = $1`,
-      [id, b.name, JSON.stringify(config), target],
-    );
+    // Gespeicherte Zugangsdaten gelten nur für das Ziel, für das sie eingegeben bzw. ausgestellt wurden (#234): Wechselt
+    // die Mastodon-Instanz bzw. Server oder Konto bei Bluesky, werden Token, App-Geheimnis und App-Passwort verworfen
+    // und die App-Registrierung zurückgesetzt – sonst schickte „Verbindung testen“ sie an den neuen Server. Danach neu
+    // verbinden bzw. neu eingeben (wie bei SMTP, Sicherung außer Haus und Update-Token).
+    const oldTarget = secretTarget(c.kind, c.config);
+    let discarded: string[] = [];
+    if (oldTarget !== null && oldTarget !== secretTarget(c.kind, config)) {
+      const sec = await connectionSecrets(c);
+      discarded = (TARGET_SECRETS[c.kind] ?? []).filter((k) => sec[k]);
+      if (c.kind === 'mastodon') for (const k of SERVER_MANAGED_CONFIG) delete (config as any)[k];
+    }
+    await tx(async (db) => {
+      await db.query(
+        `UPDATE connections SET name = $2, config = $3,
+                private_target = $4, private_approved_at = CASE WHEN private_target IS DISTINCT FROM $4 THEN NULL ELSE private_approved_at END, updated_at = now() WHERE id = $1`,
+        [id, b.name, JSON.stringify(config), target],
+      );
+      if (discarded.length) await updateConnectionSecrets(c, Object.fromEntries(discarded.map((k) => [k, null])), req.auth!.user?.id ?? null, db);
+    });
     // „Schlüssel in der Adresse“: beim Einschalten eigenen Pfad-Schlüssel erzeugen, beim Ausschalten löschen
     if (c.kind === 'fe2' && !!config.keyInPath !== !!c.config.keyInPath) {
       await updateConnectionSecrets(c, { pathToken: config.keyInPath ? newPathToken() : null }, req.auth!.user?.id ?? null);
     }
-    await audit(req.auth!.actor, 'connection.updated', { type: 'connection', id, label: b.name }, { automatische_banner: config.autoBanner ?? undefined, pruefung_verworfen: sourceChanged || undefined, neuer_test_noetig: retest || undefined, schluessel_in_adresse: c.kind === 'fe2' && !!config.keyInPath !== !!c.config.keyInPath ? (config.keyInPath ? 'an' : 'aus') : undefined });
+    await audit(req.auth!.actor, 'connection.updated', { type: 'connection', id, label: b.name }, { automatische_banner: config.autoBanner ?? undefined, pruefung_verworfen: sourceChanged || undefined, neuer_test_noetig: retest || undefined, schluessel_in_adresse: c.kind === 'fe2' && !!config.keyInPath !== !!c.config.keyInPath ? (config.keyInPath ? 'an' : 'aus') : undefined, zugangsdaten_verworfen: discarded.length ? discarded : undefined });
     const was = retest ? await invalidateTest(req.auth!.actor, { ...c, name: b.name }, 'Einstellungen geändert') : null;
-    return { ok: true, retest, deactivated: was === 'active' };
+    return { ok: true, retest, deactivated: was === 'active', secretsDiscarded: discarded };
   });
 
   /** Zugangsdaten hinterlegen (z. B. App-ID/Geheimnis, manuell erzeugter Token). Werden nie wieder angezeigt. */

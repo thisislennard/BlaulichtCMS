@@ -220,6 +220,8 @@ Mastodon ist ein kostenloses, dezentrales Netzwerk: Jede **Instanz** (Server) ha
 3. **Alternativ:** In Mastodon unter **Einstellungen → Entwicklung → Neue Anwendung** eine Anwendung mit denselben Rechten anlegen und den **Zugangstoken** in BlaulichtCMS hinterlegen ([Mastodon-Doku](https://docs.joinmastodon.org/client/token/)).
 4. **Testen:** BlaulichtCMS liest Konto und Grenzen der Instanz, legt einen **geplanten** Beitrag (nur für Erwähnte, einen Tag in der Zukunft) an und löscht ihn sofort wieder und lädt ein neutrales Testbild mit Alternativtext hoch, ohne es zu veröffentlichen. Öffentlich erscheint dabei nichts. Danach **Aktivieren**.
 
+**Instanz wechseln:** Zugangstoken und App-Registrierung gelten nur für die Instanz, für die sie ausgestellt wurden. Wird die Adresse der Instanz geändert, verwirft BlaulichtCMS beides beim Speichern – danach erneut **Mit Mastodon verbinden** (bzw. einen neuen Zugangstoken hinterlegen) und testen. So geht ein gespeicherter Token nie an eine andere Instanz.
+
 | Einstellung | Bedeutung |
 |---|---|
 | Sichtbarkeit | **Öffentlich** (Zeitleisten und Suche), **Nicht gelistet** (öffentlich lesbar, nicht in öffentlichen Zeitleisten) oder **Nur Folgende**. |
@@ -237,6 +239,8 @@ Bluesky ist kostenlos und wird über das offene [AT Protocol](https://atproto.co
 1. In Bluesky unter **Einstellungen → Datenschutz und Sicherheit → App-Passwörter** ein neues App-Passwort anlegen (Name z. B. „BlaulichtCMS“, ohne Zugriff auf Direktnachrichten). Es lässt sich jederzeit einzeln widerrufen.
 2. Unter **Verbindungen → Neue Verbindung → Bluesky-Konto** das **Handle** (z. B. `feuerwehr-musterstadt.bsky.social`) und das App-Passwort eintragen und speichern. Liegt das Konto auf einem eigenen Server (PDS), dessen Adresse unter „Eigener Server“ eintragen – sonst leer lassen.
 3. **Testen:** BlaulichtCMS meldet sich an und lädt ein neutrales Testbild hoch, ohne es zu verwenden (ein Testbeitrag wäre öffentlich). Danach **Aktivieren**.
+
+Das App-Passwort gilt nur für **dieses Handle und diesen Server**: Ändert sich eines davon, verwirft BlaulichtCMS das gespeicherte App-Passwort beim Speichern, und es muss neu eingegeben werden. So geht es nie an einen anderen Server.
 
 Beim **Entfernen** löscht BlaulichtCMS den Beitrag über die Schnittstelle. Bluesky begrenzt die Zahl der Anmeldungen; BlaulichtCMS meldet sich deshalb nur zum Testen, Veröffentlichen, Prüfen und Löschen an.
 

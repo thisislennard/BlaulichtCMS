@@ -32,6 +32,9 @@ const input = z.object({
   password: z.string().max(500).optional(),
 });
 
+/** Gleiches IMAP-Ziel: Server (ohne Groß-/Kleinschreibung), Port und Benutzer. */
+const sameImapTarget = (a: MailboxConfig, b: MailboxConfig) => a.host.trim().toLowerCase() === b.host.trim().toLowerCase() && a.port === b.port && a.user.trim() === b.user.trim();
+
 function publicConfig(c: MailboxConfig) {
   const { secretId, verified, ...rest } = c;
   return { ...rest, passwordSet: !!secretId, verifiedAt: verified?.at ?? null };
@@ -56,12 +59,20 @@ export async function pressMailboxRoutes(app: FastifyInstance) {
     many<any>(`SELECT l.id, l.at, l.outcome, l.subject, l.from_address, l.request_id, r.case_no, l.detail FROM press_mailbox_log l LEFT JOIN press_requests r ON r.id = l.request_id ORDER BY l.id DESC LIMIT 200`),
   );
 
-  /** Angaben (und ggf. neues Passwort) zusammenführen, ohne zu speichern. */
-  const merge = async (b: z.infer<typeof input>): Promise<{ next: MailboxConfig; password: string }> => {
+  /**
+   * Angaben (und ggf. neues Passwort) zusammenführen, ohne zu speichern. Das gespeicherte Passwort gilt nur für
+   * denselben Server, Port und Benutzer (wie bei SMTP und der Sicherung außer Haus, #234) – sonst könnte jemand mit
+   * „Presse-Postfach einrichten“ es an einen eigenen Server schicken lassen, ohne es je zu sehen. Für ein anderes Ziel
+   * muss es neu eingegeben werden; ohne IMAP-Ziel (Microsoft 365, Angaben geleert) wird es beim Speichern verworfen.
+   */
+  const merge = async (b: z.infer<typeof input>): Promise<{ next: MailboxConfig; password: string; dropSecret: boolean }> => {
     const cur = await mailboxConfig();
     const next: MailboxConfig = { ...cur, mode: b.mode, host: b.host, port: b.port, security: b.security, user: b.user, folder: b.folder || 'INBOX', mailbox: b.mailbox, intervalMinutes: b.intervalMinutes, maxAttachmentMb: b.maxAttachmentMb };
-    const password = b.password ? b.password : ((await readSecret(cur.secretId || null)) ?? '');
-    return { next, password };
+    if (b.password) return { next, password: b.password, dropSecret: false };
+    if (!cur.secretId) return { next, password: '', dropSecret: false };
+    if (sameImapTarget(cur, next)) return { next, password: (await readSecret(cur.secretId)) ?? '', dropSecret: false };
+    if (next.mode === 'imap' && next.host.trim()) throw badRequest('Für einen anderen Server, Port oder Benutzer bitte das Passwort neu eingeben.');
+    return { next, password: '', dropSecret: true };
   };
 
   app.post('/press/mailbox/test', { preHandler: perm, config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, async (req) => {
@@ -90,7 +101,7 @@ export async function pressMailboxRoutes(app: FastifyInstance) {
   app.put('/press/mailbox', { preHandler: perm }, async (req) => {
     const b = input.extend({ enabled: z.boolean() }).parse(req.body);
     const cur = await mailboxConfig();
-    const { next, password } = await merge(b);
+    const { next, password, dropSecret } = await merge(b);
     const problem = mailboxConfigProblem(next);
     if (problem && (b.enabled || b.host || b.mailbox)) throw badRequest(problem);
     // Zugangsdaten oder Einschalten: frische Passwortbestätigung
@@ -106,10 +117,14 @@ export async function pressMailboxRoutes(app: FastifyInstance) {
       const sec = await storeSecret('setting', SECRET_OWNER, b.password, req.auth!.user?.id ?? null);
       if (cur.secretId && cur.secretId !== sec.id) await revokeSecret(cur.secretId);
       next.secretId = sec.id;
+    } else if (dropSecret) {
+      // Ziel geändert ohne neues Passwort (Microsoft 365 oder Angaben geleert): das alte Passwort gehört zum alten Server
+      await revokeSecret(cur.secretId);
+      next.secretId = '';
     }
     next.enabled = b.enabled;
     await setSettings({ 'press.mailbox': next } as any, req.auth!.user?.id ?? null);
-    await audit(req.auth!.actor, 'press.mailbox_saved', { type: 'settings', label: 'Presse-Postfach' }, { art: next.mode, aktiv: next.enabled, server: next.mode === 'imap' ? next.host : next.mailbox, passwort_geaendert: !!b.password });
+    await audit(req.auth!.actor, 'press.mailbox_saved', { type: 'settings', label: 'Presse-Postfach' }, { art: next.mode, aktiv: next.enabled, server: next.mode === 'imap' ? next.host : next.mailbox, passwort_geaendert: !!b.password, ...(dropSecret ? { passwort_verworfen: true } : {}) });
     return { ok: true, config: publicConfig(next) };
   });
 

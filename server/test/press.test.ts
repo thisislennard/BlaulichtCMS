@@ -10,7 +10,7 @@ import { checkPressDeadlines, openPressDeadlines } from '../src/press/deadlines.
 import { runRetention } from '../src/lib/retention.js';
 import { storeSecret } from '../src/lib/secrets.js';
 import { resetM365TokenCache } from '../src/lib/mail.js';
-import { MAX_ATTEMPTS, mailboxState, pollPressMailbox } from '../src/press/mailbox.js';
+import { MAX_ATTEMPTS, mailboxConfig, mailboxState, pollPressMailbox } from '../src/press/mailbox.js';
 import { fakeGraph, fakeImap, fakeSmtp } from './press-fakes.js';
 import { deliverPressReply } from '../src/routes/press-replies.js';
 import { deliverRelease } from '../src/press/releases.js';
@@ -337,10 +337,13 @@ describe('Presse-Postfach (#205)', () => {
 
   beforeAll(async () => {
     process.env.BLAULICHTCMS_IMAP_TEST_PLAIN = '1';
+    // Stellvertreter-Server auf 127.0.0.1 mit zufälligem Port: wie ein interner Mailserver ausdrücklich freigegeben (#234)
+    await setSettings({ 'security.allowed_private_hosts': ['127.0.0.1'] } as any);
     imap = await fakeImap({ user: 'presse', password: 'Geheim-123' });
   });
   afterAll(async () => {
     await imap?.close();
+    await setSettings({ 'security.allowed_private_hosts': [] } as any);
   });
 
   it('Rechte: nur „Presse-Postfach einrichten“', async () => {
@@ -366,6 +369,40 @@ describe('Presse-Postfach (#205)', () => {
     expect(JSON.stringify(row.value)).not.toContain('Geheim-123');
     // anderes Passwort ⇒ Test gilt nicht mehr
     expect((await admin.put('/press/mailbox', { ...cfg(), password: 'Anders-456', enabled: true })).json.error).toBe('not_verified');
+  });
+
+  it('gespeichertes Passwort nur für denselben Server, Port und Benutzer; IMAP-Ziele wie alle ausgehenden Verbindungen geprüft (#234)', async () => {
+    const a2 = new Client(app); // eigene Adresse: eigenes Kontingent für „Verbindung testen“
+    a2.cookie = admin.cookie;
+    await a2.reauth();
+    const other = await fakeImap({ user: 'presse', password: 'Geheim-123' });
+    try {
+      // Server, Port oder Benutzer geändert, kein neues Passwort: abgelehnt (Test und Speichern), der andere Server erfährt nichts
+      for (const change of [{ host: 'localhost' }, { port: other.port }, { user: 'presse2' }]) {
+        const t = await a2.post('/press/mailbox/test', { ...cfg(), ...change });
+        expect(t.status, JSON.stringify(change)).toBe(400);
+        expect(t.json.message).toContain('Passwort neu eingeben');
+        expect((await a2.put('/press/mailbox', { ...cfg(), ...change, enabled: true })).status).toBe(400);
+      }
+      expect(other.commands).toEqual([]);
+      expect((await mailboxConfig()).port).toBe(imap.port);
+      // Schreibweise des Servers zählt nicht; mit neu eingegebenem Passwort ist das andere Ziel in Ordnung
+      expect((await a2.post('/press/mailbox/test', { ...cfg(), host: '127.0.0.1' })).json.ok).toBe(true);
+      expect((await a2.post('/press/mailbox/test', { ...cfg(), port: other.port, password: 'Geheim-123' })).json.ok).toBe(true);
+      expect(other.commands).toContain('AUTHENTICATE');
+    } finally {
+      await other.close();
+    }
+    // Interne Adresse ohne Freigabe gesperrt (wie lib/http.ts); andere Ports als 143/993 nur für freigegebene Hosts
+    await setSettings({ 'security.allowed_private_hosts': [] } as any);
+    try {
+      const blocked = await a2.post('/press/mailbox/test', { ...cfg(), port: 993, password: 'Geheim-123' });
+      expect(blocked.json).toMatchObject({ ok: false, error: expect.stringContaining('internes Netz') });
+      const port = await a2.post('/press/mailbox/test', { ...cfg(), host: 'imap.example.org', port: 2525, password: 'Geheim-123' });
+      expect(port.json).toMatchObject({ ok: false, error: expect.stringContaining('Port 2525') });
+    } finally {
+      await setSettings({ 'security.allowed_private_hosts': ['127.0.0.1'] } as any);
+    }
   });
 
   it('Abruf: neue Anfrage mit Anhang, Spam und automatische Antworten ignoriert, rein lesend', async () => {
@@ -417,7 +454,8 @@ describe('Presse-Postfach (#205)', () => {
   it('Fehler beim Abruf: Protokoll und eine Meldung je Störung', async () => {
     await imap.close();
     const r1 = await pollPressMailbox({ force: true });
-    expect(r1.error).toMatch(/nicht erreichbar/);
+    // einheitliche Meldung ohne Rückschluss auf die Ursache (#234), Einzelheiten im Systemprotokoll
+    expect(r1.error).toMatch(/Keine IMAP-Verbindung zu 127\.0\.0\.1/);
     await pollPressMailbox({ force: true });
     expect((await one<any>(`SELECT count(*)::int AS n FROM notifications WHERE title = 'Presse-Postfach: Abruf fehlgeschlagen'`))!.n).toBe(1);
     expect((await admin.get('/press/mailbox')).json.state).toMatchObject({ lastOk: false });

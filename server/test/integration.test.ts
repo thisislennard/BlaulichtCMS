@@ -4793,6 +4793,57 @@ describe('Mastodon und Bluesky (#215)', () => {
     expect(cat.socialChannels.map((c: any) => c.kind)).toEqual(expect.arrayContaining(['mastodon', 'bluesky']));
     await adm.raw('DELETE', `/automation-outputs/${ok.json.id}`);
   });
+
+  it('Zugangsdaten bleiben beim Ziel: andere Instanz bzw. anderer Server oder anderes Konto verwirft sie (#234)', async () => {
+    const { connectionSecrets, loadConnection, updateConnectionSecrets } = await import('../src/connections/common.js');
+    // zweite „Instanz“, die alles mitschreibt
+    const seen: string[] = [];
+    const other = http.createServer((req, res) => {
+      seen.push(`${req.method} ${req.url} ${req.headers.authorization ?? ''}`);
+      req.resume();
+      res.writeHead(401, { 'content-type': 'application/json' }).end('{"error":"nein"}');
+    });
+    await new Promise<void>((r) => other.listen(0, '127.0.0.1', r));
+    const otherBase = `http://127.0.0.1:${(other.address() as any).port}`;
+    try {
+      // Mastodon: Token und App-Geheimnis gespeichert, App auf der Instanz registriert
+      const md = (await adm.post('/connections', { kind: 'mastodon', name: 'Mastodon (Ziel)', config: { instance: base } })).json.id;
+      await adm.put(`/connections/${md}/secrets`, { token: 'MD-TOKEN-geheim' });
+      await updateConnectionSecrets(await loadConnection(md), { clientSecret: 'md-client-secret-geheim' }, null);
+      await pool.query(`UPDATE connections SET config = config || $2 WHERE id = $1`, [md, JSON.stringify({ clientId: 'MDCLIENT', appInstance: base, appRedirect: 'x' })]);
+      // Änderung ohne neues Ziel: Zugangsdaten bleiben
+      expect((await adm.put(`/connections/${md}`, { name: 'Mastodon (Ziel)', config: { instance: base, visibility: 'private' } })).json.secretsDiscarded).toEqual([]);
+      expect((await adm.get(`/connections/${md}`)).json.secrets_set.sort()).toEqual(['clientSecret', 'token']);
+      // neue Instanz – auch wenn das Formular die alte App-Registrierung mitschickt: Token und App-Geheimnis verworfen
+      const r = await adm.put(`/connections/${md}`, { name: 'Mastodon (Ziel)', config: { instance: otherBase, clientId: 'MDCLIENT', appInstance: otherBase, appRedirect: 'x' } });
+      expect(r.json.secretsDiscarded.sort()).toEqual(['clientSecret', 'token']);
+      const v = (await adm.get(`/connections/${md}`)).json;
+      expect(v.secrets_set).toEqual([]);
+      expect(v.config).not.toHaveProperty('clientId');
+      expect(v.config).not.toHaveProperty('appInstance');
+      expect(await connectionSecrets(await loadConnection(md))).toEqual({});
+      expect((await adm.post(`/connections/${md}/test`)).json.ok).toBe(false);
+      expect(seen.filter((s) => /geheim|Bearer/.test(s))).toEqual([]);
+      const ev = await one<any>(`SELECT details FROM audit_events WHERE action = 'connection.updated' AND object_id = $1 ORDER BY id DESC LIMIT 1`, [md]);
+      expect(ev!.details.zugangsdaten_verworfen.sort()).toEqual(['clientSecret', 'token']);
+
+      // Bluesky: anderer Server (PDS) oder anderes Konto – das App-Passwort geht nie an das neue Ziel
+      const bs = (await adm.post('/connections', { kind: 'bluesky', name: 'Bluesky (Ziel)', config: { identifier: 'feuerwehr.bsky.social', service: base } })).json.id;
+      await adm.put(`/connections/${bs}/secrets`, { appPassword: 'abcd-efgh-ijkl-mnop' });
+      expect((await adm.put(`/connections/${bs}`, { name: 'Bluesky (Ziel)', config: { identifier: '@Feuerwehr.bsky.social', language: 'en' } })).json.secretsDiscarded).toEqual([]);
+      expect((await adm.put(`/connections/${bs}`, { name: 'Bluesky (Ziel)', config: { service: 'https://pds.example.org' } })).json.secretsDiscarded).toEqual(['appPassword']);
+      const t = await adm.post(`/connections/${bs}/test`);
+      expect(t.json.ok).toBe(false);
+      expect(t.json.steps[0].message).toContain('App-Passwort hinterlegen');
+      await adm.put(`/connections/${bs}`, { name: 'Bluesky (Ziel)', config: { service: base } });
+      await adm.put(`/connections/${bs}/secrets`, { appPassword: 'abcd-efgh-ijkl-mnop' });
+      expect((await adm.put(`/connections/${bs}`, { name: 'Bluesky (Ziel)', config: { identifier: 'anderes-konto.bsky.social' } })).json.secretsDiscarded).toEqual(['appPassword']);
+      expect((await adm.get(`/connections/${bs}`)).json.secrets_set).toEqual([]);
+      for (const id of [md, bs]) await adm.raw('DELETE', `/connections/${id}`, {});
+    } finally {
+      other.close();
+    }
+  });
 });
 
 describe('Barrierefreiheit: Alternativtext je Bild (#217)', () => {

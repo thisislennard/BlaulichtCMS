@@ -163,7 +163,8 @@ export function hostMatches(host: string, patterns: string[]): boolean {
   });
 }
 
-async function resolveSafe(host: string, allowPrivate: boolean): Promise<{ address: string; family: number }> {
+/** Ziel selbst auflösen und interne Adressen sperren (auch für Nicht-HTTP-Verbindungen wie IMAP, press/imap.ts). */
+export async function resolveSafe(host: string, allowPrivate: boolean): Promise<{ address: string; family: number }> {
   const bare = host.replace(/^\[|\]$/g, '');
   const addrs = net.isIP(bare) ? [{ address: bare, family: net.isIP(bare) }] : await dns.lookup(bare, { all: true, verbatim: true });
   if (!addrs.length) throw new StepError('transient', `Der Name „${host}“ konnte nicht aufgelöst werden.`);

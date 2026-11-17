@@ -107,6 +107,8 @@ export default function ConnectionDetail() {
     if (relevantConfig(cfg) !== relevantConfig(c.config) && !(await confirmRetest('Einstellungen der aktiven Verbindung ändern?'))) return null;
     const r: any = await act(() => put(`/connections/${id}`, { name, config }));
     retestToast(r, 'Gespeichert');
+    // Neues Ziel (Mastodon-Instanz, Bluesky-Server oder -Konto): gespeicherte Zugangsdaten gelten dort nicht (#234)
+    if (r?.secretsDiscarded?.length) toast({ tone: 'warning', title: 'Gespeicherte Zugangsdaten verworfen', text: 'Sie galten für das bisherige Ziel. Bitte neu verbinden bzw. das App-Passwort neu eingeben.' });
     return r;
   };
   const hasSecret = Object.values(secret).some((v) => typeof v === 'string' && v.trim());
@@ -414,7 +416,7 @@ export default function ConnectionDetail() {
                   <FieldWrap label="Adresse der Instanz" htmlFor="md-inst" help="Nur die Adresse ohne Pfad, z. B. https://social.bund.de." labelAction={
                     <HelpTip title="Instanz-Adresse" more="/hilfe/verbindungen#mastodon">
                       <p className="m-0">Die Adresse des Servers, auf dem das Konto liegt – sie steht im Profil hinter dem Benutzernamen: <code className="font-mono">@feuerwehr@social.example</code> → <code className="font-mono">https://social.example</code>.</p>
-                      <p className="m-0">Ändert sich die Instanz, ist eine neue Anmeldung und ein neuer Test nötig.</p>
+                      <p className="m-0">Ändert sich die Instanz, ist eine neue Anmeldung und ein neuer Test nötig – der gespeicherte Zugangstoken wird dabei verworfen und nie an die neue Instanz geschickt.</p>
                     </HelpTip>
                   }>
                     <Input id="md-inst" type="url" value={cfg.instance ?? ''} onChange={(e) => setCfg({ ...cfg, instance: e.target.value })} placeholder="https://social.bund.de" />
@@ -477,6 +479,7 @@ export default function ConnectionDetail() {
                     <HelpTip title="App-Passwort anlegen" more="/hilfe/verbindungen#bluesky">
                       <p className="m-0">In Bluesky unter <strong>Einstellungen → Datenschutz und Sicherheit → App-Passwörter</strong> ein neues App-Passwort anlegen (Name z. B. „BlaulichtCMS“, ohne Zugriff auf Direktnachrichten) und hier eintragen.</p>
                       <p className="m-0">Ein App-Passwort lässt sich jederzeit einzeln widerrufen. BlaulichtCMS speichert es verschlüsselt und zeigt es nie wieder an.</p>
+                      <p className="m-0">Ändern sich Handle oder Server, wird das gespeicherte App-Passwort verworfen und muss neu eingegeben werden.</p>
                     </HelpTip>
                   }>
                     <Input id="bs-pw" type="password" autoComplete="off" value={secret.appPassword ?? ''} onChange={(e) => setSecret({ ...secret, appPassword: e.target.value })} />

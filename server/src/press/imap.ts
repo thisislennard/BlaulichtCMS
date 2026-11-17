@@ -1,5 +1,8 @@
 import net from 'node:net';
 import tls from 'node:tls';
+import { StepError } from '../lib/errors.js';
+import { hostMatches, resolveSafe } from '../lib/http.js';
+import { log } from '../lib/log.js';
 
 /**
  * Minimaler IMAP4rev1-Client (RFC 3501) für den Abruf des Presse-Postfachs (#205) – nur lesend, ohne Zusatzbibliothek.
@@ -19,9 +22,20 @@ export interface ImapOptions {
   timeoutMs?: number;
   /** Höchstgröße einer einzelnen Antwort (Literal) in Bytes */
   maxLiteralBytes?: number;
+  /** Hosts (exakt oder *.domain), die auf interne Adressen zeigen und andere Ports als 143/993 nutzen dürfen. */
+  allowPrivateHosts?: string[];
   /** Nur in Tests: unverschlüsselt verbinden (Stellvertreter-Server). */
   plainForTests?: boolean;
 }
+
+/** Übliche IMAP-Ports: 993 (TLS) und 143 (STARTTLS). Andere nur für ausdrücklich freigegebene Hosts. */
+export const IMAP_PORTS = [143, 993];
+
+/** Ausnahmen (interne Adresse, anderer Port) nur nach ausdrücklicher Freigabe durch die Administration. */
+const FREIGABE = 'Interne Mailserver und andere Ports muss die Administration ausdrücklich freigeben (Einstellung „security.allowed_private_hosts“, Hilfe → Presseanfragen).';
+
+/** Einheitliche Meldung für alles vor der Begrüßung des Servers (keine Rückschlüsse auf offene Ports, #234). */
+const unreachable = (host: string, port: number) => `Keine IMAP-Verbindung zu ${host}:${port} – Servername, Port, Verschlüsselung und Zertifikat prüfen (Einzelheiten im Systemprotokoll).`;
 
 /** Eine Antwortzeile des Servers samt eingebetteter Literale. */
 export interface ImapResponse {
@@ -115,7 +129,7 @@ export class ByteQueue {
 export class ImapError extends Error {
   constructor(
     message: string,
-    public kind: 'connect' | 'tls' | 'auth' | 'protocol' | 'timeout' | 'server',
+    public kind: 'config' | 'connect' | 'tls' | 'auth' | 'protocol' | 'timeout' | 'server',
   ) {
     super(message);
   }
@@ -235,26 +249,49 @@ export class ImapClient {
     if (m) this.capabilities = new Set(m[1].toUpperCase().split(/\s+/).filter(Boolean));
   }
 
-  private connectSocket(): Promise<net.Socket | tls.TLSSocket> {
+  /**
+   * Ziel prüfen wie bei allen anderen ausgehenden Verbindungen (lib/http.ts): Port nur 143/993 (andere nur für
+   * freigegebene Hosts), Name selbst auflösen, interne Adressen nur nach Freigabe unter Einstellungen → Sicherheit, und
+   * die geprüfte Adresse für die Verbindung festnageln (kein DNS-Rebinding). Sonst ließe sich über „Verbindung testen“
+   * das interne Netz abtasten.
+   */
+  private async target(): Promise<{ address: string; family: number }> {
     const { host, port } = this.o;
+    const allowed = hostMatches(host, this.o.allowPrivateHosts ?? []);
+    if (!IMAP_PORTS.includes(port) && !allowed) {
+      throw new ImapError(`Port ${port} ist für IMAP nicht vorgesehen – bitte 993 (TLS) oder 143 (STARTTLS) verwenden. ${FREIGABE}`, 'config');
+    }
+    try {
+      return await resolveSafe(host, allowed);
+    } catch (e) {
+      // Sperre interner Ziele: dieselbe Meldung wie bei allen anderen Verbindungen; sonst einheitlich
+      if (e instanceof StepError && e.errorClass === 'config') throw new ImapError(`${e.message} ${FREIGABE}`, 'config');
+      log('warn', 'press', `IMAP: ${host} nicht auflösbar`, { fehler: String((e as Error)?.message ?? e).slice(0, 200) });
+      throw new ImapError(unreachable(host, port), 'connect');
+    }
+  }
+
+  private async connectSocket(): Promise<net.Socket | tls.TLSSocket> {
+    const { host, port } = this.o;
+    const target = await this.target();
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         sock.destroy();
-        reject(new ImapError(`Mailserver ${host}:${port} nicht erreichbar (Zeitüberschreitung).`, 'connect'));
+        reject(new ImapError('Zeitüberschreitung beim Verbindungsaufbau', 'timeout'));
       }, Math.min(this.timeout, 15_000));
       const fail = (e: any) => {
         clearTimeout(timer);
-        const tlsProblem = /certificate|self.signed|SSL|TLS|wrong version/i.test(String(e?.message ?? e)) || String(e?.code ?? '').startsWith('ERR_TLS') || String(e?.code ?? '').includes('CERT');
-        reject(new ImapError(tlsProblem ? `TLS-Verbindung zu ${host}:${port} fehlgeschlagen: ${e.message}` : `Mailserver ${host}:${port} nicht erreichbar: ${e.message}`, tlsProblem ? 'tls' : 'connect'));
+        reject(new ImapError(String(e?.code ? `${e.code}: ${e.message}` : (e?.message ?? e)), 'connect'));
       };
+      // Verbindung zur geprüften Adresse; Zertifikat wird gegen den eingetragenen Namen geprüft (servername)
       const sock: net.Socket | tls.TLSSocket =
         this.o.security === 'tls' && !this.o.plainForTests
-          ? tls.connect({ host, port, servername: net.isIP(host) ? undefined : host, minVersion: 'TLSv1.2' }, () => {
+          ? tls.connect({ host: target.address, port, servername: net.isIP(host) ? undefined : host, minVersion: 'TLSv1.2' }, () => {
               clearTimeout(timer);
               sock.off('error', fail);
               resolve(sock);
             })
-          : net.connect({ host, port }, () => {
+          : net.connect({ host: target.address, port }, () => {
               clearTimeout(timer);
               sock.off('error', fail);
               resolve(sock);
@@ -263,13 +300,32 @@ export class ImapClient {
     });
   }
 
+  /**
+   * Verbinden und die Begrüßung lesen. Bis hierher steht nicht fest, dass am Ziel ein IMAP-Server läuft: Jeder Fehler
+   * (nicht erreichbar, Zeitüberschreitung, TLS, kein IMAP) ergibt dieselbe Meldung, Einzelheiten nur im Systemprotokoll.
+   */
+  private async greeting(): Promise<ImapResponse> {
+    const { host, port } = this.o;
+    try {
+      this.attach(await this.connectSocket());
+      const greet = await this.readResponse(Date.now() + Math.min(this.timeout, 15_000));
+      if (!/^\* (OK|PREAUTH|BYE)/i.test(greet.text)) throw new ImapError('keine IMAP-Begrüßung', 'protocol');
+      return greet;
+    } catch (e) {
+      if (e instanceof ImapError && e.kind === 'config') throw e;
+      this.socket?.destroy();
+      log('warn', 'press', `IMAP: keine Verbindung zu ${host}:${port}`, { fehler: String((e as Error)?.message ?? e).slice(0, 200) });
+      throw new ImapError(unreachable(host, port), 'connect');
+    }
+  }
+
   private upgrade(): Promise<void> {
     const plain = this.socket as net.Socket;
     plain.removeAllListeners('data');
     plain.removeAllListeners('error');
     plain.removeAllListeners('close');
     return new Promise((resolve, reject) => {
-      const t = tls.connect({ socket: plain, servername: net.isIP(this.o.host) ? undefined : this.o.host, minVersion: 'TLSv1.2' }, () => {
+      const t = tls.connect({ socket: plain, host: this.o.host, servername: net.isIP(this.o.host) ? undefined : this.o.host, minVersion: 'TLSv1.2' }, () => {
         t.off('error', onErr);
         this.rx.clear();
         this.attach(t);
@@ -281,10 +337,8 @@ export class ImapClient {
   }
 
   async connect(): Promise<void> {
-    this.attach(await this.connectSocket());
-    const greet = await this.readResponse();
+    const greet = await this.greeting();
     if (/^\* BYE/i.test(greet.text)) throw new ImapError(`Mailserver lehnt ab: ${greet.text.slice(6, 200)}`, 'server');
-    if (!/^\* (OK|PREAUTH)/i.test(greet.text)) throw new ImapError('Der Server spricht kein IMAP (Port und Verschlüsselung prüfen).', 'protocol');
     this.updateCapabilities(greet.text);
     if (!this.capabilities.size) await this.command('CAPABILITY');
     if (this.o.security === 'starttls' && !this.o.plainForTests) {
