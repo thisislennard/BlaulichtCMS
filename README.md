@@ -79,8 +79,9 @@ flowchart LR
 ### Sichten und aufbereiten
 
 - **Sichtung am Handy oder Laptop:** Datei für Datei auswählen, überspringen oder zurückstellen – per Button,
-  Wischgeste oder Tastatur; offene fortsetzen, alle erneut oder nur ausgewählte durchsehen; das nächste Bild ist schon
-  geladen, gleichzeitiges Sichten wird erkannt.
+  Wischgeste oder Tastatur – die Knöpfe stehen fest unten im Fenster, am Rechner Vorschau und Angaben nebeneinander;
+  offene fortsetzen, alle erneut oder nur ausgewählte durchsehen; das nächste Bild ist schon geladen, gleichzeitiges
+  Sichten wird erkannt.
 - **Galerie:** Kacheln oder Liste mit Seiten, Großansicht zum Blättern, Details je Datei mit Anzeigename,
   Beschreibung, interner Notiz, Prüfsumme und Duplikat-Hinweis, Mehrfachauswahl mit Sammelaktionen.
 - **Ordnen:** Ordner (beliebig tief) in jeder Sammlung, Zielordner je Upload-Link, Verschieben und Kopieren zwischen
@@ -186,8 +187,8 @@ flowchart LR
 - **Freigabe und Versand:** Die Freigabe fixiert die PDF; Versand per E-Mail an die zuständige Stelle (ab Werk im
   Testmodus), Eingangsbestätigung, Umgang mit unklarer Zustellung. Die amtliche Auslösung bleibt bei der zuständigen
   Stelle.
-- **Pflege:** Stichwörter mit Aliasen, Lagefragen, Regeln mit Versionen, Zuständigkeiten, Vorlagen – Regeln gibt immer
-  eine andere Person frei.
+- **Pflege:** Stichwörter mit Aliasen als kompakte Tabelle mit Suche und Filtern (Lagefragen und Regeln je Zeile
+  aufklappbar), Regeln mit Versionen, Zuständigkeiten, Vorlagen – Regeln und Lagefragen gibt immer eine andere Person frei.
 - **Stichwortverzeichnis je Bundesland:** amtliche Verzeichnisse für Hessen (Runderlass 2024) und Bayern (ABek-Anlage)
   wortgetreu mitgeliefert, für alle Länder eigene Liste per CSV/JSON importier- und exportierbar; Bedeutung der
   Stichworte in Einsatzmeldungen, Workflows und Filtern.
@@ -197,7 +198,8 @@ flowchart LR
 ### Presse
 
 - **Presseanfragen:** von Hand erfassen (z. B. nach einem Anruf), Status neu → in Bearbeitung → beantwortet → erledigt,
-  zuständige Person, Frist mit Erinnerung, Verknüpfung mit Einsatz und Beitrag, interne Notizen, vollständiger Verlauf,
+  zuständige Person, Frist mit Erinnerung, Verknüpfung mit Einsatz und Beitrag, interne Notizen, mündliche Antwort
+  festhalten (Telefon/vor Ort: Antwort und „beantwortet“ in einem Schritt), vollständiger Verlauf,
   Übersicht mit Filtern und Dashboard-Kachel; Löschfrist Standard 12 Monate nach Erledigung bzw. – für nie erledigte
   Anfragen – nach der letzten Aktivität, mit Ankündigung 30 Tage vorher; Workflow-Eingang
   „Neue Presseanfrage“ ohne Kontaktdaten.
