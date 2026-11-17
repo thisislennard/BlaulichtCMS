@@ -267,7 +267,6 @@ export default function Settings() {
     <div className="flex flex-col gap-5">
       <UnsavedChangesGuard when={dirty} text="Es gibt ungespeicherte Einstellungen. Beim Verlassen gehen sie verloren." />
       <PageHeader
-        title={t("admin.settings.title")}
         subtitle={t("admin.settings.subtitle")}
       />
       {q.isError && <LoadError error={q.error} onRetry={() => q.refetch()} />}

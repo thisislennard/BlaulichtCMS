@@ -151,7 +151,7 @@ export async function checkStorage() {
     kind: 'warning',
     title: () => 'Speicherplatz für Medien wird knapp',
     body: `Frei sind noch ${(free / 1024 ** 3).toFixed(1).replace('.', ',')} GB (Warnschwelle ${warnGb} GB). Unter „Medien → Verwaltung“ steht, was wie viel Platz belegt; Papierkorb leeren oder alte Sammlungen löschen schafft Platz.`,
-    link: '/medien/verwaltung',
+    link: '/medienverwaltung',
     permission: 'media.admin',
     bundleMs: 12 * 3600_000,
   });

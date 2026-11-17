@@ -223,7 +223,6 @@ export default function Releases() {
   return (
     <div className="flex flex-col gap-5">
       <PageHeader
-        title="Pressemitteilungen"
         subtitle="An Verteilerlisten senden – jede Mail einzeln adressiert, nie mit offener Empfängerliste, immer mit Abmeldelink."
         actions={can('press.release') && <Button variant="primary" icon="Plus" onClick={() => setEdit(null)}>Neue Pressemitteilung</Button>}
       />

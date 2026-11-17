@@ -100,7 +100,6 @@ export default function Posts({ mode }: { mode?: 'approvals' }) {
   return (
     <div className="flex flex-col gap-5">
       <PageHeader
-        title={mode === 'approvals' ? 'Freigaben' : 'Beiträge'}
         subtitle={mode === 'approvals' ? 'Fassungen, die auf Freigabe oder Veröffentlichung warten.' : 'Jede Änderung erzeugt eine neue Fassung. Freigaben gelten genau für eine Fassung.'}
         actions={
           can('post.create') && (

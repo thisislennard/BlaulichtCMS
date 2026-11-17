@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, get, put } from '../../api/client';
 import { Button, Card, cx, ErrorBox, FieldWrap, Input, Notice, PageHeader, SegmentedControl, Select, SkeletonRows, Switch } from '../../components/ui/core';
+import { usePageMeta } from '../../components/layout/AppShell';
 import { Icon } from '../../components/ui/Icon';
 import { UnsavedChangesGuard, useErrorToast, useToast } from '../../components/ui/overlays';
 import { useServerPreview, type Layout, type LayoutElement } from './ImageFill';
@@ -254,6 +255,7 @@ export default function ImageTemplateEditor() {
   const toast = useToast();
   const toastError = useErrorToast();
   const detail = useQuery({ queryKey: ['design-template', id], queryFn: () => get<any>(`/design-templates/${id}`) });
+  usePageMeta({ title: detail.data?.title ? `Bildvorlage gestalten: ${detail.data.title}` : 'Bildvorlage gestalten' });
   const fontsQ = useQuery({ queryKey: ['design-fonts'], queryFn: () => get<{ fonts: FontInfo[]; formats: Preset[] }>('/design-fonts') });
   const [layout, setLayout] = useState<Layout | null>(null);
   const [saved, setSaved] = useState('');
@@ -365,7 +367,6 @@ export default function ImageTemplateEditor() {
         </Link>
       </div>
       <PageHeader
-        title="Bildvorlage gestalten"
         subtitle="Elemente mit der Maus ziehen oder auswählen und mit den Pfeiltasten verschieben. Die Vorschau zeigt das Ergebnis genau so, wie es erzeugt wird."
         actions={
           <Button variant="primary" icon="Save" loading={busy} disabled={!dirty} onClick={save}>

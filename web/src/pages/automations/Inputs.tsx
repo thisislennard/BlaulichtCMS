@@ -7,6 +7,8 @@ import { Icon } from '../../components/ui/Icon';
 import { Dialog, useConfirm, useErrorToast, useToast } from '../../components/ui/overlays';
 import { useAuth } from '../../lib/auth';
 import { fmtDateTime } from '../../lib/format';
+import { usePageMeta } from '../../components/layout/AppShell';
+import { WorkflowTabs } from './WorkflowTabs';
 import { CheckList, FieldList, Help, NumberField, SelectField, inputSummary, normKey, useCatalog, useInputs, type Catalog, type InputDef } from './shared';
 
 /** Eingänge: Auslöser auf Grundlage der vorhandenen Verbindungen, Quellen und Sammlungen – hier eingerichtet, im Editor verwendet. */
@@ -204,6 +206,7 @@ export default function Inputs() {
   const toastError = useErrorToast();
   const [edit, setEdit] = useState<{ input: InputDef | null; kind: string } | null>(null);
   const [choose, setChoose] = useState(false);
+  usePageMeta({ title: 'Auslöser' });
   const refresh = () => qc.invalidateQueries({ queryKey: ['automation-inputs'] });
   const remove = async (i: InputDef) => {
     if (!(await ask({ title: 'Eingang löschen?', text: `„${i.name}“ steht danach im Editor nicht mehr zur Verfügung.`, confirmLabel: 'Löschen' }))) return;
@@ -218,10 +221,10 @@ export default function Inputs() {
   return (
     <div className="flex flex-col gap-5">
       <PageHeader
-        title="Eingänge"
         subtitle="Auslöser für Workflows: Einsätze, amtliche Warnungen, RSS-Einträge, Uploads, Zeitpläne, Presseanfragen, Kalendertermine und manueller Start."
         actions={manage && <Button variant="primary" icon="Plus" disabled={!cat.data} onClick={() => setChoose(true)}>Neuer Eingang</Button>}
       />
+      <WorkflowTabs />
       {cat.data && !cat.data.enabled && <Notice tone="warning" title="Workflows sind abgeschaltet">Unter Einstellungen → Redaktion lassen sie sich wieder einschalten.</Notice>}
       {(q.isLoading || cat.isLoading) && <SkeletonRows rows={4} />}
       {q.error && <ErrorBox title="Eingänge konnten nicht geladen werden">{(q.error as Error).message}</ErrorBox>}

@@ -190,7 +190,6 @@ export default function Banners() {
   return (
     <div className="flex flex-col gap-5">
       <PageHeader
-        title="Banner"
         subtitle="Zeitgesteuerte Hinweise auf der Website – mehrere gleichzeitig, sortiert nach Priorität."
         actions={can('banner.edit') && can('channel.view') && <Button variant="primary" icon="Plus" disabled={!activeSites.length} onClick={() => setEdit(null)}>Neues Banner</Button>}
       />

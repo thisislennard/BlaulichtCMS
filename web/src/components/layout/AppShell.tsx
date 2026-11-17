@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useMemo, useRef, useState, type R
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { get, post } from '../../api/client';
-import { activeNavId, navGroupOf, navigation, navItem } from '../../config/navigation';
+import { activeNavId, navGroupOf, navigation, navItem, PAGE_HELP } from '../../config/navigation';
 import { t } from '../../i18n';
 import { useAuth } from '../../lib/auth';
 import { fmtRelative } from '../../lib/format';
@@ -14,11 +14,20 @@ import { useLive } from '../../lib/live';
 import { usePwaInstall } from '../../lib/pwa';
 import { LegalLinks } from '../legal/LegalLinks';
 import { FeedbackView } from '../feedback/Feedback';
+import { PageInfoCtx, type PageInfo } from './page';
+import { helpHref, PageHelp } from './PageHelp';
 
-/* Seitentitel/Brotkrumen: Seiten ohne eigenen Menüpunkt (Editor, Details) setzen ihn selbst. */
+/**
+ * Seitentitel/Brotkrumen (#250, #267): Menüseiten erhalten Titel, Bereich und Hilfe aus der Navigation. Unterseiten und
+ * Detailseiten setzen `title` (Objekt- bzw. Reitertitel); Seiten ohne eigenen Menüpunkt ordnen sich mit `navId` einem
+ * Bereich zu (z. B. Freigabe-Ansicht → Übersicht/Freigaben) oder setzen eigene `crumbs` (Hilfe). `help` wählt ein
+ * anderes Hilfe-Kapitel als das des Menüpunkts.
+ */
 interface PageMeta {
   title?: string;
-  crumb?: string;
+  navId?: string;
+  crumbs?: { label: string; to?: string }[];
+  help?: string;
   fullBleed?: boolean;
   collapseSidebar?: boolean;
 }
@@ -105,11 +114,11 @@ function MobileNav({ onNavigate }: { onNavigate: () => void }) {
           {g.items.map((it) => {
             const on = it.id === active;
             return (
-              <NavLink key={it.id} to={it.path} onClick={onNavigate} aria-current={on ? 'page' : undefined} className={cx('flex items-center gap-2.5 h-10 px-2.5 rounded-control font-medium', on ? 'bg-raised !text-fg font-semibold' : '!text-fg-muted hover:bg-raised hover:!text-fg')}>
+              <Link key={it.id} to={it.path} onClick={onNavigate} aria-current={on ? 'page' : undefined} className={cx('flex items-center gap-2.5 h-10 px-2.5 rounded-control font-medium', on ? 'bg-raised !text-fg font-semibold' : '!text-fg-muted hover:bg-raised hover:!text-fg')}>
                 <Icon name={it.icon} size={17} className={cx('shrink-0', on && 'text-primary')} strokeWidth={1.8} />
                 <span className="flex-1 truncate">{t(it.label)}</span>
                 <CountBadge n={it.count} strong={it.badge === 'approvals'} />
-              </NavLink>
+              </Link>
             );
           })}
         </div>
@@ -131,10 +140,10 @@ function TopNav({ activeGroup }: { activeGroup?: string }) {
       {groups.map((g) => {
         const on = g.group === activeGroup;
         return (
-          <NavLink key={g.group} to={g.items[0].path} aria-current={on ? 'true' : undefined} className={cx('flex items-center gap-1.5 text-[14px] whitespace-nowrap transition-colors duration-fast', on ? '!text-fg font-semibold shadow-[inset_0_-2px_0_var(--bc-primary)]' : '!text-fg-muted font-medium hover:!text-fg')}>
+          <Link key={g.group} to={g.items[0].path} aria-current={on ? 'true' : undefined} className={cx('flex items-center gap-1.5 text-[14px] whitespace-nowrap transition-colors duration-fast', on ? '!text-fg font-semibold shadow-[inset_0_-2px_0_var(--bc-primary)]' : '!text-fg-muted font-medium hover:!text-fg')}>
             {t(g.group)}
             <CountBadge n={g.count} strong />
-          </NavLink>
+          </Link>
         );
       })}
     </nav>
@@ -150,11 +159,12 @@ function SubNav({ activeGroup, activeId }: { activeGroup?: string; activeId: str
       {g.items.map((it) => {
         const on = it.id === activeId;
         return (
-          <NavLink key={it.id} to={it.path} aria-current={on ? 'page' : undefined} className={cx('flex items-center gap-2 h-8 px-3 rounded-control text-sm whitespace-nowrap', on ? 'bg-raised !text-fg font-semibold' : '!text-fg-muted font-medium hover:bg-raised hover:!text-fg')}>
+          // Link statt NavLink: „aktuell“ ist genau der Menüpunkt der Seite (auch für Unterseiten wie /presse/mitteilungen)
+          <Link key={it.id} to={it.path} aria-current={on ? 'page' : undefined} className={cx('flex items-center gap-2 h-8 px-3 rounded-control text-sm whitespace-nowrap', on ? 'bg-raised !text-fg font-semibold' : '!text-fg-muted font-medium hover:bg-raised hover:!text-fg')}>
             <Icon name={it.icon} size={15} className={cx('shrink-0', on && 'text-primary')} strokeWidth={1.8} />
             {t(it.label)}
             <CountBadge n={it.count} strong={it.badge === 'approvals'} />
-          </NavLink>
+          </Link>
         );
       })}
     </nav>
@@ -290,7 +300,7 @@ function UserMenu() {
 }
 
 /** Statuszeile unter der Navigation: Brotkrumen links, Betriebszustand rechts (Monospace). */
-function StatusStrip({ crumb, title }: { crumb: string; title: string }) {
+function StatusStrip({ crumbs, title }: { crumbs: { label: string; to?: string }[]; title: string }) {
   const { status } = useCounts();
   const { me, can } = useAuth();
   const live = useLive();
@@ -298,22 +308,35 @@ function StatusStrip({ crumb, title }: { crumb: string; title: string }) {
   const dot = (c: string) => <span aria-hidden="true" className={cx('w-[7px] h-[7px] rounded-full shrink-0', c)} />;
   return (
     <div className="flex flex-wrap items-center gap-x-7 gap-y-2 px-4 md:px-8 py-2.5 border-b border-line font-mono text-[12px] tracking-[0.02em]">
-      <nav aria-label="Brotkrumen" className="flex items-center gap-1.5 min-w-0 flex-1 uppercase">
-        <Link to="/" className="hidden sm:inline !text-fg-muted hover:!text-fg">
-          BlaulichtCMS
-        </Link>
-        {crumb && (
-          <>
-            <span className="hidden sm:inline text-fg-muted">/</span>
-            <span className="hidden sm:inline text-fg-muted truncate">{crumb}</span>
-          </>
-        )}
-        {title && (
-          <>
-            <span className="hidden sm:inline text-fg-muted">/</span>
-            <h1 className="m-0 text-[12px] font-medium text-fg truncate">{title}</h1>
-          </>
-        )}
+      {/* Reine Navigation – die h1 steht im Seitenkopf (#267) */}
+      <nav aria-label="Brotkrumen" className="flex-1 min-w-0">
+        <ol className="m-0 p-0 list-none flex items-center gap-1.5 min-w-0 uppercase">
+          <li className="hidden sm:flex items-center">
+            <Link to="/" className="!text-fg-muted hover:!text-fg">
+              BlaulichtCMS
+            </Link>
+          </li>
+          {crumbs.map((c) => (
+            <li key={c.label} className="hidden sm:flex items-center gap-1.5 min-w-0">
+              <span aria-hidden="true" className="text-fg-muted">/</span>
+              {c.to ? (
+                <Link to={c.to} className="!text-fg-muted hover:!text-fg truncate">
+                  {c.label}
+                </Link>
+              ) : (
+                <span className="text-fg-muted truncate">{c.label}</span>
+              )}
+            </li>
+          ))}
+          {title && (
+            <li className="flex items-center gap-1.5 min-w-0">
+              <span aria-hidden="true" className="hidden sm:inline text-fg-muted">/</span>
+              <span aria-current="page" className="font-medium text-fg truncate">
+                {title}
+              </span>
+            </li>
+          )}
+        </ol>
       </nav>
       {status && (
         <Link to={can('system.status') ? '/system' : '/'} className="hidden sm:inline-flex items-center gap-2 !text-fg whitespace-nowrap">
@@ -334,9 +357,37 @@ function StatusStrip({ crumb, title }: { crumb: string; title: string }) {
   );
 }
 
+/** Hilfe-Knopf in der Kopfzeile (#265): öffnet das Kapitel der aktuellen Seite bzw. die Startseite der Hilfe. */
+function HelpButton({ topic }: { topic?: string }) {
+  return (
+    <Link to={helpHref(topic)} aria-label={t('nav.pageHelp')} title={`${t('nav.pageHelp')} (?)`} className="w-9 h-9 rounded-control border border-line inline-flex items-center justify-center !text-fg-muted hover:!text-fg hover:bg-raised">
+      <Icon name="CircleHelp" size={16} />
+    </Link>
+  );
+}
+
+/** Bereich, Brotkrumen, Titel und Hilfe der aktuellen Seite – eine Quelle für Kopf, Brotkrumen und Fenstertitel. */
+function usePageFrame(pathname: string, meta: PageMeta) {
+  const { me } = useAuth();
+  const activeId = meta.navId ?? activeNavId(pathname);
+  const activeGroup = activeId ? navGroupOf(activeId) : undefined;
+  const item = activeId ? navItem(activeId) : undefined;
+  const itemLabel = item ? t(item.label) : '';
+  const title = meta.title ?? itemLabel;
+  // Menüseiten: „Bereich / Seite“; Unter- und Detailseiten: „Bereich / Menüpunkt / Titel“ (Menüpunkt als Link)
+  const crumbs = meta.crumbs ?? [...(activeGroup ? [{ label: t(activeGroup) }] : []), ...(item && meta.title && meta.title !== itemLabel ? [{ label: itemLabel, to: item.path }] : [])];
+  const help = meta.help ?? item?.help ?? PAGE_HELP[pathname];
+  // Fenstertitel (WCAG 2.4.2): „Seite – Bereich · Organisation“, z. B. „Übung am Wochenende – Beiträge · Musterwehr“
+  const org = me?.instance.organization || (me?.instance.name && me.instance.name !== 'BlaulichtCMS' ? me.instance.name : '') || 'BlaulichtCMS';
+  const parent = crumbs.length ? crumbs[crumbs.length - 1].label : '';
+  const docTitle = title ? `${title}${parent && parent !== title ? ` – ${parent}` : ''} · ${org}` : org;
+  return { activeId, activeGroup, title, crumbs, help, docTitle };
+}
+
 export function AppShell() {
   const { me } = useAuth();
   const { pathname } = useLocation();
+  const navigate = useNavigate();
   const [meta, setMeta] = useState<PageMeta>({});
   const [mobileOpen, setMobileOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -366,24 +417,31 @@ export function AppShell() {
       btn?.focus();
     };
   }, [mobileOpen]);
+  const { activeId, activeGroup, title, crumbs, help, docTitle } = usePageFrame(pathname, meta);
+  useEffect(() => {
+    document.title = docTitle;
+  }, [docTitle]);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
         setPaletteOpen(true);
+        return;
+      }
+      // „?“ außerhalb von Eingabefeldern: Hilfe zur aktuellen Seite (#265)
+      const el = document.activeElement as HTMLElement | null;
+      const typing = !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable);
+      if (e.key === '?' && !typing && !e.ctrlKey && !e.metaKey && !e.altKey && !document.querySelector('[role=dialog][aria-modal=true]')) {
+        e.preventDefault();
+        navigate(helpHref(help));
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, []);
+  }, [help, navigate]);
 
-  const activeId = activeNavId(pathname);
-  const activeGroup = activeId ? navGroupOf(activeId) : undefined;
-  const item = activeId ? navItem(activeId) : undefined;
-  const title = meta.title ?? (item ? t(item.label) : '');
-  // Detailseiten (eigener Titel) zeigen „Bereich / Seite“ als Pfad, Listenseiten nur den Bereich
-  const crumb = meta.crumb ?? (activeGroup ? (meta.title && item ? `${t(activeGroup)} / ${t(item.label)}` : t(activeGroup)) : '');
   const setMetaStable = useMemo(() => (m: PageMeta) => setMeta(m), []);
+  const pageInfo = useMemo<PageInfo>(() => ({ title, renderHelp: (topic) => (topic === false || !(topic ?? help) ? null : <PageHelp topic={(topic ?? help)!} />) }), [title, help]);
 
   return (
     <PageMetaCtx.Provider value={setMetaStable}>
@@ -420,6 +478,7 @@ export function AppShell() {
               <button type="button" onClick={() => setPaletteOpen(true)} aria-label={t('nav.searchLabel')} className="lg:hidden w-9 h-9 rounded-control border border-line inline-flex items-center justify-center text-fg-muted">
                 <Icon name="Search" size={16} />
               </button>
+              <HelpButton topic={help} />
               <ThemeToggle />
               <NotificationsButton />
               <UserMenu />
@@ -427,9 +486,11 @@ export function AppShell() {
           </div>
           <SubNav activeGroup={activeGroup} activeId={activeId} />
         </header>
-        <StatusStrip crumb={crumb} title={title} />
+        <StatusStrip crumbs={crumbs} title={title} />
         <main id="main" className={cx('flex-1 min-w-0', meta.fullBleed ? '' : 'w-full max-w-content mx-auto px-4 md:px-8 pt-8 pb-14 flex flex-col gap-6')}>
-          <Outlet />
+          <PageInfoCtx.Provider value={pageInfo}>
+            <Outlet />
+          </PageInfoCtx.Provider>
         </main>
         {!meta.fullBleed && <LegalLinks className="pb-6 print:hidden" />}
       </div>

@@ -639,7 +639,7 @@ function EditorInner({ a, cat, inputs, outputs }: { a: AutomationDetail; cat: Ca
   const palette: { title: string; manage?: { to: string; label: string }; list: PaletteItem[] }[] = [
     {
       title: 'Eingänge',
-      manage: { to: '/workflows/eingaenge', label: 'Verwalten →' },
+      manage: { to: '/workflows/ausloeser', label: 'Verwalten →' },
       list: inputs.map((i) => ({ key: `in:${i.id}`, type: 'input', label: i.name, hint: cat.inputKinds.find((k) => k.kind === i.kind)?.label ?? i.kind, icon: cat.inputKinds.find((k) => k.kind === i.kind)?.icon ?? 'Zap', data: { inputId: i.id } })),
     },
     {
@@ -648,7 +648,7 @@ function EditorInner({ a, cat, inputs, outputs }: { a: AutomationDetail; cat: Ca
     },
     {
       title: 'Ausgänge',
-      manage: { to: '/workflows/ausgaenge', label: 'Verwalten →' },
+      manage: { to: '/workflows/aktionen', label: 'Verwalten →' },
       list: outputs.map((o) => ({ key: `out:${o.id}`, type: 'output', label: o.name, hint: cat.outputKinds.find((k) => k.kind === o.kind)?.label ?? o.kind, icon: cat.outputKinds.find((k) => k.kind === o.kind)?.icon ?? 'Send', data: { outputId: o.id } })),
     },
   ];

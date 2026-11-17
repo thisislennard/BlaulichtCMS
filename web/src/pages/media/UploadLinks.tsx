@@ -310,7 +310,7 @@ export function UploadLinksCard({ collection, links, folders = [], onChanged }: 
                     label={`Aktionen für ${l.label || 'Upload-Link'}`}
                     items={[
                       { label: 'Bearbeiten', icon: 'Pencil', onClick: () => setEditing(l) },
-                      can('media.design') ? { label: 'Gestaltung der Seite', icon: 'Palette', onClick: () => navigate(`/medien/gestaltung?link=${l.id}`) } : null,
+                      can('media.design') ? { label: 'Gestaltung der Seite', icon: 'Palette', onClick: () => navigate(`/upload-seite?link=${l.id}`) } : null,
                       l.state === 'paused'
                         ? { label: 'Fortsetzen', icon: 'Play', onClick: () => act(() => post(`/upload-links/${l.id}/resume`), 'Link fortgesetzt') }
                         : l.state === 'active'

@@ -2,7 +2,6 @@ import { useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { get, qs } from '../../api/client';
 import { Button, cx, ErrorBox, PageHeader, SegmentedControl, Select, SkeletonRows } from '../../components/ui/core';
-import { HelpTip } from '../../components/ui/HelpTip';
 import { useAuth } from '../../lib/auth';
 import { fromLocalInput } from '../../lib/format';
 import { CategoriesDialog, EntryDialog, EventDialog, type EditTarget } from './dialogs';
@@ -82,14 +81,6 @@ export default function CalendarPage() {
   return (
     <div className="flex flex-col gap-5">
       <PageHeader
-        title={
-          <span className="flex items-center gap-2">
-            Kalender
-            <HelpTip title="Kalender" more="/hilfe/kalender">
-              Eigene Termine und Serien, eingelesene Kalender und geplante Beiträge an einem Ort. Kategorien geben Farben und dienen als Filter – auch für Workflows.
-            </HelpTip>
-          </span>
-        }
         subtitle="Termine, Serien und Planung"
         actions={
           <>
@@ -122,9 +113,9 @@ export default function CalendarPage() {
           <Button icon="ChevronLeft" iconOnly aria-label="Zurück" onClick={() => setAnchor(shift(view, anchor, -1))} />
           <Button onClick={() => setAnchor(today())}>Heute</Button>
           <Button icon="ChevronRight" iconOnly aria-label="Weiter" onClick={() => setAnchor(shift(view, anchor, 1))} />
-          <h3 className="m-0 text-section font-semibold ml-1" aria-live="polite">
+          <h2 className="m-0 text-section font-semibold ml-1" aria-live="polite">
             {range.title}
-          </h3>
+          </h2>
         </div>
         <SegmentedControl<View>
           label="Ansicht"

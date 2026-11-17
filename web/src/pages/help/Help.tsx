@@ -5,6 +5,7 @@ import { Keyboard, Printer } from 'lucide-react';
 import { Button, EmptyState, ErrorBox, Skeleton, SkeletonRows, cx } from '../../components/ui/core';
 import { Icon } from '../../components/ui/Icon';
 import { useAuth } from '../../lib/auth';
+import { usePageMeta } from '../../components/layout/AppShell';
 import { t } from '../../i18n';
 import { CHAPTERS, GROUPS, chapterBySlug, chapterDoc, chapterSummary, chapterTitle, groupTitle, type Chapter, type Heading } from './chapters';
 import { ChapterContent } from './Markdown';
@@ -514,6 +515,9 @@ export default function Help() {
   const q = params.get('suche')?.trim() ?? '';
   const chapter = chapterBySlug(slug);
   const renamed = slug ? RENAMED[slug] : undefined;
+  // Titel, Brotkrumen und Fenstertitel (#267): „Kapitel – Hilfe“, Startseite „Hilfe“
+  const helpRoot = { label: t('help.title'), to: '/hilfe' };
+  usePageMeta(chapter ? { title: chapterTitle(chapter.slug), crumbs: [helpRoot] } : q ? { title: t('help.resultsFor', { q }), crumbs: [helpRoot] } : slug ? { title: t('help.notFound'), crumbs: [helpRoot] } : { title: t('help.title'), crumbs: [] });
   if (renamed) {
     const anchor = decodeURIComponent(loc.hash.replace(/^#/, ''));
     const next = renamed.anchors?.[anchor] ?? anchor;
@@ -522,7 +526,12 @@ export default function Help() {
 
   let main: ReactNode;
   if (slug && !chapter) {
-    main = <EmptyState icon="BookOpen" title={t('help.notFound')} text={t('help.notFoundText')} action={<Link to="/hilfe">{t('help.backToStart')}</Link>} />;
+    main = (
+      <>
+        <h1 className="sr-only">{t('help.notFound')}</h1>
+        <EmptyState icon="BookOpen" title={t('help.notFound')} text={t('help.notFoundText')} action={<Link to="/hilfe">{t('help.backToStart')}</Link>} />
+      </>
+    );
   } else if (chapter) main = <ChapterView key={chapter.slug} chapter={chapter} />;
   else if (q) main = <SearchResults q={q} />;
   else main = <StartPage />;

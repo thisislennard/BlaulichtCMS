@@ -9,6 +9,7 @@ import { useAuth } from '../../lib/auth';
 import { fmtDateTime, fmtRelative } from '../../lib/format';
 import { MediaThumb, mediaName } from './gallery';
 import { MediaNav } from './MediaNav';
+import { usePageMeta } from '../../components/layout/AppShell';
 
 interface TrashData {
   days: number;
@@ -20,6 +21,7 @@ interface TrashData {
 /** Papierkorb (wie LiFeOS): Wiederherstellen mit „Medien löschen (Papierkorb)“, endgültig löschen mit „Medien administrieren“. */
 export default function Trash() {
   const { can } = useAuth();
+  usePageMeta({ title: 'Papierkorb' });
   const admin = can('media.admin');
   const qc = useQueryClient();
   const ask = useConfirm();
@@ -70,7 +72,6 @@ export default function Trash() {
   return (
     <div className="flex flex-col gap-5">
       <PageHeader
-        title="Papierkorb"
         subtitle="Gelöschte Dateien, Ordner und Sammlungen lassen sich bis zum Ablauf der Frist wiederherstellen."
         actions={
           admin &&

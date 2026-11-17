@@ -10,6 +10,10 @@ import { Icon } from '../../components/ui/Icon';
 import { LegalLinks } from '../../components/legal/LegalLinks';
 
 function AuthLayout({ title, subtitle, children }: { title: string; subtitle?: ReactNode; children: ReactNode }) {
+  // Fenstertitel je Schritt (#267), z. B. „Anmelden · BlaulichtCMS“
+  useEffect(() => {
+    document.title = `${title} · BlaulichtCMS`;
+  }, [title]);
   return (
     <div className="min-h-screen bg-bg text-fg flex items-center justify-center p-4">
       <main className="w-full max-w-[420px] flex flex-col gap-6">

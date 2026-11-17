@@ -156,7 +156,8 @@ export default function ReviewView() {
     queryFn: () => get<ReviewData>(`/posts/${id}/review${fassung ? `?fassung=${fassung}` : ''}`),
   });
   const d = q.data;
-  usePageMeta({ title: d ? `Freigabe: ${d.revision.title}` : 'Freigabe', crumb: 'Freigabe' });
+  // Ziel der Push-Mitteilung ohne eigenen Menüpunkt: gehört zu Übersicht → Freigaben (#250)
+  usePageMeta({ title: d ? d.revision.title : 'Freigabe', navId: 'approvals' });
   const [decision, setDecision] = useState<'approved' | 'rejected' | null>(null);
   const [channel, setChannel] = useState<string>('grund');
   const [lightbox, setLightbox] = useState<number | null>(null);

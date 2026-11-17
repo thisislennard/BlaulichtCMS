@@ -526,7 +526,7 @@ export async function pollPressMailbox(opts: { force?: boolean } = {}): Promise<
       const run: Run = { c, key, own, state: fresh ? { key } : { ...state }, imported: 0, skipped: 0, bytes: 0 };
       const reportSkipped = async () => {
         if (!run.skipped) return;
-        await notify({ kind: 'warning', title: `Presse-Postfach: ${run.skipped === 1 ? 'eine Mail' : `${run.skipped} Mails`} nicht übernommen`, body: 'Die Mails bleiben unverändert im Postfach. Grund und Zeitpunkt stehen im Empfangsprotokoll – bitte dort nachsehen und ggf. von Hand erfassen.', link: '/presse/einstellungen', permission: 'press.mailbox', category: 'press' }).catch(() => {});
+        await notify({ kind: 'warning', title: `Presse-Postfach: ${run.skipped === 1 ? 'eine Mail' : `${run.skipped} Mails`} nicht übernommen`, body: 'Die Mails bleiben unverändert im Postfach. Grund und Zeitpunkt stehen im Empfangsprotokoll – bitte dort nachsehen und ggf. von Hand erfassen.', link: '/presse-postfach', permission: 'press.mailbox', category: 'press' }).catch(() => {});
       };
       try {
         const password = c.mode === 'imap' ? ((await readSecret(c.secretId || null)) ?? '') : '';
@@ -541,7 +541,7 @@ export async function pollPressMailbox(opts: { force?: boolean } = {}): Promise<
         await logEntry('error', { detail: msg }).catch(() => {});
         log('warn', 'press', `Presse-Postfach: ${msg}`);
         // eine Meldung je Störung (nicht bei jedem Abruf)
-        if (state.lastOk !== false) await notify({ kind: 'error', title: 'Presse-Postfach: Abruf fehlgeschlagen', body: msg.slice(0, 300), link: '/presse/einstellungen', permission: 'press.mailbox', category: 'press' }).catch(() => {});
+        if (state.lastOk !== false) await notify({ kind: 'error', title: 'Presse-Postfach: Abruf fehlgeschlagen', body: msg.slice(0, 300), link: '/presse-postfach', permission: 'press.mailbox', category: 'press' }).catch(() => {});
         await reportSkipped();
         // Fortschritt bis zur letzten fertigen Mail bleibt erhalten (run.state)
         await saveProgress(run, { lastRunAt: new Date().toISOString(), lastOk: false, lastError: msg.slice(0, 500), more: false }).catch(() => {});

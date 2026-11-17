@@ -97,25 +97,61 @@ Abschnittslabel-Muster (z. B. im Dashboard):
 ## 5. Aufbau der Oberfläche
 
 ```
-┌───────────────────────────────────────────────────────────────────────────┐
-│ [BC] BlaulichtCMS / Org  Übersicht  Redaktion①  Kanäle  Warnung  Verwaltung │  Kopfzeile (56 px)
-│                                          [Suchen  Strg K] [☀|☾] [🔔] (AA) │
-├───────────────────────────────────────────────────────────────────────────┤
-│  ▣ Beiträge   ☑ Freigaben ①   ▢ Medien   ▢ Quellen   ▢ Vorlagen           │  Unternavigation (48 px)
-├───────────────────────────────────────────────────────────────────────────┤
-│ BLAULICHTCMS / REDAKTION / BEITRÄGE          ● DIENSTE alle laufen  ● LIVE │  Statuszeile (Mono)
-├───────────────────────────────────────────────────────────────────────────┤
-│  Seitentitel                                         [Sekundär] [Primär]  │
-│  …                                                                        │
+┌──────────────────────────────────────────────────────────────────────────────────────────┐
+│ [BC] BlaulichtCMS / Org  Übersicht①  Redaktion  Presse  Warnungen  Einrichtung  Verwaltung │  Kopfzeile (56 px)
+│                                             [Suchen  Strg K] [?] [☀|☾] [🔔] (AA)          │
+├──────────────────────────────────────────────────────────────────────────────────────────┤
+│  ▣ Beiträge   ▢ Medien   ▢ Kalender   ▢ Einsatzliste   ▢ Banner   ▢ Designvorlagen …       │  Unternavigation (48 px)
+├──────────────────────────────────────────────────────────────────────────────────────────┤
+│ BLAULICHTCMS / REDAKTION / BEITRÄGE                         ● DIENSTE alle laufen  ● LIVE │  Statuszeile (Mono)
+├──────────────────────────────────────────────────────────────────────────────────────────┤
+│  Beiträge (?)                                                     [Sekundär] [Primär]     │  Seitenkopf: h1 + Hilfe
+│  …                                                                                       │
 ```
 
-- **Kopfzeile:** Bereiche (Navigationsgruppen aus `config/navigation.ts`) als Reiter. Der aktive Bereich hat eine 2 px rote Unterstreichung. Freigaben zählen als rotes Badge am Bereich.
-- **Unternavigation:** die Seiten des aktiven Bereichs als Pillen; aktiv = `bg-raised` + rotes Symbol.
-- **Statuszeile:** Brotkrumen (enthält das `<h1>` der Seite) links, Betriebszustand rechts.
-- **Handy (< 768 px):** Menü-Button öffnet die Schublade mit allen Bereichen; Suche als Symbol.
-- **Farbmodus:** Der Sonne/Mond-Schalter speichert `preferences.theme` im Profil – dieselbe Einstellung wie unter „Mein Konto“.
+### Gliederung (verbindlich seit #250)
 
-Neue Module tragen sich weiterhin nur in `config/navigation.ts` ein – Kopfzeile, Unternavigation und Schublade folgen automatisch.
+Die Bereiche folgen den Aufgaben, nicht der Technik: tägliche Arbeit zuerst, Einrichtung und Betrieb getrennt und nur
+mit passenden Rechten sichtbar. Höchstens **6 Bereiche** mit je höchstens **7 Punkten**.
+
+| Bereich | Punkte (Adresse) | Zweck |
+|---|---|---|
+| Übersicht | Dashboard (`/`), Freigaben (`/freigaben`), Benachrichtigungen, Reichweite, Aktivitäten | Was ansteht, was passiert ist |
+| Redaktion | Beiträge, Medien (Reiter Sammlungen · Alle Dateien · Papierkorb), Kalender, Einsatzliste, Banner, Designvorlagen, Quellen | Inhalte erstellen |
+| Presse | Presseanfragen (`/presse`), Pressemitteilungen, Presseverteiler, Textbausteine (`/presse/textbausteine`) | Pressearbeit |
+| Warnungen | Warnentwürfe (`/warnungen`), Amtliche Warnungen | Warnen und Warnlage |
+| Einrichtung | Websites (`/websites`), Verbindungen, Workflows (Reiter Workflows · Auslöser · Aktionen), Beitragsvorlagen (`/beitragsvorlagen`), Stichwörter & Regeln (`/stichwoerter-regeln`), Presse-Postfach (`/presse-postfach`), Upload-Seite (`/upload-seite`) | Einmal einrichten, selten ändern |
+| Verwaltung | Benutzer und Rollen, Systemstatus, Medienverwaltung (`/medienverwaltung`), Protokolle, Datenschutzanfragen, Einstellungen | Betrieb, Rechte, Datenschutz |
+
+- **Registry:** Neue Module tragen sich nur in `web/src/config/navigation.ts` ein (Bereich, Adresse, Recht, Symbol,
+  Hilfe-Kapitel) – Kopfzeile, Unternavigation, Schublade, Befehlspalette, Brotkrumen, Fenstertitel und das „?“ folgen
+  automatisch. Eine Seite gehört in den Bereich, in dem man sie für die Aufgabe sucht; Konfiguration gehört nach
+  Einrichtung, Betrieb nach Verwaltung.
+- **Keine dritte Menüebene:** Bausteine einer Seite sind Reiter mit eigener Adresse (`PageTabs`, z. B. Medien,
+  Workflows) oder Reiter in der Seite (`Tabs`), keine eigenen Menüpunkte.
+- **Bezeichnung = Titel:** Menübezeichnung, Seitentitel (`PageHeader` ohne `title` übernimmt sie), letzter Brotkrumen
+  und Fenstertitel sind gleich. Unter- und Detailseiten setzen ihren Titel mit `usePageMeta({ title })`; Seiten ohne
+  Menüpunkt ordnen sich mit `usePageMeta({ navId })` einem Bereich zu (Freigabe-Ansicht → Übersicht/Freigaben).
+- **Adressen sprechen** und bleiben gültig: frühere Adressen stehen in `LEGACY_PATHS` (`navigation.ts`) und leiten samt
+  Unterpfad, Suche und Anker weiter (z. B. `/kanaele` → `/websites`, `/warnungen/pflege` → `/stichwoerter-regeln`).
+  `/einrichtung` bleibt die Ersteinrichtung.
+- **Hinweise auf Menüpfade** („unter Einrichtung → Websites“) nutzen `navTrail(id)` aus `config/navText.ts` bzw. in der
+  Hilfe die tatsächlichen Bezeichnungen; `server/test/navigation.test.ts` prüft die Hilfe-Links.
+
+### Bestandteile
+
+- **Kopfzeile:** Bereiche als Reiter; der aktive Bereich hat eine 2 px rote Unterstreichung. Freigaben zählen als rotes
+  Badge am Bereich. Rechts Suche (`Strg K`), **Hilfe** (`?`, öffnet das Kapitel der aktuellen Seite), Farbmodus,
+  Benachrichtigungen, Konto.
+- **Unternavigation:** die Seiten des aktiven Bereichs als Pillen; aktiv = `bg-raised` + rotes Symbol.
+- **Statuszeile:** Brotkrumen als reine Navigation (`<ol>`, letzter Eintrag `aria-current="page"`) links,
+  Betriebszustand rechts.
+- **Seitenkopf (`PageHeader`):** die einzige `<h1>` der Seite, rechts daneben das „?“ mit Kurzbeschreibung und Link ins
+  Hilfe-Kapitel (aus `help` des Menüpunkts; `PageHeader help="kapitel#anker"` für einen anderen Abschnitt). Darunter
+  folgen Abschnitte mit `<h2>` (`Card`) – keine Ebene überspringen.
+- **Fenstertitel:** „Seite – Bereich · Organisation“, Detailseiten „Objekt – Menüpunkt · Organisation“.
+- **Handy (< 768 px):** Menü-Button öffnet die Schublade mit allen Bereichen; Suche und Hilfe als Symbol.
+- **Farbmodus:** Der Sonne/Mond-Schalter speichert `preferences.theme` im Profil – dieselbe Einstellung wie unter „Mein Konto“.
 
 ---
 

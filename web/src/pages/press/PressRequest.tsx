@@ -34,7 +34,7 @@ export default function PressRequestPage() {
   const [note, setNote] = useState('');
   const [due, setDue] = useState<string | null>(null);
   const r = q.data?.request;
-  usePageMeta({ title: r?.case_no });
+  usePageMeta({ title: r?.topic });
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ['press-request', id] });
     qc.invalidateQueries({ queryKey: ['press-requests'] });

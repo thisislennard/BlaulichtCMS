@@ -270,7 +270,7 @@ try {
     const ctx = await browser.newContext({ locale: 'de-DE', viewport: { width: 1440, height: 1000 } });
     await ctx.addCookies(admin.cookie.split('; ').map((c) => ({ name: c.split('=')[0], value: c.split('=').slice(1).join('='), url: BC })));
     const p = await ctx.newPage();
-    await p.goto(`${BC}/warnungen/pflege`);
+    await p.goto(`${BC}/stichwoerter-regeln`);
     await p.getByRole('tab', { name: /Regeln/ }).click();
     await p.getByText('Fachlich freigegeben').first().waitFor();
     await p.screenshot({ path: path.join(OUT, '09-regeln.png'), fullPage: true });

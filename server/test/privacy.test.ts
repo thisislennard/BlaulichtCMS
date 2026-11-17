@@ -238,7 +238,7 @@ describe('Datenschutzanfragen: Kalender, Einsatzliste, Benachrichtigungen, weite
     expect((await search('203.0.113.77')).find((h) => h.kind === 'security_event')).toMatchObject({ fields: { ereignis: 'Falsches Passwort' } });
 
     await pool.query(`INSERT INTO post_templates (name, kind, body) VALUES ('Standardtext', 'news', 'Pressesprecher Paul Vorlagenmann')`);
-    expect((await search('Vorlagenmann')).find((h) => h.kind === 'text')).toMatchObject({ title: 'Beitragsvorlage: Standardtext', link: '/vorlagen', actions: [] });
+    expect((await search('Vorlagenmann')).find((h) => h.kind === 'text')).toMatchObject({ title: 'Beitragsvorlage: Standardtext', link: '/beitragsvorlagen', actions: [] });
   });
 
   it('Beiträge: auch frühere Fassungen werden gefunden', async () => {

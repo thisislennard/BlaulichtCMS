@@ -40,10 +40,12 @@
   "retry": "Erneut versuchen",
   "groups": {
     "basics": "Grundlagen",
-    "work": "Arbeiten mit BlaulichtCMS",
-    "warnings": "Warnentwürfe",
-    "channels": "Kanäle",
-    "admin": "Administration",
+    "overview": "Übersicht",
+    "editorial": "Redaktion",
+    "press": "Presse",
+    "warnings": "Warnungen",
+    "setup": "Einrichtung",
+    "admin": "Verwaltung",
     "reference": "Nachschlagen"
   },
   "chapters": {
@@ -60,7 +62,7 @@
       "summary": "Auf Handy, Tablet und Computer installieren (Chrome, Edge, Safari), Schnellzugriffe, Verhalten ohne Verbindung."
     },
     "foto-link": {
-      "title": "Foto-Link: Fotos und Videos sammeln",
+      "title": "Upload-Links: Fotos und Videos sammeln",
       "summary": "Upload-Links erzeugen, Grenzen, Ablauf und Widerruf, Quarantäne."
     },
     "designvorlagen": {
@@ -125,7 +127,7 @@
     },
     "begriffe": {
       "title": "Begriffe",
-      "summary": "Glossar der BlaulichtCMS-Begriffe."
+      "summary": "Verbindliche Begriffe: was Website, Verbindung, Auslöser, Aktion, Vorlage und Fassung in BlaulichtCMS bedeuten."
     },
     "einsatzliste": {
       "title": "Einsatzliste auf der Website",
@@ -170,6 +172,10 @@
     "verbindungen": {
       "title": "Verbindungen: Facebook, Instagram, FE2, Warnungen",
       "summary": "Verbinden, Testen, Vorschau, Aktivieren; soziale Kanäle im Beitrag, FE2-Entwürfe, amtliche Warnungen."
+    },
+    "system": {
+      "title": "Systemstatus, Protokolle und Aktivitäten",
+      "summary": "Zustand der Dienste, technisches Protokoll, Audit-Protokoll und die lesbare Liste der Aktivitäten."
     }
   },
   "tiles": {

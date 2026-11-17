@@ -180,7 +180,6 @@ export default function Sources() {
   return (
     <div className="flex flex-col gap-5">
       <PageHeader
-        title="Quellen"
         subtitle="RSS- und Atom-Feeds als Anregung für Themen. Einträge merken, ausblenden oder als Themenidee übernehmen."
         actions={manage && <Button variant="primary" icon="Plus" onClick={() => setAdding(true)}>Quelle hinzufügen</Button>}
       />

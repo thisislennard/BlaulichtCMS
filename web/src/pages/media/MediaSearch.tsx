@@ -11,6 +11,7 @@ import { fmtBytes, fmtDateTime } from '../../lib/format';
 import { Lightbox, MarkBox, MediaList, MediaThumb, mediaName, Pager, useGalleryPrefs, ViewControls, type MenuItems } from './gallery';
 import { MediaDetailsDialog } from './MediaDetails';
 import { MediaNav } from './MediaNav';
+import { usePageMeta } from '../../components/layout/AppShell';
 import { MoveCopyDialog, TagsDialog, useTagSuggestions } from './organize';
 
 interface Filters {
@@ -30,6 +31,7 @@ const EMPTY: Filters = { q: '', kind: '', selection: '', status: 'ready', tag: '
 /** Mediensuche über alle Sammlungen (wie „Medien“ in LiFeOS): Name, Typ, Sichtung, Schlagwort, Zeitraum, Hochladende. */
 export default function MediaSearch() {
   const { can } = useAuth();
+  usePageMeta({ title: 'Alle Dateien' });
   const navigate = useNavigate();
   const may = { review: can('media.review'), organize: can('media.organize'), trash: can('media.trash'), originals: can('media.download_original'), export: can('media.export') };
   const canMark = may.review || may.organize || may.trash || may.export;
@@ -90,7 +92,7 @@ export default function MediaSearch() {
   ];
   return (
     <div className="flex flex-col gap-5">
-      <PageHeader title="Alle Dateien" subtitle="Fotos und Videos über alle Sammlungen suchen und ordnen." />
+      <PageHeader subtitle="Fotos und Videos über alle Sammlungen suchen und ordnen." />
       <MediaNav />
       <form className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 items-end" onSubmit={(e) => e.preventDefault()} aria-label="Filter">
         <FieldWrap label="Suche" htmlFor="ms-q" className="sm:col-span-2">

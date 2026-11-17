@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
 import { del, get, post, put } from '../../api/client';
 import { Badge, Button, Card, cx, ErrorBox, FieldWrap, Input, KeyValue, Notice, PageHeader, Select, SkeletonRows, StatusBadge, Switch, Textarea } from '../../components/ui/core';
+import { usePageMeta } from '../../components/layout/AppShell';
 import { Icon } from '../../components/ui/Icon';
 import { HelpLink, HelpTip } from '../../components/ui/HelpTip';
 import { CopyButton, OneTimeSecret, useErrorToast, useToast, useConfirm } from '../../components/ui/overlays';
@@ -52,6 +53,7 @@ export default function ConnectionDetail() {
   const q = useQuery({ queryKey: ['connection', id], queryFn: () => get<any>(`/connections/${id}`) });
   const sites = useQuery({ queryKey: ['sites'], queryFn: () => get<any[]>('/sites'), enabled: can('channel.view') });
   const c = q.data;
+  usePageMeta({ title: c?.name });
   // Empfangsprotokoll als eigene Ansicht neben den Schritten, direkt aufrufbar über ?ansicht=empfangsprotokoll
   const [step, setStepState] = useState<Step | 'empfang'>(() => (params.get('ansicht') === 'empfangsprotokoll' ? 'empfang' : 'verbinden'));
   const setStep = (s: Step | 'empfang') => {

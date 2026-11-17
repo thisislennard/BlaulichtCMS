@@ -209,7 +209,7 @@ export async function privacySearch(term: string): Promise<PrivacyHit[]> {
   }
 
   for (const r of await many<any>(`SELECT id, name, area, recipients, created_at FROM responsibilities WHERE name ILIKE $1 OR area ILIKE $1 OR array_to_string(recipients, ' ') ILIKE $1 LIMIT ${LIMIT}`, [like])) {
-    hits.push({ kind: 'responsibility', id: r.id, title: `Zuständigkeit „${r.name}“`, at: iso(r.created_at), fields: { name: r.name, gebiet: r.area, empfaenger: r.recipients }, actions: [], note: 'Unter Warnentwurf → Pflege ändern.', link: '/warnungen/pflege' });
+    hits.push({ kind: 'responsibility', id: r.id, title: `Zuständigkeit „${r.name}“`, at: iso(r.created_at), fields: { name: r.name, gebiet: r.area, empfaenger: r.recipients }, actions: [], note: 'Unter Einrichtung → Stichwörter & Regeln → Zuständigkeiten ändern.', link: '/stichwoerter-regeln' });
   }
 
   for (const e of await many<any>(`SELECT id, event_key, keyword, title, fields, received_at, source FROM fe2_events WHERE title ILIKE $1 OR fields::text ILIKE $1 ORDER BY received_at DESC LIMIT ${LIMIT}`, [like])) {
@@ -275,7 +275,7 @@ export async function privacySearch(term: string): Promise<PrivacyHit[]> {
       fields: { absender: l.from_address, betreff: l.subject, ergebnis: l.outcome, hinweis: l.detail || undefined, presseanfrage: l.case_no ?? undefined },
       actions: ['delete'],
       note: 'Eintrag im Empfangsprotokoll des Presse-Postfachs (Löschfrist privacy.receipt_days).',
-      link: l.request_id ? `/presse/${l.request_id}` : '/presse/einstellungen',
+      link: l.request_id ? `/presse/${l.request_id}` : '/presse-postfach',
     });
   }
 

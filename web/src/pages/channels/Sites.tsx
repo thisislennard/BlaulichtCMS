@@ -114,7 +114,6 @@ export default function Sites() {
   return (
     <div className="flex flex-col gap-5">
       <PageHeader
-        title="Websites"
         subtitle="WordPress-Websites mit der BlaulichtCMS Bridge. Die Bridge holt freigegebene Beiträge per HTTPS ab und meldet die veröffentlichte Adresse zurück."
         actions={
           manage && (

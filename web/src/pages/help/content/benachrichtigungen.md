@@ -68,7 +68,7 @@ Unter [Einstellungen → Benachrichtigungen und E-Mail](/einstellungen#benachric
 
 - **Push- und E-Mail-Benachrichtigungen** global ein- oder ausschalten.
 - **Inhalt außerhalb von BlaulichtCMS:** ob Push-Mitteilungen bzw. E-Mails Einzelheiten tragen oder nur die Art (Standard), siehe [Inhalt von Push und E-Mail](#inhalt-von-push-und-e-mail).
-- **Versandweg für alle E-Mails:** SMTP oder Microsoft 365. Er gilt für Warnversand, Sicherheitsmeldungen, Workflows und Benachrichtigungen. Die SMTP-Angaben stehen unter [Warnentwürfe → Pflege → Versand](/warnungen/pflege).
+- **Versandweg für alle E-Mails:** SMTP oder Microsoft 365. Er gilt für Warnversand, Sicherheitsmeldungen, Workflows und Benachrichtigungen. Die SMTP-Angaben stehen unter [Einrichtung → Stichwörter & Regeln](/stichwoerter-regeln) im Reiter *E-Mail-Versand*.
 - **Push-Schlüssel:** BlaulichtCMS erzeugt das Schlüsselpaar für Web Push (VAPID) selbst; der private Schlüssel liegt verschlüsselt auf dem Server. „Schlüssel erneuern“ macht alle Push-Abos ungültig – alle Geräte müssen Push neu einschalten.
 
 ## Microsoft 365

@@ -236,7 +236,6 @@ export default function SystemStatus() {
   return (
     <div className="flex flex-col gap-5">
       <PageHeader
-        title={t("admin.system.title")}
         subtitle={t("admin.system.subtitle")}
         actions={
           <>
@@ -522,7 +521,7 @@ export default function SystemStatus() {
             text="Der interne Redaktionsablauf funktioniert auch ohne Website."
             action={
               can("channel.sites") && (
-                <LinkButton to="/kanaele" icon="Plus">
+                <LinkButton to="/websites" icon="Plus">
                   Website koppeln
                 </LinkButton>
               )
@@ -543,7 +542,7 @@ export default function SystemStatus() {
                 <tr key={c.id} className="hover:bg-raised transition-colors duration-fast">
                   <Td className="pl-5">
                     {can("channel.view") ? (
-                      <Link to="/kanaele" className="font-medium">
+                      <Link to="/websites" className="font-medium">
                         {c.name}
                       </Link>
                     ) : (

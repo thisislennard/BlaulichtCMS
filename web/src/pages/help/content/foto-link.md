@@ -67,9 +67,9 @@ Das Menü eines Links bietet außerdem **Angaben der Hochladenden löschen**: Na
 - **Was würde gelöscht?** unter Einstellungen → Datenschutz zeigt vorab, welche Sammlungen und wie viele Einträge fällig sind. Jeder Löschlauf steht im Audit (`retention.run`, je Sammlung `collection.deleted`).
 - In **Sicherungen** bleiben gelöschte Daten bis zu deren Ablauf (rund 4 Monate, siehe Hilfe → Sicherung).
 
-## Gestaltung der Upload-Seite
+## Upload-Seite gestalten
 
-Unter [Medien → Gestaltung](/medien/gestaltung) lässt sich die Upload-Seite wie in LiFeOS aus **Bausteinen** zusammenstellen: Titelbild, Logo, Überschrift, Text, Bild mit Bildunterschrift, Hinweisbox, Trennlinie, Begrüßungstext des Links und der Upload-Bereich (Pflicht, genau einmal; höchstens 30 Bausteine). Dazu eine **Akzentfarbe** aus einer festen Auswahl mit gutem Kontrast und der Schalter für den Kopfbereich (Organisation, Titel, Zweck, Gültigkeit). Die **Vorschau** zeigt die Seite wahlweise als Handy oder Rechner.
+Unter [Einrichtung → Upload-Seite](/upload-seite) lässt sich die Upload-Seite wie in LiFeOS aus **Bausteinen** zusammenstellen: Titelbild, Logo, Überschrift, Text, Bild mit Bildunterschrift, Hinweisbox, Trennlinie, Begrüßungstext des Links und der Upload-Bereich (Pflicht, genau einmal; höchstens 30 Bausteine). Dazu eine **Akzentfarbe** aus einer festen Auswahl mit gutem Kontrast und der Schalter für den Kopfbereich (Organisation, Titel, Zweck, Gültigkeit). Die **Vorschau** zeigt die Seite wahlweise als Handy oder Rechner.
 
 - In Texten stehen **{thema}** für den Titel der Sammlung und **{datum}** für ihr Veranstaltungsdatum.
 - Texte bleiben reiner Text – HTML, Formatierungen oder Skripte werden nicht ausgeführt, sondern als Text gezeigt.
@@ -91,7 +91,7 @@ Unter **Mein Konto → Benachrichtigungen: Medien** lässt sich jede Art für si
 
 - Dateigröße je Datei, Anzahl Dateien je Link und Umfang je Sammlung sind begrenzt (einstellbar unter Einstellungen → Medien).
 - Wird der Speicher knapp, sperrt BlaulichtCMS Uploads, bevor das System voll läuft. Vorher warnt die Glocke (Speicherwarnung).
-- **Speicherübersicht:** [Medien → Verwaltung](/medien/verwaltung) (nur „Medien administrieren“) zeigt freien Platz, Verbrauch je Art (Fotos, Videos), je Sammlung und je Ordner sowie den Platz von Papierkorb, gesperrten Dateien und ZIP-Downloads.
+- **Speicherübersicht:** [Verwaltung → Medienverwaltung](/medienverwaltung) (nur „Medien administrieren“) zeigt freien Platz, Verbrauch je Art (Fotos, Videos), je Sammlung und je Ordner sowie den Platz von Papierkorb, gesperrten Dateien und ZIP-Downloads.
 - **ZIP-Downloads** liegen standardmäßig 24 Stunden bereit und sind höchstens 20 GB groß (Einstellungen → Medien).
 
 ## Widerrufen und Ablauf
@@ -112,7 +112,7 @@ Jede Datei landet zuerst **privat in der Quarantäne**. BlaulichtCMS prüft anha
 
 ## Gesperrte Dateien
 
-Fällt eine Datei bei der Prüfung auf (falscher Typ, beschädigt, zu lang, zu groß, nicht dekodierbar), wird sie **gesperrt** statt sofort gelöscht: Sie bleibt in der Quarantäne, wird nie ausgeliefert und steht mit Grund im Reiter **In Prüfung / gesperrt** der Sammlung sowie unter [Medien → Verwaltung](/medien/verwaltung). Wer „Medien administrieren“ hat, kann
+Fällt eine Datei bei der Prüfung auf (falscher Typ, beschädigt, zu lang, zu groß, nicht dekodierbar), wird sie **gesperrt** statt sofort gelöscht: Sie bleibt in der Quarantäne, wird nie ausgeliefert und steht mit Grund im Reiter **In Prüfung / gesperrt** der Sammlung sowie unter [Verwaltung → Medienverwaltung](/medienverwaltung). Wer „Medien administrieren“ hat, kann
 
 - **Erneut prüfen** (einzeln oder **Alle erneut prüfen**, z. B. nach einer geänderten Einstellung),
 - bei Videos, die **nur** an der Dekodierprüfung gescheitert sind, **Trotzdem freigeben** – mit Begründung; Dateityp, Aufbau, Länge und Auflösung werden weiter geprüft, die Freigabe steht im Audit und erzeugt eine Sicherheitsmeldung,
@@ -122,4 +122,4 @@ Nach der Frist „Gesperrte Dateien löschen nach“ (Einstellungen → Datensch
 
 ## Sicherheitsereignisse
 
-Unter **Medien → Verwaltung** stehen die Sicherheitsereignisse der Upload-Seiten: Aufrufe abgelaufener, pausierter oder widerrufener Links, falsche Passwörter, zu viele Anfragen, erreichte Kontingente, voller Speicher, gesperrte Dateien und Freigaben trotz Befund. Gespeichert werden nur Link, Ereignis, Zeit und ein gekürzter, nicht umkehrbarer Hash der IP-Adresse – keine Klar-IP, kein Token, keine Namen. Gleiche Ereignisse zählen höchstens einmal in 10 Minuten. Aufbewahrung: Einstellungen → Datenschutz (Standard 365 Tage). Dort stehen auch **fehlgeschlagene Medienaufträge** (Prüfung, Bereinigung, öffentliche Fassung, ZIP) mit „Erneut versuchen“.
+Unter **Verwaltung → Medienverwaltung** stehen die Sicherheitsereignisse der Upload-Seiten: Aufrufe abgelaufener, pausierter oder widerrufener Links, falsche Passwörter, zu viele Anfragen, erreichte Kontingente, voller Speicher, gesperrte Dateien und Freigaben trotz Befund. Gespeichert werden nur Link, Ereignis, Zeit und ein gekürzter, nicht umkehrbarer Hash der IP-Adresse – keine Klar-IP, kein Token, keine Namen. Gleiche Ereignisse zählen höchstens einmal in 10 Minuten. Aufbewahrung: Einstellungen → Datenschutz (Standard 365 Tage). Dort stehen auch **fehlgeschlagene Medienaufträge** (Prüfung, Bereinigung, öffentliche Fassung, ZIP) mit „Erneut versuchen“.

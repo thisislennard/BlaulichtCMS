@@ -290,6 +290,32 @@ async function scanRouteInner(page, route, { buttons = true } = {}) {
   }
 }
 
+/* ------------------------------------ Titel und Überschriften ------------------------------------ */
+
+/**
+ * Je Seite genau eine h1, ein eigener Fenstertitel (nicht nur Organisation/„BlaulichtCMS“) und keine übersprungene
+ * Überschriftenebene (h1 → h3). Dialoge und ausgeblendete Elemente zählen nicht mit, nur für Screenreader sichtbare schon.
+ */
+async function checkHeadings(page, route) {
+  await gotoRoute(page, route);
+  const r = await page.evaluate(() => {
+    const hs = [...document.querySelectorAll('h1, h2, h3, h4, h5, h6')].filter((h) => h.getClientRects().length > 0 && !h.closest('[aria-hidden=true], [role=dialog]'));
+    const skips = [];
+    let prev = 0;
+    for (const h of hs) {
+      const l = Number(h.tagName[1]);
+      if (prev && l > prev + 1) skips.push(`h${prev} → ${h.tagName.toLowerCase()} „${h.textContent.trim().slice(0, 40)}“`);
+      prev = l;
+    }
+    return { title: document.title, h1: hs.filter((h) => h.tagName === 'H1').map((h) => h.textContent.trim().slice(0, 60)), skips };
+  });
+  const where = `${route} › Überschriften`;
+  if (r.h1.length !== 1) failures.push({ where, field: '-', problem: `${r.h1.length} h1 statt genau einer: ${r.h1.join(' | ') || '–'}` });
+  if (/^(BlaulichtCMS|Musterorganisation)( · BlaulichtCMS)?$/.test(r.title) || !r.title.includes(' · ')) failures.push({ where, field: '-', problem: `Kein eigener Fenstertitel: „${r.title}“` });
+  for (const sk of r.skips) failures.push({ where, field: '-', problem: `Überschriftenebene übersprungen: ${sk}` });
+  if (DEBUG || r.h1.length !== 1 || r.skips.length) console.log(`  ${route}: „${r.title}“ · h1: ${r.h1.join(' | ')}${r.skips.length ? ` · Sprünge: ${r.skips.join('; ')}` : ''}`);
+}
+
 /* ------------------------------------------ Ablauf ------------------------------------------ */
 
 let churn = null;
@@ -503,10 +529,13 @@ try {
   let n = 0;
   churn = setInterval(() => editor.post('/posts', { title: `Live-Ereignis ${++n}`, kind: 'news' }).catch(() => {}), 2000);
 
-  const routes = ['/', '/beitraege', `/beitraege/${post.id}`, `/beitraege/${sub.id}`, '/vorlagen', '/kalender', '/freigaben', '/medien', `/medien/${col.collection.id}`, '/medien/dateien', '/medien/papierkorb', '/medien/verwaltung', '/medien/gestaltung', ...(st.linkId ? [`/medien/gestaltung?link=${st.linkId}`] : []), '/designvorlagen', ...(st.designTemplateId ? [`/designvorlagen/${st.designTemplateId}`] : []), ...(st.imageTemplateId ? [`/designvorlagen/${st.imageTemplateId}`, `/designvorlagen/${st.imageTemplateId}/editor`] : []), '/quellen', '/presse', '/presse/verteiler', '/presse/mitteilungen', '/presse/einstellungen', ...(st.pressId ? [`/presse/${st.pressId}`] : []), '/banner', '/kanaele', '/warnungen', '/warnungen/pflege', ...(warn ? [`/warnungen/${warn.id}`] : []), '/verbindungen', ...(conn ? [`/verbindungen/${conn.id}`, `/verbindungen/${conn.id}?ansicht=empfangsprotokoll`] : []), ...(st.warnfeedId ? [`/verbindungen/${st.warnfeedId}`, `/verbindungen/${st.warnfeedId}?ansicht=empfangsprotokoll`] : []), ...(st.feuersoftwareId ? [`/verbindungen/${st.feuersoftwareId}`] : []), ...[st.threadsId, st.xApiId, st.whatsappId, st.mastodonId, st.blueskyId].filter(Boolean).map((x) => `/verbindungen/${x}`), '/amtliche-warnungen', '/reichweite', '/workflows', '/workflows/eingaenge', '/workflows/ausgaenge', ...(st.automationId ? [`/workflows/${st.automationId}`] : []), '/benutzer', '/system', '/protokolle', '/datenschutz-anfragen', '/einstellungen', '/profil', '/hilfe', '/aktivitaeten', '/benachrichtigungen'];
+  const routes = ['/', '/beitraege', `/beitraege/${post.id}`, `/beitraege/${sub.id}`, '/beitragsvorlagen', '/kalender', '/freigaben', '/medien', `/medien/${col.collection.id}`, '/medien/dateien', '/medien/papierkorb', '/medienverwaltung', '/upload-seite', ...(st.linkId ? [`/upload-seite?link=${st.linkId}`] : []), '/designvorlagen', ...(st.designTemplateId ? [`/designvorlagen/${st.designTemplateId}`] : []), ...(st.imageTemplateId ? [`/designvorlagen/${st.imageTemplateId}`, `/designvorlagen/${st.imageTemplateId}/editor`] : []), '/quellen', '/presse', '/presse/verteiler', '/presse/mitteilungen', '/presse/textbausteine', '/presse-postfach', ...(st.pressId ? [`/presse/${st.pressId}`] : []), '/banner', '/websites', '/warnungen', '/stichwoerter-regeln', ...(warn ? [`/warnungen/${warn.id}`] : []), '/verbindungen', ...(conn ? [`/verbindungen/${conn.id}`, `/verbindungen/${conn.id}?ansicht=empfangsprotokoll`] : []), ...(st.warnfeedId ? [`/verbindungen/${st.warnfeedId}`, `/verbindungen/${st.warnfeedId}?ansicht=empfangsprotokoll`] : []), ...(st.feuersoftwareId ? [`/verbindungen/${st.feuersoftwareId}`] : []), ...[st.threadsId, st.xApiId, st.whatsappId, st.mastodonId, st.blueskyId].filter(Boolean).map((x) => `/verbindungen/${x}`), '/amtliche-warnungen', '/reichweite', '/workflows', '/workflows/ausloeser', '/workflows/aktionen', ...(st.automationId ? [`/workflows/${st.automationId}`] : []), '/benutzer', '/system', '/protokolle', '/datenschutz-anfragen', '/einstellungen', '/profil', '/hilfe', '/hilfe/presse', '/aktivitaeten', '/benachrichtigungen'];
   // Freigabe-Ansicht aus der Push-Mitteilung (#216)
   routes.splice(4, 0, `/freigabe/beitrag/${sub.id}?fassung=2`);
   for (const r of routes) await scanRoute(page, r);
+
+  // Seitentitel und Überschriften (#267) – immer für alle Seiten, unabhängig von FOCUS_ONLY (≈ 1 s je Seite)
+  for (const r of routes) await checkHeadings(page, r);
 
   // Löschdialoge (Löschen-Knöpfe klickt der Rundgang bewusst nicht): Warnvorgang mit Begründung, Verbindung
   async function openDialog(route, button, where, before) {
@@ -684,7 +713,7 @@ try {
     } catch (e) {
       failures.push({ where: `${route} › Listenansicht`, field: '-', problem: String(e.message).split('\n')[0] });
     }
-    for (const [r, name] of [['/workflows/eingaenge', 'Neuer Eingang'], ['/workflows/ausgaenge', 'Neuer Ausgang']]) {
+    for (const [r, name] of [['/workflows/ausloeser', 'Neuer Eingang'], ['/workflows/aktionen', 'Neuer Ausgang']]) {
       const kinds = r.endsWith('eingaenge') ? ['FE2-Alarm', 'Amtliche Warnung', 'RSS-Eintrag', 'Neue Uploads', 'Zeitplan', 'Manueller Start'] : ['Banner', 'Beitrag', 'E-Mail', 'App-Benachrichtigung', 'Warnentwurf vorbereiten'];
       for (const k of kinds) {
         await gotoRoute(page, r);
@@ -715,7 +744,7 @@ try {
   const mp = await mob.newPage();
   mp.on('dialog', (d) => d.accept().catch(() => {}));
   seenGlobal.clear();
-  for (const r of [`/beitraege/${post.id}`, '/profil', `/medien/${col.collection.id}`, '/medien/gestaltung', ...(warn ? [`/warnungen/${warn.id}`] : []), ...(conn ? [`/verbindungen/${conn.id}?ansicht=empfangsprotokoll`] : []), ...(st.automationId ? [`/workflows/${st.automationId}`] : [])]) await scanRoute(mp, r, { buttons: false });
+  for (const r of [`/beitraege/${post.id}`, '/profil', `/medien/${col.collection.id}`, '/upload-seite', ...(warn ? [`/warnungen/${warn.id}`] : []), ...(conn ? [`/verbindungen/${conn.id}?ansicht=empfangsprotokoll`] : []), ...(st.automationId ? [`/workflows/${st.automationId}`] : [])]) await scanRoute(mp, r, { buttons: false });
   await scanRoute(mp, `/freigabe/beitrag/${sub.id}?fassung=2`, { buttons: false });
 
   const uniqueFields = new Set(tested.map((t) => `${t.where}|${t.field}`)).size;

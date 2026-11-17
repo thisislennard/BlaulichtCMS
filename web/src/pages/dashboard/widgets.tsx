@@ -247,9 +247,9 @@ function FlowBoard({ d }: { d: any }) {
   return (
     <section aria-label="Redaktionsfluss" className="flex flex-col gap-4">
       <div className="flex items-baseline justify-between gap-3 pb-2.5 border-b border-fg">
-        <h3 className="m-0 font-mono text-[12px] font-medium uppercase tracking-[0.08em]">
+        <h2 className="m-0 font-mono text-[12px] font-medium uppercase tracking-[0.08em]">
           <span className="text-fg-muted">01 —</span> Redaktionsfluss
-        </h3>
+        </h2>
         <Link to="/beitraege" className="text-sm !text-fg-muted hover:!text-fg">
           Alle Beiträge →
         </Link>
@@ -311,7 +311,7 @@ function FlowBoard({ d }: { d: any }) {
                 )}
               </FlowCard>
             ))}
-            <More to="/kanaele" n={pubs.length - 2} />
+            <More to="/websites" n={pubs.length - 2} />
             {!pubs.length && <p className="m-0 px-0.5 text-meta text-fg-muted">Noch nichts veröffentlicht.</p>}
           </FlowColumn>
         )}
@@ -320,7 +320,7 @@ function FlowBoard({ d }: { d: any }) {
   );
 }
 
-const LINKS: Record<string, [string, string]> = { approvals: ['/freigaben', 'Alle'], sites: ['/kanaele', 'Verwalten'], banners: ['/banner', 'Alle'], rss: ['/quellen', 'Alle'], uploads: ['/medien', 'Alle'], press: ['/presse', 'Alle'], insights: ['/reichweite', 'Übersicht'] };
+const LINKS: Record<string, [string, string]> = { approvals: ['/freigaben', 'Alle'], sites: ['/websites', 'Verwalten'], banners: ['/banner', 'Alle'], rss: ['/quellen', 'Alle'], uploads: ['/medien', 'Alle'], press: ['/presse', 'Alle'], insights: ['/reichweite', 'Übersicht'] };
 
 /** Eine Kachel in einer Spalte. Der Redaktionsfluss bringt seine eigene Überschrift mit, alles andere ist eine Karte. */
 export function PanelTile({ id, d }: { id: string; d: any }) {

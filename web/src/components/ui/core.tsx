@@ -1,6 +1,7 @@
 import { forwardRef, useId, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from 'react';
 import { Link } from 'react-router';
 import { Icon } from './Icon';
+import { usePageInfo } from '../layout/page';
 
 export function cx(...c: (string | false | null | undefined)[]) {
   return c.filter(Boolean).join(' ');
@@ -170,9 +171,9 @@ export function Card({ title, subtitle, action, children, className, bodyClassNa
         <div className="flex items-start justify-between gap-3 px-5 pt-[18px] pb-3 flex-wrap">
           <div className="min-w-0">
             {title && (
-              <h3 id={hid} className="m-0 text-section font-semibold">
+              <h2 id={hid} className="m-0 text-section font-semibold">
                 {title}
-              </h3>
+              </h2>
             )}
             {subtitle && <p className="m-0 mt-0.5 text-meta text-fg-muted">{subtitle}</p>}
           </div>
@@ -184,11 +185,21 @@ export function Card({ title, subtitle, action, children, className, bodyClassNa
   );
 }
 
-export function PageHeader({ title, subtitle, actions, children }: { title: ReactNode; subtitle?: ReactNode; actions?: ReactNode; children?: ReactNode }) {
+/**
+ * Seitenkopf mit der einzigen h1 der Seite (#267). Ohne `title` gilt der Seitentitel aus dem App-Rahmen
+ * (`usePageMeta({ title })` bzw. die Menübezeichnung) – so sind Menüpunkt, Seitentitel, Brotkrumen und Fenstertitel
+ * gleich (#250). Rechts neben dem Titel steht das „?“ zum Hilfe-Kapitel der Seite (#265); `help` wählt ein anderes
+ * Kapitel/einen Anker, `help={false}` blendet es aus.
+ */
+export function PageHeader({ title, subtitle, actions, children, help }: { title?: ReactNode; subtitle?: ReactNode; actions?: ReactNode; children?: ReactNode; help?: string | false }) {
+  const page = usePageInfo();
   return (
     <div className="flex items-end justify-between gap-4 flex-wrap">
       <div className="flex flex-col gap-1 min-w-0">
-        <h2 className="m-0 text-page font-semibold tracking-[-0.03em]">{title}</h2>
+        <div className="flex items-center gap-1.5 min-w-0">
+          <h1 className="m-0 text-page font-semibold tracking-[-0.03em] min-w-0 break-words">{title ?? page.title}</h1>
+          {page.renderHelp(help)}
+        </div>
         {subtitle && <p className="m-0 text-fg-muted">{subtitle}</p>}
         {children}
       </div>
@@ -363,7 +374,7 @@ export function EmptyState({ icon = 'Inbox', title, text, action }: { icon?: str
         <Icon name={icon} size={20} />
       </div>
       <div className="flex flex-col gap-1 max-w-[420px]">
-        <h3 className="m-0 text-section font-semibold">{title}</h3>
+        <p className="m-0 text-section font-semibold">{title}</p>
         {text && <p className="m-0 text-sm text-fg-muted">{text}</p>}
       </div>
       {action}

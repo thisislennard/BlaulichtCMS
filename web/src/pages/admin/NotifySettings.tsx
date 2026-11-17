@@ -7,6 +7,8 @@ import { useConfirm, useToast } from '../../components/ui/overlays';
 import { HelpLink, HelpTip } from '../../components/ui/HelpTip';
 import { fmtDateTime } from '../../lib/format';
 import { FieldGrid, LoadError, SectionCard } from './shared';
+import { navPath } from '../../config/navigation';
+import { navTrail } from '../../config/navText';
 
 interface NotifySettingsView {
   transport: 'smtp' | 'm365';
@@ -141,7 +143,7 @@ export function NotifySettingsSection({ manage }: { manage: boolean }) {
 
       {form.transport === 'smtp' && (
         <Notice icon="Mail">
-          Server, Zugangsdaten und Testmail für SMTP stehen unter <Link to="/warnungen/pflege">Warnentwürfe → Pflege → Versand</Link>.
+          Server, Zugangsdaten und Testmail für SMTP stehen unter <Link to={navPath('warningConfig')}>{navTrail('warningConfig', 'E-Mail-Versand')}</Link>.
         </Notice>
       )}
 

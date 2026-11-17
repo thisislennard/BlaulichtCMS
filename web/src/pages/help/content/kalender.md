@@ -126,7 +126,7 @@ Wer den Link kennt, sieht die Termine. Bei Verdacht, dass er weitergegeben wurde
 
 Termine können [Workflows](/hilfe/workflows) starten – zum Beispiel: Beginnt ein Termin der Kategorie „Übung“, erscheint auf der Website der Banner „Achtung Übung“ bis zum Ende der Übung (Vorlage **Übung im Kalender → Banner „Achtung Übung“** unter **Neuer Workflow**).
 
-Den Eingang **Kalendereintrag** richtet man unter [Workflows → Eingänge](/workflows/eingaenge) ein:
+Den Eingang **Kalendereintrag** richtet man unter [Workflows → Auslöser](/workflows/ausloeser) ein:
 
 | Einstellung | Möglichkeiten |
 |---|---|

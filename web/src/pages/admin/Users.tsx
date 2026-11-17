@@ -111,7 +111,6 @@ export default function Users() {
   return (
     <div className="flex flex-col gap-5">
       <PageHeader
-        title={t("admin.users.title")}
         subtitle={
           users.data && roles.data ? (
             [

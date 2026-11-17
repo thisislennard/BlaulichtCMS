@@ -95,7 +95,6 @@ export default function Activities() {
   return (
     <div className="flex flex-col gap-5 max-w-[960px]">
       <PageHeader
-        title={t("activity.title")}
         subtitle={t("activity.subtitle")}
       />
       <div className="flex flex-col items-start gap-1.5">
@@ -167,12 +166,12 @@ export default function Activities() {
               aria-labelledby={`day-${g.key}`}
               className="flex flex-col gap-2"
             >
-              <h3
+              <h2
                 id={`day-${g.key}`}
                 className="m-0 font-mono text-label uppercase text-fg-muted px-1"
               >
                 {g.label}
-              </h3>
+              </h2>
               <ol className="list-none m-0 p-0 bg-card border border-line rounded-card">
                 {g.items.map((e) => (
                   <FeedItem key={e.id} ev={e} />

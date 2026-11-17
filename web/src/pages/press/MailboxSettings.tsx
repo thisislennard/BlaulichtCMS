@@ -73,7 +73,7 @@ export function MailboxSettings() {
   const s = q.data!.state;
   return (
     <div className="flex flex-col gap-5">
-      <Card title="Presse-Postfach" subtitle="Mails an das Presse-Postfach werden automatisch zu Presseanfragen; Antworten im selben Verlauf landen bei der bestehenden Anfrage.">
+      <Card title="Postfach und Abruf" subtitle="Mails an das Presse-Postfach werden automatisch zu Presseanfragen; Antworten im selben Verlauf landen bei der bestehenden Anfrage.">
         <div className="flex flex-col gap-4">
           <div className="flex flex-wrap items-center gap-2 text-sm">
             <Badge tone={v.enabled ? (s.lastOk === false ? 'error' : 'success') : 'neutral'}>{v.enabled ? (s.lastOk === false ? 'Abruf gestört' : 'Abruf aktiv') : 'Abruf aus'}</Badge>

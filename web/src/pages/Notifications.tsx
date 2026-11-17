@@ -101,7 +101,6 @@ export default function Notifications() {
   return (
     <div className="flex flex-col gap-5 max-w-[900px]">
       <PageHeader
-        title={t("activity.notifications.title")}
         subtitle={t("activity.notifications.subtitle")}
         actions={
           <Button icon="Check" disabled={!unread} onClick={markAll}>

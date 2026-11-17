@@ -7,7 +7,7 @@ import { Badge, Button, Card, EmptyState, ErrorBox, FieldWrap, PageHeader, Selec
 import { Dialog, useConfirm, useErrorToast, useToast } from '../../components/ui/overlays';
 import { fmtDateTime, fmtRelative } from '../../lib/format';
 import { mediaName } from './gallery';
-import { MediaNav } from './MediaNav';
+import { usePageMeta } from '../../components/layout/AppShell';
 import { StorageCard } from './StorageCard';
 
 
@@ -86,7 +86,7 @@ function ForceReleaseDialog({ target, onClose, onDone }: { target: { id: string;
   );
 }
 
-/** „Medien → Verwaltung“ (nur „Medien administrieren“): gesperrte Dateien, Sicherheitsereignisse, Aufträge, Speicher. */
+/** Verwaltung → Medienverwaltung (nur „Medien administrieren“): gesperrte Dateien, Sicherheitsereignisse, Aufträge, Speicher. */
 export default function MediaAdmin() {
   const qc = useQueryClient();
   const toast = useToast();
@@ -100,8 +100,7 @@ export default function MediaAdmin() {
   const actions = useBlockedActions(refresh);
   return (
     <div className="flex flex-col gap-5">
-      <PageHeader title="Verwaltung der Medien" subtitle="Gesperrte Dateien, Sicherheitsereignisse der Upload-Seiten, Aufträge und Speicher." />
-      <MediaNav />
+      <PageHeader subtitle="Gesperrte Dateien, Sicherheitsereignisse der Upload-Seiten, Aufträge und Speicher." />
       <StorageCard />
       <Card
         title="Gesperrte Dateien"

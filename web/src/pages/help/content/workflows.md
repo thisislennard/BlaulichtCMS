@@ -2,9 +2,9 @@ Workflows (bis Version 0.3.0 „Automationen“) nehmen Routinearbeit ab: Bei ei
 
 Ein Workflow besteht aus drei Bausteinen:
 
-1. **Auslöser (Eingänge)** – *wann* etwas passiert. Eingerichtet unter [Workflows → Eingänge](/workflows/eingaenge) oder direkt im Workflow.
+1. **Auslöser (Eingänge)** – *wann* etwas passiert. Eingerichtet unter [Workflows → Auslöser](/workflows/ausloeser) oder direkt im Workflow.
 2. **Bedingungen und Verarbeitung** – *ob* und *wie*: Bedingungen, Verzweigungen, Textvorlagen, Warten, Entprellen, Freigabe.
-3. **Aktionen (Ausgänge)** – *was* passiert, samt Gestaltung (Banner-Stil, Beitragsvorlage, E-Mail …). Eingerichtet unter [Workflows → Ausgänge](/workflows/ausgaenge) oder direkt im Workflow.
+3. **Aktionen (Ausgänge)** – *was* passiert, samt Gestaltung (Banner-Stil, Beitragsvorlage, E-Mail …). Eingerichtet unter [Workflows → Aktionen](/workflows/aktionen) oder direkt im Workflow.
 
 Unter [Workflows](/workflows) steht jeder Workflow mit einem Satz, was er tut – z. B. „Wenn ein neuer Alarm über „FE2 Leitstelle“ eingeht und Stichwort mit „F 2“ beginnt, erscheint nach Freigabe auf der Website ein Banner der Stufe „Warnung“.“ Rechte: **Workflows ansehen** (Administration, Redaktion, Freigabe), **Workflows verwalten** und **Workflows direkt veröffentlichen lassen** (beide nur Administration). Die Rechte heißen intern weiter `automation.*`.
 

@@ -23,13 +23,16 @@ const imgUrl = (id: string) => `/api/v1/public/design-images/${id}`;
 export function DesignedPage({ info, design, token, preview }: { info: LinkInfo; design: UploadDesign; token: string; preview?: boolean }) {
   const hasH1 = design.header || design.blocks.some((b) => b.type === 'heading' && b.size !== 'm');
   let h1Used = design.header;
+  // In der Vorschau (Verwaltungsseite) keine echten Überschriften – die Seite hat ihre eigene h1 (#267)
+  const H1 = preview ? 'div' : 'h1';
+  const H2 = preview ? 'div' : 'h2';
   return (
     <div className="flex flex-col gap-5">
-      {!hasH1 && <h1 className="sr-only">{info.collection.title}</h1>}
+      {!hasH1 && !preview && <h1 className="sr-only">{info.collection.title}</h1>}
       {design.header && (
         <header className="flex flex-col gap-1">
           <div className="text-sm text-fg-muted">{info.organization}</div>
-          <h1 className="m-0 text-page font-semibold tracking-[-0.02em]">{info.collection.title}</h1>
+          <H1 className="m-0 text-page font-semibold tracking-[-0.02em]">{info.collection.title}</H1>
           {info.collection.purpose && <p className="m-0 text-fg-muted">{info.collection.purpose}</p>}
           <div className="text-sm text-fg-muted">Uploads möglich bis {fmtDateTime(info.expires_at)}</div>
         </header>
@@ -55,15 +58,15 @@ export function DesignedPage({ info, design, token, preview }: { info: LinkInfo;
             if (b.size !== 'm' && !h1Used) {
               h1Used = true;
               return (
-                <h1 key={i} className="m-0 text-page font-semibold tracking-[-0.02em]">
+                <H1 key={i} className="m-0 text-page font-semibold tracking-[-0.02em]">
                   {text}
-                </h1>
+                </H1>
               );
             }
             return (
-              <h2 key={i} className={cx('m-0 font-semibold', b.size === 'm' ? 'text-section' : 'text-[22px]')}>
+              <H2 key={i} className={cx('m-0 font-semibold', b.size === 'm' ? 'text-section' : 'text-[22px]')}>
                 {text}
-              </h2>
+              </H2>
             );
           }
           case 'text':

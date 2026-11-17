@@ -94,7 +94,6 @@ export default function Collections() {
   return (
     <div className="flex flex-col gap-5">
       <PageHeader
-        title="Medien"
         subtitle="Sammlungen mit Fotos und Videos. Neue Uploads landen zuerst in der Prüfung."
         actions={
           can('media.collections') && (

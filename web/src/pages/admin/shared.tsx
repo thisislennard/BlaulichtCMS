@@ -321,21 +321,21 @@ export function auditHref(
     case "collection":
       return id && !deleted ? `/medien/${id}` : "/medien";
     case "site":
-      return "/kanaele";
+      return "/websites";
     case "user":
       return "/benutzer";
     case "backup":
       return "/einstellungen#sicherung";
     case "settings":
-      return ev.action.startsWith("warning.") ? "/warnungen/pflege" : "/einstellungen";
+      return ev.action.startsWith("warning.") ? "/stichwoerter-regeln" : "/einstellungen";
     case "warning":
       return id && !deleted ? `/warnungen/${id}` : "/warnungen";
     case "keyword":
     case "rule":
     case "responsibility":
-      return "/warnungen/pflege";
+      return "/stichwoerter-regeln";
     case "template":
-      return ev.action.startsWith("warning.") ? "/warnungen/pflege" : "/vorlagen";
+      return ev.action.startsWith("warning.") ? "/stichwoerter-regeln" : "/beitragsvorlagen";
     case "design_template":
       return id && !deleted ? `/designvorlagen/${id}` : "/designvorlagen";
     case "template_category":
@@ -347,13 +347,13 @@ export function auditHref(
     case "rss_feed":
       return "/quellen";
     case "plugin":
-      return "/kanaele";
+      return "/websites";
     case "automation":
       return id && !deleted ? `/workflows/${id}` : "/workflows";
     case "automation_input":
-      return "/workflows/eingaenge";
+      return "/workflows/ausloeser";
     case "automation_output":
-      return "/workflows/ausgaenge";
+      return "/workflows/aktionen";
     default:
       return null;
   }

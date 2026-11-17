@@ -1,17 +1,31 @@
 import { lazy, Suspense, type ReactNode } from 'react';
 import { createBrowserRouter, Navigate, RouterProvider, useLocation, useRouteError, type RouteObject } from 'react-router';
-import { AppShell, RequirePerm } from './components/layout/AppShell';
+import { AppShell, RequirePerm, usePageMeta } from './components/layout/AppShell';
 import { LinkButton, SkeletonRows } from './components/ui/core';
 import { useAuth } from './lib/auth';
 import { InvitePage, LoginPage, MfaSetupPage, MfaVerifyPage, SetupPage } from './pages/auth/AuthPages';
 import { UploadPage } from './pages/public/UploadPage';
 import { LiveProvider } from './lib/live';
 import { CrashView, FeedbackPage, FeedbackView, feedbackFor } from './components/feedback/Feedback';
+import { LEGACY_PATHS } from './config/navigation';
 
 /** /automationen/… → /workflows/… (Pfad, Suche und Anker bleiben erhalten). */
 function LegacyWorkflowRedirect() {
   const loc = useLocation();
   return <Navigate replace to={`${loc.pathname.replace(/^\/automationen/, '/workflows')}${loc.search}${loc.hash}`} />;
+}
+
+/** Frühere Adressen vor der neuen Gliederung (#250) → neue Adresse; Unterpfad, Suche und Anker bleiben erhalten. */
+function LegacyRedirect({ from }: { from: string }) {
+  const loc = useLocation();
+  return <Navigate replace to={`${LEGACY_PATHS[from]}${loc.pathname.slice(from.length)}${loc.search}${loc.hash}`} />;
+}
+
+/** /presse/einstellungen (bis 0.6) war Postfach und Textbausteine zugleich – jetzt zwei Seiten, je nach Recht. */
+function PressSettingsRedirect() {
+  const { can } = useAuth();
+  const loc = useLocation();
+  return <Navigate replace to={`${can('press.mailbox') ? '/presse-postfach' : '/presse/textbausteine'}${loc.search}${loc.hash}`} />;
 }
 
 const Dashboard = lazy(() => import('./pages/Dashboard'));
@@ -54,7 +68,8 @@ const AutomationOutputs = lazy(() => import('./pages/automations/Outputs'));
 const PressRequests = lazy(() => import('./pages/press/PressRequests'));
 const PressRequestPage = lazy(() => import('./pages/press/PressRequest'));
 const CalendarPage = lazy(() => import('./pages/calendar/Calendar'));
-const PressSettings = lazy(() => import('./pages/press/PressSettings'));
+const PressMailboxPage = lazy(() => import('./pages/press/PressSettings').then((m) => ({ default: m.PressMailboxPage })));
+const PressSnippetsPage = lazy(() => import('./pages/press/PressSettings').then((m) => ({ default: m.PressSnippetsPage })));
 const PressDistribution = lazy(() => import('./pages/press/Distribution'));
 const PressReleases = lazy(() => import('./pages/press/Releases'));
 const PressUnsubscribe = lazy(() => import('./pages/public/PressUnsubscribe'));
@@ -81,6 +96,7 @@ function RouteError({ page }: { page?: boolean }) {
 
 /** Unbekannte Adresse innerhalb der App. */
 function NotFound() {
+  usePageMeta({ title: 'Seite nicht gefunden' });
   return <FeedbackView kind="notfound" actions={<LinkButton to="/" variant="primary" icon="LayoutDashboard">Zur Übersicht</LinkButton>} />;
 }
 
@@ -161,13 +177,13 @@ const router = createBrowserRouter(withErrors([
       { path: 'beitraege/:id', element: <Page perm={['post.view']}><PostEditor /></Page> },
       // Freigabe-Ansicht (#216): Ziel der Push-Mitteilung „Freigabe erbeten“
       { path: 'freigabe/beitrag/:id', element: <Page perm={['approval.post']}><ReviewView /></Page> },
-      { path: 'vorlagen', element: <Page perm={['post.view']}><Templates /></Page> },
+      { path: 'beitragsvorlagen', element: <Page perm={['post.view']}><Templates /></Page> },
       { path: 'freigaben', element: <Page perm={['post.view']}><Posts key="freigaben" mode="approvals" /></Page> },
       { path: 'medien', element: <Page perm={['media.view']}><Collections /></Page> },
       { path: 'medien/dateien', element: <Page perm={['media.view']}><MediaSearch /></Page> },
       { path: 'medien/papierkorb', element: <Page perm={['media.trash']}><Trash /></Page> },
-      { path: 'medien/verwaltung', element: <Page perm={['media.admin']}><MediaAdmin /></Page> },
-      { path: 'medien/gestaltung', element: <Page perm={['media.design']}><DesignEditor /></Page> },
+      { path: 'medienverwaltung', element: <Page perm={['media.admin']}><MediaAdmin /></Page> },
+      { path: 'upload-seite', element: <Page perm={['media.design']}><DesignEditor /></Page> },
       { path: 'medien/:id', element: <Page perm={['media.view']}><CollectionDetail /></Page> },
       { path: 'designvorlagen', element: <Page perm={['templates.view']}><DesignTemplates /></Page> },
       { path: 'designvorlagen/:id', element: <Page perm={['templates.view']}><DesignTemplateDetail /></Page> },
@@ -177,15 +193,15 @@ const router = createBrowserRouter(withErrors([
       { path: 'quellen', element: <Page perm={['source.view']}><Sources /></Page> },
       { path: 'banner', element: <Page perm={['banner.view']}><Banners /></Page> },
       { path: 'einsatzliste', element: <Page perm={['incident.view']}><IncidentList /></Page> },
-      { path: 'kanaele', element: <Page perm={['channel.view']}><Sites /></Page> },
+      { path: 'websites', element: <Page perm={['channel.view']}><Sites /></Page> },
       { path: 'warnungen', element: <Page perm={['warning.view']}><Warnings /></Page> },
-      { path: 'warnungen/pflege', element: <Page perm={['warning.rules', 'warning.approve', 'warning.settings']}><WarningConfig /></Page> },
+      { path: 'stichwoerter-regeln', element: <Page perm={['warning.rules', 'warning.approve', 'warning.settings']}><WarningConfig /></Page> },
       { path: 'warnungen/:id', element: <Page perm={['warning.view']}><WarningCase /></Page> },
       { path: 'verbindungen', element: <Page perm={['connection.configure']}><Connections /></Page> },
       { path: 'verbindungen/:id', element: <Page perm={['connection.configure']}><ConnectionDetail /></Page> },
       { path: 'workflows', element: <Page perm={['automation.read']}><Automations /></Page> },
-      { path: 'workflows/eingaenge', element: <Page perm={['automation.read']}><AutomationInputs /></Page> },
-      { path: 'workflows/ausgaenge', element: <Page perm={['automation.read']}><AutomationOutputs /></Page> },
+      { path: 'workflows/ausloeser', element: <Page perm={['automation.read']}><AutomationInputs /></Page> },
+      { path: 'workflows/aktionen', element: <Page perm={['automation.read']}><AutomationOutputs /></Page> },
       { path: 'workflows/:id', element: <Page perm={['automation.read']}><AutomationEditor /></Page> },
       // Frühere Adressen (bis 0.3.0 „Automationen“): Lesezeichen, Benachrichtigungen und Audit-Links bleiben gültig
       { path: 'automationen/*', element: <LegacyWorkflowRedirect /> },
@@ -193,7 +209,8 @@ const router = createBrowserRouter(withErrors([
       { path: 'presse', element: <Page perm={['press.view']}><PressRequests /></Page> },
       { path: 'presse/verteiler', element: <Page perm={['press.contacts']}><PressDistribution /></Page> },
       { path: 'presse/mitteilungen', element: <Page perm={['press.release']}><PressReleases /></Page> },
-      { path: 'presse/einstellungen', element: <Page perm={['press.mailbox', 'press.snippets']}><PressSettings /></Page> },
+      { path: 'presse/textbausteine', element: <Page perm={['press.snippets']}><PressSnippetsPage /></Page> },
+      { path: 'presse-postfach', element: <Page perm={['press.mailbox']}><PressMailboxPage /></Page> },
       { path: 'presse/:id', element: <Page perm={['press.view']}><PressRequestPage /></Page> },
       { path: 'amtliche-warnungen', element: <Page perm={['official.view']}><OfficialWarnings /></Page> },
       { path: 'benutzer', element: <Page perm={['user.view']}><Users /></Page> },
@@ -204,6 +221,12 @@ const router = createBrowserRouter(withErrors([
       { path: 'profil', element: <Page><Profile /></Page> },
       { path: 'hilfe', element: <Page><Help /></Page> },
       { path: 'hilfe/:chapter', element: <Page><Help /></Page> },
+      // Frühere Adressen vor der neuen Gliederung (#250): Lesezeichen, Benachrichtigungen, Audit- und Hilfe-Links
+      ...Object.keys(LEGACY_PATHS).flatMap((from) => [
+        { path: from.slice(1), element: <LegacyRedirect from={from} /> },
+        { path: `${from.slice(1)}/*`, element: <LegacyRedirect from={from} /> },
+      ]),
+      { path: 'presse/einstellungen', element: <PressSettingsRedirect /> },
       { path: '*', element: <NotFound /> },
       ] },
     ],

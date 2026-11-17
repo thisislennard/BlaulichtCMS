@@ -46,7 +46,7 @@ export interface TextArea {
 export const TEXT_AREAS: TextArea[] = [
   { table: 'collections', area: 'Sammlung', columns: ['title', 'purpose', 'note'], titleSql: 't.title', linkSql: `'/medien/' || t.id`, note: 'In der Sammlung unter Medien bearbeiten.' },
   { table: 'collection_folders', area: 'Ordner einer Sammlung', columns: ['name'], titleSql: 't.name', linkSql: `'/medien/' || t.collection_id`, note: 'Ordner in der Sammlung umbenennen.' },
-  { table: 'media_tags', area: 'Schlagwort', columns: ['name'], titleSql: 't.name', linkSql: `'/medien/verwaltung'`, note: 'Schlagwort unter Medien → Verwaltung umbenennen oder löschen.' },
+  { table: 'media_tags', area: 'Schlagwort', columns: ['name'], titleSql: 't.name', linkSql: `'/medienverwaltung'`, note: 'Schlagwort unter Verwaltung → Medienverwaltung umbenennen oder löschen.' },
   {
     table: 'upload_links',
     area: 'Upload-Link',
@@ -65,20 +65,20 @@ export const TEXT_AREAS: TextArea[] = [
     linkSql: `'/banner'`,
     note: 'Kopie des Banners im Auftrag an die Website; Banner bearbeiten bzw. beenden.',
   },
-  { table: 'post_templates', area: 'Beitragsvorlage', columns: ['name', 'title', 'body', 'excerpt'], titleSql: 't.name', linkSql: `'/vorlagen'`, note: 'Vorlage unter Beiträge → Vorlagen bearbeiten.' },
+  { table: 'post_templates', area: 'Beitragsvorlage', columns: ['name', 'title', 'body', 'excerpt'], titleSql: 't.name', linkSql: `'/beitragsvorlagen'`, note: 'Beitragsvorlage unter Einrichtung → Beitragsvorlagen bearbeiten.' },
   {
     table: 'warning_templates',
     area: 'Vorlage für Warnentwürfe',
     columns: ['name', 'pdf_title', 'pdf_footer', 'mail_subject', 'mail_body', 'note'],
     titleSql: 't.name',
-    linkSql: `'/warnungen/pflege'`,
+    linkSql: `'/stichwoerter-regeln'`,
     note: 'Unter Warnentwürfe → Pflege ändern (neue Version).',
     other: { fields: 'Felddefinitionen der Vorlage (Konfiguration)' },
   },
   { table: 'design_templates', area: 'Designvorlage', columns: ['title', 'description', 'usage_note', 'tags[]'], titleSql: 't.title', linkSql: `'/designvorlagen/' || t.id`, note: 'Designvorlage bearbeiten. Bilder in Vorlagen werden nicht inhaltlich durchsucht.' },
   { table: 'design_template_versions', area: 'Designvorlage (Versionshinweis)', columns: ['note'], titleSql: `'Version ' || t.number`, linkSql: `'/designvorlagen/' || t.template_id`, note: 'Versionshinweis der Designvorlage.' },
   { table: 'design_template_files', area: 'Designvorlage (Datei)', columns: ['original_name'], titleSql: 't.original_name', linkSql: `'/designvorlagen/' || t.template_id`, note: 'Datei der Designvorlage.' },
-  { table: 'press_snippets', area: 'Textbaustein (Presse)', columns: ['title', 'body'], titleSql: 't.title', linkSql: `'/presse/einstellungen'`, note: 'Textbaustein unter Presse → Einstellungen bearbeiten.' },
+  { table: 'press_snippets', area: 'Textbaustein (Presse)', columns: ['title', 'body'], titleSql: 't.title', linkSql: `'/presse/textbausteine'`, note: 'Textbaustein unter Presse → Textbausteine bearbeiten.' },
   {
     table: 'press_releases',
     area: 'Pressemitteilung',
@@ -91,8 +91,8 @@ export const TEXT_AREAS: TextArea[] = [
   { table: 'calendar_sources', area: 'Kalenderquelle', columns: ['name'], titleSql: 't.name', linkSql: `'/kalender'`, note: 'Bezeichnung der iCal-Quelle ändern.', other: { last_error: 'technische Fehlermeldung des Abrufs' } },
   { table: 'automations', area: 'Workflow', columns: ['name', 'description', 'graph{}'], titleSql: 't.name', linkSql: `'/workflows/' || t.id`, note: 'Texte im Workflow ändern (neue Version).' },
   { table: 'automation_versions', area: 'Workflow (freigegebene Version)', columns: ['graph{}'], titleSql: `'Version ' || t.version`, linkSql: `'/workflows/' || t.automation_id`, note: 'Frühere aktive Version eines Workflows; gilt bis zum Löschen des Workflows.' },
-  { table: 'automation_inputs', area: 'Workflow-Eingang', columns: ['name', 'config{}'], titleSql: 't.name', linkSql: `'/workflows/eingaenge'`, note: 'Eingang unter Workflows → Eingänge bearbeiten.' },
-  { table: 'automation_outputs', area: 'Workflow-Ausgang', columns: ['name', 'config{}'], titleSql: 't.name', linkSql: `'/workflows/ausgaenge'`, note: 'Ausgang unter Workflows → Ausgänge bearbeiten.' },
+  { table: 'automation_inputs', area: 'Workflow-Auslöser', columns: ['name', 'config{}'], titleSql: 't.name', linkSql: `'/workflows/ausloeser'`, note: 'Auslöser unter Einrichtung → Workflows → Auslöser bearbeiten.' },
+  { table: 'automation_outputs', area: 'Workflow-Aktion', columns: ['name', 'config{}'], titleSql: 't.name', linkSql: `'/workflows/aktionen'`, note: 'Aktion unter Einrichtung → Workflows → Aktionen bearbeiten.' },
   {
     table: 'app_logs',
     area: 'Systemprotokoll',

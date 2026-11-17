@@ -486,7 +486,7 @@ function PostEditorInner({ id }: { id: string }) {
                 ))}
               </Select>
             </FieldWrap>
-            {sites.data && activeSites.length === 0 && <p className="m-0 mt-2 text-sm text-fg-muted">Noch keine Website gekoppelt. {can('channel.sites') && <Link to="/kanaele">Website koppeln</Link>}</p>}
+            {sites.data && activeSites.length === 0 && <p className="m-0 mt-2 text-sm text-fg-muted">Noch keine Website gekoppelt. {can('channel.sites') && <Link to="/websites">Website koppeln</Link>}</p>}
             {draft.siteId && (
               <div className="flex flex-col gap-4 mt-4">
                 <FieldWrap label="Termin (optional)" help="Leer = sofort nach dem Veröffentlichen. Der Termin ist Teil der freigegebenen Fassung." htmlFor="e-at">

@@ -1,4 +1,4 @@
-Unter [Stichwörter & Regeln](/warnungen/pflege) werden die Grundlagen des Warnstufen-Assistenten **lokal** gepflegt. BlaulichtCMS wird **ohne aktive Regeln** ausgeliefert – alle Inhalte stimmt die Organisation selbst mit der zuständigen Stelle ab.
+Unter [Einrichtung → Stichwörter & Regeln](/stichwoerter-regeln) werden die Grundlagen des Warnstufen-Assistenten **lokal** gepflegt. BlaulichtCMS wird **ohne aktive Regeln** ausgeliefert – alle Inhalte stimmt die Organisation selbst mit der zuständigen Stelle ab.
 
 ## Stichwortverzeichnis der Länder
 

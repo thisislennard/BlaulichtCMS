@@ -55,7 +55,6 @@ export default function Logs() {
   return (
     <div className="flex flex-col gap-5">
       <PageHeader
-        title={t("admin.logs.title")}
         subtitle={t("admin.logs.subtitle")}
       />
       <Tabs

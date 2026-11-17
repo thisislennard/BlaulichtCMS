@@ -295,7 +295,6 @@ export default function Distribution() {
   return (
     <div className="flex flex-col gap-5">
       <PageHeader
-        title="Presseverteiler"
         subtitle="Kontakte von Redaktionen mit Herkunft und Rechtsgrundlage, gruppiert in Verteilerlisten für Pressemitteilungen."
         actions={
           <>

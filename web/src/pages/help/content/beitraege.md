@@ -7,6 +7,10 @@
 | Veranstaltung | Termine, Rückblicke |
 | Lage-Info | Informationen während einer laufenden Lage |
 
+## Beitragsvorlagen
+
+Unter [Einrichtung → Beitragsvorlagen](/beitragsvorlagen) stehen Vorlagen für wiederkehrende Beiträge, z. B. „Einsatzbericht kurz“: Name, Art, Titelvorschlag, Text und Kurzfassung. Platzhalter wie `[Datum]` oder `[Ort]` erleichtern das Ausfüllen. Beim Anlegen eines Beitrags („Neuer Beitrag“) lässt sich eine Beitragsvorlage wählen; Titel, Art und Text werden dann vorbelegt. Anlegen und ändern darf, wer „Beitragsvorlagen verwalten“ hat. Beitragsvorlagen sind etwas anderes als [Designvorlagen](/hilfe/designvorlagen) (Dateien wie Logos und Bildvorlagen) – siehe [Begriffe](/hilfe/begriffe).
+
 ## Fassungen
 
 Jedes Speichern mit geändertem Inhalt erzeugt eine neue, unveränderliche **Fassung** (Fassung 1, 2, 3 …). Eine Fassung umfasst Titel, Text, Kurzfassung, Medien in ihrer Reihenfolge, das Titelbild und den Zielkanal. Speichern ohne Änderung erzeugt keine neue Fassung.

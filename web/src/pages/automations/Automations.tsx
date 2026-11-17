@@ -11,6 +11,7 @@ import { AutomationBadge, DirectBadge, RunBadge, useCatalog, type WorkflowTempla
 import { AutomationApprovals } from './Approvals';
 import { ExportDialog, ImportDialog } from './Transfer';
 import { AiAssistDialog } from './AiAssist';
+import { WorkflowTabs } from './WorkflowTabs';
 
 export interface AutomationListItem {
   id: string;
@@ -111,12 +112,9 @@ export default function Automations() {
   return (
     <div className="flex flex-col gap-5">
       <PageHeader
-        title="Workflows"
         subtitle="Wenn etwas passiert, erledigt BlaulichtCMS den nächsten Schritt – aus Vorlagen oder selbst gebaut, getestet, versioniert und jederzeit abschaltbar."
         actions={
           <>
-            <LinkButton to="/workflows/eingaenge" icon="Zap">Eingänge</LinkButton>
-            <LinkButton to="/workflows/ausgaenge" icon="Send">Ausgänge</LinkButton>
             {!!q.data?.length && (
               <Button icon="Download" onClick={() => setTransfer('export')}>
                 Exportieren
@@ -138,6 +136,7 @@ export default function Automations() {
           </>
         }
       />
+      <WorkflowTabs />
       {cat.data && !cat.data.enabled && (
         <Notice tone="warning" title="Workflows sind global abgeschaltet">
           Ereignisse und Zeitpläne starten keine Läufe. Einschalten unter <Link to="/einstellungen#redaktion">Einstellungen → Redaktion</Link>.

@@ -9,6 +9,8 @@ import { useAuth } from '../../lib/auth';
 import { fmtDateTime } from '../../lib/format';
 import { BannerPreview, DISPLAY_OPTIONS } from '../banners/Banners';
 import { WpCategoryPicker } from '../channels/WpCategories';
+import { usePageMeta } from '../../components/layout/AppShell';
+import { WorkflowTabs } from './WorkflowTabs';
 import { CheckList, Help, NumberField, SelectField, TemplateField, outputSummary, useCatalog, useOutputs, type Catalog, type OutputDef } from './shared';
 
 /** Ausgänge: wiederverwendbare Aktionen mit ihrer Gestaltung (Banner-Stil, Beitragsvorlage, E-Mail, Benachrichtigung, Warnentwurf). */
@@ -228,6 +230,7 @@ export default function Outputs() {
   const toastError = useErrorToast();
   const [edit, setEdit] = useState<{ output: OutputDef | null; kind: string } | null>(null);
   const [choose, setChoose] = useState(false);
+  usePageMeta({ title: 'Aktionen' });
   const refresh = () => qc.invalidateQueries({ queryKey: ['automation-outputs'] });
   const remove = async (o: OutputDef) => {
     if (!(await ask({ title: 'Ausgang löschen?', text: `„${o.name}“ steht danach im Editor nicht mehr zur Verfügung.`, confirmLabel: 'Löschen' }))) return;
@@ -242,10 +245,10 @@ export default function Outputs() {
   return (
     <div className="flex flex-col gap-5">
       <PageHeader
-        title="Ausgänge"
         subtitle="Aktionen mit ihrer Gestaltung: Banner-Stil, Beitragsvorlage, E-Mail, App-Benachrichtigung, Warnentwurf."
         actions={manage && <Button variant="primary" icon="Plus" disabled={!cat.data} onClick={() => setChoose(true)}>Neuer Ausgang</Button>}
       />
+      <WorkflowTabs />
       <Notice icon="ShieldCheck">Ausgänge legen Entwürfe und Benachrichtigungen an – die Freigabe bleibt bei den Menschen. Direktversand ist nur je Workflow mit eigenem Recht möglich.</Notice>
       {(q.isLoading || cat.isLoading) && <SkeletonRows rows={4} />}
       {q.error && <ErrorBox title="Ausgänge konnten nicht geladen werden">{(q.error as Error).message}</ErrorBox>}

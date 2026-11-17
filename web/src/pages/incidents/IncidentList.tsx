@@ -570,13 +570,9 @@ export default function IncidentList() {
   return (
     <div className="flex flex-col gap-5">
       <PageHeader
-        title="Einsatzliste"
         subtitle="Einsätze für die Website – aus Einsatzmeldungen vorgeschlagen, von Hand ergänzt, freigegeben und veröffentlicht."
         actions={
           <>
-            <HelpTip title="Einsatzliste" more="/hilfe/einsatzliste">
-              Einträge entstehen aus Einsatzmeldungen (FE2, Feuersoftware Connect), per Workflow „Einsatz in Einsatzliste“, von Hand oder per CSV-Import. Veröffentlicht wird erst nach Freigabe. Darstellung und Statistik stellt man in WordPress ein.
-            </HelpTip>
             <Button icon="Settings" onClick={() => setConfig(true)} disabled={!c}>
               Einstellungen
             </Button>
@@ -748,7 +744,7 @@ export default function IncidentList() {
         </Card>
       )}
       <p className="m-0 text-meta text-fg-muted">
-        Auf der Website: Shortcodes <Chip mono>[blaulichtcms_einsatzliste]</Chip> und <Chip mono>[blaulichtcms_einsatzstatistik]</Chip> bzw. die gleichnamigen Blöcke – Einstellungen in WordPress. Workflows: Ausgang „Einsatz in Einsatzliste“ unter <Link to="/workflows/ausgaenge">Workflows → Ausgänge</Link>.
+        Auf der Website: Shortcodes <Chip mono>[blaulichtcms_einsatzliste]</Chip> und <Chip mono>[blaulichtcms_einsatzstatistik]</Chip> bzw. die gleichnamigen Blöcke – Einstellungen in WordPress. Workflows: Ausgang „Einsatz in Einsatzliste“ unter <Link to="/workflows/aktionen">Workflows → Ausgänge</Link>.
       </p>
       {edit !== undefined && c && <EntryDialog entry={edit} cfg={c} onClose={(s) => (setEdit(undefined), s && refresh())} />}
       {importing && c && <ImportDialog cfg={c} onClose={(d) => (setImporting(false), d && refresh())} />}

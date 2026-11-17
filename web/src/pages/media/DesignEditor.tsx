@@ -8,7 +8,7 @@ import { UnsavedChangesGuard, useConfirm, useErrorToast, useToast } from '../../
 import { useAuth } from '../../lib/auth';
 import { DesignedPage, type DesignBlock, type UploadDesign } from '../public/DesignedPage';
 import type { LinkInfo } from '../public/UploadPage';
-import { MediaNav } from './MediaNav';
+import { usePageMeta } from '../../components/layout/AppShell';
 
 interface Meta {
   accents: Record<string, string>;
@@ -163,6 +163,8 @@ export default function DesignEditor() {
   const navigate = useNavigate();
   const linkId = params.get('link');
   const { can } = useAuth();
+  // Gestaltung eines einzelnen Upload-Links gehört zur Sammlung (Medien), die Standard-Gestaltung zu Einrichtung
+  usePageMeta(linkId ? { title: 'Upload-Link gestalten', navId: 'media' } : {});
   const qc = useQueryClient();
   const toast = useToast();
   const toastError = useErrorToast();
@@ -231,7 +233,6 @@ export default function DesignEditor() {
     <div className="flex flex-col gap-5">
       <UnsavedChangesGuard when={dirty} />
       <PageHeader
-        title={linkId ? 'Gestaltung des Upload-Links' : 'Gestaltung der Upload-Seite'}
         subtitle={linkId ? `${q.data.link.title}${q.data.link.label ? ` · ${q.data.link.label}` : ''}` : 'Standard für alle Upload-Links ohne eigene Gestaltung.'}
         actions={
           canSave && (
@@ -254,7 +255,6 @@ export default function DesignEditor() {
           )
         }
       />
-      {!linkId && <MediaNav />}
       {linkId && (
         <Button size="sm" variant="ghost" icon="ArrowLeft" className="self-start" onClick={() => navigate(-1)}>
           Zurück zur Sammlung

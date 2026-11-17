@@ -72,7 +72,7 @@ export function SnippetSettings() {
   const [edit, setEdit] = useState<Snippet | null | undefined>(undefined);
   const refresh = () => qc.invalidateQueries({ queryKey: ['press-snippets'] });
   return (
-    <Card title="Textbausteine" subtitle="Wiederkehrende Formulierungen für Antworten – mit Platzhaltern wie {{name}} oder {{thema}}." action={<Button size="sm" icon="Plus" onClick={() => setEdit(null)}>Neuer Baustein</Button>}>
+    <Card title="Bausteine" subtitle="Wiederkehrende Formulierungen für Antworten – mit Platzhaltern wie {{name}} oder {{thema}}." action={<Button size="sm" icon="Plus" onClick={() => setEdit(null)}>Neuer Baustein</Button>}>
       {q.isLoading && <SkeletonRows rows={3} />}
       {q.data && !q.data.length && <EmptyState icon="TextCursorInput" title="Noch keine Textbausteine" />}
       <ul className="m-0 p-0 list-none flex flex-col divide-y divide-line">

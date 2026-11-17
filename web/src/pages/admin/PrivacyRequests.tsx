@@ -142,7 +142,7 @@ export default function PrivacyRequests() {
 
   return (
     <div className="flex flex-col gap-5">
-      <PageHeader title="Datenschutzanfragen" subtitle="Auskunft (Art. 15) und Löschung (Art. 17 DSGVO): gespeicherte Daten zu einer Person finden, exportieren und löschen." />
+      <PageHeader subtitle="Auskunft (Art. 15) und Löschung (Art. 17 DSGVO): gespeicherte Daten zu einer Person finden, exportieren und löschen." />
       <Card>
         <form
           className="flex flex-col sm:flex-row gap-2"

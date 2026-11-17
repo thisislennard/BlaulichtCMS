@@ -77,7 +77,7 @@ try {
   check(JSON.stringify(groups) === JSON.stringify(['Übersicht', 'Redaktion']), 'Nur die Gruppen „Übersicht“ und „Redaktion“ – Gruppen ohne erlaubten Punkt entfallen');
   await go('/');
   for (const want of ['Beiträge', 'Medien']) check(nav.includes(want), `Navigation zeigt „${want}“`);
-  for (const not of ['Freigaben', 'Quellen', 'Vorlagen', 'Banner', 'Websites', 'Verbindungen', 'Warnvorgänge', 'Amtliche Warnungen', 'Benutzer und Rollen', 'Systemstatus', 'Protokolle', 'Einstellungen', 'Datenschutzanfragen', 'Aktivitäten'])
+  for (const not of ['Freigaben', 'Quellen', 'Beitragsvorlagen', 'Banner', 'Websites', 'Verbindungen', 'Warnentwürfe', 'Amtliche Warnungen', 'Benutzer und Rollen', 'Systemstatus', 'Protokolle', 'Einstellungen', 'Datenschutzanfragen', 'Aktivitäten', 'Upload-Seite', 'Medienverwaltung'])
     check(!nav.some((n) => n === not || n.startsWith(not)), `Navigation zeigt „${not}“ nicht`);
   const body = await page.locator('body').innerText();
   check(!(await hasButton(/^Neuer Beitrag/)) && !(await hasButton(/^Medien sammeln/)), 'Dashboard ohne „Neuer Beitrag“ und „Medien sammeln“');
@@ -91,12 +91,12 @@ try {
 
   await go('/medien');
   check(!(await hasButton(/^Neue Sammlung/)), 'Medien: keine Schaltfläche „Neue Sammlung“');
-  check((await page.getByRole('link', { name: /Papierkorb|Gestaltung|Verwaltung/ }).count()) === 0, 'Medien: keine Reiter Papierkorb, Gestaltung, Verwaltung');
+  check((await page.getByRole('link', { name: /Papierkorb|Upload-Seite|Medienverwaltung/ }).count()) === 0, 'Medien: kein Reiter Papierkorb, keine Upload-Seite und Medienverwaltung');
   await go(`/medien/${st.collectionId}`);
   for (const b of [/^Neuer Link/, /^Hochladen/, /^Neuer Ordner/, /ZIP/]) check(!(await hasButton(b)), `Sammlung: keine Schaltfläche ${b}`);
   check(await hasButton(/sichten$/i), 'Sammlung: „Sichten“ ist da (erlaubt)');
 
-  for (const route of ['/benutzer', '/einstellungen', '/medien/papierkorb', '/kanaele', '/banner', '/verbindungen', '/warnungen', '/protokolle', '/system', '/quellen', '/aktivitaeten', '/datenschutz-anfragen']) {
+  for (const route of ['/benutzer', '/einstellungen', '/medien/papierkorb', '/websites', '/banner', '/verbindungen', '/warnungen', '/protokolle', '/system', '/quellen', '/aktivitaeten', '/datenschutz-anfragen', '/upload-seite', '/medienverwaltung', '/stichwoerter-regeln', '/presse-postfach']) {
     await go(route);
     check(/Kein Zugriff/.test(await page.locator('main, body').first().innerText()), `${route}: „Kein Zugriff“`);
   }
@@ -115,8 +115,10 @@ try {
   // Rolle erweitern: wirkt ohne neue Anmeldung
   await admin.put(`/roles/${role.id}`, { permissions: ['media.review', 'post.view', 'post.create', 'banner.view'] });
   await go('/');
-  const groups2 = await navGroups();
-  check(groups2.includes('Kanäle'), 'Nach dem Erweitern der Rolle erscheint die Gruppe „Kanäle“ (Banner) ohne neue Anmeldung');
+  await page.goto(`${BC}/beitraege`, { waitUntil: 'networkidle' }).catch(() => {});
+  await sleep(500);
+  const sub2 = clean(await page.locator('nav:visible:not([aria-label="Brotkrumen"]) a').allInnerTexts());
+  check(sub2.includes('Banner'), 'Nach dem Erweitern der Rolle erscheint „Banner“ unter Redaktion ohne neue Anmeldung');
   await go('/banner');
   check(!/Kein Zugriff/.test(await page.locator('body').innerText()), 'Nach dem Erweitern: Banner-Seite ist erreichbar');
   await go('/beitraege');

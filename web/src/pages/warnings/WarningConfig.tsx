@@ -98,7 +98,7 @@ export default function WarningConfig() {
 
   return (
     <div className="flex flex-col gap-5">
-      <PageHeader title="Stichwörter, Regeln und Versand" subtitle="Lokal gepflegt. Regeln und Lagefragen wirken erst nach fachlicher Freigabe durch eine andere Person." />
+      <PageHeader subtitle="Lokal gepflegt. Regeln und Lagefragen wirken erst nach fachlicher Freigabe durch eine andere Person." />
       <Notice>BlaulichtCMS wird ohne aktive Regeln ausgeliefert. Alle Beispiele sind fiktiv – Inhalte vor Nutzung mit der zuständigen Stelle abstimmen.</Notice>
       <Tabs
         label="Bereiche"

@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, del, get, post } from '../../api/client';
 import { Badge, Button, Card, Chip, ErrorBox, FieldWrap, LinkButton, Notice, PageHeader, SkeletonRows, Table, Td, Textarea, Th } from '../../components/ui/core';
+import { usePageMeta } from '../../components/layout/AppShell';
 import { Icon } from '../../components/ui/Icon';
 import { DeleteDialog, Dialog, Menu, useConfirm, useErrorToast, useToast } from '../../components/ui/overlays';
 import { useAuth } from '../../lib/auth';
@@ -146,6 +147,7 @@ export default function DesignTemplateDetail() {
     qc.invalidateQueries({ queryKey: ['design-templates'] });
   };
   const manage = can('templates.manage');
+  usePageMeta({ title: q.data?.title });
   if (q.isLoading) return <SkeletonRows rows={6} />;
   if (q.error || !q.data) return <ErrorBox title="Vorlage konnte nicht geladen werden">{(q.error as Error)?.message}</ErrorBox>;
   const t = q.data;

@@ -94,7 +94,6 @@ export default function Templates() {
   return (
     <div className="flex flex-col gap-5">
       <PageHeader
-        title="Vorlagen"
         subtitle="Redaktionelle Vorlagen für wiederkehrende Beiträge, z. B. Einsatzberichte oder Veranstaltungshinweise."
         actions={can('post.templates') && <Button variant="primary" icon="Plus" onClick={() => setEdit(null)}>Neue Vorlage</Button>}
       />

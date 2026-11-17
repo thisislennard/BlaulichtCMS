@@ -238,7 +238,7 @@ export function NodePanel({
                 Neuen Eingang anlegen …
               </Button>
             )}
-            <Link to="/workflows/eingaenge" className="text-sm !text-fg-muted hover:!text-fg">Eingänge verwalten →</Link>
+            <Link to="/workflows/ausloeser" className="text-sm !text-fg-muted hover:!text-fg">Eingänge verwalten →</Link>
           </div>
         </>
       )}
@@ -273,7 +273,7 @@ export function NodePanel({
                 Neuen Ausgang anlegen …
               </Button>
             )}
-            <Link to="/workflows/ausgaenge" className="text-sm !text-fg-muted hover:!text-fg">Ausgänge verwalten →</Link>
+            <Link to="/workflows/aktionen" className="text-sm !text-fg-muted hover:!text-fg">Ausgänge verwalten →</Link>
           </div>
         </>
       )}

@@ -17,6 +17,7 @@ import { CopyButton, Dialog, useErrorToast, useToast } from "../components/ui/ov
 import { Icon } from "../components/ui/Icon";
 import { t } from "../i18n";
 import { useAuth } from "../lib/auth";
+import { usePageMeta } from "../components/layout/AppShell";
 import { fmtRelative } from "../lib/format";
 import { MfaSetupPage } from "./auth/AuthPages";
 import { AppearanceFields, LoadError, SectionCard } from "./admin/shared";
@@ -45,10 +46,12 @@ interface TrustedDevice {
 
 export default function Profile() {
   const { me } = useAuth();
+  // Kein Menüpunkt: Titel und Brotkrumen „Mein Konto“ (#250, #267)
+  usePageMeta({ title: t("profile.title") });
   if (!me) return null;
   return (
     <div className="flex flex-col gap-5">
-      <PageHeader title={t("profile.title")} subtitle={t("profile.subtitle")} />
+      <PageHeader subtitle={t("profile.subtitle")} />
       <div className="grid gap-5 xl:grid-cols-2 items-start">
         <div className="flex flex-col gap-5 min-w-0">
           <SectionCard title={t("profile.account")}>

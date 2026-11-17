@@ -25,7 +25,6 @@ export default function PressRequests() {
   return (
     <div className="flex flex-col gap-5">
       <PageHeader
-        title="Presseanfragen"
         subtitle="Anfragen von Redaktionen erfassen und bis zur Erledigung nachverfolgen – mit Zuständigkeit, Frist und Verlauf."
         actions={can('press.manage') && <Button variant="primary" icon="Plus" onClick={() => setCreating(true)}>Anfrage erfassen</Button>}
       />

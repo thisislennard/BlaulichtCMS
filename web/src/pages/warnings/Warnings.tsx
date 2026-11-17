@@ -53,11 +53,10 @@ export default function Warnings() {
   return (
     <div className="flex flex-col gap-5">
       <PageHeader
-        title="Warnentwürfe"
         subtitle="Vorbereitung und Übergabe an die zuständige Stelle. Die amtliche Auslösung erfolgt dort."
         actions={
           <>
-            {canAny('warning.rules', 'warning.approve', 'warning.settings') ? <LinkButton to="/warnungen/pflege" icon="Settings">Stichwörter &amp; Regeln</LinkButton> : null}
+            {canAny('warning.rules', 'warning.approve', 'warning.settings') ? <LinkButton to="/stichwoerter-regeln" icon="Settings">Stichwörter &amp; Regeln</LinkButton> : null}
             {can('warning.draft') && (
               <Button variant="primary" icon="Plus" onClick={create}>
                 Neue Erstmeldung

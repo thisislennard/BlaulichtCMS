@@ -46,7 +46,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (me?.instance) {
       setTimeZone(me.instance.timezone);
       setLanguage(me.user.preferences.language ?? 'de');
-      document.title = `${me.instance.name === 'BlaulichtCMS' ? '' : me.instance.name + ' · '}BlaulichtCMS`;
+      // Fenstertitel setzt der App-Rahmen je Seite (#267)
     }
   }, [me]);
 

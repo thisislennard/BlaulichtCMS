@@ -8,7 +8,7 @@ Die **BlaulichtCMS Bridge** ist ein WordPress-Plugin. Sie holt freigegebene Beit
 
 ## Koppeln in vier Schritten
 
-1. In BlaulichtCMS unter [Websites](/kanaele) **Bridge herunterladen** (ZIP). Das Paket nicht entpacken.
+1. In BlaulichtCMS unter [Websites](/websites) **Bridge herunterladen** (ZIP). Das Paket nicht entpacken.
 2. In WordPress **Plugins → Installieren → Plugin hochladen**, ZIP wählen, **Jetzt installieren** und **Plugin aktivieren** ([Anleitung von WordPress](https://wordpress.org/documentation/article/manage-plugins/#upload-via-wordpress-admin)).
 3. In BlaulichtCMS **Website koppeln**, einen Namen vergeben und den **Kopplungscode** notieren.
 4. In WordPress **Einstellungen → BlaulichtCMS Bridge** die BlaulichtCMS-Adresse und den Code eintragen und **Koppeln** klicken.
@@ -45,7 +45,7 @@ Die Bridge meldet die Kategorien der Website an BlaulichtCMS (ab Bridge 0.8.0). 
 
 Die Bridge legt den eigenen Autor bzw. die Autoren aus BlaulichtCMS beim ersten Beitrag **selbst an**. Diese Konten haben die Rolle „BlaulichtCMS-Autor“ **ohne jede Berechtigung**, kein bekanntes Passwort und keine E-Mail-Adresse; Anmeldung, Passwort-Zurücksetzen und Anwendungspasswörter sind gesperrt. Sie dienen nur der Autorenangabe.
 
-Für **Person aus BlaulichtCMS** muss in BlaulichtCMS auf der Website-Karte unter [Websites](/kanaele) **Autorenname übertragen** eingeschaltet sein (Vorgabe: aus). Übertragen wird nur der Anzeigename; statt der Konto-ID geht ein nicht umkehrbarer Schlüssel an die Website. Beiträge aus Workflows haben keine verfassende Person und erhalten den eigenen Autor der Bridge.
+Für **Person aus BlaulichtCMS** muss in BlaulichtCMS auf der Website-Karte unter [Websites](/websites) **Autorenname übertragen** eingeschaltet sein (Vorgabe: aus). Übertragen wird nur der Anzeigename; statt der Konto-ID geht ein nicht umkehrbarer Schlüssel an die Website. Beiträge aus Workflows haben keine verfassende Person und erhalten den eigenen Autor der Bridge.
 
 ## Abruf und Cronjob
 

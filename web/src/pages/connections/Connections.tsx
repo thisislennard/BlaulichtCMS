@@ -45,7 +45,6 @@ export default function Connections() {
   return (
     <div className="flex flex-col gap-5">
       <PageHeader
-        title="Verbindungen"
         subtitle="Optional: Jede Verbindung durchläuft Verbinden → Testen → Vorschau → Aktivieren. BlaulichtCMS funktioniert auch ganz ohne."
         actions={
           configure && (
@@ -163,7 +162,6 @@ export function OfficialWarnings() {
   return (
     <div className="flex flex-col gap-5">
       <PageHeader
-        title="Amtliche Warnungen"
         subtitle="Aus verbundenen Warnquellen – getrennt vom eigenen Warnentwurf. Maßgeblich ist immer die Originalquelle."
         actions={
           feeds.length > 0 ? (

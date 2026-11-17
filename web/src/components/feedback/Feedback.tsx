@@ -187,7 +187,8 @@ export function FeedbackView({
       <span className={cx('w-12 h-12 rounded-node bg-raised border border-line inline-flex items-center justify-center', tone)}>
         <Icon name={d.icon} size={24} />
       </span>
-      <h2 className="m-0 text-title font-semibold">{title ?? d.title}</h2>
+      {/* Ganzseitig (kein Seitenkopf daneben) ist das die h1 der Seite, eingebettet (compact) eine h2 (#267) */}
+      {compact ? <h2 className="m-0 text-title font-semibold">{title ?? d.title}</h2> : <h1 className="m-0 text-title font-semibold">{title ?? d.title}</h1>}
       <p className="m-0 text-fg-muted">
         {kind === 'ratelimit' && wait > 0 ? `${d.text} Bitte noch ${fmtWait(wait)} warten.` : message && kind !== 'error' && kind !== 'maintenance' ? message : d.text}
       </p>

@@ -25,41 +25,43 @@ const G = (id: string, list: [string, string][]): ChapterGroup => ({
   chapters: list.map(([slug, icon]) => ({ slug, group: id, icon })),
 });
 
+/* Kapitelgruppen folgen der Menügliederung (#250): Grundlagen, dann die Bereiche der Navigation, dann Nachschlagen. */
 export const GROUPS: ChapterGroup[] = [
   G('basics', [
     ['erste-schritte', 'Sparkles'],
     ['anmeldung', 'Lock'],
     ['app', 'Smartphone'],
   ]),
-  G('work', [
+  G('overview', [
+    ['dashboard', 'LayoutDashboard'],
+    ['freigabe', 'ShieldCheck'],
+    ['benachrichtigungen', 'Bell'],
+  ]),
+  G('editorial', [
+    ['beitraege', 'FileText'],
     ['foto-link', 'Camera'],
     ['sichtung', 'CheckSquare'],
-    ['designvorlagen', 'Palette'],
-    ['beitraege', 'FileText'],
-    ['kalender', 'CalendarDays'],
-    ['freigabe', 'ShieldCheck'],
     ['qr-codes', 'QrCode'],
-    ['dashboard', 'LayoutDashboard'],
+    ['kalender', 'CalendarDays'],
+    ['einsatzliste', 'ListOrdered'],
+    ['banner', 'Megaphone'],
+    ['designvorlagen', 'Palette'],
     ['quellen', 'Newspaper'],
-    ['presse', 'MessageSquareQuote'],
+    ['ohne-website', 'Unlink'],
   ]),
-  G('warnings', [
-    ['warnentwurf', 'Siren'],
-    ['stichwoerter-regeln', 'ListChecks'],
-  ]),
-  G('channels', [
+  G('press', [['presse', 'MessageSquareQuote']]),
+  G('warnings', [['warnentwurf', 'Siren']]),
+  G('setup', [
     ['wordpress', 'Globe'],
     ['verbindungen', 'Plug'],
     ['workflows', 'Workflow'],
     ['workflows-ki', 'Sparkles'],
-    ['banner', 'Megaphone'],
-    ['einsatzliste', 'ListOrdered'],
-    ['ohne-website', 'Unlink'],
+    ['stichwoerter-regeln', 'ListChecks'],
   ]),
   G('admin', [
     ['benutzer-rollen', 'Users'],
     ['einrichtung', 'Settings'],
-    ['benachrichtigungen', 'Bell'],
+    ['system', 'Server'],
     ['sicherheit', 'Lock'],
     ['sicherung', 'HardDrive'],
     ['updates', 'Download'],

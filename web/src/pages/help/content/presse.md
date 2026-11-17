@@ -23,7 +23,7 @@ Status, **Zuständig** und **Frist** stehen in der Anfrage rechts unter *Bearbei
 
 ## Presse-Postfach abrufen
 
-Mails an ein Presse-Postfach (z. B. `presse@…`) werden automatisch zu Anfragen. Einrichten unter [Presse → Postfach & Textbausteine](/presse/einstellungen) (Recht „Presse-Postfach einrichten“, ab Werk nur Administration).
+Mails an ein Presse-Postfach (z. B. `presse@…`) werden automatisch zu Anfragen. Einrichten unter [Einrichtung → Presse-Postfach](/presse-postfach) (Recht „Presse-Postfach einrichten“, ab Werk nur Administration).
 
 1. Art wählen: **IMAP** oder **Microsoft 365**, Angaben eintragen (siehe unten).
 2. **Verbindung testen** – meldet sich an und zählt die Nachrichten im Ordner, ändert nichts.
@@ -105,7 +105,7 @@ Unter *Einstellungen → Redaktion → Antworten an die Presse freigeben lassen*
 
 ## Textbausteine
 
-Unter [Presse → Postfach & Textbausteine](/presse/einstellungen) → *Textbausteine* (Recht „Textbausteine verwalten“). Platzhalter werden beim Einfügen in eine Antwort ersetzt:
+Unter [Presse → Textbausteine](/presse/textbausteine) (Recht „Textbausteine verwalten“). Platzhalter werden beim Einfügen in eine Antwort ersetzt:
 
 | Platzhalter | wird zu |
 |---|---|

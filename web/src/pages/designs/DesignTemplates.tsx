@@ -342,7 +342,6 @@ export default function DesignTemplates() {
   return (
     <div className="flex flex-col gap-5">
       <PageHeader
-        title="Designvorlagen"
         subtitle="Interne Bibliothek mit Logos, Layouts und Vorlagen zum Herunterladen – mit Nutzungshinweisen und älteren Versionen."
         actions={
           can('templates.manage') && (

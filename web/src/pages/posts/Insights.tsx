@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { Link } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import { get } from '../../api/client';
-import { usePageMeta } from '../../components/layout/AppShell';
 import { Card, Chip, EmptyState, ErrorBox, FieldWrap, Notice, PageHeader, SegmentedControl, Select, SkeletonRows, Table, Td, Th } from '../../components/ui/core';
 import { KpiCard } from '../../components/ui/data';
 import { HelpTip } from '../../components/ui/HelpTip';
@@ -45,14 +44,13 @@ interface Overview {
 }
 
 export default function Insights() {
-  usePageMeta({ title: 'Reichweite' });
   const [days, setDays] = useState<'7' | '30' | '90' | '365'>('30');
   const [kind, setKind] = useState('');
   const q = useQuery({ queryKey: ['insights', days, kind], queryFn: () => get<Overview>(`/insights?days=${days}${kind ? `&kind=${kind}` : ''}`) });
   const d = q.data;
   return (
     <div className="flex flex-col gap-5">
-      <PageHeader title="Reichweite" subtitle="Aufrufe und Interaktionen veröffentlichter Social-Posts – nur Summen, keine Personen." />
+      <PageHeader subtitle="Aufrufe und Interaktionen veröffentlichter Social-Posts – nur Summen, keine Personen." />
       <div className="flex flex-wrap items-end gap-3">
         <SegmentedControl label="Zeitraum" value={days} onChange={setDays} options={[{ value: '7', label: '7 Tage' }, { value: '30', label: '30 Tage' }, { value: '90', label: '90 Tage' }, { value: '365', label: '1 Jahr' }]} />
         <FieldWrap label="Kanal" htmlFor="ins-kind" className="min-w-[200px]">
