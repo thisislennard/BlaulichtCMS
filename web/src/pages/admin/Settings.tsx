@@ -461,7 +461,7 @@ export default function Settings() {
                 <FieldGrid>
                   <NumField k="invites.valid_hours" label="Einladungen gültig" unit="Std." min={1} max={720} v={v} set={set} ro={ro("invites.valid_hours")} />
                   <NumField k="press.reminder_hours" label="Erinnerung vor Frist (Presseanfragen)" help="An die zuständige Person, sonst an alle mit „Presseanfragen bearbeiten“. 0 = nur bei Überschreitung." unit="Std." min={0} max={72} v={v} set={set} ro={ro("press.reminder_hours")} />
-                  <NumField k="jobs.concurrency" label="Parallele Hintergrundaufträge" help="1 bis 32 (Medienprüfung, Exporte)." min={1} max={32} v={v} set={set} ro={ro("jobs.concurrency")} />
+                  <NumField k="jobs.concurrency" label="Parallele Hintergrundaufträge" help="1 bis 32 (Medienprüfung, Exporte, Versand). Ein Viertel (mindestens einer) bleibt immer frei für Warnversand, Benachrichtigungen und Medienprüfung – Social-Posts, Workflows, Presseversand und Sicherung außer Haus belegen höchstens den Rest." min={1} max={32} v={v} set={set} ro={ro("jobs.concurrency")} />
                   <NumField k="retention.log_days" label={t("admin.settings.retLogs")} unit={t("admin.common.days")} min={1} v={v} set={set} ro={ro("retention.log_days")} />
                   <NumField k="retention.audit_days" label={t("admin.settings.retAudit")} unit={t("admin.common.days")} min={30} v={v} set={set} ro={ro("retention.audit_days")} />
                   <NumField k="privacy.upload_ip_retention_days" label="IP-Adressen ohne Konto" help="Öffentliche Uploads und Anmeldeversuche unbekannter Konten: IP danach im Audit entfernt (1 bis 365 Tage)." unit={t("admin.common.days")} v={v} set={set} ro={ro("privacy.upload_ip_retention_days")} />

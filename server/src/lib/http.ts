@@ -16,15 +16,26 @@ import { log } from './log.js';
  *   Verbindung als „internes Ziel“ freigegeben ist.
  * - Die geprüfte IP wird für die Verbindung festgenagelt (kein DNS-Rebinding).
  * - Redirects nur begrenzt und jeder Sprung wird erneut geprüft; kein Wechsel von https auf http.
- * - Antwortgröße und Laufzeit begrenzt.
+ * - Antwortgröße und Laufzeit begrenzt: `timeoutMs` ist eine Gesamtfrist für die ganze Anfrage samt Weiterleitungen
+ *   (#240) – nicht nur eine Leerlaufgrenze, die eine tröpfchenweise antwortende Gegenstelle beliebig lange offen hielte.
  */
+
+/**
+ * Zuschlag zur Gesamtfrist für große Übertragungen: 1 s je 125 KB (Mindestdurchsatz rund 1 Mbit/s). Für den Inhalt
+ * einer Anfrage rechnet httpRequest ihn selbst dazu; bei Downloads bekannter Größe gibt ihn der Aufrufer mit.
+ */
+export function transferAllowanceMs(bytes: number): number {
+  return Number.isFinite(bytes) && bytes > 0 ? Math.floor(bytes / 125_000) * 1000 : 0;
+}
 
 export interface HttpRequest {
   method: string;
   url: string;
   headers?: Record<string, string>;
   body?: string | Buffer;
+  /** Gesamtfrist in ms (Standard 30 s); bei einem großen Anfrageinhalt zuzüglich transferAllowanceMs. */
   timeoutMs?: number;
+  /** Höchstgröße der Antwort – auch beim Schreiben in `sink`. */
   maxResponseBytes?: number;
   maxRedirects?: number;
   /** Hosts (exakt oder *.domain), deren private Adressen erlaubt sind. */
@@ -38,8 +49,9 @@ export interface HttpRequest {
   /** Inhalt aus diesem Strom senden (Länge setzt der Aufrufer als content-length); nur mit followRedirects: false. */
   bodyStream?: NodeJS.ReadableStream;
   /**
-   * Antwort mit Status 2xx nicht puffern, sondern in diesen Strom schreiben (große Downloads). Die Größenbegrenzung
-   * gilt dann nicht; der Aufrufer begrenzt selbst. Andere Status werden wie üblich gepuffert (Fehlertext).
+   * Antwort mit Status 2xx nicht puffern, sondern in diesen Strom schreiben (große Downloads). `maxResponseBytes` gilt
+   * auch hier (#240: sonst könnte ein fehlerhaftes Ziel den Datenträger füllen) – der Aufrufer setzt sie passend zur
+   * erwarteten Größe. Andere Status werden wie üblich gepuffert (Fehlertext).
    */
   sink?: NodeJS.WritableStream;
   /**
@@ -182,9 +194,23 @@ export async function resolveSafe(host: string, allowPrivate: boolean): Promise<
   return addrs[0];
 }
 
+const timeoutError = () => Object.assign(new Error('Zeitüberschreitung'), { name: 'TimeoutError' });
+
 function once(req: HttpRequest, url: URL, deadline: number): Promise<HttpResponse & { location?: string }> {
-  return new Promise(async (resolve, reject) => {
+  return new Promise(async (settleOk, settleErr) => {
     const started = Date.now();
+    // Gesamtfrist (#240): `timeout` von http.request ist nur eine Leerlaufgrenze des Sockets – eine Gegenstelle, die
+    // alle paar Sekunden ein Byte schickt, hielte die Anfrage sonst beliebig lange offen. Gilt für Senden, Empfangen
+    // und das Schreiben in `sink`.
+    let deadlineTimer: NodeJS.Timeout | null = null;
+    const resolve = (v: HttpResponse & { location?: string }) => {
+      if (deadlineTimer) clearTimeout(deadlineTimer);
+      settleOk(v);
+    };
+    const reject = (e: unknown) => {
+      if (deadlineTimer) clearTimeout(deadlineTimer);
+      settleErr(e);
+    };
     try {
       if (url.protocol !== 'https:' && url.protocol !== 'http:') {
         throw new StepError('config', `Protokoll ${url.protocol} ist nicht erlaubt (nur http/https).`);
@@ -231,10 +257,29 @@ function once(req: HttpRequest, url: URL, deadline: number): Promise<HttpRespons
         },
         (res) => {
           const status = res.statusCode ?? 0;
+          const max = req.maxResponseBytes ?? 1_000_000;
+          const tooLarge = () => new StepError('invalid_payload', `Antwort ist größer als ${max >= 10 * 1024 * 1024 ? `${Math.round(max / 1024 ** 2)} MB` : `${Math.round(max / 1024)} KB`} und wurde abgebrochen.`);
           if (req.sink && status >= 200 && status < 300) {
             const headers: Record<string, string> = {};
             for (const [k, v] of Object.entries(res.headers)) headers[k] = Array.isArray(v) ? v.join(', ') : String(v ?? '');
             const sink = req.sink;
+            // Größe begrenzen (#240): angekündigte Länge sofort prüfen, tatsächliche Menge beim Durchreichen zählen
+            // (erst ablehnen, dann abbrechen: das Abbrechen meldet sonst „Übertragung abgebrochen“ zuerst)
+            const announced = Number(res.headers['content-length']);
+            if (Number.isFinite(announced) && announced > max) {
+              reject(tooLarge());
+              res.destroy();
+              return;
+            }
+            let received = 0;
+            res.on('data', (c: Buffer) => {
+              received += c.length;
+              if (received > max) {
+                reject(tooLarge());
+                res.unpipe(sink);
+                res.destroy();
+              }
+            });
             res.on('error', reject);
             res.on('aborted', () => reject(new StepError('transient', 'Übertragung vom Zielsystem abgebrochen.')));
             sink.on('error', (e: Error) => (res.destroy(), reject(e)));
@@ -244,12 +289,11 @@ function once(req: HttpRequest, url: URL, deadline: number): Promise<HttpRespons
           }
           const chunks: Buffer[] = [];
           let size = 0;
-          const max = req.maxResponseBytes ?? 1_000_000;
           res.on('data', (c: Buffer) => {
             size += c.length;
             if (size > max) {
               res.destroy();
-              reject(new StepError('invalid_payload', `Antwort ist größer als ${Math.round(max / 1024)} KB und wurde abgebrochen.`));
+              reject(tooLarge());
               return;
             }
             chunks.push(c);
@@ -272,8 +316,10 @@ function once(req: HttpRequest, url: URL, deadline: number): Promise<HttpRespons
           res.on('error', reject);
         },
       );
+      // Leerlauf (keine Daten für die Restzeit) und Gesamtfrist enden gleich: Abbruch mit Zeitüberschreitung
+      deadlineTimer = setTimeout(() => r.destroy(timeoutError()), Math.max(1, deadline - Date.now()));
       r.on('timeout', () => {
-        r.destroy(Object.assign(new Error('Zeitüberschreitung'), { name: 'TimeoutError' }));
+        r.destroy(timeoutError());
       });
       r.on('error', (err: NodeJS.ErrnoException) => {
         // Ob die Anfrage das Ziel schon erreicht hat, wissen wir nach dem Senden nicht.
@@ -306,8 +352,24 @@ function once(req: HttpRequest, url: URL, deadline: number): Promise<HttpRespons
   });
 }
 
+/** Größe des Anfrageinhalts in Byte (für den Zuschlag zur Gesamtfrist); unbekannt = 0. */
+function requestBodyBytes(req: HttpRequest): number {
+  if (req.bodyFile) {
+    try {
+      return fs.statSync(req.bodyFile).size;
+    } catch {
+      return 0;
+    }
+  }
+  if (req.bodyStream) {
+    const len = Object.entries(req.headers ?? {}).find(([k]) => k.toLowerCase() === 'content-length')?.[1];
+    return Number(len) || 0;
+  }
+  return req.body == null ? 0 : Buffer.byteLength(req.body);
+}
+
 export async function httpRequest(req: HttpRequest): Promise<HttpResponse> {
-  const deadline = Date.now() + (req.timeoutMs ?? 30_000);
+  const deadline = Date.now() + (req.timeoutMs ?? 30_000) + transferAllowanceMs(requestBodyBytes(req));
   let url = new URL(req.url);
   let method = req.method.toUpperCase();
   let body = req.body;

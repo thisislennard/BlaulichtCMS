@@ -265,8 +265,29 @@ export function intervalOf(c: { config: Record<string, any> }): number {
   return (FEUERSOFTWARE_INTERVALS as readonly number[]).includes(v) ? v : FEUERSOFTWARE_DEFAULT_INTERVAL;
 }
 
-/** Läuft gerade ein Abruf in diesem Prozess? (zusätzlich zur Sperre über last_poll_at in der Datenbank) */
-const inFlight = new Set<string>();
+/**
+ * Läuft gerade ein Abruf in diesem Prozess? (zusätzlich zur Sperre über last_poll_at in der Datenbank). Die Sperre hat
+ * eine Frist (#240): Ein Abruf, der länger als POLL_LOCK_MS läuft, gilt als hängend – der nächste fällige Abruf läuft
+ * dann trotzdem und es wird gewarnt, statt dass still keine Einsätze mehr ankommen. Die Anfrage selbst endet ohnehin
+ * nach TIMEOUT_MS (Gesamtfrist in lib/http.ts); die Frist hier fängt alles andere ab.
+ */
+export const POLL_LOCK_MS = 120_000;
+const inFlight = new Map<string, { since: number; token: symbol }>();
+
+/** Sperre für einen Abruf nehmen; null = es läuft schon einer (innerhalb der Frist). */
+export function acquirePollLock(id: string, now = Date.now()): symbol | null {
+  const cur = inFlight.get(id);
+  if (cur && now - cur.since < POLL_LOCK_MS) return null;
+  if (cur) log('warn', 'feuersoftware', `Ein Abruf hängt seit ${Math.round((now - cur.since) / 1000)} s – Sperre aufgehoben, der nächste Abruf läuft.`);
+  const token = Symbol(id);
+  inFlight.set(id, { since: now, token });
+  return token;
+}
+
+/** Sperre freigeben – nur die eigene (ein hängender alter Abruf gibt eine neuere Sperre nicht frei). */
+export function releasePollLock(id: string, token: symbol) {
+  if (inFlight.get(id)?.token === token) inFlight.delete(id);
+}
 
 export interface PollResult {
   skipped?: string;
@@ -297,8 +318,8 @@ async function claim(id: string, force: boolean): Promise<Connection | null> {
 
 /** Abruf einer aktiven Verbindung: neue, passende Einsätze als Entwurf; Fehler zählen und ggf. melden. */
 export async function pollFeuersoftware(id: string, opts: { force?: boolean } = {}): Promise<PollResult> {
-  if (inFlight.has(id)) return { skipped: 'Ein Abruf läuft bereits.' };
-  inFlight.add(id);
+  const lock = acquirePollLock(id);
+  if (!lock) return { skipped: 'Ein Abruf läuft bereits.' };
   try {
     const c = await claim(id, !!opts.force);
     if (!c) {
@@ -317,7 +338,7 @@ export async function pollFeuersoftware(id: string, opts: { force?: boolean } = 
       throw e;
     }
   } finally {
-    inFlight.delete(id);
+    releasePollLock(id, lock);
   }
 }
 

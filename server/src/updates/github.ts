@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import { config } from '../config.js';
-import { httpRequest, type HttpResponse } from '../lib/http.js';
+import { httpRequest, transferAllowanceMs, type HttpResponse } from '../lib/http.js';
 import { log } from '../lib/log.js';
 import { notify } from '../lib/notify.js';
 import { readSecret } from '../lib/secrets.js';
@@ -119,13 +119,15 @@ export async function fetchLatestRelease(): Promise<ReleaseInfo | null> {
 export async function downloadAsset(asset: AssetRef, maxBytes: number): Promise<Buffer> {
   const src = await updateSource();
   if (asset.size > maxBytes) throw new UpdateSourceError(`${asset.name} ist zu groß (${Math.round(asset.size / 1024 ** 2)} MB).`);
-  let res = await apiGet(src, `/repos/${src.repo}/releases/assets/${asset.id}`, 'application/octet-stream', maxBytes, 300_000, false);
+  // Gesamtfrist (#240): 5 Minuten plus Zuschlag nach angekündigter Größe (langsame Leitungen)
+  const timeoutMs = 300_000 + transferAllowanceMs(asset.size);
+  let res = await apiGet(src, `/repos/${src.repo}/releases/assets/${asset.id}`, 'application/octet-stream', maxBytes, timeoutMs, false);
   for (let hop = 0; res.status >= 300 && res.status < 400; hop++) {
     const loc = res.headers.location;
     if (!loc || hop >= 3) throw new UpdateSourceError(`Download von ${asset.name}: ungültige oder zu viele Weiterleitungen.`);
     const next = new URL(loc, res.url);
     if (next.protocol !== 'https:' && !isTestLocal(next)) throw new UpdateSourceError(`Download von ${asset.name}: Weiterleitung auf eine unverschlüsselte Adresse abgewiesen.`);
-    res = await httpRequest({ method: 'GET', url: next.toString(), headers: { accept: 'application/octet-stream' }, timeoutMs: 300_000, maxResponseBytes: maxBytes, allowPrivateHosts: privateHosts(next, src.allowPrivate), followRedirects: false });
+    res = await httpRequest({ method: 'GET', url: next.toString(), headers: { accept: 'application/octet-stream' }, timeoutMs, maxResponseBytes: maxBytes, allowPrivateHosts: privateHosts(next, src.allowPrivate), followRedirects: false });
   }
   if (res.status !== 200) throw new UpdateSourceError(`Download von ${asset.name} fehlgeschlagen (Status ${res.status}).`);
   return res.body;

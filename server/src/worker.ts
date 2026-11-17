@@ -10,7 +10,7 @@ import { log } from './lib/log.js';
 import { notify } from './lib/notify.js';
 import { securityAlert } from './lib/security-alerts.js';
 import { getSettings } from './lib/settings.js';
-import { claimJobs, completeJob, failJob, heartbeatJob, HEARTBEAT_MS, requeueExpiredLeases, WORKER_ID, type Job } from './jobs/queue.js';
+import { claimForSlots, completeJob, failJob, heartbeatJob, HEARTBEAT_MS, requeueExpiredLeases, WORKER_ID, type Job } from './jobs/queue.js';
 import { runBackup } from './ops/backup.js';
 import { toStepError } from './lib/errors.js';
 import { enqueuePendingLocationStrips, processMedia, removeDerivedFiles, stripStoredOriginal } from './media/process.js';
@@ -52,6 +52,8 @@ process.env.BLAULICHTCMS_ROLE ??= 'worker';
 process.on('unhandledRejection', (e) => log('error', 'worker', `Unbehandelter Fehler: ${(e as Error)?.message ?? String(e)}`, { stack: String((e as Error)?.stack ?? '').slice(0, 2000) }));
 
 const running = new Map<number, Promise<void>>();
+/** Art je laufendem Auftrag (Plätze für Aufträge mit fremden Diensten sind begrenzt, #240) */
+const runningKind = new Map<number, string>();
 let stopping = false;
 const LEADER_LOCK = 74_210_002;
 
@@ -163,12 +165,14 @@ async function pump(): Promise<void> {
       // Wartungsmodus: laufende Aufträge zu Ende führen, aber keine neuen beginnen
       // (abgestürzte Aufträge trotzdem freigeben, sonst blockieren sie die Update-Vorabprüfung dauerhaft)
       if (s['system.maintenance']) return await requeueExpiredLeases();
-      const free = Math.max(0, Math.min(32, s['jobs.concurrency']) - running.size);
-      if (!free) return;
-      const jobs = await claimJobs(free, [...running.keys()]);
+      // Hängende Aufträge mit fremden Diensten (z. B. ein Social-Post bei einer überlasteten Instanz) dürfen nie alle
+      // Plätze belegen – Warnversand, Benachrichtigungen und Medienprüfung behalten mindestens einen (#240)
+      const jobs = await claimForSlots(s['jobs.concurrency'], [...runningKind].map(([id, kind]) => ({ id, kind })));
       for (const job of jobs) {
+        runningKind.set(job.id, job.kind);
         const p = processJob(job).finally(() => {
           running.delete(job.id);
+          runningKind.delete(job.id);
           if (!stopping) pump().catch((e) => log('error', 'worker', e.message));
         });
         running.set(job.id, p);

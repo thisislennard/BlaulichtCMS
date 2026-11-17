@@ -46,8 +46,11 @@ export async function enqueueFollowUp(kind: string, payload: Record<string, unkn
   });
 }
 
-/** @param busy Jobs, die dieser Worker gerade selbst ausführt – nie ein zweites Mal beanspruchen. */
-export async function claimJobs(limit: number, busy: number[] = []): Promise<Job[]> {
+/**
+ * @param busy Jobs, die dieser Worker gerade selbst ausführt – nie ein zweites Mal beanspruchen.
+ * @param filter nur diese Arten (`kinds`) bzw. alle außer diesen (`excludeKinds`)
+ */
+export async function claimJobs(limit: number, busy: number[] = [], filter: { kinds?: readonly string[]; excludeKinds?: readonly string[] } = {}): Promise<Job[]> {
   if (limit <= 0) return [];
   return many<Job>(
     `UPDATE jobs SET status = 'running', attempts = attempts + 1, lease_until = now() + make_interval(secs => $2),
@@ -56,12 +59,48 @@ export async function claimJobs(limit: number, busy: number[] = []): Promise<Job
         SELECT id FROM jobs
          WHERE ((status = 'queued' AND run_at <= now()) OR (status = 'running' AND lease_until < now()))
            AND NOT (id = ANY($4::bigint[]))
+           AND ($5::text[] IS NULL OR kind = ANY($5::text[]))
+           AND ($6::text[] IS NULL OR NOT (kind = ANY($6::text[])))
          ORDER BY run_at
          LIMIT $1
          FOR UPDATE SKIP LOCKED)
       RETURNING id, kind, payload, attempts, max_attempts`,
-    [limit, LEASE_SEC, WORKER_ID, busy],
+    [limit, LEASE_SEC, WORKER_ID, busy, filter.kinds ? [...filter.kinds] : null, filter.excludeKinds ? [...filter.excludeKinds] : null],
   );
+}
+
+/**
+ * Aufträge, die auf fremde Dienste warten (soziale Netzwerke, Workflows mit Ausgängen, Presseversand, NAS) und dabei
+ * lange brauchen oder hängen können (#240). Sie dürfen nie alle Plätze belegen: Warnversand, Benachrichtigungen,
+ * Medienprüfung und Exporte behalten immer mindestens einen Platz.
+ */
+export const EXTERNAL_KINDS = ['social.publish', 'automation.run', 'press.reply', 'press.release', 'backup.offsite', 'backup.drill'] as const;
+export const isExternalKind = (kind: string) => (EXTERNAL_KINDS as readonly string[]).includes(kind);
+
+/**
+ * Plätze für den nächsten Abruf: `free` insgesamt, davon höchstens `external` für EXTERNAL_KINDS. Reserviert bleibt
+ * ein Viertel der Plätze (mindestens einer); bei nur einem Platz insgesamt ist nichts zu reservieren.
+ */
+export function slotPlan(concurrency: number, runningKinds: string[]): { free: number; external: number } {
+  const cap = Math.max(1, Math.min(32, Math.floor(concurrency) || 1));
+  const free = Math.max(0, cap - runningKinds.length);
+  const reserved = cap >= 2 ? Math.max(1, Math.floor(cap / 4)) : 0;
+  const externalRunning = runningKinds.filter(isExternalKind).length;
+  return { free, external: Math.min(free, Math.max(0, cap - reserved - externalRunning)) };
+}
+
+/**
+ * Freie Plätze füllen: zuerst Aufträge mit fremden Diensten bis zu ihrer Grenze, den Rest mit allen anderen Arten.
+ * @param running Aufträge, die dieser Worker gerade ausführt
+ */
+export async function claimForSlots(concurrency: number, running: { id: number; kind: string }[]): Promise<Job[]> {
+  const plan = slotPlan(concurrency, running.map((r) => r.kind));
+  if (!plan.free) return [];
+  const busy = running.map((r) => r.id);
+  const jobs = plan.external ? await claimJobs(plan.external, busy, { kinds: EXTERNAL_KINDS }) : [];
+  const rest = plan.free - jobs.length;
+  if (rest > 0) jobs.push(...(await claimJobs(rest, [...busy, ...jobs.map((j) => j.id)], { excludeKinds: EXTERNAL_KINDS })));
+  return jobs;
 }
 
 /** Abgelaufene Leases (abgestürzter Worker) zurück in die Warteschlange, ohne sie zu beanspruchen (Wartungsmodus). */

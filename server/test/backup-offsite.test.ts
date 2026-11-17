@@ -151,6 +151,8 @@ const files = new Map<string, Buffer>();
 const dirs = new Set<string>(['/']);
 const requests: { method: string; url: string; auth: string }[] = [];
 let corruptGets = false;
+/** GET liefert mehr als die Datei (fehlerhaftes Ziel, #240) */
+let oversizeGets = false;
 let server: http.Server;
 let base = '';
 
@@ -185,7 +187,7 @@ function davServer() {
         case 'GET': {
           const f = files.get(p);
           if (!f) return res.writeHead(404).end();
-          const out = corruptGets ? Buffer.concat([f.subarray(0, f.length - 1), Buffer.from([f[f.length - 1] ^ 1])]) : f;
+          const out = corruptGets ? Buffer.concat([f.subarray(0, f.length - 1), Buffer.from([f[f.length - 1] ^ 1])]) : oversizeGets ? Buffer.concat([f, crypto.randomBytes(200_000)]) : f;
           return res.writeHead(200, { 'content-length': String(out.length) }).end(out);
         }
         case 'MOVE': {
@@ -418,6 +420,24 @@ describe('Sicherung außer Haus (WebDAV) und Probe-Wiederherstellung', () => {
     expect(row).toMatchObject({ status: 'ok', trigger: 'offsite', offsite_status: 'ok' });
     expect((await admin.post('/backups/offsite/fetch', { name: c.last_ok_file })).status).toBe(409);
     expect(await one(`SELECT 1 FROM audit_events WHERE action = 'backup.offsite_fetched' AND result = 'ok'`)).toBeTruthy();
+  });
+
+  it('fehlerhaftes Ziel liefert mehr als die Datei: Holen bricht ab, nichts bleibt liegen (#240)', async () => {
+    const c = await one(`SELECT last_ok_file FROM backup_offsite`);
+    await pool.query(`DELETE FROM backups WHERE file_name = $1`, [c.last_ok_file]);
+    fs.rmSync(path.join(backupDir(), c.last_ok_file), { force: true });
+    oversizeGets = true;
+    try {
+      const f = await admin.post('/backups/offsite/fetch', { name: c.last_ok_file });
+      expect(f.status).toBe(400);
+      expect(f.json.message).toMatch(/größer als/);
+    } finally {
+      oversizeGets = false;
+    }
+    expect(fs.readdirSync(backupDir()).filter((n) => n.startsWith(c.last_ok_file))).toEqual([]);
+    expect(await one(`SELECT 1 FROM backups WHERE file_name = $1`, [c.last_ok_file])).toBeNull();
+    // wieder in Ordnung: Holen klappt
+    expect((await admin.post('/backups/offsite/fetch', { name: c.last_ok_file })).status).toBe(200);
   });
 
   it('Volume-Sicherung vom Host: Prüfsumme muss passen, landet im Unterordner volume/ mit Aufbewahrung', async () => {

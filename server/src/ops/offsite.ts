@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { Transform, Writable } from 'node:stream';
 import { many, one, pool } from '../db/pool.js';
-import { classifyStatus, httpRequest, normalizeFingerprint, peekCertificate, type HttpRequest, type PeerCertificate } from '../lib/http.js';
+import { classifyStatus, httpRequest, normalizeFingerprint, peekCertificate, transferAllowanceMs, type HttpRequest, type PeerCertificate } from '../lib/http.js';
 import { StepError } from '../lib/errors.js';
 import { log } from '../lib/log.js';
 import { notify } from '../lib/notify.js';
@@ -165,16 +165,40 @@ export async function listRemote(t: DavTarget, pattern: RegExp = BACKUP_NAME): P
     .sort((a, b) => b.name.localeCompare(a.name));
 }
 
+/** Grundlaufzeit großer Übertragungen; httpRequest bzw. fetchFile rechnen je nach Größe einen Zuschlag dazu. */
+const TRANSFER_BASE_MS = 600_000;
+
 /** Datei hochladen (gestreamt). */
 async function putFile(t: DavTarget, local: string, name: string) {
-  const size = fs.statSync(local).size;
-  // Großzügige Laufzeit: 10 Minuten plus 1 Minute je 50 MB
-  const res = await davRequest(t, 'PUT', fileUrl(t, name), { bodyFile: local, headers: { 'content-type': 'application/octet-stream' }, timeoutMs: 600_000 + Math.ceil(size / 50e6) * 60_000 });
+  // Gesamtfrist: 10 Minuten plus Zuschlag nach Dateigröße (httpRequest, rund 1 Mbit/s Mindestdurchsatz)
+  const res = await davRequest(t, 'PUT', fileUrl(t, name), { bodyFile: local, headers: { 'content-type': 'application/octet-stream' }, timeoutMs: TRANSFER_BASE_MS });
   if (res.status !== 201 && res.status !== 204 && res.status !== 200) throw davError(res, 'Hochladen');
 }
 
-/** Datei vom Ziel lesen und dabei die SHA-256-Prüfsumme bilden; optional in eine lokale Datei schreiben. */
-async function fetchFile(t: DavTarget, name: string, dest?: string, sizeHint = 0): Promise<{ sha256: string; size: number }> {
+/** Freier Platz im Sicherungsordner abzüglich einer Reserve (für Downloads ohne bekannte Größe); null = unbekannt. */
+async function downloadBudget(): Promise<number | null> {
+  try {
+    const st = await fs.promises.statfs(backupDir());
+    return Math.max(0, st.bavail * st.bsize - 512 * 1024 ** 2);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Datei vom Ziel lesen und dabei die SHA-256-Prüfsumme bilden; optional in eine lokale Datei schreiben. Begrenzt
+ * (#240): Ist die Größe bekannt (lokale Datei, PROPFIND), darf genau so viel kommen; sonst höchstens der freie Platz
+ * im Sicherungsordner abzüglich Reserve – ein fehlerhaftes Ziel kann den Datenträger so nicht füllen.
+ */
+async function fetchFile(t: DavTarget, name: string, opts: { dest?: string; expectedSize?: number | null } = {}): Promise<{ sha256: string; size: number }> {
+  const { dest } = opts;
+  const expected = opts.expectedSize != null && Number.isSafeInteger(opts.expectedSize) && opts.expectedSize >= 0 ? opts.expectedSize : null;
+  const budget = dest ? await downloadBudget() : null;
+  if (dest && expected !== null && budget !== null && expected > budget) {
+    throw new StepError('config', `Zu wenig freier Speicher für ${name} (${Math.round(expected / 1024 ** 2)} MB, frei etwa ${Math.round(budget / 1024 ** 2)} MB).`);
+  }
+  const maxBytes = expected ?? budget ?? 8 * 1024 ** 3;
+  const timeoutMs = expected !== null ? TRANSFER_BASE_MS + transferAllowanceMs(expected) : 3_600_000;
   const hash = crypto.createHash('sha256');
   let size = 0;
   const fd = dest ? fs.openSync(dest, 'w', 0o600) : null;
@@ -187,12 +211,20 @@ async function fetchFile(t: DavTarget, name: string, dest?: string, sizeHint = 0
     },
   });
   try {
-    const res = await davRequest(t, 'GET', fileUrl(t, name), { sink, timeoutMs: 600_000 + Math.ceil(sizeHint / 50e6) * 60_000 });
+    const res = await davRequest(t, 'GET', fileUrl(t, name), { sink, timeoutMs, maxResponseBytes: Math.max(1, maxBytes) });
     if (res.status < 200 || res.status >= 300) throw davError(res, 'Zurücklesen');
   } finally {
     if (fd !== null) fs.closeSync(fd);
   }
+  // Zu wenig Daten fallen beim Vergleich der Prüfsumme bzw. beim Entschlüsseln auf (Aufrufer)
   return { sha256: hash.digest('hex'), size };
+}
+
+/** Größe einer Datei laut Ordnerliste des Ziels; wirft, wenn sie dort nicht liegt. */
+async function remoteSize(t: DavTarget, name: string): Promise<number | null> {
+  const f = (await listRemote(t)).find((x) => x.name === name);
+  if (!f) throw new StepError('config', `${name} liegt nicht (mehr) auf dem Ziel.`);
+  return f.size;
 }
 
 async function moveFile(t: DavTarget, from: string, to: string) {
@@ -304,7 +336,7 @@ export async function testTarget(t: DavTarget): Promise<TestResult> {
     try {
       await putFile(t, tmp, probe);
       steps.push({ step: 'Probedatei schreiben', ok: true });
-      const back = await fetchFile(t, probe);
+      const back = await fetchFile(t, probe, { expectedSize: data.length });
       const same = back.sha256 === crypto.createHash('sha256').update(data).digest('hex');
       steps.push({ step: 'Zurücklesen und Prüfsumme vergleichen', ok: same });
       await deleteFile(t, probe);
@@ -360,7 +392,7 @@ export async function uploadBackup(backupId: string, attempt: { final: boolean }
     const sha = b.sha256 ?? crypto.createHash('sha256').update(fs.readFileSync(local)).digest('hex');
     const part = `${b.file_name}.part`;
     await putFile(t, local, part);
-    const back = await fetchFile(t, part, undefined, fs.statSync(local).size);
+    const back = await fetchFile(t, part, { expectedSize: fs.statSync(local).size });
     if (back.sha256 !== sha) {
       await deleteFile(t, part).catch(() => {});
       throw new StepError('transient', 'Prüfsumme der hochgeladenen Datei weicht ab – Übertragung wird wiederholt.');
@@ -407,7 +439,7 @@ export async function fetchRemoteBackup(name: string, userId: string | null): Pr
   const dest = path.join(backupDir(), name);
   const part = `${dest}.holen`;
   try {
-    const got = await fetchFile(t, name, part);
+    const got = await fetchFile(t, name, { dest: part, expectedSize: await remoteSize(t, name) });
     fs.renameSync(part, dest);
     await verifyBackup(dest);
     const row = existing
@@ -466,14 +498,14 @@ export async function uploadVolumeStream(name: string, size: number, sha256: str
     const res = await davRequest(t, 'PUT', fileUrl(t, part), {
       bodyStream: tap,
       headers: { 'content-type': 'application/octet-stream', 'content-length': String(size) },
-      timeoutMs: 600_000 + Math.ceil(size / 50e6) * 60_000,
+      timeoutMs: TRANSFER_BASE_MS,
     });
     if (res.status !== 201 && res.status !== 204 && res.status !== 200) throw davError(res, 'Hochladen');
     if (seen !== size || hash.digest('hex') !== sha256.toLowerCase()) {
       await deleteFile(t, part).catch(() => {});
       throw new StepError('invalid_payload', 'Die übergebene Datei passt nicht zu Größe bzw. Prüfsumme der Sicherung.');
     }
-    const back = await fetchFile(t, part, undefined, size);
+    const back = await fetchFile(t, part, { expectedSize: size });
     if (back.sha256 !== sha256.toLowerCase()) {
       await deleteFile(t, part).catch(() => {});
       throw new StepError('transient', 'Prüfsumme der hochgeladenen Volume-Sicherung weicht ab.');
@@ -507,7 +539,7 @@ export async function listRemoteVolumes(t: DavTarget): Promise<RemoteFile[]> {
 export async function downloadForDrill(name: string, dest: string): Promise<{ sha256: string; size: number }> {
   if (!BACKUP_NAME.test(name)) throw new StepError('config', 'Unbekannter Dateiname.');
   const t = await targetFromConfig(await offsiteConfig());
-  return fetchFile(t, name, dest);
+  return fetchFile(t, name, { dest, expectedSize: await remoteSize(t, name) });
 }
 
 /** Lokale Sicherungen, deren Übertragung noch aussteht oder fehlschlug (für den Status). */
