@@ -141,9 +141,9 @@ export function MediaPicker({ collections, chosen, onClose, onAdd }: { collectio
             const on = picked.some((x) => x.id === m.id);
             return (
               <li key={m.id}>
-                <button type="button" aria-pressed={on} onClick={() => toggle(m)} className={cx('block w-full rounded-control overflow-hidden border-2 relative', on ? 'border-primary' : 'border-transparent')}>
+                <button type="button" aria-pressed={on} onClick={() => toggle(m)} className={cx('block w-full rounded-control overflow-hidden border-2 relative', on ? 'border-primary bg-primary-soft shadow-selected' : 'border-transparent')}>
                   {m.has_preview ? <img decoding="async" src={`/api/v1/media/${m.id}/preview`} alt={m.original_name} className="w-full aspect-square object-cover" /> : <div className="aspect-square bg-raised flex items-center justify-center"><Icon name="Film" /></div>}
-                  {on && <span className="absolute top-1 right-1 bg-primary-solid text-on-primary rounded-full p-0.5"><Icon name="Check" size={14} /></span>}
+                  {on && <span className="absolute top-1 right-1 bg-card text-fg border border-primary rounded-full p-0.5"><Icon name="Check" size={14} /></span>}
                 </button>
               </li>
             );

@@ -118,7 +118,7 @@ export function WidgetBody({ id, d }: { id: string; d: any }) {
         <List>
           {d.banners.map((b: any) => (
             <li key={b.id} className="py-2.5 flex items-center gap-2">
-              <span className={cx('w-2 h-2 rounded-full shrink-0', b.tone === 'danger' ? 'bg-err' : b.tone === 'warning' ? 'bg-warn' : 'bg-primary')} aria-hidden="true" />
+              <span className={cx('w-2 h-2 rounded-full shrink-0', b.tone === 'danger' ? 'bg-err' : b.tone === 'warning' ? 'bg-warn' : 'bg-fg-muted')} aria-hidden="true" />
               <Link to="/banner" className="font-medium flex-1 truncate">
                 {b.title}
               </Link>

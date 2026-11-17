@@ -15,7 +15,7 @@ interface MailboxResponse {
 
 const OUTCOME: Record<string, { label: string; tone: 'success' | 'neutral' | 'warning' | 'error' | 'primary' }> = {
   created: { label: 'Neue Anfrage', tone: 'success' },
-  assigned: { label: 'Zugeordnet', tone: 'primary' },
+  assigned: { label: 'Zugeordnet', tone: 'neutral' },
   duplicate: { label: 'Doppelt', tone: 'neutral' },
   auto: { label: 'Automatische Antwort', tone: 'neutral' },
   spam: { label: 'Spam', tone: 'warning' },

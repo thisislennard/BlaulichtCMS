@@ -10,7 +10,7 @@ Alles andere bleibt neutral.
 
 ## 1. Grundregeln
 
-1. **Ein Akzent.** Rot nur für Hauptaktionen, die aktive Navigation, Zähler mit Handlungsbedarf und „Du bist dran“. Nie für Dekoration.
+1. **Ein Akzent.** Rot nur für Hauptaktionen, die aktive Navigation, Zähler mit Handlungsbedarf und „Du bist dran“. Nie für Dekoration, Auswahl, Schrittanzeigen oder Kennzeichnungen. Der Unit-Test `server/test/design-accent.test.ts` meldet rot gefüllte Umschalter und Auswahl, rote Flächen außerhalb weniger erlaubter Stellen und den Badge-Ton `primary` für alles, was kein laufender Vorgang ist.
 2. **Status = Farbe + Text.** Grün (ok), Gelb (Hinweis/offen), Rot-Badge (Fehler) – immer mit Wort und Punkt, nie nur Farbe.
 3. **Weich, nicht verspielt.** Abgerundete Flächen (siehe Radien), keine Verläufe, keine farbigen Seitenstreifen an Karten.
 4. **Monospace für Maschinen-Werte.** IDs (`W-2026-0001`), Fassungen (`F2`), Prüfsummen, Uhrzeiten, Zähler und Abschnittslabels in IBM Plex Mono.
@@ -164,6 +164,11 @@ mit passenden Rechten sichtbar. Höchstens **6 Bereiche** mit je höchstens **7 
 | `Button variant="danger"` | Zart rot mit Rand; nur für Löschen/Widerrufen, immer mit Bestätigung. |
 | `Badge` / `StatusBadge` | Pille mit Punkt + Text. Töne: success, warning, error, neutral, primary. `primary` nur für laufende Vorgänge (wird veröffentlicht, wird versendet, geplant), nicht für Kennzeichnungen wie „Dieses Gerät“. |
 | `Chip mono` | Für IDs und Kürzel (`F-WALD-2`). |
+| Auswahl (gewählte Karte, Antwort, Datei) | `bg-primary-soft` + `border-primary` (gern mit `shadow-selected` und Haken) – nie rot gefüllt. |
+| `ToggleButton` | Umschaltknopf an/aus (z. B. Hinweise zur Datei): an = Auswahl-Muster mit Haken, aus = sekundär. |
+| Ansichtsschalter | `SegmentedControl` (aktiv `bg-raised`), auch für reine Symbole (Kacheln/Liste). |
+| Schrittleiste (Warnentwurf, Verbindung, geführter Workflow) | Nummern neutral (`bg-raised`), aktiver Schritt `bg-raised` + fett + rot umrandete Nummer; erledigt grün mit Haken. |
+| `FilePickButton` | Dateiauswahl als Knopf mit Dateiname/Vorschau und „Entfernen“ – nie das native Dateifeld zeigen; `id` für `FieldWrap htmlFor`. |
 | `Rev` | Fassungsnummer als `F2` in Mono, ausgeschrieben im Tooltip. In ganzen Sätzen bleibt „Fassung 2“. |
 | `Notice` | Standard `info` ist neutral (`bg-raised`). Gelb/Rot/Grün nur für Warnung, Fehler, Erfolg. |
 | `Avatar` | Neutral. `strong` (dunkel gefüllt) nur für das eigene Konto in der Kopfzeile. |

@@ -16,7 +16,7 @@ function Step({ n, title, hint, children, action }: { n: number; title: string; 
     <Card
       title={
         <span className="inline-flex items-center gap-2">
-          <span className="w-6 h-6 rounded-full bg-primary text-on-primary inline-flex items-center justify-center text-meta font-semibold" aria-hidden="true">
+          <span className="w-6 h-6 rounded-full bg-raised border border-line text-fg inline-flex items-center justify-center font-mono text-meta font-semibold" aria-hidden="true">
             {n}
           </span>
           {title}

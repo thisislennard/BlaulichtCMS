@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { MediaItem } from '../../api/types';
-import { Button, cx, Select, StatusBadge } from '../../components/ui/core';
+import { Button, cx, SegmentedControl, Select, StatusBadge } from '../../components/ui/core';
 import { Icon } from '../../components/ui/Icon';
 import { Dialog, Menu } from '../../components/ui/overlays';
 import { fmtBytes, fmtDateTime } from '../../lib/format';
@@ -116,10 +116,17 @@ export function MediaInfo({ m }: { m: MediaItem }) {
 export function ViewControls({ view, setView, perPage, setPerPage }: { view: ViewMode; setView: (v: ViewMode) => void; perPage: number; setPerPage: (n: number) => void }) {
   return (
     <div className="flex items-center gap-2">
-      <div role="group" aria-label="Ansicht" className="inline-flex rounded-control border border-line overflow-hidden">
-        <Button size="sm" variant={view === 'grid' ? 'primary' : 'ghost'} iconOnly icon="LayoutGrid" aria-label="Kacheln" aria-pressed={view === 'grid'} className="!rounded-none" onClick={() => setView('grid')} />
-        <Button size="sm" variant={view === 'list' ? 'primary' : 'ghost'} iconOnly icon="List" aria-label="Liste" aria-pressed={view === 'list'} className="!rounded-none" onClick={() => setView('list')} />
-      </div>
+      {/* Ansichtsschalter neutral (aktiv = bg-raised), Rot bleibt der Hauptaktion vorbehalten (#270) */}
+      <SegmentedControl
+        label="Ansicht"
+        size="sm"
+        value={view}
+        onChange={setView}
+        options={[
+          { value: 'grid', label: <><Icon name="LayoutGrid" size={15} /><span className="sr-only">Kacheln</span></> },
+          { value: 'list', label: <><Icon name="List" size={15} /><span className="sr-only">Liste</span></> },
+        ]}
+      />
       <label className="flex items-center gap-1.5 text-sm text-fg-muted">
         <span className="sr-only sm:not-sr-only">Je Seite</span>
         <Select aria-label="Dateien je Seite" value={perPage} onChange={(e) => setPerPage(Number(e.target.value))} className="!h-ctl-sm !w-auto">

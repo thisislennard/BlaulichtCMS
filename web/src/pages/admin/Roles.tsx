@@ -41,7 +41,7 @@ export interface RolesResponse {
 
 const LEVEL: Record<PermissionDef["level"], { label: string; tone: "neutral" | "primary" | "warning" }> = {
   read: { label: "lesen", tone: "neutral" },
-  write: { label: "ändern", tone: "primary" },
+  write: { label: "ändern", tone: "neutral" },
   critical: { label: "kritisch", tone: "warning" },
 };
 
@@ -125,7 +125,7 @@ export function RolesTab({ data }: { data: RolesResponse }) {
               action={<Menu size="sm" label={`Aktionen für Rolle ${r.label}`} items={items as any} />}
             >
               <div className="flex gap-1.5 flex-wrap mb-2">
-                {r.locked ? <Badge tone="neutral" dot={false}>Fest: immer alle Rechte</Badge> : r.system ? <Badge tone="neutral" dot={false}>Mitgeliefert</Badge> : <Badge tone="primary" dot={false}>Eigene Rolle</Badge>}
+                {r.locked ? <Badge tone="neutral" dot={false}>Fest: immer alle Rechte</Badge> : r.system ? <Badge tone="neutral" dot={false}>Mitgeliefert</Badge> : <Badge tone="neutral" dot={false}>Eigene Rolle</Badge>}
                 {r.customized && <Badge tone="warning" dot={false}>Angepasst</Badge>}
               </div>
               <p className="m-0 text-sm text-fg-muted">{r.description || "Ohne Beschreibung."}</p>

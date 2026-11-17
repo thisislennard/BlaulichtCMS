@@ -9,7 +9,8 @@ import { fromLocalInput, toLocalInput } from '../../lib/format';
 
 export type PressStatus = 'new' | 'in_progress' | 'answered' | 'done';
 export const STATUS_LABEL: Record<PressStatus, string> = { new: 'Neu', in_progress: 'In Bearbeitung', answered: 'Beantwortet', done: 'Erledigt' };
-const STATUS_TONE: Record<PressStatus, Tone> = { new: 'primary', in_progress: 'warning', answered: 'success', done: 'neutral' };
+// „Neu“ = offen, braucht jemanden (Gelb); in Bearbeitung neutral; Rot bleibt Fehlern und Hauptaktionen (#270)
+const STATUS_TONE: Record<PressStatus, Tone> = { new: 'warning', in_progress: 'neutral', answered: 'success', done: 'neutral' };
 export const CHANNEL_LABEL: Record<string, string> = { phone: 'Telefon', mail: 'E-Mail', mailbox: 'Presse-Postfach', in_person: 'Persönlich', other: 'Sonstiges' };
 
 export function PressStatusBadge({ status }: { status: PressStatus }) {

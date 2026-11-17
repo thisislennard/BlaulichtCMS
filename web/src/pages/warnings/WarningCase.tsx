@@ -352,9 +352,9 @@ function WarningCaseInner({ id }: { id: string }) {
                 type="button"
                 onClick={() => go(s.id)}
                 aria-current={s.id === step ? 'step' : undefined}
-                className={cx('flex items-center gap-2 h-9 px-3 rounded-full border text-sm font-medium whitespace-nowrap', s.id === step ? 'bg-primary text-on-primary border-primary' : 'bg-card border-line text-fg hover:bg-raised')}
+                className={cx('flex items-center gap-2 h-9 px-3 rounded-full border text-sm whitespace-nowrap', s.id === step ? 'bg-raised border-fg/40 text-fg font-semibold' : 'bg-card border-line text-fg font-medium hover:bg-raised')}
               >
-                <span className={cx('w-5 h-5 rounded-full inline-flex items-center justify-center text-[11px]', s.id === step ? 'bg-on-primary/20' : stepDone[s.id] ? 'bg-ok-soft text-ok' : 'bg-raised')}>
+                <span className={cx('w-5 h-5 rounded-full inline-flex items-center justify-center font-mono text-[11px]', s.id === step ? 'border border-primary text-primary' : stepDone[s.id] ? 'bg-ok-soft text-ok' : 'bg-raised')}>
                   {stepDone[s.id] && s.id !== step ? <Icon name="Check" size={12} /> : i + 1}
                 </span>
                 {s.label}
@@ -494,8 +494,9 @@ function WarningCaseInner({ id }: { id: string }) {
                                 disabled={!editable}
                                 aria-pressed={sel}
                                 onClick={() => change({ answers: { ...v.answers, [qq.key]: o } })}
-                                className={cx('min-w-[72px] h-11 px-4 rounded-control border font-medium', sel ? 'bg-primary text-on-primary border-primary' : 'bg-card border-line hover:bg-raised')}
+                                className={cx('min-w-[72px] h-11 px-4 rounded-control border font-medium inline-flex items-center justify-center gap-1.5', sel ? 'bg-primary-soft border-primary text-fg shadow-selected' : 'bg-card border-line hover:bg-raised')}
                               >
+                                {sel && <Icon name="Check" size={14} />}
                                 {o}
                               </button>
                             );
@@ -628,8 +629,8 @@ function WarningCaseInner({ id }: { id: string }) {
                   <Icon name="FileText" size={15} /> PDF-Vorschau (Entwurf)
                 </a>
                 {d.approval && (
-                  <a className="inline-flex items-center gap-2 h-9 px-3 rounded-control border border-primary bg-primary-soft !text-fg font-medium" href={`/api/v1/warnings/${id}/approvals/${d.approval.id}/pdf`} target="_blank" rel="noreferrer">
-                    <Icon name="ShieldCheck" size={15} /> Freigegebene PDF
+                  <a className="inline-flex items-center gap-2 h-9 px-3 rounded-control border border-line bg-card !text-fg font-medium" href={`/api/v1/warnings/${id}/approvals/${d.approval.id}/pdf`} target="_blank" rel="noreferrer">
+                    <Icon name="ShieldCheck" size={15} className="text-ok" /> Freigegebene PDF
                   </a>
                 )}
               </div>

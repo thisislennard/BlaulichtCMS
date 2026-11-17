@@ -170,8 +170,8 @@ export default function ConnectionDetail() {
             const done = s.id === 'verbinden' ? true : s.id === 'testen' ? !!test?.ok : s.id === 'vorschau' ? !!test?.ok : c.status === 'active';
             return (
               <li key={s.id}>
-                <button type="button" onClick={() => setStep(s.id)} aria-current={s.id === step ? 'step' : undefined} className={cx('flex items-center gap-2 h-9 px-3 rounded-full border text-sm font-medium', s.id === step ? 'bg-primary text-on-primary border-primary' : 'bg-card border-line hover:bg-raised')}>
-                  <span className={cx('w-5 h-5 rounded-full inline-flex items-center justify-center text-[11px]', s.id === step ? 'bg-on-primary/20' : done ? 'bg-ok-soft text-ok' : 'bg-raised')}>{done && s.id !== step ? <Icon name="Check" size={12} /> : i + 1}</span>
+                <button type="button" onClick={() => setStep(s.id)} aria-current={s.id === step ? 'step' : undefined} className={cx('flex items-center gap-2 h-9 px-3 rounded-full border text-sm', s.id === step ? 'bg-raised border-fg/40 font-semibold' : 'bg-card border-line font-medium hover:bg-raised')}>
+                  <span className={cx('w-5 h-5 rounded-full inline-flex items-center justify-center font-mono text-[11px]', s.id === step ? 'border border-primary text-primary' : done ? 'bg-ok-soft text-ok' : 'bg-raised')}>{done && s.id !== step ? <Icon name="Check" size={12} /> : i + 1}</span>
                   {s.label}
                 </button>
               </li>
@@ -179,8 +179,8 @@ export default function ConnectionDetail() {
           })}
           {RECEIPT_KINDS.includes(c.kind) && can('connection.log') && (
             <li className="pl-2 ml-1 border-l border-line">
-              <button type="button" onClick={() => setStep('empfang')} aria-current={step === 'empfang' ? 'page' : undefined} className={cx('flex items-center gap-2 h-9 px-3 rounded-full border text-sm font-medium', step === 'empfang' ? 'bg-primary text-on-primary border-primary' : 'bg-card border-line hover:bg-raised')}>
-                <Icon name="ScrollText" size={14} />
+              <button type="button" onClick={() => setStep('empfang')} aria-current={step === 'empfang' ? 'page' : undefined} className={cx('flex items-center gap-2 h-9 px-3 rounded-full border text-sm', step === 'empfang' ? 'bg-raised border-fg/40 font-semibold' : 'bg-card border-line font-medium hover:bg-raised')}>
+                <Icon name="ScrollText" size={14} className={step === 'empfang' ? 'text-primary' : undefined} />
                 Empfangsprotokoll
               </button>
             </li>

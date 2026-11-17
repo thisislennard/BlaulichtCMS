@@ -224,7 +224,7 @@ export default function DesignTemplateDetail() {
         title={t.title}
         subtitle={
           <span className="flex flex-wrap gap-1.5 items-center">
-            {t.kind === 'image' && <Badge tone="primary">Befüllbare Bildvorlage</Badge>}
+            {t.kind === 'image' && <Badge>Befüllbare Bildvorlage</Badge>}
             {t.category && <Chip>{t.category.name}</Chip>}
             {t.tags.map((x) => (
               <Chip key={x}>#{x}</Chip>

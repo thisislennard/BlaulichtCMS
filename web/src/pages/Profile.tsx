@@ -501,7 +501,7 @@ function SessionsCard() {
                       <Badge>{t("profile.thisDevice")}</Badge>
                     )}
                     {s.remember && (
-                      <Badge tone="primary" dot={false} title={t("profile.rememberedHint", { when: fmtRelative(s.expires_at) })}>
+                      <Badge tone="neutral" dot={false} title={t("profile.rememberedHint", { when: fmtRelative(s.expires_at) })}>
                         {t("profile.remembered")}
                       </Badge>
                     )}

@@ -234,7 +234,7 @@ export function UpdatesSection({ manage }: { manage: boolean }) {
           {d.latest ? (
             <span className="inline-flex flex-wrap items-center gap-2">
               <span className="font-mono">{d.latest.version}</span>
-              {d.available ? <Badge tone="primary">Update verfügbar</Badge> : <Badge tone="success">aktuell</Badge>}
+              {d.available ? <Badge tone="warning">Update verfügbar</Badge> : <Badge tone="success">aktuell</Badge>}
               {d.latest.publishedAt && <span className="text-fg-muted">veröffentlicht {fmtDateTime(d.latest.publishedAt)}</span>}
             </span>
           ) : d.lastCheckAt && !d.lastCheckError ? (

@@ -34,7 +34,7 @@ interface Row {
 export function LevelBadge({ level, kind }: { level?: number | null; kind: string }) {
   if (kind === 'all_clear') return <Badge tone="success">Entwarnung</Badge>;
   if (!level) return <Badge tone="warning">Stufe offen</Badge>;
-  return <Badge tone={level === 1 ? 'error' : level === 2 ? 'warning' : 'primary'}>Warnstufe {level}</Badge>;
+  return <Badge tone={level === 1 ? 'error' : level === 2 ? 'warning' : 'neutral'}>Warnstufe {level}</Badge>;
 }
 
 export default function Warnings() {

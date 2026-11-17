@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { get, patch, post } from '../../api/client';
 import type { FaceProposal, MediaItem, Redaction, Region, SensitiveFlag } from '../../api/types';
-import { Badge, Button, cx, Notice, SegmentedControl, Select, Spinner, Switch } from '../../components/ui/core';
+import { Badge, Button, cx, Notice, SegmentedControl, Select, Spinner, Switch, ToggleButton } from '../../components/ui/core';
 import { Icon } from '../../components/ui/Icon';
 import { Dialog, useErrorToast, useToast } from '../../components/ui/overlays';
 import { fmtDateTime } from '../../lib/format';
@@ -165,9 +165,9 @@ export function PrivacyDialog({ m, onClose, onSaved }: { m: MediaItem; onClose: 
           <legend className="text-label uppercase text-fg-muted mb-1">Markierungen</legend>
           <div className="flex flex-wrap gap-2">
             {SENSITIVE_ORDER.map((f) => (
-              <Button key={f} size="sm" variant={flags.includes(f) ? 'primary' : 'secondary'} icon={flags.includes(f) ? 'CheckSquare' : 'Square'} aria-pressed={flags.includes(f)} onClick={() => toggleFlag(f)}>
+              <ToggleButton key={f} size="sm" pressed={flags.includes(f)} onClick={() => toggleFlag(f)}>
                 {SENSITIVE_LABELS[f]}
-              </Button>
+              </ToggleButton>
             ))}
           </div>
           <p className="m-0 text-meta text-fg-muted">Markierte Dateien verlangen bei der Freigabe eine ausdrücklich bestätigte Datenschutz-Prüfung.</p>

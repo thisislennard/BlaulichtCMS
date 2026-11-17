@@ -237,7 +237,7 @@ export default function ReviewView() {
           <Rev n={r.number} className="text-fg-muted" />
           <span className="text-fg-muted">{KIND_LABEL[d.post.kind] ?? d.post.kind}</span>
           {fromPush && (
-            <Badge tone="primary" dot={false}>
+            <Badge tone="neutral" dot={false}>
               aus Mitteilung
             </Badge>
           )}
@@ -319,7 +319,7 @@ export default function ReviewView() {
                 <button type="button" className="block w-full rounded-control overflow-hidden border border-line" onClick={() => setLightbox(i)} aria-label={`${m.original_name} groß ansehen`}>
                   {m.has_preview ? <img decoding="async" src={`/api/v1/media/${m.id}/preview`} alt="" className="w-full aspect-square object-cover" /> : <div className="aspect-square bg-raised flex items-center justify-center"><Icon name="Film" /></div>}
                 </button>
-                {m.id === r.cover_id && <span className="absolute top-1 left-1"><Badge tone="primary" dot={false}>Titelbild</Badge></span>}
+                {m.id === r.cover_id && <span className="absolute top-1 left-1"><Badge tone="neutral" dot={false} className="!bg-card">Titelbild</Badge></span>}
                 {!!m.sensitive_flags?.length && (
                   <span className="absolute bottom-1 left-1">
                     <Badge tone="warning" title={m.sensitive_flags.map((f) => SENSITIVE_LABELS[f]).join(', ')}>

@@ -86,7 +86,7 @@ export default function Logs() {
 const LEVEL_TONE: Record<string, Tone> = {
   error: "error",
   warn: "warning",
-  info: "primary",
+  info: "neutral",
   debug: "neutral",
 };
 
