@@ -289,7 +289,7 @@ final class BlaulichtCMS_Bridge_Admin {
 							<th scope="row">Banner</th>
 							<td>
 								<label><input type="checkbox" name="banner_auto" value="1" <?php checked( false !== $s['banner_auto'] && '0' !== $s['banner_auto'] ); ?> /> automatisch am Seitenanfang anzeigen</label>
-								<p class="description">Ohne diese Einstellung erscheinen Banner nur über Shortcode <code>[blaulichtcms_banner]</code> oder Block „BlaulichtCMS: Hinweise“. Popups erscheinen immer, wenn ein Schweregrad auf „Popup“ steht. Einsatzübersicht: <code>[blaulichtcms_einsaetze anzahl="10"]</code>. Aktuell gespeichert: <?php echo (int) count( BlaulichtCMS_Bridge_Banners::all() ); ?> Hinweis(e).</p>
+								<p class="description">Ohne diese Einstellung erscheinen Banner nur über Shortcode <code>[blaulichtcms_banner]</code> oder Block „BlaulichtCMS: Hinweise“. Popups erscheinen immer, wenn ein Schweregrad auf „Popup“ steht. Einsatzübersicht: <code>[blaulichtcms_einsaetze anzahl="10"]</code>. Alle Shortcodes mit Beispielen: <a href="<?php echo esc_url( admin_url( 'options-general.php?page=' . BlaulichtCMS_Bridge_Incidents_Admin::SLUG . '&tab=shortcodes' ) ); ?>">Einstellungen → BlaulichtCMS Einsatzliste → Shortcodes</a>. Aktuell gespeichert: <?php echo (int) count( BlaulichtCMS_Bridge_Banners::all() ); ?> Hinweis(e).</p>
 							</td>
 						</tr>
 						<tr>

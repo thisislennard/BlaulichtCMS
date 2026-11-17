@@ -4,7 +4,7 @@ Tags: blaulichtcms, redaktion, veröffentlichung
 Requires at least: 6.4
 Tested up to: 6.9
 Requires PHP: 8.1
-Stable tag: 0.9.0
+Stable tag: 0.9.1
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -57,6 +57,9 @@ Nur im Testbetrieb: `define( 'BLAULICHTCMS_BRIDGE_ALLOW_HTTP', true );` in der w
 Neue Versionen bietet die gekoppelte BlaulichtCMS-Instanz über den normalen WordPress-Updateweg an (Dashboard → Aktualisierungen bzw. `wp plugin update blaulichtcms-bridge`). In der Plugin-Liste lässt sich „Automatische Updates aktivieren“ einschalten; WordPress installiert freigegebene Versionen dann selbst (mit derselben Prüfung von Prüfsumme und Signatur). Ist WP-Cron abgeschaltet, holt die Bridge ihr automatisches Update selbst nach. Websites im Update-Kanal „Test“ erhalten eine neue Version zuerst; alle anderen erst, nachdem sie in BlaulichtCMS freigegeben wurde. Vor der Installation prüft die Bridge das Paket gegen die SHA-256-Prüfsumme aus BlaulichtCMS. Ist in der Bridge ein Signaturschlüssel hinterlegt (includes/signing-keys.php), installiert sie zusätzlich nur Pakete mit gültiger Ed25519-Signatur des Betreibers; der private Schlüssel liegt nicht auf dem BlaulichtCMS-Server. Die Kopplung bleibt beim Update erhalten.
 
 == Changelog ==
+
+= 0.9.1 =
+* Shortcode-Hilfe (#227): Neuer Reiter „Shortcodes“ unter „Einstellungen → BlaulichtCMS Einsatzliste“ mit allen Shortcodes der Bridge, allen Attributen samt erlaubten Werten, Vorgaben (mit aktuell gespeicherter Einstellung) und Wirkung, den vier Teilen der Einsatzstatistik (`ansicht="summe"`, `"monate"`, `"kategorien"`, `"jahre"`) und fertigen Beispielen mit Kopieren-Knopf. Hinweis auf die Blöcke als Alternative und zur Jahresauswahl (`auswahl`).
 
 = 0.9.0 =
 * Einsatzliste (#213): Aufträge „Einsatz veröffentlichen/zurückziehen“ aus BlaulichtCMS. Jeder Einsatz wird ein eigener Inhalt (Typ `blaulichtcms_einsatz`) mit Alarmzeit, Stichwort und Bedeutung, Kategorie, Einsatzmeldung, Ort (nur Ortsteil), Fahrzeugen, weiteren Kräften, Kurzbericht und Bildern. Zurückgezogene Einsätze werden samt nicht anderweitig verwendeter Bilder entfernt.

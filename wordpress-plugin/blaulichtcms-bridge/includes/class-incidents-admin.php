@@ -2,7 +2,8 @@
 /**
  * Einstellungsseite „Einstellungen → BlaulichtCMS Einsatzliste“ (#213): Spalten und Reihenfolge, Sortierung, Filter,
  * Anzahl je Seite, Tabelle oder Karten, Jahresabschnitte, Detailseiten, Farben, Kategorienfarben und -symbole,
- * Ansichten der Statistik – mit Vorschau (echte Einträge oder Beispieldaten).
+ * Ansichten der Statistik – mit Vorschau (echte Einträge oder Beispieldaten). Reiter „Shortcodes“ (#227): alle Shortcodes
+ * mit Attributen und Beispielen zum Kopieren (BlaulichtCMS_Bridge_Shortcodes_Help).
  *
  * @package BlaulichtCMSBridge
  */
@@ -24,8 +25,21 @@ final class BlaulichtCMS_Bridge_Incidents_Admin {
 		add_options_page( 'BlaulichtCMS Einsatzliste', 'BlaulichtCMS Einsatzliste', 'manage_options', self::SLUG, array( __CLASS__, 'render' ) );
 	}
 
+	/** Gewählter Reiter: „einstellungen“ oder „shortcodes“. */
+	private static function tab(): string {
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- reine Anzeige
+		return isset( $_GET['tab'] ) && 'shortcodes' === sanitize_key( wp_unslash( $_GET['tab'] ) ) ? 'shortcodes' : 'einstellungen';
+	}
+
 	public static function assets( string $hook ): void {
 		if ( 'settings_page_' . self::SLUG !== $hook ) {
+			return;
+		}
+		if ( 'shortcodes' === self::tab() ) {
+			wp_enqueue_script( 'blaulichtcms-bridge-shortcodes', plugins_url( 'assets/shortcodes-admin.js', BLAULICHTCMS_BRIDGE_FILE ), array(), BLAULICHTCMS_BRIDGE_VERSION, array( 'in_footer' => true ) );
+			wp_register_style( 'blaulichtcms-bridge-shortcodes', false, array(), BLAULICHTCMS_BRIDGE_VERSION );
+			wp_enqueue_style( 'blaulichtcms-bridge-shortcodes' );
+			wp_add_inline_style( 'blaulichtcms-bridge-shortcodes', '.bcl-sc{max-width:75rem}.bcl-sc-table{margin:.5em 0 1.5em}.bcl-sc-table caption{text-align:left}.bcl-sc-table th[scope=row]{font-weight:600}.bcl-sc-scroll{overflow-x:auto;margin:.5em 0 1.5em}.bcl-sc-scroll:focus-visible{outline:2px solid #2271b1;outline-offset:2px}.bcl-sc-scroll .bcl-sc-table{margin:0;min-width:40rem}.bcl-sc-table th[scope=row] code{white-space:nowrap}.bcl-sc-table td code{overflow-wrap:anywhere}.bcl-sc-note{display:block;font-weight:400;color:#50575e;margin-top:.25em}.bcl-sc-copy-cell{width:1%;white-space:nowrap}.bcl-sc .notice.inline{margin:1em 0}.bcl-sc h2{margin-top:2em}' );
 			return;
 		}
 		wp_enqueue_style( 'wp-color-picker' );
@@ -86,8 +100,24 @@ final class BlaulichtCMS_Bridge_Incidents_Admin {
 			<?php if ( $notice ) : ?>
 				<div class="notice notice-<?php echo esc_attr( $notice[0] ); ?> is-dismissible"><p><?php echo esc_html( $notice[1] ); ?></p></div>
 			<?php endif; ?>
+			<nav class="nav-tab-wrapper" aria-label="Bereiche der Einsatzliste">
+				<?php
+				foreach ( array( 'einstellungen' => 'Einstellungen', 'shortcodes' => 'Shortcodes' ) as $k => $label ) {
+					$url = admin_url( 'options-general.php?page=' . self::SLUG . ( 'shortcodes' === $k ? '&tab=shortcodes' : '' ) );
+					$cur = self::tab() === $k;
+					echo '<a href="' . esc_url( $url ) . '" class="nav-tab' . ( $cur ? ' nav-tab-active' : '' ) . '"' . ( $cur ? ' aria-current="page"' : '' ) . '>' . esc_html( $label ) . '</a>';
+				}
+				?>
+			</nav>
+			<?php
+			if ( 'shortcodes' === self::tab() ) {
+				BlaulichtCMS_Bridge_Shortcodes_Help::render();
+				echo '</div>';
+				return;
+			}
+			?>
 			<p>Die Einträge kommen aus BlaulichtCMS (nur freigegebene, ohne Adressen und Namen). Hier legen Sie fest, wie die Liste und die Statistik auf der Website aussehen. Schrift und Grundfarben übernimmt die Liste vom Theme.</p>
-			<p>Einbinden: Shortcode <code>[blaulichtcms_einsatzliste]</code> bzw. <code>[blaulichtcms_einsatzstatistik]</code> (auch im Elementor-Widget „Shortcode“) oder die Blöcke „BlaulichtCMS: Einsatzliste“ und „BlaulichtCMS: Einsatzstatistik“. Attribute überschreiben die Vorgaben dieser Seite – siehe unten.</p>
+			<p>Einbinden: Shortcode <code>[blaulichtcms_einsatzliste]</code> bzw. <code>[blaulichtcms_einsatzstatistik]</code> (auch im Elementor-Widget „Shortcode“) oder die Blöcke „BlaulichtCMS: Einsatzliste“ und „BlaulichtCMS: Einsatzstatistik“. Attribute überschreiben die Vorgaben dieser Seite – alle Attribute und fertige Beispiele zum Kopieren im Reiter <a href="<?php echo esc_url( admin_url( 'options-general.php?page=' . self::SLUG . '&tab=shortcodes' ) ); ?>">Shortcodes</a>.</p>
 			<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
 				<input type="hidden" name="action" value="blaulichtcms_bridge_incidents_save">
 				<?php wp_nonce_field( 'blaulichtcms_bridge_incidents_save' ); ?>

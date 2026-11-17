@@ -59,13 +59,69 @@ In WordPress unter **Einstellungen → BlaulichtCMS Einsatzliste** – mit Vorsc
 | Farben | Akzentfarbe, Tabellenkopf; Farbe und Symbol je Kategorie. Leer = Farben des Themes |
 | Statistik | Anzahl im Jahr (mit Vorjahr und Fehlalarmen), je Monat, je Kategorie, je Jahr |
 
-Eingebunden wird die Liste mit dem Shortcode `[blaulichtcms_einsatzliste]` (auch im Elementor-Widget „Shortcode“) oder dem Block **BlaulichtCMS: Einsatzliste**, die Statistik mit `[blaulichtcms_einsatzstatistik]` bzw. dem Block **BlaulichtCMS: Einsatzstatistik**. Attribute überschreiben die Vorgaben:
+## Shortcodes und Blöcke
 
-| Shortcode | Attribute |
+Eingebunden werden Liste und Statistik mit Shortcodes (im Block-Editor über den Block „Shortcode“, im klassischen Editor im Text, in Elementor über das Widget „Shortcode“) oder mit den Blöcken **BlaulichtCMS: Einsatzliste** und **BlaulichtCMS: Einsatzstatistik** – dort stehen dieselben Attribute als Felder in der Seitenleiste, ein leeres Feld heißt „Vorgabe der Einstellungen“. Ab Bridge 0.9.1 erklärt das Plugin alle Shortcodes mit Beispielen zum Kopieren selbst: **Einstellungen → BlaulichtCMS Einsatzliste → Reiter Shortcodes**.
+
+| Shortcode | Zeigt | Block |
+|---|---|---|
+| `[blaulichtcms_einsatzliste]` | Einsatzliste (Tabelle oder Karten, Filter, Seiten oder Jahresabschnitte) | BlaulichtCMS: Einsatzliste |
+| `[blaulichtcms_einsatzstatistik]` | Jahresstatistik, ganz oder in einzelnen Teilen | BlaulichtCMS: Einsatzstatistik |
+| `[blaulichtcms_banner]` | aktive Hinweise als Banner (keine Attribute), siehe [Banner](/hilfe/banner) | BlaulichtCMS: Hinweise |
+| `[blaulichtcms_einsaetze anzahl="10"]` | die letzten Einsatzberichte (Beiträge), `anzahl` 1–50, Vorgabe 10 | BlaulichtCMS: Einsatzübersicht |
+
+Fehlt ein Attribut, gilt die Vorgabe; unbekannte Werte werden ignoriert. Als „ja“ gelten `ja`, `1`, `true`, `an` und `yes`.
+
+### Statistik in Teilen
+
+`[blaulichtcms_einsatzstatistik]` besteht aus vier Teilen, die sich mit `ansicht` einzeln an beliebigen Stellen zeigen lassen (mehrere mit Komma; sie erscheinen immer in dieser Reihenfolge):
+
+| `ansicht` | Zeigt |
 |---|---|
-| `[blaulichtcms_einsatzliste]` | `jahr="aktuell"`/`"alle"`/`"2025"`, `kategorie="Brand"`, `spalten="nr,datum,stichwort,meldung,ort"`, `sortierung="absteigend"`/`"aufsteigend"`, `anzahl="20"` (0 = alle), `filter="jahr,kategorie"`/`"aus"`, `darstellung="tabelle"`/`"karten"`, `gruppierung="jahr"`, `detail="ja"`/`"nein"`, `nur_besondere="ja"`, `titel="…"` |
-| `[blaulichtcms_einsatzstatistik]` | `jahr="aktuell"`/`"alle"`/`"2025"`, `ansicht="summe,monate,kategorien,jahre"`, `diagramm="balken"`/`"aus"`, `auswahl="ja"`/`"nein"`, `titel="…"` |
+| `summe` | große Zahl „Einsätze im Jahr …“ mit Vorjahr und Fehlalarmen; bei `jahr="alle"` „Einsätze insgesamt“ |
+| `monate` | Einsätze je Monat – nur bei einem einzelnen Jahr |
+| `kategorien` | Einsätze je Kategorie, häufigste zuerst; bei `jahr="alle"` über alle Jahre |
+| `jahre` | Einsätze je Jahr im Vergleich, immer alle Jahre |
 
-Beispiel für eine Seite wie bisher: links `[blaulichtcms_einsatzliste nur_besondere="ja" darstellung="karten" anzahl="5" filter="aus" titel="Besondere Einsätze"]`, rechts `[blaulichtcms_einsatzliste anzahl="20" jahr="alle" filter="aus" titel="Die letzten 20 Einsätze"]`, darunter `[blaulichtcms_einsatzliste gruppierung="jahr" jahr="alle" titel="Historie"]` und `[blaulichtcms_einsatzstatistik]`.
+| Attribut | Werte | Vorgabe |
+|---|---|---|
+| `ansicht` | `summe`, `monate`, `kategorien`, `jahre`, kombinierbar | Einstellung „Ansichten“ |
+| `jahr` | `aktuell` (neuestes Jahr mit Einsätzen), `alle`, Jahreszahl wie `2025` | `aktuell` |
+| `diagramm` | `balken` (Diagramm, darunter „Als Tabelle“) oder `aus` (nur Tabellen) | `balken` |
+| `auswahl` | `ja`/`nein` – Jahresauswahl für Besucher (ab zwei Jahren mit Einsätzen) | `ja` |
+| `titel` | Überschrift | leer |
+
+**`auswahl` wirkt nur im jeweiligen Shortcode:** Es blendet dort die Jahresauswahl ein oder aus und legt fest, ob dieser Teil einem gewählten Jahr folgt. Mit `auswahl="nein"` bleibt ein Teil bei seinem `jahr`, auch wenn auf derselben Seite anderswo ein Jahr gewählt wird. Das gewählte Jahr steht in der Adresse der Seite – alle Teile derselben Seite mit eingeschalteter Auswahl (Statistik mit `auswahl="ja"`, Liste mit Filter `jahr`) zeigen danach dieses Jahr.
+
+### Attribute der Liste
+
+Ohne Attribute zeigt `[blaulichtcms_einsatzliste]` die Liste wie in den Einstellungen; jedes Attribut gilt nur für diesen Shortcode.
+
+| Attribut | Werte | Vorgabe |
+|---|---|---|
+| `jahr` | `aktuell`, `alle`, Jahreszahl; mit `gruppierung="jahr"` zeigt eine Jahreszahl nur diesen Abschnitt | Einstellung „Jahr“ |
+| `kategorie` | Kategoriename wie in BlaulichtCMS, z. B. `Brand` | alle |
+| `spalten` | `nr`, `datum`, `stichwort`, `bedeutung`, `kategorie`, `meldung`, `ort`, `fahrzeuge`, `kraefte`, `bild` – mit Komma, in dieser Reihenfolge angezeigt | Einstellung „Spalten“ |
+| `sortierung` | `absteigend` (neueste zuerst) oder `aufsteigend` | Einstellung |
+| `anzahl` | 0–500 Einträge je Seite, `0` = alle; ohne Wirkung bei `gruppierung="jahr"` | Einstellung (20) |
+| `filter` | `jahr`, `kategorie`, `jahr,kategorie` oder `aus`; bei `gruppierung="jahr"` keine Filter | Einstellung |
+| `darstellung` | `tabelle` oder `karten` | Einstellung |
+| `gruppierung` | `keine` oder `jahr` (je Jahr ein aufklappbarer Abschnitt) | Einstellung |
+| `detail` | `ja`/`nein` – Einsatzmeldung zur Detailseite verlinken (nur wenn Detailseiten eingeschaltet sind) | Einstellung |
+| `nur_besondere` | `ja`/`nein` | `nein` |
+| `titel` | Überschrift | leer |
+
+### Beispiele
+
+| Zweck | Shortcode |
+|---|---|
+| Nur die große Zahl auf der Startseite | `[blaulichtcms_einsatzstatistik ansicht="summe" auswahl="nein"]` |
+| Monatsdiagramm | `[blaulichtcms_einsatzstatistik ansicht="monate" auswahl="nein"]` |
+| Kategorien als Tabelle | `[blaulichtcms_einsatzstatistik ansicht="kategorien" diagramm="aus" auswahl="nein"]` |
+| Alle Jahre im Vergleich | `[blaulichtcms_einsatzstatistik ansicht="jahre" auswahl="nein"]` |
+| Gesamtzahl über alle Jahre | `[blaulichtcms_einsatzstatistik ansicht="summe" jahr="alle" auswahl="nein"]` |
+| Liste der letzten 20 Einsätze | `[blaulichtcms_einsatzliste anzahl="20" jahr="alle" filter="aus" titel="Die letzten 20 Einsätze"]` |
+| Historie nach Jahren | `[blaulichtcms_einsatzliste gruppierung="jahr" jahr="alle" titel="Historie"]` |
+| Besondere Einsätze als Karten | `[blaulichtcms_einsatzliste nur_besondere="ja" darstellung="karten" anzahl="5" filter="aus" titel="Besondere Einsätze"]` |
 
 Diagramme zeigen jeden Wert auch als Zahl; unter **Als Tabelle** stehen dieselben Zahlen als Tabelle. Kategorien erscheinen immer mit Namen, nicht nur als Farbe.

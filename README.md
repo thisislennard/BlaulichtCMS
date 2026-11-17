@@ -15,7 +15,7 @@ Fotos per Link vom Handy sammeln · sichten · Beiträge schreiben · Fassung fr
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-18-4169E1?logo=postgresql&logoColor=white)
 ![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)
 ![Docker](https://img.shields.io/badge/Docker-ein_Container-2496ED?logo=docker&logoColor=white)
-![WordPress](https://img.shields.io/badge/BlaulichtCMS_Bridge-0.9.0-21759B?logo=wordpress&logoColor=white)
+![WordPress](https://img.shields.io/badge/BlaulichtCMS_Bridge-0.9.1-21759B?logo=wordpress&logoColor=white)
 
 </div>
 
@@ -159,7 +159,8 @@ flowchart LR
   „Einsatz in Einsatzliste“ oder von Hand anlegen, CSV-Import (auch aus der Erweiterung „Einsatzverwaltung“), Freigabe
   genau dieser Fassung, Veröffentlichen und Zurückziehen. Ort nur auf Ortsteil-Ebene (Allowlist). In WordPress
   einstellbar: Spalten, Sortierung, Filter, Tabelle oder Karten, Jahresabschnitte, Detailseiten, Kategorienfarben und
-  -symbole; Statistik je Jahr, Monat und Kategorie mit Diagramm.
+  -symbole; Statistik je Jahr, Monat und Kategorie mit Diagramm – auch in einzelnen Teilen (z. B. nur die große Zahl
+  auf der Startseite). Alle Shortcodes mit Attributen und Beispielen zum Kopieren erklärt das Plugin selbst.
 - **Einsatzübersicht** auf der Website per Shortcode bzw. Block.
 - **Facebook und Instagram:** Veröffentlichung je Kanal mit eigenem Status, wahlweise als Beitrag, **Story** oder
   beides (Bilder automatisch auf 9:16); Facebook-Beiträge lassen sich wieder löschen, für Instagram gibt es einen

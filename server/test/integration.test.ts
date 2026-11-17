@@ -2129,7 +2129,7 @@ describe('Bridge-Updates über den WordPress-Updateweg (M4)', () => {
     await admin.put(`/sites/${test.id}/update-channel`, { channel: 'test' });
     const o = (await offer(test.key)).json;
     expect(o.available).toBe(true);
-    expect(o.version).toBe('0.9.0');
+    expect(o.version).toBe('0.9.1');
     expect(o.package).toMatch(/^https:\/\/blaulichtcms\.example\.org\/api\/v1\/bridge\/update\/package\?/);
     const path = new URL(o.package).pathname + new URL(o.package).search;
     const dl = await anonymous.raw('GET', path);
@@ -2137,11 +2137,11 @@ describe('Bridge-Updates über den WordPress-Updateweg (M4)', () => {
     expect(crypto.createHash('sha256').update(dl.rawPayload).digest('hex')).toBe(o.sha256);
     expect((await anonymous.raw('GET', path.replace(/sig=[0-9a-f]{4}/, 'sig=0000'))).status).toBe(403);
     // Freigabe ohne Rückmeldung der Testwebsite mit der neuen Version → abgelehnt
-    const rel = await admin.post('/sites/bridge-release', { version: '0.9.0', note: 'Auf Testseite geprüft.' });
+    const rel = await admin.post('/sites/bridge-release', { version: '0.9.1', note: 'Auf Testseite geprüft.' });
     expect(rel.status).toBe(409);
     // Testwebsite meldet nach dem Update die neue Version (Kopplung blieb erhalten)
-    expect((await offer(test.key, '0.9.0')).status).toBe(200);
-    expect((await admin.post('/sites/bridge-release', { version: '0.9.0', note: 'Auf Testseite geprüft, Theme unverändert.' })).status).toBe(200);
+    expect((await offer(test.key, '0.9.1')).status).toBe(200);
+    expect((await admin.post('/sites/bridge-release', { version: '0.9.1', note: 'Auf Testseite geprüft, Theme unverändert.' })).status).toBe(200);
     expect((await offer(live.key)).json.available).toBe(true);
     const st = (await admin.get('/sites/bridge-release')).json;
     expect(st.releases[0].tested_on_name).toBe('Update-Testseite');
