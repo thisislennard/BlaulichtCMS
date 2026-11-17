@@ -1,3 +1,6 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import http from 'node:http';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { FastifyInstance } from 'fastify';
@@ -471,6 +474,35 @@ describe('Kalender: iCal einlesen und als Abo anbieten (#202)', () => {
     } finally {
       await pool.query('ALTER TABLE calendar_events DROP CONSTRAINT test_kaputt');
     }
+  });
+
+  it('doppelter geänderter Einzeltermin, sehr lange Serie und Serienende-Korrektur (#231)', async () => {
+    const refresh = () => admin.post(`/calendar/sources/${sourceId}/refresh`);
+    // derselbe geänderte Termin zweimal in der Datei (alte und neue SEQUENCE): die neuere gilt, kein Fehler
+    const moved = (seq: number, title: string, start: string) => MOVED.replace('SUMMARY:Dienstabend (Atemschutz)', `SEQUENCE:${seq}\r\nSUMMARY:${title}`).replace('DTSTART;TZID=W. Europe Standard Time:20261117T190000', `DTSTART;TZID=W. Europe Standard Time:${start}`).replace('DTEND;TZID=W. Europe Standard Time:20261117T210000\r\n', '');
+    const LONG = ['BEGIN:VEVENT', 'UID:lang@wehr', 'SUMMARY:Tagesdienst', 'DTSTART;TZID=Europe/Berlin:20260101T080000', 'DTEND;TZID=Europe/Berlin:20260101T090000', 'RRULE:FREQ=DAILY;COUNT=10000', 'END:VEVENT'].join('\r\n');
+    ics = cal([SERIES, moved(1, 'Alt', '20261117T180000'), moved(2, 'Neu', '20261118T180000'), LONG]);
+    const r = await refresh();
+    expect(r.status).toBe(200);
+    expect(r.json.warnings).toEqual([]);
+    const nov = (await entries(admin, berlin(2026, 11, 10), berlin(2026, 11, 25), `&sources=ical:${sourceId}`)).filter((e) => e.title !== 'Tagesdienst').map((e) => `${hm(e.start)} ${e.title}`);
+    expect(nov).toEqual(['2026-11-18 18:00 Neu', '2026-11-23 19:30 Dienstabend']);
+    expect((await many(`SELECT 1 FROM calendar_events WHERE uid = 'dienst@wehr' AND recurrence_id IS NOT NULL`)).length).toBe(1);
+    // 10 000 Termine: das Serienende stimmt, auch die letzten erscheinen
+    const long = await one<any>(`SELECT id, until_at FROM calendar_events WHERE uid = 'lang@wehr'`);
+    expect(long.until_at.toISOString()).toBe(berlin(2053, 5, 18, 9));
+    expect((await entries(admin, berlin(2053, 5, 17), berlin(2053, 6, 1), `&sources=ical:${sourceId}`)).map((e) => hm(e.start))).toEqual(['2053-05-17 08:00', '2053-05-18 08:00']);
+    // ein früher falsch gespeichertes Serienende korrigiert der nächste Abruf
+    await pool.query(`UPDATE calendar_events SET until_at = $2 WHERE id = $1`, [long.id, berlin(2039, 9, 13, 9)]);
+    expect((await refresh()).json).toMatchObject({ changed: 1, added: 0, removed: 0 });
+    expect((await one<any>(`SELECT until_at FROM calendar_events WHERE id = $1`, [long.id])).until_at.toISOString()).toBe(berlin(2053, 5, 18, 9));
+    // Migration 185: Serien, deren Ende gekappt sein kann (≥ 4 999 Tage), gelten als unbegrenzt; kürzere bleiben
+    await pool.query(`UPDATE calendar_events SET until_at = $2 WHERE id = $1`, [long.id, berlin(2039, 9, 13, 9)]);
+    const migration = fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), '../migrations/185_calendar_until_recheck.sql'), 'utf8');
+    await pool.query(migration);
+    expect((await one<any>(`SELECT until_at FROM calendar_events WHERE id = $1`, [long.id])).until_at).toBeNull();
+    expect((await one<any>(`SELECT until_at FROM calendar_events WHERE uid = 'dienst@wehr' AND recurrence_id IS NULL`)).until_at).not.toBeNull();
+    expect((await entries(admin, berlin(2053, 5, 17), berlin(2053, 6, 1), `&sources=ical:${sourceId}`))).toHaveLength(2);
   });
 
   it('Quelle löschen entfernt Termine und die verschlüsselte Adresse', async () => {

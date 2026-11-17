@@ -211,17 +211,21 @@ Pixelprüfung, Bildausschnitt).
 
 Termine liegen in `calendar_events` (Migration 110), Kategorien in `calendar_categories`. Serien speichern eine RRULE
 nach RFC 5545 (`server/src/calendar/recurrence.ts`, eigene Umsetzung ohne Fremdbibliothek: FREQ DAILY/WEEKLY/MONTHLY/
-YEARLY, INTERVAL, COUNT, UNTIL, BYDAY mit Ordnungszahl, BYMONTHDAY, BYMONTH, BYSETPOS). Wiederholungen werden in
+YEARLY, INTERVAL, COUNT, UNTIL, BYDAY mit Ordnungszahl, BYMONTHDAY, BYMONTH, BYSETPOS; YEARLY ohne BYMONTH wie in
+RFC 5545 über das ganze Jahr bzw. alle Monate). Nicht umgesetzte Regelteile (BYWEEKNO, BYYEARDAY, RSCALE/SKIP,
+BYHOUR/BYMINUTE/BYSECOND außer der Uhrzeit des ersten Termins) lehnt `parseRrule` ab – ein eingelesener Termin gilt
+dann mit Hinweis als einzelner Termin (#231). Wiederholungen werden in
 Ortszeit der Zeitzone `tz` gebildet und erst dann in UTC umgerechnet (Intl, IANA-Zeitzonen) – Sommer-/Winterzeit
 verschiebt Serien nicht. Ausgelassene Termine stehen in `exdates`, geänderte Einzeltermine als eigene Zeile mit
-`series_id` und `recurrence_id`. `until_at` (Ende des letzten Termins, NULL = unbegrenzt) begrenzt die Abfrage nach
-Zeitraum; aufgelöst wird beim Lesen (`server/src/calendar/store.ts`, höchstens 400 Tage je Abfrage). Weitere Module
+`series_id` und `recurrence_id`. `until_at` (Ende des letzten Termins, NULL = unbegrenzt; `seriesEnd()` ohne Grenze
+für die Zahl der Termine, Migration 185 setzt früher gekappte Werte auf NULL) begrenzt die Abfrage nach Zeitraum; aufgelöst wird beim Lesen (`server/src/calendar/store.ts`, höchstens 400 Tage je Abfrage). Weitere Module
 können Einträge über `registerCalendarProvider` beisteuern (geplante Beiträge und Presse-Fristen:
 `server/src/calendar/providers.ts`).
 
 iCal-Quellen (#202, Migration 111): `calendar_sources` (Adresse verschlüsselt in `secrets`, Besitzer
 `calendar_source`; gespeichert wird nur der Hostname), Abruf über `lib/http.ts` (SSRF-Schutz, 3 MB, 15 s, ETag/
-Last-Modified) im Worker, Abgleich je UID und RECURRENCE-ID in `server/src/calendar/sources.ts`, Empfangsprotokoll
+Last-Modified) im Worker, Abgleich je UID und RECURRENCE-ID in `server/src/calendar/sources.ts` (doppelte Einträge:
+höchste SEQUENCE gewinnt), Empfangsprotokoll
 `calendar_source_log` (höchstens 200 Einträge je Quelle). Eigener Leser für RFC 5545 (`server/src/calendar/ical.ts`:
 Zeilenfaltung, Maskierung, TZID inkl. Windows-Zeitzonen, DATE/UTC/schwebende Zeiten, DURATION, EXDATE, RECURRENCE-ID,
 STATUS:CANCELLED; Steuerzeichen außer Tab/Zeilenumbruch entfallen, ein unlesbarer Termin wird mit Hinweis übersprungen).

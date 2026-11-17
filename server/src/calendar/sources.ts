@@ -91,7 +91,8 @@ interface Row {
   tags: string[];
 }
 
-const fingerprint = (r: Row) => JSON.stringify([r.title, r.description, r.location, +r.starts_at, +r.ends_at, r.all_day, r.tz, r.rrule, r.exdates.map(Number).sort(), r.tags]);
+// until_at gehört dazu: so korrigiert der nächste Abruf auch ein früher falsch berechnetes Serienende (#231)
+const fingerprint = (r: Row) => JSON.stringify([r.title, r.description, r.location, +r.starts_at, +r.ends_at, r.all_day, r.tz, r.rrule, r.exdates.map(Number).sort(), r.until_at == null ? null : +r.until_at, r.tags]);
 
 function toRow(e: IcalEvent, extraEx: number[] = []): Row {
   const rrule = e.rruleParsed ? formatRrule(e.rruleParsed) : null;
@@ -143,15 +144,18 @@ export async function syncEvents(sourceId: string, cal: ParsedCalendar, category
   const seen = new Set<string>();
   let added = 0;
   let changed = 0;
+  // Doppelte Einträge (gleiche UID bzw. gleiche UID + RECURRENCE-ID, etwa alte und neue SEQUENCE in einer Datei):
+  // der mit der höchsten SEQUENCE gewinnt, bei Gleichstand der spätere. Ohne diese Bereinigung träfe ein doppelter
+  // geänderter Einzeltermin den eindeutigen Index und der Abgleich der Quelle scheiterte bei jedem Abruf (#231).
   const masters = new Map<string, IcalEvent>();
-  const overrides: IcalEvent[] = [];
+  const overrideMap = new Map<string, IcalEvent>();
   for (const e of cal.events) {
-    if (e.recurrenceId == null) {
-      // doppelte UID: die mit der höchsten SEQUENCE gewinnt
-      const prev = masters.get(e.uid);
-      if (!prev || e.sequence >= prev.sequence) masters.set(e.uid, e);
-    } else overrides.push(e);
+    const map = e.recurrenceId == null ? masters : overrideMap;
+    const k = e.recurrenceId == null ? e.uid : key(e.uid, e.recurrenceId);
+    const prev = map.get(k);
+    if (!prev || e.sequence >= prev.sequence) map.set(k, e);
   }
+  const overrides = [...overrideMap.values()];
   const upsert = async (k: string, uid: string, row: Row, link: { seriesId: string | null; recurrenceId: Date | null }) => {
     seen.add(k);
     const cur = byKey.get(k);

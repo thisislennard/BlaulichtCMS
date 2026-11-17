@@ -102,6 +102,27 @@ describe('Wiederholungsregeln', () => {
     expect(fmt(seriesEnd(series('2026-11-02 18:00', 'FREQ=DAILY;COUNT=3'))!)).toBe('2026-11-04 19:00');
     expect(fmt(seriesEnd(series('2026-11-02 18:00', 'FREQ=WEEKLY;UNTIL=20261116T170000Z'))!)).toBe('2026-11-16 19:00');
   });
+  it('jährlich ohne BYMONTH: BYDAY gilt im ganzen Jahr, BYMONTHDAY in jedem Monat (#231)', () => {
+    // alle Montage des Jahres, nicht nur die im Januar
+    expect(all(series('2026-01-05 19:00', 'FREQ=YEARLY;BYDAY=MO;COUNT=6'))).toEqual(['2026-01-05 19:00', '2026-01-12 19:00', '2026-01-19 19:00', '2026-01-26 19:00', '2026-02-02 19:00', '2026-02-09 19:00']);
+    // der 15. jedes Monats
+    expect(all(series('2026-01-15 09:00', 'FREQ=YEARLY;BYMONTHDAY=15;COUNT=4'))).toEqual(['2026-01-15 09:00', '2026-02-15 09:00', '2026-03-15 09:00', '2026-04-15 09:00']);
+    // Freitag, der 13.
+    expect(all(series('2026-02-13 18:00', 'FREQ=YEARLY;BYDAY=FR;BYMONTHDAY=13;COUNT=3'))).toEqual(['2026-02-13 18:00', '2026-03-13 18:00', '2026-11-13 18:00']);
+    // unverändert: ohne BY-Angabe am Datum des ersten Termins, mit Ordnungszahl der n-te Wochentag des Jahres
+    expect(all(series('2026-03-10 12:00', 'FREQ=YEARLY;COUNT=2'))).toEqual(['2026-03-10 12:00', '2027-03-10 12:00']);
+    expect(all(series('2026-01-05 10:00', 'FREQ=YEARLY;BYDAY=1MO;COUNT=3'))).toEqual(['2026-01-05 10:00', '2027-01-04 10:00', '2028-01-03 10:00']);
+  });
+  it('Serienende ohne Kappung bei sehr vielen Terminen (#231)', () => {
+    const many = series('2026-01-01 10:00', 'FREQ=DAILY;COUNT=10000');
+    expect(fmt(seriesEnd(many)!)).toBe('2053-05-18 11:00');
+    expect(all(many, '2053-05-15', '2053-06-01')).toEqual(['2053-05-15 10:00', '2053-05-16 10:00', '2053-05-17 10:00', '2053-05-18 10:00']);
+    expect(fmt(seriesEnd(series('2026-01-01 10:00', 'FREQ=DAILY;UNTIL=20991231'))!)).toBe('2099-12-31 11:00');
+    expect(fmt(seriesEnd(series('2026-01-05 19:00', 'FREQ=YEARLY;BYDAY=MO;UNTIL=20991231T235959Z'))!)).toBe('2099-12-28 20:00');
+    // ganztägig über mehrere Tage: Ende des letzten Termins
+    const s = midnight('2026-12-24', TZ);
+    expect(localDate(seriesEnd({ start: s, end: midnight('2026-12-27', TZ), allDay: true, tz: TZ, rrule: parseRrule('FREQ=YEARLY;COUNT=3') })!, TZ)).toBe('2028-12-27');
+  });
   it('RRULE lesen und schreiben', () => {
     const r = parseRrule('FREQ=MONTHLY;INTERVAL=1;BYDAY=1SA;UNTIL=20271231');
     expect(r.byday).toEqual([{ wd: 6, n: 1 }]);
@@ -218,6 +239,32 @@ describe('iCal lesen', () => {
     expect(cal.events[0].rrule).toBeNull();
     expect(cal.warnings.join(' ')).toMatch(/nicht unterstützt/);
     expect(cal.warnings.join(' ')).toMatch(/ohne Beginn/);
+  });
+
+  it('meldet nicht unterstützte Regelteile und übernimmt dann nur den ersten Termin (#231)', () => {
+    const ev = (summary: string, rule: string, start = '20261102T100000') => ['BEGIN:VEVENT', `UID:${summary}`, `SUMMARY:${summary}`, `DTSTART;TZID=Europe/Berlin:${start}`, `RRULE:${rule}`, 'END:VEVENT'];
+    const cal = parseIcal(
+      [
+        'BEGIN:VCALENDAR',
+        ...ev('Zweimal täglich', 'FREQ=DAILY;BYHOUR=10,18;COUNT=4'),
+        ...ev('Andere Uhrzeit', 'FREQ=DAILY;BYHOUR=11'),
+        ...ev('Kalenderwoche', 'FREQ=YEARLY;BYWEEKNO=20;BYDAY=MO'),
+        ...ev('Jahrestag', 'FREQ=YEARLY;BYYEARDAY=100'),
+        ...ev('Wöchentlich', 'FREQ=WEEKLY;BYHOUR=10;BYMINUTE=0;BYSECOND=0;X-HERSTELLER=1'),
+        'END:VCALENDAR',
+      ].join('\r\n'),
+      TZ,
+    );
+    expect(cal.events.map((e) => [e.summary, e.rrule != null])).toEqual([['Zweimal täglich', false], ['Andere Uhrzeit', false], ['Kalenderwoche', false], ['Jahrestag', false], ['Wöchentlich', true]]);
+    expect(cal.warnings).toEqual([
+      '„Zweimal täglich“: Regelteil BYHOUR wird nicht unterstützt – nur der erste Termin wird übernommen.',
+      '„Andere Uhrzeit“: Regelteil BYHOUR wird nicht unterstützt – nur der erste Termin wird übernommen.',
+      '„Kalenderwoche“: Regelteil BYWEEKNO wird nicht unterstützt – nur der erste Termin wird übernommen.',
+      '„Jahrestag“: Regelteil BYYEARDAY wird nicht unterstützt – nur der erste Termin wird übernommen.',
+    ]);
+    // Uhrzeit-Teile, die nur die Uhrzeit des ersten Termins wiederholen, ändern nichts und fallen weg
+    expect(formatRrule(cal.events[4].rruleParsed!)).toBe('FREQ=WEEKLY');
+    expect(() => parseRrule('FREQ=DAILY;BYHOUR=10')).toThrow(/BYHOUR wird nicht unterstützt/);
   });
 
   it('entfernt NUL und andere Steuerzeichen aus allen Werten (#237)', () => {

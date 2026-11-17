@@ -219,10 +219,10 @@ function toEvent(lines: Line[], floatingTz: string, defaultTz: string, warnings:
   const rr = get('RRULE');
   if (rr) {
     try {
-      rruleParsed = parseRrule(rr.value, tz);
+      rruleParsed = parseRrule(rr.value, tz, start.ms);
       rrule = rr.value.trim().replace(/^RRULE:/i, '');
     } catch (e) {
-      warnings.push(`„${summary}“: ${e instanceof RruleError ? e.message : 'Wiederholung nicht lesbar'} – nur der erste Termin wird übernommen.`);
+      warnings.push(`„${summary}“: ${e instanceof RruleError ? e.message.replace(/\.$/, '') : 'Wiederholung nicht lesbar'} – nur der erste Termin wird übernommen.`);
     }
   }
   const exdates: number[] = [];

@@ -6,8 +6,9 @@
  * werden in UTC-Zeitpunkte umgerechnet (Intl, IANA-Zeitzonen wie Europe/Berlin).
  *
  * Unterstützt: FREQ=DAILY/WEEKLY/MONTHLY/YEARLY, INTERVAL, COUNT, UNTIL (Datum oder Zeitpunkt), BYDAY (auch mit
- * Ordnungszahl wie 1SA oder -1FR), BYMONTHDAY (auch negativ), BYMONTH, BYSETPOS, WKST. Stündliche und feinere Regeln
- * werden nicht unterstützt (der Termin gilt dann als einzelner Termin).
+ * Ordnungszahl wie 1SA oder -1FR), BYMONTHDAY (auch negativ), BYMONTH, BYSETPOS, WKST. Nicht unterstützt (parseRrule
+ * wirft RruleError, der Termin gilt dann als einzelner Termin): stündliche und feinere Regeln, BYWEEKNO, BYYEARDAY,
+ * RSCALE/SKIP sowie BYHOUR/BYMINUTE/BYSECOND mit einer anderen Uhrzeit als der des ersten Termins (#231).
  */
 
 export type Freq = 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY';
@@ -129,8 +130,20 @@ export function midnight(date: string, tz: string): number {
 
 export class RruleError extends Error {}
 
-/** RRULE-Wert lesen („FREQ=MONTHLY;BYDAY=1SA“). `tz` dient nur für UNTIL als reines Datum. */
-export function parseRrule(value: string, tz = 'Europe/Berlin'): Rrule {
+/** Regelteile, die die Umsetzung auswertet. */
+const SUPPORTED_PARTS = new Set(['FREQ', 'INTERVAL', 'COUNT', 'UNTIL', 'BYDAY', 'BYMONTHDAY', 'BYMONTH', 'BYSETPOS', 'WKST']);
+/** Uhrzeit-Teile: nur zulässig, wenn sie genau die Uhrzeit des ersten Termins wiederholen (dann ohne Wirkung). */
+const TIME_PARTS = { BYHOUR: 'h', BYMINUTE: 'mi', BYSECOND: 's' } as const;
+
+/**
+ * RRULE-Wert lesen („FREQ=MONTHLY;BYDAY=1SA“). `tz` dient für UNTIL als reines Datum und für `start` (Beginn des ersten
+ * Termins), gegen den BYHOUR/BYMINUTE/BYSECOND geprüft werden.
+ *
+ * Regelteile, die die Termine verändern würden, aber nicht umgesetzt sind (BYWEEKNO, BYYEARDAY, BYHOUR mit weiteren
+ * Uhrzeiten …), werden nicht still übergangen: Dann wirft parseRrule RruleError – lieber nur der erste Termin als
+ * falsche oder fehlende Termine (#231). Erweiterungen (X-…) bleiben ohne Wirkung.
+ */
+export function parseRrule(value: string, tz = 'Europe/Berlin', start?: number): Rrule {
   const parts = new Map<string, string>();
   for (const seg of value.replace(/^RRULE:/i, '').split(';')) {
     const i = seg.indexOf('=');
@@ -138,6 +151,16 @@ export function parseRrule(value: string, tz = 'Europe/Berlin'): Rrule {
   }
   const freq = (parts.get('FREQ') ?? '').toUpperCase();
   if (!['DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY'].includes(freq)) throw new RruleError(`Wiederholung ${freq || '(ohne FREQ)'} wird nicht unterstützt.`);
+  const startCivil = start != null && Number.isFinite(start) ? toCivil(start, tz) : null;
+  const unsupported = [...parts.keys()].filter((k) => {
+    if (SUPPORTED_PARTS.has(k) || k.startsWith('X-')) return false;
+    if (k in TIME_PARTS && startCivil) {
+      const vals = (parts.get(k) ?? '').split(',').map((x) => x.trim()).filter(Boolean);
+      return !(vals.length === 1 && /^\d{1,2}$/.test(vals[0]) && +vals[0] === startCivil[TIME_PARTS[k as keyof typeof TIME_PARTS]]);
+    }
+    return true;
+  });
+  if (unsupported.length) throw new RruleError(`Regelteil ${unsupported.join(', ')} wird nicht unterstützt.`);
   const ints = (k: string, min: number, max: number) =>
     (parts.get(k) ?? '')
       .split(',')
@@ -338,10 +361,12 @@ function periodDays(r: Rrule, startDay: number, periodStart: number): number[] {
     }
     case 'YEARLY': {
       const y = fromDayNumber(periodStart).y;
-      const months = r.bymonth.length ? r.bymonth : r.byday.some((b) => b.n != null) && !r.bymonthday.length ? [] : [startCivil.m];
+      // RFC 5545: ohne BYMONTH erweitert BYMONTHDAY auf alle Monate, BYDAY (ohne BYMONTHDAY) auf das ganze Jahr;
+      // ohne BY-Angaben gilt der Monat des ersten Termins (#231)
+      const months = r.bymonth.length ? r.bymonth : r.bymonthday.length ? [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] : r.byday.length ? [] : [startCivil.m];
       if (months.length) for (const m of months) days.push(...monthDays(y, m));
       else {
-        // BYDAY mit Ordnungszahl ohne BYMONTH: n-ter Wochentag des Jahres
+        // BYDAY ohne BYMONTH: jeder passende Wochentag des Jahres bzw. mit Ordnungszahl der n-te des Jahres
         const first = dayNumber(y, 1, 1);
         const n = dayNumber(y + 1, 1, 1) - first;
         const all = Array.from({ length: n }, (_, i) => first + i);
@@ -403,21 +428,22 @@ function nextPeriod(r: Rrule, period: number): number {
   }
 }
 
+/** Letzter Tag (Tagnummer), der noch sicher darstellbar ist (Date reicht bis ins Jahr 275 760). */
+const MAX_DAY = dayNumber(275_000, 1, 1);
+/** UTC-Tagnummer eines Zeitpunkts – das Ortsdatum liegt in jeder Zeitzone höchstens einen Tag daneben. */
+const utcDay = (ms: number) => Math.floor(ms / 86_400_000);
+
 /**
- * Alle Termine einer Serie, die den Zeitraum [from, to) berühren (Ende > from und Beginn < to), aufsteigend.
- * Ohne Regel: nur der Termin selbst. Der erste Termin (DTSTART) zählt immer als erster Termin (auch für COUNT).
+ * Termine einer Serie der Reihe nach an `visit` geben – ohne Ausnahmen, der erste Termin (DTSTART) zählt immer als
+ * erster (auch für COUNT). Endet mit der Regel (COUNT/UNTIL), beim ersten Termin ab `to`, wenn `visit` false liefert,
+ * oder an der Sicherheitsgrenze MAX_PERIODS bzw. am Ende des darstellbaren Zeitraums.
+ *
+ * `visit` bekommt den Tag (Tagnummer des Ortsdatums) und `get`, das den Termin erst bei Bedarf in Zeitpunkte umrechnet:
+ * Die Umrechnung über Intl ist der teure Teil, Tage weit vor dem gesuchten Zeitraum werden nur gezählt. Die Grenzen
+ * UNTIL und `to` werden zunächst am Tag geprüft und nur in den Tagen um die Grenze genau.
  */
-export function expand(src: SeriesSource, from: number, to: number, limit = MAX_OCCURRENCES): Occurrence[] {
-  const out: Occurrence[] = [];
-  const ex = new Set(src.exdates ?? []);
+function walk(src: SeriesSource, r: Rrule, to: number, visit: (day: number, get: () => Occurrence) => boolean): void {
   const dur = Math.max(0, src.end - src.start);
-  const touches = (o: Occurrence) => (o.end > from || (o.end === o.start && o.start >= from)) && o.start < to;
-  if (!src.rrule) {
-    const o = { start: src.start, end: src.end };
-    if (touches(o) && !ex.has(o.start)) out.push(o);
-    return out;
-  }
-  const r = src.rrule;
   const tz = src.tz;
   const sc = toCivil(src.start, tz);
   const startDay = dayNumber(sc.y, sc.m, sc.d);
@@ -433,39 +459,68 @@ export function expand(src: SeriesSource, from: number, to: number, limit = MAX_
     const start = fromCivil({ ...c, h: sc.h, mi: sc.mi, s: sc.s }, tz);
     return { start, end: start + dur };
   };
-  let emitted = 0;
-  // Erster Termin
+  let emitted = 1;
   const first = { start: src.start, end: src.end };
-  emitted++;
-  if (!ex.has(first.start) && touches(first)) out.push(first);
-  if (r.count != null && emitted >= r.count) return out;
+  if (!visit(startDay, () => first)) return;
+  if (r.count != null && emitted >= r.count) return;
+  const untilDay = r.until != null ? utcDay(r.until) : Infinity;
+  const toDay = Number.isFinite(to) ? utcDay(to) : Infinity;
 
   let period = periodOf(r, startDay);
   for (let i = 0; i < MAX_PERIODS; i++, period = nextPeriod(r, period)) {
     for (const day of periodDays(r, startDay, period)) {
+      // Ein Tag nach dem ersten Termin beginnt immer später als dieser (gleiche Uhrzeit bzw. Mitternacht)
       if (day <= startDay) continue;
-      const o = make(day);
-      if (o.start <= src.start) continue;
-      if (r.until != null && o.start > r.until) return out;
-      if (o.start >= to) return out;
+      if (day > MAX_DAY || day > untilDay + 1 || day > toDay + 1) return;
+      let o: Occurrence | null = null;
+      const get = () => (o ??= make(day));
+      // genau prüfen nur nahe an der Grenze; früher liegende Tage beginnen sicher davor
+      if (day >= untilDay - 1 && get().start > r.until!) return;
+      if (day >= toDay - 1 && get().start >= to) return;
       emitted++;
-      if (!ex.has(o.start) && touches(o)) {
-        out.push(o);
-        if (out.length >= limit) return out;
-      }
-      if (r.count != null && emitted >= r.count) return out;
+      if (!visit(day, get)) return;
+      if (r.count != null && emitted >= r.count) return;
     }
   }
+}
+
+/**
+ * Alle Termine einer Serie, die den Zeitraum [from, to) berühren (Ende > from und Beginn < to), aufsteigend.
+ * Ohne Regel: nur der Termin selbst. Der erste Termin (DTSTART) zählt immer als erster Termin (auch für COUNT).
+ */
+export function expand(src: SeriesSource, from: number, to: number, limit = MAX_OCCURRENCES): Occurrence[] {
+  const out: Occurrence[] = [];
+  const ex = new Set(src.exdates ?? []);
+  const touches = (o: Occurrence) => (o.end > from || (o.end === o.start && o.start >= from)) && o.start < to;
+  if (!src.rrule) {
+    const o = { start: src.start, end: src.end };
+    if (touches(o) && !ex.has(o.start)) out.push(o);
+    return out;
+  }
+  // Termine, die vor diesem Tag beginnen, enden sicher vor `from` (Dauer in Tagen plus Spielraum für die Zeitzone)
+  const fromDay = Number.isFinite(from) ? utcDay(from) - Math.ceil(Math.max(0, src.end - src.start) / 86_400_000) - 2 : -Infinity;
+  walk(src, src.rrule, to, (day, get) => {
+    if (day < fromDay) return true;
+    const o = get();
+    if (!ex.has(o.start) && touches(o)) out.push(o);
+    return out.length < limit;
+  });
   return out;
 }
 
 /**
  * Ende der Serie (Ende des letzten Termins) oder null bei unbegrenzter Wiederholung. Grundlage für Abfragen nach
- * Zeitraum (`until_at` in der Datenbank).
+ * Zeitraum (`until_at` in der Datenbank). Läuft – anders als `expand` – ohne Grenze für die Zahl der Termine: Eine
+ * Grenze würde `until_at` zu früh setzen und spätere Termine aus den Abfragen fallen lassen (#231). Die Grenze
+ * MAX_PERIODS gilt hier wie in `expand`, also endet `until_at` nie vor dem letzten darstellbaren Termin.
  */
 export function seriesEnd(src: SeriesSource): number | null {
   if (!src.rrule) return src.end;
   if (src.rrule.count == null && src.rrule.until == null) return null;
-  const all = expand({ ...src, exdates: [] }, -8.64e15, 8.64e15, MAX_OCCURRENCES);
-  return all.length ? all[all.length - 1].end : src.end;
+  let last: () => Occurrence = () => ({ start: src.start, end: src.end });
+  walk(src, src.rrule, Infinity, (_day, get) => {
+    last = get;
+    return true;
+  });
+  return Math.max(src.end, last().end);
 }
