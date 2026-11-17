@@ -1,6 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import net from 'node:net';
+import { describe, expect, it, vi } from 'vitest';
 import { cleanLine, cleanText, decodeWords, htmlToText, parseAddressList, parseMail, parseParams, sanitizeHtml } from '../src/press/mime.js';
-import { imapSearchDate, parseImapDate } from '../src/press/imap.js';
+import { ByteQueue, ImapClient, imapSearchDate, parseImapDate } from '../src/press/imap.js';
 import { ignoreReason } from '../src/press/mailbox.js';
 import { pressMessageId } from '../src/press/send.js';
 import { configuredSender, ownSenderAddresses, parseMailbox } from '../src/lib/mail-address.js';
@@ -210,5 +211,87 @@ describe('Absender mit Anzeigenamen (#230)', () => {
     expect(own).toEqual(['presse@feuerwehr.example']);
     const m = parseMail(Buffer.from(crlf('From: Feuerwehr Musterstadt <presse@feuerwehr.example>\nSubject: Pressemitteilung\n\nText')));
     expect(ignoreReason(m, own)?.outcome).toBe('own');
+  });
+});
+
+describe('IMAP-Empfangspuffer (#239)', () => {
+  it('ByteQueue: Zeilen über Stückgrenzen, Entnahme mit genau einer Kopie', () => {
+    const q = new ByteQueue();
+    for (const part of ['* OK hal', 'lo\r', '\nzwei\r\n', 'rest']) q.push(Buffer.from(part));
+    const nl = q.indexOfCrlf(1024);
+    expect(nl).toBe(10);
+    expect(q.take(nl).toString()).toBe('* OK hallo');
+    q.skip(2);
+    expect(q.indexOfCrlf(1024)).toBe(4);
+    expect(q.take(4).toString()).toBe('zwei');
+    q.skip(2);
+    expect(q.indexOfCrlf(1024)).toBe(-1);
+    expect(q.length).toBe(4);
+    expect(q.take(4).toString()).toBe('rest');
+    expect(() => q.take(1)).toThrow();
+  });
+
+  it('30-MB-Literal in 16-KB-Stücken: linearer Aufwand statt wiederholtem Zusammenkopieren', async () => {
+    const size = 30 * 1024 * 1024;
+    const literal = Buffer.alloc(size, 0x61);
+    literal.write('Subject: gross\r\n\r\n');
+    const server = net.createServer((sock) => {
+      sock.write('* OK [CAPABILITY IMAP4rev1 AUTH=PLAIN] bereit\r\n');
+      let buf = '';
+      let authTag = '';
+      sock.on('data', async (d) => {
+        buf += d.toString('latin1');
+        let i: number;
+        while ((i = buf.indexOf('\r\n')) >= 0) {
+          const line = buf.slice(0, i);
+          buf = buf.slice(i + 2);
+          if (authTag) {
+            sock.write(`${authTag} OK angemeldet\r\n`);
+            authTag = '';
+            continue;
+          }
+          const [tag, ...rest] = line.split(' ');
+          const cmd = rest.join(' ').toUpperCase();
+          if (cmd === 'AUTHENTICATE PLAIN') {
+            authTag = tag;
+            sock.write('+ \r\n');
+          } else if (cmd.startsWith('UID FETCH')) {
+            sock.write(`* 1 FETCH (UID 7 BODY[] {${size}}\r\n`);
+            for (let off = 0; off < size; off += 16 * 1024) {
+              if (!sock.write(literal.subarray(off, off + 16 * 1024))) await new Promise((r) => sock.once('drain', r));
+            }
+            sock.write(`)\r\n${tag} OK fertig\r\n`);
+          } else if (cmd === 'LOGOUT') {
+            sock.end(`* BYE\r\n${tag} OK\r\n`);
+          } else sock.write(`${tag} OK\r\n`);
+        }
+      });
+      sock.on('error', () => {});
+    });
+    await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
+    const port = (server.address() as net.AddressInfo).port;
+    const client = new ImapClient({ host: '127.0.0.1', port, security: 'tls', user: 'u', password: 'p', plainForTests: true, maxLiteralBytes: size + 1024 });
+    let concatBytes = 0;
+    const orig = Buffer.concat;
+    const spy = vi.spyOn(Buffer, 'concat').mockImplementation((list: readonly Uint8Array[], total?: number) => {
+      const r = orig(list, total);
+      concatBytes += r.length;
+      return r;
+    });
+    try {
+      await client.connect();
+      const t0 = Date.now();
+      const raw = await client.fetchRaw(7);
+      const ms = Date.now() - t0;
+      expect(raw?.length).toBe(size);
+      expect(raw!.equals(literal)).toBe(true);
+      // vorher: jedes Stück kopierte den ganzen bisherigen Puffer (bei 30 MB mehrere Gigabyte)
+      expect(concatBytes).toBeLessThan(size);
+      expect(ms).toBeLessThan(15_000);
+    } finally {
+      spy.mockRestore();
+      await client.logout();
+      await new Promise<void>((r) => server.close(() => r()));
+    }
   });
 });

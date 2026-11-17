@@ -31,6 +31,8 @@ Mails an ein Presse-Postfach (z. B. `presse@…`) werden automatisch zu Anfragen
 
 Der Abruf läuft im eingestellten Abstand (Standard alle 5 Minuten), **Jetzt abrufen** startet ihn sofort. Beim ersten Abruf werden nur Mails der letzten 24 Stunden übernommen. Das Postfach wird **nur gelesen**: nichts wird verschoben, gelöscht oder als gelesen markiert – BlaulichtCMS merkt sich selbst, welche Mails schon da waren.
 
+Mails werden **einzeln** geholt und sofort eingeordnet; der Stand wird nach jeder Mail gespeichert. Je Durchgang höchstens 50 Mails bzw. 200 MB – liegen mehr im Postfach (z. B. nach einer Störung), folgt der nächste Durchgang sofort statt erst nach dem Abstand. Eine einzelne Mail, die sich nicht übernehmen lässt, hält die übrigen **nie** auf (siehe unten).
+
 **Was mit einer Mail passiert:**
 
 | Mail | Ergebnis |
@@ -39,12 +41,16 @@ Der Abruf läuft im eingestellten Abstand (Standard alle 5 Minuten), **Jetzt abr
 | Antwort im selben Mail-Verlauf (In-Reply-To/References) oder mit der Vorgangsnummer `[P-…]` im Betreff | wird der bestehenden Anfrage zugeordnet; war sie beantwortet oder erledigt, geht sie zurück auf *In Bearbeitung*; die zuständige Person wird benachrichtigt |
 | automatische Antwort (Abwesenheitsnotiz, Zustellbericht, `Auto-Submitted`), Newsletter/Massenmail, vom Mailserver als Spam markiert, eigene Mails | ignoriert (steht im Empfangsprotokoll) |
 | dieselbe Mail noch einmal (gleiche Message-ID) | ignoriert |
+| Mail, die sich nicht übernehmen lässt (fehlerhafter Aufbau, Speicherfehler), oder deren Verarbeitung dreimal abbricht (z. B. Zeitüberschreitung bei einer sehr großen Mail) | **nicht übernommen**: Eintrag im Empfangsprotokoll mit Grund, Absender, Betreff und Eingangszeit, eine Benachrichtigung an alle mit „Presse-Postfach einrichten“; die Mail bleibt unverändert im Postfach (dort ansehen und die Anfrage bei Bedarf [von Hand erfassen](#anfrage-erfassen)); der Abruf läuft mit den folgenden Mails weiter |
+| Mail größer als das Dreifache der Anhang-Grenze (mindestens 5 MB) | **zu groß**: Eintrag im Empfangsprotokoll, die Mail bleibt im Postfach |
 
 **Anhänge** werden übernommen, wenn sie höchstens so groß sind wie eingestellt (Standard 10 MB je Anhang) und ihr **Inhalt** ein erlaubter Typ ist: PDF, Bilder (JPEG, PNG, GIF, WebP, HEIC), Office- und OpenDocument-Dateien, RTF, Text/CSV/Kalender, Audio (MP3, M4A, WAV) und Video (MP4, MOV). Alles andere (z. B. Programme, Archive) wird nicht übernommen – die Anfrage zeigt, welche Anhänge fehlen und warum. Bilder, die nur in die HTML-Mail eingebettet sind (Logos, Signaturen), entfallen.
 
 **HTML-Mails** zeigt BlaulichtCMS zuerst als Text. **HTML-Ansicht** zeigt die entschärfte Fassung in einem abgeschotteten Bereich: ohne Skripte, ohne Formulare und ohne Bilder aus dem Internet (Zählpixel) – Links öffnen in einem neuen Fenster.
 
-**Empfangsprotokoll:** Jede abgerufene Mail mit Ergebnis (neue Anfrage, zugeordnet, ignoriert und warum, Fehler) – aufbewahrt wie das Empfangsprotokoll der Verbindungen (*Einstellungen → Datenschutz*, Standard 7 Tage). Schlägt der Abruf fehl, kommt **eine** Benachrichtigung an alle mit „Presse-Postfach einrichten“, bis er wieder läuft.
+Steuerzeichen, die in Mails vorkommen können (z. B. ein Null-Zeichen aus einer fehlerhaften Kodierung), werden aus Betreff, Namen, Text und Dateinamen entfernt. Kodierte Absendernamen mit Komma (z. B. „Müller, Hans“ aus Outlook) bleiben vollständig erhalten.
+
+**Empfangsprotokoll:** Jede abgerufene Mail mit Ergebnis (neue Anfrage, zugeordnet, ignoriert und warum, nicht übernommen, Fehler) – aufbewahrt wie das Empfangsprotokoll der Verbindungen (*Einstellungen → Datenschutz*, Standard 7 Tage). Schlägt der Abruf fehl, kommt **eine** Benachrichtigung an alle mit „Presse-Postfach einrichten“, bis er wieder läuft.
 
 ### IMAP einrichten
 

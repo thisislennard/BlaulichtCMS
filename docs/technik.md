@@ -357,7 +357,8 @@ Ergebnisse je Verbindung: [docs/integrationen.md](integrationen.md).
   Twenty-Five (SQLite, Abholung per `wp blaulichtcms-bridge poll`); Einstellungsseite und das eigene Theme der Website
   noch prüfen. Der CSV-Import folgt dem Exportformat der Erweiterung „Einsatzverwaltung“ (Spaltennamen aus deren
   Quelltext), nicht einer echten Exportdatei.
-- Presse-Postfach, Antworten und Pressemitteilungen (#205–#207): gegen IMAP-, SMTP- und Graph-Stellvertreter getestet;
+- Presse-Postfach, Antworten und Pressemitteilungen (#205–#207): gegen IMAP-, SMTP- und Graph-Stellvertreter getestet
+  (auch Abruf je Mail mit Fortschritt, fehlerhafte und hängende Mails, 30-MB-Literal in 16-KB-Stücken, #237/#239);
   mit dem echten Postfach (IMAP-Server bzw. Microsoft 365 mit `Mail.Read`) und echter Zustellung samt Abmeldelink in
   gängigen Mailprogrammen noch prüfen.
 - Kalender (#202): iCal-Abruf mit Beispiel-ICS über einen lokalen Server getestet; echte Kalender (Outlook, Google,

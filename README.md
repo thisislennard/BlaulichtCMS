@@ -203,7 +203,8 @@ flowchart LR
 - **Presse-Postfach:** Abruf per IMAP (TLS/STARTTLS) oder Microsoft 365 (Graph, gleiche App-Registrierung wie der
   Mailversand) – rein lesend, Verbindungstest vor Aktivierung, Passwort verschlüsselt; neue Mails werden Anfragen,
   Antworten im Mail-Verlauf werden zugeordnet, automatische Antworten/Spam/Newsletter ignoriert, Anhänge mit
-  Größenlimit und Typprüfung, HTML entschärft, Empfangsprotokoll.
+  Größenlimit und Typprüfung, HTML entschärft, Empfangsprotokoll; Abruf je Mail mit gespeichertem Stand – eine
+  fehlerhafte Mail wird als „nicht übernommen“ protokolliert und hält den Eingang nie auf.
 - **Antworten aus BlaulichtCMS:** Antwort-Editor in der Anfrage, Versand über SMTP oder Microsoft 365 mit richtigen
   Kopfzeilen für den Mail-Verlauf, Textbausteine mit Platzhaltern, optionale Freigabe durch eine zweite Person
   (Standard aus), Status automatisch „beantwortet“, nie automatischer Doppelversand.

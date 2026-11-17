@@ -10,7 +10,7 @@ import { readSecret } from '../lib/secrets.js';
 import { getSettings, setSettings } from '../lib/settings.js';
 import { emitNewPressRequest, nextPressCaseNo, pressEvent } from './common.js';
 import { ImapClient, ImapError, imapSearchDate } from './imap.js';
-import { htmlToText, parseMail, sanitizeHtml, type ParsedMail } from './mime.js';
+import { cleanLine, cleanText, htmlToText, parseMail, sanitizeHtml, type ParsedMail } from './mime.js';
 import { ownSenderAddresses, parseMailbox } from '../lib/mail-address.js';
 
 /**
@@ -25,6 +25,13 @@ import { ownSenderAddresses, parseMailbox } from '../lib/mail-address.js';
  * Je Mail: automatische Antworten, Massenmails und vom Server als Spam markierte Mails werden ignoriert (Protokoll);
  * Antworten im selben Verlauf (In-Reply-To/References, sonst Vorgangsnummer im Betreff) hängen sich an die bestehende
  * Anfrage, alles andere wird eine neue Anfrage. Anhänge werden mit Größenlimit und Typprüfung am Inhalt übernommen.
+ *
+ * Abruf je Mail (#237, #239): Mails werden einzeln geholt und sofort eingeordnet, der Fortschritt wird nach jeder Mail
+ * gespeichert – es liegt höchstens eine Mail im Speicher, und ein Abbruch verliert nichts. Eine Mail, die sich nicht
+ * übernehmen lässt, steht als „nicht übernommen“ im Empfangsprotokoll (sie bleibt unverändert im Postfach) und hält die
+ * folgenden nie auf. Bricht die Verarbeitung derselben Mail mehrfach ab (Zeitüberschreitung, Absturz des Workers), wird
+ * sie nach MAX_ATTEMPTS Versuchen übersprungen. Je Durchgang höchstens MAX_PER_RUN Mails bzw. MAX_BYTES_PER_RUN Bytes;
+ * der Rest folgt im nächsten Durchgang ohne Wartezeit.
  */
 
 export interface MailboxConfig {
@@ -49,11 +56,18 @@ interface MailboxState {
   key?: string;
   uidValidity?: number;
   lastUid?: number;
+  /** IMAP: erster Abruf (Rückblick 24 Stunden) noch nicht vollständig */
+  initial?: boolean;
   since?: string;
+  /** Mail in Arbeit – vor der Verarbeitung gespeichert, damit auch ein Absturz als Versuch zählt */
+  current?: { id: string; attempts: number } | null;
+  /** Durchgang nicht vollständig (Höchstzahl/-menge erreicht): nächster Abruf ohne Wartezeit */
+  more?: boolean;
   lastRunAt?: string;
   lastOk?: boolean;
   lastError?: string | null;
   lastImported?: number;
+  lastSkipped?: number;
 }
 
 export async function mailboxConfig(): Promise<MailboxConfig> {
@@ -89,45 +103,114 @@ export function mailboxConfigProblem(c: MailboxConfig): string | null {
 
 /* ------------------------------------------------------------------ Quellen */
 
-interface RawMail {
-  externalId: string;
-  raw: Buffer | null;
-  size: number;
-  receivedAt: Date | null;
-}
-
 const FIRST_RUN_MS = 24 * 3600_000;
+/** Höchstens so viele Mails bzw. Bytes je Durchgang – der Rest folgt im nächsten Durchgang (#239). */
 const MAX_PER_RUN = 50;
+const MAX_BYTES_PER_RUN = 200 * 1024 * 1024;
+/** So oft darf die Verarbeitung derselben Mail abbrechen, danach wird sie übersprungen (#237, #239). */
+export const MAX_ATTEMPTS = 3;
 const maxMailBytes = (c: MailboxConfig) => Math.max(5, c.maxAttachmentMb * 3) * 1024 * 1024;
 
 function imapClient(c: MailboxConfig, password: string) {
   return new ImapClient({ host: c.host.trim(), port: c.port, security: c.security, user: c.user.trim(), password, timeoutMs: 30_000, maxLiteralBytes: maxMailBytes(c) + 1024 * 1024, plainForTests: !!process.env.VITEST && process.env.BLAULICHTCMS_IMAP_TEST_PLAIN === '1' });
 }
 
-async function fetchImap(c: MailboxConfig, password: string, state: MailboxState, fresh: boolean): Promise<{ mails: RawMail[]; next: MailboxState }> {
+/** Ein laufender Durchgang: Fortschritt wird nach jeder Mail gespeichert. */
+interface Run {
+  c: MailboxConfig;
+  key: string;
+  own: string[];
+  state: MailboxState;
+  imported: number;
+  skipped: number;
+  bytes: number;
+}
+
+async function saveProgress(run: Run, patch: Partial<MailboxState>) {
+  run.state = { ...run.state, ...patch, key: run.key };
+  await setSettings({ 'press.mailbox_state': run.state } as any);
+}
+
+/** Eine Mail im Postfach, die geholt und eingeordnet werden soll. */
+interface Candidate {
+  /** Kennung im Postfach (IMAP: Quelle:UIDVALIDITY:UID, Microsoft 365: Nachrichten-ID) */
+  externalId: string;
+  /** Größe laut Server (0 = unbekannt) */
+  size: number;
+  receivedAt: Date | null;
+  /** Inhalt holen: Rohmail, 'too_large' oder null (nicht mehr im Postfach) */
+  fetch: () => Promise<Buffer | 'too_large' | null>;
+  /** Fortschritt, sobald diese Mail erledigt ist */
+  done: Partial<MailboxState>;
+}
+
+const mb = (n: number) => Math.max(1, Math.round(n / 1024 / 1024));
+const when = (d: Date | null) => (d ? ` vom ${d.toISOString().slice(0, 16).replace('T', ' ')} UTC` : '');
+
+/** Eine Mail holen und einordnen – höchstens eine Mail liegt dabei im Speicher. */
+async function processMail(run: Run, m: Candidate): Promise<void> {
+  const ref = { source: run.c.mode, externalId: m.externalId };
+  const prev = run.state.current;
+  const attempts = prev?.id === m.externalId ? prev.attempts : 0;
+  if (attempts >= MAX_ATTEMPTS) {
+    await logEntry('invalid', { detail: `Mail${when(m.receivedAt)} übersprungen: ${attempts} Versuche sind abgebrochen (Zeitüberschreitung oder Abbruch beim Verarbeiten). Sie bleibt unverändert im Postfach.`, ref });
+    run.skipped++;
+    await saveProgress(run, { ...m.done, current: null });
+    return;
+  }
+  if (m.size > maxMailBytes(run.c)) {
+    await logEntry('too_large', { detail: `Mail${when(m.receivedAt)} mit ${mb(m.size)} MB nicht übernommen (Grenze ${mb(maxMailBytes(run.c))} MB) – sie bleibt im Postfach.`, ref });
+    await saveProgress(run, { ...m.done, current: null });
+    return;
+  }
+  // vor dem Holen merken: bricht der Worker mitten in dieser Mail ab (Speicher, Neustart), zählt das als Versuch
+  await saveProgress(run, { current: { id: m.externalId, attempts: attempts + 1 } });
+  // Verbindungsfehler beim Holen brechen den Durchgang ab; der Fortschritt bis zur letzten fertigen Mail bleibt
+  const raw = await m.fetch();
+  if (raw === 'too_large') await logEntry('too_large', { detail: `Mail${when(m.receivedAt)} größer als ${mb(maxMailBytes(run.c))} MB nicht übernommen – sie bleibt im Postfach.`, ref });
+  else if (!raw) await logEntry('invalid', { detail: `Mail${when(m.receivedAt)} ist nicht mehr im Postfach.`, ref });
+  else {
+    run.bytes += raw.length;
+    const r = await ingestPressMail(raw, { source: run.c.mode, externalId: m.externalId, receivedAt: m.receivedAt, maxAttachmentMb: run.c.maxAttachmentMb, ownAddresses: run.own });
+    if (r.outcome === 'created' || r.outcome === 'assigned') run.imported++;
+    if (r.outcome === 'invalid') run.skipped++;
+  }
+  await saveProgress(run, { ...m.done, current: null });
+}
+
+/** IMAP: neue UIDs seit dem letzten Stand (erster Abruf: 24 Stunden) einzeln holen. Gibt zurück, ob noch Mails warten. */
+async function runImap(run: Run, password: string): Promise<boolean> {
+  const { c } = run;
   const client = imapClient(c, password);
   try {
     await client.connect();
     const box = await client.examine(c.folder);
-    let uids: number[];
-    const restart = fresh || state.uidValidity !== box.uidValidity || !state.lastUid;
-    if (restart) uids = await client.search(`SINCE ${imapSearchDate(new Date(Date.now() - FIRST_RUN_MS))}`);
-    else uids = (await client.search(`UID ${state.lastUid! + 1}:*`)).filter((u) => u > state.lastUid!);
-    const meta = uids.length ? await client.sizes(uids) : new Map();
-    if (restart) uids = uids.filter((u) => (meta.get(u)?.internalDate?.getTime() ?? Date.now()) >= Date.now() - FIRST_RUN_MS);
-    const truncated = uids.length > MAX_PER_RUN;
+    const st = run.state;
+    const reset = st.uidValidity !== box.uidValidity;
+    const initial = reset || !!st.initial || !st.lastUid;
+    const from = reset ? 0 : (st.lastUid ?? 0);
+    let uids = (initial ? await client.search(`SINCE ${imapSearchDate(new Date(Date.now() - FIRST_RUN_MS))}`) : await client.search(`UID ${from + 1}:*`)).filter((u) => u > from);
+    const meta = uids.length ? await client.sizes(uids) : new Map<number, { size: number; internalDate: Date | null }>();
+    if (initial) uids = uids.filter((u) => (meta.get(u)?.internalDate?.getTime() ?? Date.now()) >= Date.now() - FIRST_RUN_MS);
+    let more = uids.length > MAX_PER_RUN;
     uids = uids.slice(0, MAX_PER_RUN);
-    const mails: RawMail[] = [];
+    // Kennung je Quelle: ein anderer Server/Ordner kann dieselbe UIDVALIDITY haben – UIDs dürfen nicht kollidieren
+    const src = crypto.createHash('sha256').update(run.key).digest('hex').slice(0, 12);
+    await saveProgress(run, { uidValidity: box.uidValidity, lastUid: from, initial, ...(reset ? { current: null } : {}) });
     for (const uid of uids) {
+      if (run.bytes >= MAX_BYTES_PER_RUN) {
+        more = true;
+        break;
+      }
       const m = meta.get(uid);
-      const size = m?.size ?? 0;
-      mails.push({ externalId: `${box.uidValidity}:${uid}`, size, receivedAt: m?.internalDate ?? null, raw: size > maxMailBytes(c) ? null : await client.fetchRaw(uid) });
+      await processMail(run, { externalId: `${src}:${box.uidValidity}:${uid}`, size: m?.size ?? 0, receivedAt: m?.internalDate ?? null, fetch: () => client.fetchRaw(uid), done: { lastUid: uid } });
     }
-    let lastUid = restart ? 0 : state.lastUid!;
-    if (uids.length) lastUid = Math.max(lastUid, ...uids);
-    // erster Abruf: ältere Mails (auch mit höherer UID, z. B. hineinverschoben) gelten als gesehen
-    if (restart && !truncated && box.exists) lastUid = Math.max(lastUid, (await client.search('ALL')).slice(-1)[0] ?? 0);
-    return { mails, next: { ...state, uidValidity: box.uidValidity, lastUid } };
+    // erster Abruf vollständig: ältere Mails (auch mit höherer UID, z. B. hineinverschoben) gelten als gesehen
+    if (initial && !more) {
+      const highest = box.exists ? ((await client.search('ALL')).slice(-1)[0] ?? 0) : 0;
+      await saveProgress(run, { lastUid: Math.max(run.state.lastUid ?? 0, highest), initial: false });
+    }
+    return more;
   } finally {
     await client.logout();
   }
@@ -151,26 +234,47 @@ async function graphGet(path: string, accept: string, maxBytes: number) {
   return res;
 }
 
-async function fetchGraph(c: MailboxConfig, state: MailboxState, fresh: boolean): Promise<{ mails: RawMail[]; next: MailboxState }> {
-  const since = fresh || !state.since ? new Date(Date.now() - FIRST_RUN_MS).toISOString() : state.since;
+/** Microsoft 365: Nachrichten seit dem letzten Eingang (erster Abruf: 24 Stunden) einzeln holen. Gibt zurück, ob noch Mails warten. */
+async function runGraph(run: Run): Promise<boolean> {
+  const { c } = run;
+  const since = run.state.since || new Date(Date.now() - FIRST_RUN_MS).toISOString();
   const box = encodeURIComponent(c.mailbox.trim());
   const q = new URLSearchParams({ $select: 'id,internetMessageId,receivedDateTime', $filter: `receivedDateTime ge ${since}`, $orderby: 'receivedDateTime asc', $top: String(MAX_PER_RUN) });
   const list = (await graphGet(`/users/${box}/mailFolders/inbox/messages?${q.toString().replace(/\+/g, '%20')}`, 'application/json', 2 * 1024 * 1024)).json() as any;
   const items = (Array.isArray(list?.value) ? list.value : []) as { id: string; internetMessageId?: string; receivedDateTime?: string }[];
-  const known = new Set((await many<{ external_id: string }>(`SELECT external_id FROM press_messages WHERE source = 'm365' AND external_id = ANY($1::text[])`, [items.map((i) => i.id)])).map((r) => r.external_id));
-  const knownLog = new Set((await many<{ detail: string }>(`SELECT detail FROM press_mailbox_log WHERE detail = ANY($1::text[])`, [items.map((i) => `graph:${i.id}`)])).map((r) => r.detail));
-  const mails: RawMail[] = [];
+  const ids = items.map((i) => i.id);
+  const known = new Set((await many<{ external_id: string }>(`SELECT external_id FROM press_messages WHERE source = 'm365' AND external_id = ANY($1::text[])`, [ids])).map((r) => r.external_id));
+  // schon im Empfangsprotokoll (ignoriert, zu groß, nicht übernommen) – auch Einträge aus der Zeit vor #237 („graph:…“)
+  for (const r of await many<{ external_id: string | null; detail: string }>(`SELECT external_id, detail FROM press_mailbox_log WHERE (source = 'm365' AND external_id = ANY($1::text[])) OR detail = ANY($2::text[])`, [ids, ids.map((i) => `graph:${i}`)])) {
+    known.add(r.external_id ?? r.detail.slice('graph:'.length));
+  }
+  let more = items.length >= MAX_PER_RUN;
   let next = since;
   for (const it of items) {
-    if (it.receivedDateTime && it.receivedDateTime > next) next = it.receivedDateTime;
-    if (known.has(it.id) || knownLog.has(`graph:${it.id}`)) continue;
-    const res = await graphGet(`/users/${box}/messages/${encodeURIComponent(it.id)}/$value`, 'message/rfc822, text/plain, */*', maxMailBytes(c) + 1024 * 1024).catch((e) => {
-      if (/größer|too large|exceed/i.test(String(e?.message))) return null;
-      throw e;
-    });
-    mails.push({ externalId: it.id, raw: res ? res.body : null, size: res?.body.length ?? maxMailBytes(c) + 1, receivedAt: it.receivedDateTime ? new Date(it.receivedDateTime) : null });
+    const at = it.receivedDateTime && it.receivedDateTime > next ? it.receivedDateTime : next;
+    if (!known.has(it.id)) {
+      if (run.bytes >= MAX_BYTES_PER_RUN) {
+        more = true;
+        break;
+      }
+      await processMail(run, {
+        externalId: it.id,
+        size: 0,
+        receivedAt: it.receivedDateTime ? new Date(it.receivedDateTime) : null,
+        fetch: async () => {
+          const res = await graphGet(`/users/${box}/messages/${encodeURIComponent(it.id)}/$value`, 'message/rfc822, text/plain, */*', maxMailBytes(c) + 1024 * 1024).catch((e) => {
+            if (/größer|too large|exceed/i.test(String(e?.message))) return null;
+            throw e;
+          });
+          return res ? res.body : 'too_large';
+        },
+        done: { since: at },
+      });
+    }
+    next = at;
   }
-  return { mails, next: { ...state, since: next } };
+  if (next !== run.state.since) await saveProgress(run, { since: next });
+  return more;
 }
 
 /** Verbindungstest: anmelden, Ordner öffnen, Anzahl der Nachrichten melden. Ändert nichts. */
@@ -253,33 +357,73 @@ export async function checkAttachment(filename: string, content: Buffer): Promis
 const CASE_IN_SUBJECT = /\[(P-\d{4}-\d{4,})\]/;
 const stripPrefixes = (s: string) => s.replace(/^\s*((re|aw|wg|fw|fwd|antw|sv|vs)\s*(\[\d+\])?\s*:\s*)+/i, '').trim();
 
-async function logEntry(outcome: string, m: { subject?: string; from?: string; requestId?: string | null; detail?: string }) {
-  await pool.query(`INSERT INTO press_mailbox_log (outcome, subject, from_address, request_id, detail) VALUES ($1,$2,$3,$4,$5)`, [outcome, (m.subject ?? '').slice(0, 200), (m.from ?? '').slice(0, 254), m.requestId ?? null, (m.detail ?? '').slice(0, 500)]);
+type MailRef = { source: 'imap' | 'm365'; externalId: string };
+
+async function logEntry(outcome: string, m: { subject?: string; from?: string; requestId?: string | null; detail?: string; ref?: MailRef }) {
+  await pool.query(`INSERT INTO press_mailbox_log (outcome, subject, from_address, request_id, detail, source, external_id) VALUES ($1,$2,$3,$4,$5,$6,$7)`, [
+    outcome,
+    cleanLine(m.subject ?? '').slice(0, 200),
+    cleanLine(m.from ?? '').slice(0, 254),
+    m.requestId ?? null,
+    cleanText(m.detail ?? '').slice(0, 500),
+    m.ref?.source ?? null,
+    m.ref?.externalId.slice(0, 500) ?? null,
+  ]);
+}
+
+/**
+ * Fehler, die nicht an der Mail liegen (Datenbank nicht erreichbar oder überlastet, Neustart, Abbruch, Sperrkonflikt):
+ * dann bricht der Durchgang ab und die Mail kommt beim nächsten Abruf erneut an die Reihe.
+ */
+export function isTransientError(e: unknown): boolean {
+  const code = String((e as any)?.code ?? '');
+  if (/^(08|53|57P|58)/.test(code) || ['57014', '40001', '40P01'].includes(code)) return true;
+  if (['ECONNREFUSED', 'ECONNRESET', 'ETIMEDOUT', 'EPIPE', 'ENOTFOUND', 'EAI_AGAIN', 'EHOSTUNREACH'].includes(code)) return true;
+  return /Connection terminated|timeout exceeded when trying to connect|connection error|Cannot use a pool after calling end/i.test(String((e as any)?.message ?? ''));
 }
 
 export type IngestOutcome = 'created' | 'assigned' | 'duplicate' | 'auto' | 'spam' | 'bulk' | 'own' | 'too_large' | 'invalid';
 
-/** Eine Mail einordnen: neue Anfrage, Antwort im Verlauf oder ignorieren. */
-export async function ingestPressMail(raw: Buffer, meta: { source: 'imap' | 'm365'; externalId: string; receivedAt: Date | null; maxAttachmentMb: number; ownAddresses: string[] }): Promise<{ outcome: IngestOutcome; requestId?: string }> {
+type IngestMeta = { source: 'imap' | 'm365'; externalId: string; receivedAt: Date | null; maxAttachmentMb: number; ownAddresses: string[] };
+
+/**
+ * Eine Mail einordnen: neue Anfrage, Antwort im Verlauf oder ignorieren. Lässt sie sich nicht übernehmen, steht sie als
+ * „nicht übernommen“ im Empfangsprotokoll (#237) – nur Fehler, die nicht an der Mail liegen (isTransientError), werden
+ * weitergereicht.
+ */
+export async function ingestPressMail(raw: Buffer, meta: IngestMeta): Promise<{ outcome: IngestOutcome; requestId?: string }> {
+  const ref: MailRef = { source: meta.source, externalId: meta.externalId };
   let m: ParsedMail;
   try {
     m = parseMail(raw);
   } catch (e) {
-    await logEntry('invalid', { detail: `Mail nicht lesbar: ${(e as Error).message}` });
+    await logEntry('invalid', { detail: `Mail nicht lesbar (${(e as Error).message}) – sie bleibt unverändert im Postfach.`, ref });
     return { outcome: 'invalid' };
   }
+  try {
+    return await ingestParsed(m, raw, meta, ref);
+  } catch (e) {
+    if (isTransientError(e)) throw e;
+    const msg = String((e as Error)?.message ?? e).slice(0, 200);
+    log('warn', 'press', `Presse-Postfach: Mail nicht übernommen: ${msg}`);
+    await logEntry('invalid', { subject: m.subject, from: m.from?.address, detail: `Mail konnte nicht übernommen werden (${msg}) – sie bleibt unverändert im Postfach.`, ref });
+    return { outcome: 'invalid' };
+  }
+}
+
+async function ingestParsed(m: ParsedMail, raw: Buffer, meta: IngestMeta, ref: MailRef): Promise<{ outcome: IngestOutcome; requestId?: string }> {
   const from = m.from;
   const fromAddr = from?.address ?? '';
   // Antworten gehen an Reply-To, falls angegeben
   const contactAddr = m.replyTo[0]?.address ?? fromAddr;
   const messageId = m.messageId ?? `<${crypto.createHash('sha256').update(raw).digest('hex').slice(0, 40)}@press.invalid>`;
   if (await one(`SELECT 1 FROM press_messages WHERE message_id = $1`, [messageId])) {
-    await logEntry('duplicate', { subject: m.subject, from: fromAddr, detail: 'bereits übernommen (gleiche Message-ID)' });
+    await logEntry('duplicate', { subject: m.subject, from: fromAddr, detail: 'bereits übernommen (gleiche Message-ID)', ref });
     return { outcome: 'duplicate' };
   }
   const ignore = ignoreReason(m, meta.ownAddresses);
   if (ignore) {
-    await logEntry(ignore.outcome, { subject: m.subject, from: fromAddr, detail: meta.source === 'm365' ? `graph:${meta.externalId}` : ignore.detail });
+    await logEntry(ignore.outcome, { subject: m.subject, from: fromAddr, detail: ignore.detail, ref });
     return { outcome: ignore.outcome };
   }
   // Anhänge prüfen (Größe, Typ); Bilder, die nur im HTML eingebettet sind (cid), entfallen
@@ -301,7 +445,7 @@ export async function ingestPressMail(raw: Buffer, meta: { source: 'imap' | 'm36
     else skipped.push({ filename: a.filename, reason: chk.reason });
   }
   const safe = m.html ? sanitizeHtml(m.html) : null;
-  const text = (m.text || (m.html ? htmlToText(m.html) : '')).slice(0, 200_000);
+  const text = cleanText(m.text || (m.html ? htmlToText(m.html) : '')).slice(0, 200_000);
   const s = await getSettings();
   const result = await tx(async (db) => {
     // Verlauf: In-Reply-To/References, sonst Vorgangsnummer im Betreff
@@ -342,12 +486,17 @@ export async function ingestPressMail(raw: Buffer, meta: { source: 'imap' | 'm36
     if (created) await emitNewPressRequest(requestId, db);
     return { requestId, created, caseNo: caseNoOut };
   });
-  await logEntry(result.created ? 'created' : 'assigned', { subject: m.subject, from: fromAddr, requestId: result.requestId, detail: `${result.caseNo}${kept.length ? ` · ${kept.length} Anhang/Anhänge` : ''}${skipped.length ? ` · ${skipped.length} nicht übernommen` : ''}` });
-  const topic = stripPrefixes(m.subject).slice(0, 200);
-  if (result.created) await notify({ kind: 'info', title: `Neue Presseanfrage ${result.caseNo} (Presse-Postfach)`, body: topic, link: `/presse/${result.requestId}`, permission: 'press.manage', category: 'press' });
-  else {
-    const a = await one<{ assignee_id: string | null }>(`SELECT assignee_id FROM press_requests WHERE id = $1`, [result.requestId]);
-    await notify({ kind: 'info', title: `Neue Mail zur Presseanfrage ${result.caseNo}`, body: topic, link: `/presse/${result.requestId}`, ...(a?.assignee_id ? { userId: a.assignee_id } : { permission: 'press.manage' }), category: 'press' });
+  // Ab hier ist die Mail übernommen: Protokoll und Benachrichtigung dürfen das Ergebnis nicht mehr umstoßen
+  try {
+    await logEntry(result.created ? 'created' : 'assigned', { subject: m.subject, from: fromAddr, requestId: result.requestId, detail: `${result.caseNo}${kept.length ? ` · ${kept.length} Anhang/Anhänge` : ''}${skipped.length ? ` · ${skipped.length} nicht übernommen` : ''}`, ref });
+    const topic = stripPrefixes(m.subject).slice(0, 200);
+    if (result.created) await notify({ kind: 'info', title: `Neue Presseanfrage ${result.caseNo} (Presse-Postfach)`, body: topic, link: `/presse/${result.requestId}`, permission: 'press.manage', category: 'press' });
+    else {
+      const a = await one<{ assignee_id: string | null }>(`SELECT assignee_id FROM press_requests WHERE id = $1`, [result.requestId]);
+      await notify({ kind: 'info', title: `Neue Mail zur Presseanfrage ${result.caseNo}`, body: topic, link: `/presse/${result.requestId}`, ...(a?.assignee_id ? { userId: a.assignee_id } : { permission: 'press.manage' }), category: 'press' });
+    }
+  } catch (e) {
+    log('warn', 'press', `Presse-Postfach: Protokoll/Benachrichtigung zu ${result.caseNo}: ${(e as Error).message}`);
   }
   return { outcome: result.created ? 'created' : 'assigned', requestId: result.requestId };
 }
@@ -357,44 +506,44 @@ export async function ingestPressMail(raw: Buffer, meta: { source: 'imap' | 'm36
 const LOCK = 74_210_205;
 
 /** Abruf, wenn eingeschaltet und fällig (Worker) bzw. sofort (`force`, „Jetzt abrufen“). */
-export async function pollPressMailbox(opts: { force?: boolean } = {}): Promise<{ ran: boolean; imported?: number; error?: string }> {
+export async function pollPressMailbox(opts: { force?: boolean } = {}): Promise<{ ran: boolean; imported?: number; skipped?: number; more?: boolean; error?: string }> {
   const c = await mailboxConfig();
   if (!c.enabled && !opts.force) return { ran: false };
   const state = await mailboxState();
   const key = sourceKey(c);
-  if (!opts.force && state.lastRunAt && Date.now() - new Date(state.lastRunAt).getTime() < Math.max(1, c.intervalMinutes) * 60_000 - 5_000) return { ran: false };
+  // Wartezeit entfällt, solange vom letzten Durchgang noch Mails übrig sind
+  if (!opts.force && !state.more && state.lastRunAt && Date.now() - new Date(state.lastRunAt).getTime() < Math.max(1, c.intervalMinutes) * 60_000 - 5_000) return { ran: false };
   const client = await pool.connect();
   try {
     const got = await client.query('SELECT pg_try_advisory_lock($1) AS ok', [LOCK]);
     if (!got.rows[0].ok) return { ran: false, error: 'Ein Abruf läuft bereits.' };
     try {
       const fresh = state.key !== key;
-      let imported = 0;
       const s = await getSettings(true);
       const own = [...new Set([...ownSenderAddresses(s), ...[c.mailbox, c.user].map((x) => parseMailbox(x)?.address.toLowerCase() ?? '')].filter(Boolean))];
+      const run: Run = { c, key, own, state: fresh ? { key } : { ...state }, imported: 0, skipped: 0, bytes: 0 };
+      const reportSkipped = async () => {
+        if (!run.skipped) return;
+        await notify({ kind: 'warning', title: `Presse-Postfach: ${run.skipped === 1 ? 'eine Mail' : `${run.skipped} Mails`} nicht übernommen`, body: 'Die Mails bleiben unverändert im Postfach. Grund und Zeitpunkt stehen im Empfangsprotokoll – bitte dort nachsehen und ggf. von Hand erfassen.', link: '/presse/einstellungen', permission: 'press.mailbox', category: 'press' }).catch(() => {});
+      };
       try {
         const password = c.mode === 'imap' ? ((await readSecret(c.secretId || null)) ?? '') : '';
-        const { mails, next } = c.mode === 'm365' ? await fetchGraph(c, fresh ? {} : state, fresh) : await fetchImap(c, password, fresh ? {} : state, fresh);
-        for (const mail of mails) {
-          if (!mail.raw) {
-            await logEntry('too_large', { detail: `Mail mit ${Math.round(mail.size / 1024 / 1024)} MB nicht übernommen (Grenze ${Math.round(maxMailBytes(c) / 1024 / 1024)} MB)${c.mode === 'm365' ? ` · graph:${mail.externalId}` : ''}` });
-            continue;
-          }
-          const r = await ingestPressMail(mail.raw, { source: c.mode, externalId: mail.externalId, receivedAt: mail.receivedAt, maxAttachmentMb: c.maxAttachmentMb, ownAddresses: own });
-          if (r.outcome === 'created' || r.outcome === 'assigned') imported++;
-        }
+        const more = c.mode === 'm365' ? await runGraph(run) : await runImap(run, password);
         const wasFailing = state.lastOk === false;
-        await setSettings({ 'press.mailbox_state': { ...next, key, lastRunAt: new Date().toISOString(), lastOk: true, lastError: null, lastImported: imported } } as any);
+        await saveProgress(run, { lastRunAt: new Date().toISOString(), lastOk: true, lastError: null, lastImported: run.imported, lastSkipped: run.skipped, more });
         if (wasFailing) await logEntry('ok', { detail: 'Abruf wieder erfolgreich' });
-        return { ran: true, imported };
+        await reportSkipped();
+        return { ran: true, imported: run.imported, skipped: run.skipped, more };
       } catch (e) {
         const msg = e instanceof ImapError || e instanceof Error ? e.message : String(e);
-        await logEntry('error', { detail: msg });
+        await logEntry('error', { detail: msg }).catch(() => {});
         log('warn', 'press', `Presse-Postfach: ${msg}`);
         // eine Meldung je Störung (nicht bei jedem Abruf)
-        if (state.lastOk !== false) await notify({ kind: 'error', title: 'Presse-Postfach: Abruf fehlgeschlagen', body: msg.slice(0, 300), link: '/presse/einstellungen', permission: 'press.mailbox', category: 'press' });
-        await setSettings({ 'press.mailbox_state': { ...state, key: state.key, lastRunAt: new Date().toISOString(), lastOk: false, lastError: msg.slice(0, 500) } } as any);
-        return { ran: true, error: msg };
+        if (state.lastOk !== false) await notify({ kind: 'error', title: 'Presse-Postfach: Abruf fehlgeschlagen', body: msg.slice(0, 300), link: '/presse/einstellungen', permission: 'press.mailbox', category: 'press' }).catch(() => {});
+        await reportSkipped();
+        // Fortschritt bis zur letzten fertigen Mail bleibt erhalten (run.state)
+        await saveProgress(run, { lastRunAt: new Date().toISOString(), lastOk: false, lastError: msg.slice(0, 500), more: false }).catch(() => {});
+        return { ran: true, imported: run.imported, skipped: run.skipped, error: msg };
       }
     } finally {
       await client.query('SELECT pg_advisory_unlock($1)', [LOCK]);

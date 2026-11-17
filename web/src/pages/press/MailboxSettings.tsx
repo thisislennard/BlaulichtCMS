@@ -22,7 +22,7 @@ const OUTCOME: Record<string, { label: string; tone: 'success' | 'neutral' | 'wa
   bulk: { label: 'Massenmail', tone: 'neutral' },
   own: { label: 'Eigene Mail', tone: 'neutral' },
   too_large: { label: 'Zu groß', tone: 'warning' },
-  invalid: { label: 'Nicht lesbar', tone: 'warning' },
+  invalid: { label: 'Nicht übernommen', tone: 'warning' },
   error: { label: 'Fehler', tone: 'error' },
   ok: { label: 'Wieder in Ordnung', tone: 'success' },
 };
@@ -161,8 +161,9 @@ export function MailboxSettings() {
             </Button>
             {v.enabled && (
               <Button icon="RefreshCw" loading={busy === 'poll'} onClick={() => run('poll', async () => {
-                const r = await post<{ imported?: number; error?: string }>('/press/mailbox/poll');
-                toast(r.error ? { tone: 'error', title: 'Abruf fehlgeschlagen', text: r.error } : { tone: 'success', title: `${r.imported ?? 0} Mail(s) übernommen` });
+                const r = await post<{ imported?: number; skipped?: number; more?: boolean; error?: string }>('/press/mailbox/poll');
+                const more = r.more ? 'Weitere Mails folgen in Kürze automatisch.' : undefined;
+                toast(r.error ? { tone: 'error', title: 'Abruf fehlgeschlagen', text: r.error } : { tone: r.skipped ? 'warning' : 'success', title: `${r.imported ?? 0} Mail(s) übernommen${r.skipped ? `, ${r.skipped} nicht übernommen (siehe Empfangsprotokoll)` : ''}`, text: more });
                 refresh();
               })}>
                 Jetzt abrufen

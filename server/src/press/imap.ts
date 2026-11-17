@@ -29,6 +29,89 @@ export interface ImapResponse {
   literals: Buffer[];
 }
 
+/** Höchstlänge einer Antwortzeile (ohne Literale). */
+const MAX_LINE = 64 * 1024;
+
+/**
+ * Empfangspuffer ohne quadratisches Wachstum (#239): eingehende Stücke (bei TLS etwa 16 KB) werden nur gesammelt und erst
+ * beim Lesen einer Zeile bzw. eines Literals bekannter Länge genau einmal in einen passenden Puffer kopiert – statt bei
+ * jedem Stück den ganzen bisherigen Puffer neu anzulegen.
+ */
+export class ByteQueue {
+  private chunks: (Buffer | null)[] = [];
+  /** erstes noch nicht gelesenes Stück */
+  private first = 0;
+  /** Lesestelle im ersten Stück */
+  private head = 0;
+  length = 0;
+
+  push(b: Buffer) {
+    if (!b.length) return;
+    this.chunks.push(b);
+    this.length += b.length;
+  }
+
+  clear() {
+    this.chunks = [];
+    this.first = 0;
+    this.head = 0;
+    this.length = 0;
+  }
+
+  /** Stelle des ersten CRLF (relativ zur Lesestelle), gesucht in höchstens etwa `limit` Bytes; sonst -1. */
+  indexOfCrlf(limit: number): number {
+    let base = 0;
+    let prevCr = false;
+    for (let k = this.first; k < this.chunks.length; k++) {
+      const c = this.chunks[k]!;
+      const start = k === this.first ? this.head : 0;
+      if (prevCr && c[start] === 0x0a) return base - 1;
+      for (let from = start; ; ) {
+        const i = c.indexOf(0x0a, from);
+        if (i < 0) break;
+        if (i > start && c[i - 1] === 0x0d) return base + (i - start) - 1;
+        from = i + 1;
+      }
+      prevCr = c[c.length - 1] === 0x0d;
+      base += c.length - start;
+      if (base > limit) return -1;
+    }
+    return -1;
+  }
+
+  /** `n` Bytes entnehmen – als ein neuer Puffer (genau eine Kopie). */
+  take(n: number): Buffer {
+    const out = Buffer.allocUnsafe(n);
+    this.consume(n, out);
+    return out;
+  }
+
+  skip(n: number) {
+    this.consume(n, null);
+  }
+
+  private consume(n: number, out: Buffer | null) {
+    if (n > this.length) throw new RangeError('ByteQueue: zu wenige Daten');
+    let off = 0;
+    while (off < n) {
+      const c = this.chunks[this.first]!;
+      const k = Math.min(c.length - this.head, n - off);
+      if (out) c.copy(out, off, this.head, this.head + k);
+      off += k;
+      this.head += k;
+      if (this.head >= c.length) {
+        this.chunks[this.first++] = null; // gelesene Stücke freigeben
+        this.head = 0;
+      }
+    }
+    this.length -= n;
+    if (this.first > 256 || this.first === this.chunks.length) {
+      this.chunks = this.chunks.slice(this.first);
+      this.first = 0;
+    }
+  }
+}
+
 export class ImapError extends Error {
   constructor(
     message: string,
@@ -42,7 +125,7 @@ const quote = (s: string) => `"${s.replace(/[\\"]/g, (c) => `\\${c}`)}"`;
 
 export class ImapClient {
   private socket: net.Socket | tls.TLSSocket | null = null;
-  private buf: Buffer = Buffer.alloc(0);
+  private rx = new ByteQueue();
   private waiters: (() => void)[] = [];
   private closed: Error | null = null;
   private tag = 0;
@@ -57,7 +140,7 @@ export class ImapClient {
   private attach(sock: net.Socket | tls.TLSSocket) {
     this.socket = sock;
     sock.on('data', (d: Buffer) => {
-      this.buf = this.buf.length ? Buffer.concat([this.buf, d]) : d;
+      this.rx.push(d);
       this.wake();
     });
     sock.on('error', (e) => {
@@ -76,10 +159,15 @@ export class ImapClient {
     for (const f of w) f();
   }
 
-  private waitData(deadline: number): Promise<void> {
+  /**
+   * Auf weitere Daten warten – höchstens bis `deadline`; mit `idleMs` endet das Warten zusätzlich, wenn so lange nichts
+   * mehr ankommt (große Mails über langsame Leitungen dürfen dauern, solange Daten fließen).
+   */
+  private waitData(deadline: number, idleMs?: number): Promise<void> {
     if (this.closed) return Promise.reject(this.closed instanceof ImapError ? this.closed : new ImapError(`Verbindung unterbrochen: ${this.closed.message}`, 'connect'));
+    const until = idleMs ? Math.min(deadline, Date.now() + idleMs) : deadline;
     return new Promise((resolve, reject) => {
-      const t = setTimeout(() => reject(new ImapError('Zeitüberschreitung: Der Mailserver antwortet nicht.', 'timeout')), Math.max(1, deadline - Date.now()));
+      const t = setTimeout(() => reject(new ImapError('Zeitüberschreitung: Der Mailserver antwortet nicht.', 'timeout')), Math.max(1, until - Date.now()));
       this.waiters.push(() => {
         clearTimeout(t);
         resolve();
@@ -88,26 +176,26 @@ export class ImapClient {
   }
 
   /** Eine vollständige Antwort lesen (Zeile, ggf. mit Literalen {n}). */
-  private async readResponse(deadline = Date.now() + this.timeout): Promise<ImapResponse> {
+  private async readResponse(deadline = Date.now() + this.timeout, idleMs?: number): Promise<ImapResponse> {
     let text = '';
     const literals: Buffer[] = [];
     const max = this.o.maxLiteralBytes ?? 40 * 1024 * 1024;
     for (;;) {
-      let nl = this.buf.indexOf('\r\n');
+      let nl = this.rx.indexOfCrlf(MAX_LINE);
       while (nl < 0) {
-        if (this.buf.length > 64 * 1024) throw new ImapError('Antwortzeile des Mailservers ist zu lang.', 'protocol');
-        await this.waitData(deadline);
-        nl = this.buf.indexOf('\r\n');
+        if (this.rx.length > MAX_LINE) throw new ImapError('Antwortzeile des Mailservers ist zu lang.', 'protocol');
+        await this.waitData(deadline, idleMs);
+        nl = this.rx.indexOfCrlf(MAX_LINE);
       }
-      const line = this.buf.subarray(0, nl).toString('utf8');
-      this.buf = this.buf.subarray(nl + 2);
+      const line = this.rx.take(nl).toString('utf8');
+      this.rx.skip(2);
       const lit = /\{(\d+)\+?\}$/.exec(line);
       if (!lit) return { text: text + line, literals };
       const n = Number(lit[1]);
       if (n > max) throw new ImapError(`Nachricht ist größer als erlaubt (${Math.round(n / 1024 / 1024)} MB).`, 'protocol');
-      while (this.buf.length < n) await this.waitData(deadline);
-      literals.push(Buffer.from(this.buf.subarray(0, n)));
-      this.buf = this.buf.subarray(n);
+      // Literal bekannter Länge: Stücke nur sammeln, am Ende einmal in einen Puffer der richtigen Größe kopieren
+      while (this.rx.length < n) await this.waitData(deadline, idleMs);
+      literals.push(this.rx.take(n));
       text += line.slice(0, lit.index) + `{#${literals.length - 1}}`;
     }
   }
@@ -118,13 +206,13 @@ export class ImapClient {
   }
 
   /** Befehl senden und alle Antworten bis zur markierten Abschlusszeile sammeln. */
-  async command(cmd: string, opts: { continuation?: () => string; timeoutMs?: number } = {}): Promise<ImapResponse[]> {
+  async command(cmd: string, opts: { continuation?: () => string; timeoutMs?: number; idleMs?: number } = {}): Promise<ImapResponse[]> {
     const tag = `B${++this.tag}`;
     this.write(`${tag} ${cmd}\r\n`);
     const deadline = Date.now() + (opts.timeoutMs ?? this.timeout);
     const untagged: ImapResponse[] = [];
     for (;;) {
-      const r = await this.readResponse(deadline);
+      const r = await this.readResponse(deadline, opts.idleMs);
       if (r.text.startsWith('+')) {
         if (!opts.continuation) throw new ImapError('Unerwartete Rückfrage des Mailservers.', 'protocol');
         this.write(`${opts.continuation()}\r\n`);
@@ -183,7 +271,7 @@ export class ImapClient {
     return new Promise((resolve, reject) => {
       const t = tls.connect({ socket: plain, servername: net.isIP(this.o.host) ? undefined : this.o.host, minVersion: 'TLSv1.2' }, () => {
         t.off('error', onErr);
-        this.buf = Buffer.alloc(0);
+        this.rx.clear();
         this.attach(t);
         resolve();
       });
@@ -261,9 +349,12 @@ export class ImapClient {
     return out;
   }
 
-  /** Komplette Nachricht lesen, ohne sie als gelesen zu markieren. */
+  /**
+   * Komplette Nachricht lesen, ohne sie als gelesen zu markieren. Solange Daten fließen, darf das bis zu 5 Minuten dauern
+   * (große Mail, langsame Leitung); kommt eine Minute lang nichts, gilt der Server als hängend (#239).
+   */
   async fetchRaw(uid: number): Promise<Buffer | null> {
-    const res = await this.command(`UID FETCH ${uid} (UID BODY.PEEK[])`, { timeoutMs: Math.max(this.timeout, 120_000) });
+    const res = await this.command(`UID FETCH ${uid} (UID BODY.PEEK[])`, { timeoutMs: Math.max(this.timeout, 5 * 60_000), idleMs: Math.max(this.timeout, 60_000) });
     for (const r of res) if (new RegExp(`\\bUID ${uid}\\b`).test(r.text) && r.literals.length) return r.literals[r.literals.length - 1];
     return null;
   }

@@ -10,7 +10,7 @@ import { checkPressDeadlines, openPressDeadlines } from '../src/press/deadlines.
 import { runRetention } from '../src/lib/retention.js';
 import { storeSecret } from '../src/lib/secrets.js';
 import { resetM365TokenCache } from '../src/lib/mail.js';
-import { pollPressMailbox } from '../src/press/mailbox.js';
+import { MAX_ATTEMPTS, mailboxState, pollPressMailbox } from '../src/press/mailbox.js';
 import { fakeGraph, fakeImap, fakeSmtp } from './press-fakes.js';
 import { deliverPressReply } from '../src/routes/press-replies.js';
 import { deliverRelease } from '../src/press/releases.js';
@@ -376,6 +376,65 @@ describe('Presse-Postfach (#205)', () => {
     expect((await one<any>(`SELECT count(*)::int AS n FROM notifications WHERE title = 'Presse-Postfach: Abruf fehlgeschlagen'`))!.n).toBe(1);
     expect((await admin.get('/press/mailbox')).json.state).toMatchObject({ lastOk: false });
     imap = await fakeImap({ user: 'presse', password: 'Geheim-123' });
+  });
+
+  it('NUL-Zeichen und eine fehlerhafte Mail blockieren den Eingang nicht; Fortschritt je Mail (#237)', async () => {
+    const cur = (await one<any>(`SELECT value FROM settings WHERE key = 'press.mailbox'`))!.value;
+    await setSettings({ 'press.mailbox': { ...cur, port: imap.port, enabled: true } } as any);
+    expect((await pollPressMailbox({ force: true })).error).toBeUndefined(); // neue Quelle, noch leer
+    imap.add('From: nul@zeitung.example\nSubject: =?UTF-8?Q?Test=00X?=\nMessage-ID: <nul1@zeitung.example>\nContent-Type: text/plain; charset=utf-8\nContent-Transfer-Encoding: quoted-printable\n\nHallo=00Welt');
+    imap.add(simpleMail('kaputt1@x', '', 'Kaputt', 'kaputt@zeitung.example'));
+    imap.add(simpleMail('danach1@x', '', 'Danach', 'danach@zeitung.example'));
+    // eine Mail, die sich nicht speichern lässt (Fehler, der an der Mail liegt)
+    await pool.query(`CREATE OR REPLACE FUNCTION test_press_fail() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN
+      IF NEW.topic = 'Kaputt' THEN RAISE EXCEPTION 'Testfehler Mail' USING ERRCODE = '22023'; END IF;
+      IF NEW.topic = 'Hängt' THEN RAISE EXCEPTION 'Testfehler Abbruch' USING ERRCODE = '57014'; END IF;
+      RETURN NEW; END $$`);
+    await pool.query(`CREATE TRIGGER test_press_fail BEFORE INSERT ON press_requests FOR EACH ROW EXECUTE FUNCTION test_press_fail()`);
+    try {
+      const r = await pollPressMailbox({ force: true });
+      expect(r, JSON.stringify(r)).toMatchObject({ ran: true, imported: 2, skipped: 1 });
+      expect(await one<any>(`SELECT topic, body, contact_email FROM press_requests WHERE contact_email = 'nul@zeitung.example'`)).toEqual({ topic: 'TestX', body: 'HalloWelt', contact_email: 'nul@zeitung.example' });
+      expect(await one(`SELECT 1 FROM press_requests WHERE topic = 'Danach'`)).not.toBeNull();
+      const bad = await one<any>(`SELECT outcome, subject, from_address, detail, source, external_id FROM press_mailbox_log WHERE subject = 'Kaputt'`);
+      expect(bad).toMatchObject({ outcome: 'invalid', from_address: 'kaputt@zeitung.example', source: 'imap', external_id: expect.stringMatching(/^[0-9a-f]{12}:7:2$/) });
+      expect(bad.detail).toMatch(/Testfehler Mail.*bleibt unverändert im Postfach/);
+      expect(await one(`SELECT 1 FROM notifications WHERE title = 'Presse-Postfach: eine Mail nicht übernommen' AND permission = 'press.mailbox'`)).not.toBeNull();
+      // nächster Abruf: die fehlerhafte Mail wird nicht erneut geholt
+      expect((await pollPressMailbox({ force: true })).imported).toBe(0);
+      expect(imap.commands.filter((c) => c === 'UID FETCH 2 (UID BODY.PEEK[])')).toHaveLength(1);
+      expect((await mailboxState()).lastUid).toBe(3);
+    } finally {
+      await pool.query(`DROP TRIGGER IF EXISTS test_press_fail ON press_requests`);
+    }
+  });
+
+  it('Abbruch mitten im Stapel: Fortschritt bis zur letzten fertigen Mail; hängende Mail nach drei Versuchen übersprungen (#239)', async () => {
+    imap.add(simpleMail('vorher1@x', '', 'Vorher', 'vorher@zeitung.example'));
+    imap.add(simpleMail('haengt1@x', '', 'Hängt', 'haengt@zeitung.example'));
+    imap.add(simpleMail('nachher1@x', '', 'Nachher', 'nachher@zeitung.example'));
+    await pool.query(`CREATE TRIGGER test_press_fail BEFORE INSERT ON press_requests FOR EACH ROW EXECUTE FUNCTION test_press_fail()`);
+    try {
+      for (let i = 1; i <= MAX_ATTEMPTS; i++) {
+        const r = await pollPressMailbox({ force: true });
+        expect(r.error).toMatch(/Testfehler Abbruch/);
+        expect((await mailboxState()).current).toEqual({ id: expect.stringMatching(/^[0-9a-f]{12}:7:5$/), attempts: i });
+      }
+      expect((await mailboxState()).lastUid).toBe(4);
+      expect(await one(`SELECT 1 FROM press_requests WHERE topic = 'Vorher'`)).not.toBeNull();
+      expect(await one(`SELECT 1 FROM press_requests WHERE topic = 'Nachher'`)).toBeNull();
+      const r = await pollPressMailbox({ force: true });
+      expect(r, JSON.stringify(r)).toMatchObject({ imported: 1, skipped: 1 });
+      expect(await one(`SELECT 1 FROM press_requests WHERE topic = 'Nachher'`)).not.toBeNull();
+      expect(await one<any>(`SELECT outcome, detail FROM press_mailbox_log WHERE external_id LIKE '%:7:5' ORDER BY id DESC LIMIT 1`)).toMatchObject({ outcome: 'invalid', detail: expect.stringContaining('3 Versuche') });
+      // jede fertige Mail genau einmal geholt
+      expect(imap.commands.filter((c) => c === 'UID FETCH 4 (UID BODY.PEEK[])')).toHaveLength(1);
+      expect(imap.commands.filter((c) => c === 'UID FETCH 5 (UID BODY.PEEK[])')).toHaveLength(MAX_ATTEMPTS);
+      expect(await mailboxState()).toMatchObject({ lastUid: 6, current: null, lastOk: true });
+    } finally {
+      await pool.query(`DROP TRIGGER IF EXISTS test_press_fail ON press_requests`);
+      await pool.query(`DROP FUNCTION IF EXISTS test_press_fail()`);
+    }
   });
 
   it('Microsoft 365: Abruf über Graph mit derselben App-Registrierung', async () => {
