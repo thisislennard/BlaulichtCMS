@@ -8,7 +8,7 @@ import { Icon } from '../../components/ui/Icon';
 import { Dialog, UnsavedChangesGuard, useErrorToast, useToast } from '../../components/ui/overlays';
 import { useAuth } from '../../lib/auth';
 import { resolveKeyword, useKeywords } from '../../lib/keywords';
-import { fmtDateTime, fromLocalInput, toLocalInput } from '../../lib/format';
+import { fmtDateTime, fromLocalInput, toLocalInput, plural } from '../../lib/format';
 import { KIND, LevelBadge, WARN_STATE } from './Warnings';
 
 interface Field {
@@ -440,7 +440,7 @@ function WarningCaseInner({ id }: { id: string }) {
                             <li key={k.id}>
                               <button type="button" className="w-full text-left px-3 py-2 hover:bg-raised flex items-center gap-2" onClick={() => (change({ keyword: k, answers: {} }), setKwSearch(''))}>
                                 <strong>{k.code}</strong> <span className="flex-1">{k.label}</span>
-                                <span className="text-meta text-fg-muted">{k.rule_count ? `${k.rule_count} Regel(n)` : 'keine Regel'}</span>
+                                <span className="text-meta text-fg-muted">{k.rule_count ? `${plural(k.rule_count, 'Regel', 'Regeln')}` : 'keine Regel'}</span>
                               </button>
                             </li>
                           ))}
@@ -576,8 +576,8 @@ function WarningCaseInner({ id }: { id: string }) {
               <Notice tone="error">„Gültig bis“ liegt vor dem Beginn. Bitte den Zeitraum korrigieren – so lässt sich der Entwurf nicht einreichen.</Notice>
             )}
             <fieldset className="flex flex-col gap-2">
-              <legend className="font-medium mb-1">Zuständige Stelle(n) *</legend>
-              {(resp.data ?? []).length === 0 && <p className="text-sm text-fg-muted">Noch keine Zuständigkeit gepflegt (Warnentwürfe → Stichwörter &amp; Regeln).</p>}
+              <legend className="font-medium mb-1">Zuständige Stellen *</legend>
+              {(resp.data ?? []).length === 0 && <p className="text-sm text-fg-muted">Noch keine Zuständigkeit gepflegt (Einrichtung → Stichwörter &amp; Regeln).</p>}
               {(resp.data ?? []).map((r) => (
                 <label key={r.id} className="flex items-start gap-2 p-2 rounded-control border border-line">
                   <input

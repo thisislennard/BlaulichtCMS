@@ -13,7 +13,7 @@ import { usePageMeta } from '../../components/layout/AppShell';
 import { WorkflowTabs } from './WorkflowTabs';
 import { CheckList, Help, NumberField, SelectField, TemplateField, outputSummary, useCatalog, useOutputs, type Catalog, type OutputDef } from './shared';
 
-/** Ausgänge: wiederverwendbare Aktionen mit ihrer Gestaltung (Banner-Stil, Beitragsvorlage, E-Mail, Benachrichtigung, Warnentwurf). */
+/** Aktionen: wiederverwendbare Aktionen mit ihrer Gestaltung (Banner-Stil, Beitragsvorlage, E-Mail, Benachrichtigung, Warnentwurf). */
 
 const DEFAULTS: Record<string, Record<string, any>> = {
   banner: { siteIds: [], title: '', text: '', tone: 'auto', priority: 2, durationHours: 6, endFromField: true, linkUrl: '', linkText: '', display: 'auto', submit: true },
@@ -25,7 +25,7 @@ const DEFAULTS: Record<string, Record<string, any>> = {
   incident_entry: { siteId: null, title: '{{stichwort_text}}', keyword: '{{stichwort}}', alarmAt: '{{alarmzeit}}', location: '{{ortsteil}}', vehicles: '', units: '{{einheiten}}', report: '', submit: true },
 };
 
-/** Alle Felder aller Eingänge (die Prüfung im Editor sagt, ob ein Feld an der jeweiligen Stelle vorhanden ist). */
+/** Alle Felder aller Auslöser (die Prüfung im Editor sagt, ob ein Feld an der jeweiligen Stelle vorhanden ist). */
 function allFields(cat: Catalog) {
   const m = new Map<string, { key: string; label: string }>();
   for (const k of cat.inputKinds) for (const f of k.fields) if (!m.has(f.key)) m.set(f.key, { key: f.key, label: f.label });
@@ -53,7 +53,7 @@ export function OutputDialog({ output, kind, cat, onClose, preset }: { output: O
         onClose(true, output.id);
       } else onClose(true, (await post<{ id: string }>('/automation-outputs', { ...body, kind })).id);
     } catch (e) {
-      toastError(e, 'Ausgang nicht gespeichert');
+      toastError(e, 'Aktion nicht gespeichert');
     } finally {
       setBusy(false);
     }
@@ -65,7 +65,7 @@ export function OutputDialog({ output, kind, cat, onClose, preset }: { output: O
       open
       onClose={() => onClose(false)}
       width={720}
-      title={output ? `Ausgang bearbeiten: ${output.name}` : `Neuer Ausgang: ${def.label}`}
+      title={output ? `Aktion bearbeiten: ${output.name}` : `Neue Aktion: ${def.label}`}
       footer={
         <>
           <Button onClick={() => onClose(false)}>Abbrechen</Button>
@@ -77,7 +77,7 @@ export function OutputDialog({ output, kind, cat, onClose, preset }: { output: O
     >
       <div className="flex flex-col gap-4">
         <p className="m-0 text-sm text-fg-muted">{def.description}</p>
-        <FieldWrap label="Name" htmlFor="o-name" required help="So erscheint der Ausgang in der Palette des Editors.">
+        <FieldWrap label="Name" htmlFor="o-name" required help="So erscheint die Aktion in der Palette des Editors.">
           <Input id="o-name" value={name} maxLength={120} onChange={(e) => setName(e.target.value)} />
         </FieldWrap>
         <Notice icon="Braces">
@@ -88,7 +88,7 @@ export function OutputDialog({ output, kind, cat, onClose, preset }: { output: O
           <>
             <BannerPreview b={{ tone: previewTone, title: strip(c.title) || 'Titel', text: strip(c.text), link_url: c.linkUrl || null, link_text: strip(c.linkText) || null }} />
             <CheckList legend="Websites (je Website ein Banner)" options={sites.map((s) => ({ value: s.id, label: s.name }))} value={c.siteIds ?? []} onChange={(v) => set({ siteIds: v })} />
-            {!sites.length && <Notice tone="warning">Zuerst unter Kanäle → Websites eine Website koppeln.</Notice>}
+            {!sites.length && <Notice tone="warning">Zuerst unter Einrichtung → Websites eine Website koppeln.</Notice>}
             {T('title', 'Titel', { max: 300, required: true, help: 'Höchstens 120 Zeichen nach dem Einsetzen.' })}
             {T('text', 'Text', { rows: 3, max: 1000, help: 'Höchstens 500 Zeichen nach dem Einsetzen.' })}
             <div className="grid sm:grid-cols-2 gap-4">
@@ -98,7 +98,7 @@ export function OutputDialog({ output, kind, cat, onClose, preset }: { output: O
                 value={c.tone}
                 onChange={(v) => set({ tone: v })}
                 options={[{ value: 'auto', label: 'Nach Warnstufe (Feld „stufe“)' }, { value: 'info', label: 'Hinweis' }, { value: 'warning', label: 'Warnung' }, { value: 'danger', label: 'Gefahr' }]}
-                labelAction={<Help title="Stil nach Warnstufe" anchor="ausgaenge">Bei amtlichen Warnungen: Stufe 1 = Hinweis, 2 = Warnung, ab 3 = Gefahr. Ohne Feld „stufe“ gilt „Hinweis“. Farben kommen aus dem Banner-Stil der Website.</Help>}
+                labelAction={<Help title="Stil nach Warnstufe" anchor="aktionen">Bei amtlichen Warnungen: Stufe 1 = Hinweis, 2 = Warnung, ab 3 = Gefahr. Ohne Feld „stufe“ gilt „Hinweis“. Farben kommen aus dem Banner-Stil der Website.</Help>}
               />
               <SelectField id="o-prio" label="Priorität" value={String(c.priority)} onChange={(v) => set({ priority: Number(v) })} options={[{ value: '3', label: 'hoch' }, { value: '2', label: 'normal' }, { value: '1', label: 'niedrig' }]} />
               <SelectField
@@ -107,7 +107,7 @@ export function OutputDialog({ output, kind, cat, onClose, preset }: { output: O
                 value={c.display ?? 'auto'}
                 onChange={(v) => set({ display: v })}
                 options={DISPLAY_OPTIONS}
-                labelAction={<Help title="Darstellung" anchor="ausgaenge">„Nach Schweregrad“ folgt der Einstellung der Website (Bridge-Einstellungen → Darstellung der Hinweise). Popup = Dialog beim Aufruf der Seite, den jede Person einmal schließt.</Help>}
+                labelAction={<Help title="Darstellung" anchor="aktionen">„Nach Schweregrad“ folgt der Einstellung der Website (Bridge-Einstellungen → Darstellung der Hinweise). Popup = Dialog beim Aufruf der Seite, den jede Person einmal schließt.</Help>}
               />
               <NumberField id="o-dur" label="Dauer" unit="Stunden" min={1} max={168} value={c.durationHours} onChange={(v) => set({ durationHours: v })} help="Ablauf ab Anlage, wenn kein Gültig-bis-Feld vorhanden ist." />
               <div className="pt-6">
@@ -116,7 +116,7 @@ export function OutputDialog({ output, kind, cat, onClose, preset }: { output: O
               {T('linkUrl', 'Link (optional)', { max: 500, help: 'Nur https-Adressen, z. B. {{link}}.' })}
               {T('linkText', 'Linktext', { max: 100 })}
             </div>
-            <Switch checked={c.submit !== false} onChange={(v) => set({ submit: v })} label="Zur Freigabe einreichen" description="Sonst bleibt das Banner ein Entwurf. Veröffentlicht wird nur nach Freigabe – außer der Ausgang ist im Editor für den Direktversand markiert." />
+            <Switch checked={c.submit !== false} onChange={(v) => set({ submit: v })} label="Zur Freigabe einreichen" description="Sonst bleibt das Banner ein Entwurf. Veröffentlicht wird nur nach Freigabe – außer die Aktion ist im Editor für den Direktversand markiert." />
           </>
         )}
 
@@ -124,7 +124,7 @@ export function OutputDialog({ output, kind, cat, onClose, preset }: { output: O
           <>
             <div className="grid sm:grid-cols-2 gap-4">
               <SelectField id="o-kind" label="Art des Beitrags" value={c.kind} onChange={(v) => set({ kind: v })} options={[{ value: 'news', label: 'Meldung' }, { value: 'incident', label: 'Einsatz' }, { value: 'event', label: 'Termin' }, { value: 'situation', label: 'Lage' }]} />
-              <SelectField id="o-site" label="Zielkanal (optional)" value={c.siteId ?? ''} onChange={(v) => set({ siteId: v || null, variants: { ...c.variants, wordpress: { ...c.variants?.wordpress, categories: [] } } })} placeholder="Kein Zielkanal (intern)" options={sites.map((s) => ({ value: s.id, label: s.name }))} help="Für den Direktversand nötig." />
+              <SelectField id="o-site" label="Website (optional)" value={c.siteId ?? ''} onChange={(v) => set({ siteId: v || null, variants: { ...c.variants, wordpress: { ...c.variants?.wordpress, categories: [] } } })} placeholder="Keine Website (intern)" options={sites.map((s) => ({ value: s.id, label: s.name }))} help="Für den Direktversand nötig." />
             </div>
             {c.siteId && (
               <WpCategoryPicker
@@ -137,7 +137,7 @@ export function OutputDialog({ output, kind, cat, onClose, preset }: { output: O
             {T('body', 'Text', { rows: 6, max: 20000 })}
             {T('excerpt', 'Kurzfassung', { rows: 2, max: 1000 })}
             <details>
-              <summary className="cursor-pointer text-sm font-medium">Texte je Kanal (optional)</summary>
+              <summary className="cursor-pointer text-sm font-medium">Texte je Netzwerk (optional)</summary>
               <div className="flex flex-col gap-3 pt-3">
                 <TemplateField id="o-wp-title" label="WordPress: Titel" value={c.variants?.wordpress?.title ?? ''} onChange={(v) => set({ variants: { ...c.variants, wordpress: { ...c.variants?.wordpress, title: v } } })} fields={fields} max={400} />
                 <TemplateField id="o-wp-body" label="WordPress: Text" rows={4} value={c.variants?.wordpress?.body ?? ''} onChange={(v) => set({ variants: { ...c.variants, wordpress: { ...c.variants?.wordpress, body: v } } })} fields={fields} max={20000} />
@@ -181,7 +181,7 @@ export function OutputDialog({ output, kind, cat, onClose, preset }: { output: O
 
         {kind === 'incident_entry' && (
           <>
-            <Notice icon="ShieldCheck" title="Nur grob und erst nach Freigabe">Der Workflow schlägt einen Eintrag für die Einsatzliste vor – je Einsatz nur einmal. Der Ort wird gegen die erlaubten Ortsangaben der Einsatzliste geprüft (keine Straßen, keine Namen). Veröffentlicht wird erst nach Freigabe unter Kanäle → <Link to="/einsatzliste">Einsatzliste</Link>.</Notice>
+            <Notice icon="ShieldCheck" title="Nur grob und erst nach Freigabe">Der Workflow schlägt einen Eintrag für die Einsatzliste vor – je Einsatz nur einmal. Der Ort wird gegen die erlaubten Ortsangaben der Einsatzliste geprüft (keine Straßen, keine Namen). Veröffentlicht wird erst nach Freigabe unter Redaktion → <Link to="/einsatzliste">Einsatzliste</Link>.</Notice>
             <SelectField id="o-isite" label="Website" value={c.siteId ?? ''} onChange={(v) => set({ siteId: v || null })} options={[{ value: '', label: 'Standard der Einsatzliste' }, ...sites.map((s) => ({ value: s.id, label: s.name }))]} />
             {T('title', 'Einsatzmeldung', { max: 400, required: true, help: 'Kurz, ohne Adressen und Namen – z. B. {{stichwort_text}}.' })}
             {T('keyword', 'Stichwort', { max: 200, help: 'Die Bedeutung kommt aus dem Stichwortverzeichnis.' })}
@@ -196,7 +196,7 @@ export function OutputDialog({ output, kind, cat, onClose, preset }: { output: O
 
         {kind === 'press_release' && (
           <>
-            <Notice icon="ShieldCheck" title="Standard: Entwurf">Der Workflow legt die Pressemitteilung als Entwurf unter Presse → <Link to="/presse/mitteilungen">Pressemitteilungen</Link> an; gesendet wird von Hand. Sofort senden nur, wenn der Ausgang im Workflow als Direktversand markiert und der Workflow dafür freigegeben ist. Jede Mail geht einzeln an einen Kontakt, mit Abmeldelink.</Notice>
+            <Notice icon="ShieldCheck" title="Standard: Entwurf">Der Workflow legt die Pressemitteilung als Entwurf unter Presse → <Link to="/presse/mitteilungen">Pressemitteilungen</Link> an; gesendet wird von Hand. Sofort senden nur, wenn die Aktion im Workflow als Direktversand markiert und der Workflow dafür freigegeben ist. Jede Mail geht einzeln an einen Kontakt, mit Abmeldelink.</Notice>
             {!(cat.pressLists ?? []).length && <Notice tone="warning">Es gibt noch keine Verteilerliste (Presse → Presseverteiler).</Notice>}
             <CheckList legend="An Verteilerlisten" options={(cat.pressLists ?? []).map((l) => ({ value: l.id, label: `${l.name} (${l.contacts})` }))} value={c.listIds ?? []} onChange={(v) => set({ listIds: v })} />
             {T('subject', 'Betreff', { max: 300, required: true })}
@@ -209,7 +209,7 @@ export function OutputDialog({ output, kind, cat, onClose, preset }: { output: O
             <Notice tone="warning" title="Nur vorbereiten">Der Workflow legt einen Warnentwurf mit vorausgefüllten Feldern an. Warnstufe, Freigabe und Versand bleiben immer bei den zuständigen Personen.</Notice>
             {cat.warningFields.length === 0 && <Notice tone="warning">Es gibt keine aktive Warnvorlage.</Notice>}
             {cat.warningFields.map((f) => (
-              <TemplateField key={f.key} id={`o-wf-${f.key}`} label={`${f.label}${f.required ? ' (Pflicht in der Vorlage)' : ''}`} rows={f.key.includes('text') || f.key.includes('desc') ? 3 : 1} value={c.data?.[f.key] ?? ''} onChange={(v) => set({ data: Object.fromEntries(Object.entries({ ...c.data, [f.key]: v }).filter(([, x]) => String(x).length)) })} fields={fields} max={2000} />
+              <TemplateField key={f.key} id={`o-wf-${f.key}`} label={`${f.label}${f.required ? ' (Pflicht in der Bildvorlage)' : ''}`} rows={f.key.includes('text') || f.key.includes('desc') ? 3 : 1} value={c.data?.[f.key] ?? ''} onChange={(v) => set({ data: Object.fromEntries(Object.entries({ ...c.data, [f.key]: v }).filter(([, x]) => String(x).length)) })} fields={fields} max={2000} />
             ))}
             <CheckList legend="Zuständigkeiten vorauswählen" options={cat.responsibilities.map((r) => ({ value: r.id, label: r.name }))} value={c.responsibilityIds ?? []} onChange={(v) => set({ responsibilityIds: v })} />
           </>
@@ -233,10 +233,10 @@ export default function Outputs() {
   usePageMeta({ title: 'Aktionen' });
   const refresh = () => qc.invalidateQueries({ queryKey: ['automation-outputs'] });
   const remove = async (o: OutputDef) => {
-    if (!(await ask({ title: 'Ausgang löschen?', text: `„${o.name}“ steht danach im Editor nicht mehr zur Verfügung.`, confirmLabel: 'Löschen' }))) return;
+    if (!(await ask({ title: 'Aktion löschen?', text: `„${o.name}“ steht danach im Editor nicht mehr zur Verfügung.`, confirmLabel: 'Löschen' }))) return;
     try {
       await del(`/automation-outputs/${o.id}`);
-      toast({ tone: 'success', title: 'Ausgang gelöscht' });
+      toast({ tone: 'success', title: 'Aktion gelöscht' });
       refresh();
     } catch (e) {
       toastError(e, 'Nicht gelöscht');
@@ -246,13 +246,13 @@ export default function Outputs() {
     <div className="flex flex-col gap-5">
       <PageHeader
         subtitle="Aktionen mit ihrer Gestaltung: Banner-Stil, Beitragsvorlage, E-Mail, App-Benachrichtigung, Warnentwurf."
-        actions={manage && <Button variant="primary" icon="Plus" disabled={!cat.data} onClick={() => setChoose(true)}>Neuer Ausgang</Button>}
+        actions={manage && <Button variant="primary" icon="Plus" disabled={!cat.data} onClick={() => setChoose(true)}>Neue Aktion</Button>}
       />
       <WorkflowTabs />
-      <Notice icon="ShieldCheck">Ausgänge legen Entwürfe und Benachrichtigungen an – die Freigabe bleibt bei den Menschen. Direktversand ist nur je Workflow mit eigenem Recht möglich.</Notice>
+      <Notice icon="ShieldCheck">Aktionen legen Entwürfe und Benachrichtigungen an – die Freigabe bleibt bei den Menschen. Direktversand ist nur je Workflow mit eigenem Recht möglich.</Notice>
       {(q.isLoading || cat.isLoading) && <SkeletonRows rows={4} />}
-      {q.error && <ErrorBox title="Ausgänge konnten nicht geladen werden">{(q.error as Error).message}</ErrorBox>}
-      {q.data && q.data.length === 0 && <EmptyState icon="Send" title="Noch keine Ausgänge" text="Ein Ausgang legt fest, was ein Workflow tut – etwa einen Banner-Entwurf im Stil „Unwetter“ anlegen." />}
+      {q.error && <ErrorBox title="Aktionen konnten nicht geladen werden">{(q.error as Error).message}</ErrorBox>}
+      {q.data && q.data.length === 0 && <EmptyState icon="Send" title="Noch keine Aktionen" text="Eine Aktion legt fest, was ein Workflow tut – etwa einen Banner-Entwurf im Stil „Unwetter“ anlegen." />}
       <div className="grid gap-4 lg:grid-cols-2">
         {(q.data ?? []).map((o) => {
           const kind = cat.data?.outputKinds.find((k) => k.kind === o.kind);
@@ -272,7 +272,7 @@ export default function Outputs() {
                     <Button size="sm" icon="Pencil" onClick={() => setEdit({ output: o, kind: o.kind })}>
                       Bearbeiten
                     </Button>
-                    <Button size="sm" iconOnly icon="Trash2" aria-label={`Ausgang „${o.name}“ löschen`} onClick={() => remove(o)} />
+                    <Button size="sm" iconOnly icon="Trash2" aria-label={`Aktion „${o.name}“ löschen`} onClick={() => remove(o)} />
                   </div>
                 )
               }
@@ -312,7 +312,7 @@ export default function Outputs() {
         })}
       </div>
       {choose && cat.data && (
-        <Dialog open onClose={() => setChoose(false)} title="Art des Ausgangs wählen" width={620}>
+        <Dialog open onClose={() => setChoose(false)} title="Art der Aktion wählen" width={620}>
           <div className="grid sm:grid-cols-2 gap-2">
             {cat.data.outputKinds.map((k) => (
               <button key={k.kind} type="button" onClick={() => (setChoose(false), setEdit({ output: null, kind: k.kind }))} className="text-left flex gap-3 p-3 rounded-node border border-line bg-card hover:bg-raised focus-visible:shadow-ring">
@@ -331,19 +331,19 @@ export default function Outputs() {
   );
 }
 
-/** Soziale Kanäle eines Beitragsausgangs vorauswählen (#188, #189) – samt Format; veröffentlicht wird erst nach Freigabe. */
+/** Soziale Netzwerke einer Beitrags-Aktion vorauswählen (#188, #189) – samt Format; veröffentlicht wird erst nach Freigabe. */
 function SocialTargetsField({ channels, value, onChange }: { channels: { id: string; kind: string; name: string; status: string; manual: boolean }[]; value: { connectionId: string; format: string }[]; onChange: (v: { connectionId: string; format: string }[]) => void }) {
   const label: Record<string, string> = { facebook: 'Facebook', instagram: 'Instagram', threads: 'Threads', x: 'X', whatsapp: 'WhatsApp-Kanal', mastodon: 'Mastodon', bluesky: 'Bluesky' };
   const visible = channels.filter((ch) => ch.status !== 'revoked' || value.some((v) => v.connectionId === ch.id));
   return (
     <fieldset className="border border-line rounded-card p-3 flex flex-col gap-2">
       <legend className="px-1 text-sm font-medium flex items-center gap-1">
-        Soziale Kanäle vorauswählen (optional)
-        <Help title="Soziale Kanäle in Workflows" anchor="ausgaenge">
-          Der Beitragsentwurf bekommt diese Kanäle samt Format (Beitrag, Story oder beides) schon mit. Veröffentlicht wird erst, wenn eine Person den Beitrag freigegeben und „Auf sozialen Kanälen veröffentlichen“ gewählt hat – Workflows posten nie selbst in sozialen Netzwerken. Kanäle ohne Schnittstelle (X im Modus „Teilen von Hand“, WhatsApp-Kanal) erscheinen danach als „Zum Teilen bereit“ samt Benachrichtigung. Storys brauchen ein Bild oder Video, das die Redaktion im Entwurf ergänzt.
+        Soziale Netzwerke vorauswählen (optional)
+        <Help title="Soziale Netzwerke in Workflows" anchor="aktionen">
+          Der Beitragsentwurf bekommt diese Netzwerke samt Format (Beitrag, Story oder beides) schon mit. Veröffentlicht wird erst, wenn eine Person den Beitrag freigegeben und „Auf sozialen Netzwerken veröffentlichen“ gewählt hat – Workflows posten nie selbst in sozialen Netzwerken. Netzwerke ohne Schnittstelle (X im Modus „Teilen von Hand“, WhatsApp-Kanal) erscheinen danach als „Zum Teilen bereit“ samt Benachrichtigung. Storys brauchen ein Bild oder Video, das die Redaktion im Entwurf ergänzt.
         </Help>
       </legend>
-      {!visible.length && <p className="m-0 text-sm text-fg-muted">Noch kein sozialer Kanal verbunden (Verwaltung → Verbindungen).</p>}
+      {!visible.length && <p className="m-0 text-sm text-fg-muted">Noch kein soziales Netzwerk verbunden (Einrichtung → Verbindungen).</p>}
       {visible.map((ch) => {
         const cur = value.find((v) => v.connectionId === ch.id);
         const story = ch.kind === 'facebook' || ch.kind === 'instagram';

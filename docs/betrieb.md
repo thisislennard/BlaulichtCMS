@@ -168,7 +168,7 @@ Standardwerte und der Lasttest unten. Abweichungen hier eintragen, damit Betrieb
 | Speicher für `/data` | mind. **200 GB** SSD, Warnung bei < 20 % frei | Host | ca. 2 000 Fotos à 8 MB plus Vorschauen ≈ 25 GB/Jahr; Videos deutlich mehr |
 | Mindestens frei halten | **10 GB** (Standard 2 GB) | *Einstellungen → Medien* `media.min_free_gb` | Uploads stoppen rechtzeitig vor vollem Datenträger, Datenbank bleibt schreibfähig |
 | Größe je Datei / Sammlung | 2 GB / 10 GB (Standard) | `media.max_file_mb`, `media.collection_max_gb` | Video-Einsätze; größere Sammlungen bewusst freigeben |
-| Speicherwarnung | Benachrichtigung an „Medien administrieren“ unter **10 GB** frei | `media.storage_warn_gb` (0 = aus) | Übersicht unter *Medien → Verwaltung → Speicher* (je Sammlung, Ordner, Art, Papierkorb, Quarantäne, ZIP) |
+| Speicherwarnung | Benachrichtigung an „Medien administrieren“ unter **10 GB** frei | `media.storage_warn_gb` (0 = aus) | Übersicht unter *Verwaltung → Medienverwaltung → Speicher* (je Sammlung, Ordner, Art, Papierkorb, Quarantäne, ZIP) |
 | ZIP-Downloads | **24 Stunden** verfügbar, höchstens **20 GB** | `media.export_hours`, `media.export_max_gb` | große Auswahl in mehreren ZIPs anfordern |
 | Aufbewahrung Medien | abgeschlossene Sammlungen (archiviert oder ohne aktiven Link) **365 Tage** nach der letzten Aktivität löschen, samt Originalen, Fassungen, Sammeldownloads und Links; Dateien in laufenden Beiträgen bleiben; fehlen einem später wieder aufgenommenen Beitrag dadurch Dateien, ist seine Freigabe nicht mehr auslieferbar (Hinweis „Dateien fehlen“, neue Fassung nötig) | `privacy.collection_retention_days` (Einstellungen → Datenschutz, 0 = nie) | Datenschutz: Zweckbindung der Uploads (Art. 5 Abs. 1 lit. e DSGVO); Probelauf „Was würde gelöscht?“ |
 | Papierkorb und abgewiesene Dateien | Dateien, Ordner und Sammlungen im Papierkorb samt Datensatz **30 Tage** nach dem Löschen endgültig entfernen; Datensätze abgewiesener Dateien ebenso | `privacy.deleted_media_days` | Papierkorb wie in LiFeOS: bis dahin wiederherstellbar; „Medien administrieren“ kann früher endgültig löschen; abgewiesene Dateien sind sofort weg |
@@ -309,12 +309,12 @@ setzen den eingerichteten E-Mail-Versand voraus.
 |---|---|
 | Konto übernommen oder Gerät verloren | Benutzer → *Auf allen Geräten abmelden* (beendet alle Sitzungen, auch „Angemeldet bleiben“, und entfernt gemerkte Geräte der Zwei-Faktor-Anmeldung) oder Konto deaktivieren (zusätzlich offene Links), Zwei-Faktor zurücksetzen, Passwort-Link neu erzeugen; die Person kann sich unter *Profil → Auf allen Geräten abmelden* auch selbst überall abmelden |
 | Admin-Konto betroffen | wie oben, zusätzlich Rollen und Einstellungen im Audit (Details: vorher/nachher) prüfen und ggf. zurücksetzen; im Notfall `cli.js password-link` / `cli.js reset-mfa` |
-| Bridge-Schlüssel einer Website abgeflossen | Kanäle → Website → Kopplung widerrufen (sofort wirksam, offene Aufträge werden abgebrochen), danach neu koppeln |
+| Bridge-Schlüssel einer Website abgeflossen | Einrichtung → Websites → Kopplung widerrufen (sofort wirksam, offene Aufträge werden abgebrochen), danach neu koppeln |
 | FE2-Zugangsschlüssel abgeflossen | Verbindungen → FE2 → „Neuen Zugangsschlüssel erzeugen“ und in FE2 eintragen |
-| Zugangsdaten sozialer Kanäle oder SMTP | Verbindung widerrufen bzw. Zugangsdaten neu setzen; das Passwort bzw. Token beim Anbieter ändern |
+| Zugangsdaten sozialer Netzwerke oder SMTP | Verbindung widerrufen bzw. Zugangsdaten neu setzen; das Passwort bzw. Token beim Anbieter ändern |
 | API-Schlüssel abgeflossen | API-Schlüssel widerrufen und neu erzeugen |
 | Upload-Link in falschen Händen | Sammlung → Link → „Neu erzeugen“ (alter Link und QR-Code sofort ungültig, Einstellungen bleiben) oder widerrufen; eingegangene Dateien in der Sichtung prüfen |
-| Master-Schlüssel oder Volume-Sicherung abgeflossen | Master-Schlüssel wechseln (`cli.js rotate-master-key --ja`, Abschnitt „Master-Schlüssel wechseln“), alle Zugangsdaten bei den Gegenstellen erneuern (soziale Kanäle, SMTP, Bridge neu koppeln, FE2-Schlüssel erneuern), Upload-Links widerrufen und neu ausgeben; Sicherungen getrennt vom Master-Schlüssel aufbewahren |
+| Master-Schlüssel oder Volume-Sicherung abgeflossen | Master-Schlüssel wechseln (`cli.js rotate-master-key --ja`, Abschnitt „Master-Schlüssel wechseln“), alle Zugangsdaten bei den Gegenstellen erneuern (soziale Netzwerke, SMTP, Bridge neu koppeln, FE2-Schlüssel erneuern), Upload-Links widerrufen und neu ausgeben; Sicherungen getrennt vom Master-Schlüssel aufbewahren |
 | Audit-Kette meldet Auffälligkeiten | Belege sichern (Datenbanksicherung, zentrales Protokoll), Zugänge zum Docker-Host prüfen, ISB informieren |
 
 ### Angemeldet bleiben und gemerkte Geräte

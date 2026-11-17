@@ -7,7 +7,7 @@ import type { Data } from '../automations/logic.js';
 import { occurrences, type Occ } from './store.js';
 
 /**
- * Workflow-Eingang „Kalendereintrag“ (#203). Der Worker (Leader) prüft alle 30 Sekunden, welche Termine – eigene und
+ * Workflow-Auslöser „Kalendereintrag“ (#203). Der Worker (Leader) prüft alle 30 Sekunden, welche Termine – eigene und
  * eingelesene, Serien aufgelöst – gerade beginnen, enden oder in X Minuten/Stunden/Tagen beginnen.
  *
  * Genau einmal: Jeder Auslösezeitpunkt eines Termins hat einen festen Schlüssel (Termin bzw. Serie + ursprünglicher
@@ -25,12 +25,12 @@ export function offsetMs(cfg: { timing?: string; beforeValue?: number; beforeUni
   return cfg.timing === 'before' ? (Number(cfg.beforeValue) || 0) * (UNIT_MS[cfg.beforeUnit ?? 'minutes'] ?? 60_000) : 0;
 }
 
-/** Zeitpunkt, zu dem ein Termin für diesen Eingang auslöst. */
+/** Zeitpunkt, zu dem ein Termin für diesen Auslöser auslöst. */
 export function triggerTime(o: { start: number; end: number }, cfg: { timing?: string; beforeValue?: number; beforeUnit?: keyof typeof UNIT_MS }): number {
   return cfg.timing === 'end' ? o.end : o.start - offsetMs(cfg);
 }
 
-/** Erfüllt der Termin die Filter des Eingangs? */
+/** Erfüllt der Termin die Filter des Auslösers? */
 export function matchesFilters(o: Occ, cfg: any): boolean {
   const r = o.row;
   if (cfg.categoryIds?.length && !(r.category_id && cfg.categoryIds.includes(r.category_id))) return false;

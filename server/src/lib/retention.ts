@@ -11,6 +11,7 @@ import { log } from './log.js';
 import { getSettings, type Settings } from './settings.js';
 import { purgeOrphanRaws } from '../connections/receipts.js';
 import { pressReleaseLogRetention, pressRequestRetention } from '../press/retention.js';
+import { plural } from '../lib/text.js';
 
 /*
  * Löschfristen (#97, Art. 5 Abs. 1 lit. e, Art. 17, Art. 25 Abs. 2 DSGVO).
@@ -130,7 +131,7 @@ export async function purgeCollection(id: string, actor: Actor, mode: 'manual' |
     if (mode === 'manual' && used.size) {
       const titles = [...new Set([...used.values()].flat())];
       throw conflict(
-        `${used.size} Datei(en) werden in ${titles.length === 1 ? 'dem Beitrag' : 'den Beiträgen'} ${titles.map((t) => `„${t}“`).join(', ')} verwendet. ` +
+        `${plural(used.size, 'Datei', 'Dateien')} werden in ${titles.length === 1 ? 'dem Beitrag' : 'den Beiträgen'} ${titles.map((t) => `„${t}“`).join(', ')} verwendet. ` +
           'Bitte die Dateien dort aus der Fassung nehmen oder den Beitrag archivieren (bei veröffentlichten Beiträgen vorher zurückziehen) und dann erneut löschen.',
         { beitraege: titles },
       );
@@ -221,7 +222,7 @@ export async function runRetention(opts: { dryRun: boolean; actor?: Actor; setti
       report.collections.push({ id: c.id, title: c.title, last_activity: new Date(c.last_activity).toISOString(), archived: c.archived, media, kept: kept.length, used_in: usedIn });
     }
     cat.count = report.collections.length;
-    cat.detail = `${fileCount} Datei(en)`;
+    cat.detail = `${plural(fileCount, 'Datei', 'Dateien')}`;
   }
   report.categories.push(cat);
 

@@ -2091,7 +2091,7 @@ describe('Verbindungen (M4): FE2, Facebook, Instagram, amtliche Warnfeeds', () =
     void state;
     const cb = await anonymous.raw('GET', `/connections/oauth/callback?state=${encodeURIComponent(state2)}&code=abc`);
     expect(cb.status).toBe(302);
-    expect(decodeURIComponent(cb.headers.location as string)).toContain('Seite(n) wählen');
+    expect(decodeURIComponent(cb.headers.location as string)).toMatch(/Angemeldet – bitte (die gefundene Seite|eine von \d+ Seiten) wählen/);
     // state ist verbraucht
     expect(decodeURIComponent((await anonymous.raw('GET', `/connections/oauth/callback?state=${encodeURIComponent(state2)}&code=abc`)).headers.location as string)).toContain('ungültig');
     const v = await admin.get(`/connections/${c.json.id}`);

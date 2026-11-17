@@ -25,7 +25,7 @@ import { stateName } from '../keywords/catalog.js';
 import { activeKeywords } from '../keywords/store.js';
 
 /**
- * Automationen: Eingänge und Ausgänge (wiederverwendbare Bausteine), Abläufe mit Entwurf, Test, Aktivierung und
+ * Automationen: Auslöser und Aktionen (wiederverwendbare Bausteine), Abläufe mit Entwurf, Test, Aktivierung und
  * Notbremse, Läufe und Freigaben. Rechte: automation.read / automation.manage / automation.publish (Direktversand).
  */
 
@@ -39,7 +39,7 @@ async function loadAutomation(id: string) {
   return a;
 }
 
-/** Wo wird ein Eingang bzw. Ausgang verwendet (Entwurf oder aktive Version)? */
+/** Wo wird ein Auslöser bzw. eine Aktion verwendet (Entwurf oder aktive Version)? */
 async function usage(key: 'inputId' | 'outputId', id: string) {
   const probe = JSON.stringify([{ data: { [key]: id } }]);
   return many<{ id: string; name: string }>(
@@ -50,7 +50,7 @@ async function usage(key: 'inputId' | 'outputId', id: string) {
   );
 }
 
-/** Bezüge eines Eingangs prüfen (Verbindung der passenden Art, Quelle, Sammlung). */
+/** Bezüge eines Auslösers prüfen (Verbindung der passenden Art, Quelle, Sammlung). */
 async function checkInputRefs(kind: InputKind, cfg: any) {
   const def = INPUT_KINDS[kind];
   if (def.source === 'connection') {
@@ -78,11 +78,11 @@ async function checkOutputRefs(kind: OutputKind, cfg: any) {
     const n = await one<{ n: number }>(`SELECT count(*)::int AS n FROM wp_sites WHERE id = ANY($1::uuid[]) AND status <> 'revoked'`, [cfg.siteIds]);
     if (n!.n !== new Set(cfg.siteIds).size) throw badRequest('Mindestens eine gewählte Website ist nicht verfügbar.');
   }
-  if (kind === 'post' && cfg.siteId && !(await one(`SELECT 1 FROM wp_sites WHERE id = $1 AND status <> 'revoked'`, [cfg.siteId]))) throw badRequest('Der gewählte Zielkanal ist nicht verfügbar.');
+  if (kind === 'post' && cfg.siteId && !(await one(`SELECT 1 FROM wp_sites WHERE id = $1 AND status <> 'revoked'`, [cfg.siteId]))) throw badRequest('Die gewählte Website ist nicht verfügbar.');
   if (kind === 'incident_entry' && cfg.siteId && !(await one(`SELECT 1 FROM wp_sites WHERE id = $1 AND status <> 'revoked'`, [cfg.siteId]))) throw badRequest('Die gewählte Website ist nicht verfügbar.');
   if (kind === 'post' && cfg.socialTargets?.length) {
     const rows = await many<{ id: string; kind: string }>(`SELECT id, kind FROM connections WHERE id = ANY($1::uuid[]) AND deleted_at IS NULL AND status <> 'revoked' AND kind IN ('facebook','instagram','threads','x','whatsapp','mastodon','bluesky')`, [cfg.socialTargets.map((t: any) => t.connectionId)]);
-    if (rows.length !== cfg.socialTargets.length) throw badRequest('Mindestens ein gewählter sozialer Kanal ist nicht verfügbar.');
+    if (rows.length !== cfg.socialTargets.length) throw badRequest('Mindestens ein gewähltes soziales Netzwerk ist nicht verfügbar.');
     if (cfg.socialTargets.some((t: any) => t.format !== 'feed' && !['facebook', 'instagram'].includes(rows.find((r) => r.id === t.connectionId)!.kind))) throw badRequest('Storys gibt es nur für Facebook-Seiten und Instagram-Konten.');
   }
   if ((kind === 'mail' || kind === 'warning_draft') && cfg.responsibilityIds?.length) {
@@ -158,15 +158,15 @@ export async function automationRoutes(app: FastifyInstance) {
       roles: activeRoles().map((r) => ({ id: r.id, label: r.label })),
       connections: await many<any>(`SELECT id, kind, name, status FROM connections WHERE deleted_at IS NULL AND kind IN ('fe2','feuersoftware','warnfeed') ORDER BY name`),
       feeds: await many<any>(`SELECT id, title FROM rss_feeds ORDER BY title`),
-      // Kalender (#203): Kategorien und iCal-Quellen für den Eingang „Kalendereintrag“
+      // Kalender (#203): Kategorien und iCal-Quellen für den Auslöser „Kalendereintrag“
       calendarCategories: await many<any>(`SELECT id, name, color FROM calendar_categories ORDER BY position, lower(name)`),
       calendarSources: await many<any>(`SELECT id, name FROM calendar_sources ORDER BY lower(name)`),
       collections: await many<any>(`SELECT id, title FROM collections WHERE deleted_at IS NULL AND archived_at IS NULL ORDER BY created_at DESC LIMIT 200`),
-      // Kategorien der Website, wie die Bridge sie meldet (#186) – Auswahl im Beitrags-Ausgang
+      // Kategorien der Website, wie die Bridge sie meldet (#186) – Auswahl in der Beitrags-Aktion
       sites: await many<any>(`SELECT id, name, status, COALESCE(bridge_report->'categories', '[]'::jsonb) AS categories FROM wp_sites WHERE status <> 'revoked' ORDER BY name`),
       socialChannels: (await many<any>(`SELECT id, kind, name, status, config FROM connections WHERE deleted_at IS NULL AND status <> 'revoked' AND kind IN ('facebook','instagram','threads','x','whatsapp','mastodon','bluesky') ORDER BY kind, name`)).map((c) => ({ id: c.id, kind: c.kind, name: c.name, status: c.status, manual: c.kind === 'whatsapp' || (c.kind === 'x' && c.config?.mode !== 'api') })),
       responsibilities: await many<any>(`SELECT id, name, area FROM responsibilities WHERE active ORDER BY name`),
-      // Presseverteiler (#207): Listen für den Ausgang „Pressemitteilung an Verteiler“ (nur Name und Zahl der Kontakte)
+      // Presseverteiler (#207): Listen für die Aktion „Pressemitteilung an Verteiler“ (nur Name und Zahl der Kontakte)
       pressLists: await many<any>(`SELECT l.id, l.name, (SELECT count(*)::int FROM press_list_members m JOIN press_contacts c ON c.id = m.contact_id WHERE m.list_id = l.id AND c.unsubscribed_at IS NULL) AS contacts FROM press_lists l ORDER BY lower(l.name)`),
       warningFields: ((await one<any>(`SELECT fields FROM warning_templates WHERE status = 'active' ORDER BY created_at DESC, version DESC LIMIT 1`))?.fields ?? []).map((f: any) => ({ key: f.key, label: f.label, required: !!f.required })),
       users: canManage ? await many<any>(`SELECT id, name FROM users WHERE status = 'active' ORDER BY name`) : [],
@@ -180,7 +180,7 @@ export async function automationRoutes(app: FastifyInstance) {
     };
   });
 
-  /* ------------------------------------------------------------ Eingänge */
+  /* ------------------------------------------------------------ Auslöser */
 
   app.get('/automation-inputs', { preHandler: read }, async () => {
     const rows = await many<any>(`SELECT i.*, u.name AS updated_by_name FROM automation_inputs i LEFT JOIN users u ON u.id = i.updated_by WHERE i.archived_at IS NULL ORDER BY i.name`);
@@ -200,7 +200,7 @@ export async function automationRoutes(app: FastifyInstance) {
     const { id } = uuidParam.parse(req.params);
     const b = z.object({ name: z.string().trim().min(2).max(120), config: z.record(z.string(), z.any()).default({}) }).parse(req.body);
     const cur = await one<any>(`SELECT * FROM automation_inputs WHERE id = $1 AND archived_at IS NULL`, [id]);
-    if (!cur) throw notFound('Eingang nicht gefunden.');
+    if (!cur) throw notFound('Auslöser nicht gefunden.');
     const cfg = INPUT_CONFIG[cur.kind as InputKind].parse(b.config);
     await checkInputRefs(cur.kind, cfg);
     const row = await one<any>(`UPDATE automation_inputs SET name = $2, config = $3, updated_at = now(), updated_by = $4 WHERE id = $1 RETURNING *`, [id, b.name, JSON.stringify(cfg), actorUser(req)]);
@@ -211,15 +211,15 @@ export async function automationRoutes(app: FastifyInstance) {
   app.delete('/automation-inputs/:id', { preHandler: manage }, async (req) => {
     const { id } = uuidParam.parse(req.params);
     const cur = await one<any>(`SELECT * FROM automation_inputs WHERE id = $1 AND archived_at IS NULL`, [id]);
-    if (!cur) throw notFound('Eingang nicht gefunden.');
+    if (!cur) throw notFound('Auslöser nicht gefunden.');
     const used = await usage('inputId', id);
-    if (used.length) throw conflict(`Der Eingang wird noch verwendet: ${used.map((u) => `„${u.name}“`).join(', ')}. Bitte zuerst aus den Abläufen entfernen.`, { used_by: used });
+    if (used.length) throw conflict(`Der Auslöser wird noch verwendet: ${used.map((u) => `„${u.name}“`).join(', ')}. Bitte zuerst aus den Abläufen entfernen.`, { used_by: used });
     await pool.query(`UPDATE automation_inputs SET archived_at = now(), updated_by = $2 WHERE id = $1`, [id, actorUser(req)]);
     await audit(req.auth!.actor, 'automation.input_deleted', { type: 'automation_input', id, label: cur.name });
     return { ok: true };
   });
 
-  /* ------------------------------------------------------------ Ausgänge */
+  /* ------------------------------------------------------------ Aktionen */
 
   app.get('/automation-outputs', { preHandler: read }, async () => {
     const rows = await many<any>(`SELECT o.*, u.name AS updated_by_name FROM automation_outputs o LEFT JOIN users u ON u.id = o.updated_by WHERE o.archived_at IS NULL ORDER BY o.name`);
@@ -239,7 +239,7 @@ export async function automationRoutes(app: FastifyInstance) {
     const { id } = uuidParam.parse(req.params);
     const b = z.object({ name: z.string().trim().min(2).max(120), config: z.record(z.string(), z.any()).default({}) }).parse(req.body);
     const cur = await one<any>(`SELECT * FROM automation_outputs WHERE id = $1 AND archived_at IS NULL`, [id]);
-    if (!cur) throw notFound('Ausgang nicht gefunden.');
+    if (!cur) throw notFound('Aktion nicht gefunden.');
     const cfg = OUTPUT_CONFIG[cur.kind as OutputKind].parse(b.config);
     await checkOutputRefs(cur.kind, cfg);
     const row = await one<any>(`UPDATE automation_outputs SET name = $2, config = $3, updated_at = now(), updated_by = $4 WHERE id = $1 RETURNING *`, [id, b.name, JSON.stringify(cfg), actorUser(req)]);
@@ -250,9 +250,9 @@ export async function automationRoutes(app: FastifyInstance) {
   app.delete('/automation-outputs/:id', { preHandler: manage }, async (req) => {
     const { id } = uuidParam.parse(req.params);
     const cur = await one<any>(`SELECT * FROM automation_outputs WHERE id = $1 AND archived_at IS NULL`, [id]);
-    if (!cur) throw notFound('Ausgang nicht gefunden.');
+    if (!cur) throw notFound('Aktion nicht gefunden.');
     const used = await usage('outputId', id);
-    if (used.length) throw conflict(`Der Ausgang wird noch verwendet: ${used.map((u) => `„${u.name}“`).join(', ')}. Bitte zuerst aus den Abläufen entfernen.`, { used_by: used });
+    if (used.length) throw conflict(`Die Aktion wird noch verwendet: ${used.map((u) => `„${u.name}“`).join(', ')}. Bitte zuerst aus den Abläufen entfernen.`, { used_by: used });
     await pool.query(`UPDATE automation_outputs SET archived_at = now(), updated_by = $2 WHERE id = $1`, [id, actorUser(req)]);
     await audit(req.auth!.actor, 'automation.output_deleted', { type: 'automation_output', id, label: cur.name });
     return { ok: true };
@@ -277,7 +277,7 @@ export async function automationRoutes(app: FastifyInstance) {
 
   app.post('/automations', { preHandler: manage }, async (req) => {
     const b = z.object({ name: z.string().trim().min(2).max(120), description: z.string().trim().max(500).default(''), template: z.string().max(40).optional() }).parse(req.body);
-    // Vorlage: fertiger Ablauf aus dem Katalog; passende Ein-/Ausgänge werden eingesetzt, wenn es genau einen gibt
+    // Vorlage: fertiger Ablauf aus dem Katalog; passende Auslöser und Aktionen werden eingesetzt, wenn es genau einen gibt
     const tpl = b.template ? templateById(b.template) : undefined;
     if (b.template && !tpl) throw badRequest('Unbekannte Vorlage.');
     const { graph, open } = tpl ? templateGraph(tpl, await loadRefs()) : { graph: { nodes: [], edges: [] } as Graph, open: 0 };
@@ -304,7 +304,7 @@ export async function automationRoutes(app: FastifyInstance) {
   });
 
   /**
-   * Katalog für „Workflows mit KI erstellen“ (#199): vorhandene Ein-/Ausgänge (Art + Name), Felder je Auslöser,
+   * Katalog für „Workflows mit KI erstellen“ (#199): vorhandene Auslöser und Aktionen (Art + Name), Felder je Auslöser,
    * Vergleiche, Bildvorlagen, Kalender-Kategorien und aktives Stichwortverzeichnis – ohne Kennungen, Einstellungen,
    * Zugangsdaten, Einsatz- oder Personendaten (Positivliste in automations/aicatalog.ts).
    */
@@ -355,7 +355,7 @@ export async function automationRoutes(app: FastifyInstance) {
   };
   const takenNames = async () => new Set((await many<{ name: string }>(`SELECT name FROM automations WHERE deleted_at IS NULL`)).map((r) => r.name.toLocaleLowerCase('de')));
 
-  /** Vorschau: was angelegt würde und welche Ein-/Ausgänge zuzuordnen sind (mit Vorschlag bei gleichem Namen). */
+  /** Vorschau: was angelegt würde und welche Auslöser und Aktionen zuzuordnen sind (mit Vorschlag bei gleichem Namen). */
   app.post('/automations/import/preview', importOpts, async (req) => {
     const b = importBody.parse(req.body);
     const file = readFile(b.file);
@@ -383,16 +383,16 @@ export async function automationRoutes(app: FastifyInstance) {
     const b = importBody.parse(req.body);
     const file = readFile(b.file);
     const refs = await loadRefs();
-    // Zuordnungen prüfen: nur vorhandene, nicht gelöschte Ein-/Ausgänge derselben Art
+    // Zuordnungen prüfen: nur vorhandene, nicht gelöschte Auslöser und Aktionen derselben Art
     for (const r of file.references.inputs) {
       const id = b.mapping.inputs[r.ref];
       const t = id ? refs.inputs.get(id) : null;
-      if (id && (!t || t.archived || t.kind !== r.kind)) throw badRequest(`Die Zuordnung für den Eingang „${r.name}“ passt nicht (gelöscht oder andere Art).`);
+      if (id && (!t || t.archived || t.kind !== r.kind)) throw badRequest(`Die Zuordnung für den Auslöser „${r.name}“ passt nicht (gelöscht oder andere Art).`);
     }
     for (const r of file.references.outputs) {
       const id = b.mapping.outputs[r.ref];
       const t = id ? refs.outputs.get(id) : null;
-      if (id && (!t || t.archived || t.kind !== r.kind)) throw badRequest(`Die Zuordnung für den Ausgang „${r.name}“ passt nicht (gelöscht oder andere Art).`);
+      if (id && (!t || t.archived || t.kind !== r.kind)) throw badRequest(`Die Zuordnung für die Aktion „${r.name}“ passt nicht (gelöscht oder andere Art).`);
     }
     const imageTemplates = new Map((await many<any>(`SELECT id, title FROM design_templates WHERE kind = 'image' ORDER BY created_at`)).reverse().map((t) => [String(t.title).trim().toLocaleLowerCase('de'), t.id as string]));
     const created = await tx(async (db) => {
@@ -439,10 +439,10 @@ export async function automationRoutes(app: FastifyInstance) {
       const a = await one<any>(`SELECT * FROM automations WHERE id = $1 AND deleted_at IS NULL FOR UPDATE`, [id], db);
       if (!a) throw notFound('Workflow nicht gefunden.');
       if (a.graph_hash !== b.baseHash) throw conflict('Der Workflow wurde inzwischen von jemand anderem geändert. Bitte neu laden.');
-      // Ausgänge als „direkt veröffentlichen“ markieren oder die Markierung ändern: nur mit automation.publish
+      // Aktionen als „direkt veröffentlichen“ markieren oder die Markierung ändern: nur mit automation.publish
       const before = directNodes(a.graph);
       const after = directNodes(b.graph);
-      if (JSON.stringify(before) !== JSON.stringify(after) && !req.auth!.permissions.has('automation.publish')) throw forbidden('Nur mit dem Recht „Workflows direkt veröffentlichen lassen“ dürfen Ausgänge für den Direktversand markiert werden.');
+      if (JSON.stringify(before) !== JSON.stringify(after) && !req.auth!.permissions.has('automation.publish')) throw forbidden('Nur mit dem Recht „Workflows direkt veröffentlichen lassen“ dürfen Aktionen für den Direktversand markiert werden.');
       const hash = draftHash(b.graph);
       await db.query(`UPDATE automations SET name = $2, description = $3, graph = $4, graph_hash = $5, updated_at = now(), updated_by = $6 WHERE id = $1`, [id, b.name, b.description, JSON.stringify(b.graph), hash, actorUser(req)]);
       if (a.graph_hash !== hash || a.name !== b.name) await audit(req.auth!.actor, 'automation.updated', { type: 'automation', id, label: b.name }, { knoten: b.graph.nodes.length, verbindungen: b.graph.edges.length, direkt_markiert: after.length, direkt_geaendert: JSON.stringify(before) !== JSON.stringify(after) || undefined }, 'ok', db);
@@ -474,7 +474,7 @@ export async function automationRoutes(app: FastifyInstance) {
     const v = validateGraph(graph, refs);
     if (!v.ok) throw new AppError(400, 'invalid_graph', 'Der Ablauf hat noch Fehler und kann nicht getestet werden.', { errors: v.errors });
     const node = graph.nodes.find((n) => n.type === 'input' && (!b.inputNodeId || n.id === b.inputNodeId));
-    if (!node) throw badRequest('Eingang für den Test nicht gefunden.');
+    if (!node) throw badRequest('Auslöser für den Test nicht gefunden.');
     const input = refs.inputs.get(node.data.inputId)!;
     const allowed = new Set(inputFields(input).map((f) => f.key));
     const payload = { ...examplePayload(input), ...cleanPayload(b.payload, allowed), ...(input.kind === 'manual' ? { gestartet_von: req.auth!.actor.name } : {}) };
@@ -495,10 +495,10 @@ export async function automationRoutes(app: FastifyInstance) {
     if (!v.ok) throw new AppError(400, 'invalid_graph', 'Der Ablauf hat noch Fehler.', { errors: v.errors });
     const snap = buildSnapshot(graph, refs);
     const hash = snapshotHash(snap);
-    if (a.tested_hash !== hash) throw new AppError(409, 'not_tested', 'Bitte diesen Stand zuerst erfolgreich testen. Jede Änderung am Ablauf oder an einem verwendeten Ein- oder Ausgang verlangt einen neuen Test.');
+    if (a.tested_hash !== hash) throw new AppError(409, 'not_tested', 'Bitte diesen Stand zuerst erfolgreich testen. Jede Änderung am Ablauf oder an einem verwendeten Auslöser oder einer verwendeten Aktion verlangt einen neuen Test.');
     const direct = v.directNodes.length > 0;
     if (direct) {
-      if (!req.auth!.permissions.has('automation.publish')) throw forbidden('Ausgänge mit Direktversand: Aktivieren nur mit dem Recht „Workflows direkt veröffentlichen lassen“.');
+      if (!req.auth!.permissions.has('automation.publish')) throw forbidden('Aktionen mit Direktversand: Aktivieren nur mit dem Recht „Workflows direkt veröffentlichen lassen“.');
       assertRecentAuth(req);
       if (!a.direct_publish) throw new AppError(409, 'direct_not_allowed', 'Für diesen Workflow ist „Darf direkt veröffentlichen/versenden“ nicht eingeschaltet.');
     }
@@ -513,7 +513,7 @@ export async function automationRoutes(app: FastifyInstance) {
     if (direct) {
       await securityAlert('automation_direct_publish', {
         title: `Workflow mit Direktversand aktiviert: „${a.name}“`,
-        body: `${req.auth!.actor.name} hat Version ${version} aktiviert. ${v.directNodes.length} Ausgang/Ausgänge veröffentlichen bzw. versenden ohne menschliche Freigabe. Abschalten: Workflows → „${a.name}“ → Deaktivieren.`,
+        body: `${req.auth!.actor.name} hat Version ${version} aktiviert. ${v.directNodes.length === 1 ? 'Eine Aktion veröffentlicht bzw. versendet' : `${v.directNodes.length} Aktionen veröffentlichen bzw. versenden`} ohne menschliche Freigabe. Abschalten: Workflows → „${a.name}“ → Deaktivieren.`,
         link: `/workflows/${id}`,
       });
     }
@@ -553,14 +553,14 @@ export async function automationRoutes(app: FastifyInstance) {
       kind: enabled ? 'warning' : 'info',
       title: enabled ? `Direktversand erlaubt: Workflow „${a.name}“` : `Direktversand entzogen: Workflow „${a.name}“`,
       body: enabled
-        ? `${req.auth!.actor.name} hat erlaubt, dass markierte Ausgänge dieses Workflows ohne menschliche Freigabe veröffentlichen bzw. versenden. Wirksam erst mit einer aktivierten Version, die solche Ausgänge enthält.`
-        : `${req.auth!.actor.name} hat den Direktversand abgeschaltet. Markierte Ausgänge legen ab sofort wieder nur Entwürfe an bzw. fordern eine Freigabe an.`,
+        ? `${req.auth!.actor.name} hat erlaubt, dass markierte Aktionen dieses Workflows ohne menschliche Freigabe veröffentlichen bzw. versenden. Wirksam erst mit einer aktivierten Version, die solche Aktionen enthält.`
+        : `${req.auth!.actor.name} hat den Direktversand abgeschaltet. Markierte Aktionen legen ab sofort wieder nur Entwürfe an bzw. fordern eine Freigabe an.`,
       link: `/workflows/${id}`,
     });
     return { ok: true, direct_publish: enabled };
   });
 
-  /** Manueller Start einer aktiven Automation (Eingang „Manueller Start“). */
+  /** Manueller Start einer aktiven Automation (Auslöser „Manueller Start“). */
   app.post('/automations/:id/run', { preHandler: manage, config: { rateLimit: { max: 20, timeWindow: '1 minute' } } }, async (req) => {
     const { id } = uuidParam.parse(req.params);
     const b = z.object({ inputNodeId: z.string().max(40), payload: z.record(z.string(), z.any()).default({}) }).parse(req.body);
@@ -571,7 +571,7 @@ export async function automationRoutes(app: FastifyInstance) {
     const snap = v.graph as Snapshot;
     const node = snap.nodes.find((n) => n.id === b.inputNodeId && n.type === 'input');
     const input = node ? snap.refs.inputs[node.data.inputId] : null;
-    if (!node || input?.kind !== 'manual') throw badRequest('Dieser Eingang lässt sich nicht von Hand starten.');
+    if (!node || input?.kind !== 'manual') throw badRequest('Dieser Auslöser lässt sich nicht von Hand starten.');
     const allowed = new Set(((input.config.fields ?? []) as { key: string }[]).map((f) => f.key));
     const payload = { ...cleanPayload(b.payload, allowed), gestartet_von: req.auth!.actor.name };
     const runId = await createRun({ automationId: id, version: v.version, mode: 'live', trigger: 'manual', inputNode: node.id, snapshot: snap, directAllowed: !!v.direct_publish && !!a.direct_publish, payload, createdBy: actorUser(req) });
@@ -602,8 +602,8 @@ export async function automationRoutes(app: FastifyInstance) {
       const n = snap.nodes?.find((x) => x.id === nid);
       if (!n) return nid;
       if (n.data?.label) return n.data.label;
-      if (n.type === 'input') return snap.refs.inputs[n.data.inputId]?.name ?? 'Eingang';
-      if (n.type === 'output') return snap.refs.outputs[n.data.outputId]?.name ?? 'Ausgang';
+      if (n.type === 'input') return snap.refs.inputs[n.data.inputId]?.name ?? 'Auslöser';
+      if (n.type === 'output') return snap.refs.outputs[n.data.outputId]?.name ?? 'Aktion';
       return NODE_TYPES[n.type as keyof typeof NODE_TYPES]?.label ?? n.type;
     };
     return {

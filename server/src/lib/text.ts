@@ -50,3 +50,8 @@ export function fitText(text: string, max: number, measure: (s: string) => numbe
   }
   return (lo ? g.slice(0, lo).join('').trimEnd() + '…' : '') + suffix;
 }
+
+/** Zahl mit Einzahl oder Mehrzahl statt Behelfsplural „Datei(en)“ (#257), z. B. plural(3, 'Datei', 'Dateien') → „3 Dateien“. */
+export function plural(n: number, one: string, many: string): string {
+  return `${n.toLocaleString('de-DE')} ${n === 1 ? one : many}`;
+}

@@ -4,6 +4,7 @@ import { get, patch, post, put } from '../../api/client';
 import { Button, Chip, FieldWrap, Input, Notice, Select } from '../../components/ui/core';
 import { Icon } from '../../components/ui/Icon';
 import { Dialog, Menu, useConfirm, useErrorToast, useToast } from '../../components/ui/overlays';
+import { plural } from '../../lib/format';
 
 export interface Folder {
   id: string;
@@ -221,7 +222,7 @@ export function MoveCopyDialog({ mode, ids, defaultCollection, onClose, onDone }
     <Dialog
       open
       onClose={onClose}
-      title={`${ids.length} Datei(en) ${mode === 'move' ? 'verschieben' : 'kopieren'}`}
+      title={`${plural(ids.length, 'Datei', 'Dateien')} ${mode === 'move' ? 'verschieben' : 'kopieren'}`}
       width={480}
       footer={
         <>
@@ -235,7 +236,7 @@ export function MoveCopyDialog({ mode, ids, defaultCollection, onClose, onDone }
               setBusy(true);
               try {
                 const r = await post<any>(`/media/${mode}`, { ids, collectionId, folderId: folderId || null });
-                toast({ tone: 'success', title: mode === 'move' ? `${r.moved} Datei(en) verschoben` : `${r.copied} Datei(en) kopiert` });
+                toast({ tone: 'success', title: mode === 'move' ? `${plural(r.moved, 'Datei', 'Dateien')} verschoben` : `${plural(r.copied, 'Datei', 'Dateien')} kopiert` });
                 onDone();
               } catch (e) {
                 toastError(e);
@@ -339,7 +340,7 @@ export function TagsDialog({ ids, current, onClose, onDone }: { ids: string[]; c
     <Dialog
       open
       onClose={onClose}
-      title={single ? 'Schlagworte' : `Schlagworte für ${ids.length} Datei(en)`}
+      title={single ? 'Schlagworte' : `Schlagworte für ${plural(ids.length, 'Datei', 'Dateien')}`}
       width={480}
       footer={
         <>

@@ -1,4 +1,4 @@
-/** Soziale Kanäle in der Oberfläche – Zählregeln wie auf dem Server (server/src/connections/channels.ts). */
+/** Soziale Netzwerke in der Oberfläche – Zählregeln wie auf dem Server (server/src/connections/channels.ts). */
 export type SocialKind = 'facebook' | 'instagram' | 'threads' | 'x' | 'whatsapp' | 'mastodon' | 'bluesky';
 export const SOCIAL_KINDS: SocialKind[] = ['facebook', 'instagram', 'threads', 'x', 'whatsapp', 'mastodon', 'bluesky'];
 export const SOCIAL_LABEL: Record<SocialKind, string> = { facebook: 'Facebook', instagram: 'Instagram', threads: 'Threads', x: 'X', whatsapp: 'WhatsApp-Kanal', mastodon: 'Mastodon', bluesky: 'Bluesky' };

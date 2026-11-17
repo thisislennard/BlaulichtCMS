@@ -10,6 +10,7 @@ import { useAuth } from "../../lib/auth";
 import { fmtDateTime, fmtRelative } from "../../lib/format";
 import { Markdown } from "../help/Markdown";
 import { FieldGrid, LoadError, SectionCard } from "./shared";
+import { plural } from '../../lib/format';
 
 type Phase = "idle" | "download" | "verify" | "preflight" | "backup" | "extract" | "dependencies" | "selfcheck" | "activating" | "failed";
 interface InstallState {
@@ -413,7 +414,7 @@ function ImageUpdateSteps({ version, need, helper, manage, onRequested }: { vers
                 Image-Update auf {version} anstoßen
               </Button>
               {helper.busy && <span className="text-sm">Es läuft bereits ein Image-Update.</span>}
-              {!helper.busy && wait > 0 && <span className="text-sm">Höchstens eine Anfrage je 10 Minuten – wieder möglich in {wait} Minute(n).</span>}
+              {!helper.busy && wait > 0 && <span className="text-sm">Höchstens eine Anfrage je 10 Minuten – wieder möglich in {plural(wait, 'Minute', 'Minuten')}.</span>}
             </div>
           )}
           <details className="mt-2">

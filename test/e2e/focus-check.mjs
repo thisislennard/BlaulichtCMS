@@ -625,7 +625,7 @@ try {
       };
       for (const [field, loc, value] of [
         ['Breite von Spalte 1', page.getByLabel('Breite von Spalte 1'), '2'],
-        ['Als Vorlage speichern für', page.locator('#dash-template-target'), '*'],
+        ['Als Dashboard-Vorlage speichern für', page.locator('#dash-template-target'), '*'],
       ]) {
         await loc.scrollIntoViewIfNeeded({ timeout: 2000 });
         await loc.focus();
@@ -713,7 +713,7 @@ try {
     } catch (e) {
       failures.push({ where: `${route} › Listenansicht`, field: '-', problem: String(e.message).split('\n')[0] });
     }
-    for (const [r, name] of [['/workflows/ausloeser', 'Neuer Eingang'], ['/workflows/aktionen', 'Neuer Ausgang']]) {
+    for (const [r, name] of [['/workflows/ausloeser', 'Neuer Auslöser'], ['/workflows/aktionen', 'Neue Aktion']]) {
       const kinds = r.endsWith('eingaenge') ? ['FE2-Alarm', 'Amtliche Warnung', 'RSS-Eintrag', 'Neue Uploads', 'Zeitplan', 'Manueller Start'] : ['Banner', 'Beitrag', 'E-Mail', 'App-Benachrichtigung', 'Warnentwurf vorbereiten'];
       for (const k of kinds) {
         await gotoRoute(page, r);

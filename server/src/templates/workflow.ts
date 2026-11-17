@@ -9,8 +9,8 @@ import { cleanValues, generateIntoMedia, previewJpeg, renderFromTemplate, resolv
 
 /*
  * Workflow-Baustein „Bild aus Vorlage erzeugen“ (#210). Textfelder der Bildvorlage werden mit {{platzhaltern}} des Laufs
- * befüllt; das Bild landet geprüft in den Medien. Ein Beitrags-Ausgang danach übernimmt alle Bilder des Laufs (Feld
- * `bilder`) – damit auch soziale Kanäle und Storys des Beitrags. Testläufe erzeugen nur eine Vorschau, nichts in den Medien.
+ * befüllt; das Bild landet geprüft in den Medien. Eine Beitrags-Aktion danach übernimmt alle Bilder des Laufs (Feld
+ * `bilder`) – damit auch soziale Netzwerke und Storys des Beitrags. Testläufe erzeugen nur eine Vorschau, nichts in den Medien.
  */
 
 export const runPreviewDir = () => path.join(config.mediaDir, 'templates', 'run-previews');

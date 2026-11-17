@@ -2,7 +2,7 @@ BlaulichtCMS braucht keine Website, keine externen Dienste und kein anderes Syst
 
 ## Intern freigeben
 
-1. Beitrag schreiben, Zielkanal **„Nur intern“** lassen.
+1. Beitrag schreiben, Website **„Nur intern“** lassen.
 2. Zur Freigabe einreichen.
 3. Eine berechtigte Person gibt frei.
 
@@ -10,4 +10,4 @@ Der Beitrag ist dann **intern freigegeben**: Text und Medien sind geprüft und l
 
 ## Später doch veröffentlichen
 
-Wird nachträglich ein Zielkanal gewählt, entsteht eine neue Fassung. Sie braucht eine neue Freigabe – die interne Freigabe gilt nicht automatisch für eine Veröffentlichung.
+Wird nachträglich eine Website gewählt, entsteht eine neue Fassung. Sie braucht eine neue Freigabe – die interne Freigabe gilt nicht automatisch für eine Veröffentlichung.

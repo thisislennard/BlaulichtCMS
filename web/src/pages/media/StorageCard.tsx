@@ -3,7 +3,7 @@ import { Link } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import { get } from '../../api/client';
 import { Badge, Button, Card, ErrorBox, Notice, SkeletonRows } from '../../components/ui/core';
-import { fmtBytes } from '../../lib/format';
+import { fmtBytes, plural } from '../../lib/format';
 
 interface Part {
   files: number;
@@ -46,7 +46,7 @@ export function StorageCard() {
     <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-sm py-1">
       <span className="w-44 shrink-0">{label}</span>
       <span className="font-mono text-meta w-28 shrink-0">{fmtBytes(p.bytes)}</span>
-      <span className="text-meta text-fg-muted">{p.files} Datei(en)</span>
+      <span className="text-meta text-fg-muted">{plural(p.files, 'Datei', 'Dateien')}</span>
       {extra}
     </div>
   );
@@ -87,7 +87,7 @@ export function StorageCard() {
                     </Link>
                     <Bar value={c.bytes} max={maxCol} />
                     <span className="font-mono text-meta w-24 text-right">{fmtBytes(c.bytes)}</span>
-                    <span className="text-meta text-fg-muted w-32">{c.files} Datei(en){c.archived ? ' · archiviert' : ''}</span>
+                    <span className="text-meta text-fg-muted w-32">{plural(c.files, 'Datei', 'Dateien')}{c.archived ? ' · archiviert' : ''}</span>
                     <Button size="sm" variant="ghost" icon={open === c.id ? 'ChevronDown' : 'ChevronRight'} aria-expanded={open === c.id} onClick={() => setOpen(open === c.id ? null : c.id)}>
                       Ordner
                     </Button>
@@ -97,13 +97,13 @@ export function StorageCard() {
                       <li className="flex gap-3">
                         <span className="w-56 truncate text-fg-muted">Oberste Ebene</span>
                         <span className="font-mono text-meta">{fmtBytes(folders.data.top.bytes)}</span>
-                        <span className="text-meta text-fg-muted">{folders.data.top.files} Datei(en)</span>
+                        <span className="text-meta text-fg-muted">{plural(folders.data.top.files, 'Datei', 'Dateien')}</span>
                       </li>
                       {folders.data.folders.map((f: any) => (
                         <li key={f.id} className="flex gap-3">
                           <span className="w-56 truncate">{f.name}</span>
                           <span className="font-mono text-meta">{fmtBytes(f.bytes)}</span>
-                          <span className="text-meta text-fg-muted">{f.files} Datei(en)</span>
+                          <span className="text-meta text-fg-muted">{plural(f.files, 'Datei', 'Dateien')}</span>
                         </li>
                       ))}
                     </ul>

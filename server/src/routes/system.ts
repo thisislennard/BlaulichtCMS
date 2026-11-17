@@ -22,6 +22,7 @@ import { backupHealth } from './backup-offsite.js';
 import { normalizePublicUrl } from '../lib/urls.js';
 import { CATALOGS, STATE_IDS, stateName } from '../keywords/catalog.js';
 import { syncCatalog } from '../keywords/store.js';
+import { plural } from '../lib/text.js';
 
 const startedAt = Date.now();
 
@@ -158,7 +159,7 @@ export async function systemStatus() {
       id: 'media',
       name: 'Medienprüfung',
       state: quarantine!.n > 50 ? 'warning' : 'ok',
-      detail: `${quarantine!.n} Datei(en) in Quarantäne`,
+      detail: `${plural(quarantine!.n, 'Datei', 'Dateien')} in Quarantäne`,
       ms: null,
     },
     {

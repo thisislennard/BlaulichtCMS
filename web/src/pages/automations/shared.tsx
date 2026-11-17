@@ -3,8 +3,9 @@ import { useQuery } from '@tanstack/react-query';
 import { get } from '../../api/client';
 import { Badge, Chip, cx, FieldWrap, Input, Select, Textarea, type Tone } from '../../components/ui/core';
 import { HelpTip } from '../../components/ui/HelpTip';
+import { plural } from '../../lib/format';
 
-/* Gemeinsame Typen und Bausteine der Workflows (Eingänge, Ausgänge, Editor). */
+/* Gemeinsame Typen und Bausteine der Workflows (Auslöser, Aktionen, Editor). */
 
 export interface FieldDef {
   key: string;
@@ -25,7 +26,7 @@ export interface Catalog {
   roles: { id: string; label: string }[];
   connections: { id: string; kind: string; name: string; status: string }[];
   feeds: { id: string; title: string }[];
-  /** Kalender (#203): Kategorien und iCal-Quellen für den Eingang „Kalendereintrag“ */
+  /** Kalender (#203): Kategorien und iCal-Quellen für den Auslöser „Kalendereintrag“ */
   calendarCategories?: { id: string; name: string; color: string }[];
   calendarSources?: { id: string; name: string }[];
   collections: { id: string; title: string }[];
@@ -147,7 +148,7 @@ export function AutomationBadge({ status }: { status: string }) {
 /** Kennzeichnung „Darf direkt veröffentlichen“ – immer mit Text. */
 export function DirectBadge({ title }: { title?: string }) {
   return (
-    <Badge tone="warning" title={title ?? 'Markierte Ausgänge veröffentlichen bzw. versenden ohne menschliche Freigabe.'}>
+    <Badge tone="warning" title={title ?? 'Markierte Aktionen veröffentlichen bzw. versenden ohne menschliche Freigabe.'}>
       Direktversand
     </Badge>
   );
@@ -155,7 +156,7 @@ export function DirectBadge({ title }: { title?: string }) {
 
 const WEEKDAYS = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
 
-/** Kurzbeschreibung der Einstellungen eines Eingangs. */
+/** Kurzbeschreibung der Einstellungen eines Auslösers. */
 export function inputSummary(i: Pick<InputDef, 'kind' | 'config'>, cat?: Catalog): string {
   const c = i.config ?? {};
   const kind = cat?.inputKinds.find((k) => k.kind === i.kind);
@@ -201,7 +202,7 @@ export function outputSummary(o: Pick<OutputDef, 'kind' | 'config'>, cat?: Catal
     case 'mail':
       return [roles(c.roles), (c.responsibilityIds ?? []).map((r: string) => cat?.responsibilities.find((x) => x.id === r)?.name ?? 'Zuständigkeit').join(', ')].filter(Boolean).join(' · ');
     case 'notify':
-      return [roles(c.roles), c.userIds?.length ? `${c.userIds.length} Person(en)` : ''].filter(Boolean).join(' · ');
+      return [roles(c.roles), c.userIds?.length ? `${plural(c.userIds.length, 'Person', 'Personen')}` : ''].filter(Boolean).join(' · ');
     case 'warning_draft':
       return `${Object.keys(c.data ?? {}).length} vorausgefüllte Felder`;
     case 'press_release':
@@ -280,7 +281,7 @@ export function CheckList<T extends string | number>({ legend, options, value, o
   );
 }
 
-/** Liste der Felder eines Eingangs (mit {{schlüssel}} zum Kopieren). */
+/** Liste der Felder eines Auslösers (mit {{schlüssel}} zum Kopieren). */
 export function FieldList({ fields }: { fields: FieldDef[] }) {
   return (
     <ul className="m-0 p-0 list-none flex flex-col gap-1">

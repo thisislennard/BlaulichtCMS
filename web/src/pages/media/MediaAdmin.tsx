@@ -5,7 +5,7 @@ import { get, post, qs } from '../../api/client';
 import type { MediaItem } from '../../api/types';
 import { Badge, Button, Card, EmptyState, ErrorBox, FieldWrap, PageHeader, Select, SkeletonRows, Textarea } from '../../components/ui/core';
 import { Dialog, useConfirm, useErrorToast, useToast } from '../../components/ui/overlays';
-import { fmtDateTime, fmtRelative } from '../../lib/format';
+import { fmtDateTime, fmtRelative, plural } from '../../lib/format';
 import { mediaName } from './gallery';
 import { usePageMeta } from '../../components/layout/AppShell';
 import { StorageCard } from './StorageCard';
@@ -107,7 +107,7 @@ export default function MediaAdmin() {
         subtitle="Dateien mit Prüfbefund bleiben in der Quarantäne (nie ausgeliefert) und werden nach der Frist gelöscht. Schadsoftware wird sofort gelöscht."
         action={
           !!blocked.data?.length && (
-            <Button size="sm" icon="RefreshCw" onClick={() => void post<any>('/media-admin/recheck-all').then((r) => (toast({ tone: 'success', title: `${r.count} Datei(en) werden erneut geprüft` }), refresh()), toastError)}>
+            <Button size="sm" icon="RefreshCw" onClick={() => void post<any>('/media-admin/recheck-all').then((r) => (toast({ tone: 'success', title: `${plural(r.count, 'Datei', 'Dateien')} werden erneut geprüft` }), refresh()), toastError)}>
               Alle erneut prüfen
             </Button>
           )
@@ -158,7 +158,7 @@ export default function MediaAdmin() {
                 {j.original_name && <span className="text-sm">{j.original_name}</span>}
                 <span className="text-meta text-err break-all">{j.last_error}</span>
                 <span className="text-meta text-fg-muted">
-                  {j.status === 'dead' ? 'endgültig fehlgeschlagen' : 'wird wiederholt'} · {j.attempts} Versuch(e) · {fmtDateTime(j.updated_at)}
+                  {j.status === 'dead' ? 'endgültig fehlgeschlagen' : 'wird wiederholt'} · {plural(j.attempts, 'Versuch', 'Versuche')} · {fmtDateTime(j.updated_at)}
                 </span>
               </div>
               <Button size="sm" icon="RefreshCw" onClick={() => void post(`/media-admin/jobs/${j.id}/retry`).then(() => (toast({ tone: 'success', title: 'Auftrag neu eingeplant' }), refresh()), toastError)}>

@@ -5,7 +5,7 @@ Die Einsatzliste zeigt die Einsätze auf der Website – als Tabelle oder Karten
 | Weg | Wie |
 |---|---|
 | Einsatzmeldung | Unter [Einsatzliste](/einsatzliste) → **Vorschläge aus Einsatzmeldungen** stehen die eingegangenen Einsätze (FE2, Feuersoftware Connect) der letzten 60 Tage, die noch nicht in der Liste sind. **Übernehmen** legt einen Entwurf an: Alarmzeit, Stichwort, Klartext, Ortsteil und Einheiten aus der Meldung. |
-| Workflow | Ausgang **Einsatz in Einsatzliste** (siehe [Workflows](/hilfe/workflows#ausgaenge)). Je Einsatz entsteht nur ein Eintrag, auch wenn der Workflow bei Aktualisierungen erneut läuft. Wahlweise gleich zur Freigabe eingereicht. |
+| Workflow | Aktion **Einsatz in Einsatzliste** (siehe [Workflows](/hilfe/workflows#aktionen)). Je Einsatz entsteht nur ein Eintrag, auch wenn der Workflow bei Aktualisierungen erneut läuft. Wahlweise gleich zur Freigabe eingereicht. |
 | Von Hand | **Neuer Eintrag**. |
 | Import | **Importieren** – siehe [unten](#vorhandene-einsaetze-importieren). |
 

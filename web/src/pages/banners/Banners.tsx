@@ -193,7 +193,7 @@ export default function Banners() {
         subtitle="Zeitgesteuerte Hinweise auf der Website – mehrere gleichzeitig, sortiert nach Priorität."
         actions={can('banner.edit') && can('channel.view') && <Button variant="primary" icon="Plus" disabled={!activeSites.length} onClick={() => setEdit(null)}>Neues Banner</Button>}
       />
-      {!activeSites.length && sites.data && <Notice>Für Banner muss zuerst eine Website gekoppelt sein (Kanäle → Websites).</Notice>}
+      {!activeSites.length && sites.data && <Notice>Für Banner muss zuerst eine Website gekoppelt sein (Einrichtung → Websites).</Notice>}
       {q.isLoading && <SkeletonRows rows={4} />}
       {q.error && <ErrorBox title="Banner konnten nicht geladen werden">{(q.error as Error).message}</ErrorBox>}
       {q.data && q.data.length === 0 && <EmptyState icon="Megaphone" title="Keine Banner" />}

@@ -6,7 +6,7 @@ import { Badge, Button, Card, Chip, FieldWrap, Input, Notice, Rev, Select, Skele
 import { HelpTip } from '../../components/ui/HelpTip';
 import { CopyButton, Dialog, useErrorToast, useToast } from '../../components/ui/overlays';
 import { useAuth } from '../../lib/auth';
-import { fmtDateTime } from '../../lib/format';
+import { fmtDateTime, plural } from '../../lib/format';
 import { BLUESKY_MAX, blueskyLength, mastodonLength, SOCIAL_KINDS, SOCIAL_LABEL, STORY_KINDS, threadsLength, xLength, type SocialKind } from '../../lib/social';
 import { safeHref } from '../../lib/url';
 import { MetricLine } from './Insights';
@@ -21,7 +21,7 @@ export interface SocialTarget {
 }
 export interface SocialDraft {
   social: string[];
-  /** Format je Kanal: feed (Standard), story oder both – nur Facebook und Instagram */
+  /** Format je Netzwerk: feed (Standard), story oder both – nur Facebook und Instagram */
   formats: Record<string, string>;
   fb: string;
   ig: string;
@@ -39,7 +39,7 @@ const SOCIAL_LABELS = { queued: 'Wartet', publishing: 'Wird veröffentlicht', pu
 const REMOVAL_RESULT: Record<string, string> = { removed: 'Entfernt', manual: 'Von Hand löschen', failed: 'Löschen fehlgeschlagen', canceled: 'Abgebrochen', pending: 'Noch offen' };
 const kindName = (k: string) => KIND[k as SocialKind] ?? k;
 
-/** Formate je Kanal: nur gewählte Kanäle und nur Abweichungen vom Standard „Beitrag“ (wie der Server). */
+/** Formate je Netzwerk: nur gewählte Netzwerke und nur Abweichungen vom Standard „Beitrag“ (wie der Server). */
 export function cleanFormats(f: Record<string, string> | null | undefined, targets: string[]): Record<string, string> {
   return Object.fromEntries(
     Object.entries(f ?? {})
@@ -57,7 +57,7 @@ function Counter({ n, max }: { n: number; max: number }) {
   return <span className={n > max ? 'text-warn' : 'text-fg-muted'}>{n} / {max}</span>;
 }
 
-/** Auswahl der sozialen Kanäle, Formate und eigene Texte – Teil der Fassung. */
+/** Auswahl der sozialen Netzwerke, Formate und eigene Texte – Teil der Fassung. */
 export function SocialTargetsCard({ draft, onChange, editable }: { draft: SocialDraft; onChange: (d: SocialDraft) => void; editable: boolean }) {
   const { can } = useAuth();
   const targets = useSocialTargets();
@@ -66,8 +66,8 @@ export function SocialTargetsCard({ draft, onChange, editable }: { draft: Social
   if (!can('connection.view') && !draft.social.length) return null;
   if (!list.length && !draft.social.length)
     return (
-      <Card title="Soziale Kanäle">
-        <p className="m-0 text-sm text-fg-muted">Kein sozialer Kanal verbunden. {can('connection.configure') && <Link to="/verbindungen">Verbindung einrichten</Link>}</p>
+      <Card title="Soziale Netzwerke">
+        <p className="m-0 text-sm text-fg-muted">Kein soziales Netzwerk verbunden. {can('connection.configure') && <Link to="/verbindungen">Verbindung einrichten</Link>}</p>
       </Card>
     );
   const chosen = (k: SocialKind) => draft.social.filter((id) => list.find((t) => t.id === id)?.kind === k);
@@ -77,7 +77,7 @@ export function SocialTargetsCard({ draft, onChange, editable }: { draft: Social
   // Höchstlänge der Mastodon-Instanz(en) laut letztem Test – bei mehreren gilt die kleinste
   const mastodonMax = Math.min(...chosen('mastodon').map((id) => Number(list.find((t) => t.id === id)?.capabilities?.max_characters) || 500), 500 * 100);
   return (
-    <Card title="Soziale Kanäle" subtitle="Jeder Kanal hat eigenen Status. Eine Änderung der Auswahl oder des Formats verlangt eine neue Freigabe.">
+    <Card title="Soziale Netzwerke" subtitle="Jedes Netzwerk hat einen eigenen Status. Eine Änderung der Auswahl oder des Formats verlangt eine neue Freigabe.">
       <div className="flex flex-col gap-3">
         {list.map((t) => {
           const on = draft.social.includes(t.id);
@@ -156,7 +156,7 @@ export function SocialTargetsCard({ draft, onChange, editable }: { draft: Social
   );
 }
 
-/** Formatprüfung, Veröffentlichen, Status je Kanal, gezieltes Wiederholen, Teilen von Hand, manueller Export. */
+/** Formatprüfung, Veröffentlichen, Status je Netzwerk, gezieltes Wiederholen, Teilen von Hand, manueller Export. */
 export function SocialStatusCard({ postId, revision, hash, approved, targets, items, dirty, onChanged }: { postId: string; revision: number; hash: string; approved: boolean; targets: string[]; items: any[]; dirty: boolean; onChanged: () => void }) {
   const { can } = useAuth();
   const toast = useToast();
@@ -179,7 +179,7 @@ export function SocialStatusCard({ postId, revision, hash, approved, targets, it
   const issues = (check.data ?? []).filter((c) => c.issues.length);
   const manualTargets = (check.data ?? []).filter((c) => c.manual);
   return (
-    <Card title="Soziale Kanäle – Status">
+    <Card title="Soziale Netzwerke – Status">
       <div className="flex flex-col gap-3 text-sm">
         {issues.map((c) => (
           <Notice key={c.id} tone="warning" title={`${kindName(c.kind)}: ${c.name}`}>
@@ -193,8 +193,8 @@ export function SocialStatusCard({ postId, revision, hash, approved, targets, it
         {approved && targets.length > 0 && can('publish.social') && !dirty && (
           <div className="flex flex-col gap-2">
             <div className="flex flex-wrap gap-2">
-              <Button variant="primary" icon="Share2" onClick={() => act(() => post(`/posts/${postId}/social`, { revision, contentHash: hash }), 'Veröffentlichung auf sozialen Kanälen beauftragt')}>
-                Auf sozialen Kanälen veröffentlichen
+              <Button variant="primary" icon="Share2" onClick={() => act(() => post(`/posts/${postId}/social`, { revision, contentHash: hash }), 'Veröffentlichung auf sozialen Netzwerken beauftragt')}>
+                Auf sozialen Netzwerken veröffentlichen
               </Button>
               <Button icon="Download" onClick={async () => setExp(await get(`/posts/${postId}/social-export`).catch((e) => (toastError(e), null)))}>
                 Manuell exportieren
@@ -206,7 +206,7 @@ export function SocialStatusCard({ postId, revision, hash, approved, targets, it
         {removable && can('publish.social_remove') && (
           <div>
             <Button size="sm" icon="Ban" onClick={() => setRemoving(true)}>
-              Von sozialen Kanälen entfernen
+              Von sozialen Netzwerken entfernen
             </Button>
           </div>
         )}
@@ -275,13 +275,13 @@ export function SocialStatusCard({ postId, revision, hash, approved, targets, it
                 {s.status === 'unknown' && <div className="text-warn">Vor einem neuen Versuch prüft BlaulichtCMS, ob der Beitrag bereits existiert.</div>}
                 <div className="text-meta text-fg-muted">
                   {fmtDateTime(s.created_at)}
-                  {s.status !== 'ready' && !s.shared_at ? ` · ${s.attempts} Versuch(e)` : ''}
+                  {s.status !== 'ready' && !s.shared_at ? ` · ${plural(s.attempts, 'Versuch', 'Versuche')}` : ''}
                   {s.published_at && !s.shared_at ? ` · veröffentlicht ${fmtDateTime(s.published_at)}` : ''}
                 </div>
                 {['failed', 'unknown'].includes(s.status) && can('publish.social') && (
                   <div>
-                    <Button size="sm" icon="RefreshCw" onClick={() => act(() => post(`/social-publications/${s.id}/retry`), 'Nur dieser Kanal wird erneut versucht')}>
-                      {s.status === 'unknown' ? 'Prüfen und ggf. erneut versuchen' : 'Nur diesen Kanal erneut versuchen'}
+                    <Button size="sm" icon="RefreshCw" onClick={() => act(() => post(`/social-publications/${s.id}/retry`), 'Nur dieses Netzwerk wird erneut versucht')}>
+                      {s.status === 'unknown' ? 'Prüfen und ggf. erneut versuchen' : 'Nur dieses Netzwerk erneut versuchen'}
                     </Button>
                   </div>
                 )}
@@ -295,7 +295,7 @@ export function SocialStatusCard({ postId, revision, hash, approved, targets, it
       {exp && (
         <Dialog open onClose={() => setExp(null)} title="Manueller Export" width={640}>
           <div className="flex flex-col gap-4 text-sm">
-            <p className="m-0 text-fg-muted">Freigegebener Text je Kanal und Dateien (Links gelten {exp.expires_in_hours} Stunden).</p>
+            <p className="m-0 text-fg-muted">Freigegebener Text je Netzwerk und Dateien (Links gelten {exp.expires_in_hours} Stunden).</p>
             {SOCIAL_KINDS.filter((k) => typeof exp[k] === 'string').map((k) => (
               <div key={k} className="flex flex-col gap-1">
                 <div className="flex items-center justify-between">
@@ -401,7 +401,7 @@ function ShareDialog({ item, onClose }: { item: any; onClose: (changed: boolean)
   );
 }
 
-/** Zurückziehen auf sozialen Kanälen (#114): zeigt je Kanal, was passiert ist. */
+/** Zurückziehen auf sozialen Netzwerken (#114): zeigt je Netzwerk, was passiert ist. */
 function RemoveDialog({ postId, onClose }: { postId: string; onClose: () => void }) {
   const toastError = useErrorToast();
   const [reason, setReason] = useState('');
@@ -421,7 +421,7 @@ function RemoveDialog({ postId, onClose }: { postId: string; onClose: () => void
     <Dialog
       open
       onClose={onClose}
-      title="Von sozialen Kanälen entfernen"
+      title="Von sozialen Netzwerken entfernen"
       width={560}
       footer={
         result ? (

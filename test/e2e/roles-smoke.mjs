@@ -80,13 +80,13 @@ try {
   for (const not of ['Freigaben', 'Quellen', 'Beitragsvorlagen', 'Banner', 'Websites', 'Verbindungen', 'Warnentwürfe', 'Amtliche Warnungen', 'Benutzer und Rollen', 'Systemstatus', 'Protokolle', 'Einstellungen', 'Datenschutzanfragen', 'Aktivitäten', 'Upload-Seite', 'Medienverwaltung'])
     check(!nav.some((n) => n === not || n.startsWith(not)), `Navigation zeigt „${not}“ nicht`);
   const body = await page.locator('body').innerText();
-  check(!(await hasButton(/^Neuer Beitrag/)) && !(await hasButton(/^Medien sammeln/)), 'Dashboard ohne „Neuer Beitrag“ und „Medien sammeln“');
+  check(!(await hasButton(/^Neuer Beitrag/)) && !(await hasButton(/^Fotos sammeln/)), 'Dashboard ohne „Neuer Beitrag“ und „Fotos sammeln“');
   check(!/Kein Zugriff/.test(body), 'Dashboard ist erreichbar');
 
   await go('/beitraege');
   check(!(await hasButton(/^Neuer Beitrag/)), 'Beiträge: keine Schaltfläche „Neuer Beitrag“');
   await go(`/beitraege/${st.postId}`);
-  for (const b of [/^Speichern/, /Zur Freigabe einreichen/, /^Freigeben/, /^Veröffentlichen/, /Fotos und Videos sammeln/])
+  for (const b of [/^Speichern/, /Zur Freigabe einreichen/, /^Freigeben/, /^Veröffentlichen/, /Fotos sammeln/])
     check(!(await hasButton(b)), `Beitrag: keine Schaltfläche ${b}`);
 
   await go('/medien');
@@ -107,7 +107,7 @@ try {
   await page.keyboard.press('Control+k');
   await sleep(400);
   const palette = await page.locator('[role=dialog]').first().innerText().catch(() => '');
-  check(!/Neuer Beitrag|Medien sammeln|Website koppeln|Einstellungen|Benutzer/.test(palette), 'Befehlspalette ohne verbotene Aktionen und Seiten');
+  check(!/Neuer Beitrag|Fotos sammeln|Website koppeln|Einstellungen|Benutzer/.test(palette), 'Befehlspalette ohne verbotene Aktionen und Seiten');
   await page.keyboard.press('Escape');
 
   check(denied.length === 0, `Rundgang ohne abgelehnte Anfragen (403)${denied.length ? `: ${[...new Set(denied)].join(', ')}` : ''}`);

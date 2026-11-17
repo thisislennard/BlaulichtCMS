@@ -6,7 +6,7 @@ import { TRANSFER_FORMAT, TRANSFER_SCHEMA_VERSION } from './transfer.js';
 /*
  * „Katalog exportieren“ (#199): alles, was eine KI braucht, um eine Workflow-Datei für genau diese Installation zu
  * entwerfen – und nichts darüber hinaus. Gebaut wird ausschließlich aus einer Positivliste: Art und Name der Ein- und
- * Ausgänge, Feldnamen (beim manuellen Start Name + Bezeichnung, bei Ausgängen die verwendeten Platzhalter), Namen und
+ * Aktionen, Feldnamen (beim manuellen Start Name + Bezeichnung, bei Aktionen die verwendeten Platzhalter), Namen und
  * Textfelder der Bildvorlagen, Namen der Kalender-Kategorien, das aktive Stichwortverzeichnis (Stichwort, Bezeichnung,
  * Kategorie). Keine Kennungen, Einstellungen, Zugangsdaten, Einsatz-/Warndaten, Läufe, Medien, Konten oder Kontakte.
  */
@@ -56,9 +56,9 @@ export function buildAiCatalog(src: AiCatalogSource) {
     notes: [
       'Katalog dieser BlaulichtCMS-Installation zum Entwerfen von Workflow-Dateien. Er enthält keine Zugangsdaten, Kennungen, Einsatz- oder Personendaten.',
       `Die Workflow-Datei muss dem JSON-Schema ${SCHEMA_FILE} entsprechen (Format „${TRANSFER_FORMAT}“, schemaVersion ${TRANSFER_SCHEMA_VERSION}).`,
-      'Ein- und Ausgänge der Datei stammen aus „inputs“ bzw. „outputs“: unter references mit kind und genau diesem name eintragen, im Knoten mit inputRef/outputRef darauf verweisen.',
-      'Felder eines Auslösers: systemFields plus triggers[kind].fields; beim manuellen Start zusätzlich die fields des Eingangs. Danach kommen Felder aus „Felder setzen“, „Bild aus Vorlage erzeugen“ (imageFields) und vorherigen Ausgängen (actions[kind].producesFields) hinzu.',
-      'usesFields eines Ausgangs: Platzhalter, die seine Texte verwenden. Sie müssen an dieser Stelle vorhanden sein – sonst vorher mit „Felder setzen“ anlegen oder einen anderen Ausgang wählen.',
+      'Auslöser und Aktionen der Datei stammen aus „inputs“ bzw. „outputs“: unter references mit kind und genau diesem name eintragen, im Knoten mit inputRef/outputRef darauf verweisen.',
+      'Felder eines Auslösers: systemFields plus triggers[kind].fields; beim manuellen Start zusätzlich die fields des Auslösers. Danach kommen Felder aus „Felder setzen“, „Bild aus Vorlage erzeugen“ (imageFields) und vorherigen Aktionen (actions[kind].producesFields) hinzu.',
+      'usesFields einer Aktion: Platzhalter, die ihre Texte verwenden. Sie müssen an dieser Stelle vorhanden sein – sonst vorher mit „Felder setzen“ anlegen oder eine andere Aktion wählen.',
       'Stichwörter (keywords) helfen bei Bedingungen auf stichwort, stichwort_text und stichwort_kategorie; Kalender-Kategorien bei Bedingungen auf kategorie.',
     ],
     nodeTypes: (Object.keys(NODE_TYPES) as NodeType[]).map((t) => ({ type: t, label: NODE_TYPES[t].label, description: NODE_TYPES[t].description, sourceHandles: nodeHandles(t) })),

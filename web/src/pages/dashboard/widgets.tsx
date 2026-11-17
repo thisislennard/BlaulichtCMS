@@ -3,7 +3,7 @@ import { Link } from 'react-router';
 import { Card, cx, EmptyState, Rev, StatusBadge } from '../../components/ui/core';
 import { Icon } from '../../components/ui/Icon';
 import { useAuth } from '../../lib/auth';
-import { fmtDateTime, fmtRelative, fmtTime } from '../../lib/format';
+import { fmtDateTime, fmtRelative, fmtTime, plural } from '../../lib/format';
 import { safeHref } from '../../lib/url';
 import { BADGE_TITLES, PANEL_TITLES } from './model';
 
@@ -47,7 +47,7 @@ export function WidgetBody({ id, d }: { id: string; d: any }) {
               <Link to={`/beitraege/${p.id}`} className="font-medium flex-1 truncate">
                 {p.title}
               </Link>
-              <span className="text-meta text-fg-muted">{p.site_id ? 'mit Zielkanal' : 'intern'}</span>
+              <span className="text-meta text-fg-muted">{p.site_id ? 'mit Website' : 'intern'}</span>
             </li>
           ))}
         </List>
@@ -258,7 +258,7 @@ function FlowBoard({ d }: { d: any }) {
         {d.media && (
           <FlowColumn title="Eingang" count={d.media.last_24h}>
             {cols.slice(0, 2).map((c: any) => (
-              <FlowCard key={c.id} to={`/medien/${c.id}`} title={c.title} meta={`${c.uploads} Uploads`} sub={c.last_upload ? fmtRelative(c.last_upload) : undefined} />
+              <FlowCard key={c.id} to={`/medien/${c.id}`} title={c.title} meta={plural(c.uploads, 'Upload', 'Uploads')} sub={c.last_upload ? fmtRelative(c.last_upload) : undefined} />
             ))}
             {!cols.length && <p className="m-0 px-0.5 text-meta text-fg-muted">Keine neuen Uploads in 24 Std.</p>}
           </FlowColumn>
@@ -292,7 +292,7 @@ function FlowBoard({ d }: { d: any }) {
         {d.readyToPublish && (
           <FlowColumn title="Bereit" count={ready.length}>
             {ready.slice(0, MAX).map((p: any) => (
-              <FlowCard key={p.id} to={`/beitraege/${p.id}`} title={p.title} meta="freigegeben" sub={p.site_id ? 'mit Zielkanal' : 'intern'} />
+              <FlowCard key={p.id} to={`/beitraege/${p.id}`} title={p.title} meta="freigegeben" sub={p.site_id ? 'mit Website' : 'intern'} />
             ))}
             <More to="/freigaben" n={ready.length - MAX} />
             {!ready.length && <p className="m-0 px-0.5 text-meta text-fg-muted">Nichts wartet.</p>}

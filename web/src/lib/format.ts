@@ -62,6 +62,14 @@ export function fmtNumber(n: number | null | undefined, digits = 0): string {
   return new Intl.NumberFormat('de-DE', { maximumFractionDigits: digits, minimumFractionDigits: digits }).format(n);
 }
 
+/**
+ * Zahl mit Einzahl oder Mehrzahl statt Behelfsplural (#257): plural(1, 'Datei', 'Dateien') → „1 Datei“,
+ * plural(3, 'Datei', 'Dateien') → „3 Dateien“, plural(0, …) → „0 Dateien“. Tausender mit Punkt.
+ */
+export function plural(n: number, one: string, many: string): string {
+  return `${fmtNumber(n)} ${n === 1 ? one : many}`;
+}
+
 /** 640 ms · 1,8 s · 2 Min. 5 s */
 export function fmtDuration(ms: number | null | undefined): string {
   if (ms == null) return '–';

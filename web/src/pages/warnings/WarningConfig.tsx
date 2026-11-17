@@ -90,7 +90,7 @@ export default function WarningConfig() {
           { value: 'stichwoerter', label: 'Stichwörter & Fragen', count: c.keywords.filter((k: any) => k.active).length },
           { value: 'regeln', label: 'Regeln', count: c.rules.filter((r: any) => r.status === 'approved').length },
           { value: 'zustaendigkeiten', label: 'Zuständigkeiten', count: c.responsibilities.length },
-          { value: 'vorlagen', label: 'Vorlagen' },
+          { value: 'vorlagen', label: 'Übergabe-Vorlagen' },
           ...(can('warning.settings') ? [{ value: 'versand' as Tab, label: 'E-Mail-Versand' }] : []),
         ]}
       />

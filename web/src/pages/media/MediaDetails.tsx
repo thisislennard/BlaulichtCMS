@@ -93,7 +93,7 @@ export function MediaDetailsDialog({ mediaId, manage, onClose, onSaved }: { medi
                   <Input id="md-name" value={f.displayName} maxLength={200} placeholder={m.original_name} onChange={(e) => setForm({ ...f, displayName: e.target.value })} />
                 </FieldWrap>
                 {m.kind === 'image' && (
-                  <FieldWrap label="Alternativtext" htmlFor="md-alt" help={`Beschreibt das Bild für Menschen, die es nicht sehen (Screenreader). Öffentlich – wird für Website und soziale Kanäle vorgeschlagen. ${f.altText.length} / 1000`} labelAction={
+                  <FieldWrap label="Alternativtext" htmlFor="md-alt" help={`Beschreibt das Bild für Menschen, die es nicht sehen (Screenreader). Öffentlich – wird für Website und soziale Netzwerke vorgeschlagen. ${f.altText.length} / 1000`} labelAction={
                     <HelpTip title="Guter Alternativtext" more="/hilfe/beitraege#alternativtext">
                       <p className="m-0">Kurz sagen, was zu sehen ist und warum es wichtig ist – z. B. „Löschfahrzeug vor dem Gerätehaus, Einsatzkräfte rollen Schläuche aus“. Nicht „Bild von …“ und keine Namen von Personen.</p>
                     </HelpTip>

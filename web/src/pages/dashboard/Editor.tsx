@@ -317,31 +317,31 @@ export default function DashboardEditor({ draft, onChange, available, d, templat
             )}
           </Section>
           {templates && (
-            <Section title="Gemeinsame Vorlage">
+            <Section title="Dashboard-Vorlage">
               <div className="flex flex-wrap gap-2 items-center">
                 <label htmlFor="dash-template-target" className="text-fg-muted">
-                  Als Vorlage speichern für
+                  Als Dashboard-Vorlage speichern für
                 </label>
                 <Select id="dash-template-target" value={target} onChange={(e) => setTarget(e.target.value)} className="!w-[220px] !h-10">
                   <option value="">– wählen –</option>
-                  <option value="*">alle{templates.existing.includes('*') ? ' (Vorlage vorhanden)' : ''}</option>
+                  <option value="*">alle{templates.existing.includes('*') ? ' (Dashboard-Vorlage vorhanden)' : ''}</option>
                   {templates.roles.map((r) => (
                     <option key={r.id} value={r.id}>
                       Rolle {r.label}
-                      {templates.existing.includes(r.id) ? ' (Vorlage vorhanden)' : ''}
+                      {templates.existing.includes(r.id) ? ' (Dashboard-Vorlage vorhanden)' : ''}
                     </option>
                   ))}
                 </Select>
                 <Button className="!h-10" icon="LayoutTemplate" disabled={!target || templates.busy} onClick={() => templates.onSave(target)}>
-                  Als Vorlage speichern
+                  Als Dashboard-Vorlage speichern
                 </Button>
                 {target && templates.existing.includes(target) && (
                   <Button className="!h-10" variant="ghost" icon="Trash2" disabled={templates.busy} onClick={() => templates.onRemove(target)}>
-                    Vorlage entfernen
+                    Dashboard-Vorlage entfernen
                   </Button>
                 )}
               </div>
-              <p className="m-0 text-fg-muted">Eine Vorlage gilt für alle, die ihr Dashboard nicht selbst angepasst haben. Jede Person sieht daraus nur die Widgets, für die sie das Recht hat.</p>
+              <p className="m-0 text-fg-muted">Eine Dashboard-Vorlage gilt für alle, die ihr Dashboard nicht selbst angepasst haben. Jede Person sieht daraus nur die Widgets, für die sie das Recht hat.</p>
             </Section>
           )}
         </div>

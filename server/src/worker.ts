@@ -303,7 +303,7 @@ async function maintenance(isLeader: boolean) {
   // Reichweite der Social-Posts (#218): nach 1 h, 24 h und 7 Tagen; läuft im Hintergrund und nie doppelt
   if (due('social-insights', 15 * 60_000)) void runDueInsights().catch((e) => log('warn', 'insights', e.message));
   if (due('automations', 30_000)) await automationTick().catch((e) => log('warn', 'automation', e.message));
-  // Workflow-Eingang „Kalendereintrag“ (#203): Beginn, Ende oder X vorher
+  // Workflow-Auslöser „Kalendereintrag“ (#203): Beginn, Ende oder X vorher
   if (due('calendar-triggers', 30_000)) await calendarTriggerTick().catch((e) => log('warn', 'automation', `Kalender-Auslöser: ${e.message}`));
   // Presseanfragen: Erinnerung vor Ablauf der Frist und bei Überschreitung (#204)
   // Presse-Postfach (#205): im eingestellten Abstand (geprüft alle 30 s). Läuft im Hintergrund (#239) – ein Durchgang mit

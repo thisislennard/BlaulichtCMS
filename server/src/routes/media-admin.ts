@@ -14,6 +14,7 @@ import { config } from '../config.js';
 import { getSettings } from '../lib/settings.js';
 import { mediaPayload } from './media.js';
 import { purgeMedia } from './media-trash.js';
+import { plural } from '../lib/text.js';
 
 /*
  * Verwaltung der Medien („Medien administrieren“, Paket 7): gesperrte Dateien erneut prüfen, „Trotzdem freigeben“
@@ -111,7 +112,7 @@ export async function mediaAdminRoutes(app: FastifyInstance) {
     const ids = (await many<any>(`SELECT id FROM media WHERE status = 'blocked' AND deleted_at IS NULL LIMIT 2000`)).map((r) => r.id).filter((id) => fs.existsSync(mediaPaths.quarantine(id)));
     let n = 0;
     for (const id of ids) if (await requeue(id)) n++;
-    await audit(req.auth!.actor, 'media.rechecked', { type: 'media', label: `${n} Datei(en)` }, { alle: true });
+    await audit(req.auth!.actor, 'media.rechecked', { type: 'media', label: `${plural(n, 'Datei', 'Dateien')}` }, { alle: true });
     return { ok: true, count: n };
   });
 

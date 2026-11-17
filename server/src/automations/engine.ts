@@ -16,17 +16,18 @@ import { OUTPUT_KINDS, type NodeType } from './catalog.js';
 import { ImageStepError, runImageStep, runImages } from '../templates/workflow.js';
 import { graphHash, inputFields, topoOrder, type Graph, type GraphNode, type InputRef, type OutputRef } from './graph.js';
 import { dedupKey, evaluateGroup, redactForLog, renderTemplate, valueText, type Data, type Group } from './logic.js';
+import { plural } from '../lib/text.js';
 
 /*
  * Ausführung von Automationen als Auftrag in der Warteschlange (`automation.run`).
  *
- * - Jeder Lauf arbeitet auf einer festen Momentaufnahme (Ablauf + Ein-/Ausgänge der aktiven Version bzw. beim Test des
+ * - Jeder Lauf arbeitet auf einer festen Momentaufnahme (Ablauf + Auslöser und Aktionen der aktiven Version bzw. beim Test des
  *   Entwurfs). Spätere Änderungen wirken erst nach neuem Test und neuer Aktivierung.
  * - Knoten laufen in topologischer Reihenfolge; ein Knoten läuft, wenn mindestens ein eingehender Weg aktiv ist.
  * - Je Lauf und Knoten genau ein Schritt (automation_steps). Wiederholung und Fortsetzung (Warten, Freigabe)
- *   überspringen erledigte Schritte; Ausgänge schreiben ihr Ergebnis und den Schritt in derselben Transaktion – ein Lauf
+ *   überspringen erledigte Schritte; Aktionen schreiben ihr Ergebnis und den Schritt in derselben Transaktion – ein Lauf
  *   legt nie denselben Entwurf oder dasselbe Banner zweimal an.
- * - Testläufe (mode = test) legen nichts an und senden nichts: Ausgänge beschreiben nur, was sie tun würden.
+ * - Testläufe (mode = test) legen nichts an und senden nichts: Aktionen beschreiben nur, was sie tun würden.
  */
 
 export interface Snapshot extends Graph {
@@ -38,7 +39,7 @@ export class PermanentError extends Error {}
 
 const TERMINAL = ['succeeded', 'failed', 'canceled', 'limited'];
 
-/** Prüfsumme aus Ablauf und den Einstellungen aller verwendeten Ein- und Ausgänge. */
+/** Prüfsumme aus Ablauf und den Einstellungen aller verwendeten Auslöser und Aktionen. */
 export function snapshotHash(s: Snapshot): string {
   const refs = Object.fromEntries(
     [...Object.entries(s.refs.inputs).map(([k, v]) => [`i:${k}`, [v.kind, v.config]]), ...Object.entries(s.refs.outputs).map(([k, v]) => [`o:${k}`, [v.kind, v.config]])].sort(([a], [b]) => String(a).localeCompare(String(b))),
@@ -46,7 +47,7 @@ export function snapshotHash(s: Snapshot): string {
   return crypto.createHash('sha256').update(`${graphHash(s)}|${JSON.stringify(refs)}`).digest('hex');
 }
 
-/** Alle Ein- und Ausgänge (auch gelöschte, für Hinweise). */
+/** Alle Auslöser und Aktionen (auch gelöschte, für Hinweise). */
 export async function loadRefs(db: Queryable = pool): Promise<{ inputs: Map<string, InputRef>; outputs: Map<string, OutputRef> }> {
   const ins = await many<any>(`SELECT id, name, kind, config, archived_at FROM automation_inputs`, [], db);
   const outs = await many<any>(`SELECT id, name, kind, config, archived_at FROM automation_outputs`, [], db);
@@ -56,7 +57,7 @@ export async function loadRefs(db: Queryable = pool): Promise<{ inputs: Map<stri
   };
 }
 
-/** Momentaufnahme eines Ablaufs mit genau den verwendeten Ein- und Ausgängen. */
+/** Momentaufnahme eines Ablaufs mit genau den verwendeten Auslösern und Aktionen. */
 export function buildSnapshot(g: Graph, refs: { inputs: Map<string, InputRef>; outputs: Map<string, OutputRef> }): Snapshot {
   const inputs: Record<string, InputRef> = {};
   const outputs: Record<string, OutputRef> = {};
@@ -106,7 +107,7 @@ export async function createRun(r: NewRun, db: Queryable = pool): Promise<string
            VALUES ($1,$2,'live',$3,$4,'limited',$5,$6,'{}',$7, now())`,
           [r.automationId, r.version, r.trigger, r.inputNode, JSON.stringify({ nodes: [], edges: [], refs: { inputs: {}, outputs: {} } }), '', `Grenze von ${s['automations.max_runs_per_minute']} Läufen je Minute erreicht – weitere Ereignisse in dieser Minute wurden verworfen.`],
         );
-        await notify({ kind: 'warning', title: 'Workflow: zu viele Läufe', body: `Ein Workflow wurde in einer Minute mehr als ${s['automations.max_runs_per_minute']}-mal ausgelöst. Weitere Ereignisse wurden verworfen. Bitte Bedingungen und Eingänge prüfen.`, link: `/workflows/${r.automationId}`, permission: 'automation.manage' });
+        await notify({ kind: 'warning', title: 'Workflow: zu viele Läufe', body: `Ein Workflow wurde in einer Minute mehr als ${s['automations.max_runs_per_minute']}-mal ausgelöst. Weitere Ereignisse wurden verworfen. Bitte Bedingungen und Auslöser prüfen.`, link: `/workflows/${r.automationId}`, permission: 'automation.manage' });
       }
       return null;
     }
@@ -291,7 +292,7 @@ async function executeLocked(runId: string, job?: { attempts: number; max_attemp
   }
   await finishRun(runId, 'succeeded');
   if (test) {
-    // Erfolgreicher Test genau dieses Entwurfs (Prüfsumme über Ablauf und verwendete Ein-/Ausgänge)
+    // Erfolgreicher Test genau dieses Entwurfs (Prüfsumme über Ablauf und verwendete Auslöser und Aktionen)
     await pool.query(`UPDATE automations SET tested_hash = $2, tested_at = now(), tested_by = $3 WHERE id = $1`, [run.automation_id, run.graph_hash, run.created_by]);
   }
   return 'succeeded';
@@ -310,8 +311,8 @@ async function notifyFailure(run: any, where: string, msg: string) {
 
 function nodeTitle(ctx: Ctx, n: GraphNode): string {
   if (n.data?.label) return `„${n.data.label}“`;
-  if (n.type === 'output') return `Ausgang „${ctx.snap.refs.outputs[n.data.outputId]?.name ?? '?'}“`;
-  if (n.type === 'input') return `Eingang „${ctx.snap.refs.inputs[n.data.inputId]?.name ?? '?'}“`;
+  if (n.type === 'output') return `Aktion „${ctx.snap.refs.outputs[n.data.outputId]?.name ?? '?'}“`;
+  if (n.type === 'input') return `Auslöser „${ctx.snap.refs.inputs[n.data.inputId]?.name ?? '?'}“`;
   return n.type;
 }
 
@@ -363,7 +364,7 @@ async function runNode(ctx: Ctx, node: GraphNode, data: Data, prev: StepRow | un
     }
     case 'delay': {
       const minutes = Number(node.data.minutes);
-      if (ctx.test) return done({ ports: ['out'], info: `Testlauf: würde ${minutes} Minute(n) warten.` });
+      if (ctx.test) return done({ ports: ['out'], info: `Testlauf: würde ${plural(minutes, 'Minute', 'Minuten')} warten.` });
       if (prev?.status === 'waiting') {
         const until = new Date(prev.output?.until ?? 0).getTime();
         if (until > Date.now() + 1000) {
@@ -371,11 +372,11 @@ async function runNode(ctx: Ctx, node: GraphNode, data: Data, prev: StepRow | un
           await pool.query(`UPDATE automation_runs SET status = 'waiting', resume_at = $2 WHERE id = $1`, [runId, new Date(until)]);
           return { pause: true };
         }
-        return done({ ports: ['out'], info: `${minutes} Minute(n) gewartet.` });
+        return done({ ports: ['out'], info: `${plural(minutes, 'Minute', 'Minuten')} gewartet.` });
       }
       const until = new Date(Date.now() + minutes * 60_000);
       await tx(async (db) => {
-        await upsertStep(db, runId, node, { status: 'waiting', input: data, output: { until: until.toISOString() }, info: `Wartet ${minutes} Minute(n).`, attempt: true });
+        await upsertStep(db, runId, node, { status: 'waiting', input: data, output: { until: until.toISOString() }, info: `Wartet ${plural(minutes, 'Minute', 'Minuten')}.`, attempt: true });
         await db.query(`UPDATE automation_runs SET status = 'waiting', resume_at = $2 WHERE id = $1`, [runId, until]);
         await resumeRun(runId, db, until);
       });
@@ -458,7 +459,7 @@ async function awaitApproval(
   return { pause: true };
 }
 
-/* ------------------------------------------------------------------ Ausgänge */
+/* ------------------------------------------------------------------ Aktionen */
 
 const TONE_BY_LEVEL = (lvl: unknown): 'info' | 'warning' | 'danger' => {
   const n = Number(String(lvl ?? '').replace(',', '.'));
@@ -474,7 +475,7 @@ async function usersWithRoles(roles: string[], db: Queryable = pool) {
 
 async function runOutput(ctx: Ctx, node: GraphNode, data: Data, prev: StepRow | undefined, done: (r: Result, db?: Queryable) => Promise<Result>): Promise<Result | Pause> {
   const out = ctx.snap.refs.outputs[node.data.outputId];
-  if (!out) throw new PermanentError('Ausgang fehlt in der Version.');
+  if (!out) throw new PermanentError('Aktion fehlt in der Version.');
   const c = out.config ?? {};
   const direct = ctx.direct && !!node.data.direct && OUTPUT_KINDS[out.kind].directCapable;
   const r = (t: string, max: number) => renderTemplate(t, data, { timeZone: ctx.tz, maxLength: max }).text.trim();
@@ -537,7 +538,7 @@ async function runOutput(ctx: Ctx, node: GraphNode, data: Data, prev: StepRow | 
       }
       const cw = r(c.variants?.mastodon?.cw ?? '', 500);
       if (cw) variants.mastodon = { ...(variants.mastodon ?? {}), cw };
-      // Vorausgewählte soziale Kanäle (#188, #189): nur verfügbare (getestet/aktiv); Storys nur für Facebook/Instagram.
+      // Vorausgewählte soziale Netzwerke (#188, #189): nur verfügbare (getestet/aktiv); Storys nur für Facebook/Instagram.
       // Veröffentlicht wird erst nach Freigabe durch eine Person – Automationen posten nie selbst in sozialen Netzwerken.
       const wanted = (c.socialTargets ?? []) as { connectionId: string; format: string }[];
       const avail = wanted.length ? await many<{ id: string; kind: string; name: string }>(`SELECT id, kind, name FROM connections WHERE id = ANY($1::uuid[]) AND deleted_at IS NULL AND status IN ('tested','active') AND kind IN ('facebook','instagram','threads','x','whatsapp','mastodon','bluesky')`, [wanted.map((w) => w.connectionId)]) : [];
@@ -547,7 +548,7 @@ async function runOutput(ctx: Ctx, node: GraphNode, data: Data, prev: StepRow | 
       const socialNames = socialTargets.map((id) => { const a = avail.find((x) => x.id === id)!; return socialFormats[id] ? `${a.name} (${socialFormats[id] === 'both' ? 'Beitrag und Story' : 'Story'})` : a.name; });
       let site: { id: string; name: string; status: string } | null = null;
       if (c.siteId) site = await one<any>(`SELECT id, name, status FROM wp_sites WHERE id = $1`, [c.siteId]);
-      if (direct && (!site || site.status !== 'active')) throw new PermanentError('Direkt veröffentlichen braucht eine gekoppelte Website als Zielkanal.');
+      if (direct && (!site || site.status !== 'active')) throw new PermanentError('Direkt veröffentlichen braucht eine gekoppelte Website.');
       const siteId = site && site.status !== 'revoked' ? site.id : null;
       const submit = (c.submit || direct) && !!body;
       const what = direct ? `direkt auf „${site!.name}“ veröffentlichen` : submit ? 'als Entwurf anlegen und zur Freigabe einreichen' : 'als Entwurf anlegen';
@@ -640,14 +641,14 @@ async function runOutput(ctx: Ctx, node: GraphNode, data: Data, prev: StepRow | 
       const link = r(c.link, 300);
       const safeLink = /^\/[A-Za-z0-9/_?=&.%-]*$/.test(link) ? link : null;
       const users = [...new Map([...(await usersWithRoles(c.roles ?? [])), ...(c.userIds?.length ? await many<any>(`SELECT id, email, name FROM users WHERE id = ANY($1::uuid[]) AND status = 'active'`, [c.userIds]) : [])].map((u) => [u.id, u])).values()];
-      if (ctx.test) return done({ ports: ['out'], info: `Testlauf: würde ${users.length} Person(en) benachrichtigen: „${title}“.`, log: { titel: title, text: body, link: safeLink, personen: users.length } });
+      if (ctx.test) return done({ ports: ['out'], info: `Testlauf: würde ${plural(users.length, 'Person', 'Personen')} benachrichtigen: „${title}“.`, log: { titel: title, text: body, link: safeLink, personen: users.length } });
       return tx(async (db) => {
         for (const u of users) {
           const n = await db.query<{ id: number }>(`INSERT INTO notifications (kind, title, body, link, user_id, category) VALUES ($1,$2,$3,$4,$5,'automation_message') RETURNING id`, [c.kind === 'warning' ? 'warning' : 'info', title.slice(0, 200), body.slice(0, 1000), safeLink, u.id]);
           // Push/E-Mail nach Wahl der Person (#191) – im selben Vorgang eingeplant, Rücknahme nimmt auch den Auftrag zurück
           await scheduleDelivery(n.rows[0].id, db);
         }
-        return done({ ports: ['out'], info: `${users.length} Person(en) benachrichtigt.`, log: { titel: title, personen: users.length } }, db);
+        return done({ ports: ['out'], info: `${plural(users.length, 'Person', 'Personen')} benachrichtigt.`, log: { titel: title, personen: users.length } }, db);
       });
     }
 
@@ -716,7 +717,7 @@ async function runOutput(ctx: Ctx, node: GraphNode, data: Data, prev: StepRow | 
       return done({ ports: ['out'], produced: { pressemitteilung_link: res.id ? `/presse/mitteilungen?id=${res.id}` : '/presse/mitteilungen' }, info: res.info, log: { betreff: subject, empfaenger: res.recipients, direkt: direct } });
     }
   }
-  throw new PermanentError(`Unbekannte Art von Ausgang.`);
+  throw new PermanentError(`Unbekannte Art von Aktion.`);
 }
 
 /* ------------------------------------------------------------------ Freigaben und Wartung */
@@ -747,7 +748,7 @@ export async function cancelOpenRuns(automationId: string, why: string, db: Quer
   return r.rowCount ?? 0;
 }
 
-/** Felder eines Eingangs als Beispieldaten (für Testläufe ohne eigene Eingaben). */
+/** Felder eines Auslösers als Beispieldaten (für Testläufe ohne eigene Eingaben). */
 export function examplePayload(input: InputRef): Data {
   const out: Data = {};
   for (const f of inputFields(input)) if (!['automation', 'lauf', 'jetzt'].includes(f.key)) out[f.key] = f.example;

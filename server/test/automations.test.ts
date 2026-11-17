@@ -246,7 +246,7 @@ describe('Automationen: Entwurf, Test, Aktivierung', () => {
     expect(w.json.open).toBe(2);
     const wd = await admin.get(`/automations/${w.json.id}`);
     expect(wd.json.validation.open).toHaveLength(2);
-    expect(wd.json.validation.errors.map((e: any) => e.message).join(' ')).toMatch(/Auslöser \(Eingang\) noch nicht gewählt.*Aktion \(Ausgang\) noch nicht gewählt/);
+    expect(wd.json.validation.errors.map((e: any) => e.message).join(' ')).toMatch(/Auslöser noch nicht gewählt.*Aktion noch nicht gewählt/);
     expect(wd.json.graph.nodes.find((n: any) => n.type === 'input').data.want.kinds).toEqual(['warnfeed']);
     const v = await editor.post(`/automations/${w.json.id}/validate`, { graph: wd.json.graph });
     expect(v.json.summary).toMatch(/^Wenn eine neue amtliche Warnung/);

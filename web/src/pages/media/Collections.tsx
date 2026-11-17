@@ -11,7 +11,8 @@ import { useAuth } from '../../lib/auth';
 import { fmtDate, fmtRelative } from '../../lib/format';
 import { DEFAULT_VALIDITY, ValidityPicker, validityPayload, type Validity } from './UploadLinks';
 
-export function NewCollectionDialog({ open, onClose, postId, defaultTitle }: { open: boolean; onClose: () => void; postId?: string; defaultTitle?: string }) {
+/** Neue Sammlung (mit Upload-Link). Vom Dashboard aus heißt der Dialog wie die Aktion: „Fotos sammeln“ (#257). */
+export function NewCollectionDialog({ open, onClose, postId, defaultTitle, title: dialogTitle }: { open: boolean; onClose: () => void; postId?: string; defaultTitle?: string; title?: string }) {
   const nav = useNavigate();
   const toastError = useErrorToast();
   const mayLinks = useAuth().can('media.links');
@@ -26,7 +27,7 @@ export function NewCollectionDialog({ open, onClose, postId, defaultTitle }: { o
     <Dialog
       open={open}
       onClose={onClose}
-      title="Neue Sammlung"
+      title={dialogTitle ?? 'Neue Sammlung'}
       footer={
         <>
           <Button onClick={onClose}>Abbrechen</Button>
@@ -124,7 +125,7 @@ export default function Collections() {
         <EmptyState
           icon="Images"
           title={term || status !== 'active' ? 'Keine passende Sammlung' : 'Noch keine Sammlung'}
-          text={term || status !== 'active' ? 'Suche oder Filter anpassen.' : 'Lege eine Sammlung an oder nutze im Beitrag „Fotos und Videos sammeln“.'}
+          text={term || status !== 'active' ? 'Suche oder Filter anpassen.' : 'Lege eine Sammlung an oder nutze im Beitrag „Fotos sammeln“.'}
           action={!term && status === 'active' && can('media.collections') && <Button variant="primary" icon="Plus" onClick={() => setCreate(true)}>Neue Sammlung</Button>}
         />
       )}

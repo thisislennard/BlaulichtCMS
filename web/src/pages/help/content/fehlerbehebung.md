@@ -12,7 +12,7 @@
 
 | Problem | Ursache und Lösung |
 |---|---|
-| Kein „Veröffentlichen“-Button | Fassung nicht freigegeben, kein Zielkanal gewählt oder Recht „Veröffentlichen“ fehlt. |
+| Kein „Veröffentlichen“-Button | Fassung nicht freigegeben, keine Website gewählt oder Recht „Veröffentlichen“ fehlt. |
 | „Wartet auf Abholung“ bleibt | Bridge holt nicht ab: in WordPress „Letzter Abruf“ prüfen, WP-Cron bzw. Host-Cron einrichten. |
 | „Fehlgeschlagen“ | Fehlermeldung lesen (z. B. Medien-Upload in WordPress verboten), beheben, „Erneut versuchen“. |
 | „Ergebnis unbekannt“ | Die Bridge hat abgeholt, aber nicht bestätigt. Beim nächsten Abruf wird automatisch abgeglichen. |

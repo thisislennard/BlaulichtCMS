@@ -37,7 +37,7 @@ import { wantKinds, type GuidedGraph } from './workflowModel';
 import type { CreateRefRequest } from './CreateRef';
 import { AutomationBadge, DirectBadge, Help, STEP_STATUS, inputSummary, outputSummary, useCatalog, useInputs, useOutputs, type Catalog, type InputDef, type OutputDef } from './shared';
 
-// Formulare für Ein-/Ausgänge erst laden, wenn jemand direkt aus dem Workflow einen anlegt
+// Formulare für Auslöser und Aktionen erst laden, wenn jemand direkt aus dem Workflow einen anlegt
 const CreateRefDialog = lazy(() => import('./CreateRef').then((m) => ({ default: m.CreateRefDialog })));
 
 /*
@@ -92,16 +92,16 @@ interface Ctx {
 const EditorCtx = createContext<Ctx | null>(null);
 
 const CATEGORY = {
-  input: { label: 'Eingang', chip: 'bg-flow-input-soft text-flow-input' },
+  input: { label: 'Auslöser', chip: 'bg-flow-input-soft text-flow-input' },
   process: { label: 'Verarbeitung', chip: 'bg-raised text-fg-muted' },
-  output: { label: 'Ausgang', chip: 'bg-flow-output-soft text-flow-output' },
+  output: { label: 'Aktion', chip: 'bg-flow-output-soft text-flow-output' },
 } as const;
 
 /** Anzeigename eines Knotens. */
 function nodeTitle(t: NodeType, d: any, ctx: Pick<Ctx, 'cat' | 'inputs' | 'outputs'>): string {
   if (d?.label) return d.label;
-  if (t === 'input') return ctx.inputs.get(d?.inputId)?.name ?? 'Eingang wählen';
-  if (t === 'output') return ctx.outputs.get(d?.outputId)?.name ?? 'Ausgang wählen';
+  if (t === 'input') return ctx.inputs.get(d?.inputId)?.name ?? 'Auslöser wählen';
+  if (t === 'output') return ctx.outputs.get(d?.outputId)?.name ?? 'Aktion wählen';
   return ctx.cat.nodeTypes.find((x) => x.type === t)?.label ?? t;
 }
 
@@ -111,11 +111,11 @@ function nodeSummary(t: NodeType, d: any, ctx: Pick<Ctx, 'cat' | 'inputs' | 'out
   switch (t) {
     case 'input': {
       const i = ctx.inputs.get(d?.inputId);
-      return i ? `${ctx.cat.inputKinds.find((k) => k.kind === i.kind)?.label} · ${inputSummary(i, ctx.cat)}` : 'Noch kein Eingang gewählt';
+      return i ? `${ctx.cat.inputKinds.find((k) => k.kind === i.kind)?.label} · ${inputSummary(i, ctx.cat)}` : 'Noch kein Auslöser gewählt';
     }
     case 'output': {
       const o = ctx.outputs.get(d?.outputId);
-      return o ? `${ctx.cat.outputKinds.find((k) => k.kind === o.kind)?.label} · ${outputSummary(o, ctx.cat)}` : 'Noch kein Ausgang gewählt';
+      return o ? `${ctx.cat.outputKinds.find((k) => k.kind === o.kind)?.label} · ${outputSummary(o, ctx.cat)}` : 'Noch keine Aktion gewählt';
     }
     case 'condition': {
       const rules = (d?.rules ?? []) as any[];
@@ -176,7 +176,7 @@ function FlowNode({ id, data, selected }: NodeProps<FNode>) {
       </div>
       {data.t !== 'input' && (
         <>
-          <Handle type="target" position={Position.Left} id="in" style={{ top: 22 }} aria-label={`Eingang von „${title}“`} isConnectable={!ctx.readOnly} />
+          <Handle type="target" position={Position.Left} id="in" style={{ top: 22 }} aria-label={`Eingehender Anschluss von „${title}“`} isConnectable={!ctx.readOnly} />
           <span className="absolute left-2 top-[34px] sr-only">ein</span>
         </>
       )}
@@ -184,7 +184,7 @@ function FlowNode({ id, data, selected }: NodeProps<FNode>) {
         {ps.map((p) => (
           <div key={p.id} className="relative flex justify-end items-center h-6 pr-3.5 text-meta text-fg-muted">
             {p.label}
-            <Handle type="source" position={Position.Right} id={p.id} aria-label={`Ausgang „${p.label}“ von „${title}“`} isConnectable={!ctx.readOnly} />
+            <Handle type="source" position={Position.Right} id={p.id} aria-label={`Zweig „${p.label}“ von „${title}“`} isConnectable={!ctx.readOnly} />
           </div>
         ))}
       </div>
@@ -359,7 +359,7 @@ function NodeList({ nodes, edges, onSelect, onConnect, onDisconnect, onRemove, r
                       </span>
                     ))}
                     {!readOnly && candidates.length > 0 && (
-                      <select aria-label={`„${title(n.id)}“, Ausgang „${p.label}“: verbinden mit …`} className="h-7 text-sm bg-bg border border-line rounded-chip px-1.5" value="" onChange={(e) => e.target.value && onConnect({ source: n.id, sourceHandle: p.id, target: e.target.value, targetHandle: 'in' })}>
+                      <select aria-label={`„${title(n.id)}“, Zweig „${p.label}“: verbinden mit …`} className="h-7 text-sm bg-bg border border-line rounded-chip px-1.5" value="" onChange={(e) => e.target.value && onConnect({ source: n.id, sourceHandle: p.id, target: e.target.value, targetHandle: 'in' })}>
                         <option value="">verbinden mit …</option>
                         {candidates.map((c) => (
                           <option key={c.id} value={c.id}>
@@ -524,7 +524,7 @@ function EditorInner({ a, cat, inputs, outputs }: { a: AutomationDetail; cat: Ca
     setNodes(f.nodes);
     setEdges(f.edges);
   };
-  /** Eingang/Ausgang aus dem Seitenleisten-Panel direkt anlegen und in den Knoten einsetzen. */
+  /** Auslöser/Aktion aus dem Seitenleisten-Panel direkt anlegen und in den Knoten einsetzen. */
   const createForNode = (n: GNode) => {
     const { want, ...rest } = n.data ?? {};
     setCreateReq({ req: { type: n.type === 'input' ? 'input' : 'output', kinds: wantKinds(n.data), preset: want }, assign: (id) => updateData(n.id, { ...rest, [n.type === 'input' ? 'inputId' : 'outputId']: id }) });
@@ -638,7 +638,7 @@ function EditorInner({ a, cat, inputs, outputs }: { a: AutomationDetail; cat: Ca
 
   const palette: { title: string; manage?: { to: string; label: string }; list: PaletteItem[] }[] = [
     {
-      title: 'Eingänge',
+      title: 'Auslöser',
       manage: { to: '/workflows/ausloeser', label: 'Verwalten →' },
       list: inputs.map((i) => ({ key: `in:${i.id}`, type: 'input', label: i.name, hint: cat.inputKinds.find((k) => k.kind === i.kind)?.label ?? i.kind, icon: cat.inputKinds.find((k) => k.kind === i.kind)?.icon ?? 'Zap', data: { inputId: i.id } })),
     },
@@ -647,7 +647,7 @@ function EditorInner({ a, cat, inputs, outputs }: { a: AutomationDetail; cat: Ca
       list: cat.nodeTypes.filter((t) => t.category === 'process').map((t) => ({ key: `p:${t.type}`, type: t.type as NodeType, label: t.label, hint: t.description, icon: t.icon, data: {} })),
     },
     {
-      title: 'Ausgänge',
+      title: 'Aktionen',
       manage: { to: '/workflows/aktionen', label: 'Verwalten →' },
       list: outputs.map((o) => ({ key: `out:${o.id}`, type: 'output', label: o.name, hint: cat.outputKinds.find((k) => k.kind === o.kind)?.label ?? o.kind, icon: cat.outputKinds.find((k) => k.kind === o.kind)?.icon ?? 'Send', data: { outputId: o.id } })),
     },
@@ -711,7 +711,7 @@ function EditorInner({ a, cat, inputs, outputs }: { a: AutomationDetail; cat: Ca
             <RunsCard automationId={a.id} onOpen={setRunId} />
 
             {a.versions.length > 0 && (
-              <Card title="Versionen" subtitle="Jede Aktivierung speichert den getesteten Stand samt Ein- und Ausgängen.">
+              <Card title="Versionen" subtitle="Jede Aktivierung speichert den getesteten Stand samt Auslösern und Aktionen.">
                 <ul className="m-0 p-0 list-none flex flex-col gap-1 text-sm">
                   {a.versions.map((v) => (
                     <li key={v.version} className="flex flex-wrap gap-2 items-center">
@@ -756,7 +756,7 @@ function EditorInner({ a, cat, inputs, outputs }: { a: AutomationDetail; cat: Ca
                   disabled={!canActivate}
                   title={dirty ? 'Erst speichern' : !a.tested ? 'Erst erfolgreich testen' : undefined}
                   onClick={async () => {
-                    if (directMarked && !(await ask({ title: 'Mit Direktversand aktivieren?', text: `${directMarked} Ausgang/Ausgänge veröffentlichen bzw. versenden ohne menschliche Freigabe. Das wird auditiert und der Administration gemeldet.`, confirmLabel: 'Aktivieren' }))) return;
+                    if (directMarked && !(await ask({ title: 'Mit Direktversand aktivieren?', text: `${directMarked === 1 ? 'Eine Aktion veröffentlicht bzw. versendet' : `${directMarked} Aktionen veröffentlichen bzw. versenden`} ohne menschliche Freigabe. Das wird auditiert und der Administration gemeldet.`, confirmLabel: 'Aktivieren' }))) return;
                     act(() => post(`/automations/${a.id}/activate`), 'Aktiviert');
                   }}
                 >
@@ -838,7 +838,7 @@ function EditorInner({ a, cat, inputs, outputs }: { a: AutomationDetail; cat: Ca
           )}
           <Help title="Editor bedienen" anchor={mode === 'guided' ? 'gefuehrt-wenn-nur-wenn-dann' : 'erweiterter-editor'}>
             Geführt: Auslöser, optionale Bedingungen und Aktionen in drei Schritten. Erweitert: alle Bausteine auf der Fläche.
-            Fläche: Bausteine aus der Palette ziehen, Punkte rechts (Ausgänge) mit dem Punkt links (Eingang) des nächsten Knotens verbinden, Knoten anklicken zum Einstellen. Entf löscht, Strg+Z/Strg+Y macht rückgängig, Strg+S speichert. Liste: dasselbe ohne Maus über „verbinden mit …“.
+            Fläche: Bausteine aus der Palette ziehen, Punkte rechts (Zweige) mit dem Punkt links (Anschluss) des nächsten Knotens verbinden, Knoten anklicken zum Einstellen. Entf löscht, Strg+Z/Strg+Y macht rückgängig, Strg+S speichert. Liste: dasselbe ohne Maus über „verbinden mit …“.
           </Help>
           {Object.keys(steps).length > 0 && (
             <Button size="sm" variant="ghost" icon="X" onClick={() => setSteps({})}>
@@ -919,7 +919,7 @@ function EditorInner({ a, cat, inputs, outputs }: { a: AutomationDetail; cat: Ca
                     <Panel position="top-center" className="!top-1/3">
                       <div className="text-center text-sm text-fg-muted bg-card border border-line rounded-card px-5 py-4 max-w-[340px]">
                         <Icon name="Workflow" size={22} className="mx-auto mb-2" />
-                        Einen Eingang, die Verarbeitung und einen Ausgang aus der Palette auf die Fläche ziehen und verbinden.
+                        Einen Auslöser, die Verarbeitung und eine Aktion aus der Palette auf die Fläche ziehen und verbinden.
                       </div>
                     </Panel>
                   )}
@@ -1060,18 +1060,18 @@ function DirectDialog({ a, onClose, onDone }: { a: AutomationDetail; onClose: ()
       {enable ? (
         <div className="flex flex-col gap-3 text-sm">
           <Notice tone="warning" title="Ohne Vier-Augen-Prinzip">
-            Markierte Ausgänge dieses Workflows veröffentlichen Banner und Beiträge auf der Website bzw. senden E-Mails an externe Empfänger, ohne dass ein Mensch freigibt.
+            Markierte Aktionen dieses Workflows veröffentlichen Banner und Beiträge auf der Website bzw. senden E-Mails an externe Empfänger, ohne dass ein Mensch freigibt.
           </Notice>
           <ul className="m-0 pl-5 flex flex-col gap-1 text-fg-muted">
             <li>Nur mit dem Recht „Workflows direkt veröffentlichen lassen“ und frischer Passwortbestätigung.</li>
             <li>Voraussetzung: ein erfolgreicher Testlauf des aktuellen Stands{a.tested ? ' (vorhanden)' : ' – noch nicht vorhanden'}.</li>
-            <li>Wirksam erst mit einer neu aktivierten Version, die markierte Ausgänge enthält.</li>
+            <li>Wirksam erst mit einer neu aktivierten Version, die markierte Aktionen enthält.</li>
             <li>Jede Änderung wird auditiert und der Administration als Sicherheitsmeldung gemeldet.</li>
             <li>Entziehen oder Deaktivieren wirkt sofort – auch für bereits laufende Abläufe.</li>
           </ul>
         </div>
       ) : (
-        <p className="m-0 text-sm">Markierte Ausgänge legen ab sofort wieder nur Entwürfe an bzw. fordern eine Freigabe an.</p>
+        <p className="m-0 text-sm">Markierte Aktionen legen ab sofort wieder nur Entwürfe an bzw. fordern eine Freigabe an.</p>
       )}
     </Dialog>
   );

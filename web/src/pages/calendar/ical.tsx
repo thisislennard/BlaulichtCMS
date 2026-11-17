@@ -5,7 +5,7 @@ import { Badge, Button, cx, EmptyState, FieldWrap, Input, Notice, Select, Spinne
 import { CopyButton, Dialog, OneTimeSecret, useConfirm, useErrorToast, useToast } from '../../components/ui/overlays';
 import { HelpTip } from '../../components/ui/HelpTip';
 import { Icon } from '../../components/ui/Icon';
-import { fmtDateTime, fmtRelative } from '../../lib/format';
+import { fmtDateTime, fmtRelative, plural } from '../../lib/format';
 import type { CalendarCategory } from './model';
 
 /**
@@ -104,7 +104,7 @@ function SourceForm({ source, categories, onDone, onCancel }: { source?: Source;
           </Button>
           {tested && test && (
             <Badge tone="success">
-              Lesbar: {test.events} Termin(e){test.recurring ? `, davon ${test.recurring} Serie(n)` : ''}
+              Lesbar: {plural(test.events, 'Termin', 'Termine')}{test.recurring ? `, davon ${plural(test.recurring, 'Serie', 'Serien')}` : ''}
             </Badge>
           )}
         </div>
@@ -184,9 +184,9 @@ function SourceLog({ id }: { id: string }) {
           <span className="font-mono text-fg-muted shrink-0">{fmtDateTime(l.at)}</span>
           {l.ok ? <Badge tone="success">ok</Badge> : <Badge tone="error">Fehler</Badge>}
           <span>
-            {l.ok ? (l.not_modified ? 'unverändert' : `${l.events} Termin(e): +${l.added} neu, ${l.changed} geändert, ${l.removed} entfernt`) : l.message}
+            {l.ok ? (l.not_modified ? 'unverändert' : `${plural(l.events, 'Termin', 'Termine')}: +${l.added} neu, ${l.changed} geändert, ${l.removed} entfernt`) : l.message}
             {l.trigger !== 'schedule' && <span className="text-fg-muted"> · {l.trigger === 'manual' ? 'von Hand' : 'beim Anlegen'}</span>}
-            {l.ok && l.warnings?.length > 0 && <span className="text-warn"> · {l.warnings.length} Hinweis(e): {l.warnings[0]}</span>}
+            {l.ok && l.warnings?.length > 0 && <span className="text-warn"> · {plural(l.warnings.length, 'Hinweis', 'Hinweise')}: {l.warnings[0]}</span>}
           </span>
         </li>
       ))}
@@ -208,7 +208,7 @@ export function SourcesDialog({ categories, onClose }: { categories: CalendarCat
     setBusy(s.id);
     try {
       const r = await post<any>(`/calendar/sources/${s.id}/refresh`);
-      toast({ tone: 'success', title: `„${s.name}“ abgerufen`, text: `${r.events} Termin(e): +${r.added} neu, ${r.changed} geändert, ${r.removed} entfernt` });
+      toast({ tone: 'success', title: `„${s.name}“ abgerufen`, text: `${plural(r.events, 'Termin', 'Termine')}: +${r.added} neu, ${r.changed} geändert, ${r.removed} entfernt` });
     } catch (e) {
       toastError(e);
     } finally {
@@ -234,7 +234,7 @@ export function SourcesDialog({ categories, onClose }: { categories: CalendarCat
     }
   };
   return (
-    <Dialog open onClose={onClose} title="iCal-Kalender einlesen" width={760} footer={<Button onClick={onClose}>Fertig</Button>}>
+    <Dialog open onClose={onClose} title="Externe Kalender einlesen" width={760} footer={<Button onClick={onClose}>Fertig</Button>}>
       <div className="flex flex-col gap-4">
         <p className="m-0 text-sm text-fg-muted">Externe Kalender (Outlook, Google, Wehr-Kalender) werden regelmäßig abgerufen. Eingelesene Termine sind schreibgeschützt; Änderungen und gelöschte Termine der Quelle werden beim nächsten Abruf übernommen.</p>
         {!q.data ? (
@@ -252,7 +252,7 @@ export function SourcesDialog({ categories, onClose }: { categories: CalendarCat
                       {s.active ? s.lastError ? <Badge tone="error">Fehler</Badge> : <Badge tone="success">aktiv</Badge> : <Badge>pausiert</Badge>}
                     </span>
                     <span className="text-meta text-fg-muted">
-                      <Icon name="Lock" size={12} className="inline -mt-0.5" /> {s.host} · {s.eventCount} Termin(e) · {s.categoryName ?? 'ohne Kategorie'} · {INTERVALS.find((i) => i.value === s.intervalMin)?.label ?? `alle ${s.intervalMin} Min.`} · zuletzt erfolgreich {s.lastSuccessAt ? fmtRelative(s.lastSuccessAt) : '–'}
+                      <Icon name="Lock" size={12} className="inline -mt-0.5" /> {s.host} · {plural(s.eventCount, 'Termin', 'Termine')} · {s.categoryName ?? 'ohne Kategorie'} · {INTERVALS.find((i) => i.value === s.intervalMin)?.label ?? `alle ${s.intervalMin} Min.`} · zuletzt erfolgreich {s.lastSuccessAt ? fmtRelative(s.lastSuccessAt) : '–'}
                     </span>
                     {s.lastError && <span className="text-meta text-err flex items-center gap-1"><Icon name="AlertTriangle" size={12} /> {s.lastError}</span>}
                   </div>
@@ -395,7 +395,7 @@ export function SubscribeDialog({ categories, onClose }: { categories: CalendarC
                 );
               })}
             </div>
-            <p className="m-0 text-meta text-fg-muted">{curCats.length ? `${curCats.length} Kategorie(n) gewählt.` : 'Keine Auswahl = alle Termine (auch ohne Kategorie).'}</p>
+            <p className="m-0 text-meta text-fg-muted">{curCats.length ? `${plural(curCats.length, 'Kategorie', 'Kategorien')} gewählt.` : 'Keine Auswahl = alle Termine (auch ohne Kategorie).'}</p>
             <Switch checked={curDesc} onChange={(v) => saveSettings(curCats, v)} label="Beschreibung und Ort mitsenden" description="Nur einschalten, wenn die Beschreibungen nichts Vertrauliches enthalten." />
           </fieldset>
           <div className="flex gap-2 flex-wrap justify-end">

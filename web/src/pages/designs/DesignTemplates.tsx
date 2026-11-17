@@ -73,7 +73,7 @@ export function TemplateMetaDialog({ tpl, onClose, onSaved }: { tpl?: Partial<Te
     };
     try {
       const id = editing ? (await patch(`/design-templates/${tpl!.id}`, body), tpl!.id!) : (await post<{ id: string }>('/design-templates', body)).id;
-      toast({ tone: 'success', title: editing ? 'Vorlage gespeichert' : 'Vorlage angelegt' });
+      toast({ tone: 'success', title: editing ? 'Designvorlage gespeichert' : 'Designvorlage angelegt' });
       onSaved?.(id, v.kind);
       onClose();
     } catch (e) {
@@ -86,7 +86,7 @@ export function TemplateMetaDialog({ tpl, onClose, onSaved }: { tpl?: Partial<Te
       open
       onClose={onClose}
       width={620}
-      title={editing ? 'Vorlage bearbeiten' : 'Neue Designvorlage'}
+      title={editing ? 'Designvorlage bearbeiten' : 'Neue Designvorlage'}
       footer={
         <>
           <Button onClick={onClose}>Abbrechen</Button>
@@ -99,7 +99,7 @@ export function TemplateMetaDialog({ tpl, onClose, onSaved }: { tpl?: Partial<Te
       <div className="flex flex-col gap-4">
         {!editing && (
           <SegmentedControl
-            label="Art der Vorlage"
+            label="Art der Designvorlage"
             value={v.kind}
             onChange={(kind) => setV({ ...v, kind })}
             options={[
@@ -135,7 +135,7 @@ export function TemplateMetaDialog({ tpl, onClose, onSaved }: { tpl?: Partial<Te
         <FieldWrap label="Beschreibung" htmlFor="dt-desc">
           <Textarea id="dt-desc" rows={3} value={v.description} onChange={(e) => setV({ ...v, description: e.target.value })} maxLength={2000} />
         </FieldWrap>
-        <FieldWrap label="Nutzungshinweis" htmlFor="dt-note" help="Steht gut sichtbar bei der Vorlage, z. B. „Nur unverändert verwenden“ oder „Nicht für Werbung“.">
+        <FieldWrap label="Nutzungshinweis" htmlFor="dt-note" help="Steht gut sichtbar bei der Designvorlage, z. B. „Nur unverändert verwenden“ oder „Nicht für Werbung“.">
           <Textarea id="dt-note" rows={2} value={v.usageNote} onChange={(e) => setV({ ...v, usageNote: e.target.value })} maxLength={1000} />
         </FieldWrap>
         <FieldWrap label="Schlagworte" htmlFor="dt-tags" help="Mit Komma trennen; helfen bei der Suche.">
@@ -201,7 +201,7 @@ function CategoriesDialog({ onClose }: { onClose: () => void }) {
               ) : (
                 <>
                   <span className="flex-1">
-                    {c.name} <span className="text-fg-muted text-sm">· {c.template_count} {c.template_count === 1 ? 'Vorlage' : 'Vorlagen'}</span>
+                    {c.name} <span className="text-fg-muted text-sm">· {c.template_count} {c.template_count === 1 ? 'Designvorlage' : 'Designvorlagen'}</span>
                   </span>
                   <Button size="sm" iconOnly icon="Pencil" aria-label={`${c.name} umbenennen`} onClick={() => setEdit({ ...edit, [c.id]: c.name })} />
                   <Button
@@ -210,7 +210,7 @@ function CategoriesDialog({ onClose }: { onClose: () => void }) {
                     icon="Trash2"
                     aria-label={`${c.name} löschen`}
                     onClick={async () => {
-                      if (await confirm({ title: `Kategorie „${c.name}“ löschen?`, text: 'Die Vorlagen bleiben erhalten und stehen danach ohne Kategorie in der Bibliothek.', confirmLabel: 'Löschen', danger: true })) run(() => del(`/design-template-categories/${c.id}`));
+                      if (await confirm({ title: `Kategorie „${c.name}“ löschen?`, text: 'Die Designvorlagen bleiben erhalten und stehen danach ohne Kategorie in der Bibliothek.', confirmLabel: 'Löschen', danger: true })) run(() => del(`/design-template-categories/${c.id}`));
                     }}
                   />
                 </>
@@ -340,7 +340,7 @@ export default function DesignTemplates() {
   return (
     <div className="flex flex-col gap-5">
       <PageHeader
-        subtitle="Interne Bibliothek mit Logos, Layouts und Vorlagen zum Herunterladen – mit Nutzungshinweisen und älteren Versionen."
+        subtitle="Interne Bibliothek mit Logos, Layouts und Bildvorlagen zum Herunterladen – mit Nutzungshinweisen und älteren Versionen."
         actions={
           can('templates.manage') && (
             <>
@@ -351,14 +351,14 @@ export default function DesignTemplates() {
                 Schriften
               </Button>
               <Button variant="primary" icon="Plus" onClick={() => setCreate(true)}>
-                Neue Vorlage
+                Neue Designvorlage
               </Button>
             </>
           )
         }
       />
       <div className="flex flex-wrap items-end gap-3">
-        <Input type="search" aria-label="Vorlagen durchsuchen" placeholder="Titel, Beschreibung, Schlagwort …" value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-[320px]" />
+        <Input type="search" aria-label="Designvorlagen durchsuchen" placeholder="Titel, Beschreibung, Schlagwort …" value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-[320px]" />
         <Select aria-label="Kategorie" value={category} onChange={(e) => setCategory(e.target.value)} className="max-w-[220px]">
           <option value="">Alle Kategorien</option>
           {(categories.data ?? []).map((c) => (
@@ -383,13 +383,13 @@ export default function DesignTemplates() {
         </Select>
       </div>
       {q.isLoading && <SkeletonRows rows={4} />}
-      {q.error && <ErrorBox title="Vorlagen konnten nicht geladen werden">{(q.error as Error).message}</ErrorBox>}
+      {q.error && <ErrorBox title="Designvorlagen konnten nicht geladen werden">{(q.error as Error).message}</ErrorBox>}
       {list && list.length === 0 && (
         <EmptyState
           icon="Palette"
-          title={filtered ? 'Keine passende Vorlage' : 'Noch keine Designvorlage'}
-          text={filtered ? 'Suche oder Filter anpassen.' : 'Lege Logos, Layouts und Vorlagen hier ab, damit alle dieselben aktuellen Dateien verwenden.'}
-          action={!filtered && can('templates.manage') && <Button variant="primary" icon="Plus" onClick={() => setCreate(true)}>Neue Vorlage</Button>}
+          title={filtered ? 'Keine passende Designvorlage' : 'Noch keine Designvorlage'}
+          text={filtered ? 'Suche oder Filter anpassen.' : 'Lege Logos, Layouts und Bildvorlagen hier ab, damit alle dieselben aktuellen Dateien verwenden.'}
+          action={!filtered && can('templates.manage') && <Button variant="primary" icon="Plus" onClick={() => setCreate(true)}>Neue Designvorlage</Button>}
         />
       )}
       {list && list.length > 0 && (

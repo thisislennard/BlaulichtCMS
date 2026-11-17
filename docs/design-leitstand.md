@@ -169,7 +169,7 @@ mit passenden Rechten sichtbar. Höchstens **6 Bereiche** mit je höchstens **7 
 | Ansichtsschalter | `SegmentedControl` (aktiv `bg-raised`), auch für reine Symbole (Kacheln/Liste). |
 | Schrittleiste (Warnentwurf, Verbindung, geführter Workflow) | Nummern neutral (`bg-raised`), aktiver Schritt `bg-raised` + fett + rot umrandete Nummer; erledigt grün mit Haken. |
 | `FilePickButton` | Dateiauswahl als Knopf mit Dateiname/Vorschau und „Entfernen“ – nie das native Dateifeld zeigen; `id` für `FieldWrap htmlFor`. |
-| `Rev` | Fassungsnummer als `F2` in Mono, ausgeschrieben im Tooltip. In ganzen Sätzen bleibt „Fassung 2“. |
+| `Rev` | Fassungsnummer als `F2` in Mono, ausgeschrieben im Tooltip. In ganzen Sätzen bleibt „Fassung 2“. Nie neben Einsatzstichwörtern (Einsatzliste): dort „Fassung 2“, weil `F1` wie das Stichwort „F 1“ gelesen wird. |
 | `Notice` | Standard `info` ist neutral (`bg-raised`). Gelb/Rot/Grün nur für Warnung, Fehler, Erfolg. |
 | `Avatar` | Neutral. `strong` (dunkel gefüllt) nur für das eigene Konto in der Kopfzeile. |
 | Aktive Navigation | Reiter: rote 2-px-Linie. Unternavigation, Schublade, Einstellungs- und Hilfe-Navigation: `bg-raised` + fett + rotes Symbol. |
@@ -265,12 +265,12 @@ Bei neuen oder überarbeiteten Seiten:
 
 - Fläche mit React Flow; alle Farben über `web/src/pages/automations/flow.css`, das die `--xy-*`-Variablen auf Tokens
   legt (Hell/Dunkel ohne eigene Werte). Raster: `--bc-flow-grid`.
-- Knoten = kleine Karte (`rounded-node`, Linie, kein Schatten), oben Mono-Label der Kategorie **EINGANG /
-  VERARBEITUNG / AUSGANG** mit Symbolfläche. Kategorie-Tokens `--bc-flow-input(-soft)` und `--bc-flow-output(-soft)`
+- Knoten = kleine Karte (`rounded-node`, Linie, kein Schatten), oben Mono-Label der Kategorie **AUSLÖSER /
+  VERARBEITUNG / AKTION** mit Symbolfläche. Kategorie-Tokens `--bc-flow-input(-soft)` und `--bc-flow-output(-soft)`
   (gedecktes Blau bzw. Violett, Hell und Dunkel) färben **nur** die Symbolfläche – die Kategorie steht immer auch als
   Text da. Verarbeitung bleibt neutral (`bg-raised`). Kein farbiger Seitenstreifen.
 - Gewählt: roter Rahmen + `shadow-selected`; Fehler: Rahmen `border-err` **und** „n Fehler“ mit Symbol; Direktversand:
-  Badge „Direkt“ (Gelb, mit Text). Ports tragen Beschriftungen („trifft zu“, „freigegeben“ …), Verbindungen sind
+  Badge „Direkt“ (Gelb, mit Text). Zweige (Anschlüsse) tragen Beschriftungen („trifft zu“, „freigegeben“ …), Verbindungen sind
   geschwungen mit Pfeil, Beschriftung in Mono.
 - Werkzeugleiste oben links (Ansicht zurücksetzen, Einpassen, Automatisch anordnen, Auswahl fokussieren, Rückgängig,
   Wiederholen, Löschen), Zoom unten links, Übersichtskarte unten rechts. Die Listenansicht ist die gleichwertige
@@ -287,3 +287,44 @@ Diese Stellen behalten feste Farben, weil sie unabhängig vom Farbmodus gleich a
 | A4-Aushang (`PrintSheet.tsx`) und Druck der Hilfe | Schwarz auf Weiß für jeden Drucker |
 | Darstellungs-Vorschau (`admin/shared.tsx`) | Zeigt die Farbmodi selbst; Werte = `tokens.css` |
 | Website-Banner-Vorschau | Zeigt das Aussehen auf der Website; Werte = Bridge-Stylesheet, als `--bc-site-*` hinterlegt |
+
+## 12. Begriffe (verbindlich)
+
+Ein Wort hat in BlaulichtCMS genau eine Bedeutung (#257). Oberfläche, Hilfe, Benachrichtigungen, Rechte-Katalog und
+Dokumentation halten sich daran; für Nutzende steht dieselbe Liste in der Hilfe unter „Begriffe“
+(`web/src/pages/help/content/begriffe.md`). `server/test/navigation.test.ts` meldet die verbotenen Schreibweisen.
+
+| Begriff | Bedeutung | Nicht verwenden |
+|---|---|---|
+| **Website** | über die BlaulichtCMS Bridge gekoppelte WordPress-Website; im Beitrag das Ziel „Veröffentlichen auf“ | Kanal, Zielkanal |
+| **Soziale Netzwerke** | Facebook, Instagram, Threads, X, Mastodon, Bluesky, WhatsApp-Kanal (Eigenname des Dienstes) | soziale Kanäle |
+| **Veröffentlichungsziele** | Website und soziale Netzwerke zusammen | Kanäle, Zielkanäle |
+| **Verbindung** | Kopplung mit einem externen Dienst – eingehend (FE2, Feuersoftware Connect, amtliche Warnungen) oder zum Veröffentlichen (soziale Netzwerke). Websites haben ihre eigene Seite. | Kanal |
+| **Update-Stufe** | „Test“ oder „Stabil“ je Website für Bridge-Updates | Update-Kanal |
+| **Auslöser** | Workflow-Baustein, der einen Lauf startet (Alarm, Warnung, Termin, Zeitplan, Start von Hand …) | Eingang |
+| **Aktion** | Workflow-Baustein, der etwas tut (Banner, Beitrag, E-Mail, Benachrichtigung …) | Ausgang |
+| **Zweig** | Anschluss eines Knotens im Workflow-Editor, z. B. „trifft zu“, „freigegeben“ | Ausgang |
+| **Eingang** | nur für Eingegangenes: Mail im Presse-Postfach, FE2-Eingang, Upload („Eingang“ in den Medien), „Eingang bestätigt“ beim Warnentwurf | für Workflow-Bausteine |
+| **Beitragsvorlage** | Vorlage für wiederkehrende Beiträge (Einrichtung → Beitragsvorlagen) | „Vorlage“ ohne Zusatz |
+| **Designvorlage** / **Bildvorlage** | Datei der internen Bibliothek (Logo, Layout, Plakat) bzw. befüllbare Designvorlage, aus der Bilder entstehen | „Vorlage“ ohne Zusatz |
+| **Übergabe-Vorlage** | Vorlage für die Übergabe eines Warnentwurfs (Stichwörter & Regeln) | „Vorlage“ ohne Zusatz |
+| **Workflow-Vorlage** / **Dashboard-Vorlage** | fertiger Ablauf für einen neuen Workflow bzw. Dashboard-Anordnung für alle oder eine Rolle | „Vorlage“ ohne Zusatz |
+| **Textbaustein** / **Mustertext** | wiederkehrende Formulierung für Presseantworten bzw. Startpunkt für Datenschutzerklärung und KI-Anfrage | Vorlage |
+| **Upload-Link** | befristeter, widerrufbarer Link zum Hochladen ohne Konto | Foto-Link |
+| **Upload-Seite** | öffentliche Seite eines Upload-Links; Standard unter Einrichtung → Upload-Seite gestalten | Gestaltung |
+| **Fotos sammeln** | die Aktion, die eine Sammlung samt Upload-Link anlegt (Dashboard, Beitrag, Suche) | Medien sammeln, Fotos und Videos sammeln |
+| **Sammlung** | Ablage für Fotos und Videos, eigenständig oder zu einem Beitrag; unterteilt in Ordner | |
+| **Fassung** | unveränderlicher Stand eines Beitrags oder Eintrags; `F2` nur über `Rev`, neben Stichwörtern ausgeschrieben („Fassung 2“) | `F1` neben einem Stichwort |
+| **Stichwort** | Einsatzstichwort wie „F 1“ oder „B 2“ samt Aliasen | |
+| **Einsatzmeldung** / **Einsatzentwurf** / **Einsatzliste** | Meldung aus FE2 oder Feuersoftware Connect (intern) / daraus vorgeschlagener interner Beitragsentwurf / öffentliche Liste vergangener Einsätze auf der Website | „Einsatz“ allein für eine dieser Bedeutungen |
+| **Externe Kalender einlesen** / **Kalender abonnieren** | Kalender anderer Programme (iCal) lesen bzw. den eigenen Kalender als Abo-Link ausgeben | „iCal-Kalender“ als Knopf, „Abonnieren“ allein |
+
+Weitere Regeln:
+
+- **Mengen** mit `plural(n, 'Datei', 'Dateien')` (`web/src/lib/format.ts`, `server/src/lib/text.ts`) – keine
+  Behelfsplurale wie „Datei(en)“ oder „1 Uploads“.
+- **Menüpfade in Hinweisen** („unter Einrichtung → Websites“) mit `navTrail(id)` bzw. in der Hilfe mit den tatsächlichen
+  Menübezeichnungen (siehe §5).
+- **„Kanal“** nur im Eigennamen „WhatsApp-Kanal“ und in WhatsApp-eigenen Bezeichnungen (Kanaladresse); im
+  Betriebshandbuch außerdem für die Update-Quelle des Installationsskripts (`BLAULICHTCMS_UPDATE_CHANNEL`).
+

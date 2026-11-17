@@ -2,11 +2,11 @@ BlaulichtCMS ist das Redaktionssystem für Öffentlichkeitsarbeit und Krisenkomm
 
 ## Der Ablauf in fünf Schritten
 
-1. **Sammeln:** Im Beitrag „Fotos und Videos sammeln“ wählen. BlaulichtCMS erzeugt eine Sammlung und einen Upload-Link mit QR-Code. Wer den Link hat, kann ohne Konto hochladen.
+1. **Sammeln:** Im Beitrag „Fotos sammeln“ wählen. BlaulichtCMS erzeugt eine Sammlung und einen Upload-Link mit QR-Code. Wer den Link hat, kann ohne Konto hochladen.
 2. **Prüfen:** Jede Datei landet zuerst in der Quarantäne. BlaulichtCMS prüft Dateityp und Inhalt und erzeugt eine Vorschau sowie eine öffentliche Fassung ohne Standortdaten.
 3. **Sichten:** In der Sammlung Datei für Datei „Auswählen“ oder „Überspringen“ – am Handy auch per Wischen.
 4. **Redigieren und freigeben:** Text schreiben, ausgewählte Medien übernehmen, zur Freigabe einreichen. Die Freigabe gilt genau für diese Fassung.
-5. **Veröffentlichen:** Mit Zielkanal (z. B. eure WordPress-Website) beauftragt eine berechtigte Person die Veröffentlichung. Die Website meldet die veröffentlichte Adresse zurück – sie steht dann im Beitrag und im Dashboard.
+5. **Veröffentlichen:** Mit Website (eure gekoppelte WordPress-Website) beauftragt eine berechtigte Person die Veröffentlichung. Die Website meldet die veröffentlichte Adresse zurück – sie steht dann im Beitrag und im Dashboard.
 
 > **Gut zu wissen:** BlaulichtCMS funktioniert auch ganz ohne Website. Beiträge lassen sich intern schreiben, prüfen und freigeben. Siehe [Ohne Website arbeiten](/hilfe/ohne-website).
 
@@ -14,13 +14,14 @@ BlaulichtCMS ist das Redaktionssystem für Öffentlichkeitsarbeit und Krisenkomm
 
 | Begriff | Bedeutung |
 |---|---|
-| **Sammlung** | Ein Ordner für Fotos und Videos – eigenständig oder zu einem Beitrag. |
+| **Sammlung** | Eine Ablage für Fotos und Videos – eigenständig oder zu einem Beitrag. **Fotos sammeln** legt sie samt Upload-Link an. |
 | **Upload-Link** | Befristeter, widerrufbarer Link, über den Personen ohne Konto in genau eine Sammlung hochladen. |
-| **Fassung** | Ein unveränderlicher Stand eines Beitrags (Text, Medien, Zielkanal). Jede Änderung erzeugt eine neue Fassung. |
+| **Fassung** | Ein unveränderlicher Stand eines Beitrags (Text, Medien, Veröffentlichungsziele). Jede Änderung erzeugt eine neue Fassung. |
 | **Freigabe** | Die Entscheidung einer berechtigten Person für genau eine Fassung. |
-| **Zielkanal** | Wohin veröffentlicht wird, z. B. eine gekoppelte WordPress-Website. |
+| **Website** | Eine über die BlaulichtCMS Bridge gekoppelte WordPress-Website – das Ziel „Veröffentlichen auf“ im Beitrag. |
+| **Soziale Netzwerke** | Facebook, Instagram, Threads, X, Mastodon, Bluesky und der WhatsApp-Kanal; mit der Website zusammen die **Veröffentlichungsziele**. |
 
-Weitere Begriffe stehen im [Glossar](/hilfe/begriffe).
+Alle verbindlichen Begriffe stehen unter [Begriffe](/hilfe/begriffe).
 
 ## Für Administratoren: die ersten zehn Minuten
 

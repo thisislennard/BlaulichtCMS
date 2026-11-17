@@ -138,12 +138,12 @@ Für die Betriebswerte (Speicher, Aufbewahrung, Wiederanlaufzeit) gibt es einen 
 Ein Durchlauf in etwa zehn Minuten:
 
 1. **Einladen:** *Benutzer und Rollen → Benutzer einladen*, Rollen z. B. „Redaktion“ und „Medienverwaltung“. Den Link aufs Handy schicken, dort das Passwort setzen.
-2. **Beitrag:** *Beiträge → Neuer Beitrag*.
-3. **Sammeln:** Im Beitrag *Fotos und Videos sammeln*, QR-Code anzeigen, mit einem zweiten Handy scannen und ein Foto hochladen.
-4. **Sichten:** *Medien → Sammlung → sichten*, dann **Auswählen**.
+2. **Beitrag:** *Redaktion → Beiträge → Neuer Beitrag*.
+3. **Sammeln:** Im Beitrag *Fotos sammeln*, QR-Code anzeigen, mit einem zweiten Handy scannen und ein Foto hochladen.
+4. **Sichten:** *Redaktion → Medien → Sammlung → sichten*, dann **Auswählen**.
 5. **Schreiben:** Text eingeben, *Medien übernehmen*, **Neue Fassung speichern**, **Zur Freigabe einreichen**.
-6. **Freigeben:** Eine berechtigte Person gibt frei. Ohne Zielkanal ist der Beitrag jetzt *intern freigegeben*.
-7. **Veröffentlichen:** Website koppeln (siehe unten), Zielkanal wählen, erneut freigeben, **Veröffentlichen**. Nach dem nächsten Abruf der Bridge steht die URL im Beitrag und im Dashboard.
+6. **Freigeben:** Eine berechtigte Person gibt frei. Ohne Website ist der Beitrag jetzt *intern freigegeben*.
+7. **Veröffentlichen:** Website koppeln (siehe unten), Website wählen, erneut freigeben, **Veröffentlichen**. Nach dem nächsten Abruf der Bridge steht die URL im Beitrag und im Dashboard.
 
 Ausführlich im Hilfe-Center der App (`/hilfe`). Derselbe Ablauf läuft automatisiert als Abnahmetest:
 [`test/e2e/m1-flow.mjs`](../test/e2e/m1-flow.mjs).
@@ -152,7 +152,7 @@ Ausführlich im Hilfe-Center der App (`/hilfe`). Derselbe Ablauf läuft automati
 
 ## WordPress verbinden
 
-1. In BlaulichtCMS *Kanäle → Websites → Bridge herunterladen* (ZIP, aktuell Version 0.9.1).
+1. In BlaulichtCMS *Einrichtung → Websites → Bridge herunterladen* (ZIP, aktuell Version 0.9.1).
 2. In WordPress *Plugins → Installieren → Plugin hochladen*, dann aktivieren.
 3. In BlaulichtCMS *Website koppeln*, den einmaligen **Kopplungscode** notieren (30 Minuten gültig).
 4. In WordPress *Einstellungen → BlaulichtCMS Bridge* die BlaulichtCMS-Adresse (`https://…`) und den Code eintragen, dann **Koppeln**.

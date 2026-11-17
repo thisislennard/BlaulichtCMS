@@ -155,7 +155,7 @@ Jede Mail geht **einzeln** an einen Kontakt – nur dessen Adresse steht im Empf
 
 Das **Versandprotokoll** zeigt je Empfänger *Gesendet*, *Fehlgeschlagen* (mit Grund) oder *Ergebnis unbekannt* (Abbruch während des Sendens – wird **nie** automatisch wiederholt). Bricht der Versand ab, schreibt **Rest senden** nur die Empfänger an, die noch nicht versucht wurden. Wer gesendet hat, wird benachrichtigt, sobald der Versand fertig ist. **12 Monate** nach dem Versand werden die Empfängerzeilen (Adresse, Stand, Fehlermeldung) gelöscht; Betreff, Text und die Zahl der erreichten bzw. nicht erreichten Empfänger bleiben (*Einstellungen → Datenschutz → Versandprotokolle der Pressemitteilungen*, 0 = nie).
 
-**Workflow-Ausgang „Pressemitteilung an Verteiler“:** legt eine Pressemitteilung mit Texten aus {{platzhaltern}} für gewählte Listen an – **standardmäßig als Entwurf**, den eine Person prüft und sendet (Benachrichtigung an alle mit „Pressemitteilungen versenden“). Sofort gesendet wird nur, wenn der Ausgang im Workflow als **Direktversand** markiert ist – mit denselben Absicherungen wie bei Websites und Bannern (Recht „Workflows direkt veröffentlichen lassen“, Passwortbestätigung, Audit, Sicherheitsmeldung).
+**Workflow-Aktion „Pressemitteilung an Verteiler“:** legt eine Pressemitteilung mit Texten aus {{platzhaltern}} für gewählte Listen an – **standardmäßig als Entwurf**, den eine Person prüft und sendet (Benachrichtigung an alle mit „Pressemitteilungen versenden“). Sofort gesendet wird nur, wenn die Aktion im Workflow als **Direktversand** markiert ist – mit denselben Absicherungen wie bei Websites und Bannern (Recht „Workflows direkt veröffentlichen lassen“, Passwortbestätigung, Audit, Sicherheitsmeldung).
 
 ## Verknüpfungen, Notizen und Verlauf
 
@@ -171,7 +171,7 @@ Die Übersicht filtert nach **Offen**, **Überfällig**, **Meine**, **Beantworte
 
 ## Workflows
 
-Der Eingang **Neue Presseanfrage** startet einen [Workflow](/hilfe/workflows), sobald eine Anfrage erfasst wird oder über das Presse-Postfach eingeht – wahlweise nur für bestimmte Eingangswege. Er liefert nur Felder **ohne Kontaktdaten**: Vorgangsnummer, Thema, Medium, Eingangsweg, Frist, zuständige Person und den Link zur Anfrage.
+Der Auslöser **Neue Presseanfrage** startet einen [Workflow](/hilfe/workflows), sobald eine Anfrage erfasst wird oder über das Presse-Postfach eingeht – wahlweise nur für bestimmte Eingangswege. Er liefert nur Felder **ohne Kontaktdaten**: Vorgangsnummer, Thema, Medium, Eingangsweg, Frist, zuständige Person und den Link zur Anfrage.
 
 ## Rechte
 

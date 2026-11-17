@@ -3,13 +3,13 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router';
 import { get, post, put, del } from '../../api/client';
 import type { MediaItem } from '../../api/types';
-import { Badge, Button, Card, Chip, EmptyState, ErrorBox, FieldWrap, FilePickButton, Input, Notice, PageHeader, Rev, SegmentedControl, Select, SkeletonRows, StatusBadge, Switch, Table, Td, Textarea, Th } from '../../components/ui/core';
+import { Badge, Button, Card, Chip, EmptyState, ErrorBox, FieldWrap, FilePickButton, Input, Notice, PageHeader, SegmentedControl, Select, SkeletonRows, StatusBadge, Switch, Table, Td, Textarea, Th } from '../../components/ui/core';
 import { Icon } from '../../components/ui/Icon';
 import { HelpTip } from '../../components/ui/HelpTip';
 import { Dialog, Menu, useConfirm, useErrorToast, useToast } from '../../components/ui/overlays';
 import { KeywordMeaning } from '../../components/KeywordMeaning';
 import { useAuth } from '../../lib/auth';
-import { fmtDate, fmtDateTime, fmtTime, fromLocalInput, toLocalInput } from '../../lib/format';
+import { fmtDate, fmtDateTime, fmtTime, fromLocalInput, toLocalInput, plural } from '../../lib/format';
 import { MediaPicker } from '../posts/PostEditor';
 import { PRIVACY_CHECKS, PrivacyCheckList } from '../posts/DecisionDialog';
 import { SENSITIVE_LABELS } from '../media/PrivacyDialog';
@@ -273,7 +273,7 @@ function ImportDialog({ cfg, onClose }: { cfg: Config; onClose: (done: boolean) 
       const r = await post<any>('/incidents/import', { csv, dryRun, includeReports: opts.includeReports, submit: opts.submit, siteId: opts.siteId || null });
       if (dryRun) setRes(r);
       else {
-        toast({ tone: 'success', title: `${r.created} Einträge importiert`, text: r.duplicates ? `${r.duplicates} schon vorhanden – übersprungen.` : undefined });
+        toast({ tone: 'success', title: `${plural(r.created, 'Eintrag', 'Einträge')} importiert`, text: r.duplicates ? `${r.duplicates} schon vorhanden – übersprungen.` : undefined });
         onClose(true);
       }
     } catch (e) {
@@ -552,7 +552,7 @@ export default function IncidentList() {
     const heldText = held ? `${held === 1 ? 'Ein Eintrag enthält' : `${held} Einträge enthalten`} markierte Bilder oder offene Gesichtsvorschläge – bitte einzeln über das Aktionsmenü prüfen.` : undefined;
     if (!items.length) return toast({ tone: 'warning', title: held ? 'Datenschutz-Prüfung nötig' : 'Keine passenden Einträge ausgewählt', text: heldText });
     const label = { submit: 'zur Freigabe einreichen', approve: 'freigeben', publish: 'auf der Website veröffentlichen' }[what];
-    if (!(await ask({ title: `${items.length} Einträge ${label}?`, text: held ? `Übersprungen: ${heldText}` : undefined, confirmLabel: 'Ja', danger: false }))) return;
+    if (!(await ask({ title: `${plural(items.length, 'Eintrag', 'Einträge')} ${label}?`, text: held ? `Übersprungen: ${heldText}` : undefined, confirmLabel: 'Ja', danger: false }))) return;
     try {
       const r = await post<any>(`/incidents/bulk/${what}`, what === 'submit' ? { ids: items.map((e) => e.id) } : { items: items.map((e) => ({ id: e.id, contentHash: e.content_hash })) });
       const skipped = Array.isArray(r.skipped) ? r.skipped.length : r.skipped;
@@ -590,7 +590,7 @@ export default function IncidentList() {
       />
       {noBridge && (
         <Notice tone="warning" title={`BlaulichtCMS Bridge ${c!.min_bridge} nötig`}>
-          Die gekoppelten Websites verwenden eine ältere Bridge. Veröffentlichte Einträge warten, bis die Bridge aktualisiert ist (Kanäle → Websites).
+          Die gekoppelten Websites verwenden eine ältere Bridge. Veröffentlichte Einträge warten, bis die Bridge aktualisiert ist (Einrichtung → Websites).
         </Notice>
       )}
       {c && !c.locations.length && can('incident.settings') && (
@@ -687,14 +687,15 @@ export default function IncidentList() {
                     <div className="text-meta text-fg-muted flex flex-wrap gap-x-2">
                       {e.featured && <span className="inline-flex items-center gap-1"><Icon name="Star" size={12} /> besonders</span>}
                       {e.false_alarm && <span>Fehlalarm</span>}
-                      {e.media_ids.length > 0 && <span>{e.media_ids.length} Bild(er)</span>}
+                      {e.media_ids.length > 0 && <span>{plural(e.media_ids.length, 'Bild', 'Bilder')}</span>}
                       {e.privacy.approve_check && (
                         <span className="inline-flex items-center gap-1 text-warn" title="Markierte Bilder oder offene Gesichtsvorschläge: Freigabe und Veröffentlichung nur mit bestätigter Datenschutz-Prüfung">
                           <Icon name="ShieldAlert" size={12} /> Datenschutz-Prüfung
                         </span>
                       )}
                       <span>{SOURCE[e.source]}</span>
-                      <Rev n={e.revision} />
+                      {/* Ausgeschrieben: „F1“ läse sich neben dem Stichwort „F 1“ wie ein Einsatzstichwort (#257) */}
+                      <span>Fassung {e.revision}</span>
                     </div>
                   </Td>
                   <Td>{e.location || '–'}</Td>
@@ -743,7 +744,7 @@ export default function IncidentList() {
         </Card>
       )}
       <p className="m-0 text-meta text-fg-muted">
-        Auf der Website: Shortcodes <Chip mono>[blaulichtcms_einsatzliste]</Chip> und <Chip mono>[blaulichtcms_einsatzstatistik]</Chip> bzw. die gleichnamigen Blöcke – Einstellungen in WordPress. Workflows: Ausgang „Einsatz in Einsatzliste“ unter <Link to="/workflows/aktionen">Workflows → Ausgänge</Link>.
+        Auf der Website: Shortcodes <Chip mono>[blaulichtcms_einsatzliste]</Chip> und <Chip mono>[blaulichtcms_einsatzstatistik]</Chip> bzw. die gleichnamigen Blöcke – Einstellungen in WordPress. Workflows: Aktion „Einsatz in Einsatzliste“ unter <Link to="/workflows/aktionen">Workflows → Aktionen</Link>.
       </p>
       {edit !== undefined && c && <EntryDialog entry={edit} cfg={c} onClose={(s) => (setEdit(undefined), s && refresh())} />}
       {importing && c && <ImportDialog cfg={c} onClose={(d) => (setImporting(false), d && refresh())} />}

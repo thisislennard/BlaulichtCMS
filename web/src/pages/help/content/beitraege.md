@@ -13,7 +13,7 @@ Unter [Einrichtung → Beitragsvorlagen](/beitragsvorlagen) stehen Vorlagen für
 
 ## Fassungen
 
-Jedes Speichern mit geändertem Inhalt erzeugt eine neue, unveränderliche **Fassung** (Fassung 1, 2, 3 …). Eine Fassung umfasst Titel, Text, Kurzfassung, Medien in ihrer Reihenfolge, das Titelbild und den Zielkanal. Speichern ohne Änderung erzeugt keine neue Fassung.
+Jedes Speichern mit geändertem Inhalt erzeugt eine neue, unveränderliche **Fassung** (Fassung 1, 2, 3 …). Eine Fassung umfasst Titel, Text, Kurzfassung, Medien in ihrer Reihenfolge, das Titelbild und den Website. Speichern ohne Änderung erzeugt keine neue Fassung.
 
 Bearbeiten zwei Personen gleichzeitig, gewinnt nicht einfach die letzte: BlaulichtCMS meldet „Der Beitrag wurde inzwischen geändert“ und bittet um Neuladen.
 
@@ -27,9 +27,9 @@ Absätze durch eine Leerzeile trennen. Die Website übernimmt den Text als einfa
 - Mit den Pfeilen die Reihenfolge ändern, mit „Als Titelbild“ das Beitragsbild festlegen.
 - Veröffentlicht wird immer die geprüfte Fassung ohne Standortdaten.
 
-## Zielkanal
+## Website
 
-„Nur intern“ oder eine gekoppelte Website. Auch eine Änderung des Zielkanals erzeugt eine neue Fassung und braucht eine neue Freigabe.
+„Nur intern“ oder eine gekoppelte Website. Auch eine Änderung der Website erzeugt eine neue Fassung und braucht eine neue Freigabe.
 
 Weiter mit [Freigabe und Veröffentlichung](/hilfe/freigabe).
 
@@ -39,7 +39,7 @@ Jedes Bild braucht einen **Alternativtext**: eine kurze Beschreibung für Mensch
 
 - Im Beitrag unter **Medien** steht unter jedem Bild das Feld **Alternativtext**. Der Text ist **Teil der Fassung** – eine Änderung braucht eine neue Freigabe.
 - In der **Medienverwaltung** (Details einer Datei) lässt sich ein Alternativtext hinterlegen; der Beitrag schlägt ihn vor. Steht dort noch keiner, übernimmt die Medienverwaltung beim Speichern den Text aus dem Beitrag – so lässt er sich wiederverwenden.
-- Fehlt ein Alternativtext, warnt die **Freigabe**. Unter **Einstellungen → Redaktion → Alternativtext ist Pflicht** lässt sich die Freigabe dann ganz sperren. Die Formatprüfung der sozialen Kanäle nennt fehlende Texte ebenfalls.
+- Fehlt ein Alternativtext, warnt die **Freigabe**. Unter **Einstellungen → Redaktion → Alternativtext ist Pflicht** lässt sich die Freigabe dann ganz sperren. Die Formatprüfung der sozialen Netzwerke nennt fehlende Texte ebenfalls.
 
 **So gelingt ein guter Alternativtext**
 

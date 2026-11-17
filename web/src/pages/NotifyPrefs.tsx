@@ -5,7 +5,7 @@ import { Badge, Button, Notice, SkeletonRows, Switch } from '../components/ui/co
 import { useErrorToast, useToast } from '../components/ui/overlays';
 import { HelpTip } from '../components/ui/HelpTip';
 import { Icon } from '../components/ui/Icon';
-import { fmtRelative } from '../lib/format';
+import { fmtRelative, plural } from '../lib/format';
 import { usePwaInstall } from '../lib/pwa';
 import { Link } from 'react-router';
 import { LoadError, SectionCard } from './admin/shared';
@@ -129,7 +129,7 @@ export function NotifyPrefsCard() {
       const r = await post<{ results: { label: string; status: string; error?: string }[] }>('/notify/push/test', {});
       const failed = r.results.filter((x) => x.status !== 'sent');
       if (failed.length) toast({ tone: 'error', title: 'Nicht alle Geräte erreicht', text: failed.map((f) => `${f.label}: ${f.error ?? f.status}`).join(' · ') });
-      else toast({ tone: 'success', title: `Testnachricht an ${r.results.length} Gerät(e) gesendet` });
+      else toast({ tone: 'success', title: `Testnachricht an ${plural(r.results.length, 'Gerät', 'Geräte')} gesendet` });
       refresh();
     } catch (e) {
       onError(e);

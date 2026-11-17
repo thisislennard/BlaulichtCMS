@@ -60,7 +60,7 @@ export const PERMISSIONS: PermissionDef[] = [
   P('media.view', 'media', 'read', 'Medien ansehen', 'Sammlungen, Ordner und geprüfte Medien ansehen, durchsuchen und einzeln in der öffentlichen Fassung (ohne Standort) laden.'),
   P('media.export', 'media', 'read', 'Medien exportieren (ZIP)', 'Sammeldownloads der öffentlichen Fassungen als ZIP erstellen und laden.', ['media.view']),
   P('media.download_original', 'media', 'write', 'Originale herunterladen', 'Originaldateien mit möglichen Standortdaten einzeln oder als Sammeldownload laden; Sammeldownloads anderer Personen laden.', ['media.view']),
-  P('media.collections', 'media', 'write', 'Sammlungen anlegen und bearbeiten', 'Sammlungen anlegen, umbenennen, beschreiben und Fristen ändern. Für „Fotos und Videos sammeln“ im Beitrag zusätzlich „Upload-Links verwalten“.', ['media.view']),
+  P('media.collections', 'media', 'write', 'Sammlungen anlegen und bearbeiten', 'Sammlungen anlegen, umbenennen, beschreiben und Fristen ändern. Für „Fotos sammeln“ im Beitrag zusätzlich „Upload-Links verwalten“.', ['media.view']),
   P('media.upload', 'media', 'write', 'Dateien hochladen', 'Eigene Dateien direkt in eine Sammlung hochladen.', ['media.view']),
   P('media.links', 'media', 'write', 'Upload-Links verwalten', 'Upload-Links erstellen, pausieren, verlängern, erneuern und widerrufen; Optionen je Link ändern.', ['media.view']),
   P('media.review', 'media', 'write', 'Medien sichten und auswählen', 'Sichtungsstand setzen (ausgewählt, zurückgestellt, übersprungen); Namen der Einsendenden und Einwilligungen sehen.', ['media.view']),
@@ -90,12 +90,12 @@ export const PERMISSIONS: PermissionDef[] = [
   /* Veröffentlichung */
   P('publish.website', 'publishing', 'critical', 'Auf Website veröffentlichen', 'Freigegebene Fassungen an eine gekoppelte Website übergeben, Aufträge abbrechen, klären und wiederholen.', ['post.view', 'channel.view']),
   P('publish.unpublish', 'publishing', 'critical', 'Von Website zurückziehen', 'Veröffentlichte Beiträge von der Website zurückziehen.', ['post.view']),
-  P('publish.social', 'publishing', 'critical', 'In sozialen Kanälen veröffentlichen', 'Freigegebene Fassungen auf Facebook, Instagram (auch als Story), Threads, X, Mastodon und Bluesky veröffentlichen, Teilen von Hand vorbereiten und als geteilt markieren oder als Paket exportieren.', ['post.view', 'connection.view']),
+  P('publish.social', 'publishing', 'critical', 'In sozialen Netzwerken veröffentlichen', 'Freigegebene Fassungen auf Facebook, Instagram (auch als Story), Threads, X, Mastodon und Bluesky veröffentlichen, Teilen von Hand vorbereiten und als geteilt markieren oder als Paket exportieren.', ['post.view', 'connection.view']),
   P('insights.view', 'publishing', 'read', 'Reichweite ansehen', 'Aufrufe und Interaktionen veröffentlichter Social-Posts sehen (nur zusammengefasste Zahlen, keine Personen): je Beitrag, Übersicht und Dashboard-Kachel.', ['post.view']),
-  P('publish.social_remove', 'publishing', 'critical', 'Aus sozialen Kanälen entfernen', 'Veröffentlichungen in sozialen Kanälen entfernen oder als entfernt bestätigen.', ['post.view']),
+  P('publish.social_remove', 'publishing', 'critical', 'Aus sozialen Netzwerken entfernen', 'Veröffentlichungen in sozialen Netzwerken entfernen oder als entfernt bestätigen.', ['post.view']),
   P('channel.view', 'publishing', 'read', 'Websites ansehen', 'Gekoppelte Websites und ihren Zustand sehen.'),
   P('channel.sites', 'publishing', 'critical', 'Websites koppeln und widerrufen', 'Websites mit der BlaulichtCMS Bridge koppeln, Kopplungscodes erzeugen, Schlüssel widerrufen, Plugin laden.', ['channel.view'], true),
-  P('channel.updates', 'publishing', 'critical', 'Bridge-Updates freigeben', 'Neue Versionen der BlaulichtCMS Bridge für die Websites freigeben und den Update-Kanal je Website wählen.', ['channel.view'], true),
+  P('channel.updates', 'publishing', 'critical', 'Bridge-Updates freigeben', 'Neue Versionen der BlaulichtCMS Bridge für die Websites freigeben und die Update-Stufe je Website wählen.', ['channel.view'], true),
 
   /* Banner */
   P('banner.view', 'banners', 'read', 'Banner ansehen', 'Banner und ihren Stand ansehen.'),
@@ -105,7 +105,7 @@ export const PERMISSIONS: PermissionDef[] = [
   /* Kalender (#200) */
   P('calendar.view', 'calendar', 'read', 'Kalender ansehen', 'Termine, Kategorien und eingelesene Kalender ansehen; geplante Beiträge erscheinen zusätzlich mit „Beiträge ansehen“.'),
   P('calendar.manage', 'calendar', 'write', 'Termine verwalten', 'Eigene Termine und Serien anlegen, ändern und löschen; Kategorien mit Farben verwalten.', ['calendar.view']),
-  P('calendar.sources', 'calendar', 'write', 'iCal-Kalender einlesen', 'Externe Kalender (iCal-Links) hinzufügen, testen, ändern, abrufen, schalten und löschen; Empfangsprotokoll ansehen. Die Adressen werden verschlüsselt gespeichert und nicht angezeigt.', ['calendar.view']),
+  P('calendar.sources', 'calendar', 'write', 'Externe Kalender einlesen', 'Externe Kalender (iCal-Links) hinzufügen, testen, ändern, abrufen, schalten und löschen; Empfangsprotokoll ansehen. Die Adressen werden verschlüsselt gespeichert und nicht angezeigt.', ['calendar.view']),
   P('calendar.subscribe', 'calendar', 'write', 'Kalender abonnieren', 'Einen eigenen geheimen iCal-Abo-Link (Outlook, Google, iPhone) erzeugen, erneuern, einstellen und widerrufen. Das Abo enthält nur Titel, Zeit und Kategorie, auf Wunsch die Beschreibung.', ['calendar.view']),
 
   /* Einsatzliste (#213) */
@@ -139,15 +139,15 @@ export const PERMISSIONS: PermissionDef[] = [
 
   /* Verbindungen */
   P('connection.view', 'connections', 'read', 'Verbindungen ansehen', 'Verfügbare Verbindungen mit Namen, Art und Zustand sehen (ohne Zugangsdaten und Einstellungen).'),
-  P('connection.configure', 'connections', 'critical', 'Verbindungen verwalten', 'Verbindungen (FE2, Feuersoftware Connect, soziale Kanäle, amtliche Warnfeeds) einrichten, ändern, testen, aktivieren und widerrufen.', ['connection.view'], true),
+  P('connection.configure', 'connections', 'critical', 'Verbindungen verwalten', 'Verbindungen (FE2, Feuersoftware Connect, soziale Netzwerke, amtliche Warnfeeds) einrichten, ändern, testen, aktivieren und widerrufen.', ['connection.view'], true),
   P('connection.delete', 'connections', 'critical', 'Verbindungen löschen', 'Verbindungen löschen und gelöschte Verbindungen zur Nachvollziehbarkeit einsehen.', ['connection.configure'], true),
   P('connection.private_targets', 'connections', 'critical', 'Interne Zieladressen erlauben', 'Den Abruf von Adressen im internen Netz für eine Verbindung ausdrücklich erlauben.', ['connection.configure'], true),
   P('connection.log', 'connections', 'read', 'Empfangsprotokoll ansehen', 'Empfangsprotokoll eingehender Verbindungen (amtliche Warnungen, FE2, Feuersoftware Connect) mit Entscheidungen und Rohdaten ansehen.', ['connection.configure']),
 
   /* Automationen */
-  P('automation.read', 'automations', 'read', 'Workflows ansehen', 'Workflows, Eingänge, Ausgänge und Laufprotokolle ansehen.'),
-  P('automation.manage', 'automations', 'write', 'Workflows verwalten', 'Eingänge, Ausgänge und Workflows anlegen, bearbeiten, testen, aktivieren und deaktivieren. Ausgänge legen nur Entwürfe und Benachrichtigungen an; Freigaben bleiben bei den Menschen.', ['automation.read'], true),
-  P('automation.publish', 'automations', 'critical', 'Workflows direkt veröffentlichen lassen', 'Einem Workflow erlauben, markierte Ausgänge ohne menschliche Freigabe zu veröffentlichen bzw. zu versenden (mit Passwortbestätigung, Audit und Sicherheitsmeldung).', ['automation.manage'], true),
+  P('automation.read', 'automations', 'read', 'Workflows ansehen', 'Workflows, Auslöser, Aktionen und Laufprotokolle ansehen.'),
+  P('automation.manage', 'automations', 'write', 'Workflows verwalten', 'Auslöser, Aktionen und Workflows anlegen, bearbeiten, testen, aktivieren und deaktivieren. Aktionen legen nur Entwürfe und Benachrichtigungen an; Freigaben bleiben bei den Menschen.', ['automation.read'], true),
+  P('automation.publish', 'automations', 'critical', 'Workflows direkt veröffentlichen lassen', 'Einem Workflow erlauben, markierte Aktionen ohne menschliche Freigabe zu veröffentlichen bzw. zu versenden (mit Passwortbestätigung, Audit und Sicherheitsmeldung).', ['automation.manage'], true),
 
   /* Designvorlagen (#208–#210) */
   P('templates.view', 'templates', 'read', 'Designvorlagen ansehen', 'Interne Vorlagen-Bibliothek durchsuchen, Vorlagen mit Nutzungshinweisen ansehen und ihre Dateien (auch ältere Versionen) herunterladen.'),
@@ -291,11 +291,11 @@ const sys = (id: string, label: string, description: string): RoleDef => ({
 
 /** Mitgelieferte Rollen mit ihren Vorgaben. „Administration“ hat immer alle Rechte, auch künftige. */
 export const SYSTEM_ROLES: RoleDef[] = [
-  sys('platform_admin', 'Administration', 'Vollzugriff: Konten, Rechte, Kanäle, Systemzustand, Sicherungen. Hat immer alle Rechte und lässt sich nicht ändern.'),
+  sys('platform_admin', 'Administration', 'Vollzugriff: Konten, Rechte, Websites und Verbindungen, Systemzustand, Sicherungen. Hat immer alle Rechte und lässt sich nicht ändern.'),
   sys('media_manager', 'Medienverwaltung', 'Pflegt Sammlungen und Upload-Links, sichtet und wählt Medien aus.'),
   sys('editor', 'Redaktion', 'Erstellt Beiträge, übernimmt Medien und reicht Fassungen zur Freigabe ein.'),
   sys('approver', 'Freigabe', 'Gibt geprüfte Fassungen frei.'),
-  sys('publisher', 'Veröffentlichung', 'Übergibt freigegebene Fassungen an die Zielkanäle.'),
+  sys('publisher', 'Veröffentlichung', 'Übergibt freigegebene Fassungen an die Veröffentlichungsziele.'),
   sys('warning_author', 'Warnentwurf', 'Erfasst Warnentwürfe (Erstmeldung, Aktualisierung, Entwarnung).'),
   sys('warning_approver', 'Warnfreigabe', 'Bestätigt Warnstufen, gibt Warnentwürfe und Regeln fachlich frei.'),
   sys('warning_sender', 'Warnversand', 'Versendet freigegebene Warnentwürfe an die zuständige Stelle.'),

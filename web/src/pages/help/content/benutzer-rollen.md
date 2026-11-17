@@ -47,7 +47,7 @@ Dazu gilt:
 | Fotos vor Ort sichten, ohne Originale und ohne Löschen | Medien ansehen, Medien sichten und auswählen |
 | Pressefotos verpixeln und ordnen | Medien ansehen, Medien ordnen, Medien unkenntlich machen |
 | Praktikum: Beiträge schreiben, aber nicht einreichen | Beiträge ansehen, Beiträge anlegen, Beiträge bearbeiten, Medien ansehen |
-| Social Media: nur in sozialen Kanälen veröffentlichen | Beiträge ansehen, In sozialen Kanälen veröffentlichen, Aus sozialen Kanälen entfernen |
+| Social Media: nur in sozialen Netzwerken veröffentlichen | Beiträge ansehen, In sozialen Netzwerken veröffentlichen, Aus sozialen Netzwerken entfernen |
 | Banner pflegen und schalten | Banner ansehen, Banner bearbeiten, Banner veröffentlichen, Websites ansehen |
 | Konten betreuen, ohne Systemzugriff | Benutzer ansehen, Benutzer einladen, Konten sperren und entsperren, Sitzungen beenden |
 | Revision: alles nachvollziehen, nichts ändern | Audit-Protokoll ansehen, Systemprotokoll ansehen, Einstellungen ansehen, Benutzer ansehen |
@@ -85,7 +85,7 @@ Alle Rechte, nach Bereichen. Die Tabelle entspricht dem Rollen-Editor; „Setzt 
 | Medien ansehen | lesen | Sammlungen, Ordner und geprüfte Medien ansehen, durchsuchen und einzeln in der öffentlichen Fassung (ohne Standort) laden. | – |
 | Medien exportieren (ZIP) | lesen | Sammeldownloads der öffentlichen Fassungen als ZIP erstellen und laden. | Medien ansehen |
 | Originale herunterladen | ändern | Originaldateien mit möglichen Standortdaten einzeln oder als Sammeldownload laden; Sammeldownloads anderer Personen laden. | Medien ansehen |
-| Sammlungen anlegen und bearbeiten | ändern | Sammlungen anlegen, umbenennen, beschreiben und Fristen ändern. Für „Fotos und Videos sammeln“ im Beitrag zusätzlich „Upload-Links verwalten“. | Medien ansehen |
+| Sammlungen anlegen und bearbeiten | ändern | Sammlungen anlegen, umbenennen, beschreiben und Fristen ändern. Für „Fotos sammeln“ im Beitrag zusätzlich „Upload-Links verwalten“. | Medien ansehen |
 | Dateien hochladen | ändern | Eigene Dateien direkt in eine Sammlung hochladen. | Medien ansehen |
 | Upload-Links verwalten | ändern | Upload-Links erstellen, pausieren, verlängern, erneuern und widerrufen; Optionen je Link ändern. | Medien ansehen |
 | Medien sichten und auswählen | ändern | Sichtungsstand setzen (ausgewählt, zurückgestellt, übersprungen); Namen der Einsendenden und Einwilligungen sehen. | Medien ansehen |
@@ -124,12 +124,12 @@ Alle Rechte, nach Bereichen. Die Tabelle entspricht dem Rollen-Editor; „Setzt 
 | --- | --- | --- | --- |
 | Auf Website veröffentlichen | kritisch | Freigegebene Fassungen an eine gekoppelte Website übergeben, Aufträge abbrechen, klären und wiederholen. | Beiträge ansehen, Websites ansehen |
 | Von Website zurückziehen | kritisch | Veröffentlichte Beiträge von der Website zurückziehen. | Beiträge ansehen |
-| In sozialen Kanälen veröffentlichen | kritisch | Freigegebene Fassungen auf Facebook, Instagram (auch als Story), Threads, X, Mastodon und Bluesky veröffentlichen, Teilen von Hand vorbereiten und als geteilt markieren oder als Paket exportieren. | Beiträge ansehen, Verbindungen ansehen |
+| In sozialen Netzwerken veröffentlichen | kritisch | Freigegebene Fassungen auf Facebook, Instagram (auch als Story), Threads, X, Mastodon und Bluesky veröffentlichen, Teilen von Hand vorbereiten und als geteilt markieren oder als Paket exportieren. | Beiträge ansehen, Verbindungen ansehen |
 | Reichweite ansehen | lesen | Aufrufe und Interaktionen veröffentlichter Social-Posts sehen (nur zusammengefasste Zahlen, keine Personen): je Beitrag, Übersicht und Dashboard-Kachel. | Beiträge ansehen |
-| Aus sozialen Kanälen entfernen | kritisch | Veröffentlichungen in sozialen Kanälen entfernen oder als entfernt bestätigen. | Beiträge ansehen |
+| Aus sozialen Netzwerken entfernen | kritisch | Veröffentlichungen in sozialen Netzwerken entfernen oder als entfernt bestätigen. | Beiträge ansehen |
 | Websites ansehen | lesen | Gekoppelte Websites und ihren Zustand sehen. | – |
 | Websites koppeln und widerrufen | kritisch | Websites mit der BlaulichtCMS Bridge koppeln, Kopplungscodes erzeugen, Schlüssel widerrufen, Plugin laden. | Websites ansehen |
-| Bridge-Updates freigeben | kritisch | Neue Versionen der BlaulichtCMS Bridge für die Websites freigeben und den Update-Kanal je Website wählen. | Websites ansehen |
+| Bridge-Updates freigeben | kritisch | Neue Versionen der BlaulichtCMS Bridge für die Websites freigeben und die Update-Stufe je Website wählen. | Websites ansehen |
 
 **Banner**
 
@@ -145,7 +145,7 @@ Alle Rechte, nach Bereichen. Die Tabelle entspricht dem Rollen-Editor; „Setzt 
 | --- | --- | --- | --- |
 | Kalender ansehen | lesen | Termine, Kategorien und eingelesene Kalender ansehen; geplante Beiträge erscheinen zusätzlich mit „Beiträge ansehen“. | – |
 | Termine verwalten | ändern | Eigene Termine und Serien anlegen, ändern und löschen; Kategorien mit Farben verwalten. | Kalender ansehen |
-| iCal-Kalender einlesen | ändern | Externe Kalender (iCal-Links) hinzufügen, testen, ändern, abrufen, schalten und löschen; Empfangsprotokoll ansehen. Die Adressen werden verschlüsselt gespeichert und nicht angezeigt. | Kalender ansehen |
+| Externe Kalender einlesen | ändern | Externe Kalender (iCal-Links) hinzufügen, testen, ändern, abrufen, schalten und löschen; Empfangsprotokoll ansehen. Die Adressen werden verschlüsselt gespeichert und nicht angezeigt. | Kalender ansehen |
 | Kalender abonnieren | ändern | Einen eigenen geheimen iCal-Abo-Link (Outlook, Google, iPhone) erzeugen, erneuern, einstellen und widerrufen. Das Abo enthält nur Titel, Zeit und Kategorie, auf Wunsch die Beschreibung. | Kalender ansehen |
 
 **Einsatzliste**
@@ -191,7 +191,7 @@ Alle Rechte, nach Bereichen. Die Tabelle entspricht dem Rollen-Editor; „Setzt 
 | Recht | Stufe | Erlaubt | Setzt voraus |
 | --- | --- | --- | --- |
 | Verbindungen ansehen | lesen | Verfügbare Verbindungen mit Namen, Art und Zustand sehen (ohne Zugangsdaten und Einstellungen). | – |
-| Verbindungen verwalten | kritisch | Verbindungen (FE2, Feuersoftware Connect, soziale Kanäle, amtliche Warnfeeds) einrichten, ändern, testen, aktivieren und widerrufen. | Verbindungen ansehen |
+| Verbindungen verwalten | kritisch | Verbindungen (FE2, Feuersoftware Connect, soziale Netzwerke, amtliche Warnfeeds) einrichten, ändern, testen, aktivieren und widerrufen. | Verbindungen ansehen |
 | Verbindungen löschen | kritisch | Verbindungen löschen und gelöschte Verbindungen zur Nachvollziehbarkeit einsehen. | Verbindungen verwalten |
 | Interne Zieladressen erlauben | kritisch | Den Abruf von Adressen im internen Netz für eine Verbindung ausdrücklich erlauben. | Verbindungen verwalten |
 | Empfangsprotokoll ansehen | lesen | Empfangsprotokoll eingehender Verbindungen (amtliche Warnungen, FE2, Feuersoftware Connect) mit Entscheidungen und Rohdaten ansehen. | Verbindungen verwalten |
@@ -200,9 +200,9 @@ Alle Rechte, nach Bereichen. Die Tabelle entspricht dem Rollen-Editor; „Setzt 
 
 | Recht | Stufe | Erlaubt | Setzt voraus |
 | --- | --- | --- | --- |
-| Workflows ansehen | lesen | Workflows, Eingänge, Ausgänge und Laufprotokolle ansehen. | – |
-| Workflows verwalten | ändern | Eingänge, Ausgänge und Workflows anlegen, bearbeiten, testen, aktivieren und deaktivieren. Ausgänge legen nur Entwürfe und Benachrichtigungen an; Freigaben bleiben bei den Menschen. | Workflows ansehen |
-| Workflows direkt veröffentlichen lassen | kritisch | Einem Workflow erlauben, markierte Ausgänge ohne menschliche Freigabe zu veröffentlichen bzw. zu versenden (mit Passwortbestätigung, Audit und Sicherheitsmeldung). | Workflows verwalten |
+| Workflows ansehen | lesen | Workflows, Auslöser, Aktionen und Laufprotokolle ansehen. | – |
+| Workflows verwalten | ändern | Auslöser, Aktionen und Workflows anlegen, bearbeiten, testen, aktivieren und deaktivieren. Aktionen legen nur Entwürfe und Benachrichtigungen an; Freigaben bleiben bei den Menschen. | Workflows ansehen |
+| Workflows direkt veröffentlichen lassen | kritisch | Einem Workflow erlauben, markierte Aktionen ohne menschliche Freigabe zu veröffentlichen bzw. zu versenden (mit Passwortbestätigung, Audit und Sicherheitsmeldung). | Workflows verwalten |
 
 **Designvorlagen**
 

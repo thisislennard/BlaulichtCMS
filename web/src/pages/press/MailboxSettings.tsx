@@ -4,7 +4,7 @@ import { Link } from 'react-router';
 import { get, post, put } from '../../api/client';
 import { Badge, Button, Card, EmptyState, ErrorBox, FieldWrap, Input, Notice, SegmentedControl, Select, SkeletonRows, Switch, Table, Td, Th } from '../../components/ui/core';
 import { SecretField, useErrorToast, useToast } from '../../components/ui/overlays';
-import { fmtDateTime, fmtRelative } from '../../lib/format';
+import { fmtDateTime, fmtRelative, plural } from '../../lib/format';
 
 interface MailboxResponse {
   config: { enabled: boolean; mode: 'imap' | 'm365'; host: string; port: number; security: 'tls' | 'starttls'; user: string; folder: string; mailbox: string; intervalMinutes: number; maxAttachmentMb: number; passwordSet: boolean; verifiedAt: string | null };
@@ -163,7 +163,7 @@ export function MailboxSettings() {
               <Button icon="RefreshCw" loading={busy === 'poll'} onClick={() => run('poll', async () => {
                 const r = await post<{ imported?: number; skipped?: number; more?: boolean; error?: string }>('/press/mailbox/poll');
                 const more = r.more ? 'Weitere Mails folgen in Kürze automatisch.' : undefined;
-                toast(r.error ? { tone: 'error', title: 'Abruf fehlgeschlagen', text: r.error } : { tone: r.skipped ? 'warning' : 'success', title: `${r.imported ?? 0} Mail(s) übernommen${r.skipped ? `, ${r.skipped} nicht übernommen (siehe Empfangsprotokoll)` : ''}`, text: more });
+                toast(r.error ? { tone: 'error', title: 'Abruf fehlgeschlagen', text: r.error } : { tone: r.skipped ? 'warning' : 'success', title: `${plural(r.imported ?? 0, 'Mail', 'Mails')} übernommen${r.skipped ? `, ${r.skipped} nicht übernommen (siehe Empfangsprotokoll)` : ''}`, text: more });
                 refresh();
               })}>
                 Jetzt abrufen

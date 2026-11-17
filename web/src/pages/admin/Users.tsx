@@ -42,6 +42,7 @@ import { fmtDateTime, fmtRelative } from "../../lib/format";
 import { AuditTable } from "./AuditTable";
 import { LoadError, type AuditEvent } from "./shared";
 import { RolesTab, type RoleDef, type RolesResponse } from "./Roles";
+import { plural } from '../../lib/format';
 
 interface UserRow {
   id: string;
@@ -623,7 +624,7 @@ function UserTable({
       toast({
         tone: "success",
         title: `${u.name} auf allen Geräten abgemeldet`,
-        text: `${r.sessions} Sitzung(en) beendet, ${r.trustedDevices} gemerkte(s) Gerät(e) entfernt.`,
+        text: `${plural(r.sessions, 'Sitzung', 'Sitzungen')} beendet, ${plural(r.trustedDevices, 'gemerktes Gerät', 'gemerkte Geräte')} entfernt.`,
       });
     } catch (e) {
       onError(e);

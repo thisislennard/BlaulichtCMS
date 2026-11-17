@@ -11,7 +11,7 @@ import { usePageMeta } from '../../components/layout/AppShell';
 import { WorkflowTabs } from './WorkflowTabs';
 import { CheckList, FieldList, Help, NumberField, SelectField, inputSummary, normKey, useCatalog, useInputs, type Catalog, type InputDef } from './shared';
 
-/** Eingänge: Auslöser auf Grundlage der vorhandenen Verbindungen, Quellen und Sammlungen – hier eingerichtet, im Editor verwendet. */
+/** Auslöser auf Grundlage der vorhandenen Verbindungen, Quellen und Sammlungen – hier eingerichtet, im Editor verwendet. */
 
 const DEFAULTS: Record<string, Record<string, any>> = {
   fe2: { connectionId: '', phases: ['neu'] },
@@ -58,7 +58,7 @@ export function InputDialog({ input, kind, cat, onClose, preset }: { input: Inpu
         onClose(true, input.id);
       } else onClose(true, (await post<{ id: string }>('/automation-inputs', { ...body, kind })).id);
     } catch (e) {
-      toastError(e, 'Eingang nicht gespeichert');
+      toastError(e, 'Auslöser nicht gespeichert');
     } finally {
       setBusy(false);
     }
@@ -70,7 +70,7 @@ export function InputDialog({ input, kind, cat, onClose, preset }: { input: Inpu
       open
       onClose={() => onClose(false)}
       width={620}
-      title={input ? `Eingang bearbeiten: ${input.name}` : `Neuer Eingang: ${def.label}`}
+      title={input ? `Auslöser bearbeiten: ${input.name}` : `Neuer Auslöser: ${def.label}`}
       footer={
         <>
           <Button onClick={() => onClose(false)}>Abbrechen</Button>
@@ -82,7 +82,7 @@ export function InputDialog({ input, kind, cat, onClose, preset }: { input: Inpu
     >
       <div className="flex flex-col gap-4">
         <p className="m-0 text-sm text-fg-muted">{def.description}</p>
-        <FieldWrap label="Name" htmlFor="in-name" required help="So erscheint der Eingang in der Palette des Editors.">
+        <FieldWrap label="Name" htmlFor="in-name" required help="So erscheint der Auslöser in der Palette des Editors.">
           <Input id="in-name" value={name} maxLength={120} onChange={(e) => setName(e.target.value)} />
         </FieldWrap>
         {def.source === 'connection' && (
@@ -94,8 +94,8 @@ export function InputDialog({ input, kind, cat, onClose, preset }: { input: Inpu
               onChange={(v) => set({ connectionId: v })}
               placeholder="Bitte wählen …"
               options={conns.map((x) => ({ value: x.id, label: `${x.name}${x.status !== 'active' ? ` (${x.status === 'disabled' ? 'deaktiviert' : 'nicht aktiv'})` : ''}` }))}
-              help={conns.length ? 'Nur aktive Verbindungen liefern Ereignisse. Eingerichtet wird die Verbindung unter Kanäle → Verbindungen.' : undefined}
-              labelAction={<Help title="Verbindung" anchor="eingaenge">Ein Eingang hört auf eine bestehende Verbindung. Zugangsdaten, Tests und Gebietsfilter bleiben dort; hier wird nur festgelegt, welche Ereignisse einen Workflow starten.</Help>}
+              help={conns.length ? 'Nur aktive Verbindungen liefern Ereignisse. Eingerichtet wird die Verbindung unter Einrichtung → Verbindungen.' : undefined}
+              labelAction={<Help title="Verbindung" anchor="ausloeser">Ein Auslöser hört auf eine bestehende Verbindung. Zugangsdaten, Tests und Gebietsfilter bleiben dort; hier wird nur festgelegt, welche Ereignisse einen Workflow starten.</Help>}
             />
             {!conns.length && <Notice tone="warning">Es gibt noch keine passende Verbindung. <Link to="/verbindungen">Verbindungen öffnen →</Link></Notice>}
             <CheckList legend="Welche Vorgänge starten einen Lauf?" options={(def.phases ?? []).map((p) => ({ value: p.value, label: p.label }))} value={c.phases ?? []} onChange={(v) => set({ phases: v })} />
@@ -138,7 +138,7 @@ export function InputDialog({ input, kind, cat, onClose, preset }: { input: Inpu
                 { value: 'before', label: 'Vor Beginn (X Minuten/Stunden/Tage)' },
               ]}
               help="Gilt für eigene und eingelesene Termine, auch für jeden Termin einer Serie – jeder Zeitpunkt löst genau einmal aus."
-              labelAction={<Help title="Kalendereintrag" anchor="eingaenge">Der Worker prüft alle 30 Sekunden. Wird ein Termin verschoben, löst er zum neuen Zeitpunkt aus. Verpasste Zeitpunkte (z. B. Neustart) werden höchstens 10 Minuten nachgeholt, Zeitpunkte vor dem Aktivieren des Workflows nie.</Help>}
+              labelAction={<Help title="Kalendereintrag" anchor="ausloeser">Der Worker prüft alle 30 Sekunden. Wird ein Termin verschoben, löst er zum neuen Zeitpunkt aus. Verpasste Zeitpunkte (z. B. Neustart) werden höchstens 10 Minuten nachgeholt, Zeitpunkte vor dem Aktivieren des Workflows nie.</Help>}
             />
             {c.timing === 'before' && (
               <div className="grid grid-cols-[1fr_1fr] gap-3">
@@ -209,10 +209,10 @@ export default function Inputs() {
   usePageMeta({ title: 'Auslöser' });
   const refresh = () => qc.invalidateQueries({ queryKey: ['automation-inputs'] });
   const remove = async (i: InputDef) => {
-    if (!(await ask({ title: 'Eingang löschen?', text: `„${i.name}“ steht danach im Editor nicht mehr zur Verfügung.`, confirmLabel: 'Löschen' }))) return;
+    if (!(await ask({ title: 'Auslöser löschen?', text: `„${i.name}“ steht danach im Editor nicht mehr zur Verfügung.`, confirmLabel: 'Löschen' }))) return;
     try {
       await del(`/automation-inputs/${i.id}`);
-      toast({ tone: 'success', title: 'Eingang gelöscht' });
+      toast({ tone: 'success', title: 'Auslöser gelöscht' });
       refresh();
     } catch (e) {
       toastError(e, 'Nicht gelöscht');
@@ -222,13 +222,13 @@ export default function Inputs() {
     <div className="flex flex-col gap-5">
       <PageHeader
         subtitle="Auslöser für Workflows: Einsätze, amtliche Warnungen, RSS-Einträge, Uploads, Zeitpläne, Presseanfragen, Kalendertermine und manueller Start."
-        actions={manage && <Button variant="primary" icon="Plus" disabled={!cat.data} onClick={() => setChoose(true)}>Neuer Eingang</Button>}
+        actions={manage && <Button variant="primary" icon="Plus" disabled={!cat.data} onClick={() => setChoose(true)}>Neuer Auslöser</Button>}
       />
       <WorkflowTabs />
       {cat.data && !cat.data.enabled && <Notice tone="warning" title="Workflows sind abgeschaltet">Unter Einstellungen → Redaktion lassen sie sich wieder einschalten.</Notice>}
       {(q.isLoading || cat.isLoading) && <SkeletonRows rows={4} />}
-      {q.error && <ErrorBox title="Eingänge konnten nicht geladen werden">{(q.error as Error).message}</ErrorBox>}
-      {q.data && q.data.length === 0 && <EmptyState icon="Zap" title="Noch keine Eingänge" text="Ein Eingang legt fest, welches Ereignis einen Workflow startet." />}
+      {q.error && <ErrorBox title="Auslöser konnten nicht geladen werden">{(q.error as Error).message}</ErrorBox>}
+      {q.data && q.data.length === 0 && <EmptyState icon="Zap" title="Noch keine Auslöser" text="Ein Auslöser legt fest, welches Ereignis einen Workflow startet." />}
       <div className="grid gap-4 lg:grid-cols-2">
         {(q.data ?? []).map((i) => {
           const kind = cat.data?.inputKinds.find((k) => k.kind === i.kind);
@@ -248,7 +248,7 @@ export default function Inputs() {
                     <Button size="sm" icon="Pencil" onClick={() => setEdit({ input: i, kind: i.kind })}>
                       Bearbeiten
                     </Button>
-                    <Button size="sm" iconOnly icon="Trash2" aria-label={`Eingang „${i.name}“ löschen`} onClick={() => remove(i)} />
+                    <Button size="sm" iconOnly icon="Trash2" aria-label={`Auslöser „${i.name}“ löschen`} onClick={() => remove(i)} />
                   </div>
                 )
               }
@@ -279,7 +279,7 @@ export default function Inputs() {
         })}
       </div>
       {choose && cat.data && (
-        <Dialog open onClose={() => setChoose(false)} title="Art des Eingangs wählen" width={620}>
+        <Dialog open onClose={() => setChoose(false)} title="Art des Auslösers wählen" width={620}>
           <div className="grid sm:grid-cols-2 gap-2">
             {cat.data.inputKinds.map((k) => (
               <button

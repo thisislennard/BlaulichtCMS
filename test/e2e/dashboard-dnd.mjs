@@ -288,15 +288,15 @@ try {
 
   // Vorlage für alle speichern und wieder entfernen (Administration)
   await page.locator('#dash-template-target').selectOption('*');
-  await page.getByRole('button', { name: 'Als Vorlage speichern' }).click();
+  await page.getByRole('button', { name: 'Als Dashboard-Vorlage speichern' }).click();
   await sleep(700);
   check('Vorlage für alle gespeichert', same((await admin.get('/dashboard/layout')).templates, ['*']));
   check('Bearbeitungsmodus bleibt nach dem Speichern der Vorlage offen', (await page.locator('[data-dash-columns]').count()) === 1);
-  await page.getByRole('button', { name: 'Vorlage entfernen' }).click();
+  await page.getByRole('button', { name: 'Dashboard-Vorlage entfernen' }).click();
   await sleep(700);
   check('Vorlage entfernt', same((await admin.get('/dashboard/layout')).templates, []));
   // Auf Vorlage zurücksetzen
-  await page.getByRole('button', { name: 'Auf Vorlage zurücksetzen' }).click();
+  await page.getByRole('button', { name: 'Auf Dashboard-Vorlage zurücksetzen' }).click();
   await page.locator('[data-dash-view-column]').first().waitFor({ timeout: 8000 });
   await sleep(400);
   check('Zurücksetzen: Standardlayout gilt wieder', (await admin.get('/dashboard/layout')).source === 'default' && same(await viewState(page), startView), JSON.stringify(await viewState(page)));

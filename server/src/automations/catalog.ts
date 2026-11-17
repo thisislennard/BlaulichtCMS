@@ -1,6 +1,6 @@
 /**
- * Katalog der Automationen: Arten von Eingängen (Auslöser) und Ausgängen (Aktionen), Verarbeitungsknoten und die
- * Datenfelder, die ein Eingang liefert. Die Felder sind die einzige Grundlage für Platzhalter und Bedingungen – ein
+ * Katalog der Automationen: Arten von Auslösern und Aktionen, Verarbeitungsknoten und die
+ * Datenfelder, die ein Auslöser liefert. Die Felder sind die einzige Grundlage für Platzhalter und Bedingungen – ein
  * Ablauf kann nur mit Feldern arbeiten, die hier stehen (bei FE2/Feuersoftware genau die Allowlist der Verbindung).
  */
 
@@ -163,7 +163,7 @@ export const INPUT_KINDS: Record<InputKind, { label: string; description: string
       { key: 'ort', label: 'Ort', type: 'text', example: 'Gerätehaus Nord' },
       { key: 'kategorie', label: 'Kategorie', type: 'text', example: 'Übung' },
       { key: 'schlagwoerter', label: 'Schlagwörter', type: 'text', example: 'Atemschutz, Ausbildung' },
-      { key: 'quelle', label: 'Quelle (eigene Termine oder Name des iCal-Kalenders)', type: 'text', example: 'Eigene Termine' },
+      { key: 'quelle', label: 'Quelle (eigene Termine oder Name des externen Kalenders)', type: 'text', example: 'Eigene Termine' },
       { key: 'zeitpunkt', label: 'Auslöser', type: 'choice', example: 'beginn', options: ['beginn', 'ende', 'vorher'] },
       { key: 'gueltig_bis', label: 'Gültig bis (Ende des Termins)', type: 'datetime', example: '2026-11-21T12:00:00.000Z' },
       { key: 'termin_link', label: 'Link zum Kalender', type: 'url', example: '/kalender' },
@@ -187,7 +187,7 @@ export const OUTPUT_KINDS: Record<OutputKind, { label: string; description: stri
   },
   post: {
     label: 'Beitrag',
-    description: 'Beitragsentwurf aus einer Vorlage mit Texten je Kanal und vorausgewählten sozialen Kanälen (auch als Story oder zum Teilen von Hand), optional zur Freigabe eingereicht.',
+    description: 'Beitragsentwurf aus einer Vorlage mit Texten je Netzwerk und vorausgewählten sozialen Netzwerken (auch als Story oder zum Teilen von Hand), optional zur Freigabe eingereicht.',
     icon: 'FileText',
     directCapable: true,
     produces: [
@@ -236,8 +236,8 @@ export const OUTPUT_KINDS: Record<OutputKind, { label: string; description: stri
 };
 
 export const NODE_TYPES: Record<NodeType, { label: string; category: 'input' | 'process' | 'output'; description: string; icon: string }> = {
-  input: { label: 'Eingang', category: 'input', description: 'Auslöser aus der Liste der Eingänge.', icon: 'Zap' },
-  output: { label: 'Ausgang', category: 'output', description: 'Aktion aus der Liste der Ausgänge.', icon: 'Send' },
+  input: { label: 'Auslöser', category: 'input', description: 'Auslöser aus der Liste der Auslöser.', icon: 'Zap' },
+  output: { label: 'Aktion', category: 'output', description: 'Aktion aus der Liste der Aktionen.', icon: 'Send' },
   condition: { label: 'Bedingung', category: 'process', description: 'Prüft Felder und verzweigt nach „trifft zu“ und „trifft nicht zu“.', icon: 'Filter' },
   switch: { label: 'Verzweigung', category: 'process', description: 'Wählt den Weg nach dem Wert eines Feldes.', icon: 'Split' },
   template: { label: 'Felder setzen', category: 'process', description: 'Legt neue Felder aus Textvorlagen mit {{platzhaltern}} an.', icon: 'TextCursorInput' },
@@ -245,7 +245,7 @@ export const NODE_TYPES: Record<NodeType, { label: string; category: 'input' | '
   dedup: { label: 'Einmal je Vorgang', category: 'process', description: 'Lässt je Schlüssel nur den ersten Lauf im Zeitfenster durch.', icon: 'CopyPlus' },
   approval: { label: 'Freigabe anfordern', category: 'process', description: 'Hält den Lauf an, bis eine Person freigibt oder ablehnt.', icon: 'ShieldCheck' },
   merge: { label: 'Zusammenführen', category: 'process', description: 'Führt Wege wieder zusammen.', icon: 'GitBranch' },
-  image: { label: 'Bild aus Vorlage erzeugen', category: 'process', description: 'Füllt eine befüllbare Bildvorlage mit Feldern und legt das Bild in den Medien ab; Beitrags-Ausgänge danach übernehmen es (auch für Social und Story).', icon: 'ImageUp' },
+  image: { label: 'Bild aus Vorlage erzeugen', category: 'process', description: 'Füllt eine befüllbare Bildvorlage mit Feldern und legt das Bild in den Medien ab; Beitrags-Aktionen danach übernehmen es (auch für Social und Story).', icon: 'ImageUp' },
 };
 
 /** Felder, die „Bild aus Vorlage erzeugen“ liefert (#210). `bilder`: alle bisher im Lauf erzeugten Bilder. */
@@ -285,7 +285,7 @@ export const OPERATORS = {
 } as const;
 export type Operator = keyof typeof OPERATORS;
 
-/** Ausgangs-Ports eines Knotens (Kanten starten hier). */
+/** Anschlüsse (Zweige) eines Knotens (Kanten starten hier). */
 export function outputPorts(node: { type: string; data?: any }): { id: string; label: string }[] {
   switch (node.type) {
     case 'condition':

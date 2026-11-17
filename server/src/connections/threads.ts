@@ -151,7 +151,7 @@ export async function testThreads(c: Connection, sec: Record<string, string>) {
 /* ------------------------------------------------------------------ Veröffentlichen */
 
 /**
- * Text, Bild(er), Video oder Text mit Link-Vorschau. Ohne Medien hängt BlaulichtCMS den Link zur Website als
+ * Text, Bilder, Video oder Text mit Link-Vorschau. Ohne Medien hängt BlaulichtCMS den Link zur Website als
  * Link-Anhang an (nur bei Textbeiträgen möglich); mit Medien steht er im Text.
  */
 export async function publishThreads(c: Connection, sec: Record<string, string>, { sp, rev, media }: { sp: any; rev: any; media: any[] }, onContainer: (id: string | null) => Promise<void>) {

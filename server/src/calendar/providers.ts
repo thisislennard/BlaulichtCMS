@@ -6,7 +6,7 @@ import { POST_STATE_SQL, postState, revisionHash } from '../routes/posts.js';
 import { registerCalendarProvider, type CalendarEntry } from './store.js';
 
 /**
- * Einträge anderer Module im Kalender (#201): geplante Beiträge samt sozialer Kanäle und Fristen von Presseanfragen.
+ * Einträge anderer Module im Kalender (#201): geplante Beiträge samt sozialer Netzwerke und Fristen von Presseanfragen.
  */
 
 export const POST_STATE_LABEL: Record<string, string> = {
@@ -51,7 +51,7 @@ export async function postEntries(from: Date, to: Date, canMove: boolean): Promi
       ...((r.social_targets ?? []) as string[]).map((id) => {
         const c = connName.get(id);
         const s = social.find((x) => x.revision_id === r.revision_id && x.connection_id === id);
-        return { name: c?.name ?? 'Kanal', kind: c?.kind ?? 'social', status: s ? SOCIAL_LABEL[s.status] ?? s.status : null };
+        return { name: c?.name ?? 'Netzwerk', kind: c?.kind ?? 'social', status: s ? SOCIAL_LABEL[s.status] ?? s.status : null };
       }),
     ];
     const socialBusy = social.some((s) => s.revision_id === r.revision_id && ['queued', 'publishing', 'unknown'].includes(s.status));
@@ -67,7 +67,7 @@ export async function postEntries(from: Date, to: Date, canMove: boolean): Promi
       end: at,
       allDay: false,
       location: '',
-      description: channels.length ? `Kanäle: ${channels.map((c) => `${c.name}${c.status ? ` (${c.status})` : ''}`).join(', ')}` : 'Noch kein Kanal gewählt.',
+      description: channels.length ? `Netzwerke: ${channels.map((c) => `${c.name}${c.status ? ` (${c.status})` : ''}`).join(', ')}` : 'Noch kein Netzwerk gewählt.',
       category: null,
       tags: [],
       source: 'post',
@@ -103,7 +103,7 @@ export async function reschedulePost(postId: string, input: { revision: number; 
     if (cur.number !== input.revision) throw conflict(`Der Beitrag wurde inzwischen geändert (aktuell Fassung ${cur.number}). Bitte neu laden.`, { current: cur.number });
     if (FIXED_STATES.has(st.state)) throw new AppError(409, 'publication_running', 'Die Veröffentlichung ist bereits beauftragt oder erfolgt. Den Termin bitte im Beitrag ändern (vorher den Auftrag abbrechen).');
     const busy = await one(`SELECT 1 FROM social_publications WHERE revision_id = $1 AND status IN ('queued','publishing','unknown') LIMIT 1`, [cur.id], db);
-    if (busy) throw new AppError(409, 'publication_running', 'Eine Veröffentlichung in sozialen Kanälen ist bereits beauftragt. Den Termin bitte im Beitrag ändern.');
+    if (busy) throw new AppError(409, 'publication_running', 'Eine Veröffentlichung in sozialen Netzwerken ist bereits beauftragt. Den Termin bitte im Beitrag ändern.');
     if (cur.publish_at && new Date(cur.publish_at).getTime() === at.getTime()) return { changed: false, number: cur.number, approvalInvalidated: false, wasSubmitted: false };
     const next = { title: cur.title, body: cur.body, excerpt: cur.excerpt, media_ids: cur.media_ids, cover_id: cur.cover_id, site_id: cur.site_id, variants: cur.variants, publish_at: at, social_targets: cur.social_targets ?? [], social_formats: cur.social_formats ?? {} };
     const hash = revisionHash(next);

@@ -37,7 +37,7 @@ export async function pressEvent(db: Queryable, requestId: string, actor: Pick<A
   await db.query(`UPDATE press_requests SET updated_at = now() WHERE id = $1`, [requestId]);
 }
 
-/** Workflow-Eingang „Neue Presseanfrage“ – nur Felder ohne Kontaktdaten. */
+/** Workflow-Auslöser „Neue Presseanfrage“ – nur Felder ohne Kontaktdaten. */
 export async function emitNewPressRequest(id: string, db?: pg.PoolClient) {
   const r = await one<any>(`SELECT r.id, r.case_no, r.topic, r.outlet, r.channel, r.due_at, u.name AS assignee FROM press_requests r LEFT JOIN users u ON u.id = r.assignee_id WHERE r.id = $1`, [id], db ?? pool);
   if (!r) return;

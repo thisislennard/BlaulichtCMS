@@ -12,6 +12,7 @@ import { descendants } from '../media/folders.js';
 import { removeMediaFiles } from '../media/storage.js';
 import { mediaPayload } from './media.js';
 import { loadFolders } from './media-organize.js';
+import { plural } from '../lib/text.js';
 
 /*
  * Papierkorb wie LiFeOS (Paket 4). Löschen verschiebt Dateien, Ordner (samt Inhalt) und Sammlungen in den Papierkorb;
@@ -223,7 +224,7 @@ export async function trashCollection(id: string, actor: Actor, userId: string |
   if (used.size) {
     const titles = [...new Set([...used.values()].flat())];
     throw conflict(
-      `${used.size} Datei(en) werden in ${titles.length === 1 ? 'dem Beitrag' : 'den Beiträgen'} ${titles.map((t) => `„${t}“`).join(', ')} verwendet. ` +
+      `${plural(used.size, 'Datei', 'Dateien')} werden in ${titles.length === 1 ? 'dem Beitrag' : 'den Beiträgen'} ${titles.map((t) => `„${t}“`).join(', ')} verwendet. ` +
         'Bitte die Dateien dort aus der Fassung nehmen oder den Beitrag archivieren (bei veröffentlichten Beiträgen vorher zurückziehen) und dann erneut löschen.',
       { beitraege: titles },
     );

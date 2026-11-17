@@ -14,8 +14,8 @@ import { enqueueFollowUp } from '../jobs/queue.js';
 import { approvalStillValid } from '../lib/approval.js';
 
 /**
- * Ein Auftrag je Kanal und Fassung. Genau ein Versuch pro Anstoß (kein automatisches Wiederholen):
- *  - bestätigter Fehler → failed (nur dieser Kanal kann erneut angestoßen werden)
+ * Ein Auftrag je Netzwerk und Fassung. Genau ein Versuch pro Anstoß (kein automatisches Wiederholen):
+ *  - bestätigter Fehler → failed (nur dieses Netzwerk kann erneut angestoßen werden)
  *  - Abbruch nach dem Absenden → unknown; vor jedem neuen Versuch wird geprüft, ob der Beitrag schon existiert
  */
 export async function runSocialPublication(id: string) {
@@ -34,7 +34,7 @@ export async function runSocialPublication(id: string) {
     await notify({ kind: status === 'unknown' ? 'warning' : 'error', title: `${label}: ${status === 'unknown' ? 'Ergebnis unbekannt – bitte prüfen' : 'Veröffentlichung fehlgeschlagen'}`, body: msg.slice(0, 200), link: `/beitraege/${sp.post_id}`, permission: 'publish.social' });
     log('warn', 'social', `${label}: ${status} – ${msg}`);
   };
-  if (c.status !== 'active') return fail('failed', new StepError('config', 'Der Kanal ist nicht aktiv.'));
+  if (c.status !== 'active') return fail('failed', new StepError('config', 'Die Verbindung ist nicht aktiv.'));
   const sec = await connectionSecrets(c);
 
   // Unbekannter Ausgang oder unterbrochener Lauf: zuerst nachsehen statt doppelt zu veröffentlichen
@@ -109,7 +109,7 @@ export async function runSocialPublication(id: string) {
   }
 }
 
-/** Wiedererkennung je Kanal und Format (vor jedem erneuten Versuch nach unklarem Ausgang). */
+/** Wiedererkennung je Netzwerk und Format (vor jedem erneuten Versuch nach unklarem Ausgang). */
 function lookupExisting(c: Connection, sec: Record<string, string>, sp: any) {
   if (sp.format === 'story') return findExistingStory(c, sec, sp);
   if (c.kind === 'threads') return findExistingThreads(c, sec, sp.marker, new Date(sp.created_at));

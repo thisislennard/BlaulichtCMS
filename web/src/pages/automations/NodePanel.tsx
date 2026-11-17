@@ -184,7 +184,7 @@ export function NodePanel({
   errors: string[];
   canPublish: boolean;
   readOnly: boolean;
-  /** Ein-/Ausgang direkt hier anlegen und einsetzen */
+  /** Auslöser oder Aktion direkt hier anlegen und einsetzen */
   onCreate?: () => void;
 }) {
   const d = node.data ?? {};
@@ -198,7 +198,7 @@ export function NodePanel({
     <section aria-labelledby={`${idp}-h`} className="flex flex-col gap-4">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <div className="font-mono text-label uppercase text-fg-muted">{nt?.category === 'input' ? 'Eingang' : nt?.category === 'output' ? 'Ausgang' : 'Verarbeitung'}</div>
+          <div className="font-mono text-label uppercase text-fg-muted">{nt?.category === 'input' ? 'Auslöser' : nt?.category === 'output' ? 'Aktion' : 'Verarbeitung'}</div>
           <h3 id={`${idp}-h`} className="m-0 text-section font-semibold">{nt?.label}</h3>
           <p className="m-0 text-meta text-fg-muted">{nt?.description}</p>
         </div>
@@ -223,10 +223,10 @@ export function NodePanel({
 
       {node.type === 'input' && (
         <>
-          <SelectField id={`${idp}-in`} label="Eingang" value={d.inputId ?? ''} disabled={readOnly} onChange={(v) => set({ inputId: v })} placeholder="Bitte wählen …" options={inputs.map((i) => ({ value: i.id, label: i.name }))} help={input ? inputSummary(input, cat) : undefined} labelAction={<Help title="Eingang" anchor="eingaenge">Eingänge werden unter Workflows → Eingänge eingerichtet. Ein Ablauf darf mehrere Eingänge haben; ein Lauf startet immer an genau einem.</Help>} />
+          <SelectField id={`${idp}-in`} label="Auslöser" value={d.inputId ?? ''} disabled={readOnly} onChange={(v) => set({ inputId: v })} placeholder="Bitte wählen …" options={inputs.map((i) => ({ value: i.id, label: i.name }))} help={input ? inputSummary(input, cat) : undefined} labelAction={<Help title="Auslöser" anchor="ausloeser">Auslöser werden unter Workflows → Auslöser eingerichtet. Ein Ablauf darf mehrere Auslöser haben; ein Lauf startet immer an genau einem.</Help>} />
           {input && (
             <details open>
-              <summary className="cursor-pointer text-sm font-medium">Felder dieses Eingangs</summary>
+              <summary className="cursor-pointer text-sm font-medium">Felder dieses Auslösers</summary>
               <div className="pt-2">
                 <FieldList fields={input.fields} />
               </div>
@@ -235,17 +235,17 @@ export function NodePanel({
           <div className="flex flex-wrap items-center gap-3">
             {!readOnly && onCreate && (
               <Button size="sm" icon="Plus" onClick={onCreate}>
-                Neuen Eingang anlegen …
+                Neuen Auslöser anlegen …
               </Button>
             )}
-            <Link to="/workflows/ausloeser" className="text-sm !text-fg-muted hover:!text-fg">Eingänge verwalten →</Link>
+            <Link to="/workflows/ausloeser" className="text-sm !text-fg-muted hover:!text-fg">Auslöser verwalten →</Link>
           </div>
         </>
       )}
 
       {node.type === 'output' && (
         <>
-          <SelectField id={`${idp}-out`} label="Ausgang" value={d.outputId ?? ''} disabled={readOnly} onChange={(v) => set({ outputId: v })} placeholder="Bitte wählen …" options={outputs.map((o) => ({ value: o.id, label: o.name }))} help={output ? `${outKind?.label} · ${outputSummary(output, cat)}` : undefined} />
+          <SelectField id={`${idp}-out`} label="Aktion" value={d.outputId ?? ''} disabled={readOnly} onChange={(v) => set({ outputId: v })} placeholder="Bitte wählen …" options={outputs.map((o) => ({ value: o.id, label: o.name }))} help={output ? `${outKind?.label} · ${outputSummary(output, cat)}` : undefined} />
           {output && output.needs.length > 0 && (
             <p className="m-0 text-meta text-fg-muted">
               Braucht die Felder: <span className="font-mono">{output.needs.join(', ')}</span>
@@ -270,10 +270,10 @@ export function NodePanel({
           <div className="flex flex-wrap items-center gap-3">
             {!readOnly && onCreate && (
               <Button size="sm" icon="Plus" onClick={onCreate}>
-                Neuen Ausgang anlegen …
+                Neue Aktion anlegen …
               </Button>
             )}
-            <Link to="/workflows/aktionen" className="text-sm !text-fg-muted hover:!text-fg">Ausgänge verwalten →</Link>
+            <Link to="/workflows/aktionen" className="text-sm !text-fg-muted hover:!text-fg">Aktionen verwalten →</Link>
           </div>
         </>
       )}
@@ -291,7 +291,7 @@ export function NodePanel({
         <>
           <SelectField id={`${idp}-sf`} label="Feld" value={d.field ?? ''} disabled={readOnly} onChange={(v) => set({ field: v })} options={fields.map((f) => ({ value: f.key, label: f.label }))} />
           <fieldset className="m-0 p-0 border-0 flex flex-col gap-2">
-            <legend className="text-sm font-medium mb-1">Fälle (je Fall ein Ausgang, dazu „sonst“)</legend>
+            <legend className="text-sm font-medium mb-1">Fälle (je Fall ein Zweig, dazu „sonst“)</legend>
             {(d.cases ?? []).map((c: { id: string; value: string }, i: number) => (
               <div key={c.id} className="flex gap-1.5">
                 <label className="sr-only" htmlFor={`${idp}-case-${c.id}`}>Wert für Fall {i + 1}</label>
@@ -310,7 +310,7 @@ export function NodePanel({
         <fieldset className="m-0 p-0 border-0 flex flex-col gap-3">
           <legend className="text-sm font-medium mb-1 inline-flex items-center gap-1">
             Neue Felder
-            <Help title="Felder setzen" anchor="verarbeitung">Legt Felder aus Textvorlagen an, z. B. <code>titel</code> = „{'{{stichwort_text}}'} in {'{{ort}}'}“. Die neuen Felder stehen danach in Bedingungen und Ausgängen zur Verfügung. Platzhalter werden nur als Text eingesetzt.</Help>
+            <Help title="Felder setzen" anchor="verarbeitung">Legt Felder aus Textvorlagen an, z. B. <code>titel</code> = „{'{{stichwort_text}}'} in {'{{ort}}'}“. Die neuen Felder stehen danach in Bedingungen und Aktionen zur Verfügung. Platzhalter werden nur als Text eingesetzt.</Help>
           </legend>
           {(d.fields ?? []).map((f: { key: string; template: string }, i: number) => (
             <div key={i} className="flex flex-col gap-1.5 p-2 rounded-node bg-bg border border-line">
@@ -320,7 +320,7 @@ export function NodePanel({
                 </FieldWrap>
                 <Button iconOnly icon="X" aria-label={`Feld ${f.key} entfernen`} disabled={readOnly || d.fields.length <= 1} onClick={() => set({ fields: d.fields.filter((_: any, j: number) => j !== i) })} />
               </div>
-              <TemplateField id={`${idp}-tt-${i}`} label="Vorlage" rows={3} max={5000} value={f.template} disabled={readOnly} fields={fields} onChange={(v) => set({ fields: d.fields.map((x: any, j: number) => (j === i ? { ...x, template: v } : x)) })} />
+              <TemplateField id={`${idp}-tt-${i}`} label="Text mit Platzhaltern" rows={3} max={5000} value={f.template} disabled={readOnly} fields={fields} onChange={(v) => set({ fields: d.fields.map((x: any, j: number) => (j === i ? { ...x, template: v } : x)) })} />
             </div>
           ))}
           <Button size="sm" icon="Plus" className="self-start" disabled={readOnly || (d.fields ?? []).length >= 20} onClick={() => set({ fields: [...(d.fields ?? []), { key: `feld_${(d.fields ?? []).length + 1}`, template: '' }] })}>
@@ -410,7 +410,7 @@ function ImageStep({ idp, d, set, cat, fields, readOnly }: { idp: string; d: any
       />
       {tpl && (
         <fieldset className="m-0 p-0 border-0 flex flex-col gap-3">
-          <legend className="text-sm font-medium mb-1">Texte der Vorlage</legend>
+          <legend className="text-sm font-medium mb-1">Texte der Bildvorlage</legend>
           {tpl.texts.map((f) => (
             <TemplateField
               key={f.id}
@@ -427,7 +427,7 @@ function ImageStep({ idp, d, set, cat, fields, readOnly }: { idp: string; d: any
           ))}
           {tpl.images.length > 0 && (
             <div className="flex flex-col gap-2">
-              <span className="text-sm font-medium">Bilder der Vorlage</span>
+              <span className="text-sm font-medium">Bilder der Bildvorlage</span>
               {tpl.images.map((f) => (
                 <div key={f.id} className="flex flex-wrap items-center gap-2 text-sm">
                   <span className="flex-1 min-w-0">
@@ -443,7 +443,7 @@ function ImageStep({ idp, d, set, cat, fields, readOnly }: { idp: string; d: any
                   )}
                 </div>
               ))}
-              <p className="m-0 text-meta text-fg-muted">Ohne festes Bild bleibt der Platzhalter leer (Hintergrund der Vorlage).</p>
+              <p className="m-0 text-meta text-fg-muted">Ohne festes Bild bleibt der Platzhalter leer (Hintergrund der Bildvorlage).</p>
             </div>
           )}
           <TemplateField id={`${idp}-alt`} label="Alternativtext" rows={2} max={1000} value={d.altText ?? ''} disabled={readOnly} fields={fields} help="Leer: die Texte der Vorlage." onChange={(v) => set({ altText: v })} />
@@ -455,7 +455,7 @@ function ImageStep({ idp, d, set, cat, fields, readOnly }: { idp: string; d: any
             onChange={(v) => set({ collectionId: v || null })}
             options={[{ value: '', label: 'Automatisch („Bilder aus Vorlagen“)' }, ...cat.collections.map((c) => ({ value: c.id, label: c.title }))]}
           />
-          <Notice>Ein Beitrags-Ausgang danach übernimmt das Bild (erstes Bild als Titelbild) – damit auch für soziale Kanäle und Storys des Beitrags. Der Testlauf zeigt nur eine Vorschau und legt nichts an.</Notice>
+          <Notice>Eine Beitrags-Aktion danach übernimmt das Bild (erstes Bild als Titelbild) – damit auch für soziale Netzwerke und Storys des Beitrags. Der Testlauf zeigt nur eine Vorschau und legt nichts an.</Notice>
         </fieldset>
       )}
       {pick && <ImageMediaPicker onClose={() => setPick(null)} onPick={(m) => set({ images: { ...images, [pick]: m.id } })} />}

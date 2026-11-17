@@ -125,7 +125,7 @@ function Protocol({ id, onClose, onChange }: { id: string; onClose: () => void; 
   const r = q.data?.release;
   const send = async () => {
     const n = r.status === 'draft' ? r.list_ids.length : 0;
-    if (!(await ask({ title: r.status === 'draft' ? 'Pressemitteilung jetzt senden?' : 'Restliche Empfänger anschreiben?', text: r.status === 'draft' ? `„${r.subject}“ geht einzeln an jeden angemeldeten Kontakt der ${n} gewählten Liste(n).` : 'Nur Empfänger, an die noch nicht gesendet wurde.', confirmLabel: 'Senden' }))) return;
+    if (!(await ask({ title: r.status === 'draft' ? 'Pressemitteilung jetzt senden?' : 'Restliche Empfänger anschreiben?', text: r.status === 'draft' ? `„${r.subject}“ geht einzeln an jeden angemeldeten Kontakt ${n === 1 ? 'der gewählten Liste' : `der ${n} gewählten Listen`}.` : 'Nur Empfänger, an die noch nicht gesendet wurde.', confirmLabel: 'Senden' }))) return;
     try {
       const res = await post<{ recipients: number }>(`/press/releases/${id}/send`);
       toast({ tone: 'success', title: `Versand an ${res.recipients} Empfänger gestartet` });

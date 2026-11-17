@@ -3,7 +3,7 @@ import type { MediaItem } from '../../api/types';
 import { Button, cx, SegmentedControl, Select, StatusBadge } from '../../components/ui/core';
 import { Icon } from '../../components/ui/Icon';
 import { Dialog, Menu } from '../../components/ui/overlays';
-import { fmtBytes, fmtDateTime } from '../../lib/format';
+import { fmtBytes, fmtDateTime, plural } from '../../lib/format';
 import { openFaces, SENSITIVE_LABELS } from './PrivacyDialog';
 
 /** Name für die Oberfläche: Anzeigename, sonst Originalname. */
@@ -101,7 +101,7 @@ export function MediaInfo({ m }: { m: MediaItem }) {
       {m.had_location ? row('Standort', m.location_stripped ? 'beim Upload enthalten, aus Original und öffentlicher Fassung entfernt' : 'im Original enthalten, in der öffentlichen Fassung entfernt') : null}
       {m.sensitive_flags?.length ? row('Markiert', m.sensitive_flags.map((f) => SENSITIVE_LABELS[f]).join(', ')) : null}
       {m.redactions?.length || m.crop || m.strip_audio
-        ? row('Öffentlich', [m.redactions?.length ? `${m.redactions.length} Bereich(e) unkenntlich` : '', m.crop ? 'zugeschnitten' : '', m.strip_audio ? 'ohne Ton' : ''].filter(Boolean).join(' · '))
+        ? row('Öffentlich', [m.redactions?.length ? `${plural(m.redactions.length, 'Bereich', 'Bereiche')} unkenntlich` : '', m.crop ? 'zugeschnitten' : '', m.strip_audio ? 'ohne Ton' : ''].filter(Boolean).join(' · '))
         : null}
       {m.had_location === null ? row('Standort', 'unbekannt – das Format wird nicht ausgewertet; das Original kann Standortdaten enthalten') : null}
       {!m.had_location && m.had_location !== null && m.location_stripped ? row('Original', 'ohne Standort-, Seriennummer- und Personenangaben gespeichert') : null}

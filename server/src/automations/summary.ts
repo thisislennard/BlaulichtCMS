@@ -144,7 +144,7 @@ function outputPhrase(n: GraphNode, outputs: Map<string, OutputRef>, labels: Sum
 }
 
 /**
- * Ein Satz für den ganzen Workflow. Einfache Abläufe (Eingänge → höchstens eine Bedingung → Ausgänge) werden vollständig
+ * Ein Satz für den ganzen Workflow. Einfache Abläufe (Auslöser → höchstens eine Bedingung → Aktionen) werden vollständig
  * beschrieben; bei Verzweigungen und weiteren Schritten nennt der Satz Auslöser, Zahl der Zwischenschritte und Aktionen.
  */
 export function summarizeGraph(g: Pick<Graph, 'nodes' | 'edges'>, refs: { inputs: Map<string, InputRef>; outputs: Map<string, OutputRef> }, labels: SummaryLabels = {}, directAllowed = false): string {

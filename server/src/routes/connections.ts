@@ -31,6 +31,7 @@ import { endBanner, insecureFeed, insecureFeedUrl, REVIEW_CHECKS, refreshWarnfee
 import { listReceipts, Receipt, RECEIPT_CAP, receiptItems, receiptRaw } from '../connections/receipts.js';
 import { getSettings } from '../lib/settings.js';
 import { kindSupportsAlt } from '../lib/accessibility.js';
+import { plural } from '../lib/text.js';
 
 /** Öffentliche Sicht auf eine Verbindung – nie mit Geheimnissen. */
 async function view(c: Connection) {
@@ -198,7 +199,7 @@ export async function connectionRoutes(app: FastifyInstance) {
     const withDeleted = full && req.auth!.permissions.has('connection.delete') && (req.query as any)?.deleted === '1';
     const rows = await many<Connection>(withDeleted ? `SELECT * FROM connections ORDER BY (deleted_at IS NOT NULL OR status = 'revoked'), kind, name` : `SELECT * FROM connections WHERE status <> 'revoked' AND deleted_at IS NULL ORDER BY kind, name`);
     if (full) return Promise.all(rows.map(view));
-    // Redaktion sieht nur verfügbare soziale Kanäle (Name, Art, Funktionen)
+    // Redaktion sieht nur verfügbare soziale Netzwerke (Name, Art, Funktionen)
     return rows.filter((c) => isSocialKind(c.kind) && ['tested', 'active'].includes(c.status)).map((c) => ({ id: c.id, kind: c.kind, kind_label: KIND_LABEL[c.kind], name: c.name, status: c.status, capabilities: c.capabilities, manual: isManualChannel(c), account: { name: c.account?.name ?? c.account?.username ?? null } }));
   });
 
@@ -380,7 +381,7 @@ export async function connectionRoutes(app: FastifyInstance) {
         await updateConnectionSecrets(c, { userToken: r.userToken, pages: JSON.stringify(r.pages) }, by.id);
         await audit(actor, 'connection.oauth', { type: 'connection', id: c.id, label: c.name }, { seiten: r.pages.length });
         await invalidateTest(actor, c, 'Neu angemeldet');
-        return back(r.pages.length ? `Angemeldet – bitte eine von ${r.pages.length} Seite(n) wählen.` : 'Angemeldet, aber keine verwaltbare Seite gefunden.');
+        return back(r.pages.length ? `Angemeldet – bitte ${r.pages.length === 1 ? 'die gefundene Seite' : `eine von ${r.pages.length} Seiten`} wählen.` : 'Angemeldet, aber keine verwaltbare Seite gefunden.');
       }
       if (c.kind === 'mastodon') {
         const token = await mastodonExchange(c, String(c.config.clientId ?? ''), sec.clientSecret ?? '', redirect, q.code);
@@ -434,7 +435,7 @@ export async function connectionRoutes(app: FastifyInstance) {
       r = {
         steps: [
           { name: 'Zugangsschlüssel', ok: !!sec.inboundTokenHash, message: sec.inboundTokenHash ? 'Hinterlegt.' : 'Fehlt – bitte neu erzeugen.', kind: 'login' },
-          { name: 'Testmeldung empfangen', ok: got, message: got ? `Letzte Meldung: ${Object.keys(c.preview.fields ?? {}).length} Feld(er) übernommen, ${c.preview.ignoredKeys ?? 0} verworfen.` : 'Noch keine Meldung eingegangen. In FE2 eine anonymisierte Testmeldung an die Adresse senden.', kind: 'receive' },
+          { name: 'Testmeldung empfangen', ok: got, message: got ? `Letzte Meldung: ${plural(Object.keys(c.preview.fields ?? {}).length, 'Feld', 'Felder')} übernommen, ${c.preview.ignoredKeys ?? 0} verworfen.` : 'Noch keine Meldung eingegangen. In FE2 eine anonymisierte Testmeldung an die Adresse senden.', kind: 'receive' },
           { name: 'Einsatz-ID erkannt', ok: got, message: got ? 'Die Zuordnung liefert eine Einsatz-ID (Wiederholungen werden erkannt).' : '–', kind: 'receive' },
         ],
         capabilities: { drafts: true },
@@ -507,7 +508,7 @@ export async function connectionRoutes(app: FastifyInstance) {
 
   /**
    * Löschen: Eine nie benutzte Verbindung wird samt Geheimnissen endgültig gelöscht. Hat sie Bezüge (Veröffentlichungen,
-   * Einsatzmeldungen, amtliche Warnungen, Zielkanal in einer Fassung), wird sie widerrufen, ihre Geheimnisse werden
+   * Einsatzmeldungen, amtliche Warnungen, Veröffentlichungsziel in einer Fassung), wird sie widerrufen, ihre Geheimnisse werden
    * gelöscht und sie wird als gelöscht markiert: aus den Listen ausgeblendet, Bezüge zeigen „Verbindung gelöscht“.
    * Abrufe, Eingang und Veröffentlichungen ignorieren sie (Status „widerrufen“).
    */
@@ -687,7 +688,7 @@ export async function connectionRoutes(app: FastifyInstance) {
     return reply.send(await connectionTestImage());
   });
 
-  /* ------------------------------------------------------------ Soziale Kanäle */
+  /* ------------------------------------------------------------ Soziale Netzwerke */
 
   /** Formatprüfung je gewähltem Kanal (vor Freigabe und Veröffentlichung sichtbar). */
   app.get('/posts/:id/social-check', { preHandler: requireAuth('post.view') }, async (req) => {
@@ -718,7 +719,7 @@ export async function connectionRoutes(app: FastifyInstance) {
     });
   });
 
-  /** Veröffentlichen auf den gewählten sozialen Kanälen – nur mit gültiger Freigabe genau dieser Fassung. */
+  /** Veröffentlichen auf den gewählten sozialen Netzwerken – nur mit gültiger Freigabe genau dieser Fassung. */
   app.post('/posts/:id/social', { preHandler: requireAuth('publish.social') }, async (req) => {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
     const b = z.object({ revision: z.number().int(), contentHash: z.string().length(64), connectionIds: z.array(z.uuid()).optional() }).parse(req.body);
@@ -730,14 +731,14 @@ export async function connectionRoutes(app: FastifyInstance) {
       if (!st.validApproval) throw new AppError(409, 'not_approved', 'Diese Fassung ist nicht freigegeben.');
       await assertMediaPresent(st.current, db);
       const targets: string[] = (st.current.social_targets ?? []).filter((t: string) => !b.connectionIds || b.connectionIds.includes(t));
-      if (!targets.length) throw badRequest('Für diese Fassung ist kein sozialer Kanal gewählt.');
+      if (!targets.length) throw badRequest('Für diese Fassung ist kein soziales Netzwerk gewählt.');
       const created: any[] = [];
       const link = await postLink(id, db);
       const ready: { name: string }[] = [];
       for (const cid of targets) {
         const c = await one<any>(`SELECT * FROM connections WHERE id = $1`, [cid], db);
         if (!c || c.status !== 'active') {
-          created.push({ connection_id: cid, skipped: 'Kanal ist nicht aktiv.' });
+          created.push({ connection_id: cid, skipped: 'Verbindung ist nicht aktiv.' });
           continue;
         }
         const manual = isManualChannel(c);
@@ -745,7 +746,7 @@ export async function connectionRoutes(app: FastifyInstance) {
         for (const format of formatsFor(c.kind, (st.current.social_formats ?? {})[cid])) {
           const exists = await one<any>(`SELECT id, status FROM social_publications WHERE revision_id = $1 AND connection_id = $2 AND format = $3 AND status <> 'canceled' ORDER BY created_at DESC LIMIT 1`, [st.current.id, cid, format], db);
           if (exists) {
-            created.push({ id: exists.id, connection_id: cid, format, status: exists.status, duplicate: true, hint: ['failed', 'unknown'].includes(exists.status) ? 'Bitte diesen Kanal gezielt wiederholen.' : undefined });
+            created.push({ id: exists.id, connection_id: cid, format, status: exists.status, duplicate: true, hint: ['failed', 'unknown'].includes(exists.status) ? 'Bitte dieses Netzwerk gezielt wiederholen.' : undefined });
             continue;
           }
           const marker = format === 'story' ? `story:${crypto.randomUUID()}` : markerFor(socialText(st.current, c.kind, link, limitsFor(c)), c.kind);
@@ -763,7 +764,7 @@ export async function connectionRoutes(app: FastifyInstance) {
       }
       return { items: created, ready, title: st.current.title as string };
     }).then(async (r) => {
-      // Hinweis „zum Teilen bereit“ an alle, die in sozialen Kanälen veröffentlichen dürfen
+      // Hinweis „zum Teilen bereit“ an alle, die in sozialen Netzwerken veröffentlichen dürfen
       for (const x of r.ready) await notify({ kind: 'info', title: `Zum Teilen bereit (${x.name}): ${r.title}`.slice(0, 200), body: 'Text und Dateien sind vorbereitet – bitte von Hand teilen und anschließend als geteilt markieren.', link: `/beitraege/${id}`, permission: 'publish.social' });
       return { items: r.items };
     });
@@ -821,7 +822,7 @@ export async function connectionRoutes(app: FastifyInstance) {
   });
 
   /**
-   * Auf sozialen Kanälen zurückziehen (#114). Facebook: Beitrag per Graph API löschen. Instagram: die Schnittstelle
+   * Auf sozialen Netzwerken zurückziehen (#114). Facebook: Beitrag per Graph API löschen. Instagram: die Schnittstelle
    * erlaubt kein Löschen – Hinweis mit Link zum Beitrag, Löschen von Hand und anschließend hier bestätigen. Noch nicht
    * ausgeführte Aufträge des Beitrags werden abgebrochen. Jeder Schritt wird auditiert. Braucht keine neue Freigabe.
    */
@@ -843,7 +844,7 @@ export async function connectionRoutes(app: FastifyInstance) {
         WHERE sp.post_id = $1 AND sp.status = 'published' AND (sp.removal_status IS NULL OR sp.removal_status = 'failed') ORDER BY sp.created_at`,
       [id],
     );
-    if (!live.length && !canceled.length && !open.length) throw badRequest('Der Beitrag steht auf keinem sozialen Kanal (mehr).');
+    if (!live.length && !canceled.length && !open.length) throw badRequest('Der Beitrag steht auf keinem sozialen Netzwerk (mehr).');
     const items: any[] = [];
     for (const r of canceled) {
       items.push({ id: r.id, kind: r.kind, name: r.name, result: 'canceled', message: 'Noch nicht veröffentlicht – Auftrag abgebrochen.' });
@@ -909,13 +910,13 @@ export async function connectionRoutes(app: FastifyInstance) {
         WHERE id = $1 AND status = 'published' AND removal_status IN ('manual','failed') RETURNING *`,
       [id, req.auth!.user?.id ?? null],
     );
-    if (!sp) throw badRequest('Für diesen Kanal steht keine Löschung von Hand aus.');
+    if (!sp) throw badRequest('Für dieses Netzwerk steht keine Löschung von Hand aus.');
     const c = await one<any>(`SELECT name FROM connections WHERE id = $1`, [sp.connection_id]);
     await audit(req.auth!.actor, 'social.removal_confirmed', { type: 'post', id: sp.post_id }, { kanal: c?.name ?? null, link: sp.remote_url });
     return { ok: true };
   });
 
-  /** Manueller Export: Text je Kanal und freigegebene Medien (zeitlich begrenzte Links). */
+  /** Manueller Export: Text je Netzwerk und freigegebene Medien (zeitlich begrenzte Links). */
   app.get('/posts/:id/social-export', { preHandler: requireAuth('publish.social') }, async (req) => {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
     const st = await postState(id);

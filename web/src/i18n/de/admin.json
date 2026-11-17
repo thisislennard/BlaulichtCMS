@@ -213,7 +213,7 @@
     "retReplay": "Wiederholfenster",
     "retReplayHelp": "So lange können Läufe erneut ausgeführt werden.",
     "retRuns": "Ausführungen",
-    "retEvents": "Eingangsereignisse",
+    "retEvents": "Auslöser-Ereignisse",
     "retLogs": "Systemprotokoll",
     "retAudit": "Audit-Protokoll",
     "fourEyes": "Vier-Augen-Freigabe",

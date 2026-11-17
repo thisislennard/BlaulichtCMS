@@ -21,7 +21,7 @@ dem Server abgeleitet ist. Die Prüfsumme schützt also gegen Übertragungsfehle
   aus WordPress): Signatur gültig, jede Datei passt, keine zusätzliche oder fehlende Datei, Version im Plugin-Kopf
   gleich der signierten und neuer als die installierte (kein Zurückspielen alter, verwundbarer Versionen). Sonst bricht
   WordPress das Update mit einer Meldung ab. Die Prüfsummenkontrolle bleibt zusätzlich bestehen.
-- **Prüfung in BlaulichtCMS:** Unter *Websites → Bridge-Updates* zeigt BlaulichtCMS, ob das Paket im Image gültig signiert ist.
+- **Prüfung in BlaulichtCMS:** Unter *Einrichtung → Websites → Bridge-Updates* zeigt BlaulichtCMS, ob das Paket im Image gültig signiert ist.
   Ein unsigniertes oder falsch signiertes Paket lässt sich nicht für alle freigeben. Das ist nur eine Hilfe gegen
   Versehen – maßgeblich ist die Prüfung in der Bridge.
 - **Server-Test:** `server/test/units.test.ts` schlägt fehl, wenn Schlüssel hinterlegt sind, die Bridge aber nach dem
@@ -52,7 +52,7 @@ Voraussetzung: Node.js 24 und ein Klon des Repositorys.
    node scripts/bridge-signing.mjs verify
    ```
 4. `includes/signing-keys.php`, `signature.json` und die Versionsänderung committen und wie gewohnt ausliefern
-   (`install.sh`), dann über den Test-Kanal und die Freigabe verteilen.
+   (`install.sh`), dann über die Test-Stufe und die Freigabe verteilen.
 
 **Bei jeder späteren Änderung an der Bridge** nach dem Erhöhen der Version Schritt 3 wiederholen. Ohne neue Signatur
 schlägt der Server-Test fehl, BlaulichtCMS zeigt „Signatur ungültig“ und verweigert die Freigabe.
@@ -79,13 +79,13 @@ Schlüssel per Hand auf allen Websites installieren.
 - **Übergang:** Websites mit einer Bridge ohne Schlüssel (0.6.0 und älter) nehmen die erste Version mit Schlüssel noch
   ohne Signaturprüfung an (nur Prüfsumme). Wer genau in diesem Zeitfenster den BlaulichtCMS-Server kontrolliert, könnte
   stattdessen eigenen Code ausliefern. Abhilfe: die erste Version mit Schlüssel per Hand installieren (ZIP aus
-  *Websites → Bridge herunterladen* nach Prüfung von `node scripts/bridge-signing.mjs verify`) oder den Übergang zügig
+  *Einrichtung → Websites → Bridge herunterladen* nach Prüfung von `node scripts/bridge-signing.mjs verify`) oder den Übergang zügig
   nach der Einrichtung durchführen.
 - **Schlüssel im Plugin-Verzeichnis:** Wer bereits Schreibzugriff auf die WordPress-Dateien hat, kann
   `signing-keys.php` ändern – er kann dann aber ohnehin beliebigen Code ausführen. Die Signatur schützt den Updateweg,
   nicht eine bereits übernommene Website.
 - **Vertrauen in den Signierenden:** Die Signatur belegt nur, dass der Inhaber des privaten Schlüssels das Paket
-  freigegeben hat. Sie ersetzt keine Durchsicht der Änderungen vor dem Signieren und nicht den Test-Kanal.
+  freigegeben hat. Sie ersetzt keine Durchsicht der Änderungen vor dem Signieren und nicht die Test-Stufe.
 - **Von Hand hochgeladene ZIP-Dateien** (Plugin installieren statt Update) prüft die Bridge nicht – das ist ein
   bewusster Schritt einer Person mit Administratorrechten in WordPress.
 - **Verfügbarkeit:** Ein übernommener Server kann Updates zurückhalten oder ein abgelehntes Paket anbieten (die

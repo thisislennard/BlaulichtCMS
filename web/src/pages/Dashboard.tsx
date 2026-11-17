@@ -138,7 +138,7 @@ export default function Dashboard() {
     setBusy(true);
     try {
       await put('/dashboard/layout', { scope, role, layout });
-      toast({ tone: 'success', title: scope === 'personal' ? (layout ? 'Dashboard gespeichert' : 'Auf Vorlage zurückgesetzt') : layout ? 'Vorlage gespeichert' : 'Vorlage entfernt' });
+      toast({ tone: 'success', title: scope === 'personal' ? (layout ? 'Dashboard gespeichert' : 'Auf Dashboard-Vorlage zurückgesetzt') : layout ? 'Dashboard-Vorlage gespeichert' : 'Vorlage entfernt' });
       await qc.invalidateQueries({ queryKey: ['dashboard-layout'] });
       if (scope === 'personal') setDraft(null);
     } catch (e) {
@@ -166,7 +166,7 @@ export default function Dashboard() {
             <>
               {can('media.collections') && (
                 <Button icon="Camera" onClick={() => setNewCollection(true)}>
-                  Medien sammeln
+                  Fotos sammeln
                 </Button>
               )}
               {can('post.create') && (
@@ -187,7 +187,7 @@ export default function Dashboard() {
               </Button>
               {lq.data?.source === 'personal' && (
                 <Button disabled={busy} icon="RotateCcw" onClick={() => save('personal', undefined, null)}>
-                  Auf Vorlage zurücksetzen
+                  Auf Dashboard-Vorlage zurücksetzen
                 </Button>
               )}
               <Button variant="primary" icon="Save" loading={busy} onClick={() => draft && save('personal', undefined, fromEdit(draft))}>
@@ -217,7 +217,7 @@ export default function Dashboard() {
       )}
       <UnsavedChangesGuard when={dirty} text="Die Änderungen am Dashboard sind noch nicht gespeichert und gehen verloren." />
       {newPost && <NewPostDialog onClose={() => setNewPost(false)} />}
-      {newCollection && <NewCollectionDialog open onClose={() => setNewCollection(false)} />}
+      {newCollection && <NewCollectionDialog open title="Fotos sammeln" onClose={() => setNewCollection(false)} />}
     </div>
   );
 }

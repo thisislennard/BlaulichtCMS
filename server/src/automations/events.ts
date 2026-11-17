@@ -27,7 +27,7 @@ export interface Trigger {
   input: InputRef;
 }
 
-/** Eingangs-Knoten aller aktiven Automationen für eine Art von Eingang (Momentaufnahme der aktiven Version). */
+/** Auslöser-Knoten aller aktiven Automationen für eine Art von Auslöser (Momentaufnahme der aktiven Version). */
 export async function activeTriggers(kind: InputKind, db: pg.PoolClient | pg.Pool = pool): Promise<Trigger[]> {
   const rows = await many<any>(
     `SELECT a.id, a.name, a.direct_publish, v.version, v.graph, v.direct_publish AS v_direct, v.activated_at
@@ -158,7 +158,7 @@ export async function emitRssItem(feedId: string, item: { key: string; title: st
 /* ------------------------------------------------------------------ Uploads */
 
 /**
- * Neue geprüfte Datei über einen Upload-Link. Gebündelt je Sammlung und Zeitfenster des Eingangs: Der Lauf startet am
+ * Neue geprüfte Datei über einen Upload-Link. Gebündelt je Sammlung und Zeitfenster des Auslösers: Der Lauf startet am
  * Ende des Fensters und zählt dann die neuen Dateien. Keine Angaben der Hochladenden.
  */
 export async function emitUpload(m: { collectionId: string; linkLabel: string | null; collectionTitle: string }) {

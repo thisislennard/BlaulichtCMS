@@ -8,6 +8,7 @@ import { categoryFor, chosenChannels, notifyCategory, type NotifyCategory } from
 import { readSecret, revokeSecret, storeSecret } from './secrets.js';
 import { getSettings, setSettings, type Settings } from './settings.js';
 import { generateVapidKeys, sendPush, type VapidKeys } from './webpush.js';
+import { plural } from '../lib/text.js';
 
 /**
  * Zustellung der Benachrichtigungen per Push und E-Mail (#191, wie die Versandschicht von LiFeOS #922):
@@ -189,7 +190,7 @@ async function deliverPush(n: { title: string; body: string; link: string | null
     const r = await pushTo(sub, payload, keys, subject, cat.urgency);
     if (r.status === 'failed') failed++;
   }
-  if (failed) log('warn', 'notify', `Push „${cat.label}“: ${failed} von ${subs.length} Gerät(en) nicht erreicht.`);
+  if (failed) log('warn', 'notify', `Push „${cat.label}“: ${failed} von ${plural(subs.length, 'Gerät', 'Geräten')} nicht erreicht.`);
 }
 
 async function deliverMail(n: { title: string; body: string; link: string | null }, cat: NotifyCategory, users: Recipient[], s: Settings) {

@@ -105,7 +105,7 @@ export async function instagramExchange(appId: string, appSecret: string, redire
 /* ------------------------------------------------------------------ Test */
 
 /**
- * Test je Kanal. Eine erfolgreiche Anmeldung ist ausdrücklich KEIN Veröffentlichungstest:
+ * Test je Netzwerk. Eine erfolgreiche Anmeldung ist ausdrücklich KEIN Veröffentlichungstest:
  *  - Facebook: unveröffentlichten Beitrag auf der Seite anlegen und sofort wieder löschen.
  *  - Instagram: Mediencontainer mit einem Testbild anlegen und Verarbeitungsstatus prüfen – ohne zu veröffentlichen.
  */
@@ -479,7 +479,7 @@ export function checkStoryFormats(kind: 'facebook' | 'instagram', media: any[]):
   return issues;
 }
 
-/** Prüft je Kanal, ob die Medien der Fassung unterstützt werden (vor der Freigabe sichtbar). */
+/** Prüft je Netzwerk, ob die Medien der Fassung unterstützt werden (vor der Freigabe sichtbar). */
 export function checkFormats(kind: 'facebook' | 'instagram', media: any[], text: string): string[] {
   const issues: string[] = [];
   if (kind === 'instagram') {

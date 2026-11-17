@@ -53,9 +53,9 @@ export default function Insights() {
       <PageHeader subtitle="Aufrufe und Interaktionen veröffentlichter Social-Posts – nur Summen, keine Personen." />
       <div className="flex flex-wrap items-end gap-3">
         <SegmentedControl label="Zeitraum" value={days} onChange={setDays} options={[{ value: '7', label: '7 Tage' }, { value: '30', label: '30 Tage' }, { value: '90', label: '90 Tage' }, { value: '365', label: '1 Jahr' }]} />
-        <FieldWrap label="Kanal" htmlFor="ins-kind" className="min-w-[200px]">
+        <FieldWrap label="Netzwerk" htmlFor="ins-kind" className="min-w-[200px]">
           <Select id="ins-kind" value={kind} onChange={(e) => setKind(e.target.value)}>
-            <option value="">Alle Kanäle</option>
+            <option value="">Alle Netzwerke</option>
             {SOCIAL_KINDS.filter((k) => k !== 'whatsapp').map((k) => (
               <option key={k} value={k}>
                 {SOCIAL_LABEL[k]}
@@ -65,7 +65,7 @@ export default function Insights() {
         </FieldWrap>
         <HelpTip title="Woher die Zahlen kommen" more="/hilfe/verbindungen#reichweite">
           <p className="m-0">BlaulichtCMS fragt die offiziellen Statistik-Schnittstellen 1 Stunde, 24 Stunden und 7 Tage nach der Veröffentlichung ab. Gezählt werden nur Beiträge über eine Schnittstelle – keine Storys und nichts, was von Hand geteilt wurde.</p>
-          <p className="m-0">Welche Zahlen ein Kanal liefert, ist verschieden; „–“ heißt: liefert der Kanal nicht oder fehlt das Recht.</p>
+          <p className="m-0">Welche Zahlen ein Netzwerk liefert, ist verschieden; „–“ heißt: liefert das Netzwerk nicht oder fehlt das Recht.</p>
         </HelpTip>
       </div>
       {q.isLoading && <SkeletonRows rows={6} />}
@@ -80,12 +80,12 @@ export default function Insights() {
             <KpiCard label="Klicks" icon="MousePointerClick" value={fmtNum(d.totals.clicks)} delta="nur Facebook" deltaTone="muted" />
           </div>
           {d.errors > 0 && <Notice tone="warning">Für {d.errors === 1 ? 'eine Veröffentlichung' : `${d.errors} Veröffentlichungen`} ließen sich keine Zahlen abrufen – meist fehlt das Statistik-Recht der Verbindung. Einzelheiten stehen im Beitrag.</Notice>}
-          <Card title="Je Kanal">
+          <Card title="Je Netzwerk">
             <div className="overflow-x-auto">
               <Table>
                 <thead>
                   <tr>
-                    <Th>Kanal</Th>
+                    <Th>Netzwerk</Th>
                     <Th align="right">Beiträge</Th>
                     {METRIC_ORDER.map((k) => (
                       <Th key={k} align="right">
@@ -112,7 +112,7 @@ export default function Insights() {
               </Table>
             </div>
           </Card>
-          <Card title="Top-Beiträge" subtitle="Nach Interaktionen über alle Kanäle eines Beitrags.">
+          <Card title="Top-Beiträge" subtitle="Nach Interaktionen über alle Netzwerke eines Beitrags.">
             {d.top.length === 0 ? (
               <p className="m-0 text-sm text-fg-muted">Noch keine Zahlen – der erste Abruf folgt eine Stunde nach der Veröffentlichung.</p>
             ) : (

@@ -424,7 +424,7 @@ export async function bridgeRoutes(app: FastifyInstance) {
   });
 
   /**
-   * Meldung der Bridge (#186): Kategorien der Website (Auswahl im Beitrag und im Ausgang), Abrufweg, automatische
+   * Meldung der Bridge (#186): Kategorien der Website (Auswahl im Beitrag und im Aktion), Abrufweg, automatische
    * Updates und Darstellung. Die Bridge sendet nur bei Änderungen und sonst höchstens alle paar Stunden.
    */
   app.post('/bridge/report', bridgeLimit, async (req) => {

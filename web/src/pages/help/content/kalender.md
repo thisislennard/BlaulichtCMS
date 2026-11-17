@@ -59,7 +59,7 @@ Alle Zeiten gelten in der Zeitzone der Instanz (**Einstellungen → Allgemein �
 
 ## Geplante Beiträge
 
-Beiträge mit einem **geplanten Veröffentlichungstermin** (im Beitrag unter „Termin“) erscheinen im Kalender als eigene Einträge mit Beitragssymbol – sichtbar für alle mit **Beiträge ansehen**. Der Eintrag nennt den Status der aktuellen Fassung (**Entwurf**, **zur Freigabe**, **freigegeben**, **veröffentlicht** …) und die gewählten Kanäle: Website und soziale Kanäle samt Stand (geplant, veröffentlicht, fehlgeschlagen). Ein Klick öffnet die Übersicht, **Öffnen →** führt zum Beitrag. Über die Quelle **Geplante Beiträge** lassen sie sich allein anzeigen oder ausblenden.
+Beiträge mit einem **geplanten Veröffentlichungstermin** (im Beitrag unter „Termin“) erscheinen im Kalender als eigene Einträge mit Beitragssymbol – sichtbar für alle mit **Beiträge ansehen**. Der Eintrag nennt den Status der aktuellen Fassung (**Entwurf**, **zur Freigabe**, **freigegeben**, **veröffentlicht** …) und die gewählten Veröffentlichungsziele: Website und soziale Netzwerke samt Stand (geplant, veröffentlicht, fehlgeschlagen). Ein Klick öffnet die Übersicht, **Öffnen →** führt zum Beitrag. Über die Quelle **Geplante Beiträge** lassen sie sich allein anzeigen oder ausblenden.
 
 ### Termin verschieben
 
@@ -70,7 +70,7 @@ Mit dem Recht **Beiträge bearbeiten** lässt sich der Termin ändern:
 
 Der Termin gehört zur **Fassung** des Beitrags. Verschieben legt deshalb eine neue Fassung an („Termin im Kalender verschoben“). War die bisherige Fassung **freigegeben** oder **zur Freigabe eingereicht**, fragt der Kalender vorher nach: Die Freigabe gilt danach nicht mehr, der Beitrag muss erneut eingereicht und freigegeben werden. Das Vier-Augen-Prinzip bleibt unberührt – ein verschobener Termin zählt nicht als Schreiben am Inhalt.
 
-Nicht verschieben lassen sich Beiträge, deren Veröffentlichung **bereits beauftragt** ist (Website oder soziale Kanäle), die gerade veröffentlicht werden oder schon veröffentlicht sind. Dann den Termin im Beitrag ändern und vorher den Auftrag abbrechen. Termine in der Vergangenheit sind nicht möglich.
+Nicht verschieben lassen sich Beiträge, deren Veröffentlichung **bereits beauftragt** ist (Website oder soziale Netzwerke), die gerade veröffentlicht werden oder schon veröffentlicht sind. Dann den Termin im Beitrag ändern und vorher den Auftrag abbrechen. Termine in der Vergangenheit sind nicht möglich.
 
 ## Fristen von Presseanfragen
 
@@ -80,7 +80,7 @@ Offene [Presseanfragen](/presse) (neu oder in Bearbeitung) mit Frist erscheinen 
 
 Externe Kalender – etwa der Outlook-Kalender der Wehrführung, ein Google-Kalender oder ein Wehr-Kalender einer anderen Software – lassen sich über ihren **iCal-Link** (Adresse einer `.ics`-Datei) einlesen. Dafür braucht es das Recht **iCal-Kalender einlesen**.
 
-1. **iCal-Kalender** → **Kalender hinzufügen**.
+1. **Externe Kalender einlesen** → **Kalender hinzufügen**.
 2. Den **iCal-Link** einfügen (`https://…` oder `webcal://…`).
 3. **Verbindung testen**: BlaulichtCMS ruft die Adresse ab und zeigt Anzahl und die nächsten Termine. Ohne erfolgreichen Test lässt sich der Kalender nicht hinzufügen.
 4. **Name**, **Kategorie** (gilt für alle Termine der Quelle) und **Abruf** (15 Minuten bis täglich) wählen → **Kalender hinzufügen**. Die Termine erscheinen sofort.
@@ -103,7 +103,7 @@ Externe Kalender – etwa der Outlook-Kalender der Wehrführung, ein Google-Kale
 
 ## Kalender abonnieren
 
-Mit **Abonnieren** (Recht **Kalender abonnieren**) erzeugt jede Person ihren eigenen, **geheimen Abo-Link**. Damit erscheinen die Termine im eigenen Kalenderprogramm und werden dort regelmäßig aktualisiert.
+Mit **Kalender abonnieren** (gleichnamiges Recht) erzeugt jede Person ihren eigenen, **geheimen Abo-Link**. Damit erscheinen die Termine im eigenen Kalenderprogramm und werden dort regelmäßig aktualisiert.
 
 - Enthalten sind eigene und eingelesene Termine von **60 Tagen zurück bis ein Jahr voraus** – nur **Titel, Zeit und Kategorie**. **Beschreibung und Ort** nur, wenn eingeschaltet. Geplante Beiträge und Presse-Fristen sind nie enthalten.
 - Unter **Kategorien im Abo** lässt sich das Abo auf einzelne Kategorien begrenzen (z. B. nur „Übung“).
@@ -126,13 +126,13 @@ Wer den Link kennt, sieht die Termine. Bei Verdacht, dass er weitergegeben wurde
 
 Termine können [Workflows](/hilfe/workflows) starten – zum Beispiel: Beginnt ein Termin der Kategorie „Übung“, erscheint auf der Website der Banner „Achtung Übung“ bis zum Ende der Übung (Vorlage **Übung im Kalender → Banner „Achtung Übung“** unter **Neuer Workflow**).
 
-Den Eingang **Kalendereintrag** richtet man unter [Workflows → Auslöser](/workflows/ausloeser) ein:
+Den Auslöser **Kalendereintrag** richtet man unter [Workflows → Auslöser](/workflows/ausloeser) ein:
 
 | Einstellung | Möglichkeiten |
 |---|---|
 | Zeitpunkt | **zu Beginn**, **zum Ende** oder **vorher** – 1 bis 999 Minuten, Stunden oder Tage vor Beginn (höchstens 30 Tage) |
 | Kategorien | nur Termine dieser Kategorien (leer = alle) |
-| Quellen | eigene Termine und/oder bestimmte eingelesene iCal-Kalender (leer = alle) |
+| Quellen | eigene Termine und/oder bestimmte eingelesene externe Kalender (leer = alle) |
 | Schlagwörter | mindestens eines davon (Groß-/Kleinschreibung egal) |
 | Text enthält | Titel oder Beschreibung enthält den Text |
 

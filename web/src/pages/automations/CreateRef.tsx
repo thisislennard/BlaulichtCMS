@@ -7,8 +7,8 @@ import { OutputDialog } from './Outputs';
 import type { Catalog, SlotPreset } from './shared';
 
 /*
- * Ein- oder Ausgang direkt aus dem Workflow anlegen (ohne Seitenwechsel): erst die Art wählen (nur passende, falls ein
- * Platz aus einer Vorlage sie vorgibt), dann dasselbe Formular wie unter Workflows → Eingänge bzw. Ausgänge.
+ * Auslöser oder Aktion direkt aus dem Workflow anlegen (ohne Seitenwechsel): erst die Art wählen (nur passende, falls ein
+ * Platz aus einer Vorlage sie vorgibt), dann dasselbe Formular wie unter Workflows → Auslöser bzw. Aktionen.
  */
 export interface CreateRefRequest {
   type: 'input' | 'output';

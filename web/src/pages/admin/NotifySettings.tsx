@@ -5,7 +5,7 @@ import { get, post, put } from '../../api/client';
 import { Badge, Button, FieldWrap, Input, Notice, Select, Switch } from '../../components/ui/core';
 import { useConfirm, useToast } from '../../components/ui/overlays';
 import { HelpLink, HelpTip } from '../../components/ui/HelpTip';
-import { fmtDateTime } from '../../lib/format';
+import { fmtDateTime, plural } from '../../lib/format';
 import { FieldGrid, LoadError, SectionCard } from './shared';
 import { navPath } from '../../config/navigation';
 import { navTrail } from '../../config/navText';
@@ -97,7 +97,7 @@ export function NotifySettingsSection({ manage }: { manage: boolean }) {
     setBusy('rotate');
     try {
       const r = await post<{ removed: number }>('/notify/settings/push-rotate', {});
-      toast({ tone: 'success', title: 'Push-Schlüssel erneuert', text: `${r.removed} Gerät(e) entfernt.` });
+      toast({ tone: 'success', title: 'Push-Schlüssel erneuert', text: `${plural(r.removed, 'Gerät', 'Geräte')} entfernt.` });
       await refresh();
     } catch (e) {
       setError((e as Error).message);
@@ -115,7 +115,7 @@ export function NotifySettingsSection({ manage }: { manage: boolean }) {
       bodyClassName="flex flex-col gap-5"
     >
       <div className="flex flex-col gap-1">
-        <Switch checked={form.pushEnabled} disabled={ro} onChange={(v) => set({ pushEnabled: v })} label="Push-Benachrichtigungen" description={`Mitteilungen an Browser und installierte App (Web Push). ${d.push.subscriptions} Gerät(e) eingerichtet.`} />
+        <Switch checked={form.pushEnabled} disabled={ro} onChange={(v) => set({ pushEnabled: v })} label="Push-Benachrichtigungen" description={`Mitteilungen an Browser und installierte App (Web Push). ${plural(d.push.subscriptions, 'Gerät', 'Geräte')} eingerichtet.`} />
         <Switch checked={form.mailEnabled} disabled={ro} onChange={(v) => set({ mailEnabled: v })} label="E-Mail-Benachrichtigungen" description="Benachrichtigungen per E-Mail über den gewählten Versandweg. Warnversand und Sicherheitsmeldungen sind davon unabhängig." />
       </div>
 

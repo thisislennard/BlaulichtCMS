@@ -10,7 +10,7 @@ Unter [Workflows](/workflows) → **Mit KI erstellen** (Recht *Workflows ansehen
 2. **Katalog exportieren** – `workflow-katalog.json` mit dem, was es in dieser Installation gibt (siehe [Was der Katalog enthält](#was-der-katalog-enthaelt)).
 3. **Anfrage kopieren** – die [Vorlage](#vorlage-fuer-die-anfrage) steht im Dialog. „…“ durch den eigenen Wunsch ersetzen, z. B. „bei einem FE2-Alarm mit Stichwort-Kategorie Brand einen Beitragsentwurf anlegen und die Redaktion benachrichtigen“.
 4. In der KI die beiden Dateien anhängen (oder ihren Inhalt einfügen) und die Anfrage senden.
-5. **Ergebnis importieren** (oder **Importieren** in der Liste): die Antwort als Datei wählen oder **Als Text einfügen** und **Prüfen**. BlaulichtCMS prüft die Datei, zeigt eine Vorschau und schlägt je Ein- und Ausgang den gleichnamigen vorhandenen vor.
+5. **Ergebnis importieren** (oder **Importieren** in der Liste): die Antwort als Datei wählen oder **Als Text einfügen** und **Prüfen**. BlaulichtCMS prüft die Datei, zeigt eine Vorschau und schlägt je Auslöser und Aktion den gleichnamigen vorhandenen Baustein vor.
 6. Den Entwurf im Editor ansehen, Fehler beheben (sie stehen am Knoten), **testen** und erst dann aktivieren.
 
 Meldet der Import Fehler, nennt jede Meldung den Ort in der Datei (z. B. `automations[0].graph.nodes[2].data.rules[0].op`) und was erwartet wurde. **Meldungen kopieren** und der KI zur Korrektur geben – auch dabei keine Einsatz- oder Personendaten ergänzen.
@@ -19,12 +19,12 @@ Meldet der Import Fehler, nennt jede Meldung den Ort in der Datei (z. B. `automa
 
 Der Katalog ist eine JSON-Datei nur mit Angaben zum Bau von Workflows:
 
-- vorhandene **Eingänge** und **Ausgänge** mit Art und Name; beim manuellen Start die eigenen Felder (Feldname und Bezeichnung), bei Ausgängen die Felder, die ihre Texte verwenden (`usesFields`),
-- die **Felder je Auslöser** samt Systemfeldern, die Felder, die Schritte und Aktionen liefern, die **Vergleiche** für Bedingungen, Knotenarten mit Ausgängen und die Grenzen,
+- vorhandene **Auslöser** und **Aktionen** mit Art und Name; beim manuellen Start die eigenen Felder (Feldname und Bezeichnung), bei Aktionen die Felder, die ihre Texte verwenden (`usesFields`),
+- die **Felder je Auslöser** samt Systemfeldern, die Felder, die Schritte und Aktionen liefern, die **Vergleiche** für Bedingungen, Knotenarten mit Aktionen und die Grenzen,
 - Namen und Textfelder der **befüllbaren Bildvorlagen**, Namen der **Kalender-Kategorien**,
 - das aktive **Stichwortverzeichnis** (Stichwort, Bezeichnung, Kategorie).
 
-Nicht enthalten sind Zugangsdaten, Kennungen und Einstellungen von Verbindungen, Ein- und Ausgängen, Einsatz- und Warndaten, Läufe, Medien, Konten, Personen und Kontakte (auch keine Empfänger von E-Mails oder Pressemitteilungen). Jeder Export steht in den [Aktivitäten](/aktivitaeten).
+Nicht enthalten sind Zugangsdaten, Kennungen und Einstellungen von Verbindungen, Auslösern und Aktionen, Einsatz- und Warndaten, Läufe, Medien, Konten, Personen und Kontakte (auch keine Empfänger von E-Mails oder Pressemitteilungen). Jeder Export steht in den [Aktivitäten](/aktivitaeten).
 
 ## Vorlage für die Anfrage
 
@@ -35,13 +35,13 @@ Die Vorlage ist für jede KI gleich. Im Dialog **Mit KI erstellen** lässt sie s
 ```text
 Ich möchte in BlaulichtCMS einen Workflow anlegen. Im Anhang sind zwei Dateien:
 1. die Formatbeschreibung als JSON-Schema (blaulichtcms-automations-1.schema.json),
-2. der Katalog meiner Installation (workflow-katalog.json) mit den vorhandenen Eingängen und Ausgängen, den Feldern je Auslöser, den Vergleichen für Bedingungen, den Bildvorlagen und dem Stichwortverzeichnis.
+2. der Katalog meiner Installation (workflow-katalog.json) mit den vorhandenen Auslösern und Aktionen, den Feldern je Auslöser, den Vergleichen für Bedingungen, den Bildvorlagen und dem Stichwortverzeichnis.
 
 Erstelle eine Workflow-Datei im Format „blaulichtcms.automations“ (schemaVersion 1), die genau dem Schema entspricht:
-- Verwende nur Knotenarten, Felder, Vergleiche, Ein- und Ausgänge, Bildvorlagen und Stichwörter aus dem Katalog. Erfinde nichts dazu.
-- Trage Ein- und Ausgänge unter „references“ mit Art („kind“) und genauem Namen aus dem Katalog ein; die Knoten verweisen darauf mit „inputRef“ (in1, in2 …) bzw. „outputRef“ (out1, out2 …).
-- Schreibe Platzhalter als {{feldname}} und verwende nur Felder, die an dieser Stelle vorhanden sind. Braucht ein Ausgang Felder („usesFields“ im Katalog), die der Auslöser nicht liefert, lege sie vorher mit „Felder setzen“ an.
-- Verbinde die Knoten über „edges“ mit dem passenden Ausgang („sourceHandle“, z. B. „true“ bei einer zutreffenden Bedingung).
+- Verwende nur Knotenarten, Felder, Vergleiche, Auslöser und Aktionen, Bildvorlagen und Stichwörter aus dem Katalog. Erfinde nichts dazu.
+- Trage Auslöser und Aktionen unter „references“ mit Art („kind“) und genauem Namen aus dem Katalog ein; die Knoten verweisen darauf mit „inputRef“ (in1, in2 …) bzw. „outputRef“ (out1, out2 …).
+- Schreibe Platzhalter als {{feldname}} und verwende nur Felder, die an dieser Stelle vorhanden sind. Braucht eine Aktion Felder („usesFields“ im Katalog), die der Auslöser nicht liefert, lege sie vorher mit „Felder setzen“ an.
+- Verbinde die Knoten über „edges“ mit dem passenden Zweig („sourceHandle“, z. B. „true“ bei einer zutreffenden Bedingung).
 - Gib nur das JSON aus, ohne Erklärungen davor oder danach.
 
 Der Workflow soll: …
@@ -51,9 +51,9 @@ Der Workflow soll: …
 
 ## Grenzen
 
-- Die KI kann nur **vorhandene** Ein- und Ausgänge verwenden: Texte, Empfänger und Gestaltung eines Ausgangs (z. B. Banner-Stil oder Beitragsvorlage) stehen im Ausgang selbst und gehören nicht in die Datei. Fehlt ein passender Ein- oder Ausgang, bleibt der Platz nach dem Import offen und lässt sich im Editor wählen oder neu anlegen.
+- Die KI kann nur **vorhandene** Auslöser und Aktionen verwenden: Texte, Empfänger und Gestaltung einer Aktion (z. B. Banner-Stil oder Beitragsvorlage) stehen in der Aktion selbst und gehören nicht in die Datei. Fehlt ein passender Ein- oder Aktion, bleibt der Platz nach dem Import offen und lässt sich im Editor wählen oder neu anlegen.
 - Direktversand, Aktivieren und Freigaben bleiben bei Menschen; eine Datei kann nichts davon einschalten.
-- Ob ein Feld an einer Stelle vorhanden ist, ob alle Knoten angeschlossen sind und ob die Ausgänge der Knoten passen, prüft der Editor nach dem Import – die Fehler stehen am Knoten.
+- Ob ein Feld an einer Stelle vorhanden ist, ob alle Knoten angeschlossen sind und ob die Zweige der Knoten passen, prüft der Editor nach dem Import – die Fehler stehen am Knoten.
 - KI-Ergebnisse können plausibel aussehen und trotzdem falsch sein. Der Testlauf zeigt Schritt für Schritt, was passieren würde.
 
 ## Formatbeschreibung
@@ -72,14 +72,14 @@ Die Datei hat das Format `blaulichtcms.automations` (Formatversion 1) – dassel
 | `automations` | ja | 1–50 Workflows: `name` (2–120 Zeichen), `description` (optional, bis 500) und `graph` mit `nodes` (bis 60) und `edges` (bis 150) |
 | `appVersion`, `exportedAt` | nein | nur zur Information |
 
-Ein **Knoten** hat `id` (1–40 Zeichen aus Buchstaben, Ziffern, `_` und `-`; eindeutig im Workflow), `type`, `data` und optional `position` (`x`, `y`). Eine **Verbindung** hat `id`, `source`, `sourceHandle` (Ausgang des Quellknotens) und `target`. Andere Schlüssel sind nicht vorgesehen.
+Ein **Knoten** hat `id` (1–40 Zeichen aus Buchstaben, Ziffern, `_` und `-`; eindeutig im Workflow), `type`, `data` und optional `position` (`x`, `y`). Eine **Verbindung** hat `id`, `source`, `sourceHandle` (Zweig des Quellknotens) und `target`. Andere Schlüssel sind nicht vorgesehen.
 
 ### Knotenarten
 
-| `type` | Baustein | Angaben in `data` | Ausgänge (`sourceHandle`) |
+| `type` | Baustein | Angaben in `data` | Zweige (`sourceHandle`) |
 | --- | --- | --- | --- |
-| `input` | **Eingang** – Auslöser aus der Liste der Eingänge. | optional: `inputRef`, `label`. inputRef: Bezug aus references.inputs (z. B. „in1“). Ohne inputRef bleibt der Auslöser offen und wird nach dem Import gewählt. | `out` (weiter) |
-| `output` | **Ausgang** – Aktion aus der Liste der Ausgänge. | optional: `outputRef`, `label`. outputRef: Bezug aus references.outputs (z. B. „out1“). Texte, Empfänger und Gestaltung stehen im Ausgang selbst, nicht in der Datei. | `out` (danach) |
+| `input` | **Auslöser** – Auslöser aus der Liste der Auslöser. | optional: `inputRef`, `label`. inputRef: Bezug aus references.inputs (z. B. „in1“). Ohne inputRef bleibt der Auslöser offen und wird nach dem Import gewählt. | `out` (weiter) |
+| `output` | **Aktion** – Aktion aus der Liste der Aktionen. | optional: `outputRef`, `label`. outputRef: Bezug aus references.outputs (z. B. „out1“). Texte, Empfänger und Gestaltung stehen in der Aktion selbst, nicht in der Datei. | `out` (danach) |
 | `condition` | **Bedingung** – Prüft Felder und verzweigt nach „trifft zu“ und „trifft nicht zu“. | Pflicht: `combinator`, `rules` · optional: `label`. Regeln „Feld – Vergleich – Wert“ (field, op, value), verknüpft mit combinator „and“ oder „or“; höchstens 20 Regeln und eine Ebene Untergruppen ({ combinator, rules }). | `true` (trifft zu), `false` (trifft nicht zu) |
 | `switch` | **Verzweigung** – Wählt den Weg nach dem Wert eines Feldes. | Pflicht: `field`, `cases` · optional: `label`. field: Feld, nach dessen Wert verzweigt wird; cases: 1–12 Fälle { id, value }. | `case:<id>` (je Fall, id aus cases), `default` (sonst) |
 | `template` | **Felder setzen** – Legt neue Felder aus Textvorlagen mit {{platzhaltern}} an. | Pflicht: `fields` · optional: `label`. fields: 1–20 Einträge { key, template } – legt das Feld key mit dem Text aus template an (Platzhalter {{feld}} erlaubt). | `out` (weiter) |
@@ -87,11 +87,11 @@ Ein **Knoten** hat `id` (1–40 Zeichen aus Buchstaben, Ziffern, `_` und `-`; ei
 | `dedup` | **Einmal je Vorgang** – Lässt je Schlüssel nur den ersten Lauf im Zeitfenster durch. | Pflicht: `fields`, `windowMinutes` · optional: `label`. fields: 1–5 Feldnamen als Schlüssel; windowMinutes: Zeitfenster 1–10080. | `out` (weiter) |
 | `approval` | **Freigabe anfordern** – Hält den Lauf an, bis eine Person freigibt oder ablehnt. | Pflicht: `timeoutHours` · optional: `title`, `summary`, `label`. title und summary (mit Platzhaltern); timeoutHours: 1–72 – ohne Entscheidung gilt die Anfrage danach als abgelehnt. | `approved` (freigegeben), `rejected` (abgelehnt) |
 | `merge` | **Zusammenführen** – Führt Wege wieder zusammen. | optional: `label`. Keine Einstellungen. | `out` (weiter) |
-| `image` | **Bild aus Vorlage erzeugen** – Füllt eine befüllbare Bildvorlage mit Feldern und legt das Bild in den Medien ab; Beitrags-Ausgänge danach übernehmen es (auch für Social und Story). | optional: `templateId`, `templateName`, `texts`, `images`, `altText`, `collectionId`, `label`. templateName: Name einer Bildvorlage aus dem Katalog; texts: Kennung des Textfelds der Vorlage → Text mit Platzhaltern; altText: Alternativtext. templateId, images und collectionId gehören zur Installation und werden in Dateien nicht verwendet. | `out` (weiter) |
+| `image` | **Bild aus Vorlage erzeugen** – Füllt eine befüllbare Bildvorlage mit Feldern und legt das Bild in den Medien ab; Beitrags-Aktionen danach übernehmen es (auch für Social und Story). | optional: `templateId`, `templateName`, `texts`, `images`, `altText`, `collectionId`, `label`. templateName: Name einer Bildvorlage aus dem Katalog; texts: Kennung des Textfelds der Vorlage → Text mit Platzhaltern; altText: Alternativtext. templateId, images und collectionId gehören zur Installation und werden in Dateien nicht verwendet. | `out` (weiter) |
 
 ### Auslöser und ihre Felder
 
-Ein Eingang liefert die Felder seiner Art. Zusätzlich steht in jedem Lauf zur Verfügung:
+Ein Auslöser liefert die Felder seiner Art. Zusätzlich steht in jedem Lauf zur Verfügung:
 
 | Feld | Bedeutung | Art | Beispiel |
 | --- | --- | --- | --- |
@@ -193,7 +193,7 @@ Felder wie bei FE2-Alarm (`fe2`).
 | `ort` | Ort | text | Gerätehaus Nord |
 | `kategorie` | Kategorie | text | Übung |
 | `schlagwoerter` | Schlagwörter | text | Atemschutz, Ausbildung |
-| `quelle` | Quelle (eigene Termine oder Name des iCal-Kalenders) | text | Eigene Termine |
+| `quelle` | Quelle (eigene Termine oder Name des externen Kalenders) | text | Eigene Termine |
 | `zeitpunkt` | Auslöser | choice: `beginn`, `ende`, `vorher` | beginn |
 | `gueltig_bis` | Gültig bis (Ende des Termins) | datetime | 2026-11-21T12:00:00.000Z |
 | `termin_link` | Link zum Kalender | url | /kalender |
@@ -204,27 +204,27 @@ Felder wie bei FE2-Alarm (`fe2`).
 | --- | --- | --- | --- |
 | `gestartet_von` | Gestartet von | text | Alex Beispiel |
 
-Dazu kommen die eigenen Felder des jeweiligen Eingangs (im Katalog unter `inputs` → `fields`).
+Dazu kommen die eigenen Felder des jeweiligen Auslösers (im Katalog unter `inputs` → `fields`).
 
 ### Aktionen und Felder danach
 
-Ein Ausgang führt die Aktion mit seinen eigenen, in BlaulichtCMS eingerichteten Texten aus; im Katalog steht je Ausgang, welche Felder er verwendet (`usesFields`). Danach stehen die gelieferten Felder bereit (z. B. für eine Benachrichtigung mit Link).
+Eine Aktion arbeitet mit ihren eigenen, in BlaulichtCMS eingerichteten Texten; im Katalog steht je Aktion, welche Felder sie verwendet (`usesFields`). Danach stehen die gelieferten Felder bereit (z. B. für eine Benachrichtigung mit Link).
 
 | `kind` | Aktion | Liefert danach |
 | --- | --- | --- |
 | `banner` | **Banner** – Banner-Entwurf im eingestellten Stil (zur Freigabe eingereicht) – je Website ein Banner. | `banner_link` (Link zu den Bannern) |
-| `post` | **Beitrag** – Beitragsentwurf aus einer Vorlage mit Texten je Kanal und vorausgewählten sozialen Kanälen (auch als Story oder zum Teilen von Hand), optional zur Freigabe eingereicht. | `beitrag_link` (Link zum Beitrag), `beitrag_titel` (Titel des Beitrags) |
+| `post` | **Beitrag** – Beitragsentwurf aus einer Vorlage mit Texten je Netzwerk und vorausgewählten sozialen Netzwerken (auch als Story oder zum Teilen von Hand), optional zur Freigabe eingereicht. | `beitrag_link` (Link zum Beitrag), `beitrag_titel` (Titel des Beitrags) |
 | `mail` | **E-Mail** – E-Mail über den eingerichteten Mailserver an Rollen oder hinterlegte Zuständigkeiten. | – |
 | `notify` | **App-Benachrichtigung** – Benachrichtigung in BlaulichtCMS an Rollen oder einzelne Personen. | – |
 | `warning_draft` | **Warnentwurf vorbereiten** – Warnentwurf mit vorausgefüllten Feldern – Warnstufe, Freigabe und Versand bleiben bei Menschen. | `warnentwurf_link` (Link zum Warnentwurf), `warnentwurf_nr` (Vorgangsnummer) |
 | `incident_entry` | **Einsatz in Einsatzliste** – Eintrag für die Einsatzliste der Website vorschlagen (Stichwort, Ortsteil, Alarmzeit) – veröffentlicht wird erst nach Freigabe. Ein Einsatz entsteht nur einmal, auch bei Aktualisierungen. | `einsatzliste_link` (Link zur Einsatzliste) |
 | `press_release` | **Pressemitteilung an Verteiler** – Pressemitteilung für Verteilerlisten des Presseverteilers – standardmäßig als Entwurf (Versand von Hand); sofort senden nur mit Direktversand. Jede Mail einzeln adressiert, mit Abmeldelink. | `pressemitteilung_link` (Link zur Pressemitteilung) |
 
-**Bild aus Vorlage erzeugen** liefert `bild_id` (Kennung des erzeugten Bildes), `bild_link` (Link zum Bild in den Medien), `bilder` (Alle erzeugten Bilder dieses Laufs); ein Beitrags-Ausgang danach übernimmt die Bilder. **Felder setzen** liefert die dort angelegten Felder.
+**Bild aus Vorlage erzeugen** liefert `bild_id` (Kennung des erzeugten Bildes), `bild_link` (Link zum Bild in den Medien), `bilder` (Alle erzeugten Bilder dieses Laufs); eine Beitrags-Aktion danach übernimmt die Bilder. **Felder setzen** liefert die dort angelegten Felder.
 
 ### Bedingungen
 
-Eine Regel ist `{ "field": "stichwort", "op": "starts_with", "value": "B" }`. `combinator` `"and"` verlangt alle Regeln, `"or"` mindestens eine; eine Untergruppe `{ "combinator": "or", "rules": [ … ] }` darf eine Ebene tief stehen. Vergleiche ignorieren Groß- und Kleinschreibung. Ausgänge der Bedingung: `true` (trifft zu) und `false` (trifft nicht zu).
+Eine Regel ist `{ "field": "stichwort", "op": "starts_with", "value": "B" }`. `combinator` `"and"` verlangt alle Regeln, `"or"` mindestens eine; eine Untergruppe `{ "combinator": "or", "rules": [ … ] }` darf eine Ebene tief stehen. Vergleiche ignorieren Groß- und Kleinschreibung. Aktionen der Bedingung: `true` (trifft zu) und `false` (trifft nicht zu).
 
 | `op` | Vergleich |
 | --- | --- |

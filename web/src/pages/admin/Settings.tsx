@@ -38,6 +38,7 @@ import { fmtUptime, useSystemStatus } from "./SystemStatus";
 import { UpdatesSection } from "./Updates";
 import { NotifySettingsSection } from "./NotifySettings";
 import { OffsiteBackupSection } from "./OffsiteBackup";
+import { plural } from '../../lib/format';
 
 type Values = Record<string, any>;
 interface SettingsResponse {
@@ -346,7 +347,7 @@ export default function Settings() {
                     htmlFor="s-state"
                     help={
                       <>
-                        Legt das Stichwortverzeichnis fest (Warnentwürfe → Stichwörter &amp; Regeln). Mitgeliefert für {STATE_OPTIONS.filter((x) => STATES_WITH_CATALOG.includes(x.id)).map((x) => x.name).join(" und ")}; für andere Länder eine eigene Liste importieren.{" "}
+                        Legt das Stichwortverzeichnis fest (Einrichtung → Stichwörter &amp; Regeln). Mitgeliefert für {STATE_OPTIONS.filter((x) => STATES_WITH_CATALOG.includes(x.id)).map((x) => x.name).join(" und ")}; für andere Länder eine eigene Liste importieren.{" "}
                         <Link to="/hilfe/stichwoerter-regeln#stichwortverzeichnis-der-laender">Mehr dazu</Link>
                       </>
                     }
@@ -450,7 +451,7 @@ export default function Settings() {
                   disabled={ro("editorial.alt_text_required")}
                   onChange={(x) => set("editorial.alt_text_required", x)}
                   label="Alternativtext ist Pflicht"
-                  description="An: Ohne Alternativtext je Bild lässt sich ein Beitrag für Website oder soziale Kanäle nicht freigeben. Aus: Die Freigabe zeigt nur eine Warnung."
+                  description="An: Ohne Alternativtext je Bild lässt sich ein Beitrag für Website oder soziale Netzwerke nicht freigeben. Aus: Die Freigabe zeigt nur eine Warnung."
                 />
                 <Switch
                   checked={!!v["press.reply_approval"]}
@@ -998,7 +999,7 @@ ${who}
 
 ## Welche Daten verarbeitet werden
 
-### Foto-Links (Upload-Seite)
+### Upload-Links (Upload-Seite)
 
 [Hochgeladene Dateien, abgefragte Angaben, IP-Adresse zur Missbrauchsabwehr]
 
@@ -1006,9 +1007,9 @@ ${who}
 
 [Beiträge, Banner und Einträge der Einsatzliste (Alarmzeit, Stichwort, Ort nur als Ortsteil bzw. Gemeinde, Kurzbericht, Fotos) nach Freigabe auf der Website; ggf. Name der Autorin bzw. des Autors; Umgang mit Abgebildeten, Widerspruch und Zurückziehen]
 
-### Soziale Kanäle
+### Soziale Netzwerke
 
-[Nur die tatsächlich genutzten Kanäle nennen, z. B. Facebook/Instagram (Meta), X, Mastodon (Instanz und Betreiber), Bluesky: welche Inhalte dort veröffentlicht werden, eigene Verantwortung der Betreiber, Drittland (USA), gemeinsame Verantwortung für Seiten-Statistiken bei Meta, Link zur Datenschutzerklärung der Präsenz]
+[Nur die tatsächlich genutzten Netzwerke nennen, z. B. Facebook/Instagram (Meta), X, Mastodon (Instanz und Betreiber), Bluesky: welche Inhalte dort veröffentlicht werden, eigene Verantwortung der Betreiber, Drittland (USA), gemeinsame Verantwortung für Seiten-Statistiken bei Meta, Link zur Datenschutzerklärung der Präsenz]
 
 ### Anmeldung in BlaulichtCMS
 
@@ -1028,7 +1029,7 @@ ${who}
 
 ## Empfänger und Übermittlung in Drittländer
 
-[z. B. Öffentlichkeit (Website), Hoster der Website, Betreiber der sozialen Kanäle (Meta, X, Bluesky – USA; Mastodon-Instanz je nach Standort), Redaktionen als Empfänger von Pressemitteilungen, Mail- bzw. Microsoft-365-Dienstleister, Hosting- und Sicherungsdienstleister; Grundlage einer Übermittlung in die USA, z. B. EU-US Data Privacy Framework]
+[z. B. Öffentlichkeit (Website), Hoster der Website, Betreiber der sozialen Netzwerke (Meta, X, Bluesky – USA; Mastodon-Instanz je nach Standort), Redaktionen als Empfänger von Pressemitteilungen, Mail- bzw. Microsoft-365-Dienstleister, Hosting- und Sicherungsdienstleister; Grundlage einer Übermittlung in die USA, z. B. EU-US Data Privacy Framework]
 
 ## Speicherdauer
 
@@ -1050,7 +1051,7 @@ function LegalTextField({ k, path, label, max, controller, v, set, ro }: { k: "l
   const id = `s-${k.replace(/\W/g, "-")}`;
   const text = String(v[k] ?? "");
   const insert = async () => {
-    if (text.trim() && !(await ask({ title: "Vorlage einfügen?", text: "Der bisherige Text wird durch die Vorlage ersetzt.", confirmLabel: "Ersetzen" }))) return;
+    if (text.trim() && !(await ask({ title: "Mustertext einfügen?", text: "Der bisherige Text wird durch den Mustertext ersetzt.", confirmLabel: "Ersetzen" }))) return;
     set(k, legalTemplate(k, controller));
     setPreview(false);
   };
@@ -1063,7 +1064,7 @@ function LegalTextField({ k, path, label, max, controller, v, set, ro }: { k: "l
         <div className="flex flex-wrap items-center gap-1.5">
           {!ro && (
             <Button size="sm" icon="FileText" onClick={insert}>
-              Vorlage einfügen
+              Mustertext einfügen
             </Button>
           )}
           <Button size="sm" icon={preview ? "Pencil" : "Eye"} onClick={() => setPreview((p) => !p)} aria-pressed={preview}>
@@ -1215,7 +1216,7 @@ function RetentionPreview({ manage, dirty }: { manage: boolean; dirty: boolean }
     try {
       const r = await post<RetentionReport>("/system/retention/run");
       const n = r.categories.reduce((a, c) => a + c.count, 0);
-      toast({ tone: "success", title: "Löschfristen angewendet", text: `${fmtNumber(n)} Einträge gelöscht.` });
+      toast({ tone: "success", title: "Löschfristen angewendet", text: `${plural(n, 'Eintrag', 'Einträge')} gelöscht.` });
       setReport(await get<RetentionReport>("/system/retention"));
     } catch (e) {
       setError((e as Error).message);
@@ -1266,7 +1267,7 @@ function RetentionPreview({ manage, dirty }: { manage: boolean; dirty: boolean }
             <ul className="m-0 pl-5 text-sm flex flex-col gap-1">
               {report.collections.map((c) => (
                 <li key={c.id}>
-                  {can("media.view") ? <Link to={`/medien/${c.id}`}>{c.title}</Link> : c.title} – letzte Aktivität {fmtDateTime(c.last_activity)}, {fmtNumber(c.media)} Datei(en)
+                  {can("media.view") ? <Link to={`/medien/${c.id}`}>{c.title}</Link> : c.title} – letzte Aktivität {fmtDateTime(c.last_activity)}, {plural(Number(c.media), 'Datei', 'Dateien')}
                   {c.kept > 0 && <span className="text-fg-muted">; {fmtNumber(c.kept)} bleiben (verwendet in {c.used_in.map((x) => `„${x}“`).join(", ")})</span>}
                 </li>
               ))}

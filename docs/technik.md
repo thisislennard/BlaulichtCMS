@@ -38,7 +38,7 @@ Die Architekturentscheidungen mit Begründung stehen in [architektur.md](archite
 
 ## Verbindungen
 
-Alle Verbindungen sind optional und laufen unter *Kanäle → Verbindungen* nach dem Muster
+Alle Verbindungen sind optional und laufen unter *Einrichtung → Verbindungen* nach dem Muster
 **Verbinden → Testen → Vorschau → Aktivieren**.
 
 | Verbindung | Wofür | Geprüft |
@@ -47,7 +47,7 @@ Alle Verbindungen sind optional und laufen unter *Kanäle → Verbindungen* nach
 | FE2 | interner Entwurf je Einsatz; Feldzuordnung je Instanz | mit nachgebildeten Meldungen |
 | Feuersoftware Connect | regelmäßiger Abruf der Öffentlichen Connect Schnittstelle (60–300 s, Retry-After), Filter nach RIC und Stichwort, derselbe Entwurf wie bei FE2 (nur Ort, keine Adresse) | gegen nachgebildete Connect-Schnittstelle |
 | Amtliche Warnungen | Warn-App-Schnittstelle des Bundes (Kreis-ARS) oder CAP, Banner mit Quellenvermerk | echte Schnittstelle |
-| Facebook / Instagram | Veröffentlichung und Zurückziehen je Kanal mit eigenem Status (Graph API v27.0), auch als Story | gegen nachgebildete Graph API |
+| Facebook / Instagram | Veröffentlichung und Zurückziehen je Netzwerk mit eigenem Status (Graph API v27.0), auch als Story | gegen nachgebildete Graph API |
 | Threads / X | Threads-API (OAuth, Token-Verlängerung); X über die X-API (OAuth 1.0a) oder Teilen von Hand | gegen nachgebildete Schnittstellen |
 | Mastodon / Bluesky | Mastodon-API der gewählten Instanz (App-Registrierung, OAuth oder Zugangstoken); Bluesky über das AT Protocol mit App-Passwort – beides reines HTTP/JSON ohne zusätzliche Abhängigkeit | gegen nachgebildete Schnittstellen |
 | WhatsApp-Kanal | Teilen von Hand (keine Schnittstelle bei WhatsApp) | – |
@@ -58,7 +58,7 @@ Details und Einrichtung: [docs/integrationen.md](integrationen.md), Hilfe → *V
 
 ## Workflows (intern „automations“)
 
-Bereich *Workflows* (Liste, Eingänge, Ausgänge, Editor; bis 0.3.0 „Automationen“). Umbenannt ist nur, was man sieht:
+Bereich *Workflows* (Liste, Auslöser, Aktionen, Editor; bis 0.3.0 „Automationen“). Umbenannt ist nur, was man sieht:
 Oberfläche unter `/workflows` (alte Adressen `/automationen/…` leiten weiter, ebenso `/hilfe/automationen` samt
 Ankern), Texte, Benachrichtigungen, Audit-Anzeige und Anzeigenamen der Rechte. API-Pfade (`/api/automations…`),
 Tabellen, Einstellungen (`automations.*`), Rechte-IDs (`automation.*`) und das Exportformat `blaulichtcms.automations`
@@ -70,19 +70,19 @@ Vorlagen/Bedingungen, Engine, Ereignisse), API `server/src/routes/automations.ts
 | Teil | Umsetzung |
 |---|---|
 | Ablauf | Knoten/Kanten als JSON; Prüfung auf Kreise, Anschlüsse, Ports, Felder je Stelle, Grenzen (60 Knoten, 150 Kanten) |
-| Versionen | Entwurf → Testlauf (Trockenlauf, sofort in der Anfrage) → Aktivieren als unveränderliche Momentaufnahme samt Ein-/Ausgängen |
+| Versionen | Entwurf → Testlauf (Trockenlauf, sofort in der Anfrage) → Aktivieren als unveränderliche Momentaufnahme samt Auslösern und Aktionen |
 | Auslöser | Funktionsaufrufe in FE2/Feuersoftware (`handleIncident`), Warnfeed-Abruf, RSS-Abruf, Medienprüfung; Zeitpläne im Worker-Leader |
 | Ausführung | Auftrag `automation.run`, Advisory-Lock je Lauf, Schritt je Knoten, Ergebnis + Schritt in einer Transaktion, Wiederholung mit Backoff, Warten/Freigabe als Fortsetzung |
 | Grenzen | `automations.max_runs_per_minute` (20), `automations.enabled`, Deaktivieren als Notbremse, `privacy.automation_run_days` (30) |
 | Direktversand | je Automation, Recht `automation.publish`, Passwortbestätigung, Test, Audit, Sicherheitsmeldung (Architektur E17) |
-| Vorlagen | `automations/templates.ts`: Abläufe nur aus Katalog-Bausteinen, im Katalog (`templates`) ausgeliefert; `POST /automations` mit `template` setzt den einzigen passenden Ein-/Ausgang ein, sonst bleibt ein offener Platz (`data.want`: passende Arten + Startwerte fürs Anlegen) |
-| Geführte Ansicht | `web/src/pages/automations/workflowModel.ts` (reine Funktionen): Ablauf ↔ Modell „Wenn → Nur wenn → Dann“ (Eingänge, höchstens eine Bedingung ohne Untergruppen, Ausgänge, Kanten genau nach Muster); alles andere nur lesend mit Hinweis auf „Erweitert“; Checkliste vor dem Aktivieren aus `validateGraph` (`open` = offene Plätze) |
+| Vorlagen | `automations/templates.ts`: Abläufe nur aus Katalog-Bausteinen, im Katalog (`templates`) ausgeliefert; `POST /automations` mit `template` setzt den einzigen passenden Auslöser bzw. die einzige passende Aktion ein, sonst bleibt ein offener Platz (`data.want`: passende Arten + Startwerte fürs Anlegen) |
+| Geführte Ansicht | `web/src/pages/automations/workflowModel.ts` (reine Funktionen): Ablauf ↔ Modell „Wenn → Nur wenn → Dann“ (Auslöser, höchstens eine Bedingung ohne Untergruppen, Aktionen, Kanten genau nach Muster); alles andere nur lesend mit Hinweis auf „Erweitert“; Checkliste vor dem Aktivieren aus `validateGraph` (`open` = offene Plätze) |
 | Zusammenfassung | `automations/summary.ts`: ein Satz je Workflow, in Liste, Detail und `POST /automations/:id/validate` (`summary`) |
-| Export/Import | `automations/transfer.ts`: Format `blaulichtcms.automations`, `schemaVersion` 1, App-Version; Ein-/Ausgänge nur als Bezug (Art + Name), kein `direct`; `GET /automations/export` (automation.read), `POST /automations/import/preview` und `/automations/import` (automation.manage, höchstens 1 MB und 50 Automationen, Import immer als Entwurf) |
+| Export/Import | `automations/transfer.ts`: Format `blaulichtcms.automations`, `schemaVersion` 1, App-Version; Auslöser und Aktionen nur als Bezug (Art + Name), kein `direct`; `GET /automations/export` (automation.read), `POST /automations/import/preview` und `/automations/import` (automation.manage, höchstens 1 MB und 50 Automationen, Import immer als Entwurf) |
 | Mit KI erstellen (#199) | `automations/format.ts`: JSON-Schema (Draft 2020-12) aus den Zod-Schemas der Importprüfung, statisch unter `/schema/blaulichtcms-automations-1.schema.json` (`web/public/schema/`), Hilfe-Referenz und Anfrage-Vorlage – alles mit `npx tsx scripts/workflow-format.mjs` erzeugt, Unit-Test prüft die Aktualität; `automations/aicatalog.ts`: `GET /automations/catalog/export` (automation.read, Audit `automation.catalog_exported`) nur aus einer Positivliste (Art + Name, Feldnamen, Bildvorlagen-Textfelder, Kalender-Kategorien, Stichwort/Bezeichnung/Kategorie); Importfehler mit JSON-Pfad, Erwartung und Fund |
 
 Tests: `server/test/workflow-guided.test.ts` (ohne Datenbank: Roundtrip Ablauf ↔ geführte Ansicht, nicht darstellbare Abläufe, Checkliste, Vorlagen gegen Katalog und Einstellungen, Zusammenfassung), `server/test/automation-logic.test.ts` (ohne Datenbank: Vorlagen, Bedingungen, Entprellen, Zeitplan, Prüfung,
-Prüfsumme, Rechte) und `server/test/automations.test.ts` (gegen PostgreSQL: Rechte, Ein-/Ausgänge, Test und
+Prüfsumme, Rechte) und `server/test/automations.test.ts` (gegen PostgreSQL: Rechte, Auslöser und Aktionen, Test und
 Aktivierung, FE2/Warnfeed/RSS-Ereignisse, Zeitplan mit Mail und Freigabe, Direktversand, Warten, Entprellen, Grenze,
 Notbremse, Löschfrist, Export → Import und abgelehnte Dateien, Katalog für die KI ohne Kennungen und Personendaten) und `server/test/workflow-format.test.ts` (ohne Datenbank: Schema und Hilfe aktuell, Galerie-Vorlagen und KI-Datei gegen Schema und Import, beschädigte Dateien, Fehlermeldungen, Katalog-Positivliste).
 
@@ -92,7 +92,7 @@ Notbremse, Löschfrist, Export → Import und abgelehnte Dateien, Katalog für d
 
 Worker-Aufgabe alle 15 Minuten (`server/src/connections/insights.ts`, läuft nie doppelt): fällig sind veröffentlichte
 Beiträge (nicht Storys, nicht von Hand geteilt, nicht entfernt) 1 h, 24 h und 7 Tage nach der Veröffentlichung
-(`social_publications.insights_stage` 0–3); höchstens 25 je Kanal und 150 je Lauf. Letzter Stand in
+(`social_publications.insights_stage` 0–3); höchstens 25 je Netzwerk und 150 je Lauf. Letzter Stand in
 `social_publications.insights`, Verlauf in `social_insights` (Migration 147). Zeitweise Störungen (Netz, 429, 5xx)
 werden beim nächsten Lauf wiederholt, Fehler je Beitrag (gelöscht, Recht fehlt) festgehalten. Nur Summen, keine
 Personen. Routen `GET /insights`, `GET /posts/:id/insights` (Recht `insights.view`), Dashboard-Kachel `insights`.
@@ -196,7 +196,7 @@ Interne Vorlagen-Bibliothek (#208) unter `/designvorlagen`. Server: `server/src/
 | Textanpassung | binäre Suche über die Schriftgröße (Größe … Mindestgröße), bis Höhe und Zeilenzahl passen; sonst Kürzen nach Wörtern mit „…“. libvips beschneidet Textbilder auf die Tinte – die Zeilenzahl ergibt sich aus dem je Schrift und Größe gemessenen Zeilenabstand (Höhe von zwei Zeilen minus eine Zeile) |
 | Schriften | `server/assets/fonts` (Barlow, Barlow Condensed, Atkinson Hyperlegible, je normal/fett, SIL OFL 1.1, Quelle github.com/google/fonts), beim Build nach `server/dist/assets/fonts` kopiert – kommen also mit jedem App-Update, keine Änderung am Image. Jede Schrift wird per `fontfile` angemeldet; zusätzlich setzt `configureFonts()` eine eigene `FONTCONFIG_FILE` (mitgelieferte und hochgeladene Schriften, Cache unter `/data/fonts`, Systemschriften nur falls vorhanden). Eigene TTF/OTF: Name und Stil aus den Tabellen `name`/`OS/2`, Lizenzangabe Pflicht, Ablage `/data/media/templates/fonts` |
 | Erzeugen | volle Größe als PNG (JPEG, falls PNG in den Medien nicht erlaubt) → `finalizeUpload` (Kontingente, Audit) → `processMedia` direkt (sonst Worker) → ausgewählt, Alternativtext in `media.alt_text` (#217); Ziel: gewählte Sammlung, sonst erste Sammlung des Beitrags, sonst Systemsammlung „Bilder aus Vorlagen“ (`system_key = 'design-templates'`). Bild-Platzhalter verwenden die öffentliche Fassung (ohne Standort, mit Unkenntlichmachungen) |
-| Workflows (#210) | Knotentyp `image` (Verarbeitung, `automations/catalog.ts`, Daten in `graph.ts`: `templateId`, `texts` je Textfeld-Kennung, `images` feste Medien, `altText`, `collectionId`); ohne Bildvorlage offener Platz. Ausführung `templates/workflow.ts` (`runImageStep`): Testlauf rendert nur eine Vorschau nach `/data/media/templates/run-previews` (zwei Tage, `GET /automation-runs/:id/image-preview/:node`), live `generateIntoMedia`. Liefert `bild_id`, `bild_link`, `bilder`; der Beitrags-Ausgang übernimmt `bilder` als Medien, erstes als Titelbild, Alternativtexte in `media_alt`. Export: Bildvorlage nur als `templateName`, Import ordnet nach Name zu (sonst offen). Galerie-Vorlagen `calendar-exercise-story-banner` (Kalender, #203) und `date-story-image` (manueller Start) |
+| Workflows (#210) | Knotentyp `image` (Verarbeitung, `automations/catalog.ts`, Daten in `graph.ts`: `templateId`, `texts` je Textfeld-Kennung, `images` feste Medien, `altText`, `collectionId`); ohne Bildvorlage offener Platz. Ausführung `templates/workflow.ts` (`runImageStep`): Testlauf rendert nur eine Vorschau nach `/data/media/templates/run-previews` (zwei Tage, `GET /automation-runs/:id/image-preview/:node`), live `generateIntoMedia`. Liefert `bild_id`, `bild_link`, `bilder`; der Beitrags-Aktion übernimmt `bilder` als Medien, erstes als Titelbild, Alternativtexte in `media_alt`. Export: Bildvorlage nur als `templateName`, Import ordnet nach Name zu (sonst offen). Galerie-Vorlagen `calendar-exercise-story-banner` (Kalender, #203) und `date-story-image` (manueller Start) |
 | Vorschau | `POST …/layout-preview` (Editor, ungespeichertes Layout) und `POST …/fill-preview` (Ausfüllen): JPEG höchstens 900 px, Kopfzeile `x-text-truncated` mit gekürzten Feldern |
 
 Tests: `server/test/templates.test.ts` (gegen PostgreSQL: Rechte, Kategorien, Formatprüfung, SVG-Bereinigung,
@@ -233,7 +233,7 @@ Der Abgleich speichert jeden Termin in einem eigenen Sicherungspunkt (SAVEPOINT)
 Stand, der Hinweis landet im Empfangsprotokoll und die Quelle wird trotzdem abgeglichen (#237). Abo: `calendar_feeds` speichert nur die SHA-256-Prüfsumme des Links; `GET /api/v1/public/calendar/:token`
 liefert einzelne Termine (UTC bzw. Datum) für 60 Tage zurück bis 365 Tage voraus.
 
-Workflow-Eingang „Kalendereintrag“ (#203, `server/src/calendar/triggers.ts`): Der Worker (Leader) prüft alle 30 s
+Workflow-Auslöser „Kalendereintrag“ (#203, `server/src/calendar/triggers.ts`): Der Worker (Leader) prüft alle 30 s
 je Zeitversatz die Termine, deren Auslösezeitpunkt (Beginn, Ende oder Beginn minus Versatz) im Fenster der letzten
 10 Minuten liegt, und startet je passendem Workflow einen Lauf. `event_key` = Termin bzw. Serie (eigene) oder
 Quelle + UID (iCal) + ursprünglicher Beginn des Einzeltermins + Art + Auslösezeitpunkt – derselbe Zeitpunkt startet
@@ -334,7 +334,7 @@ Video-Verarbeitung mit ffmpeg), Build, PHP-Lint des Plugins, Probelauf mit Docke
 Audit-Kette), Abhängigkeits-, Image- und Secret-Scan sowie Browsertests der Kernabläufe mit Playwright/Chromium
 (Einrichtung mit Zwei-Faktor, Beitrag bis zur Freigabe, Workflow aus Vorlage, Rollen, Dashboard, Fokus-Check).
 Wöchentlich prüft ein Workflow alle festgelegten Versionen und meldet Neuerungen in einem Issue. Dazu kommen Abnahmetests über Browser, Container und ein
-Test-WordPress (`test/e2e/`, Foto-Link bis Website, fortsetzbarer Upload, Warnentwurf, fehlgeschlagenes Update mit
+Test-WordPress (`test/e2e/`, Upload-Link bis Website, fortsetzbarer Upload, Warnentwurf, fehlgeschlagenes Update mit
 Rückweg, Wiederherstellung, PostgreSQL-Upgrade). Das Update aus der App ist mit dem echten Supervisor durchgespielt
 (Aktivierung, Rückweg bei fehlerhafter Migration und bei Absturz der neuen Version).
 

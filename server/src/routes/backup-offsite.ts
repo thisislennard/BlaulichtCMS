@@ -28,6 +28,7 @@ import {
   type DavTarget,
   type OffsiteRow,
 } from '../ops/offsite.js';
+import { plural } from '../lib/text.js';
 
 /**
  * Sicherung außer Haus und Probe-Wiederherstellung (#212) – Einstellungen → Sicherung außer Haus.
@@ -152,7 +153,7 @@ export async function backupOffsiteRoutes(app: FastifyInstance) {
       assertRecentAuth(req);
       try {
         const r = await purgeTarget(await targetFromConfig(c));
-        if (r.failed.length) throw new Error(`${r.failed.length} Datei(en) ließen sich nicht löschen`);
+        if (r.failed.length) throw new Error(`${plural(r.failed.length, 'Datei', 'Dateien')} ließen sich nicht löschen`);
         purged = r.removed;
       } catch (e) {
         await audit(req.auth!.actor, 'backup.offsite_purged', { type: 'backup', label: new URL(c.url).host }, { fehler: stepMessage(e).message.slice(0, 300) }, 'failed');

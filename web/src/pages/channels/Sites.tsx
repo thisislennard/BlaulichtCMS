@@ -255,12 +255,12 @@ function BridgeUpdates() {
     qc.invalidateQueries({ queryKey: ['bridge-release'] });
   };
   return (
-    <Card title="Bridge-Updates" subtitle="Updates kommen über den normalen WordPress-Updateweg. Websites im Kanal „Test“ erhalten neue Versionen zuerst.">
+    <Card title="Bridge-Updates" subtitle="Updates kommen über den normalen WordPress-Updateweg. Websites in der Stufe „Test“ erhalten neue Versionen zuerst.">
       <div className="flex flex-col gap-4 text-sm">
         <div className="flex flex-wrap items-center gap-2">
           Version in BlaulichtCMS: <strong>{bundled.version}</strong>
           <code className="text-meta">{bundled.sha256.slice(0, 16)}…</code>
-          {released ? <Badge tone="success">für alle freigegeben</Badge> : <Badge tone="warning">nur Test-Kanal</Badge>}
+          {released ? <Badge tone="success">für alle freigegeben</Badge> : <Badge tone="warning">nur Stufe Test</Badge>}
           {bundled.signature?.state === 'valid' && <Badge tone="success">signiert</Badge>}
           {bundled.signature?.state === 'not_configured' && <Badge tone="neutral">ohne Signatur (nur Prüfsumme)</Badge>}
           {(bundled.signature?.state === 'unsigned' || bundled.signature?.state === 'invalid') && <Badge tone="error">Signatur ungültig</Badge>}
@@ -274,9 +274,9 @@ function BridgeUpdates() {
               <span className="min-w-[160px] font-medium">{s.name}</span>
               <span className="text-fg-muted">Bridge {s.plugin_version ?? '–'}</span>
               {s.plugin_version === bundled.version && <Badge tone="success">aktuell</Badge>}
-              <Select aria-label={`Update-Kanal ${s.name}`} value={s.update_channel} onChange={(e) => act(() => put(`/sites/${s.id}/update-channel`, { channel: e.target.value }))} className="max-w-[160px]">
-                <option value="stable">Kanal: Stabil</option>
-                <option value="test">Kanal: Test</option>
+              <Select aria-label={`Update-Stufe ${s.name}`} value={s.update_channel} onChange={(e) => act(() => put(`/sites/${s.id}/update-channel`, { channel: e.target.value }))} className="max-w-[160px]">
+                <option value="stable">Stufe: Stabil</option>
+                <option value="test">Stufe: Test</option>
               </Select>
             </li>
           ))}
@@ -285,7 +285,7 @@ function BridgeUpdates() {
           <div className="flex flex-wrap items-end gap-2 border-t border-line pt-3">
             <FieldWrap label="Prüfnotiz (Testwebsite, Theme, Ergebnis)" htmlFor="br-note" className="flex-1 min-w-[240px]" labelAction={
               <HelpTip title="Bridge-Update freigeben" more="/hilfe/updates#blaulichtcms-bridge">
-                <p className="m-0">Erst eine Testwebsite in den Kanal „Test“ setzen, dort in WordPress aktualisieren und prüfen (Beitrag, Banner, Zurückziehen). Freigeben lässt sich die Version erst, wenn die Testwebsite sie meldet.</p>
+                <p className="m-0">Erst eine Testwebsite in die Stufe „Test“ setzen, dort in WordPress aktualisieren und prüfen (Beitrag, Banner, Zurückziehen). Freigeben lässt sich die Version erst, wenn die Testwebsite sie meldet.</p>
               </HelpTip>
             }>
               <Input id="br-note" value={note} onChange={(e) => setNote(e.target.value)} />

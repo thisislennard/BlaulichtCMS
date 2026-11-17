@@ -6,7 +6,7 @@ import { Badge, Button, Card, cx, EmptyState, ErrorBox, FieldWrap, Input, LinkBu
 import { Dialog, useErrorToast, useToast } from '../../components/ui/overlays';
 import { Icon } from '../../components/ui/Icon';
 import { useAuth } from '../../lib/auth';
-import { fmtRelative } from '../../lib/format';
+import { fmtRelative, plural } from '../../lib/format';
 import { AutomationBadge, DirectBadge, RunBadge, useCatalog, type WorkflowTemplate } from './shared';
 import { AutomationApprovals } from './Approvals';
 import { ExportDialog, ImportDialog } from './Transfer';
@@ -75,7 +75,7 @@ function CreateDialog({ onClose, templates }: { onClose: () => void; templates: 
     >
       <div className="flex flex-col gap-4">
         <fieldset className="m-0 p-0 border-0 flex flex-col gap-2">
-          <legend className="text-sm font-medium mb-2">Vorlage</legend>
+          <legend className="text-sm font-medium mb-2">Workflow-Vorlage</legend>
           <div className="grid sm:grid-cols-2 gap-2">
             {tiles.map((t) => (
               <label key={t.id || 'leer'} className={cx('flex gap-3 p-3 rounded-node border cursor-pointer focus-within:shadow-ring', tpl === t.id ? 'border-primary bg-primary-soft' : 'border-line bg-card hover:bg-raised')}>
@@ -88,7 +88,7 @@ function CreateDialog({ onClose, templates }: { onClose: () => void; templates: 
               </label>
             ))}
           </div>
-          <p className="m-0 text-meta text-fg-muted">Vorlagen nutzen vorhandene Auslöser und Aktionen, wenn es genau einen passenden gibt. Sonst bleibt der Platz offen und lässt sich im Workflow wählen oder neu anlegen.</p>
+          <p className="m-0 text-meta text-fg-muted">Workflow-Vorlagen nutzen vorhandene Auslöser und Aktionen, wenn es genau einen passenden Baustein gibt. Sonst bleibt der Platz offen und lässt sich im Workflow wählen oder neu anlegen.</p>
         </fieldset>
         <FieldWrap label="Name" htmlFor="a-name" required>
           <Input id="a-name" value={name} maxLength={120} onChange={(e) => setName(e.target.value)} placeholder="z. B. Unwetter-Banner" onKeyDown={(e) => e.key === 'Enter' && name.trim().length >= 2 && create()} />
@@ -112,7 +112,7 @@ export default function Automations() {
   return (
     <div className="flex flex-col gap-5">
       <PageHeader
-        subtitle="Wenn etwas passiert, erledigt BlaulichtCMS den nächsten Schritt – aus Vorlagen oder selbst gebaut, getestet, versioniert und jederzeit abschaltbar."
+        subtitle="Wenn etwas passiert, erledigt BlaulichtCMS den nächsten Schritt – aus Workflow-Vorlagen oder selbst gebaut, getestet, versioniert und jederzeit abschaltbar."
         actions={
           <>
             {!!q.data?.length && (
@@ -149,7 +149,7 @@ export default function Automations() {
         <EmptyState
           icon="Workflow"
           title="Noch kein Workflow"
-          text="Mit „Neuer Workflow“ eine Vorlage wählen oder leer beginnen. Fehlende Auslöser und Aktionen lassen sich direkt im Workflow anlegen."
+          text="Mit „Neuer Workflow“ eine Workflow-Vorlage wählen oder leer beginnen. Fehlende Auslöser und Aktionen lassen sich direkt im Workflow anlegen."
           action={<LinkButton to="/hilfe/workflows" icon="BookOpen">Hilfe: Workflows</LinkButton>}
         />
       )}
@@ -160,7 +160,7 @@ export default function Automations() {
               <tr>
                 <Th>Workflow</Th>
                 <Th>Status</Th>
-                <Th>Eingänge</Th>
+                <Th>Auslöser</Th>
                 <Th>Letzter Lauf</Th>
                 <Th align="right">Läufe 24 h</Th>
               </tr>
@@ -181,7 +181,7 @@ export default function Automations() {
                       {a.active && <span className="font-mono text-meta text-fg-muted" title={`Aktive Version ${a.active.version}`}>V{a.active.version}</span>}
                       {a.status === 'active' && a.active && !a.active.current && <Badge tone="warning">Entwurf geändert</Badge>}
                       {a.direct_publish && <DirectBadge />}
-                      {a.pending_approvals > 0 && <Badge tone="warning">{a.pending_approvals} Freigabe(n) offen</Badge>}
+                      {a.pending_approvals > 0 && <Badge tone="warning">{plural(a.pending_approvals, 'Freigabe', 'Freigaben')} offen</Badge>}
                     </div>
                   </Td>
                   <Td className="text-sm text-fg-muted">{a.inputs.map(kindLabel).join(', ') || '–'}</Td>

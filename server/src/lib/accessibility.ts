@@ -36,7 +36,7 @@ export function effectiveAlt(rev: { media_alt?: Record<string, string> | null },
 }
 
 export interface AltCheck {
-  /** Gibt es ein Ziel, das Alternativtexte unterstützt (Website oder passender sozialer Kanal)? */
+  /** Gibt es ein Ziel, das Alternativtexte unterstützt (Website oder passendes soziales Netzwerk)? */
   applies: boolean;
   /** Bilder der Fassung ohne Alternativtext */
   missing: string[];

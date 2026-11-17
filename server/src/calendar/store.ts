@@ -4,7 +4,7 @@ import { expand, isValidTimeZone, parseRrule, seriesEnd, type Rrule } from './re
 
 /**
  * Termine des Kalenders laden und Serien in einzelne Termine auflösen. Grundlage für die Ansichten (routes/calendar.ts),
- * das iCal-Abo und den Workflow-Eingang „Kalendereintrag“.
+ * das iCal-Abo und den Workflow-Auslöser „Kalendereintrag“.
  */
 
 export const CATEGORY_COLORS = ['rot', 'orange', 'gelb', 'gruen', 'tuerkis', 'blau', 'violett', 'grau'] as const;

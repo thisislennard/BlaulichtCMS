@@ -190,10 +190,10 @@ export default function PressRequestPage() {
           <Card title="Verknüpfungen">
             {manage ? (
               <div className="flex flex-col gap-4">
-                <FieldWrap label="Einsatz" htmlFor="pr-event" help="Aus FE2 oder Feuersoftware Connect.">
+                <FieldWrap label="Einsatzmeldung" htmlFor="pr-event" help="Aus FE2 oder Feuersoftware Connect (nicht die Einsatzliste).">
                   <Select id="pr-event" value={r.fe2_event_id ?? ''} onChange={(e) => change({ fe2EventId: e.target.value || null })}>
                     <option value="">– keiner –</option>
-                    {r.fe2_event_id && !opts.data?.events.some((x) => x.id === r.fe2_event_id) && <option value={r.fe2_event_id}>{r.fe2_title ?? 'Einsatz'}</option>}
+                    {r.fe2_event_id && !opts.data?.events.some((x) => x.id === r.fe2_event_id) && <option value={r.fe2_event_id}>{r.fe2_title ?? 'Einsatzmeldung'}</option>}
                     {(opts.data?.events ?? []).map((x) => (
                       <option key={x.id} value={x.id}>
                         {x.title} · {fmtDateTime(x.received_at)}
@@ -214,7 +214,7 @@ export default function PressRequestPage() {
                 </FieldWrap>
               </div>
             ) : (
-              <KeyValue items={[['Einsatz', r.fe2_title ?? '–'], ['Beitrag', r.post_id && can('post.view') ? <Link key="p" to={`/beitraege/${r.post_id}`}>{r.post_title}</Link> : (r.post_title ?? '–')]]} />
+              <KeyValue items={[['Einsatzmeldung', r.fe2_title ?? '–'], ['Beitrag', r.post_id && can('post.view') ? <Link key="p" to={`/beitraege/${r.post_id}`}>{r.post_title}</Link> : (r.post_title ?? '–')]]} />
             )}
           </Card>
         </div>

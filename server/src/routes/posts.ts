@@ -49,8 +49,8 @@ function cleanVariants(v: Variants | null | undefined): Variants {
 }
 
 /**
- * Prüfsumme einer Fassung: Text, Medien (in Reihenfolge), Titelbild, Zielkanal, Texte je Kanal und Termin.
- * Ohne Kanaltexte und Termin bleibt das Format der ersten Version erhalten (bestehende Freigaben bleiben gültig).
+ * Prüfsumme einer Fassung: Text, Medien (in Reihenfolge), Titelbild, Website, Texte je Netzwerk und Termin.
+ * Ohne Texte je Netzwerk und Termin bleibt das Format der ersten Version erhalten (bestehende Freigaben bleiben gültig).
  */
 export function revisionHash(r: { title: string; body: string; excerpt: string; media_ids: string[]; cover_id: string | null; site_id: string | null; variants?: Variants | null; publish_at?: string | Date | null; social_targets?: string[] | null; social_formats?: Record<string, string> | null; media_alt?: Record<string, string> | null }): string {
   const base: unknown[] = [r.title, r.body, r.excerpt, r.media_ids, r.cover_id ?? null, r.site_id ?? null];
@@ -58,9 +58,9 @@ export function revisionHash(r: { title: string; body: string; excerpt: string; 
   const at = r.publish_at ? new Date(r.publish_at).toISOString() : null;
   const social = [...(r.social_targets ?? [])].sort();
   if (Object.keys(v).length || at || social.length) base.push(v, at);
-  // Soziale Zielkanäle sind Teil der Fassung (Änderung → neue Freigabe); ohne sie bleibt das alte Format
+  // Soziale Netzwerke sind Teil der Fassung (Änderung → neue Freigabe); ohne sie bleibt das alte Format
   if (social.length) base.push(social);
-  // Formate je Kanal (Story, #188) – nur wenn vom Standard „Beitrag“ abweichend, sonst bleibt das alte Format
+  // Formate je Netzwerk (Story, #188) – nur wenn vom Standard „Beitrag“ abweichend, sonst bleibt das alte Format
   const formats = cleanFormats(r.social_formats, r.social_targets ?? []);
   if (Object.keys(formats).length) base.push(Object.fromEntries(Object.entries(formats).sort(([a], [b]) => a.localeCompare(b))));
   // Alternativtexte je Bild (#217) – nur wenn vorhanden, sonst bleibt das alte Format
@@ -69,14 +69,14 @@ export function revisionHash(r: { title: string; body: string; excerpt: string; 
   return crypto.createHash('sha256').update(JSON.stringify(base)).digest('hex');
 }
 
-/** Formate je Kanal: nur gewählte Kanäle und nur Abweichungen vom Standard „feed“. */
+/** Formate je Netzwerk: nur gewählte Netzwerke und nur Abweichungen vom Standard „feed“. */
 export function cleanFormats(f: Record<string, string> | null | undefined, targets: string[]): Record<string, 'story' | 'both'> {
   const out: Record<string, 'story' | 'both'> = {};
   for (const [k, v] of Object.entries(f ?? {})) if (targets.includes(k) && (v === 'story' || v === 'both')) out[k] = v;
   return out;
 }
 
-/** Text, der an einen Kanal geht: Kanaltext, sonst Grundtext. */
+/** Text, der an ein Netzwerk geht: Text je Netzwerk, sonst Grundtext. */
 export function textFor(rev: { title: string; body: string; excerpt: string; variants?: Variants | null }, channel: 'wordpress'): Required<Omit<ChannelText, 'categories' | 'cw'>> {
   const v = (rev.variants ?? {})[channel] ?? {};
   return { title: v.title?.trim() ? v.title : rev.title, body: v.body?.trim() ? v.body : rev.body, excerpt: v.excerpt?.trim() ? v.excerpt : rev.excerpt };
@@ -151,8 +151,8 @@ export const POST_STATE_SQL = `
 
 /**
  * Vier-Augen-Prinzip (#169, wie bei Warnentwürfen #153): Wer bis zu dieser Fassung Inhalte geschrieben (Text,
- * Kanaltexte, Medien, Titelbild) oder die Fassung eingereicht hat, darf sie nicht freigeben. Nur Termin, Zielkanal
- * oder soziale Kanäle zu ändern zählt nicht als Schreiben. Gemeinsam genutzt von der Entscheidung und der
+ * Texte je Netzwerk, Medien, Titelbild) oder die Fassung eingereicht hat, darf sie nicht freigeben. Nur Termin, Website
+ * oder soziale Netzwerke zu ändern zählt nicht als Schreiben. Gemeinsam genutzt von der Entscheidung und der
  * Freigabe-Ansicht (#216), damit beide dieselbe Regel anwenden.
  */
 export async function fourEyesBlocked(postId: string, number: number, submittedBy: string | null, userId: string, db: Queryable = pool): Promise<boolean> {
@@ -202,7 +202,7 @@ const revisionInput = z.object({
     })
     .default({}),
   socialTargets: z.array(z.uuid()).max(10).default([]),
-  /** Format je Kanal (#188): feed (Standard), story oder both – Storys gibt es für Facebook und Instagram. */
+  /** Format je Netzwerk (#188): feed (Standard), story oder both – Storys gibt es für Facebook und Instagram. */
   socialFormats: z.record(z.uuid(), z.enum(['feed', 'story', 'both'])).default({}),
   /** Alternativtext je Bild (#217) – Teil der Fassung */
   mediaAlt: z.record(z.uuid(), z.string().max(ALT_MAX * 2)).default({}),
@@ -335,7 +335,7 @@ export async function postRoutes(app: FastifyInstance) {
     };
   });
 
-  /** Speichern: erzeugt nur dann eine neue Fassung, wenn sich Inhalt, Medien oder Zielkanal ändern. */
+  /** Speichern: erzeugt nur dann eine neue Fassung, wenn sich Inhalt, Medien oder Website ändern. */
   app.put('/posts/:id/revision', { preHandler: requireAuth('post.edit') }, async (req) => {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
     const body = revisionInput.parse(req.body);
@@ -345,11 +345,11 @@ export async function postRoutes(app: FastifyInstance) {
     if (body.coverId && !body.mediaIds.includes(body.coverId)) throw badRequest('Das Titelbild muss zu den Medien des Beitrags gehören.');
     if (body.siteId) {
       const site = await one<any>(`SELECT status FROM wp_sites WHERE id = $1`, [body.siteId]);
-      if (!site || site.status === 'revoked') throw badRequest('Der gewählte Zielkanal ist nicht verfügbar.');
+      if (!site || site.status === 'revoked') throw badRequest('Die gewählte Website ist nicht verfügbar.');
     }
     if (body.socialTargets.length) {
       const ok = await many<any>(`SELECT id, kind FROM connections WHERE id = ANY($1) AND kind IN ('facebook','instagram','threads','x','whatsapp','mastodon','bluesky') AND status IN ('tested','active')`, [body.socialTargets]);
-      if (ok.length !== new Set(body.socialTargets).size) throw badRequest('Mindestens ein gewählter sozialer Kanal ist nicht verfügbar.');
+      if (ok.length !== new Set(body.socialTargets).size) throw badRequest('Mindestens ein gewähltes soziales Netzwerk ist nicht verfügbar.');
       const noStory = ok.filter((c) => !['facebook', 'instagram'].includes(c.kind) && ['story', 'both'].includes(body.socialFormats[c.id]));
       if (noStory.length) throw badRequest('Storys gibt es nur für Facebook-Seiten und Instagram-Konten.');
     }
@@ -421,7 +421,7 @@ export async function postRoutes(app: FastifyInstance) {
 
   /**
    * Freigabe-Ansicht (#216): alles, was zum Entscheiden über eine eingereichte Fassung nötig ist, kompakt für das
-   * Handy – Vorschau je Kanal, Medien, Änderungen zur letzten freigegebenen (sonst vorigen) Fassung und der Stand der
+   * Handy – Vorschau je Netzwerk, Medien, Änderungen zur letzten freigegebenen (sonst vorigen) Fassung und der Stand der
    * Anfrage (offen, entschieden, überholt, zurückgezogen). Entschieden wird weiterhin über POST /posts/:id/decision mit
    * allen Regeln (Prüfsumme, Vier-Augen, Datenschutz-Prüfung, Sitzung mit Zwei-Faktor).
    */
@@ -576,7 +576,7 @@ export async function postRoutes(app: FastifyInstance) {
       );
       if (inFlight) throw badRequest('Die Veröffentlichung läuft bereits oder ihr Ergebnis ist ungeklärt. Bitte das Ergebnis abwarten.');
       const socialInFlight = await one<any>(`SELECT 1 FROM social_publications WHERE approval_id = $1 AND status IN ('publishing','unknown') LIMIT 1`, [aid], db);
-      if (socialInFlight) throw badRequest('Eine Veröffentlichung in sozialen Kanälen läuft bereits oder ist ungeklärt. Bitte das Ergebnis abwarten.');
+      if (socialInFlight) throw badRequest('Eine Veröffentlichung in sozialen Netzwerken läuft bereits oder ist ungeklärt. Bitte das Ergebnis abwarten.');
       await db.query('UPDATE approvals SET revoked_at = now(), revoked_by = $2 WHERE id = $1', [aid, req.auth!.user?.id ?? null]);
       // Noch nicht ausgeführte oder fehlgeschlagene Aufträge dieser Freigabe abbrechen (sonst später per Wiederholen veröffentlichbar)
       const c1 = await db.query(`UPDATE publications SET status = 'canceled', error = 'Freigabe widerrufen', result_at = now() WHERE approval_id = $1 AND action = 'publish' AND status IN ('queued','failed')`, [aid]);
@@ -598,7 +598,7 @@ export async function postRoutes(app: FastifyInstance) {
       if (st.current.number !== body.revision || st.current.content_hash !== body.contentHash) throw conflict('Die Fassung hat sich geändert. Eine erneute Freigabe ist nötig.');
       if (!st.validApproval) throw new AppError(409, 'not_approved', 'Diese Fassung ist nicht freigegeben.');
       await assertMediaPresent(st.current, db);
-      if (!st.current.site_id) throw badRequest('Für diese Fassung ist kein Zielkanal gewählt. Ohne Zielkanal bleibt der Beitrag intern freigegeben.');
+      if (!st.current.site_id) throw badRequest('Für diese Fassung ist keine Website gewählt. Ohne Website bleibt der Beitrag intern freigegeben.');
       const site = await one<any>('SELECT * FROM wp_sites WHERE id = $1', [st.current.site_id], db);
       if (!site || site.status !== 'active') throw badRequest('Die Website ist nicht (mehr) gekoppelt.');
       const existing = await one<any>(`SELECT * FROM publications WHERE revision_id = $1 AND site_id = $2 AND action = 'publish' AND status IN ('queued','sent','published','unknown')`, [st.current.id, site.id], db);
@@ -749,7 +749,7 @@ export async function postRoutes(app: FastifyInstance) {
     return { ok: true };
   });
 
-  /** „Fotos und Videos sammeln“: verknüpfte Sammlung samt Upload-Link in einem Schritt. */
+  /** „Fotos sammeln“: verknüpfte Sammlung samt Upload-Link in einem Schritt. */
   app.post('/posts/:id/collect', { preHandler: requireAuth('media.collections') }, async (req) => {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
     const body = z.object({ days: z.number().int().min(1).max(3650).optional() }).parse(req.body ?? {});

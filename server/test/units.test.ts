@@ -235,9 +235,16 @@ describe('Feine Rechte und Rollen (0.3.0)', () => {
     expect(P.settingPermission('neu.unbekannt')).toBe('settings.security');
   });
 
-  it('Migration 075 trägt genau die mitgelieferten Rollen ein', () => {
-    const sql = fs.readFileSync(path.join(__dirname, '../migrations/075_roles.sql'), 'utf8');
+  it('Migration 075 trägt genau die mitgelieferten Rollen ein (spätere Texte per UPDATE, z. B. 210)', () => {
+    const dir = path.join(__dirname, '../migrations');
+    const sql = fs.readFileSync(path.join(dir, '075_roles.sql'), 'utf8');
     const seeded = [...sql.matchAll(/^\s*\('([a-z_]+)',\s+'([^']+)',\s+'([^']+)', true\)/gm)].map((m) => ({ id: m[1], label: m[2], description: m[3] }));
+    // Spätere Migrationen dürfen die Beschreibung einer Systemrolle ersetzen (UPDATE roles SET description = … WHERE id = …)
+    for (const f of fs.readdirSync(dir).filter((x) => x > '075' && x.endsWith('.sql')).sort())
+      for (const m of fs.readFileSync(path.join(dir, f), 'utf8').matchAll(/UPDATE roles SET description = '([^']+)' WHERE id = '([a-z_]+)'/g)) {
+        const r = seeded.find((x) => x.id === m[2]);
+        if (r) r.description = m[1];
+      }
     expect(seeded).toEqual(P.SYSTEM_ROLES.map((r) => ({ id: r.id, label: r.label, description: r.description })));
   });
 

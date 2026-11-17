@@ -8,7 +8,7 @@ import { Icon } from '../../components/ui/Icon';
 import { HelpLink, HelpTip } from '../../components/ui/HelpTip';
 import { CopyButton, OneTimeSecret, useErrorToast, useToast, useConfirm } from '../../components/ui/overlays';
 import { useAuth } from '../../lib/auth';
-import { fmtDateTime } from '../../lib/format';
+import { fmtDateTime, plural } from '../../lib/format';
 import { CONN_STATE } from './Connections';
 import { RECEIPT_KINDS, ReceiptLog } from './ReceiptLog';
 import { KeywordMeaning } from '../../components/KeywordMeaning';
@@ -129,7 +129,7 @@ export default function ConnectionDetail() {
   const test = c.last_test;
   const usageText = () => {
     const u = c.usage ?? {};
-    const parts = [u.publications && `${u.publications} Veröffentlichung(en) auf sozialen Kanälen`, u.targets && `${u.targets} Beitragsfassung(en) mit diesem Kanal`, u.events && `${u.events} Einsatzmeldung(en)`, u.warnings && `${u.warnings} amtliche Warnung(en)`, !u.events && u.seen && 'übernommene Einsätze'].filter(Boolean);
+    const parts = [u.publications && `${plural(u.publications, 'Veröffentlichung', 'Veröffentlichungen')} auf sozialen Netzwerken`, u.targets && `${plural(u.targets, 'Beitragsfassung', 'Beitragsfassungen')} mit dieser Verbindung`, u.events && `${plural(u.events, 'Einsatzmeldung', 'Einsatzmeldungen')}`, u.warnings && `${u.warnings} ${u.warnings === 1 ? 'amtliche Warnung' : 'amtliche Warnungen'}`, !u.events && u.seen && 'übernommene Einsätze'].filter(Boolean);
     return parts.join(', ');
   };
   const remove = async () => {
@@ -681,7 +681,7 @@ export default function ConnectionDetail() {
                 <div className="flex flex-col gap-2 text-sm">
                   <strong>{c.preview.title}</strong>
                   <pre className="m-0 p-2 bg-raised rounded-control whitespace-pre-wrap">{c.preview.body}</pre>
-                  <p className="m-0 text-meta text-fg-muted">{Object.keys(c.preview.fields).length} Feld(er) übernommen, {c.preview.ignoredKeys} verworfen · {fmtDateTime(c.preview.receivedAt)}</p>
+                  <p className="m-0 text-meta text-fg-muted">{plural(Object.keys(c.preview.fields).length, 'Feld', 'Felder')} übernommen, {c.preview.ignoredKeys} verworfen · {fmtDateTime(c.preview.receivedAt)}</p>
                 </div>
               ) : (
                 <p className="m-0 text-sm text-fg-muted">Noch keine Testmeldung empfangen.</p>
@@ -714,7 +714,7 @@ export default function ConnectionDetail() {
             </Card>
           )}
           {['facebook', 'instagram', 'threads', 'x', 'whatsapp', 'mastodon', 'bluesky'].includes(c.kind) && (
-            <Notice>Die Vorschau je Beitrag (Text und Formatprüfung je Kanal) steht im Beitrag unter „Soziale Kanäle – Status“.</Notice>
+            <Notice>Die Vorschau je Beitrag (Text und Formatprüfung je Netzwerk) steht im Beitrag unter „Soziale Netzwerke – Status“.</Notice>
           )}
         </div>
       )}

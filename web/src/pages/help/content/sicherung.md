@@ -8,7 +8,7 @@ Ein vollständiger Stand besteht aus:
 
 Ohne Master-Schlüssel sind verschlüsselte Inhalte einer Sicherung nicht lesbar.
 
-Wie viel Platz die Medien belegen (je Sammlung, Ordner und Art, Papierkorb, gesperrte Dateien, ZIP-Downloads), steht unter **Medien → Verwaltung → Speicher**. Dateien im Papierkorb und gesperrte Dateien sind bis zum Ablauf ihrer Frist ebenfalls Teil der Volume-Sicherung.
+Wie viel Platz die Medien belegen (je Sammlung, Ordner und Art, Papierkorb, gesperrte Dateien, ZIP-Downloads), steht unter **Verwaltung → Medienverwaltung → Speicher**. Dateien im Papierkorb und gesperrte Dateien sind bis zum Ablauf ihrer Frist ebenfalls Teil der Volume-Sicherung.
 
 Die Volume-Sicherungen am Docker-Host sind zusätzlich **als Ganzes verschlüsselt** – mit einem eigenen
 Sicherungsschlüssel (`/etc/blaulichtcms/backup.key`), der nicht im Volume und nicht im Sicherungsziel liegt. Eine Kopie

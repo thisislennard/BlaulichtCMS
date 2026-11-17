@@ -9,6 +9,7 @@ import { notify } from '../lib/notify.js';
 import { securityAlert } from '../lib/security-alerts.js';
 import { getSettings, setSettings } from '../lib/settings.js';
 import { compareVersions, parseVersion, UpdateError } from './core.js';
+import { plural } from '../lib/text.js';
 
 /**
  * Image-Updates aus der App über den Host-Helfer (#226, scripts/host-update-helper.sh). Der Container bekommt dafür
@@ -196,7 +197,7 @@ export async function requestHostUpdate(opts: { version: string; userId: string 
   const view = await hostHelperView(now);
   if (!view.installed) throw new UpdateError('Der Update-Helfer ist am Host nicht eingerichtet. Einrichten: am Host sudo bash /opt/apps/blaulichtcms/install.sh ausführen und die Frage nach dem Update-Helfer bejahen.');
   if (view.busy) throw new UpdateError('Es läuft bereits ein Image-Update über den Update-Helfer.');
-  if (view.nextRequestAt) throw new UpdateError(`Höchstens eine Anfrage je 10 Minuten – wieder möglich in ${Math.max(1, Math.ceil((Date.parse(view.nextRequestAt) - now) / 60_000))} Minute(n).`);
+  if (view.nextRequestAt) throw new UpdateError(`Höchstens eine Anfrage je 10 Minuten – wieder möglich in ${plural(Math.max(1, Math.ceil((Date.parse(view.nextRequestAt) - now) / 60_000)), 'Minute', 'Minuten')}.`);
   if (!parseVersion(opts.version) || !VERSION_RE.test(opts.version)) throw new UpdateError('Ungültige Version.');
   if (!opts.latestVersion || opts.latestVersion !== opts.version) throw new UpdateError('Das neueste Release hat sich geändert. Bitte erneut prüfen.');
   if (compareVersions(opts.version, config.version) <= 0) throw new UpdateError(`Version ${opts.version} ist nicht neuer als die laufende Version ${config.version}. Ein Downgrade ist nicht möglich.`);

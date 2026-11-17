@@ -6,7 +6,7 @@
     "all": "Alle",
     "editorial": "Redaktion & Freigaben",
     "media": "Medien",
-    "channels": "Kanäle",
+    "channels": "Websites & Verbindungen",
     "warnings": "Warnentwürfe",
     "user": "Benutzer & Anmeldung",
     "system": "System"
@@ -126,7 +126,7 @@
       "paired": "Website gekoppelt",
       "revoked": "Kopplung widerrufen",
       "plugin_downloaded": "Bridge heruntergeladen",
-      "update_channel": "Update-Kanal geändert"
+      "update_channel": "Update-Stufe geändert"
     },
     "banner": {
       "created": "Banner angelegt",
@@ -187,12 +187,12 @@
       "run_canceled": "Lauf abgebrochen",
       "direct_enabled": "Direktversand erlaubt",
       "direct_disabled": "Direktversand entzogen",
-      "input_created": "Eingang angelegt",
-      "input_updated": "Eingang geändert",
-      "input_deleted": "Eingang gelöscht",
-      "output_created": "Ausgang angelegt",
-      "output_updated": "Ausgang geändert",
-      "output_deleted": "Ausgang gelöscht",
+      "input_created": "Auslöser angelegt",
+      "input_updated": "Auslöser geändert",
+      "input_deleted": "Auslöser gelöscht",
+      "output_created": "Aktion angelegt",
+      "output_updated": "Aktion geändert",
+      "output_deleted": "Aktion gelöscht",
       "approval_requested": "Freigabe angefordert",
       "approval_approved": "Freigabe erteilt",
       "approval_rejected": "Freigabe abgelehnt",
@@ -215,7 +215,7 @@
     "social": {
       "requested": "Soziale Veröffentlichung beauftragt",
       "retry": "Soziale Veröffentlichung wiederholt",
-      "exported": "Für soziale Kanäle exportiert"
+      "exported": "Für soziale Netzwerke exportiert"
     },
     "template": {
       "created": "Vorlage angelegt",
@@ -277,9 +277,9 @@
       "event_created": "Termin angelegt",
       "event_updated": "Termin geändert",
       "event_deleted": "Termin gelöscht",
-      "source_created": "iCal-Kalender hinzugefügt",
-      "source_updated": "iCal-Kalender geändert",
-      "source_deleted": "iCal-Kalender entfernt",
+      "source_created": "Externen Kalender hinzugefügt",
+      "source_updated": "Externen Kalender geändert",
+      "source_deleted": "Externen Kalender entfernt",
       "feed_created": "Kalender-Abo erstellt",
       "feed_renewed": "Kalender-Abo erneuert",
       "feed_updated": "Kalender-Abo geändert",
@@ -386,7 +386,7 @@
       "paired": "hat die Website „{o}“ gekoppelt",
       "revoked": "hat die Kopplung von „{o}“ widerrufen",
       "plugin_downloaded": "hat die BlaulichtCMS Bridge heruntergeladen",
-      "update_channel": "hat den Update-Kanal von „{o}“ geändert"
+      "update_channel": "hat die Update-Stufe von „{o}“ geändert"
     },
     "banner": {
       "created": "hat das Banner „{o}“ angelegt",
@@ -447,12 +447,12 @@
       "run_canceled": "hat einen Lauf abgebrochen",
       "direct_enabled": "hat „{o}“ den Direktversand erlaubt",
       "direct_disabled": "hat „{o}“ den Direktversand entzogen",
-      "input_created": "hat den Eingang „{o}“ angelegt",
-      "input_updated": "hat den Eingang „{o}“ geändert",
-      "input_deleted": "hat den Eingang „{o}“ gelöscht",
-      "output_created": "hat den Ausgang „{o}“ angelegt",
-      "output_updated": "hat den Ausgang „{o}“ geändert",
-      "output_deleted": "hat den Ausgang „{o}“ gelöscht",
+      "input_created": "hat den Auslöser „{o}“ angelegt",
+      "input_updated": "hat den Auslöser „{o}“ geändert",
+      "input_deleted": "hat den Auslöser „{o}“ gelöscht",
+      "output_created": "hat die Aktion „{o}“ angelegt",
+      "output_updated": "hat die Aktion „{o}“ geändert",
+      "output_deleted": "hat die Aktion „{o}“ gelöscht",
       "approval_requested": "hat die Freigabe „{o}“ angefordert",
       "approval_approved": "hat „{o}“ freigegeben",
       "approval_rejected": "hat „{o}“ abgelehnt",
@@ -473,9 +473,9 @@
       "idea_created": "hat „{o}“ als Themenidee übernommen"
     },
     "social": {
-      "requested": "hat „{o}“ für einen sozialen Kanal beauftragt",
+      "requested": "hat „{o}“ für ein soziales Netzwerk beauftragt",
       "retry": "hat eine soziale Veröffentlichung erneut gestartet",
-      "exported": "hat „{o}“ für soziale Kanäle exportiert"
+      "exported": "hat „{o}“ für soziale Netzwerke exportiert"
     },
     "template": {
       "created": "hat die Vorlage „{o}“ angelegt",
@@ -488,7 +488,7 @@
       "submitted": "hat „{o}“ zur Freigabe eingereicht",
       "send_requested": "hat den Versand von „{o}“ beauftragt",
       "send_resolved": "hat einen unklaren Versand geklärt",
-      "acknowledged": "hat den Eingang eines Warnentwurfs bestätigt",
+      "acknowledged": "hat den Auslöser eines Warnentwurfs bestätigt",
       "keyword_created": "hat das Stichwort „{o}“ angelegt",
       "keyword_updated": "hat das Stichwort „{o}“ geändert",
       "question_created": "hat die Lagefrage „{o}“ angelegt",
@@ -537,9 +537,9 @@
       "event_created": "hat den Termin „{o}“ angelegt",
       "event_updated": "hat den Termin „{o}“ geändert",
       "event_deleted": "hat den Termin „{o}“ gelöscht",
-      "source_created": "hat den iCal-Kalender „{o}“ hinzugefügt",
-      "source_updated": "hat den iCal-Kalender „{o}“ geändert",
-      "source_deleted": "hat den iCal-Kalender „{o}“ entfernt",
+      "source_created": "hat den externen Kalender „{o}“ hinzugefügt",
+      "source_updated": "hat den externen Kalender „{o}“ geändert",
+      "source_deleted": "hat den externen Kalender „{o}“ entfernt",
       "feed_created": "hat einen Abo-Link für den Kalender erstellt",
       "feed_renewed": "hat den Abo-Link für den Kalender erneuert",
       "feed_updated": "hat das Kalender-Abo geändert",

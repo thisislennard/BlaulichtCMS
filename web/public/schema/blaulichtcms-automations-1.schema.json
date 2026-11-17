@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "BlaulichtCMS-Workflows (Format blaulichtcms.automations, schemaVersion 1)",
-  "description": "Datei mit einem oder mehreren Workflows für BlaulichtCMS (Import unter Workflows → Importieren; importierte Workflows sind immer inaktive Entwürfe). Ein Workflow ist ein Ablauf aus Knoten (nodes) und Verbindungen (edges): Eingang (Auslöser) → Verarbeitung → Ausgang (Aktion). Platzhalter in Texten: {{feldname}} – nur Felder, die an dieser Stelle vorhanden sind (Felder des Auslösers, Systemfelder, Felder aus „Felder setzen“, „Bild aus Vorlage erzeugen“ und vorherigen Ausgängen). Zusätzlich prüft der Import: Knoten-Kennungen eindeutig je Workflow; inputRef/outputRef verweisen auf einen Eintrag in references; Verbindungen nur zwischen vorhandenen Knoten. Nach dem Import prüft der Editor außerdem: mindestens ein Eingang und ein Ausgang, jeder Knoten angeschlossen, sourceHandle passend zur Knotenart, keine Kreise, Felder und Platzhalter an der Stelle vorhanden.",
+  "description": "Datei mit einem oder mehreren Workflows für BlaulichtCMS (Import unter Workflows → Importieren; importierte Workflows sind immer inaktive Entwürfe). Ein Workflow ist ein Ablauf aus Knoten (nodes) und Verbindungen (edges): Auslöser → Verarbeitung → Aktion. Platzhalter in Texten: {{feldname}} – nur Felder, die an dieser Stelle vorhanden sind (Felder des Auslösers, Systemfelder, Felder aus „Felder setzen“, „Bild aus Vorlage erzeugen“ und vorherigen Aktionen). Zusätzlich prüft der Import: Knoten-Kennungen eindeutig je Workflow; inputRef/outputRef verweisen auf einen Eintrag in references; Verbindungen nur zwischen vorhandenen Knoten. Nach dem Import prüft der Editor außerdem: mindestens ein Auslöser und eine Aktion, jeder Knoten angeschlossen, sourceHandle passend zur Knotenart, keine Kreise, Felder und Platzhalter an der Stelle vorhanden.",
   "type": "object",
   "properties": {
     "format": {
@@ -50,7 +50,7 @@
         }
       },
       "additionalProperties": false,
-      "description": "Die im Ablauf verwendeten Ein- und Ausgänge als Bezug (Art + Name) – ohne Kennungen, Einstellungen oder Zugangsdaten."
+      "description": "Die im Ablauf verwendeten Auslöser und Aktionen als Bezug (Art + Name) – ohne Kennungen, Einstellungen oder Zugangsdaten."
     },
     "automations": {
       "minItems": 1,
@@ -137,7 +137,7 @@
             "merge",
             "image"
           ],
-          "description": "Knotenart: input = Eingang; output = Ausgang; condition = Bedingung; switch = Verzweigung; template = Felder setzen; delay = Warten; dedup = Einmal je Vorgang; approval = Freigabe anfordern; merge = Zusammenführen; image = Bild aus Vorlage erzeugen."
+          "description": "Knotenart: input = Auslöser; output = Aktion; condition = Bedingung; switch = Verzweigung; template = Felder setzen; delay = Warten; dedup = Einmal je Vorgang; approval = Freigabe anfordern; merge = Zusammenführen; image = Bild aus Vorlage erzeugen."
         },
         "position": {
           "default": {
@@ -405,12 +405,12 @@
               "type": "null"
             }
           ],
-          "description": "Ausgang des Quellknotens je Knotenart – input: out (weiter); output: out (danach); condition: true (trifft zu), false (trifft nicht zu); switch: case:<id> (je Fall, id aus cases), default (sonst); template: out (weiter); delay: out (weiter); dedup: out (weiter); approval: approved (freigegeben), rejected (abgelehnt); merge: out (weiter); image: out (weiter)."
+          "description": "Zweig des Quellknotens je Knotenart – input: out (weiter); output: out (danach); condition: true (trifft zu), false (trifft nicht zu); switch: case:<id> (je Fall, id aus cases), default (sonst); template: out (weiter); delay: out (weiter); dedup: out (weiter); approval: approved (freigegeben), rejected (abgelehnt); merge: out (weiter); image: out (weiter)."
         },
         "target": {
           "type": "string",
           "pattern": "^[A-Za-z0-9_-]{1,40}$",
-          "description": "Kennung des Knotens, zu dem die Verbindung führt (nie ein Eingang)."
+          "description": "Kennung des Knotens, zu dem die Verbindung führt (nie ein Auslöser)."
         },
         "targetHandle": {
           "anyOf": [
@@ -431,7 +431,7 @@
         "target"
       ],
       "additionalProperties": false,
-      "description": "Verbindung von einem Ausgang (sourceHandle) eines Knotens zum nächsten Knoten."
+      "description": "Verbindung von einem Zweig (sourceHandle) eines Knotens zum nächsten Knoten."
     },
     "inputReference": {
       "type": "object",
@@ -439,7 +439,7 @@
         "ref": {
           "type": "string",
           "pattern": "^(in|out)[0-9]{1,4}$",
-          "description": "Kennung des Bezugs in dieser Datei: „in1“, „in2“ … für Eingänge, „out1“, „out2“ … für Ausgänge."
+          "description": "Kennung des Bezugs in dieser Datei: „in1“, „in2“ … für Auslöser, „out1“, „out2“ … für Aktionen."
         },
         "kind": {
           "type": "string",
@@ -454,13 +454,13 @@
             "calendar",
             "manual"
           ],
-          "description": "Art des Eingangs: fe2 = FE2-Alarm; feuersoftware = Feuersoftware-Einsatz; warnfeed = Amtliche Warnung; rss = RSS-Eintrag; upload = Neue Uploads; schedule = Zeitplan; press = Neue Presseanfrage; calendar = Kalendereintrag; manual = Manueller Start."
+          "description": "Art des Auslösers: fe2 = FE2-Alarm; feuersoftware = Feuersoftware-Einsatz; warnfeed = Amtliche Warnung; rss = RSS-Eintrag; upload = Neue Uploads; schedule = Zeitplan; press = Neue Presseanfrage; calendar = Kalendereintrag; manual = Manueller Start."
         },
         "name": {
           "type": "string",
           "minLength": 1,
           "maxLength": 120,
-          "description": "Name genau wie im Katalog (inputs bzw. outputs); beim Import wird der gleichnamige Ein- bzw. Ausgang derselben Art vorgeschlagen."
+          "description": "Name genau wie im Katalog (inputs bzw. outputs); beim Import wird der gleichnamige Auslöser bzw. die gleichnamige Aktion derselben Art vorgeschlagen."
         }
       },
       "required": [
@@ -469,7 +469,7 @@
         "name"
       ],
       "additionalProperties": false,
-      "description": "Eingang (Auslöser) als Bezug: Art und genauer Name eines vorhandenen Eingangs aus dem Katalog."
+      "description": "Auslöser als Bezug: Art und genauer Name eines vorhandenen Auslösers aus dem Katalog."
     },
     "outputReference": {
       "type": "object",
@@ -477,7 +477,7 @@
         "ref": {
           "type": "string",
           "pattern": "^(in|out)[0-9]{1,4}$",
-          "description": "Kennung des Bezugs in dieser Datei: „in1“, „in2“ … für Eingänge, „out1“, „out2“ … für Ausgänge."
+          "description": "Kennung des Bezugs in dieser Datei: „in1“, „in2“ … für Auslöser, „out1“, „out2“ … für Aktionen."
         },
         "kind": {
           "type": "string",
@@ -490,13 +490,13 @@
             "incident_entry",
             "press_release"
           ],
-          "description": "Art des Ausgangs: banner = Banner; post = Beitrag; mail = E-Mail; notify = App-Benachrichtigung; warning_draft = Warnentwurf vorbereiten; incident_entry = Einsatz in Einsatzliste; press_release = Pressemitteilung an Verteiler."
+          "description": "Art der Aktion: banner = Banner; post = Beitrag; mail = E-Mail; notify = App-Benachrichtigung; warning_draft = Warnentwurf vorbereiten; incident_entry = Einsatz in Einsatzliste; press_release = Pressemitteilung an Verteiler."
         },
         "name": {
           "type": "string",
           "minLength": 1,
           "maxLength": 120,
-          "description": "Name genau wie im Katalog (inputs bzw. outputs); beim Import wird der gleichnamige Ein- bzw. Ausgang derselben Art vorgeschlagen."
+          "description": "Name genau wie im Katalog (inputs bzw. outputs); beim Import wird der gleichnamige Auslöser bzw. die gleichnamige Aktion derselben Art vorgeschlagen."
         }
       },
       "required": [
@@ -505,10 +505,10 @@
         "name"
       ],
       "additionalProperties": false,
-      "description": "Ausgang (Aktion) als Bezug: Art und genauer Name eines vorhandenen Ausgangs aus dem Katalog."
+      "description": "Aktion als Bezug: Art und genauer Name einer vorhandenen Aktion aus dem Katalog."
     },
     "data_input": {
-      "description": "Eingang: Auslöser aus der Liste der Eingänge. inputRef: Bezug aus references.inputs (z. B. „in1“). Ohne inputRef bleibt der Auslöser offen und wird nach dem Import gewählt.",
+      "description": "Auslöser: Auslöser aus der Liste der Auslöser. inputRef: Bezug aus references.inputs (z. B. „in1“). Ohne inputRef bleibt der Auslöser offen und wird nach dem Import gewählt.",
       "type": "object",
       "properties": {
         "inputRef": {
@@ -525,7 +525,7 @@
       "additionalProperties": false
     },
     "data_output": {
-      "description": "Ausgang: Aktion aus der Liste der Ausgänge. outputRef: Bezug aus references.outputs (z. B. „out1“). Texte, Empfänger und Gestaltung stehen im Ausgang selbst, nicht in der Datei.",
+      "description": "Aktion: Aktion aus der Liste der Aktionen. outputRef: Bezug aus references.outputs (z. B. „out1“). Texte, Empfänger und Gestaltung stehen in der Aktion selbst, nicht in der Datei.",
       "type": "object",
       "properties": {
         "outputRef": {
@@ -818,7 +818,7 @@
       }
     },
     "data_image": {
-      "description": "Bild aus Vorlage erzeugen: Füllt eine befüllbare Bildvorlage mit Feldern und legt das Bild in den Medien ab; Beitrags-Ausgänge danach übernehmen es (auch für Social und Story). templateName: Name einer Bildvorlage aus dem Katalog; texts: Kennung des Textfelds der Vorlage → Text mit Platzhaltern; altText: Alternativtext. templateId, images und collectionId gehören zur Installation und werden in Dateien nicht verwendet.",
+      "description": "Bild aus Vorlage erzeugen: Füllt eine befüllbare Bildvorlage mit Feldern und legt das Bild in den Medien ab; Beitrags-Aktionen danach übernehmen es (auch für Social und Story). templateName: Name einer Bildvorlage aus dem Katalog; texts: Kennung des Textfelds der Vorlage → Text mit Platzhaltern; altText: Alternativtext. templateId, images und collectionId gehören zur Installation und werden in Dateien nicht verwendet.",
       "type": "object",
       "properties": {
         "templateId": {

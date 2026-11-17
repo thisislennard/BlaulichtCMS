@@ -7,7 +7,7 @@ import { CopyButton, Dialog, useToast } from '../../components/ui/overlays';
 import { Icon } from '../../components/ui/Icon';
 import type { AutomationListItem } from './Automations';
 
-/* Export und Import von Workflows (#196). Die Datei enthält nur Abläufe und für Ein-/Ausgänge Art und Name –
+/* Export und Import von Workflows (#196). Die Datei enthält nur Abläufe und für Auslöser und Aktionen Art und Name –
    keine Kennungen, keine Zugangsdaten. Importierte Workflows starten immer als Entwurf. */
 
 /** Gleiche Grenze wie der Server (automations/transfer.ts). */
@@ -47,7 +47,7 @@ export function ExportDialog({ items, onClose }: { items: AutomationListItem[]; 
     >
       <div className="flex flex-col gap-3">
         <p className="m-0 text-sm text-fg-muted">
-          Die JSON-Datei enthält die Abläufe. Ein- und Ausgänge stehen darin nur mit Art und Name – ohne Einstellungen, Kennungen oder Zugangsdaten. Beim Import werden sie vorhandenen Ein- und Ausgängen zugeordnet.
+          Die JSON-Datei enthält die Abläufe. Auslöser und Aktionen stehen darin nur mit Art und Name – ohne Einstellungen, Kennungen oder Zugangsdaten. Beim Import werden sie vorhandenen Auslösern und Aktionen zugeordnet.
         </p>
         <label className="flex items-center gap-2.5 text-sm font-medium cursor-pointer">
           <input type="checkbox" className="w-4 h-4 accent-[var(--bc-primary-solid)]" checked={all} onChange={(e) => setSel(e.target.checked ? new Set(items.map((a) => a.id)) : new Set())} />
@@ -130,7 +130,7 @@ function parseJsonText(raw: string): { ok: true; value: unknown } | { ok: false;
 /** Meldungen als Text, z. B. zum Weitergeben an die KI, die die Datei erstellt hat. */
 const problemText = (p: FileProblem) => [p.title, ...p.lines.map((l) => `- ${l.path ? `${l.path}: ` : ''}${l.message}`)].join('\n');
 
-function MappingRows({ title, rows, value, onChange, kind }: { title: string; rows: RefRow[]; value: Record<string, string>; onChange: (ref: string, id: string) => void; kind: 'Eingang' | 'Ausgang' }) {
+function MappingRows({ title, rows, value, onChange, kind }: { title: string; rows: RefRow[]; value: Record<string, string>; onChange: (ref: string, id: string) => void; kind: 'Auslöser' | 'Aktion' }) {
   const base = useId();
   if (!rows.length) return null;
   return (
@@ -316,8 +316,8 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
               </ul>
               {preview.appVersion && <p className="m-0 text-meta text-fg-muted">Exportiert mit BlaulichtCMS <span className="font-mono">{preview.appVersion}</span>.</p>}
             </div>
-            <MappingRows title="Eingänge zuordnen" kind="Eingang" rows={preview.inputs} value={inputs} onChange={(ref, id) => setInputs((m) => ({ ...m, [ref]: id }))} />
-            <MappingRows title="Ausgänge zuordnen" kind="Ausgang" rows={preview.outputs} value={outputs} onChange={(ref, id) => setOutputs((m) => ({ ...m, [ref]: id }))} />
+            <MappingRows title="Auslöser zuordnen" kind="Auslöser" rows={preview.inputs} value={inputs} onChange={(ref, id) => setInputs((m) => ({ ...m, [ref]: id }))} />
+            <MappingRows title="Aktionen zuordnen" kind="Aktion" rows={preview.outputs} value={outputs} onChange={(ref, id) => setOutputs((m) => ({ ...m, [ref]: id }))} />
             <Notice title="Importierte Workflows starten als Entwurf">
               Sie sind nicht aktiv, nicht getestet und haben keinen Direktversand. {open > 0 ? `${open} Bezug/Bezüge bleiben offen und müssen im Editor gewählt werden. ` : ''}Vor dem Aktivieren im Editor prüfen und testen.
             </Notice>

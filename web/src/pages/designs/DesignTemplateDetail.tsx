@@ -149,7 +149,7 @@ export default function DesignTemplateDetail() {
   const manage = can('templates.manage');
   usePageMeta({ title: q.data?.title });
   if (q.isLoading) return <SkeletonRows rows={6} />;
-  if (q.error || !q.data) return <ErrorBox title="Vorlage konnte nicht geladen werden">{(q.error as Error)?.message}</ErrorBox>;
+  if (q.error || !q.data) return <ErrorBox title="Designvorlage konnte nicht geladen werden">{(q.error as Error)?.message}</ErrorBox>;
   const t = q.data;
   const current = t.versions.find((v) => v.current);
   const older = t.versions.filter((v) => !v.current);
@@ -270,7 +270,7 @@ export default function DesignTemplateDetail() {
                         },
                       ]
                     : []),
-                  { label: 'Vorlage löschen', icon: 'Trash2', danger: true, onClick: () => setRemove(true) },
+                  { label: 'Designvorlage löschen', icon: 'Trash2', danger: true, onClick: () => setRemove(true) },
                 ]}
               />
               )}
@@ -380,7 +380,7 @@ export default function DesignTemplateDetail() {
         onClose={() => setRemove(false)}
         objectType="Designvorlage"
         name={t.title}
-        extra="Alle Versionen und Dateien dieser Vorlage werden endgültig gelöscht."
+        extra="Alle Versionen und Dateien dieser Designvorlage werden endgültig gelöscht."
         onConfirm={async () => {
           await del(`/design-templates/${t.id}`);
           qc.invalidateQueries({ queryKey: ['design-templates'] });

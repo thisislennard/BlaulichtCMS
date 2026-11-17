@@ -6,7 +6,7 @@ Der Assistent ist für das Handy gebaut: Schritte oben, **Zurück / Speichern / 
 
 1. **Vorgang** – Erstmeldung, Aktualisierung oder Entwarnung. Jeder Vorgang hat eine eigene Vorgangs-ID (z. B. `W-2026-0001`).
 2. **Stichwort & Warnstufe** – Feuerwehrstichwort suchen, Lagefragen beantworten, Warnstufe bestätigen (siehe unten).
-3. **Gebiet & Zeitraum** – betroffenes Gebiet, Beginn, Gültigkeit und die zuständige(n) Stelle(n).
+3. **Gebiet & Zeitraum** – betroffenes Gebiet, Beginn, Gültigkeit und die zuständigen Stellen.
 4. **Inhalt** – Überschrift, Lage, Verhaltensempfehlungen, Absender, Rückrufkontakt.
 5. **Prüfen & PDF** – PDF-Vorschau (mit „ENTWURF“ gekennzeichnet), einreichen, freigeben.
 6. **Versand** – Empfänger prüfen, versenden, Ergebnis und Eingangsbestätigung festhalten.

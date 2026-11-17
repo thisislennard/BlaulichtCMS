@@ -62,8 +62,8 @@ export async function loadConnection(id: string, db: Queryable = pool, opts: { i
 }
 
 /**
- * Wo eine Verbindung verwendet wird (alle Bezüge auf connections): Veröffentlichungen auf sozialen Kanälen,
- * Einsatzmeldungen, übernommene Einsätze, amtliche Warnungen und Zielkanäle in Beitragsfassungen. Ohne Bezüge darf sie
+ * Wo eine Verbindung verwendet wird (alle Bezüge auf connections): Veröffentlichungen auf sozialen Netzwerken,
+ * Einsatzmeldungen, übernommene Einsätze, amtliche Warnungen und Veröffentlichungsziele in Beitragsfassungen. Ohne Bezüge darf sie
  * endgültig gelöscht werden.
  */
 export async function connectionUsage(id: string, db: Queryable = pool) {

@@ -2,13 +2,13 @@ import type { InputKind, OutputKind, Operator } from './catalog.js';
 import { graphSchema, outputNeeds, slotFields, type Graph, type InputRef, type OutputRef } from './graph.js';
 
 /*
- * Vorlagen für neue Workflows: fertige Abläufe nur aus Eingängen, Bedingungen und Ausgängen des Katalogs. Ein- und
- * Ausgänge sind „Plätze“: Gibt es genau einen passenden Ein- bzw. Ausgang, wird er eingesetzt, sonst bleibt der Platz
+ * Vorlagen für neue Workflows: fertige Abläufe nur aus Auslösern, Bedingungen und Aktionen des Katalogs. Auslöser
+ * und Aktionen sind „Plätze“: Gibt es genau einen passenden Auslöser bzw. genau eine passende Aktion, wird er bzw. sie eingesetzt, sonst bleibt der Platz
  * offen (data.want nennt die passenden Arten und Startwerte, um ihn direkt im Workflow anzulegen).
  */
 
 export interface SlotPreset {
-  /** Vorschlag für den Namen eines neu angelegten Ein-/Ausgangs */
+  /** Vorschlag für den Namen eines neu angelegten Auslösers bzw. einer neuen Aktion */
   name: string;
   /** Startwerte der Einstellungen (werden beim Anlegen serverseitig geprüft) */
   config: Record<string, unknown>;
@@ -21,7 +21,7 @@ export interface TemplateDef {
   icon: string;
   input?: { kinds: InputKind[]; preset?: SlotPreset };
   rules?: { field: string; op: Operator; value?: string }[];
-  /** Schritt „Bild aus Vorlage erzeugen“ vor den Ausgängen (#210); die Bildvorlage bleibt ein offener Platz */
+  /** Schritt „Bild aus Vorlage erzeugen“ vor den Aktionen (#210); die Bildvorlage bleibt ein offener Platz */
   image?: { label: string; texts: Record<string, string>; altText?: string };
   outputs: { kind: OutputKind; preset: SlotPreset }[];
 }
@@ -141,9 +141,9 @@ export function templateById(id: string): TemplateDef | undefined {
 }
 
 /**
- * Ablauf einer Vorlage. Jeder Platz bekommt den einzigen passenden vorhandenen Ein-/Ausgang (nicht gelöscht) oder bleibt
- * offen. Ein Ausgang passt nur, wenn alle seine Platzhalter vom Auslöser der Vorlage geliefert werden (ein Banner mit
- * {{stichwort}} passt nicht zu einer amtlichen Warnung). Ohne Bedingung führt der Eingang direkt zu allen Ausgängen, sonst über „trifft zu“.
+ * Ablauf einer Vorlage. Jeder Platz bekommt den einzigen passenden vorhandenen Auslöser bzw. die einzige passende Aktion (nicht gelöscht) oder bleibt
+ * offen. Eine Aktion passt nur, wenn alle ihre Platzhalter vom Auslöser der Vorlage geliefert werden (ein Banner mit
+ * {{stichwort}} passt nicht zu einer amtlichen Warnung). Ohne Bedingung führt der Auslöser direkt zu allen Aktionen, sonst über „trifft zu“.
  */
 export function templateGraph(t: TemplateDef, refs: { inputs: Map<string, InputRef>; outputs: Map<string, OutputRef> }): { graph: Graph; open: number } {
   let open = 0;
@@ -163,7 +163,7 @@ export function templateGraph(t: TemplateDef, refs: { inputs: Map<string, InputR
     nodes.push({ id: 'if1', type: 'condition', position: { x: 320, y: 0 }, data: { combinator: 'and', rules: t.rules.map((r) => ({ ...r })) } });
     if (t.input) edges.push({ id: 'e_in1_if1', source: 'in1', sourceHandle: 'out', target: 'if1' });
   }
-  // Bild aus Vorlage: zwischen Bedingung/Eingang und Ausgängen; die Bildvorlage wählt man im Workflow
+  // Bild aus Vorlage: zwischen Bedingung/Auslöser und Aktionen; die Bildvorlage wählt man im Workflow
   const imgX = t.rules?.length ? 640 : 320;
   if (t.image) {
     open++;

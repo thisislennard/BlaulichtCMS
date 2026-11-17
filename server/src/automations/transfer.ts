@@ -4,8 +4,8 @@ import { graphSchema, NODE_DATA, type Graph, type InputRef, type OutputRef } fro
 
 /*
  * Export und Import von Automationen (#196) als JSON-Datei. Die Datei enthält nur den Ablauf (Knoten, Kanten,
- * Verarbeitungsschritte) und für verwendete Ein- und Ausgänge deren Art und Namen – keine Kennungen, keine
- * Konfiguration der Ein-/Ausgänge, keine Zugangsdaten. Beim Import werden die Bezüge vorhandenen Ein- und Ausgängen
+ * Verarbeitungsschritte) und für verwendete Auslöser und Aktionen deren Art und Namen – keine Kennungen, keine
+ * Konfiguration der Auslöser und Aktionen, keine Zugangsdaten. Beim Import werden die Bezüge vorhandenen Auslösern und Aktionen
  * derselben Art zugeordnet oder bleiben offen; importierte Automationen sind immer Entwürfe (nicht aktiv, nicht
  * getestet, ohne Direktversand).
  */
@@ -16,17 +16,17 @@ export const TRANSFER_SCHEMA_VERSION = 1;
 export const TRANSFER_MAX_BYTES = 1024 * 1024;
 export const TRANSFER_MAX_AUTOMATIONS = 50;
 
-/** Bezug auf einen Ein- oder Ausgang in der Datei: „in“ bzw. „out“ mit Nummer. */
+/** Bezug auf einen Auslöser oder eine Aktion in der Datei: „in“ bzw. „out“ mit Nummer. */
 export const REF_PATTERN = /^(in|out)[0-9]{1,4}$/;
 const refKey = z.string().regex(REF_PATTERN, 'ungültiger Bezug – erwartet „in“ bzw. „out“ mit Nummer, z. B. „in1“ oder „out1“');
 const inputKind = z.enum(Object.keys(INPUT_KINDS) as [InputKind, ...InputKind[]]);
 const outputKind = z.enum(Object.keys(OUTPUT_KINDS) as [OutputKind, ...OutputKind[]]);
 
-/** Eingang bzw. Ausgang als Bezug (Art + Name); Knoten verweisen über `ref` darauf. */
+/** Auslöser bzw. Aktion als Bezug (Art + Name); Knoten verweisen über `ref` darauf. */
 export const inputReferenceSchema = z.object({ ref: refKey, kind: inputKind, name: z.string().trim().min(1).max(120) });
 export const outputReferenceSchema = z.object({ ref: refKey, kind: outputKind, name: z.string().trim().min(1).max(120) });
 
-/** Knoten in der Datei; `data` prüft parseTransferFile je Art (Ein-/Ausgänge nur mit Bezug und Bezeichnung). */
+/** Knoten in der Datei; `data` prüft parseTransferFile je Art (Auslöser und Aktionen nur mit Bezug und Bezeichnung). */
 export const fileNodeSchema = z.object({
   id: z.string().regex(/^[A-Za-z0-9_-]{1,40}$/, 'ungültige Kennung – erwartet 1–40 Zeichen aus Buchstaben, Ziffern, _ und -'),
   type: z.enum(Object.keys(NODE_TYPES) as [NodeType, ...NodeType[]]),
@@ -68,7 +68,7 @@ export interface ExportSource {
   graph: Graph;
 }
 
-/** Exportdatei aus Automationen bauen: Ein-/Ausgänge werden zu Bezügen (Art + Name), Direktversand entfällt. */
+/** Exportdatei aus Automationen bauen: Auslöser und Aktionen werden zu Bezügen (Art + Name), Direktversand entfällt. */
 export function buildExport(list: ExportSource[], refs: { inputs: Map<string, InputRef>; outputs: Map<string, OutputRef> }, appVersion: string, now = new Date(), templates: Map<string, string> = new Map()): TransferFile {
   const inputs = new Map<string, { ref: string; kind: InputKind; name: string }>();
   const outputs = new Map<string, { ref: string; kind: OutputKind; name: string }>();
@@ -126,7 +126,7 @@ export class TransferError extends Error {
   }
 }
 
-const PATH_WORDS: Record<string, string> = { name: 'Name', description: 'Beschreibung', graph: 'Ablauf', nodes: 'Knoten', edges: 'Verbindung', data: 'Einstellungen', references: 'Bezüge', inputs: 'Eingang', outputs: 'Ausgang', automations: 'Workflow', schemaVersion: 'Formatversion', kind: 'Art', type: 'Typ' };
+const PATH_WORDS: Record<string, string> = { name: 'Name', description: 'Beschreibung', graph: 'Ablauf', nodes: 'Knoten', edges: 'Verbindung', data: 'Einstellungen', references: 'Bezüge', inputs: 'Auslöser', outputs: 'Aktionen', automations: 'Workflow', schemaVersion: 'Formatversion', kind: 'Art', type: 'Typ' };
 /** Lesbarer Ort eines Prüffehlers, z. B. „Workflow 1 › Knoten 2 › Einstellungen“. */
 function pathLabel(p: PropertyKey[]): string {
   const out: string[] = [];
@@ -233,10 +233,10 @@ export function parseTransferFile(raw: unknown): TransferFile {
         const known = n.type === 'input' ? inRefs : outRefs;
         const ref = n.data[key];
         if (ref !== undefined && (typeof ref !== 'string' || !known.includes(ref))) {
-          problems.push({ path: jsonPath([...at, 'data', key]), message: `${who}: ${n.type === 'input' ? 'Eingang' : 'Ausgang'} verweist auf einen unbekannten Bezug ${shown(ref)} – erwartet ein „ref“ aus references.${n.type === 'input' ? 'inputs' : 'outputs'} (${names(known)}).` });
+          problems.push({ path: jsonPath([...at, 'data', key]), message: `${who}: ${n.type === 'input' ? 'Auslöser' : 'Aktion'} verweist auf einen unbekannten Bezug ${shown(ref)} – erwartet ein „ref“ aus references.${n.type === 'input' ? 'inputs' : 'outputs'} (${names(known)}).` });
         }
         const extra = Object.keys(n.data).filter((k) => k !== key && k !== 'label');
-        if (extra.length) problems.push({ path: jsonPath([...at, 'data']), message: `${who}: ${n.type === 'input' ? 'Eingangs' : 'Ausgangs'}-Knoten mit unerwarteten Angaben (${names(extra)}) – erlaubt sind nur „${key}“ und „label“.` });
+        if (extra.length) problems.push({ path: jsonPath([...at, 'data']), message: `${who}: ${n.type === 'input' ? 'Auslöser' : 'Aktions'}-Knoten mit unerwarteten Angaben (${names(extra)}) – erlaubt sind nur „${key}“ und „label“.` });
       } else {
         const d = NODE_DATA[n.type].safeParse(n.data, { reportInput: true });
         if (!d.success) {
@@ -264,7 +264,7 @@ export interface TransferMapping {
 }
 
 /**
- * Ablauf einer importierten Automation mit Zuordnung: Bezüge werden zu Kennungen vorhandener Ein-/Ausgänge (gleiche Art,
+ * Ablauf einer importierten Automation mit Zuordnung: Bezüge werden zu Kennungen vorhandener Auslöser und Aktionen (gleiche Art,
  * nicht gelöscht) oder bleiben offen. Unbekannte Zuordnungen bleiben ebenfalls offen. Daten der übrigen Knoten wurden
  * in parseTransferFile geprüft; hier wird nur über das Schema normalisiert.
  */
@@ -300,7 +300,7 @@ export function mappedGraph(a: TransferFile['automations'][number], file: Transf
   return { graph: graphSchema.parse({ nodes, edges: a.graph.edges }), open };
 }
 
-/** Vorschlag je Bezug: vorhandene Ein-/Ausgänge derselben Art, gleicher Name (ohne Groß-/Kleinschreibung) zuerst. */
+/** Vorschlag je Bezug: vorhandene Auslöser und Aktionen derselben Art, gleicher Name (ohne Groß-/Kleinschreibung) zuerst. */
 export function suggestions<T extends { id: string; name: string; kind: string; archived?: boolean }>(ref: { kind: string; name: string }, pool: Iterable<T>) {
   const candidates = [...pool].filter((x) => !x.archived && x.kind === ref.kind).sort((a, b) => a.name.localeCompare(b.name, 'de'));
   const same = candidates.find((x) => x.name.trim().toLocaleLowerCase('de') === ref.name.trim().toLocaleLowerCase('de'));

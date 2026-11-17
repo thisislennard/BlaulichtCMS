@@ -39,7 +39,7 @@ In WordPress unter **Einstellungen → BlaulichtCMS Bridge**:
 
 ### Kategorie
 
-Die Bridge meldet die Kategorien der Website an BlaulichtCMS (ab Bridge 0.8.0). Im Beitrag erscheint unter **Zielkanal** die Auswahl **Kategorie auf der Website**, ebenso im [Ausgang „Beitrag“](/hilfe/workflows#ausgaenge) eines Workflows, sobald dort ein Zielkanal gewählt ist. Die Kategorie gehört zur freigegebenen Fassung – eine Änderung braucht eine neue Freigabe. Ohne Auswahl gilt die Standardkategorie. Eine neu angelegte Kategorie erscheint nach dem nächsten Abruf in BlaulichtCMS.
+Die Bridge meldet die Kategorien der Website an BlaulichtCMS (ab Bridge 0.8.0). Im Beitrag erscheint unter **Website** die Auswahl **Kategorie auf der Website**, ebenso in der [Aktion „Beitrag“](/hilfe/workflows#aktionen) eines Workflows, sobald dort eine Website gewählt ist. Die Kategorie gehört zur freigegebenen Fassung – eine Änderung braucht eine neue Freigabe. Ohne Auswahl gilt die Standardkategorie. Eine neu angelegte Kategorie erscheint nach dem nächsten Abruf in BlaulichtCMS.
 
 ### Autor
 
@@ -85,7 +85,7 @@ Cache-Plugins und Hoster-Caches liefern Seiten aus dem Zwischenspeicher. Die Bri
 
 ### Bridge-Updates
 
-Neue Bridge-Versionen kommen über den normalen WordPress-Updateweg – zuerst auf Websites im Kanal **„Test“**, dann nach Freigabe für alle. In der Plugin-Liste lässt sich **Automatische Updates aktivieren** einschalten; WordPress installiert freigegebene Versionen dann selbst, geprüft wie bisher (Prüfsumme und Signatur). Ablauf: [Updates → BlaulichtCMS Bridge](/hilfe/updates#blaulichtcms-bridge).
+Neue Bridge-Versionen kommen über den normalen WordPress-Updateweg – zuerst auf Websites in der Stufe **„Test“**, dann nach Freigabe für alle. In der Plugin-Liste lässt sich **Automatische Updates aktivieren** einschalten; WordPress installiert freigegebene Versionen dann selbst, geprüft wie bisher (Prüfsumme und Signatur). Ablauf: [Updates → BlaulichtCMS Bridge](/hilfe/updates#blaulichtcms-bridge).
 
 ## Was in WordPress entsteht
 
@@ -103,7 +103,7 @@ Alle Shortcodes der Bridge (auch `[blaulichtcms_banner]` und `[blaulichtcms_eins
 
 ## Zurückziehen
 
-**Zurückziehen** im Beitrag wirkt auf **jede** Website, auf der der Beitrag noch steht – auch wenn eine frühere Fassung auf eine andere Website ging. Die Bridge setzt den WordPress-Beitrag auf „Entwurf“ und löscht die übernommenen Bilder und Videos endgültig aus der Mediathek (samt aller Bildgrößen unter `/wp-content/uploads`), sofern kein anderer Beitrag und keine andere Seite sie verwendet. So ist ein Bild nach einem Widerspruch einer abgebildeten Person auch über die Mediathek nicht mehr abrufbar. Kopien in Caches, Suchmaschinen oder bei Dritten erreicht die Bridge nicht. Facebook und Instagram sind davon getrennt – siehe [Verbindungen](/hilfe/verbindungen) („Von sozialen Kanälen entfernen“).
+**Zurückziehen** im Beitrag wirkt auf **jede** Website, auf der der Beitrag noch steht – auch wenn eine frühere Fassung auf eine andere Website ging. Die Bridge setzt den WordPress-Beitrag auf „Entwurf“ und löscht die übernommenen Bilder und Videos endgültig aus der Mediathek (samt aller Bildgrößen unter `/wp-content/uploads`), sofern kein anderer Beitrag und keine andere Seite sie verwendet. So ist ein Bild nach einem Widerspruch einer abgebildeten Person auch über die Mediathek nicht mehr abrufbar. Kopien in Caches, Suchmaschinen oder bei Dritten erreicht die Bridge nicht. Facebook und Instagram sind davon getrennt – siehe [Verbindungen](/hilfe/verbindungen) („Von sozialen Netzwerken entfernen“).
 
 Wurde die Kopplung einer Website widerrufen und **dieselbe Website (gleiche Adresse) neu gekoppelt**, wirkt „Zurückziehen“ auch auf Beiträge, die noch über die alte Kopplung veröffentlicht wurden: Der Auftrag geht an die neue Kopplung, die Bridge findet den Beitrag in WordPress wieder.
 

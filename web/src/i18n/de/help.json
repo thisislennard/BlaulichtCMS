@@ -51,7 +51,7 @@
   "chapters": {
     "erste-schritte": {
       "title": "Erste Schritte",
-      "summary": "Der Ablauf von Foto-Link bis Veröffentlichung und die wichtigsten Begriffe."
+      "summary": "Der Ablauf vom Upload-Link bis zur Veröffentlichung und die wichtigsten Begriffe."
     },
     "anmeldung": {
       "title": "Anmeldung und Zwei-Faktor",
@@ -62,7 +62,7 @@
       "summary": "Auf Handy, Tablet und Computer installieren (Chrome, Edge, Safari), Schnellzugriffe, Verhalten ohne Verbindung."
     },
     "foto-link": {
-      "title": "Upload-Links: Fotos und Videos sammeln",
+      "title": "Upload-Links: Fotos sammeln",
       "summary": "Upload-Links erzeugen, Grenzen, Ablauf und Widerruf, Quarantäne."
     },
     "designvorlagen": {
@@ -75,7 +75,7 @@
     },
     "beitraege": {
       "title": "Beiträge und Fassungen",
-      "summary": "Arten, Text, Medien, Zielkanal und warum jede Änderung eine Fassung ist."
+      "summary": "Arten, Text, Medien, Veröffentlichungsziele und warum jede Änderung eine Fassung ist."
     },
     "freigabe": {
       "title": "Freigabe und Veröffentlichung",
@@ -171,7 +171,7 @@
     },
     "verbindungen": {
       "title": "Verbindungen: Facebook, Instagram, FE2, Warnungen",
-      "summary": "Verbinden, Testen, Vorschau, Aktivieren; soziale Kanäle im Beitrag, FE2-Entwürfe, amtliche Warnungen."
+      "summary": "Verbinden, Testen, Vorschau, Aktivieren; soziale Netzwerke im Beitrag, FE2-Entwürfe, amtliche Warnungen."
     },
     "system": {
       "title": "Systemstatus, Protokolle und Aktivitäten",
@@ -184,7 +184,7 @@
       "text": "Der ganze Ablauf in fünf Schritten."
     },
     "foto-link": {
-      "title": "Foto-Link",
+      "title": "Upload-Link",
       "text": "Fotos und Videos ohne Konto sammeln."
     },
     "freigabe": {
@@ -212,7 +212,7 @@
     },
     "2": {
       "q": "Warum muss ich nach einer kleinen Änderung neu freigeben?",
-      "a": "Eine Freigabe gilt für genau eine Fassung. Jede Änderung an Text, Medien oder Zielkanal erzeugt eine neue Fassung, damit nichts Ungeprüftes veröffentlicht wird.",
+      "a": "Eine Freigabe gilt für genau eine Fassung. Jede Änderung an Text, Medien oder Veröffentlichungszielen erzeugt eine neue Fassung, damit nichts Ungeprüftes veröffentlicht wird.",
       "link": "/hilfe/freigabe"
     },
     "3": {

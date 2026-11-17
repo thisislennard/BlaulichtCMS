@@ -4,7 +4,7 @@ import { del, download, get, post, put } from '../../api/client';
 import { Badge, Button, Card, EmptyState, FieldWrap, FilePickButton, Input, Notice, PageHeader, Select, SkeletonRows, Switch, Table, Tabs, Td, Textarea, Th } from '../../components/ui/core';
 import { Dialog, useConfirm, useErrorToast, useToast } from '../../components/ui/overlays';
 import { useAuth } from '../../lib/auth';
-import { fmtDate } from '../../lib/format';
+import { fmtDate, plural } from '../../lib/format';
 import { CheckList } from '../automations/shared';
 
 export interface PressList {
@@ -330,7 +330,7 @@ export default function Distribution() {
             </div>
           </div>
           {toReview > 0 && listFilter !== 'review' && (
-            <Notice tone="warning" title={`${toReview} Kontakt(e) zu prüfen`}>
+            <Notice tone="warning" title={`${plural(toReview, 'Kontakt', 'Kontakte')} zu prüfen`}>
               Ohne vermerkte Rechtsgrundlage oder lange ohne Pressemitteilung und Änderung (Einstellungen → Datenschutz → Wiedervorlage). Prüfen, ob die Adresse noch stimmt und gebraucht wird – dann ergänzen bzw. „Geprüft“, sonst löschen. Automatisch gelöscht wird nichts.{' '}
               <Button size="sm" variant="ghost" onClick={() => setListFilter('review')}>
                 Anzeigen
@@ -417,7 +417,7 @@ export default function Distribution() {
                 <div className="min-w-0 flex-1">
                   <div className="font-medium">{l.name}</div>
                   <div className="text-meta text-fg-muted">
-                    {l.contacts} Kontakt(e){l.unsubscribed ? ` · ${l.unsubscribed} abgemeldet` : ''}
+                    {plural(l.contacts, 'Kontakt', 'Kontakte')}{l.unsubscribed ? ` · ${l.unsubscribed} abgemeldet` : ''}
                     {l.description ? ` · ${l.description}` : ''}
                   </div>
                 </div>

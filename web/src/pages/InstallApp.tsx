@@ -96,7 +96,7 @@ export default function InstallApp() {
           <Icon name={mobile ? 'Smartphone' : 'Monitor'} size={24} /> BlaulichtCMS als App
         </h1>
         <p className="m-0 text-fg-muted">
-          Als App läuft BlaulichtCMS in einem eigenen Fenster mit Symbol auf dem Startbildschirm, in der Taskleiste oder im Dock, Benachrichtigungen erscheinen als Mitteilung des Geräts. Schnellzugriffe führen direkt zu „Neuer Beitrag“, „Medien sammeln“ und „Offene Freigaben“. Zum Anmelden brauchst du ein Konto oder eine persönliche Einladung.
+          Als App läuft BlaulichtCMS in einem eigenen Fenster mit Symbol auf dem Startbildschirm, in der Taskleiste oder im Dock, Benachrichtigungen erscheinen als Mitteilung des Geräts. Schnellzugriffe führen direkt zu „Neuer Beitrag“, „Fotos sammeln“ und „Offene Freigaben“. Zum Anmelden brauchst du ein Konto oder eine persönliche Einladung.
         </p>
         {installed ? (
           <Notice tone="success">BlaulichtCMS läuft hier als installierte App.</Notice>

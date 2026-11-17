@@ -70,7 +70,7 @@ export async function claimJobs(limit: number, busy: number[] = [], filter: { ki
 }
 
 /**
- * Aufträge, die auf fremde Dienste warten (soziale Netzwerke, Workflows mit Ausgängen, Presseversand, NAS) und dabei
+ * Aufträge, die auf fremde Dienste warten (soziale Netzwerke, Workflows mit Aktionen, Presseversand, NAS) und dabei
  * lange brauchen oder hängen können (#240). Sie dürfen nie alle Plätze belegen: Warnversand, Benachrichtigungen,
  * Medienprüfung und Exporte behalten immer mindestens einen Platz.
  */

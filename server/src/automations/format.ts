@@ -28,7 +28,7 @@ function js(schema: z.ZodType): Json {
 const labelSchema = z.string().trim().max(80);
 const code = (s: string) => `\`${s}\``;
 
-/** Ausgänge (sourceHandle) je Knotenart, z. B. „true (trifft zu)“ und „false (trifft nicht zu)“. */
+/** Zweige (sourceHandle) je Knotenart, z. B. „true (trifft zu)“ und „false (trifft nicht zu)“. */
 export function nodeHandles(type: NodeType): { id: string; label: string }[] {
   if (type === 'switch') return [{ id: 'case:<id>', label: 'je Fall, id aus cases' }, { id: 'default', label: 'sonst' }];
   return outputPorts({ type, data: {} });
@@ -38,7 +38,7 @@ const handleText = (type: NodeType) => nodeHandles(type).map((h) => `${h.id} (${
 /** Hinweise je Knotenart (Zahlen aus den Grenzen des Katalogs). */
 const DATA_NOTES: Record<NodeType, string> = {
   input: 'inputRef: Bezug aus references.inputs (z. B. „in1“). Ohne inputRef bleibt der Auslöser offen und wird nach dem Import gewählt.',
-  output: 'outputRef: Bezug aus references.outputs (z. B. „out1“). Texte, Empfänger und Gestaltung stehen im Ausgang selbst, nicht in der Datei.',
+  output: 'outputRef: Bezug aus references.outputs (z. B. „out1“). Texte, Empfänger und Gestaltung stehen in der Aktion selbst, nicht in der Datei.',
   condition: `Regeln „Feld – Vergleich – Wert“ (field, op, value), verknüpft mit combinator „and“ oder „or“; höchstens ${LIMITS.maxConditionRules} Regeln und eine Ebene Untergruppen ({ combinator, rules }).`,
   switch: `field: Feld, nach dessen Wert verzweigt wird; cases: 1–${LIMITS.maxCases} Fälle { id, value }.`,
   template: 'fields: 1–20 Einträge { key, template } – legt das Feld key mit dem Text aus template an (Platzhalter {{feld}} erlaubt).',
@@ -90,18 +90,18 @@ export function transferJsonSchema(): Json {
     then: { properties: { data: { $ref: `#/$defs/data_${t}` } }, ...(needsData(t) ? { required: ['data'] } : {}) },
   }));
   const edge: Json = { ...automation.properties.graph.properties.edges.items, additionalProperties: false };
-  edge.description = 'Verbindung von einem Ausgang (sourceHandle) eines Knotens zum nächsten Knoten.';
+  edge.description = 'Verbindung von einem Zweig (sourceHandle) eines Knotens zum nächsten Knoten.';
   edge.properties.source.description = 'Kennung des Knotens, von dem die Verbindung ausgeht.';
-  edge.properties.target.description = 'Kennung des Knotens, zu dem die Verbindung führt (nie ein Eingang).';
-  edge.properties.sourceHandle.description = `Ausgang des Quellknotens je Knotenart – ${types.map((t) => `${t}: ${handleText(t)}`).join('; ')}.`;
+  edge.properties.target.description = 'Kennung des Knotens, zu dem die Verbindung führt (nie ein Auslöser).';
+  edge.properties.sourceHandle.description = `Zweig des Quellknotens je Knotenart – ${types.map((t) => `${t}: ${handleText(t)}`).join('; ')}.`;
   edge.properties.targetHandle.description = 'Optional, immer „in“.';
-  const inputRef: Json = { ...js(inputReferenceSchema), additionalProperties: false, description: 'Eingang (Auslöser) als Bezug: Art und genauer Name eines vorhandenen Eingangs aus dem Katalog.' };
-  inputRef.properties.kind.description = `Art des Eingangs: ${kindList(INPUT_KINDS)}.`;
-  const outputRef: Json = { ...js(outputReferenceSchema), additionalProperties: false, description: 'Ausgang (Aktion) als Bezug: Art und genauer Name eines vorhandenen Ausgangs aus dem Katalog.' };
-  outputRef.properties.kind.description = `Art des Ausgangs: ${kindList(OUTPUT_KINDS)}.`;
+  const inputRef: Json = { ...js(inputReferenceSchema), additionalProperties: false, description: 'Auslöser als Bezug: Art und genauer Name eines vorhandenen Auslösers aus dem Katalog.' };
+  inputRef.properties.kind.description = `Art des Auslösers: ${kindList(INPUT_KINDS)}.`;
+  const outputRef: Json = { ...js(outputReferenceSchema), additionalProperties: false, description: 'Aktion als Bezug: Art und genauer Name einer vorhandenen Aktion aus dem Katalog.' };
+  outputRef.properties.kind.description = `Art der Aktion: ${kindList(OUTPUT_KINDS)}.`;
   for (const r of [inputRef, outputRef]) {
-    r.properties.ref.description = 'Kennung des Bezugs in dieser Datei: „in1“, „in2“ … für Eingänge, „out1“, „out2“ … für Ausgänge.';
-    r.properties.name.description = 'Name genau wie im Katalog (inputs bzw. outputs); beim Import wird der gleichnamige Ein- bzw. Ausgang derselben Art vorgeschlagen.';
+    r.properties.ref.description = 'Kennung des Bezugs in dieser Datei: „in1“, „in2“ … für Auslöser, „out1“, „out2“ … für Aktionen.';
+    r.properties.name.description = 'Name genau wie im Katalog (inputs bzw. outputs); beim Import wird der gleichnamige Auslöser bzw. die gleichnamige Aktion derselben Art vorgeschlagen.';
   }
   automation.additionalProperties = false;
   automation.properties.name.description = 'Name des Workflows.';
@@ -111,7 +111,7 @@ export function transferJsonSchema(): Json {
   automation.properties.graph.properties.edges.items = { $ref: '#/$defs/edge' };
   file.properties.automations.items = { $ref: '#/$defs/automation' };
   file.properties.references.additionalProperties = false;
-  file.properties.references.description = 'Die im Ablauf verwendeten Ein- und Ausgänge als Bezug (Art + Name) – ohne Kennungen, Einstellungen oder Zugangsdaten.';
+  file.properties.references.description = 'Die im Ablauf verwendeten Auslöser und Aktionen als Bezug (Art + Name) – ohne Kennungen, Einstellungen oder Zugangsdaten.';
   file.properties.references.properties.inputs.items = { $ref: '#/$defs/inputReference' };
   file.properties.references.properties.outputs.items = { $ref: '#/$defs/outputReference' };
   file.properties.format.description = `Immer „${TRANSFER_FORMAT}“.`;
@@ -125,10 +125,10 @@ export function transferJsonSchema(): Json {
     title: `BlaulichtCMS-Workflows (Format ${TRANSFER_FORMAT}, schemaVersion ${TRANSFER_SCHEMA_VERSION})`,
     description: [
       'Datei mit einem oder mehreren Workflows für BlaulichtCMS (Import unter Workflows → Importieren; importierte Workflows sind immer inaktive Entwürfe).',
-      'Ein Workflow ist ein Ablauf aus Knoten (nodes) und Verbindungen (edges): Eingang (Auslöser) → Verarbeitung → Ausgang (Aktion).',
-      'Platzhalter in Texten: {{feldname}} – nur Felder, die an dieser Stelle vorhanden sind (Felder des Auslösers, Systemfelder, Felder aus „Felder setzen“, „Bild aus Vorlage erzeugen“ und vorherigen Ausgängen).',
+      'Ein Workflow ist ein Ablauf aus Knoten (nodes) und Verbindungen (edges): Auslöser → Verarbeitung → Aktion.',
+      'Platzhalter in Texten: {{feldname}} – nur Felder, die an dieser Stelle vorhanden sind (Felder des Auslösers, Systemfelder, Felder aus „Felder setzen“, „Bild aus Vorlage erzeugen“ und vorherigen Aktionen).',
       'Zusätzlich prüft der Import: Knoten-Kennungen eindeutig je Workflow; inputRef/outputRef verweisen auf einen Eintrag in references; Verbindungen nur zwischen vorhandenen Knoten.',
-      'Nach dem Import prüft der Editor außerdem: mindestens ein Eingang und ein Ausgang, jeder Knoten angeschlossen, sourceHandle passend zur Knotenart, keine Kreise, Felder und Platzhalter an der Stelle vorhanden.',
+      'Nach dem Import prüft der Editor außerdem: mindestens ein Auslöser und eine Aktion, jeder Knoten angeschlossen, sourceHandle passend zur Knotenart, keine Kreise, Felder und Platzhalter an der Stelle vorhanden.',
     ].join(' '),
     ...file,
     $defs: {
@@ -148,7 +148,7 @@ export function transferJsonSchema(): Json {
 const FAKE_ID = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 
 /**
- * Vorlage der Galerie als Exportdatei, wie BlaulichtCMS sie schreiben würde: mit je einem passenden Ein- und Ausgang
+ * Vorlage der Galerie als Exportdatei, wie BlaulichtCMS sie schreiben würde: mit je einem passenden Auslöser und einer passenden Aktion
  * (Name aus der Vorlage) oder – `open` – mit offenen Plätzen. Ohne appVersion/exportedAt (Beispiel bleibt stabil).
  */
 export function exampleFile(templateId: string, opts: { open?: boolean } = {}): TransferFile {
@@ -181,13 +181,13 @@ export function exampleFile(templateId: string, opts: { open?: boolean } = {}): 
 /** Vorlage für die Anfrage an eine KI (anbieterneutral); „…“ ersetzt man durch den eigenen Wunsch. */
 export const AI_PROMPT = `Ich möchte in BlaulichtCMS einen Workflow anlegen. Im Anhang sind zwei Dateien:
 1. die Formatbeschreibung als JSON-Schema (${SCHEMA_FILE}),
-2. der Katalog meiner Installation (${CATALOG_FILE}) mit den vorhandenen Eingängen und Ausgängen, den Feldern je Auslöser, den Vergleichen für Bedingungen, den Bildvorlagen und dem Stichwortverzeichnis.
+2. der Katalog meiner Installation (${CATALOG_FILE}) mit den vorhandenen Auslösern und Aktionen, den Feldern je Auslöser, den Vergleichen für Bedingungen, den Bildvorlagen und dem Stichwortverzeichnis.
 
 Erstelle eine Workflow-Datei im Format „${TRANSFER_FORMAT}“ (schemaVersion ${TRANSFER_SCHEMA_VERSION}), die genau dem Schema entspricht:
-- Verwende nur Knotenarten, Felder, Vergleiche, Ein- und Ausgänge, Bildvorlagen und Stichwörter aus dem Katalog. Erfinde nichts dazu.
-- Trage Ein- und Ausgänge unter „references“ mit Art („kind“) und genauem Namen aus dem Katalog ein; die Knoten verweisen darauf mit „inputRef“ (in1, in2 …) bzw. „outputRef“ (out1, out2 …).
-- Schreibe Platzhalter als {{feldname}} und verwende nur Felder, die an dieser Stelle vorhanden sind. Braucht ein Ausgang Felder („usesFields“ im Katalog), die der Auslöser nicht liefert, lege sie vorher mit „Felder setzen“ an.
-- Verbinde die Knoten über „edges“ mit dem passenden Ausgang („sourceHandle“, z. B. „true“ bei einer zutreffenden Bedingung).
+- Verwende nur Knotenarten, Felder, Vergleiche, Auslöser und Aktionen, Bildvorlagen und Stichwörter aus dem Katalog. Erfinde nichts dazu.
+- Trage Auslöser und Aktionen unter „references“ mit Art („kind“) und genauem Namen aus dem Katalog ein; die Knoten verweisen darauf mit „inputRef“ (in1, in2 …) bzw. „outputRef“ (out1, out2 …).
+- Schreibe Platzhalter als {{feldname}} und verwende nur Felder, die an dieser Stelle vorhanden sind. Braucht eine Aktion Felder („usesFields“ im Katalog), die der Auslöser nicht liefert, lege sie vorher mit „Felder setzen“ an.
+- Verbinde die Knoten über „edges“ mit dem passenden Zweig („sourceHandle“, z. B. „true“ bei einer zutreffenden Bedingung).
 - Gib nur das JSON aus, ohne Erklärungen davor oder danach.
 
 Der Workflow soll: …`;
@@ -223,17 +223,17 @@ export function formatReferenceMarkdown(): string {
   out.push(`| ${code('automations')} | ja | 1–${TRANSFER_MAX_AUTOMATIONS} Workflows: ${code('name')} (2–120 Zeichen), ${code('description')} (optional, bis 500) und ${code('graph')} mit ${code('nodes')} (bis ${LIMITS.maxNodes}) und ${code('edges')} (bis ${LIMITS.maxEdges}) |`);
   out.push(`| ${code('appVersion')}, ${code('exportedAt')} | nein | nur zur Information |`);
   out.push('');
-  out.push(`Ein **Knoten** hat ${code('id')} (1–40 Zeichen aus Buchstaben, Ziffern, ${code('_')} und ${code('-')}; eindeutig im Workflow), ${code('type')}, ${code('data')} und optional ${code('position')} (${code('x')}, ${code('y')}). Eine **Verbindung** hat ${code('id')}, ${code('source')}, ${code('sourceHandle')} (Ausgang des Quellknotens) und ${code('target')}. Andere Schlüssel sind nicht vorgesehen.`);
+  out.push(`Ein **Knoten** hat ${code('id')} (1–40 Zeichen aus Buchstaben, Ziffern, ${code('_')} und ${code('-')}; eindeutig im Workflow), ${code('type')}, ${code('data')} und optional ${code('position')} (${code('x')}, ${code('y')}). Eine **Verbindung** hat ${code('id')}, ${code('source')}, ${code('sourceHandle')} (Zweig des Quellknotens) und ${code('target')}. Andere Schlüssel sind nicht vorgesehen.`);
   out.push('');
   out.push('### Knotenarten', '');
-  out.push('| `type` | Baustein | Angaben in `data` | Ausgänge (`sourceHandle`) |', '| --- | --- | --- | --- |');
+  out.push('| `type` | Baustein | Angaben in `data` | Zweige (`sourceHandle`) |', '| --- | --- | --- | --- |');
   for (const t of types) {
     const def = schema.$defs[`data_${t}`];
     out.push(`| ${code(t)} | **${esc(NODE_TYPES[t].label)}** – ${esc(NODE_TYPES[t].description)} | ${keysText(def)}. ${esc(DATA_NOTES[t])} | ${nodeHandles(t).map((h) => `${code(h.id)} (${esc(h.label)})`).join(', ')} |`);
   }
   out.push('');
   out.push('### Auslöser und ihre Felder', '');
-  out.push(`Ein Eingang liefert die Felder seiner Art. Zusätzlich steht in jedem Lauf zur Verfügung:`, '');
+  out.push(`Ein Auslöser liefert die Felder seiner Art. Zusätzlich steht in jedem Lauf zur Verfügung:`, '');
   out.push(...FIELD_HEAD, ...fieldRows(SYSTEM_FIELDS), '');
   const seen: { kind: InputKind; keys: string }[] = [];
   for (const [kind, d] of Object.entries(INPUT_KINDS) as [InputKind, (typeof INPUT_KINDS)[InputKind]][]) {
@@ -242,19 +242,19 @@ export function formatReferenceMarkdown(): string {
     const same = seen.find((x) => x.keys === keys);
     if (same) out.push(`Felder wie bei ${INPUT_KINDS[same.kind].label} (${code(same.kind)}).`, '');
     else out.push(...FIELD_HEAD, ...fieldRows(d.fields), '');
-    if (kind === 'manual') out.push('Dazu kommen die eigenen Felder des jeweiligen Eingangs (im Katalog unter `inputs` → `fields`).', '');
+    if (kind === 'manual') out.push('Dazu kommen die eigenen Felder des jeweiligen Auslösers (im Katalog unter `inputs` → `fields`).', '');
     seen.push({ kind, keys });
   }
   out.push('### Aktionen und Felder danach', '');
-  out.push('Ein Ausgang führt die Aktion mit seinen eigenen, in BlaulichtCMS eingerichteten Texten aus; im Katalog steht je Ausgang, welche Felder er verwendet (`usesFields`). Danach stehen die gelieferten Felder bereit (z. B. für eine Benachrichtigung mit Link).', '');
+  out.push('Eine Aktion arbeitet mit ihren eigenen, in BlaulichtCMS eingerichteten Texten; im Katalog steht je Aktion, welche Felder sie verwendet (`usesFields`). Danach stehen die gelieferten Felder bereit (z. B. für eine Benachrichtigung mit Link).', '');
   out.push('| `kind` | Aktion | Liefert danach |', '| --- | --- | --- |');
   for (const [kind, d] of Object.entries(OUTPUT_KINDS) as [OutputKind, (typeof OUTPUT_KINDS)[OutputKind]][]) {
     out.push(`| ${code(kind)} | **${esc(d.label)}** – ${esc(d.description)} | ${d.produces.length ? d.produces.map((f) => `${code(f.key)} (${esc(f.label)})`).join(', ') : '–'} |`);
   }
   out.push('');
-  out.push(`**Bild aus Vorlage erzeugen** liefert ${IMAGE_FIELDS.map((f) => `${code(f.key)} (${esc(f.label)})`).join(', ')}; ein Beitrags-Ausgang danach übernimmt die Bilder. **Felder setzen** liefert die dort angelegten Felder.`, '');
+  out.push(`**Bild aus Vorlage erzeugen** liefert ${IMAGE_FIELDS.map((f) => `${code(f.key)} (${esc(f.label)})`).join(', ')}; eine Beitrags-Aktion danach übernimmt die Bilder. **Felder setzen** liefert die dort angelegten Felder.`, '');
   out.push('### Bedingungen', '');
-  out.push(`Eine Regel ist ${code('{ "field": "stichwort", "op": "starts_with", "value": "B" }')}. ${code('combinator')} ${code('"and"')} verlangt alle Regeln, ${code('"or"')} mindestens eine; eine Untergruppe ${code('{ "combinator": "or", "rules": [ … ] }')} darf eine Ebene tief stehen. Vergleiche ignorieren Groß- und Kleinschreibung. Ausgänge der Bedingung: ${code('true')} (trifft zu) und ${code('false')} (trifft nicht zu).`, '');
+  out.push(`Eine Regel ist ${code('{ "field": "stichwort", "op": "starts_with", "value": "B" }')}. ${code('combinator')} ${code('"and"')} verlangt alle Regeln, ${code('"or"')} mindestens eine; eine Untergruppe ${code('{ "combinator": "or", "rules": [ … ] }')} darf eine Ebene tief stehen. Vergleiche ignorieren Groß- und Kleinschreibung. Aktionen der Bedingung: ${code('true')} (trifft zu) und ${code('false')} (trifft nicht zu).`, '');
   out.push('| `op` | Vergleich |', '| --- | --- |');
   for (const [op, label] of Object.entries(OPERATORS)) out.push(`| ${code(op)} | ${esc(label)}${op === 'in' ? ` – Werte mit Komma getrennt` : ''}${op === 'exists' || op === 'not_exists' ? ` – ohne ${code('value')}` : ''}${op === 'before' || op === 'after' ? ` – für Datumsfelder; ${code('value')}: ${code('jetzt')}, ${code('heute')}, ${code('morgen')}, ${code('jetzt + 2 h')}, ${code('jetzt - 7 Tage')}, ${code('24.12.2026 18:00')} oder ${code('2026-12-24')}` : ''} |`);
   out.push('');

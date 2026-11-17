@@ -50,7 +50,7 @@ export function NewPostDialog({ onClose }: { onClose: () => void }) {
           <Input id="p-title" value={title} onChange={(e) => setTitle(e.target.value)} maxLength={200} placeholder="z. B. Übung am Wochenende" />
         </FieldWrap>
         {(tpls.data?.length ?? 0) > 0 && (
-          <FieldWrap label="Vorlage (optional)" htmlFor="p-tpl">
+          <FieldWrap label="Beitragsvorlage (optional)" htmlFor="p-tpl">
             <Select
               id="p-tpl"
               value={templateId}
@@ -64,7 +64,7 @@ export function NewPostDialog({ onClose }: { onClose: () => void }) {
                 }
               }}
             >
-              <option value="">– ohne Vorlage –</option>
+              <option value="">– ohne Beitragsvorlage –</option>
               {tpls.data!.map((t) => (
                 <option key={t.id} value={t.id}>
                   {t.name}
@@ -73,7 +73,7 @@ export function NewPostDialog({ onClose }: { onClose: () => void }) {
             </Select>
           </FieldWrap>
         )}
-        <FieldWrap label="Art" help={templateId ? 'Aus der Vorlage übernommen.' : undefined} htmlFor="p-kind">
+        <FieldWrap label="Art" help={templateId ? 'Aus der Beitragsvorlage übernommen.' : undefined} htmlFor="p-kind">
           <Select id="p-kind" value={kind} disabled={!!templateId} onChange={(e) => setKind(e.target.value)}>
             {Object.entries(KIND_LABEL).map(([k, v]) => (
               <option key={k} value={k}>
@@ -130,7 +130,7 @@ export default function Posts({ mode }: { mode?: 'approvals' }) {
             <tr>
               <Th>Titel</Th>
               <Th>Status</Th>
-              <Th className="hidden md:table-cell">Zielkanal</Th>
+              <Th className="hidden md:table-cell">Website</Th>
               <Th className="hidden md:table-cell">Geändert</Th>
             </tr>
           </thead>

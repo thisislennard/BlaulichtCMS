@@ -7,7 +7,7 @@ import { Icon } from '../../components/ui/Icon';
 import { Dialog, useErrorToast, useToast, useConfirm } from '../../components/ui/overlays';
 import { HelpLink, HelpTip } from '../../components/ui/HelpTip';
 import { useAuth } from '../../lib/auth';
-import { fmtDateTime, fmtRelative } from '../../lib/format';
+import { fmtDateTime, fmtRelative, plural } from '../../lib/format';
 import { safeHref } from '../../lib/url';
 
 /** ?-Knopf: Wo finde ich die Adresse eines Feeds? */
@@ -68,7 +68,7 @@ function AddFeedDialog({ onClose }: { onClose: () => void }) {
                 setBusy(true);
                 try {
                   const r = await post<any>('/rss/feeds', { url: url.trim() });
-                  toast({ tone: 'success', title: `„${r.feed.title}“ hinzugefügt`, text: `${r.added} Einträge übernommen` });
+                  toast({ tone: 'success', title: `„${r.feed.title}“ hinzugefügt`, text: `${plural(r.added, 'Eintrag', 'Einträge')} übernommen` });
                   onClose();
                 } catch (e) {
                   toastError(e);
@@ -132,7 +132,7 @@ function EditFeedDialog({ feed, onClose }: { feed: any; onClose: () => void }) {
               setErr(null);
               try {
                 const r = await put<any>(`/rss/feeds/${feed.id}`, { title: form.title.trim(), url: form.url.trim(), intervalMin: form.intervalMin });
-                toast({ tone: 'success', title: 'Quelle gespeichert', text: form.url.trim() !== feed.url ? `Neue Adresse geprüft, ${r.added} Einträge übernommen` : undefined });
+                toast({ tone: 'success', title: 'Quelle gespeichert', text: form.url.trim() !== feed.url ? `Neue Adresse geprüft, ${plural(r.added, 'Eintrag', 'Einträge')} übernommen` : undefined });
                 onClose();
               } catch (e) {
                 setErr((e as Error).message);

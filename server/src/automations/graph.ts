@@ -73,7 +73,7 @@ function stable(v: unknown): unknown {
   return v;
 }
 
-/* ------------------------------------------------------------------ Ein- und Ausgänge */
+/* ------------------------------------------------------------------ Auslöser und Aktionen */
 
 export interface InputRef {
   id: string;
@@ -90,13 +90,13 @@ export interface OutputRef {
   archived?: boolean;
 }
 
-/** Felder eines Eingangs (Art + eigene Felder des manuellen Starts) samt Systemfeldern. */
+/** Felder eines Auslösers (Art + eigene Felder des manuellen Starts) samt Systemfeldern. */
 export function inputFields(input: Pick<InputRef, 'kind' | 'config'>): FieldDef[] {
   const own = input.kind === 'manual' ? ((input.config.fields ?? []) as { key: string; label: string }[]).map((f) => ({ key: f.key, label: f.label, type: 'text' as const, example: '' })) : [];
   return [...SYSTEM_FIELDS, ...INPUT_KINDS[input.kind].fields, ...own];
 }
 
-/** Alle Vorlagentexte eines Ausgangs (für die Platzhalterprüfung). */
+/** Alle Vorlagentexte einer Aktion (für die Platzhalterprüfung). */
 export function outputTemplates(o: Pick<OutputRef, 'kind' | 'config'>): string[] {
   const c = o.config ?? {};
   switch (o.kind) {
@@ -119,7 +119,7 @@ export function outputTemplates(o: Pick<OutputRef, 'kind' | 'config'>): string[]
   }
 }
 
-/** Felder, die ein Ausgang braucht (alle Platzhalter seiner Vorlagen). */
+/** Felder, die eine Aktion braucht (alle Platzhalter ihrer Vorlagen). */
 export function outputNeeds(o: Pick<OutputRef, 'kind' | 'config'>): string[] {
   return [...new Set(outputTemplates(o).flatMap((t) => placeholders(t)))];
 }
@@ -128,7 +128,7 @@ export function outputNeeds(o: Pick<OutputRef, 'kind' | 'config'>): string[] {
 
 /**
  * Offener Platz aus einer Vorlage: `data.want.kinds` nennt die passenden Arten (z. B. FE2 oder Feuersoftware), damit
- * die Oberfläche nur passende Ein-/Ausgänge anbietet und einen neuen vorbelegt anlegen kann.
+ * die Oberfläche nur passende Auslöser und Aktionen anbietet und einen neuen vorbelegt anlegen kann.
  */
 export function slotKinds(n: { type: string; data?: any }): string[] {
   const k = n.data?.want?.kinds;
@@ -157,13 +157,13 @@ export interface Validation {
   ok: boolean;
   errors: Problem[];
   warnings: Problem[];
-  /** Verfügbare Felder je Knoten (Eingang des Knotens) */
+  /** Verfügbare Felder je Knoten (Auslöser des Knotens) */
   fields: Record<string, string[]>;
   /** Knoten in Ausführungsreihenfolge (leer bei Kreisen) */
   order: string[];
-  /** Ausgänge mit „direkt“ */
+  /** Aktionen mit „direkt“ */
   directNodes: string[];
-  /** Offene Plätze: Ein- und Ausgangs-Knoten ohne gewählten Eingang bzw. Ausgang (Vorlage, Import) */
+  /** Offene Plätze: Auslöser- und Aktionsknoten ohne gewählten Auslöser bzw. Aktion (Vorlage, Import) */
   open: string[];
 }
 
@@ -192,8 +192,8 @@ export function topoOrder(g: Pick<Graph, 'nodes' | 'edges'>): string[] | null {
 
 const nodeName = (n: GraphNode, ctx: { inputs: Map<string, InputRef>; outputs: Map<string, OutputRef> }) => {
   if (n.data?.label) return `„${n.data.label}“`;
-  if (n.type === 'input') return `Eingang „${ctx.inputs.get(n.data?.inputId)?.name ?? '?'}“`;
-  if (n.type === 'output') return `Ausgang „${ctx.outputs.get(n.data?.outputId)?.name ?? '?'}“`;
+  if (n.type === 'input') return `Auslöser „${ctx.inputs.get(n.data?.inputId)?.name ?? '?'}“`;
+  if (n.type === 'output') return `Aktion „${ctx.outputs.get(n.data?.outputId)?.name ?? '?'}“`;
   return `„${NODE_TYPES[n.type as NodeType]?.label ?? n.type}“`;
 };
 
@@ -216,7 +216,7 @@ export function validateGraph(g: Graph, ctx: { inputs: Map<string, InputRef>; ou
     // Offener Platz (aus einer Vorlage oder einem Import): verständliche Meldung statt „Einstellungen unvollständig“
     if ((n.type === 'input' && !n.data?.inputId) || (n.type === 'output' && !n.data?.outputId)) {
       open.push(n.id);
-      errors.push({ nodeId: n.id, message: n.type === 'input' ? `${n.data?.label ? `„${n.data.label}“: ` : ''}Auslöser (Eingang) noch nicht gewählt.` : `${n.data?.label ? `„${n.data.label}“: ` : ''}Aktion (Ausgang) noch nicht gewählt.` });
+      errors.push({ nodeId: n.id, message: n.type === 'input' ? `${n.data?.label ? `„${n.data.label}“: ` : ''}Auslöser noch nicht gewählt.` : `${n.data?.label ? `„${n.data.label}“: ` : ''}Aktion noch nicht gewählt.` });
       continue;
     }
     if (n.type === 'image' && !n.data?.templateId) {
@@ -232,13 +232,13 @@ export function validateGraph(g: Graph, ctx: { inputs: Map<string, InputRef>; ou
     }
     if (n.type === 'input') {
       const inp = ctx.inputs.get(n.data.inputId);
-      if (!inp) errors.push({ nodeId: n.id, message: 'Der gewählte Eingang existiert nicht mehr.' });
-      else if (inp.archived) errors.push({ nodeId: n.id, message: `Eingang „${inp.name}“ wurde gelöscht.` });
+      if (!inp) errors.push({ nodeId: n.id, message: 'Der gewählte Auslöser existiert nicht mehr.' });
+      else if (inp.archived) errors.push({ nodeId: n.id, message: `Auslöser „${inp.name}“ wurde gelöscht.` });
     }
     if (n.type === 'output') {
       const out = ctx.outputs.get(n.data.outputId);
-      if (!out) errors.push({ nodeId: n.id, message: 'Der gewählte Ausgang existiert nicht mehr.' });
-      else if (out.archived) errors.push({ nodeId: n.id, message: `Ausgang „${out.name}“ wurde gelöscht.` });
+      if (!out) errors.push({ nodeId: n.id, message: 'Die gewählte Aktion existiert nicht mehr.' });
+      else if (out.archived) errors.push({ nodeId: n.id, message: `Aktion „${out.name}“ wurde gelöscht.` });
       else if (n.data.direct) {
         if (!OUTPUT_KINDS[out.kind].directCapable) errors.push({ nodeId: n.id, message: `${nodeName(n, ctx)}: „${OUTPUT_KINDS[out.kind].label}“ kennt keinen Direktversand.` });
         else directNodes.push(n.id);
@@ -256,8 +256,8 @@ export function validateGraph(g: Graph, ctx: { inputs: Map<string, InputRef>; ou
       }
     }
   }
-  if (!g.nodes.some((n) => n.type === 'input')) errors.push({ message: 'Der Workflow braucht mindestens einen Auslöser (Eingang).' });
-  if (!g.nodes.some((n) => n.type === 'output')) errors.push({ message: 'Der Workflow braucht mindestens eine Aktion (Ausgang).' });
+  if (!g.nodes.some((n) => n.type === 'input')) errors.push({ message: 'Der Workflow braucht mindestens einen Auslöser.' });
+  if (!g.nodes.some((n) => n.type === 'output')) errors.push({ message: 'Der Workflow braucht mindestens eine Aktion.' });
 
   // Kanten
   const seen = new Set<string>();
@@ -269,8 +269,8 @@ export function validateGraph(g: Graph, ctx: { inputs: Map<string, InputRef>; ou
       continue;
     }
     if (e.source === e.target) errors.push({ edgeId: e.id, nodeId: e.source, message: 'Ein Knoten kann nicht mit sich selbst verbunden werden.' });
-    if (!outputPorts(s).some((p) => p.id === (e.sourceHandle ?? 'out'))) errors.push({ edgeId: e.id, nodeId: s.id, message: `${nodeName(s, ctx)}: unbekannter Ausgang „${e.sourceHandle}“.` });
-    if (!hasInputPort(t.type)) errors.push({ edgeId: e.id, nodeId: t.id, message: `${nodeName(t, ctx)}: Eingänge haben keinen Eingangsanschluss.` });
+    if (!outputPorts(s).some((p) => p.id === (e.sourceHandle ?? 'out'))) errors.push({ edgeId: e.id, nodeId: s.id, message: `${nodeName(s, ctx)}: unbekannter Zweig „${e.sourceHandle}“.` });
+    if (!hasInputPort(t.type)) errors.push({ edgeId: e.id, nodeId: t.id, message: `${nodeName(t, ctx)}: Auslöser haben keinen eingehenden Anschluss.` });
     const k = `${e.source}|${e.sourceHandle}|${e.target}`;
     if (seen.has(k)) warnings.push({ edgeId: e.id, message: 'Doppelte Verbindung.' });
     seen.add(k);
@@ -346,7 +346,7 @@ export function validateGraph(g: Graph, ctx: { inputs: Map<string, InputRef>; ou
       }
       out.set(nid, produced);
     }
-    // Nicht erreichbare Knoten (nur über Knoten ohne Eingang erreichbar ist ausgeschlossen, weil jeder Knoten einen Eingang braucht)
+    // Nicht erreichbare Knoten (nur über Knoten ohne Auslöser erreichbar ist ausgeschlossen, weil jeder Knoten einen Auslöser braucht)
   }
   return { ok: errors.length === 0, errors, warnings, fields, order: order ?? [], directNodes, open };
 }

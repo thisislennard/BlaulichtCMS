@@ -117,7 +117,7 @@ export function GuidedEditor({
   outputs: OutputDef[];
   errors: Record<string, string[]>;
   readOnly: boolean;
-  /** Ein-/Ausgang direkt anlegen; `assign` setzt ihn danach in den Platz ein */
+  /** Auslöser oder Aktion direkt anlegen; `assign` setzt ihn danach in den Platz ein */
   onCreate: (req: CreateRefRequest, assign: (id: string) => void) => void;
   onAdvanced: () => void;
 }) {
@@ -169,7 +169,7 @@ export function GuidedEditor({
         n={1}
         title="Wenn"
         hint="Welches Ereignis startet den Workflow? Mehrere Auslöser sind möglich – jeder startet einen eigenen Lauf."
-        action={<Help title="Auslöser" anchor="eingaenge">Auslöser sind die Eingänge: Alarm (FE2, Feuersoftware), amtliche Warnung, RSS-Eintrag, Uploads, Zeitplan oder Start von Hand. „Neu anlegen …“ richtet einen Eingang direkt hier ein.</Help>}
+        action={<Help title="Auslöser" anchor="ausloeser">Mögliche Auslöser: Alarm (FE2, Feuersoftware), amtliche Warnung, RSS-Eintrag, Uploads, Zeitplan oder Start von Hand. „Neu anlegen …“ richtet einen Auslöser direkt hier ein.</Help>}
       >
         {m.inputs.map((x) => {
           const kinds = wantKinds(x.data);
@@ -256,7 +256,7 @@ export function GuidedEditor({
   );
 }
 
-/** Platz-Hinweis entfernen, sobald ein Ein-/Ausgang gewählt ist. */
+/** Platz-Hinweis entfernen, sobald ein Auslöser oder Aktion gewählt ist. */
 function withoutWant(d: Record<string, any>) {
   const { want: _w, ...rest } = d;
   return rest;

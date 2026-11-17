@@ -7,6 +7,7 @@ import { Icon } from '../../components/ui/Icon';
 import { useErrorToast, useToast, useConfirm, type MenuItem } from '../../components/ui/overlays';
 import { useAuth } from '../../lib/auth';
 import { useKeywords } from '../../lib/keywords';
+import { plural } from '../../lib/format';
 
 /**
  * Stichwortverzeichnis des Landes (#195): Herkunft der aktiven Liste, erneut übernehmen, eigene Liste importieren
@@ -46,8 +47,8 @@ export function useKeywordCatalogActions(onChanged: () => void): { items: MenuIt
     await run(async () => {
       const check = await post<{ rows: number; errors: string[] }>('/keywords/import', { text, dryRun: true });
       const ok = await ask({
-        title: `${check.rows} Einträge übernehmen?`,
-        text: `Gleiche Kürzel werden zu eigenen Einträgen und überschreiben das Landesverzeichnis; neue Kürzel kommen dazu.${check.errors.length ? ` ${check.errors.length} Zeile(n) werden übersprungen: ${check.errors.slice(0, 3).join(' ')}${check.errors.length > 3 ? ' …' : ''}` : ''}`,
+        title: `${plural(check.rows, 'Eintrag', 'Einträge')} übernehmen?`,
+        text: `Gleiche Kürzel werden zu eigenen Einträgen und überschreiben das Landesverzeichnis; neue Kürzel kommen dazu.${check.errors.length ? ` ${plural(check.errors.length, 'Zeile', 'Zeilen')} werden übersprungen: ${check.errors.slice(0, 3).join(' ')}${check.errors.length > 3 ? ' …' : ''}` : ''}`,
         confirmLabel: 'Übernehmen',
       });
       if (!ok) return;

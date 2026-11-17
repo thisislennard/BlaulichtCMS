@@ -15,21 +15,21 @@ Unter [Mein Konto → Benachrichtigungen](/profil#benachrichtigungen):
 | Eigene Fassung freigegeben oder zurückgewiesen | wer Fassungen einreicht | Push |
 | Einsatz-Eingang (FE2, Feuersoftware Connect) | Beiträge bearbeiten | Push |
 | Neue Entwürfe aus Workflows | Beiträge bearbeiten, Warnentwurf erstellen | – |
-| Neue Dateien über Foto-Links | Medien sichten | Push |
+| Neue Dateien über Upload-Links | Medien sichten | Push |
 | Upload-Links und Kontingente | Medien sichten | – |
 | Speicherplatz der Medien | Medien administrieren | E-Mail |
 | Amtliche Warnungen (z. B. DWD, MoWaS) | Amtliche Warnungen ansehen | Push |
-| Veröffentlichungen | Auf Website/sozialen Kanälen veröffentlichen, Banner veröffentlichen | – |
+| Veröffentlichungen | Auf Website/sozialen Netzwerken veröffentlichen, Banner veröffentlichen | – |
 | Versand von Warnentwürfen | Warnentwurf versenden | Push und E-Mail |
 | Verbindungsfehler | Verbindungen verwalten, Websites koppeln | E-Mail |
 | Workflow fehlgeschlagen | Workflows verwalten | E-Mail |
-| Benachrichtigungen aus Workflows | alle (der Ausgang „Benachrichtigen“ wählt die Personen) | Push |
+| Benachrichtigungen aus Workflows | alle (die Aktion „Benachrichtigen“ wählt die Personen) | Push |
 | Update verfügbar und installiert | Updates installieren | E-Mail |
 | Sicherung fehlgeschlagen | Sicherungen erstellen | E-Mail |
 | Sicherheitsmeldungen | Verwaltungsrechte | Push (E-Mail regeln die Sicherheitseinstellungen) |
 | Eigenes Konto | alle | Push (E-Mail regeln die Sicherheitseinstellungen) |
 
-Neue Dateien über Foto-Links werden gebündelt: höchstens eine Push-Nachricht bzw. E-Mail je Sammlung und Stunde, weitere Dateien erhöhen nur den Zähler in der Glocke.
+Neue Dateien über Upload-Links werden gebündelt: höchstens eine Push-Nachricht bzw. E-Mail je Sammlung und Stunde, weitere Dateien erhöhen nur den Zähler in der Glocke.
 
 ## Inhalt von Push und E-Mail
 

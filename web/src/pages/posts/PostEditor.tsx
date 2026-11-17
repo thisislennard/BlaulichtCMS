@@ -67,7 +67,7 @@ const emptyWp = { title: '', body: '', excerpt: '', categories: [] as number[] }
 /** Kategorien geordnet – gleiche Auswahl in anderer Reihenfolge ist keine Änderung (#186). */
 const sortCats = (c: unknown) => (Array.isArray(c) ? [...new Set(c.map(Number).filter((n) => Number.isInteger(n) && n > 0))].sort((a, b) => a - b) : []);
 const wpOf = (v: any) => ({ title: v?.wordpress?.title ?? '', body: v?.wordpress?.body ?? '', excerpt: v?.wordpress?.excerpt ?? '', categories: sortCats(v?.wordpress?.categories) });
-/** Website-Fassung zählt nur mit Zielkanal – sonst ist sie unsichtbar und darf keine neue Fassung auslösen. */
+/** Website-Fassung zählt nur mit Website – sonst ist sie unsichtbar und darf keine neue Fassung auslösen. */
 const NO_WP = { title: '', body: '', excerpt: '', categories: [] as number[] };
 
 /** Einfache Absätze wie auf der Website (Leerzeile = neuer Absatz). */
@@ -310,7 +310,7 @@ function PostEditorInner({ id }: { id: string }) {
                   }
                 }}
               >
-                Fotos und Videos sammeln
+                Fotos sammeln
               </Button>
             )}
             {editable && (
@@ -395,7 +395,7 @@ function PostEditorInner({ id }: { id: string }) {
             }
           >
             {draft.mediaIds.length === 0 ? (
-              <p className="m-0 text-sm text-fg-muted">Noch keine Medien. Über „Fotos und Videos sammeln“ einen Upload-Link erzeugen, sichten und ausgewählte Dateien hier übernehmen.</p>
+              <p className="m-0 text-sm text-fg-muted">Noch keine Medien. Über „Fotos sammeln“ einen Upload-Link erzeugen, sichten und ausgewählte Dateien hier übernehmen.</p>
             ) : (
               <ul className="m-0 p-0 list-none grid gap-3 grid-cols-2 sm:grid-cols-3">
                 {draft.mediaIds.map((mid, i) => {
@@ -473,11 +473,11 @@ function PostEditorInner({ id }: { id: string }) {
             )}
           </Card>
 
-          <Card title="Zielkanal">
-            <FieldWrap label="Veröffentlichen auf" help="Ohne Zielkanal bleibt der Beitrag intern. Eine Änderung des Zielkanals verlangt eine neue Freigabe." htmlFor="e-site">
+          <Card title="Website">
+            <FieldWrap label="Veröffentlichen auf" help="Ohne Website bleibt der Beitrag intern. Eine Änderung der Website verlangt eine neue Freigabe." htmlFor="e-site">
               <Select id="e-site" value={draft.siteId ?? ''} disabled={!editable} onChange={(e) => setDraft({ ...draft, siteId: e.target.value || null, wp: { ...draft.wp, categories: [] } })}>
                 <option value="">Nur intern (keine Veröffentlichung)</option>
-                {/* Ohne „Websites ansehen“ fehlt die Liste – den gespeicherten Zielkanal trotzdem zeigen */}
+                {/* Ohne „Websites ansehen“ fehlt die Liste – die gespeicherte Website trotzdem zeigen */}
                 {!can('channel.view') && draft.siteId && <option value={draft.siteId}>WordPress</option>}
                 {activeSites.map((s) => (
                   <option key={s.id} value={s.id}>
@@ -574,7 +574,7 @@ function PostEditorInner({ id }: { id: string }) {
                   {d!.approval.note && <div>„{d!.approval.note}“</div>}
                 </div>
               )}
-              {d!.state === 'approved' && !r.site_id && !(r.social_targets ?? []).length && <Notice tone="success">Intern freigegeben. Für eine Veröffentlichung einen Zielkanal wählen und erneut freigeben lassen.</Notice>}
+              {d!.state === 'approved' && !r.site_id && !(r.social_targets ?? []).length && <Notice tone="success">Intern freigegeben. Für eine Veröffentlichung einen Website wählen und erneut freigeben lassen.</Notice>}
               {d!.state === 'approved' && r.site_id && can('publish.website') && !dirty && (
                 <Button variant="primary" icon="Globe" onClick={() => act(() => post(`/posts/${id}/publish`, { revision: r.number, contentHash: r.content_hash }), 'Veröffentlichung beauftragt')}>
                   Auf {site?.name ?? 'Website'} veröffentlichen
@@ -738,7 +738,7 @@ function PostEditorInner({ id }: { id: string }) {
         />
       )}
       {collectLink && (
-        <Dialog open onClose={() => setCollectLink(null)} title="Fotos und Videos sammeln" width={560}>
+        <Dialog open onClose={() => setCollectLink(null)} title="Fotos sammeln" width={560}>
           <div className="flex flex-col gap-3">
             <p className="m-0 text-sm">Eine Sammlung zum Beitrag wurde angelegt. Teile den Link oder hänge den QR-Code aus – Hochladen geht ohne Konto.</p>
             <code className="text-sm break-all bg-raised rounded-control p-2">{collectLink.url}</code>
@@ -769,7 +769,7 @@ function UnpublishDialog({ postId, onClose }: { postId: string; onClose: () => v
     >
       <div className="flex flex-col gap-3 text-sm">
         <p className="m-0">Jede Website, auf der der Beitrag steht, setzt ihn beim nächsten Abruf auf „Entwurf“ und löscht die übernommenen Bilder und Videos aus der Mediathek, sofern kein anderer Beitrag sie verwendet. Der Beitrag bleibt in BlaulichtCMS erhalten.</p>
-        <p className="m-0 text-fg-muted">Facebook und Instagram sind davon nicht betroffen – dort über „Von sozialen Kanälen entfernen“ in der Karte „Soziale Kanäle – Status“.</p>
+        <p className="m-0 text-fg-muted">Facebook und Instagram sind davon nicht betroffen – dort über „Von sozialen Netzwerken entfernen“ in der Karte „Soziale Netzwerke – Status“.</p>
         <FieldWrap label="Grund" required htmlFor="un-reason">
           <Textarea id="un-reason" rows={2} value={reason} onChange={(e) => setReason(e.target.value)} maxLength={300} />
         </FieldWrap>

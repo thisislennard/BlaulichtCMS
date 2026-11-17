@@ -190,7 +190,7 @@ export function ImageFillDialog({ templateId: initial, postId, onClose, onDone }
         <>
           {!initial && templateId && (
             <Button variant="ghost" icon="ArrowLeft" onClick={() => setTemplateId('')} className="mr-auto">
-              Andere Vorlage
+              Andere Bildvorlage
             </Button>
           )}
           <Button onClick={onClose}>Abbrechen</Button>
@@ -205,7 +205,7 @@ export function ImageFillDialog({ templateId: initial, postId, onClose, onDone }
       {!templateId ? (
         <TemplateChooser onPick={setTemplateId} />
       ) : !layout ? (
-        detail.isLoading ? <Skeleton className="h-64" /> : <Notice tone="error">Diese Vorlage ist keine befüllbare Bildvorlage.</Notice>
+        detail.isLoading ? <Skeleton className="h-64" /> : <Notice tone="error">Diese Designvorlage ist keine befüllbare Bildvorlage.</Notice>
       ) : (
         <div className="grid gap-5 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
           <div className="flex flex-col gap-4 min-w-0">

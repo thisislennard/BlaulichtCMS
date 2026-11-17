@@ -6,7 +6,7 @@ import { Badge, Button, Chip, cx, FieldWrap, Input, Notice, Select, Spinner, Swi
 import { Dialog, useConfirm, useErrorToast, useToast } from '../../components/ui/overlays';
 import { HelpTip } from '../../components/ui/HelpTip';
 import { Icon } from '../../components/ui/Icon';
-import { fromLocalInput, toLocalInput } from '../../lib/format';
+import { fromLocalInput, toLocalInput, plural } from '../../lib/format';
 import { COLORS, dayKey, dayOfMonth, entryColor, rangeText, weekdayOf, WEEKDAYS_LONG, WEEKDAYS_SHORT, type CalendarCategory, type CalendarEntry, type EventDetail, type Recurrence } from './model';
 
 /* ------------------------------------------------------------------ Termin anlegen/bearbeiten */
@@ -435,7 +435,7 @@ export function CategoriesDialog({ categories, onClose }: { categories: Calendar
     }
   };
   const remove = async (c: CalendarCategory) => {
-    if (!(await confirm({ title: `Kategorie „${c.name}“ löschen?`, text: c.event_count ? `${c.event_count} Termin(e) bleiben erhalten und sind danach ohne Kategorie.` : 'Es sind keine Termine zugeordnet.', confirmLabel: 'Löschen' }))) return;
+    if (!(await confirm({ title: `Kategorie „${c.name}“ löschen?`, text: c.event_count ? `${plural(c.event_count, 'Termin', 'Termine')} bleiben erhalten und sind danach ohne Kategorie.` : 'Es sind keine Termine zugeordnet.', confirmLabel: 'Löschen' }))) return;
     try {
       await del(`/calendar/categories/${c.id}`);
       refresh();
@@ -463,7 +463,7 @@ export function CategoriesDialog({ categories, onClose }: { categories: Calendar
                 ) : (
                   <>
                     <span className="flex-1 min-w-0">
-                      {c.name} <span className="text-meta text-fg-muted">· {COLORS.find((x) => x.value === c.color)?.label} · {c.event_count ?? 0} Termin(e)</span>
+                      {c.name} <span className="text-meta text-fg-muted">· {COLORS.find((x) => x.value === c.color)?.label} · {plural(c.event_count ?? 0, 'Termin', 'Termine')}</span>
                     </span>
                     <Button size="sm" icon="Pencil" iconOnly aria-label={`${c.name} bearbeiten`} onClick={() => setEdit({ ...edit, [c.id]: { name: c.name, color: c.color } })} />
                     <Button size="sm" variant="ghost" icon="Trash2" iconOnly aria-label={`${c.name} löschen`} onClick={() => remove(c)} />

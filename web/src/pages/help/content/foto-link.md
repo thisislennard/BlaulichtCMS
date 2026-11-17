@@ -1,8 +1,8 @@
-Mit einem Foto-Link (Upload-Link) laden Personen **ohne Konto** Fotos und Videos direkt vom Handy in eine Sammlung – zum Beispiel Einsatzkräfte, Helferinnen oder Gäste einer Veranstaltung.
+Mit einem Upload-Link laden Personen **ohne Konto** Fotos und Videos direkt vom Handy in eine Sammlung – zum Beispiel Einsatzkräfte, Helferinnen oder Gäste einer Veranstaltung.
 
 ## Link erzeugen
 
-- **Im Beitrag:** „Fotos und Videos sammeln“ legt eine verknüpfte Sammlung samt Link an.
+- **Im Beitrag:** „Fotos sammeln“ legt eine verknüpfte Sammlung samt Upload-Link an.
 - **Eigenständig:** Unter [Medien](/medien) eine neue Sammlung anlegen. Sie lässt sich später einem Beitrag zuordnen.
 - **Weitere Links:** In der Sammlung unter „Upload-Links“ beliebig viele Links erzeugen, z. B. einen für den Aushang und einen für den Messenger.
 
@@ -75,7 +75,7 @@ Unter [Einrichtung → Upload-Seite](/upload-seite) lässt sich die Upload-Seite
 - Texte bleiben reiner Text – HTML, Formatierungen oder Skripte werden nicht ausgeführt, sondern als Text gezeigt.
 - Bilder (JPEG, PNG, WebP bis 15 MB) werden beim Hochladen neu kodiert, höchstens 2400 Pixel groß und ohne Standort- und Kameradaten gespeichert. Nicht mehr verwendete Bilder entfernt der Hintergrunddienst nach einem Tag.
 - Der **Datenschutzabschnitt** steht immer am Ende und lässt sich nicht entfernen.
-- Die Standardgestaltung gilt für alle Links ohne eigene und ändert, wer „Medien administrieren“ hat. Für einzelne Links: Menü des Links → **Gestaltung der Seite** („Medien verwalten“); „Standard verwenden“ verwirft die eigene Gestaltung.
+- Die Standardgestaltung gilt für alle Links ohne eigene und ändert, wer „Medien administrieren“ hat. Für einzelne Links: Menü des Links → **Upload-Seite gestalten** („Medien verwalten“); „Standard verwenden“ verwirft die eigene Gestaltung.
 
 ## Benachrichtigungen
 

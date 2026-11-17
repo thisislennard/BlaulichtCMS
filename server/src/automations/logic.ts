@@ -92,7 +92,7 @@ const daysIn = (y: number, m: number) => new Date(Date.UTC(y, m, 0)).getUTCDate(
 
 /**
  * Zeitpunkt (ms) für die Vergleiche „liegt vor/nach“ (#233). Erkannt werden ISO-Zeitpunkte mit Zeitzone (so liefern
- * Eingänge Datumsfelder), ein Datum „24.12.2026“ bzw. „2026-12-24“ (Mitternacht) und mit Uhrzeit „24.12.2026 18:00“,
+ * Auslöser Datumsfelder), ein Datum „24.12.2026“ bzw. „2026-12-24“ (Mitternacht) und mit Uhrzeit „24.12.2026 18:00“,
  * „24.12.2026, 18:00“ bzw. „2026-12-24T18:00“ (Ortszeit der Instanz). Mit `relative` (Vergleichswert der Regel) auch:
  * leer oder „jetzt“, „heute“/„morgen“/„gestern“ (Mitternacht) und Abstände zu jetzt wie „jetzt + 2 h“, „- 30 min“,
  * „+ 3 Tage“. Ungültige Angaben (z. B. 31.04.) ergeben null.
@@ -207,8 +207,8 @@ export function dedupKey(automationId: string, nodeId: string, fields: string[],
 const EMAIL = /([A-Za-z0-9._%+-])[A-Za-z0-9._%+-]*@([A-Za-z0-9.-]+\.[A-Za-z]{2,})/g;
 
 /**
- * Daten fürs Laufprotokoll: E-Mail-Adressen gekürzt, Texte auf 500 Zeichen, höchstens 60 Felder. Die Eingänge
- * liefern ohnehin nur Felder ohne Personenbezug (FE2/Feuersoftware: Allowlist); Adressen aus E-Mail-Ausgängen
+ * Daten fürs Laufprotokoll: E-Mail-Adressen gekürzt, Texte auf 500 Zeichen, höchstens 60 Felder. Die Auslöser
+ * liefern ohnehin nur Felder ohne Personenbezug (FE2/Feuersoftware: Allowlist); Adressen aus E-Mail-Aktionen
  * erscheinen nur gekürzt.
  */
 export function redactForLog(d: unknown, depth = 0): unknown {

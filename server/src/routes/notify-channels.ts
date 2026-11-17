@@ -173,14 +173,14 @@ export async function notifyChannelRoutes(app: FastifyInstance) {
       }
     }
     if (b.transport === 'smtp' && before['mail.transport'] !== 'smtp' && !(before['smtp.host'] && before['smtp.from'])) {
-      throw badRequest('Es ist kein SMTP-Server eingerichtet (Warnentwürfe → Pflege → Versand). Bitte zuerst SMTP einrichten oder bei Microsoft 365 bleiben.');
+      throw badRequest('Es ist kein SMTP-Server eingerichtet (Einrichtung → Stichwörter & Regeln → E-Mail-Versand). Bitte zuerst SMTP einrichten oder bei Microsoft 365 bleiben.');
     }
     // Warnversand im Echtbetrieb: zurück auf SMTP nur mit frischer SMTP-Testmail der gespeicherten Einstellungen
     if (b.transport === 'smtp' && before['mail.transport'] !== 'smtp' && !before['warnings.test_mode']) {
       const { smtpFingerprint, storedSmtpSettings } = await import('../warnings/mail.js');
       const v = before['smtp.verified'];
       if (!v || Date.now() - Date.parse(v.at) > VERIFY_MAX_AGE_MS || v.fp !== smtpFingerprint(await storedSmtpSettings())) {
-        throw conflict('Der Warnversand ist im Echtbetrieb: Zurück auf SMTP erst nach einer erfolgreichen SMTP-Testmail (Warnentwürfe → Pflege → Versand, höchstens 60 Minuten alt).');
+        throw conflict('Der Warnversand ist im Echtbetrieb: Zurück auf SMTP erst nach einer erfolgreichen SMTP-Testmail (Einrichtung → Stichwörter & Regeln → E-Mail-Versand, höchstens 60 Minuten alt).');
       }
     }
     const patch: Record<string, unknown> = {

@@ -7,7 +7,7 @@ import { Badge, Button, cx, EmptyState, ErrorBox, FieldWrap, Input, Notice, Page
 import { Icon } from '../../components/ui/Icon';
 import { Dialog, useConfirm, useErrorToast, useToast } from '../../components/ui/overlays';
 import { useAuth } from '../../lib/auth';
-import { fmtBytes, fmtDateTime } from '../../lib/format';
+import { fmtBytes, fmtDateTime, plural } from '../../lib/format';
 import { Lightbox, MarkBox, MediaList, MediaThumb, mediaName, Pager, useGalleryPrefs, ViewControls, type MenuItems } from './gallery';
 import { MediaDetailsDialog } from './MediaDetails';
 import { MediaNav } from './MediaNav';
@@ -73,7 +73,7 @@ export default function MediaSearch() {
   const bulkSelection = async (selection: string) => {
     try {
       const r = await post<{ updated: number }>('/media/bulk', { ids: [...marked], action: 'selection', selection });
-      toast({ tone: 'success', title: `${r.updated} Datei(en) geändert` });
+      toast({ tone: 'success', title: `${plural(r.updated, 'Datei', 'Dateien')} geändert` });
       setMarked(new Set());
     } catch (e) {
       toastError(e);
@@ -190,7 +190,7 @@ export default function MediaSearch() {
               variant="danger"
               icon="Trash2"
               onClick={async () => {
-                if (!(await ask({ title: `${marked.size} Datei(en) in den Papierkorb?`, text: 'Die Dateien lassen sich im Papierkorb wiederherstellen. Dateien in laufenden Beiträgen verhindern die Aktion.', confirmLabel: 'In den Papierkorb' }))) return;
+                if (!(await ask({ title: `${plural(marked.size, 'Datei', 'Dateien')} in den Papierkorb?`, text: 'Die Dateien lassen sich im Papierkorb wiederherstellen. Dateien in laufenden Beiträgen verhindern die Aktion.', confirmLabel: 'In den Papierkorb' }))) return;
                 try {
                   await post('/media/bulk', { ids: [...marked], action: 'delete' });
                   setMarked(new Set());
@@ -261,7 +261,7 @@ function CrossExportDialog({ ids, originals, onClose }: { ids: string[]; origina
     <Dialog
       open
       onClose={onClose}
-      title={`ZIP aus ${ids.length} Datei(en)`}
+      title={`ZIP aus ${plural(ids.length, 'Datei', 'Dateien')}`}
       footer={
         !job ? (
           <>

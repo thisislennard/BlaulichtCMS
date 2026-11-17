@@ -142,7 +142,7 @@ async function fetchFor(c: Connection, sec: Record<string, string>, ids: string[
         : c.kind === 'threads' ? await threadsMetrics(sec, id)
         : c.kind === 'mastodon' ? await mastodonMetrics(c, sec, id)
         : null;
-      out.set(id, m ?? { error: 'Für diesen Kanal gibt es keine Statistik-Schnittstelle.' });
+      out.set(id, m ?? { error: 'Für dieses Netzwerk gibt es keine Statistik-Schnittstelle.' });
     } catch (e: any) {
       // Anmeldung abgelaufen, Kontingent oder Störung betreffen den ganzen Kanal
       if (['auth', 'transient', 'rate_limit'].includes(e?.errorClass)) throw e;

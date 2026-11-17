@@ -86,12 +86,12 @@ export default function CalendarPage() {
           <>
             {can('calendar.subscribe') && (
               <Button icon="Link2" onClick={() => setDialog('subscribe')}>
-                Abonnieren
+                Kalender abonnieren
               </Button>
             )}
             {can('calendar.sources') && (
               <Button icon="Download" onClick={() => setDialog('sources')}>
-                iCal-Kalender
+                Externe Kalender einlesen
               </Button>
             )}
             {canManage && (

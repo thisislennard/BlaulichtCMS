@@ -9,7 +9,7 @@ import { Badge, Button, cx, EmptyState, ErrorBox, FieldWrap, Input, Notice, Page
 import { Icon } from '../../components/ui/Icon';
 import { Dialog, Menu, useErrorToast, useToast, useConfirm } from '../../components/ui/overlays';
 import { useAuth } from '../../lib/auth';
-import { fmtBytes, fmtDateTime } from '../../lib/format';
+import { fmtBytes, fmtDateTime, plural } from '../../lib/format';
 import { newClientKey, uploadResumable } from '../../lib/upload';
 import { openFaces, PrivacyDialog } from './PrivacyDialog';
 import { Lightbox, MarkBox, MediaList, MediaThumb, mediaName, Pager, useGalleryPrefs, ViewControls, type MenuItems } from './gallery';
@@ -148,7 +148,7 @@ export default function CollectionDetail() {
     const ids = [...marked];
     try {
       const r = await post<{ updated: number }>('/media/bulk', { ids, ...body });
-      toast({ tone: 'success', title: `${r.updated} Datei(en) ${body.action === 'delete' ? 'im Papierkorb' : 'geändert'}` });
+      toast({ tone: 'success', title: `${plural(r.updated, 'Datei', 'Dateien')} ${body.action === 'delete' ? 'im Papierkorb' : 'geändert'}` });
       setMarked(new Set());
     } catch (e) {
       toastError(e);
@@ -318,7 +318,7 @@ export default function CollectionDetail() {
             }
           }
           setUpload(null);
-          toast({ tone: failed ? 'warning' : 'success', title: `${files.length - failed} Datei(en) hochgeladen`, text: 'Sie werden jetzt geprüft.' });
+          toast({ tone: failed ? 'warning' : 'success', title: `${plural(files.length - failed, 'Datei', 'Dateien')} hochgeladen`, text: 'Sie werden jetzt geprüft.' });
           refresh();
         }}
       />}
@@ -422,7 +422,7 @@ export default function CollectionDetail() {
               variant="danger"
               icon="Trash2"
               onClick={async () => {
-                if (!(await ask({ title: `${marked.size} Datei(en) in den Papierkorb?`, text: 'Die markierten Dateien kommen in den Papierkorb und lassen sich dort wiederherstellen. Dateien in laufenden Beiträgen verhindern die Aktion.', confirmLabel: 'In den Papierkorb' }))) return;
+                if (!(await ask({ title: `${plural(marked.size, 'Datei', 'Dateien')} in den Papierkorb?`, text: 'Die markierten Dateien kommen in den Papierkorb und lassen sich dort wiederherstellen. Dateien in laufenden Beiträgen verhindern die Aktion.', confirmLabel: 'In den Papierkorb' }))) return;
                 await bulk({ action: 'delete' });
               }}
             >

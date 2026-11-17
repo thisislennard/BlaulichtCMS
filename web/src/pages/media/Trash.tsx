@@ -6,7 +6,7 @@ import { Button, Card, EmptyState, ErrorBox, Notice, PageHeader, SkeletonRows } 
 import { Icon } from '../../components/ui/Icon';
 import { useConfirm, useErrorToast, useToast } from '../../components/ui/overlays';
 import { useAuth } from '../../lib/auth';
-import { fmtDateTime, fmtRelative } from '../../lib/format';
+import { fmtDateTime, fmtRelative, plural } from '../../lib/format';
 import { MediaThumb, mediaName } from './gallery';
 import { MediaNav } from './MediaNav';
 import { usePageMeta } from '../../components/layout/AppShell';
@@ -84,7 +84,7 @@ export default function Trash() {
                 if (!(await ask({ title: 'Papierkorb leeren?', text: 'Alle Einträge werden sofort endgültig gelöscht. Das lässt sich nicht rückgängig machen.', confirmLabel: 'Papierkorb leeren' }))) return;
                 try {
                   const r = await post<any>('/trash/empty');
-                  toast({ tone: 'success', title: 'Papierkorb geleert', text: `${r.media} Datei(en), ${r.folders} Ordner, ${r.collections} Sammlung(en)` });
+                  toast({ tone: 'success', title: 'Papierkorb geleert', text: `${plural(r.media, 'Datei', 'Dateien')}, ${r.folders} Ordner, ${plural(r.collections, 'Sammlung', 'Sammlungen')}` });
                 } catch (e) {
                   toastError(e);
                 }
@@ -116,7 +116,7 @@ export default function Trash() {
                   <Link to={`/medien/${c.id}`} className="font-medium truncate">
                     {c.title}
                   </Link>
-                  <span className="text-meta text-fg-muted">{c.media_count} Datei(en)</span>
+                  <span className="text-meta text-fg-muted">{plural(c.media_count, 'Datei', 'Dateien')}</span>
                   {when(c)}
                 </div>
                 {actions('collection', c.id, c.title)}
@@ -134,7 +134,7 @@ export default function Trash() {
                 <div className="flex-1 min-w-0 flex flex-col">
                   <span className="font-medium truncate">{f.name}</span>
                   <span className="text-meta text-fg-muted">
-                    in „{f.collection_title}“ · {f.media_count} Datei(en)
+                    in „{f.collection_title}“ · {plural(f.media_count, 'Datei', 'Dateien')}
                   </span>
                   {when(f)}
                 </div>

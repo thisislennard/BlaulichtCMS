@@ -72,7 +72,7 @@ export function DecisionDialog({ decision, revision, hash, postId, flagged, face
     >
       <div className="flex flex-col gap-3 text-sm">
         <p className="m-0">
-          Die Entscheidung gilt genau für Fassung {revision} (Prüfsumme <code>{hash.slice(0, 10)}</code>). Jede spätere Änderung an Text, Medien oder Zielkanal braucht eine neue Freigabe.
+          Die Entscheidung gilt genau für Fassung {revision} (Prüfsumme <code>{hash.slice(0, 10)}</code>). Jede spätere Änderung an Text, Medien oder Veröffentlichungszielen braucht eine neue Freigabe.
         </p>
         {needsCheck && (
           <fieldset className="m-0 p-3 border border-warn rounded-node flex flex-col gap-2">

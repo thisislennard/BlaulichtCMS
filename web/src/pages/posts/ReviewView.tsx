@@ -6,7 +6,7 @@ import type { MediaItem } from '../../api/types';
 import { usePageMeta } from '../../components/layout/AppShell';
 import { Badge, Button, ErrorBox, LinkButton, Notice, Rev, SegmentedControl, SkeletonRows, StatusBadge } from '../../components/ui/core';
 import { Icon } from '../../components/ui/Icon';
-import { fmtDateTime, fmtRelative } from '../../lib/format';
+import { fmtDateTime, fmtRelative, plural } from '../../lib/format';
 import { SOCIAL_LABEL, type SocialKind } from '../../lib/social';
 import { openFaces, SENSITIVE_LABELS } from '../media/PrivacyDialog';
 import { Lightbox } from '../media/gallery';
@@ -140,7 +140,7 @@ function Section({ title, children, aside }: { title: ReactNode; children: React
 
 /**
  * Freigabe-Ansicht (#216): kompakt und für das Handy gedacht – Ziel der Push-Mitteilung „Freigabe erbeten“. Zeigt die
- * angefragte Fassung je Kanal, die Bilder und die Änderungen zur letzten freigegebenen Fassung. Freigeben und
+ * angefragte Fassung je Netzwerk, die Bilder und die Änderungen zur letzten freigegebenen Fassung. Freigeben und
  * Zurückweisen laufen über denselben Dialog und dieselben Regeln wie im Beitrag (Prüfsumme, Vier-Augen,
  * Datenschutz-Prüfung). Überholte oder bereits entschiedene Anfragen werden klar als solche gezeigt.
  */
@@ -220,12 +220,12 @@ export default function ReviewView() {
     }
     const added = r.media_ids.filter((x) => !b.media_ids.includes(x)).length;
     const removed = b.media_ids.filter((x) => !r.media_ids.includes(x)).length;
-    if (added) other.push(`${added} Datei(en) hinzugefügt`);
-    if (removed) other.push(`${removed} Datei(en) entfernt`);
+    if (added) other.push(`${plural(added, 'Datei', 'Dateien')} hinzugefügt`);
+    if (removed) other.push(`${plural(removed, 'Datei', 'Dateien')} entfernt`);
     if (!added && !removed && b.media_ids.join() !== r.media_ids.join()) other.push('Reihenfolge der Dateien geändert');
     if (b.cover_id !== r.cover_id) other.push('Titelbild geändert');
-    if (b.site_id !== r.site_id) other.push(r.site_id ? 'Website als Zielkanal geändert' : 'Website als Zielkanal entfernt');
-    if ([...b.social_targets].sort().join() !== [...r.social_targets].sort().join()) other.push('Soziale Kanäle geändert');
+    if (b.site_id !== r.site_id) other.push(r.site_id ? 'Website geändert' : 'Website entfernt');
+    if ([...b.social_targets].sort().join() !== [...r.social_targets].sort().join()) other.push('Soziale Netzwerke geändert');
     if ((b.publish_at ?? null) !== (r.publish_at ?? null)) other.push(r.publish_at ? `Termin: ${fmtDateTime(r.publish_at)}` : 'Termin entfernt');
   }
 
@@ -277,7 +277,7 @@ export default function ReviewView() {
         </Notice>
       )}
       {d.schedule_passed && <Notice tone="warning">Der Termin dieser Fassung ({fmtDateTime(r.publish_at)}) ist bereits verstrichen. Nach der Freigabe wird sofort veröffentlicht.</Notice>}
-      {d.missing_media > 0 && <Notice tone="error">{d.missing_media} Datei(en) dieser Fassung wurden inzwischen gelöscht. Freigeben ist erst nach einer neuen Fassung möglich.</Notice>}
+      {d.missing_media > 0 && <Notice tone="error">{plural(d.missing_media, 'Datei', 'Dateien')} dieser Fassung wurden inzwischen gelöscht. Freigeben ist erst nach einer neuen Fassung möglich.</Notice>}
 
       <Section
         title="Vorschau"
@@ -290,7 +290,7 @@ export default function ReviewView() {
       >
         {channels.length > 1 && (
           <div className="mb-3 overflow-x-auto">
-            <SegmentedControl label="Kanal" value={active} onChange={setChannel} options={channels} size="sm" />
+            <SegmentedControl label="Ansicht" value={active} onChange={setChannel} options={channels} size="sm" />
           </div>
         )}
         <article className="flex flex-col gap-3">
@@ -305,7 +305,7 @@ export default function ReviewView() {
           )}
         </article>
         {d.connections.length > 0 && (
-          <p className="m-0 mt-3 text-meta text-fg-muted">Soziale Kanäle: {d.connections.map((c) => `${SOCIAL_LABEL[c.kind as SocialKind] ?? c.kind} (${c.name})`).join(', ')}</p>
+          <p className="m-0 mt-3 text-meta text-fg-muted">Soziale Netzwerke: {d.connections.map((c) => `${SOCIAL_LABEL[c.kind as SocialKind] ?? c.kind} (${c.name})`).join(', ')}</p>
         )}
       </Section>
 

@@ -6,8 +6,8 @@ import type { Connection, ConnectionKind } from './common.js';
 export { fitText };
 
 /**
- * Soziale Kanäle (#188, #189, #215): Facebook, Instagram, Threads, X, WhatsApp-Kanal, Mastodon und Bluesky. Gemeinsame
- * Regeln für Texte je Kanal, Formate (Beitrag/Story) und „Teilen von Hand“.
+ * Soziale Netzwerke (#188, #189, #215): Facebook, Instagram, Threads, X, WhatsApp-Kanal, Mastodon und Bluesky. Gemeinsame
+ * Regeln für Texte je Netzwerk, Formate (Beitrag/Story) und „Teilen von Hand“.
  */
 export type SocialChannel = 'facebook' | 'instagram' | 'threads' | 'x' | 'whatsapp' | 'mastodon' | 'bluesky';
 export const SOCIAL_KINDS: SocialChannel[] = ['facebook', 'instagram', 'threads', 'x', 'whatsapp', 'mastodon', 'bluesky'];
@@ -96,7 +96,7 @@ export const INSTAGRAM_MAX = 2200;
 export const FACEBOOK_MAX = 60_000;
 export const WHATSAPP_MAX = 60_000;
 
-/* ------------------------------------------------------------------ Texte je Kanal */
+/* ------------------------------------------------------------------ Texte je Netzwerk */
 
 interface RevText {
   title: string;
@@ -128,7 +128,7 @@ const baseText = (rev: RevText) => [rev.title, rev.excerpt?.trim() || rev.body].
 const withLink = (text: string, link: string | null | undefined) => (link && !text.includes(link) ? `\n\n${link}` : '');
 
 /**
- * Text, der an einen Kanal geht: eigener Kanaltext, sonst Titel und Kurzfassung bzw. Text. Threads, X und
+ * Text, der an ein Netzwerk geht: eigener Text je Netzwerk, sonst Titel und Kurzfassung bzw. Text. Threads, X und
  * WhatsApp-Kanal bekommen den Link zur Website angehängt, wenn der Beitrag dort schon veröffentlicht ist.
  */
 export function socialText(rev: RevText, channel: SocialChannel, link?: string | null, limits: TextLimits = {}): string {

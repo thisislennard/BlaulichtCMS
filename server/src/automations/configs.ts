@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { roleExists } from '../auth/permissions.js';
 import { FIELD_KEY, LIMITS, type InputKind, type OutputKind } from './catalog.js';
 
-/* Einstellungen je Art von Eingang und Ausgang (serverseitig geprüft; die Oberfläche spiegelt die Felder). */
+/* Einstellungen je Art von Auslöser und Aktion (serverseitig geprüft; die Oberfläche spiegelt die Felder). */
 
 const tpl = (max: number) => z.string().max(max).default('');
 const phases = <T extends string>(values: readonly [T, ...T[]]) => z.array(z.enum(values)).min(1, 'mindestens ein Vorgang').max(values.length);
@@ -57,12 +57,12 @@ const variants = z
   })
   .default({});
 
-/** Vorausgewählte soziale Kanäle samt Format (#188, #189) – veröffentlicht wird erst nach menschlicher Freigabe. */
+/** Vorausgewählte soziale Netzwerke samt Format (#188, #189) – veröffentlicht wird erst nach menschlicher Freigabe. */
 const socialTargets = z
   .array(z.object({ connectionId: z.uuid(), format: z.enum(['feed', 'story', 'both']).default('feed') }))
   .max(10)
   .default([])
-  .refine((l) => new Set(l.map((x) => x.connectionId)).size === l.length, 'Jeder Kanal nur einmal.');
+  .refine((l) => new Set(l.map((x) => x.connectionId)).size === l.length, 'Jedes Netzwerk nur einmal.');
 
 // Mitgelieferte und eigene Rollen (Stand der Rollentabelle zum Zeitpunkt der Prüfung)
 const roles = z.array(z.string().max(40).refine((r) => roleExists(r), 'Unbekannte Rolle.')).max(100).default([]);

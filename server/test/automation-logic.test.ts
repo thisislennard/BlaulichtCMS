@@ -153,7 +153,7 @@ describe('Automationen: Prüfung des Ablaufs', () => {
     expect(v.errors.some((e) => e.nodeId === 'if' && /keinen ausgehenden/.test(e.message))).toBe(true);
     const k = base();
     k.edges[1].sourceHandle = 'vielleicht';
-    expect(validateGraph(k, ctx).errors.some((e) => /unbekannter Ausgang/.test(e.message))).toBe(true);
+    expect(validateGraph(k, ctx).errors.some((e) => /unbekannter Zweig/.test(e.message))).toBe(true);
     const s = base();
     s.edges.push(edge('e9', 'if', 'if', 'false'));
     expect(validateGraph(s, ctx).errors.some((e) => /sich selbst/.test(e.message))).toBe(true);

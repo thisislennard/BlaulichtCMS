@@ -94,7 +94,7 @@ Schlüssel meldet „falscher Master-Schlüssel oder veränderte Daten“ (`docs
 ### E5 – Fassungen und Freigabe
 
 Jede inhaltliche Änderung erzeugt eine neue, unveränderliche Zeile in `post_revisions` mit SHA-256 über
-`[Titel, Text, Kurzfassung, Medien-IDs in Reihenfolge, Titelbild, Zielkanal]`. Eine Freigabe speichert diese Prüfsumme;
+`[Titel, Text, Kurzfassung, Medien-IDs in Reihenfolge, Titelbild, Website]`. Eine Freigabe speichert diese Prüfsumme;
 gültig ist sie nur, solange Fassung und Prüfsumme die aktuellen sind. Veröffentlichen verlangt Fassungsnummer und
 Prüfsumme im Request (Schutz gegen veraltete Oberflächen). Optimistische Sperre über `baseRevision` beim Speichern.
 
@@ -193,8 +193,8 @@ voraus“), Rollen kombinierbar.
 
 Vier-Augen-Prinzip optional (Einstellung `editorial.four_eyes`) für Beiträge, Banner und Warnentwürfe: nicht durch die
 einreichende Person (`post_revisions.submitted_by`, `banners.submitted_by`, `warning_revisions.submitted_by`) und nicht
-durch Personen, die bis zur geprüften Fassung Inhalte geschrieben haben (Beiträge: Text, Kanaltexte, Medien, Titelbild –
-Termin, Zielkanal und soziale Kanäle zählen nicht; Banner ohne Fassungshistorie: anlegende und zuletzt ändernde Person).
+durch Personen, die bis zur geprüften Fassung Inhalte geschrieben haben (Beiträge: Text, Texte je Netzwerk, Medien, Titelbild –
+Termin, Website und soziale Netzwerke zählen nicht; Banner ohne Fassungshistorie: anlegende und zuletzt ändernde Person).
 
 ### E11 – Öffentliche Adresse aus dem Erstsetup
 
@@ -240,7 +240,7 @@ Alles über Tokens in `web/src/theme/tokens.css` – das endgültige Design läs
 - Geheimnisse je Verbindung als verschlüsseltes JSON in `secrets` (neue Version bei jeder Änderung in einer Transaktion
   unter Zeilensperre, alte widerrufen; Versionen je Besitzer unter Advisory-Sperre). Auch das SMTP-Passwort widerruft
   beim Ändern die alte Version; widerrufene Geheimnisse löscht der Worker nach 30 Tagen endgültig.
-- Soziale Kanäle sind Teil der Fassung (`post_revisions.social_targets`, in der Prüfsumme). Je Kanal und Fassung genau ein
+- Soziale Netzwerke sind Teil der Fassung (`post_revisions.social_targets`, in der Prüfsumme). Je Netzwerk und Fassung genau ein
   Auftrag (`social_publications`, eindeutiger Index); ein Versuch je Anstoß; „unbekannt“ wird vor jedem neuen Versuch
   über den Text-Marker beim Anbieter geprüft.
 - Meta ruft Medien über befristete, tokenisierte URLs `/api/v1/m/<token>` ab (24 h, nur öffentliche Fassungen).
@@ -266,9 +266,9 @@ Alles über Tokens in `web/src/theme/tokens.css` – das endgültige Design läs
 
 **Aufbau** (`server/src/automations/`, Migration `060_automations.sql`):
 
-- **Eingänge** (`automation_inputs`: FE2, Feuersoftware, amtliche Warnung, RSS, Uploads, Zeitplan, manueller Start) und
-  **Ausgänge** (`automation_outputs`: Banner, Beitrag, E-Mail, App-Benachrichtigung, Warnentwurf vorbereiten) sind
-  wiederverwendbare Bausteine mit serverseitig geprüften Einstellungen (`configs.ts`). Jede Eingangsart deklariert ihre
+- **Auslöser** (`automation_inputs`: FE2, Feuersoftware, amtliche Warnung, RSS, Uploads, Zeitplan, manueller Start) und
+  **Aktionen** (`automation_outputs`: Banner, Beitrag, E-Mail, App-Benachrichtigung, Warnentwurf vorbereiten) sind
+  wiederverwendbare Bausteine mit serverseitig geprüften Einstellungen (`configs.ts`). Jede Art des Auslösers deklariert ihre
   Felder (`catalog.ts`) – sie sind die einzige Grundlage für Platzhalter und Bedingungen.
 - **Ablauf** (`automations.graph`): Knoten und Kanten als JSON. Verarbeitungsknoten: Bedingung (Feld – Operator – Wert,
   UND/ODER, eine Ebene Untergruppen), Verzweigung, Felder setzen (`{{feld}}`-Vorlagen), Warten (≤ 24 h), Einmal je
@@ -277,7 +277,7 @@ Alles über Tokens in `web/src/theme/tokens.css` – das endgültige Design läs
 - **Prüfung** (`graph.ts`, ohne Datenbank): Kreise, Pflicht-Anschlüsse, Ports, Grenzen (60 Knoten, 150 Kanten) und ob
   jedes verwendete Feld an der jeweiligen Stelle vorhanden ist (Schnittmenge über alle eingehenden Wege).
 - **Versionen:** Aktivieren geht nur, wenn genau dieser Stand einen erfolgreichen Testlauf hatte (`tested_hash` =
-  Prüfsumme über Ablauf **und** Einstellungen der verwendeten Ein-/Ausgänge, ohne Positionen). Die Aktivierung speichert
+  Prüfsumme über Ablauf **und** Einstellungen der verwendeten Auslöser und Aktionen, ohne Positionen). Die Aktivierung speichert
   eine unveränderliche Momentaufnahme (`automation_versions`); Läufe arbeiten nur auf Momentaufnahmen. Wie bei den
   Verbindungen (E15) gilt „aktiv nur nach bestandenem Test“.
 - **Ereignisse:** Die Quellen rufen nur eine kleine Funktion auf (`events.ts`: `emitIncident` in `handleIncident`,
@@ -285,39 +285,39 @@ Alles über Tokens in `web/src/theme/tokens.css` – das endgültige Design läs
   In Transaktionen der Quelle läuft das Anlegen unter einem Savepoint; ein Fehler stört den Empfang nie. Zeitpläne
   startet der Worker-Leader (alle 30 s, keine Nachholung > 10 min, nie vor der Aktivierung).
 - **Ausführung** (`engine.ts`): Auftrag `automation.run` in der Warteschlange, Advisory-Lock je Lauf (nie parallel),
-  topologische Reihenfolge, ein Schritt je Knoten (`automation_steps`, eindeutig je Lauf und Knoten). Ausgänge schreiben
+  topologische Reihenfolge, ein Schritt je Knoten (`automation_steps`, eindeutig je Lauf und Knoten). Aktionen schreiben
   Ergebnis und Schritt in **einer** Transaktion – Wiederholung und Fortsetzung legen nichts doppelt an. Ein Ereignis
   startet je Automation genau einen Lauf (eindeutiger `event_key`). Vorübergehende Fehler: bis zu 4 Versuche mit
   Backoff; E-Mail mit unklarem Ergebnis wird nie automatisch neu gesendet (wie `warning.send`). Warten und Freigabe
   halten den Lauf an und setzen ihn über einen neuen Auftrag fort.
-- **Testläufe** laufen direkt in der Anfrage (ohne Worker) als Trockenlauf: Ausgänge beschreiben, was sie tun würden.
+- **Testläufe** laufen direkt in der Anfrage (ohne Worker) als Trockenlauf: Aktionen beschreiben, was sie tun würden.
 - **Grenzen:** Läufe je Automation und Minute (`automations.max_runs_per_minute`, Standard 20; darüber verworfen,
   protokolliert, Verwaltung benachrichtigt), globaler Schalter `automations.enabled`, Notbremse „Deaktivieren“ (offene
   Läufe und Freigaben werden abgebrochen), Löschfrist `privacy.automation_run_days` (30 Tage).
 - **Rechte:** `automation.read` (Administration, Redaktion, Freigabe), `automation.manage` und `automation.publish`
   (Administration). Freigaben aus Abläufen entscheidet „Fassungen freigeben“; mit `editorial.four_eyes` nicht, wer die
   Automation zuletzt geändert oder die laufende Version aktiviert hat.
-- **Ausgänge und Vier-Augen:** Banner und Beiträge entstehen als Entwürfe (wahlweise eingereicht); App-Benachrichtigungen
+- **Aktionen und Vier-Augen:** Banner und Beiträge entstehen als Entwürfe (wahlweise eingereicht); App-Benachrichtigungen
   und E-Mails an Konten (Rollen) gehen sofort – sie verlassen BlaulichtCMS nicht bzw. nur an hinterlegte Konten; E-Mails
   an Zuständigkeiten nur nach Freigabe; Warnentwürfe werden nur vorbereitet. Keine sozialen Netzwerke, keine Webhooks.
 
 **Bewusste Abweichung: Direktversand ohne menschliche Freigabe, je Automation wählbar (Entscheidung des Betriebs).**
 Eine Automation kann „Darf direkt veröffentlichen/versenden“ erhalten. Dann veröffentlichen **nur im Editor markierte**
-Banner- und Beitrags-Ausgänge direkt (Banner freigegeben und als Auftrag für die Bridge; Beitrag mit Freigabe ohne
-Person und Veröffentlichungsauftrag) bzw. senden E-Mails an Zuständigkeiten ohne Freigabe. Das hebt für diese Ausgänge
+Banner- und Beitrags-Aktionen direkt (Banner freigegeben und als Auftrag für die Bridge; Beitrag mit Freigabe ohne
+Person und Veröffentlichungsauftrag) bzw. senden E-Mails an Zuständigkeiten ohne Freigabe. Das hebt für diese Aktionen
 das Vier-Augen-Prinzip (E10) auf.
 
 Ausgleich:
 
 | Maßnahme | Wirkung |
 |---|---|
-| Eigenes Recht `automation.publish` (nur Administration) | Markieren, Erlauben und Aktivieren einer Version mit markierten Ausgängen; „Verwalten“ allein genügt nicht |
+| Eigenes Recht `automation.publish` (nur Administration) | Markieren, Erlauben und Aktivieren einer Version mit markierten Aktionen; „Verwalten“ allein genügt nicht |
 | Frische Passwortbestätigung (#109, ≤ 10 min) | Erlauben und Aktivieren mit Direktversand; API-Schlüssel können das nie |
-| Pflicht-Testlauf des aktuellen Stands | Erlauben und Aktivieren nur mit `tested_hash` des aktuellen Ablaufs samt Ein-/Ausgängen |
+| Pflicht-Testlauf des aktuellen Stands | Erlauben und Aktivieren nur mit `tested_hash` des aktuellen Ablaufs samt Auslösern und Aktionen |
 | Doppelte Bedingung zur Laufzeit | direkt nur, wenn die Version mit Direktversand aktiviert wurde **und** die Automation ihn jetzt noch hat – Entziehen wirkt sofort, auch für wartende Läufe |
 | Sichtbarkeit | Kennzeichnung „Direktversand“ in Liste und Editor, „Direkt“ am Knoten, Versionen „mit Direktversand“ |
-| Nachvollziehbarkeit | Audit (`automation.direct_enabled/disabled`, `automation.activated` mit Zahl der Direkt-Ausgänge, `automation.post_published`, `automation.banner_published`, `automation.mail_sent`) und Sicherheitsmeldung `automation_direct_publish` |
-| Begrenzung | nur Banner, Beitrag (nur mit gekoppeltem Zielkanal), E-Mail an gepflegte Zuständigkeiten; nie Warnentwürfe, nie soziale Netzwerke; Testmodus des Mailversands gilt weiter |
+| Nachvollziehbarkeit | Audit (`automation.direct_enabled/disabled`, `automation.activated` mit Zahl der Direkt-Aktionen, `automation.post_published`, `automation.banner_published`, `automation.mail_sent`) und Sicherheitsmeldung `automation_direct_publish` |
+| Begrenzung | nur Banner, Beitrag (nur mit gekoppelter Website), E-Mail an gepflegte Zuständigkeiten; nie Warnentwürfe, nie soziale Netzwerke; Testmodus des Mailversands gilt weiter |
 
 Restrisiko: Eine fehlerhaft gebaute Bedingung oder eine manipulierte Quelle (z. B. gefälschter Feed, falls interne
 Ziele freigegeben sind) kann ungeprüfte Inhalte auf die Website bringen. Gegenmittel: Direktversand nur für eng

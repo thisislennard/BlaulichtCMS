@@ -66,7 +66,7 @@ export function AiAssistDialog({ ai, canImport, onImport, onClose }: { ai: NonNu
           </Step>
           <Step n={2} title="Katalog dieser Installation">
             <p className="m-0 text-sm">
-              Vorhandene Eingänge und Ausgänge (Art und Name), Felder je Auslöser, Vergleiche, Bildvorlagen, Kalender-Kategorien und das aktive Stichwortverzeichnis. Ohne Zugangsdaten, Kennungen, Einsatzdaten, Läufe, Medien und Personen.
+              Vorhandene Auslöser und Aktionen (Art und Name), Felder je Auslöser, Vergleiche, Bildvorlagen, Kalender-Kategorien und das aktive Stichwortverzeichnis. Ohne Zugangsdaten, Kennungen, Einsatzdaten, Läufe, Medien und Personen.
             </p>
             <div className="flex items-center gap-3 flex-wrap">
               <Button icon="Braces" onClick={() => download('/automations/catalog/export')}>
@@ -76,13 +76,13 @@ export function AiAssistDialog({ ai, canImport, onImport, onClose }: { ai: NonNu
             </div>
           </Step>
           <Step n={3} title="Anfrage an die KI">
-            <FieldWrap label="Vorlage für die Anfrage" htmlFor={promptId} help="„…“ am Ende durch den eigenen Wunsch ersetzen, kopieren und mit beiden Dateien an die KI geben." labelAction={<CopyButton value={prompt} size="sm" label="Anfrage kopieren" />}>
+            <FieldWrap label="Mustertext für die Anfrage" htmlFor={promptId} help="„…“ am Ende durch den eigenen Wunsch ersetzen, kopieren und mit beiden Dateien an die KI geben." labelAction={<CopyButton value={prompt} size="sm" label="Anfrage kopieren" />}>
               <Textarea id={promptId} rows={9} value={prompt} maxLength={8000} onChange={(e) => setPrompt(e.target.value)} className="text-sm" />
             </FieldWrap>
             {prompt !== ai.prompt && (
               <div>
                 <Button size="sm" icon="RotateCcw" onClick={() => setPrompt(ai.prompt)}>
-                  Vorlage wiederherstellen
+                  Mustertext wiederherstellen
                 </Button>
               </div>
             )}

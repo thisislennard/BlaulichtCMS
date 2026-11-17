@@ -28,7 +28,7 @@ function TemplateDialog({ tpl, onClose }: { tpl: Partial<Tpl> | null; onClose: (
       open
       onClose={onClose}
       width={680}
-      title={tpl?.id ? 'Vorlage bearbeiten' : 'Neue Vorlage'}
+      title={tpl?.id ? 'Beitragsvorlage bearbeiten' : 'Neue Beitragsvorlage'}
       footer={
         <>
           <Button onClick={onClose}>Abbrechen</Button>
@@ -42,7 +42,7 @@ function TemplateDialog({ tpl, onClose }: { tpl: Partial<Tpl> | null; onClose: (
               try {
                 if (tpl?.id) await put(`/templates/${tpl.id}`, v);
                 else await post('/templates', v);
-                toast({ tone: 'success', title: tpl?.id ? 'Vorlage gespeichert' : 'Vorlage angelegt' });
+                toast({ tone: 'success', title: tpl?.id ? 'Beitragsvorlage gespeichert' : 'Beitragsvorlage angelegt' });
                 onClose();
               } catch (e) {
                 toastError(e);
@@ -56,7 +56,7 @@ function TemplateDialog({ tpl, onClose }: { tpl: Partial<Tpl> | null; onClose: (
       }
     >
       <div className="flex flex-col gap-4">
-        <FieldWrap label="Name der Vorlage" required htmlFor="t-name">
+        <FieldWrap label="Name der Beitragsvorlage" required htmlFor="t-name">
           <Input id="t-name" value={v.name} onChange={(e) => setV({ ...v, name: e.target.value })} maxLength={100} placeholder="z. B. Einsatzbericht kurz" />
         </FieldWrap>
         <FieldWrap label="Titel (Vorschlag)" help="Wird beim Anlegen eines Beitrags vorbelegt." htmlFor="t-title">
@@ -94,12 +94,12 @@ export default function Templates() {
   return (
     <div className="flex flex-col gap-5">
       <PageHeader
-        subtitle="Redaktionelle Vorlagen für wiederkehrende Beiträge, z. B. Einsatzberichte oder Veranstaltungshinweise."
-        actions={can('post.templates') && <Button variant="primary" icon="Plus" onClick={() => setEdit(null)}>Neue Vorlage</Button>}
+        subtitle="Vorlagen für wiederkehrende Beiträge, z. B. Einsatzberichte oder Veranstaltungshinweise."
+        actions={can('post.templates') && <Button variant="primary" icon="Plus" onClick={() => setEdit(null)}>Neue Beitragsvorlage</Button>}
       />
       {q.isLoading && <SkeletonRows rows={4} />}
-      {q.error && <ErrorBox title="Vorlagen konnten nicht geladen werden">{(q.error as Error).message}</ErrorBox>}
-      {q.data && q.data.length === 0 && <EmptyState icon="FileText" title="Noch keine Vorlage" />}
+      {q.error && <ErrorBox title="Beitragsvorlagen konnten nicht geladen werden">{(q.error as Error).message}</ErrorBox>}
+      {q.data && q.data.length === 0 && <EmptyState icon="FileText" title="Noch keine Beitragsvorlage" />}
       {q.data && q.data.length > 0 && (
         <Table>
           <thead>
@@ -136,7 +136,7 @@ export default function Templates() {
         <Dialog
           open
           onClose={() => setArchive(null)}
-          title="Vorlage archivieren?"
+          title="Beitragsvorlage archivieren?"
           footer={
             <>
               <Button onClick={() => setArchive(null)}>Abbrechen</Button>
@@ -145,7 +145,7 @@ export default function Templates() {
                 onClick={async () => {
                   try {
                     await del(`/templates/${archive.id}`);
-                    toast({ tone: 'success', title: 'Vorlage archiviert' });
+                    toast({ tone: 'success', title: 'Beitragsvorlage archiviert' });
                   } catch (e) {
                     toastError(e);
                   }

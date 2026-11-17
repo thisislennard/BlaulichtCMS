@@ -271,7 +271,7 @@ export async function roleRoutes(app: FastifyInstance) {
       const users = await many<{ id: string; email: string }>('SELECT id, email FROM users WHERE $1 = ANY(roles) FOR UPDATE', [id], db);
       const keys = await many<{ id: string }>('SELECT id FROM api_keys WHERE $1 = ANY(roles) AND revoked_at IS NULL', [id], db);
       if ((users.length || keys.length) && !target) {
-        throw conflict(`Die Rolle ist noch ${users.length} Konto/Konten${keys.length ? ` und ${keys.length} API-Schlüssel(n)` : ''} zugewiesen. Bitte eine Ersatzrolle wählen.`, { users: users.length, apiKeys: keys.length });
+        throw conflict(`Die Rolle ist noch ${users.length === 1 ? 'einem Konto' : `${users.length} Konten`}${keys.length ? ` und ${keys.length === 1 ? 'einem API-Schlüssel' : `${keys.length} API-Schlüsseln`}` : ''} zugewiesen. Bitte eine Ersatzrolle wählen.`, { users: users.length, apiKeys: keys.length });
       }
       const swap = `ARRAY(SELECT DISTINCT x FROM unnest(array_replace(roles, $1::text, $2::text)) x WHERE x IS NOT NULL)`;
       if (users.length) await db.query(`UPDATE users SET roles = ${swap} WHERE $1 = ANY(roles)`, [id, target!.id]);

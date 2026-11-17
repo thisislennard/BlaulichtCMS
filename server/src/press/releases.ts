@@ -193,10 +193,10 @@ export function parseCsv(text: string): string[][] {
   return rows;
 }
 
-/* ------------------------------------------------------------------ Workflow-Ausgang */
+/* ------------------------------------------------------------------ Workflow-Aktion */
 
 /**
- * Workflow-Ausgang „Pressemitteilung an Verteiler“: legt standardmäßig einen Entwurf an (Versand von Hand); nur mit
+ * Workflow-Aktion „Pressemitteilung an Verteiler“: legt standardmäßig einen Entwurf an (Versand von Hand); nur mit
  * Direktversand (Freigabe des Workflows für Direktveröffentlichung, Recht „Workflows direkt veröffentlichen lassen“)
  * wird sofort gesendet.
  */

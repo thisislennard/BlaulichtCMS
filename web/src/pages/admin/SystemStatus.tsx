@@ -31,6 +31,7 @@ import {
 import { LoadError, StateBadge } from "./shared";
 import { useAuth } from "../../lib/auth";
 import { UpdateAvailableNotice } from "./Updates";
+import { plural } from '../../lib/format';
 
 export interface SystemStatusData {
   services: {
@@ -140,8 +141,8 @@ function AuditIntegrityCard() {
             <p className={cx("m-0 flex items-center gap-2 font-medium", v.ok ? "text-ok" : "text-err")}>
               <Icon name={v.ok ? "CircleCheck" : "AlertTriangle"} size={16} />
               {v.ok
-                ? `${fmtNumber(v.checked)} Einträge geprüft – keine Auffälligkeiten.`
-                : `${fmtNumber(v.problems.length)} Auffälligkeit(en) in ${fmtNumber(v.checked)} Einträgen.`}
+                ? `${plural(v.checked, 'Eintrag', 'Einträge')} geprüft – keine Auffälligkeiten.`
+                : `${plural(v.problems.length, 'Auffälligkeit', 'Auffälligkeiten')} in ${plural(v.checked, 'Eintrag', 'Einträgen')}.`}
             </p>
             {v.problems.length > 0 && (
               <ul className="m-0 pl-5 list-disc text-err">

@@ -139,3 +139,42 @@ describe('Menüpfade in Hilfe und Hinweisen (#257)', () => {
     expect(problems).toEqual([]);
   });
 });
+
+describe('Begriffe (#257): verbotene Schreibweisen in Oberfläche und Hilfe', () => {
+  /** Quelltexte der Oberfläche ohne Kommentare, Hilfe-Kapitel und deutsche Übersetzungen. */
+  function texts(): { file: string; lines: string[] }[] {
+    const out: { file: string; lines: string[] }[] = [];
+    const walk = (dir: string) => {
+      for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+        const p = path.join(dir, e.name);
+        if (e.isDirectory()) {
+          if (e.name !== 'en') walk(p);
+        } else if (/\.(tsx?|md|json)$/.test(e.name)) {
+          let src = fs.readFileSync(p, 'utf8');
+          if (!e.name.endsWith('.md') && !e.name.endsWith('.json')) src = src.replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, '')).replace(/(^|[^:'"`])\/\/.*$/gm, '$1');
+          out.push({ file: path.relative(WEB, p), lines: src.split('\n') });
+        }
+      }
+    };
+    walk(WEB);
+    return out;
+  }
+  const RULES: [RegExp, string, RegExp?][] = [
+    [/\b(Kanal|Kanäle|Kanälen|Kanals|Zielkanal|Zielkanäle)\b/, '„Website“, „soziale Netzwerke“ bzw. „Veröffentlichungsziele“', /whatsapp/i],
+    [/\b(Eingänge|Ausgänge|Ausgängen|Eingängen)\b/, '„Auslöser“ bzw. „Aktionen“', /FE2|HTTP/],
+    [/Foto-Link/, '„Upload-Link“'],
+    [/Medien sammeln|Fotos und Videos sammeln/, '„Fotos sammeln“'],
+    [/Update-Kanal/, '„Update-Stufe“'],
+    // Deutsches Wort mit Klammerendung („Datei(en)“, „Freigabe(n)“, „zuständige(n)“); Aufrufe wie String(e) sind ausgenommen
+    [/(^|[\s>{}"'`(])(?!(String|Number|Boolean|Set|Map|Error|Date|Array|Object|Promise|JSON|Symbol)\()([A-ZÄÖÜ][a-zäöüß-]{2,}|[a-zäöüß]+ige)\((e|en|n|er|s|nen)\)(?![\w.])/, 'plural(n, …) statt Behelfsplural'],
+  ];
+  it('keine Behelfsplurale und keine alten Bezeichnungen', () => {
+    const problems: string[] = [];
+    for (const { file, lines } of texts()) {
+      lines.forEach((l, i) => {
+        for (const [re, instead, allow] of RULES) if (re.test(l) && !(allow && allow.test(l))) problems.push(`${file}:${i + 1}: ${l.trim().slice(0, 90)} → ${instead}`);
+      });
+    }
+    expect(problems).toEqual([]);
+  });
+});

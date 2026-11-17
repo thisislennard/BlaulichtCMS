@@ -5,7 +5,7 @@ import { Badge, Button, Card, cx, FieldWrap, Input, Notice, Select, Textarea, ty
 import { Icon } from '../../components/ui/Icon';
 import { Dialog, useConfirm, useErrorToast, useToast } from '../../components/ui/overlays';
 import { useAuth } from '../../lib/auth';
-import { fmtBytes, fmtDateTime } from '../../lib/format';
+import { fmtBytes, fmtDateTime, plural } from '../../lib/format';
 import type { PressRequest } from './shared';
 
 export interface PressMessage {
@@ -177,7 +177,7 @@ function MessageItem({ m, onChange }: { m: PressMessage; onChange: () => void })
               <Button size="sm" variant="ghost" icon={html ? 'FileText' : 'Eye'} onClick={() => setHtml(!html)}>
                 {html ? 'Als Text anzeigen' : 'HTML-Ansicht'}
               </Button>
-              {html && m.blocked_images > 0 && <span className="text-meta text-fg-muted">{m.blocked_images} Bild(er) aus dem Internet blockiert (Zählpixel-Schutz)</span>}
+              {html && m.blocked_images > 0 && <span className="text-meta text-fg-muted">{plural(m.blocked_images, 'Bild', 'Bilder')} aus dem Internet blockiert (Zählpixel-Schutz)</span>}
             </div>
           )}
           {m.attachments.length > 0 && (

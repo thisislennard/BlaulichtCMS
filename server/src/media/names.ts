@@ -1,6 +1,6 @@
 /**
  * Neutrale Dateinamen für öffentliche Fassungen (#137): Der Originalname des Uploads kann Namen, Datum oder Ort
- * enthalten („Unfall_Mueller_Hauptstr.jpg“) und gehört nicht in Dateien, die nach außen gehen (soziale Kanäle,
+ * enthalten („Unfall_Mueller_Hauptstr.jpg“) und gehört nicht in Dateien, die nach außen gehen (soziale Netzwerke,
  * Presse, ZIP der öffentlichen Fassung). Der Originalname bleibt nur beim Download des Originals erhalten.
  */
 

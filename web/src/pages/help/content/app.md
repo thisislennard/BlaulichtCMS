@@ -1,4 +1,4 @@
-BlaulichtCMS lässt sich auf Handy, Tablet und Computer als App installieren (PWA). Die App läuft in einem eigenen Fenster mit Symbol auf dem Startbildschirm, in der Taskleiste oder im Dock, zeigt Push-Benachrichtigungen als Mitteilungen des Geräts und führt direkt zu **Neuer Beitrag**, **Medien sammeln** und **Offene Freigaben**.
+BlaulichtCMS lässt sich auf Handy, Tablet und Computer als App installieren (PWA). Die App läuft in einem eigenen Fenster mit Symbol auf dem Startbildschirm, in der Taskleiste oder im Dock, zeigt Push-Benachrichtigungen als Mitteilungen des Geräts und führt direkt zu **Neuer Beitrag**, **Fotos sammeln** und **Offene Freigaben**.
 
 ## Installieren
 
@@ -32,7 +32,7 @@ Ein langer Druck auf das App-Symbol zeigt die Schnellzugriffe – am Computer mi
 | Schnellzugriff | Öffnet |
 |---|---|
 | Neuer Beitrag | Dialog „Neuer Beitrag“ |
-| Medien sammeln | Dialog „Neue Sammlung“ mit Upload-Link |
+| Fotos sammeln | Dialog „Fotos sammeln“: neue Sammlung mit Upload-Link |
 | Offene Freigaben | Liste der Fassungen, die auf Freigabe oder Veröffentlichung warten |
 
 ## Ohne Verbindung

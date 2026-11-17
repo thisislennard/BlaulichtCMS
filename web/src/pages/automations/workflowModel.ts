@@ -2,9 +2,9 @@
  * Geführte Ansicht „Wenn → Nur wenn → Dann“: Umwandlung zwischen gespeichertem Ablauf (Knoten + Kanten) und einem
  * einfachen Modell. Reine Funktionen ohne React – getestet in server/test/workflow-guided.test.ts.
  *
- * Darstellbar ist ein Ablauf genau dann, wenn er nur aus Eingängen, höchstens einer Bedingung (ohne Untergruppen) und
- * Ausgängen besteht und die Kanten genau dem Muster entsprechen: ohne Bedingung jeder Eingang → jeder Ausgang, mit
- * Bedingung jeder Eingang → Bedingung und Bedingung („trifft zu“) → jeder Ausgang. Alles andere bleibt dem
+ * Darstellbar ist ein Ablauf genau dann, wenn er nur aus Auslösern, höchstens einer Bedingung (ohne Untergruppen) und
+ * Aktionen besteht und die Kanten genau dem Muster entsprechen: ohne Bedingung jeder Auslöser → jede Aktion, mit
+ * Bedingung jeder Auslöser → Bedingung und Bedingung („trifft zu“) → jede Aktion. Alles andere bleibt dem
  * erweiterten Editor vorbehalten – die geführte Ansicht ändert solche Abläufe nie.
  */
 
@@ -132,7 +132,7 @@ function defaultId(prefix: string) {
   return `${prefix}${Math.random().toString(36).slice(2, 8)}`;
 }
 
-/** Offener Platz: Ein-/Ausgangs-Knoten ohne gewählten Eingang bzw. Ausgang. */
+/** Offener Platz: Auslöser- und Aktionsknoten ohne gewählten Auslöser bzw. Aktion. */
 export function isOpenSlot(n: { type: string; data?: any }): boolean {
   return (n.type === 'input' && !n.data?.inputId) || (n.type === 'output' && !n.data?.outputId);
 }

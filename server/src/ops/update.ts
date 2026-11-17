@@ -25,7 +25,7 @@ export async function updatePreflight() {
   add('publications', 'Keine Website-Veröffentlichung in Übertragung', pubs === 0, pubs ? `${pubs} abgeholt, Rückmeldung ausstehend` : 'keine');
 
   const social = (await one<any>(`SELECT count(*)::int AS n FROM social_publications WHERE status = 'publishing'`))!.n;
-  add('social', 'Keine Veröffentlichung auf sozialen Kanälen in Arbeit', social === 0, social ? `${social} in Arbeit` : 'keine');
+  add('social', 'Keine Veröffentlichung auf sozialen Netzwerken in Arbeit', social === 0, social ? `${social} in Arbeit` : 'keine');
 
   const sends = (await one<any>(`SELECT count(*)::int AS n FROM warning_sends WHERE status IN ('queued','sending')`))!.n;
   add('warnings', 'Kein Warnversand in Arbeit', sends === 0, sends ? `${sends} in Arbeit` : 'keine');

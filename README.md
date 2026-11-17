@@ -4,7 +4,7 @@
 
 **Selbst gehostetes Redaktionssystem für Öffentlichkeitsarbeit und Krisenkommunikation**
 
-Fotos per Link vom Handy sammeln · sichten · Beiträge schreiben · Fassung freigeben · auf Website und sozialen Kanälen veröffentlichen – dazu Kalender, Presseanfragen, Einsatzliste und Workflows, nachvollziehbar und auf dem eigenen Server
+Fotos per Link vom Handy sammeln · sichten · Beiträge schreiben · Fassung freigeben · auf Website und sozialen Netzwerken veröffentlichen – dazu Kalender, Presseanfragen, Einsatzliste und Workflows, nachvollziehbar und auf dem eigenen Server
 
 [![CI](https://github.com/thisislennard/BlaulichtCMS/actions/workflows/ci.yml/badge.svg)](https://github.com/thisislennard/BlaulichtCMS/actions/workflows/ci.yml)
 [![Sicherheitsprüfung](https://github.com/thisislennard/BlaulichtCMS/actions/workflows/security.yml/badge.svg)](https://github.com/thisislennard/BlaulichtCMS/actions/workflows/security.yml)
@@ -54,14 +54,14 @@ flowchart LR
 
 ### Fotos und Videos sammeln
 
-- **Foto-Link:** Mit einem Klick entsteht eine Sammlung mit befristetem, jederzeit widerrufbarem Upload-Link – als Link
+- **Upload-Link (Fotos sammeln):** Mit einem Klick entsteht eine Sammlung mit befristetem, jederzeit widerrufbarem Upload-Link – als Link
   zum Teilen (auch per WhatsApp oder E-Mail), als QR-Code (PNG/SVG) oder als A4-Aushang zum Drucken. Wer hochlädt,
   braucht kein Konto.
 - **Links bedienen:** Gültigkeit in Stunden, Tagen oder bis zu einem Termin; pausieren, fortsetzen, verlängern, neu
   erzeugen (alter Link und QR-Code sofort ungültig), eigener Begrüßungstext je Link.
 - **Optionen je Link:** Grenzen (Uploads, Dateien je Upload, Größe), erlaubte Dateitypen, abgefragte Angaben (Name,
   E-Mail, Ort, Datum – je aus, freiwillig oder Pflicht, mit Löschfrist), Bestätigung vor dem Upload, optional Passwort.
-- **Gestaltung der Upload-Seite:** Titelbild, Logo, Überschriften, Texte, Bilder mit Unterschrift, Hinweisboxen,
+- **Upload-Seite gestalten** (Einrichtung → Upload-Seite): Titelbild, Logo, Überschriften, Texte, Bilder mit Unterschrift, Hinweisboxen,
   Akzentfarbe mit gutem Kontrast, Platzhalter {thema}/{datum}, Live-Vorschau für Handy und Rechner – als Standard und
   je Link; der Datenschutzabschnitt bleibt immer dabei.
 - **Upload am Handy:** großer Knopf für die Galerie, „Foto aufnehmen“ und „Video aufnehmen“ für die Kamera, mehrere
@@ -105,22 +105,22 @@ flowchart LR
 ### Beiträge schreiben
 
 - **Beitragsarten:** Nachricht, Einsatzbericht, Veranstaltung, Lage-Info – mit Vorlagen für wiederkehrende Texte.
-- **Fassungen:** Jede Änderung an Text, Medien oder Zielkanal erzeugt eine neue Fassung; Unterschiede sind
+- **Fassungen:** Jede Änderung an Text, Medien oder Veröffentlichungszielen erzeugt eine neue Fassung; Unterschiede sind
   nachvollziehbar.
-- **Texte je Kanal:** eigener Text für Website, Facebook, Instagram, Threads, X, Mastodon, Bluesky und WhatsApp-Kanal, Vorschau je Kanal und Zeichenzähler, geplanter
+- **Texte je Netzwerk:** eigener Text für Website, Facebook, Instagram, Threads, X, Mastodon, Bluesky und WhatsApp-Kanal, Vorschau je Netzwerk und Zeichenzähler, geplanter
   Veröffentlichungstermin.
 - **Barrierefreiheit:** Alternativtext je Bild (in der Medienverwaltung hinterlegt und wiederverwendet, an Website
-  und soziale Kanäle übergeben), Freigabe mit Warnung oder Pflicht; Lesbarkeitshinweis im Editor mit
+  und soziale Netzwerke übergeben), Freigabe mit Warnung oder Pflicht; Lesbarkeitshinweis im Editor mit
   Flesch-Amstad und Wiener Sachtextformel, langen Sätzen, Abkürzungen, Linktexten wie „hier“ und Hashtags – ohne KI.
 - **Quellen:** RSS- und Atom-Feeds als Anregung für eigene Beiträge.
 - **Kalender:** eigene Termine und Serien (täglich, wöchentlich, monatlich auch „jeden 1. Samstag“, jährlich; Ende nach
   Datum oder Anzahl, einzelne Termine ändern oder auslassen), Kategorien mit Farben, Ansichten Monat, Woche und Liste
   (am Handy Liste), Filter nach Kategorie und Quelle; in der eingestellten Zeitzone inklusive Sommer-/Winterzeit. Geplante
-  Beiträge mit Status und Kanälen erscheinen im Kalender und lassen sich per Ziehen (oder Datum/Uhrzeit) verschieben –
+  Beiträge mit Status und Veröffentlichungszielen erscheinen im Kalender und lassen sich per Ziehen (oder Datum/Uhrzeit) verschieben –
   mit Hinweis und neuer Freigabe, wenn der Termin zur freigegebenen Fassung gehört; Fristen von Presseanfragen,
-  überfällige hervorgehoben. iCal-Kalender (Outlook, Google, Wehr-Kalender) einlesen – mit Verbindungstest,
+  überfällige hervorgehoben. Externe Kalender (iCal: Outlook, Google, Wehr-Kalender) einlesen – mit Verbindungstest,
   Abrufintervall, Kategorie je Quelle, Empfangsprotokoll, verschlüsselt gespeicherter Adresse; persönlicher, geheimer
-  iCal-Abo-Link (nur Titel/Zeit/Kategorie, wählbare Kategorien) für Outlook, Google und iPhone. Workflow-Eingang
+  iCal-Abo-Link (nur Titel/Zeit/Kategorie, wählbare Kategorien) für Outlook, Google und iPhone. Workflow-Auslöser
   „Kalendereintrag“: Termine lösen zu Beginn, zum Ende oder X vorher Workflows aus (z. B. Übung → Banner „Achtung Übung“).
 
 ### Designvorlagen
@@ -141,7 +141,7 @@ flowchart LR
 ### Freigeben
 
 - **Freigabe genau einer Fassung** (Prüfsumme) – ändert sich danach etwas, ist eine neue Freigabe nötig.
-- **Freigabe unterwegs:** die Push-Mitteilung „Freigabe erbeten“ öffnet eine kompakte Freigabe-Ansicht fürs Handy (Vorschau je Kanal, Bilder, Änderungen zur letzten Fassung) mit Freigeben/Ablehnen unter denselben Regeln; in Chrome/Edge/Android mit Knöpfen in der Mitteilung, die nur die Ansicht öffnen – nie ohne Vorschau.
+- **Freigabe unterwegs:** die Push-Mitteilung „Freigabe erbeten“ öffnet eine kompakte Freigabe-Ansicht fürs Handy (Vorschau je Netzwerk, Bilder, Änderungen zur letzten Fassung) mit Freigeben/Ablehnen unter denselben Regeln; in Chrome/Edge/Android mit Knöpfen in der Mitteilung, die nur die Ansicht öffnen – nie ohne Vorschau.
 - **Vier-Augen-Prinzip** wählbar für Beiträge, Banner und Warnentwürfe: wer geschrieben oder eingereicht hat, gibt
   nicht selbst frei.
 - **Intern freigeben** ohne Veröffentlichung, z. B. für Pressemitteilungen oder als Vorlage.
@@ -163,7 +163,7 @@ flowchart LR
   -symbole; Statistik je Jahr, Monat und Kategorie mit Diagramm – auch in einzelnen Teilen (z. B. nur die große Zahl
   auf der Startseite). Alle Shortcodes mit Attributen und Beispielen zum Kopieren erklärt das Plugin selbst.
 - **Einsatzübersicht** auf der Website per Shortcode bzw. Block.
-- **Facebook und Instagram:** Veröffentlichung je Kanal mit eigenem Status, wahlweise als Beitrag, **Story** oder
+- **Facebook und Instagram:** Veröffentlichung je Netzwerk mit eigenem Status, wahlweise als Beitrag, **Story** oder
   beides (Bilder automatisch auf 9:16); Facebook-Beiträge lassen sich wieder löschen, für Instagram gibt es einen
   geführten Weg.
 - **Threads und X:** Threads über die offizielle Threads-API; X wahlweise über die eigene (kostenpflichtige) X-API
@@ -201,13 +201,13 @@ flowchart LR
   zuständige Person, Frist mit Erinnerung, Verknüpfung mit Einsatz und Beitrag, interne Notizen, mündliche Antwort
   festhalten (Telefon/vor Ort: Antwort und „beantwortet“ in einem Schritt), vollständiger Verlauf,
   Übersicht mit Filtern und Dashboard-Kachel; Löschfrist Standard 12 Monate nach Erledigung bzw. – für nie erledigte
-  Anfragen – nach der letzten Aktivität, mit Ankündigung 30 Tage vorher; Workflow-Eingang
+  Anfragen – nach der letzten Aktivität, mit Ankündigung 30 Tage vorher; Workflow-Auslöser
   „Neue Presseanfrage“ ohne Kontaktdaten.
 - **Presse-Postfach:** Abruf per IMAP (TLS/STARTTLS) oder Microsoft 365 (Graph, gleiche App-Registrierung wie der
   Mailversand) – rein lesend, Verbindungstest vor Aktivierung, Passwort verschlüsselt; neue Mails werden Anfragen,
   Antworten im Mail-Verlauf werden zugeordnet, automatische Antworten/Spam/Newsletter ignoriert, Anhänge mit
   Größenlimit und Typprüfung, HTML entschärft, Empfangsprotokoll; Abruf je Mail mit gespeichertem Stand – eine
-  fehlerhafte Mail wird als „nicht übernommen“ protokolliert und hält den Eingang nie auf.
+  fehlerhafte Mail wird als „nicht übernommen“ protokolliert und hält den Abruf nie auf.
 - **Antworten aus BlaulichtCMS:** Antwort-Editor in der Anfrage, Versand über SMTP oder Microsoft 365 mit richtigen
   Kopfzeilen für den Mail-Verlauf, Textbausteine mit Platzhaltern, optionale Freigabe durch eine zweite Person
   (Standard aus), Status automatisch „beantwortet“, nie automatischer Doppelversand.
@@ -215,13 +215,13 @@ flowchart LR
   Rechtsgrundlage (Einwilligung mit Datum), Verteilerlisten, CSV-Import/-Export, Wiedervorlage „zu prüfen“, nach der
   Abmeldung nur Sperrvermerk; Pressemitteilung frei oder aus einem Beitrag an Listen senden – jede Mail einzeln
   adressiert, Fußzeile mit verantwortlicher Stelle, Datenschutzhinweis und Abmeldelink (auch Ein-Klick),
-  Versandprotokoll je Empfänger mit Löschfrist; Workflow-Ausgang „Pressemitteilung an Verteiler“
+  Versandprotokoll je Empfänger mit Löschfrist; Workflow-Aktion „Pressemitteilung an Verteiler“
   (Standard Entwurf, Direktversand nur mit den bestehenden Absicherungen).
 
 ### Verbindungen
 
 - **FE2 und Feuersoftware Connect:** Einsätze erzeugen je Einsatz einen internen Beitragsentwurf (nur freigegebene
-  Felder, keine Adressen). FE2 meldet per HTTP-Eingang, Feuersoftware Connect wird regelmäßig abgefragt (Filter nach
+  Felder, keine Adressen). FE2 meldet per HTTP-Aufruf, Feuersoftware Connect wird regelmäßig abgefragt (Filter nach
   RIC und Stichwort, Rücksicht auf das Abfragelimit).
 - **Einheitlicher Ablauf** für alle Verbindungen: Verbinden → Testen → Vorschau → Aktivieren.
 - **Empfangsprotokoll** für amtliche Warnungen, FE2 und Feuersoftware: jeder Abruf bzw. jede eingehende Meldung mit
@@ -235,24 +235,24 @@ flowchart LR
 - **Vorlagen:** „Alarm → Banner auf der Website“, „DWD-Warnung → Banner + Beitragsentwurf“, „Alarm mit
   Stichwort-Kategorie Brand → Beitragsentwurf“, „Warnung → Benachrichtigen“, „Übung im Kalender → Banner
   ‚Achtung Übung‘“, „Kalendertermin Übung → Story-Bild + Banner“, „Termin von Hand → Story-Bild + Beitragsentwurf“
-  oder leer beginnen; passende Ein- und Ausgänge werden eingesetzt, offene Plätze hervorgehoben.
+  oder leer beginnen; passende Auslöser und Aktionen werden eingesetzt, offene Plätze hervorgehoben.
 - **Geführt in drei Schritten:** *Wenn* (Auslöser) – *Nur wenn* (Feld – Vergleich – Wert, mit Vorschlägen aus dem
-  Stichwortverzeichnis) – *Dann* (Aktionen). Fehlende Ein- und Ausgänge direkt im Workflow anlegen. Jeder Workflow
+  Stichwortverzeichnis) – *Dann* (Aktionen). Fehlende Auslöser und Aktionen direkt im Workflow anlegen. Jeder Workflow
   steht in der Liste und im Editor als ein Satz („Wenn ein neuer Alarm … eingeht, erscheint nach Freigabe auf der
   Website ein Banner …“); eine Checkliste zeigt vor dem Aktivieren, was noch fehlt.
-- **Erweitert – visueller Editor:** Eingänge (FE2-Alarm, Feuersoftware-Einsatz, amtliche Warnung, RSS-Eintrag, neue Uploads,
+- **Erweitert – visueller Editor:** Auslöser (FE2-Alarm, Feuersoftware-Einsatz, amtliche Warnung, RSS-Eintrag, neue Uploads,
   Zeitplan, neue Presseanfrage, Kalendereintrag, manueller Start), Verarbeitung (Bedingung, Verzweigung, Felder setzen, Warten, Einmal je Vorgang, Freigabe
-  anfordern, Zusammenführen, Bild aus Vorlage erzeugen) und Ausgänge (Banner, Beitrag, E-Mail, App-Benachrichtigung, Warnentwurf vorbereiten, Einsatz in Einsatzliste, Pressemitteilung an Verteiler)
+  anfordern, Zusammenführen, Bild aus Vorlage erzeugen) und Aktionen (Banner, Beitrag, E-Mail, App-Benachrichtigung, Warnentwurf vorbereiten, Einsatz in Einsatzliste, Pressemitteilung an Verteiler)
   auf einer Fläche verbinden – mit Palette, Minikarte, automatischer Anordnung, Rückgängig und einer Listenansicht für
   Tastatur und Handy.
-- **Ein- und Ausgänge** werden auf eigenen Seiten eingerichtet (z. B. Banner-Stil nach Warnstufe, Beitragsvorlage mit
-  Texten je Kanal, E-Mail an Rollen oder Zuständigkeiten) und in vielen Abläufen wiederverwendet.
+- **Auslöser und Aktionen** werden auf eigenen Seiten eingerichtet (z. B. Banner-Stil nach Warnstufe, Beitragsvorlage mit
+  Texten je Netzwerk, E-Mail an Rollen oder Zuständigkeiten) und in vielen Abläufen wiederverwendet.
 - **Sicher:** Abläufe sind Daten (keine Formeln, kein Code); Testlauf ohne Wirkung, aktiv nur nach erfolgreichem Test,
-  Versionen, Schrittprotokoll, Grenzen je Minute, Notbremse. Ausgänge legen Entwürfe an – Direktversand ohne
+  Versionen, Schrittprotokoll, Grenzen je Minute, Notbremse. Aktionen legen Entwürfe an – Direktversand ohne
   Freigabe nur je Workflow mit eigenem Recht, Passwortbestätigung, Audit und Sicherheitsmeldung.
 - **Export und Import:** Workflows als JSON-Datei (versioniert, ohne Kennungen und Zugangsdaten) exportieren und
-  mit Vorschau und Zuordnung der Ein- und Ausgänge als Entwurf importieren.
-- **Mit KI erstellen:** Formatbeschreibung als JSON-Schema, Katalog der Installation (Ein-/Ausgänge, Felder, Vergleiche,
+  mit Vorschau und Zuordnung der Auslöser und Aktionen als Entwurf importieren.
+- **Mit KI erstellen:** Formatbeschreibung als JSON-Schema, Katalog der Installation (Auslöser und Aktionen, Felder, Vergleiche,
   Bildvorlagen, Stichwortverzeichnis – ohne Zugangsdaten, Kennungen, Einsatz- oder Personendaten) und eine
   anbieterneutrale Vorlage für die Anfrage; das Ergebnis wird geprüft (Fehler mit Ort und Erwartung) und als Entwurf importiert.
 
@@ -270,14 +270,14 @@ flowchart LR
   hat. Push an Browser und installierte App (Web Push über den Push-Dienst des Browsers, Inhalt Ende-zu-Ende-verschlüsselt,
   kein zusätzlicher Anbieter); E-Mail über SMTP oder Microsoft 365 (Microsoft Graph als Anwendung, aktivierbar erst nach
   bestandener Testmail). Push und E-Mail tragen standardmäßig nur die Art der Benachrichtigung und einen Link –
-  Stichwort, Ort oder Betreff bleiben in BlaulichtCMS, Einzelheiten lassen sich je Kanal zuschalten.
+  Stichwort, Ort oder Betreff bleiben in BlaulichtCMS, Einzelheiten lassen sich je Zustellweg (Push, E-Mail) zuschalten.
 - **App für Handy und Computer:** installierbar (PWA) auf Android, iPhone/iPad und am Computer (Chrome, Edge, Safari am Mac – „Zum Dock hinzufügen“), mit eigenem Fenster, Push-Mitteilungen des Betriebssystems, Zähler ungelesener Benachrichtigungen am App-Symbol und Schnellzugriffen auf Neuer Beitrag, Medien sammeln und Freigaben; „App installieren“ im Benutzermenü.
 - **Schnell bedienbar:** Suche und Schnellaktionen mit `Strg` + `K`, vollständig per Tastatur nutzbar, heller und
   dunkler Modus, Design „Leitstand“ für draußen und nachts.
 - **Eine Zeitzone für alles:** Anzeigen und Eingaben (Listen, Verläufe, Fristen, Ablauf von Upload-Links, geplante
   Veröffentlichung, Kalender, Begrüßung, Platzhalter `{datum}`, Zeitpläne) folgen der Zeitzone unter *Einstellungen →
   Allgemein* (Standard Europe/Berlin), nicht der des Geräts; Sommer-/Winterzeit automatisch.
-- **Hilfe-Center:** 31 Kapitel mit Volltextsuche direkt in der App.
+- **Hilfe-Center:** 32 Kapitel mit Volltextsuche direkt in der App.
 
 ### Benutzer und Sicherheit
 
@@ -338,7 +338,7 @@ flowchart LR
   <tr>
     <td><b>Auf der Website</b><br/>veröffentlicht von der BlaulichtCMS Bridge<br/><br/><img src="docs/bilder/wordpress-beitrag.webp" alt="Beitrag auf WordPress"/></td>
     <td><b>Einsatzliste auf der Website</b><br/>mit Jahresstatistik, freigegeben in BlaulichtCMS<br/><br/><img src="docs/bilder/einsatzliste.webp" alt="Einsatzliste mit Jahresstatistik auf WordPress"/></td>
-    <td><b>Hilfe-Center</b><br/>31 Kapitel mit Volltextsuche<br/><br/><img src="docs/bilder/hilfe.webp" alt="Hilfe-Center"/></td>
+    <td><b>Hilfe-Center</b><br/>32 Kapitel mit Volltextsuche<br/><br/><img src="docs/bilder/hilfe.webp" alt="Hilfe-Center"/></td>
   </tr>
   <tr>
     <td><b>Warnentwurf am Handy</b><br/>Stichwort, Lagefragen, Vorschlag<br/><br/><img src="docs/bilder/warnentwurf-handy.webp" alt="Warnentwurf-Assistent am Handy"/></td>
@@ -352,7 +352,7 @@ flowchart LR
   <tr>
     <td><b>Presseanfragen</b><br/>Status, Zuständigkeit, Frist und Verlauf<br/><br/><img src="docs/bilder/presse.webp" alt="Liste der Presseanfragen"/></td>
     <td><b>Bild aus Vorlage</b><br/>ausfüllen mit Live-Vorschau<br/><br/><img src="docs/bilder/bildvorlage.webp" alt="Bild aus einer befüllbaren Bildvorlage erzeugen"/></td>
-    <td><b>Reichweite</b><br/>Aufrufe und Interaktionen je Kanal, nur Summen<br/><br/><img src="docs/bilder/reichweite.webp" alt="Reichweite der Social-Posts"/></td>
+    <td><b>Reichweite</b><br/>Aufrufe und Interaktionen je Netzwerk, nur Summen<br/><br/><img src="docs/bilder/reichweite.webp" alt="Reichweite der Social-Posts"/></td>
   </tr>
 </table>
 
@@ -390,7 +390,7 @@ Optionen, Updates, Sicherung, WordPress: **[Installation und Betrieb](docs/insta
 | [docs/sicherheitspruefung.md](docs/sicherheitspruefung.md) | Ergebnis der Sicherheitsprüfung mit Nachweisen |
 | [docs/datenschutz.md](docs/datenschutz.md) | Datenschutz: Datenkategorien, Empfänger, Löschfristen, TOMs, Vorlagen für Verarbeitungsverzeichnis und DSFA |
 | [docs/entwicklung.md](docs/entwicklung.md) | Entwicklungsumgebung |
-| Hilfe-Center in der App (`/hilfe`) | 31 Kapitel für Redaktion und Administration |
+| Hilfe-Center in der App (`/hilfe`) | 32 Kapitel für Redaktion und Administration |
 
 ---
 

@@ -9,7 +9,7 @@ import { mediaPaths, removeMediaFiles } from './storage.js';
 /**
  * Hilfen für abgebildete Personen und Art.-9-Inhalte (#118): Markierungen aus der Sichtung, unkenntlich gemachte
  * Bereiche und Zuschnitt der öffentlichen Fassung von Bildern, Videos ohne Ton. Das Original bleibt unverändert;
- * nur die öffentliche Fassung (für Website, soziale Kanäle, Exporte) wird neu erzeugt.
+ * nur die öffentliche Fassung (für Website, soziale Netzwerke, Exporte) wird neu erzeugt.
  */
 
 export const SENSITIVE_FLAGS = ['persons', 'health', 'plates', 'sensitive'] as const;

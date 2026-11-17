@@ -11,6 +11,7 @@ import { cleanFolderName, depthAfterMove, FOLDER_MAX_DEPTH, wouldCycle, type Fol
 import { freeBytes, mediaPaths } from '../media/storage.js';
 import { effectiveTypes, TYPE_DEFS } from '../media/types.js';
 import { mediaPayload } from './media.js';
+import { plural } from '../lib/text.js';
 
 /*
  * Ordnen wie LiFeOS (Paket 3): Ordner innerhalb einer Sammlung, Verschieben/Kopieren zwischen Sammlungen und Ordnern,
@@ -167,7 +168,7 @@ export async function mediaOrganizeRoutes(app: FastifyInstance) {
       await pruneTags(db);
       return live.length;
     });
-    await audit(req.auth!.actor, 'media.tagged', { type: 'media', label: `${r} Datei(en)` }, { hinzu: body.add, entfernt: body.remove, sammelaktion: true, ids: body.ids.slice(0, 50) });
+    await audit(req.auth!.actor, 'media.tagged', { type: 'media', label: `${plural(r, 'Datei', 'Dateien')}` }, { hinzu: body.add, entfernt: body.remove, sammelaktion: true, ids: body.ids.slice(0, 50) });
     return { updated: r };
   });
 

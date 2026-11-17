@@ -5,7 +5,7 @@ import { Badge, Button, FieldWrap, Input, Notice, Select, Switch, Table, Td, Th 
 import { Icon } from '../../components/ui/Icon';
 import { Dialog, SecretField, useConfirm, useToast } from '../../components/ui/overlays';
 import { HelpTip } from '../../components/ui/HelpTip';
-import { fmtBytes, fmtDate, fmtDateTime, fmtDuration, fmtNumber, fmtRelative } from '../../lib/format';
+import { fmtBytes, fmtDate, fmtDateTime, fmtDuration, fmtNumber, fmtRelative, plural } from '../../lib/format';
 import { FieldGrid, LoadError, SectionCard } from './shared';
 
 interface OffsiteConfig {
@@ -211,7 +211,7 @@ export function OffsiteBackupSection() {
           ) : (
             <p className="m-0 text-sm text-fg-muted">Noch keine Sicherung übertragen – die nächste Sicherung geht automatisch außer Haus.</p>
           )}
-          {q.data!.pending > 0 && <p className="m-0 text-sm text-fg-muted">{q.data!.pending} Übertragung(en) laufen oder warten.</p>}
+          {q.data!.pending > 0 && <p className="m-0 text-sm text-fg-muted">{q.data!.pending === 1 ? 'Eine Übertragung läuft oder wartet.' : `${q.data!.pending} Übertragungen laufen oder warten.`}</p>}
         </div>
       )}
 
@@ -293,7 +293,7 @@ export function OffsiteBackupSection() {
         <div className="flex flex-col gap-2 border border-line rounded-card p-4" role="status">
           <div className="flex items-center gap-2 font-medium">
             <Icon name={test.ok ? 'CheckCircle2' : 'XCircle'} size={16} className={test.ok ? 'text-ok' : 'text-err'} />
-            {test.ok ? `Verbindungstest bestanden${test.files != null ? ` · ${test.files} Sicherung(en) auf dem Ziel` : ''}` : (test.error ?? 'Verbindungstest fehlgeschlagen')}
+            {test.ok ? `Verbindungstest bestanden${test.files != null ? ` · ${plural(test.files, 'Sicherung', 'Sicherungen')} auf dem Ziel` : ''}` : (test.error ?? 'Verbindungstest fehlgeschlagen')}
           </div>
           <Steps steps={test.steps} />
           {test.hint && <p className="m-0 text-sm text-fg-muted">{test.hint}</p>}
@@ -383,7 +383,7 @@ function Leftovers({ config: c, onChanged }: { config: OffsiteConfig; onChanged:
       qc.invalidateQueries({ queryKey: ['backup-offsite-files'] });
       qc.invalidateQueries({ queryKey: ['system-status'] });
       if (r.failed) toast({ tone: 'error', title: 'Nicht alles gelöscht', text: `${r.removed} gelöscht, ${r.failed} ließen sich nicht löschen (Systemprotokoll).` });
-      else toast({ tone: 'success', title: r.removed ? `${r.removed} Sicherung(en) gelöscht` : 'Keine Sicherungen auf dem Ziel' });
+      else toast({ tone: 'success', title: r.removed ? `${plural(r.removed, 'Sicherung', 'Sicherungen')} gelöscht` : 'Keine Sicherungen auf dem Ziel' });
     } catch (e) {
       toast({ tone: 'error', title: 'Löschen fehlgeschlagen', text: (e as Error).message });
     } finally {
@@ -498,7 +498,7 @@ function RemoteFiles() {
             )}
             {q.data.volumes.length > 0 && (
               <p className="m-0 text-sm text-fg-muted">
-                Außerdem {q.data.volumes.length} Volume-Sicherung(en) vom Docker-Host im Unterordner <code>volume/</code> (neueste: {q.data.volumes[0].name}). Zurückspielen am Host mit <code>scripts/restore-volume.sh</code>.
+                Außerdem {plural(q.data.volumes.length, 'Volume-Sicherung', 'Volume-Sicherungen')} vom Docker-Host im Unterordner <code>volume/</code> (neueste: {q.data.volumes[0].name}). Zurückspielen am Host mit <code>scripts/restore-volume.sh</code>.
               </p>
             )}
           </>

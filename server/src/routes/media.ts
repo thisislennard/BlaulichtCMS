@@ -31,6 +31,7 @@ import { resolveDesign } from '../media/design.js';
 import { effectiveDesign } from './media-design.js';
 import { assertFolder, loadFolders } from './media-organize.js';
 import { freeBytes, mediaPaths, moveFile, SizeLimitError, streamToTemp } from '../media/storage.js';
+import { plural } from '../lib/text.js';
 
 const linkAad = aad.uploadLink;
 
@@ -142,7 +143,7 @@ export function mediaPayload(m: any) {
   };
 }
 
-/** Legt eine Sammlung an (optional mit Beitrag verknüpft) – gemeinsam für API und „Fotos und Videos sammeln“. */
+/** Legt eine Sammlung an (optional mit Beitrag verknüpft) – gemeinsam für API und „Fotos sammeln“. */
 export async function createCollection(actor: Actor, userId: string | null, input: { title: string; purpose?: string; note?: string; postId?: string | null; eventDate?: string | null }, db: any = pool) {
   const s = await getSettings();
   const c = await one<any>(
@@ -797,7 +798,7 @@ export async function mediaRoutes(app: FastifyInstance) {
         throw conflict(`Diese Datei wurde inzwischen${who} anders gesichtet. Bitte die Ansicht neu laden.`, { media: stale.map((x) => ({ id: x.id, selection: x.selection })) });
       }
     }
-    await audit(req.auth!.actor, 'media.selection', { type: 'media', label: `${rows.length} Datei(en)` }, { auswahl: body.selection, ids: body.ids.slice(0, 50) });
+    await audit(req.auth!.actor, 'media.selection', { type: 'media', label: `${plural(rows.length, 'Datei', 'Dateien')}` }, { auswahl: body.selection, ids: body.ids.slice(0, 50) });
     return { updated: rows.length, versions: Object.fromEntries(rows.map((r) => [r.id, r.selection_version])) };
   });
 
@@ -866,7 +867,7 @@ export async function mediaRoutes(app: FastifyInstance) {
         `UPDATE media SET selection = $2, selection_by = $3, selection_at = now(), selection_version = selection_version + 1 WHERE id = ANY($1) AND status = 'ready' AND deleted_at IS NULL`,
         [body.ids, body.selection, req.auth!.user?.id ?? null],
       );
-      await audit(req.auth!.actor, 'media.selection', { type: 'media', label: `${r.rowCount} Datei(en)` }, { auswahl: body.selection, sammelaktion: true, ids: body.ids.slice(0, 50) });
+      await audit(req.auth!.actor, 'media.selection', { type: 'media', label: `${plural(r.rowCount ?? 0, 'Datei', 'Dateien')}` }, { auswahl: body.selection, sammelaktion: true, ids: body.ids.slice(0, 50) });
       return { updated: r.rowCount };
     }
     const r = await trashMedia(body.ids, req.auth!.actor, req.auth!.user?.id ?? null);

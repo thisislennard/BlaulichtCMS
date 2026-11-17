@@ -204,7 +204,7 @@ POST /api/v1/bridge/report
 Antwort: `{ "ok": true, "send_author": false }`. Die Bridge (ab 0.8.0) sendet nach einem erfolgreichen Abruf, wenn sich
 etwas geändert hat, sonst höchstens alle 6 Stunden. BlaulichtCMS speichert die Meldung je Website
 (`wp_sites.bridge_report`) und zeigt sie auf der Website-Karte; die Kategorien erscheinen als Auswahl im Beitrag und im
-Ausgang „Beitrag“. `cron.mode`: `wp-cron`, `host` (WP-CLI oder wp-cron.php per Host-Cron), `self` (Selbstauslösung),
+Aktion „Beitrag“. `cron.mode`: `wp-cron`, `host` (WP-CLI oder wp-cron.php per Host-Cron), `self` (Selbstauslösung),
 `manual` oder `unknown`.
 
 ## Abruf

@@ -88,7 +88,7 @@ export function RunView({ run }: { run: RunDetail }) {
                 <div className="grid md:grid-cols-2 gap-2 pt-2">
                   {s.input && (
                     <div>
-                      <div className="text-meta text-fg-muted mb-1">Eingang des Schritts</div>
+                      <div className="text-meta text-fg-muted mb-1">Eingabe des Schritts</div>
                       <JsonView value={s.input} />
                     </div>
                   )}
@@ -203,9 +203,9 @@ export function TestDialog({ automationId, inputs, onClose, onDone }: { automati
       }
     >
       <div className="flex flex-col gap-4">
-        <Notice icon="FlaskConical">Der Testlauf führt den gespeicherten Entwurf mit diesen Beispieldaten aus. Ausgänge beschreiben nur, was sie tun würden – es wird nichts angelegt, veröffentlicht oder gesendet. Ein erfolgreicher Test ist Voraussetzung für das Aktivieren.</Notice>
+        <Notice icon="FlaskConical">Der Testlauf führt den gespeicherten Entwurf mit diesen Beispieldaten aus. Aktionen beschreiben nur, was sie tun würden – es wird nichts angelegt, veröffentlicht oder gesendet. Ein erfolgreicher Test ist Voraussetzung für das Aktivieren.</Notice>
         {inputs.length > 1 && (
-          <FieldWrap label="Eingang" htmlFor="t-in">
+          <FieldWrap label="Auslöser" htmlFor="t-in">
             <Select id="t-in" value={nodeId} onChange={(e) => setNodeId(e.target.value)}>
               {inputs.map((i) => (
                 <option key={i.nodeId} value={i.nodeId}>
@@ -230,7 +230,7 @@ export function TestDialog({ automationId, inputs, onClose, onDone }: { automati
   );
 }
 
-/** Manueller Start einer aktiven Automation (Eingang „Manueller Start“). */
+/** Manueller Start einer aktiven Automation (Auslöser „Manueller Start“). */
 export function StartDialog({ automationId, inputs, onClose, onStarted }: { automationId: string; inputs: { nodeId: string; name: string; fields: { key: string; label: string; example: string }[] }[]; onClose: () => void; onStarted: (runId: string) => void }) {
   const toastError = useErrorToast();
   const [nodeId, setNodeId] = useState(inputs[0]?.nodeId ?? '');
@@ -263,9 +263,9 @@ export function StartDialog({ automationId, inputs, onClose, onStarted }: { auto
       }
     >
       <div className="flex flex-col gap-4">
-        <p className="m-0 text-sm text-fg-muted">Startet die aktive Version – mit echten Ausgängen (Entwürfe, Benachrichtigungen, E-Mails nach den Regeln der Ausgänge).</p>
+        <p className="m-0 text-sm text-fg-muted">Startet die aktive Version – mit echten Aktionen (Entwürfe, Benachrichtigungen, E-Mails nach den Regeln der Aktionen).</p>
         {inputs.length > 1 && (
-          <FieldWrap label="Eingang" htmlFor="s-in">
+          <FieldWrap label="Auslöser" htmlFor="s-in">
             <Select id="s-in" value={nodeId} onChange={(e) => setNodeId(e.target.value)}>
               {inputs.map((i) => (
                 <option key={i.nodeId} value={i.nodeId}>

@@ -17,7 +17,7 @@ function sum(list: (Metrics | null | undefined)[]): Metrics {
 }
 
 /**
- * Reichweite (#218): Übersicht über einen Zeitraum (nach Veröffentlichung), je Kanal und Top-Beiträge, sowie die
+ * Reichweite (#218): Übersicht über einen Zeitraum (nach Veröffentlichung), je Netzwerk und Top-Beiträge, sowie die
  * Zahlen eines Beitrags. Nur zusammengefasste Zahlen – keine Personen. Recht: „Reichweite ansehen“.
  */
 export async function insightsOverview(days: number, kind: string | null, limit = 10) {
@@ -36,7 +36,7 @@ export async function insightsOverview(days: number, kind: string | null, limit 
     const data = list.filter((r) => r.insights);
     return { kind: k, publications: list.length, measured: data.length, totals: sum(data.map((r) => r.insights)), interactions: data.reduce((a, r) => a + interactions(r.insights), 0) };
   }).filter((c) => c.publications > 0);
-  // Top-Beiträge: Interaktionen über alle Kanäle eines Beitrags zusammen
+  // Top-Beiträge: Interaktionen über alle Netzwerke eines Beitrags zusammen
   const byPost = new Map<string, { post_id: string; title: string; channels: { kind: string; name: string; url: string | null; insights: Metrics | null }[]; interactions: number; views: number | null; published_at: string }>();
   for (const r of rows) {
     const e = byPost.get(r.post_id) ?? { post_id: r.post_id, title: r.title, channels: [] as { kind: string; name: string; url: string | null; insights: Metrics | null }[], interactions: 0, views: null as number | null, published_at: r.published_at };
@@ -66,7 +66,7 @@ export async function insightRoutes(app: FastifyInstance) {
     return insightsOverview(q.days, q.kind ?? null, 20);
   });
 
-  /** Zahlen je Kanal eines Beitrags samt Verlauf (nach 1 h, 24 h, 7 Tagen). */
+  /** Zahlen je Netzwerk eines Beitrags samt Verlauf (nach 1 h, 24 h, 7 Tagen). */
   app.get('/posts/:id/insights', { preHandler: requireAuth('insights.view') }, async (req) => {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
     if (!(await one(`SELECT 1 FROM posts WHERE id = $1`, [id]))) throw notFound();

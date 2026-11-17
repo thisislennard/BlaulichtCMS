@@ -219,15 +219,15 @@ try {
   /* ------------------------------------------------------------------ Beitrag + Foto-Link */
   let postUrl = '';
   let uploadLink = '';
-  await step('Bediener legt Beitrag an und erzeugt „Fotos und Videos sammeln“', async () => {
+  await step('Bediener legt Beitrag an und erzeugt „Fotos sammeln“', async () => {
     await op.goto(`${BC}/beitraege`);
     await op.getByRole('button', { name: 'Neuer Beitrag' }).click();
     await op.fill('#p-title', 'Übung am Wochenende');
     await op.getByRole('button', { name: 'Anlegen' }).click();
     await op.waitForURL(/\/beitraege\/[0-9a-f-]{36}$/);
     postUrl = op.url();
-    await op.getByRole('button', { name: 'Fotos und Videos sammeln' }).click();
-    const dlg = op.getByRole('dialog', { name: 'Fotos und Videos sammeln' });
+    await op.getByRole('button', { name: 'Fotos sammeln' }).click();
+    const dlg = op.getByRole('dialog', { name: 'Fotos sammeln' });
     await dlg.waitFor();
     uploadLink = (await dlg.locator('code').first().textContent()).trim();
     expect(uploadLink.startsWith(`${BC}/u/`), `Unerwarteter Link ${uploadLink}`);

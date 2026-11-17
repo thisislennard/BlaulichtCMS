@@ -23,7 +23,7 @@
   ],
   "shortcuts": [
     { "name": "Neuer Beitrag", "url": "/?aktion=beitrag", "icons": [{ "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" }] },
-    { "name": "Medien sammeln", "url": "/?aktion=medien", "icons": [{ "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" }] },
+    { "name": "Fotos sammeln", "url": "/?aktion=medien", "icons": [{ "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" }] },
     { "name": "Offene Freigaben", "url": "/freigaben", "icons": [{ "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" }] }
   ]
 }

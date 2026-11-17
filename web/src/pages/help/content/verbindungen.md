@@ -51,7 +51,7 @@ Beides steht in der Verbindung unter Schritt **Aktivieren** und braucht das Rech
 
 - **Widerrufen** löscht die Zugangsdaten; die Verbindung bleibt sichtbar und lässt sich nicht wieder aktivieren.
 - **Löschen** entfernt eine Verbindung, die **nie verwendet** wurde, endgültig samt Zugangsdaten.
-- Wurde sie verwendet – Veröffentlichungen auf einem sozialen Kanal, Zielkanal in einer Beitragsfassung, Einsatzmeldungen aus FE2 oder Feuersoftware Connect, amtliche Warnungen –, wird sie stattdessen **widerrufen, ihre Zugangsdaten werden gelöscht** und sie verschwindet aus den Listen. Der Veröffentlichungsverlauf und andere Bezüge bleiben erhalten und zeigen „Verbindung gelöscht“. Abrufe, der FE2-Eingang und Veröffentlichungen ignorieren sie.
+- Wurde sie verwendet – Veröffentlichungen auf einem sozialen Netzwerk, Veröffentlichungsziel in einer Beitragsfassung, Einsatzmeldungen aus FE2 oder Feuersoftware Connect, amtliche Warnungen –, wird sie stattdessen **widerrufen, ihre Zugangsdaten werden gelöscht** und sie verschwindet aus den Listen. Der Veröffentlichungsverlauf und andere Bezüge bleiben erhalten und zeigen „Verbindung gelöscht“. Abrufe, der FE2-Eingang und Veröffentlichungen ignorieren sie.
 - Der Bestätigungsdialog nennt vorher, welcher der beiden Fälle eintritt.
 - Wer „Verbindungen löschen“ hat, kann unter Verbindungen mit **Gelöschte anzeigen** auch widerrufene und gelöschte Verbindungen einsehen.
 
@@ -86,7 +86,7 @@ BlaulichtCMS zeigt in der Verbindung die **Weiterleitungsadresse** (`https://<ei
 
 ### Berechtigungen
 
-| Kanal | Berechtigungen | Wofür |
+| Netzwerk | Berechtigungen | Wofür |
 |---|---|---|
 | Facebook | `pages_show_list`, `pages_manage_posts`, `pages_read_engagement` | Seiten auflisten, Beiträge anlegen und löschen, Beiträge lesen (Prüfung auf Duplikate) |
 | Instagram | `instagram_business_basic`, `instagram_business_content_publish` | Konto lesen, Beiträge veröffentlichen |
@@ -128,34 +128,34 @@ Statt der Anmeldung lässt sich unter **Alternativ: Token manuell hinterlegen** 
 
 ### Im Beitrag veröffentlichen
 
-Im Beitrag unter **Soziale Kanäle** die Kanäle wählen (optional mit eigenem Text, bei Facebook und Instagram mit Format **Beitrag**, **Story** oder **Beitrag und Story**). Auswahl und Format sind Teil der Fassung – eine Änderung braucht eine neue Freigabe. Nach der Freigabe: **Auf sozialen Kanälen veröffentlichen**. Dasselbe gilt für [Threads](#threads), [X](#x) und den [WhatsApp-Kanal](#whatsapp-kanal).
+Im Beitrag unter **Soziale Netzwerke** die Netzwerke wählen (optional mit eigenem Text, bei Facebook und Instagram mit Format **Beitrag**, **Story** oder **Beitrag und Story**). Auswahl und Format sind Teil der Fassung – eine Änderung braucht eine neue Freigabe. Nach der Freigabe: **Auf sozialen Netzwerken veröffentlichen**. Dasselbe gilt für [Threads](#threads), [X](#x) und den [WhatsApp-Kanal](#whatsapp-kanal).
 
 | Status | Bedeutung |
 |---|---|
 | Veröffentlicht | mit Link zum Beitrag (Storys haben keinen festen Link) |
-| Fehlgeschlagen | eindeutig abgelehnt – **nur dieser Kanal** lässt sich erneut versuchen |
+| Fehlgeschlagen | eindeutig abgelehnt – **nur dieses Netzwerk** lässt sich erneut versuchen |
 | Ergebnis unbekannt | Verbindung brach ab; vor einem neuen Versuch prüft BlaulichtCMS, ob der Beitrag schon existiert |
-| Zum Teilen bereit | Kanal ohne Schnittstelle (X im Modus „Teilen von Hand“, WhatsApp-Kanal): Text und Dateien sind vorbereitet, siehe [Teilen von Hand](#teilen-von-hand) |
+| Zum Teilen bereit | Netzwerk ohne Schnittstelle (X im Modus „Teilen von Hand“, WhatsApp-Kanal): Text und Dateien sind vorbereitet, siehe [Teilen von Hand](#teilen-von-hand) |
 
-Längen je Kanal: Instagram höchstens **2 200 Zeichen**, Facebook und WhatsApp-Kanal **60 000**; Threads, X, Mastodon und Bluesky siehe dort. Ist ein Text länger, kürzt BlaulichtCMS ihn mit „…“ an einer Zeichengrenze – nie mitten in einem Emoji – und der angehängte Link zur Website bleibt immer vollständig.
+Längen je Netzwerk: Instagram höchstens **2 200 Zeichen**, Facebook und WhatsApp-Kanal **60 000**; Threads, X, Mastodon und Bluesky siehe dort. Ist ein Text länger, kürzt BlaulichtCMS ihn mit „…“ an einer Zeichengrenze – nie mitten in einem Emoji – und der angehängte Link zur Website bleibt immer vollständig.
 
 ### Storys
 
-Für Facebook-Seiten und Instagram-Konten lässt sich je Kanal **Story** oder **Beitrag und Story** wählen. BlaulichtCMS nutzt dafür die offiziellen Schnittstellen von Meta – dieselbe Meta-App und dieselben Berechtigungen wie für Beiträge, nichts zusätzlich einzurichten ([Instagram: Content Publishing](https://developers.facebook.com/docs/instagram-platform/content-publishing/), [Facebook: Page Stories](https://developers.facebook.com/docs/page-stories-api/)).
+Für Facebook-Seiten und Instagram-Konten lässt sich je Netzwerk **Story** oder **Beitrag und Story** wählen. BlaulichtCMS nutzt dafür die offiziellen Schnittstellen von Meta – dieselbe Meta-App und dieselben Berechtigungen wie für Beiträge, nichts zusätzlich einzurichten ([Instagram: Content Publishing](https://developers.facebook.com/docs/instagram-platform/content-publishing/), [Facebook: Page Stories](https://developers.facebook.com/docs/page-stories-api/)).
 
 - Eine Story zeigt **eine Datei** – verwendet wird die erste Datei des Beitrags. Storys haben **keinen Text**; ein eigener Text für Facebook bzw. Instagram gilt nur für den Beitrag.
 - **Bilder** bringt BlaulichtCMS automatisch auf das empfohlene Hochformat **9:16 (1080 × 1920)**: nichts wird abgeschnitten, der Rand wird unscharf aus dem Bild selbst gefüllt. Grundlage ist die geprüfte öffentliche Fassung (Unkenntlichmachungen bleiben, Metadaten sind entfernt).
 - **Videos** gehen unverändert hinaus: am besten im Hochformat, 3 bis 60 Sekunden, MP4. WebM wird nicht unterstützt.
 - Storys verschwinden nach 24 Stunden von selbst. Über die Schnittstellen lassen sie sich **nicht löschen** – beim Entfernen zeigt BlaulichtCMS den Hinweis, die Story in Facebook bzw. Instagram zu löschen und das zu bestätigen.
-- Die Formatprüfung im Beitrag (**Soziale Kanäle – Status**) zeigt vor der Freigabe, was mit Bild oder Video passiert.
+- Die Formatprüfung im Beitrag (**Soziale Netzwerke – Status**) zeigt vor der Freigabe, was mit Bild oder Video passiert.
 
-### Von sozialen Kanälen entfernen
+### Von sozialen Netzwerken entfernen
 
-Muss ein Beitrag wieder weg (z. B. Widerspruch einer abgebildeten Person), im Beitrag unter **Soziale Kanäle – Status** auf **Von sozialen Kanälen entfernen** gehen und einen Grund angeben. Der Dialog zeigt danach je Kanal, was passiert ist:
+Muss ein Beitrag wieder weg (z. B. Widerspruch einer abgebildeten Person), im Beitrag unter **Soziale Netzwerke – Status** auf **Von sozialen Netzwerken entfernen** gehen und einen Grund angeben. Der Dialog zeigt danach je Netzwerk, was passiert ist:
 
-| Kanal | Ablauf |
+| Netzwerk | Ablauf |
 |---|---|
-| Facebook | BlaulichtCMS löscht den Beitrag über die Schnittstelle. Schlägt das fehl (z. B. Verbindung widerrufen), steht ein Hinweis mit Link zum Beitrag beim Kanal. |
+| Facebook | BlaulichtCMS löscht den Beitrag über die Schnittstelle. Schlägt das fehl (z. B. Verbindung widerrufen), steht ein Hinweis mit Link zum Beitrag beim Netzwerk. |
 | Instagram | Die Schnittstelle von Instagram erlaubt **kein Löschen**. BlaulichtCMS zeigt einen Link zum Beitrag: dort in Instagram löschen und anschließend **Gelöscht – bestätigen** wählen. |
 | Storys | Lassen sich über die Schnittstellen nicht löschen (sie verschwinden nach 24 Stunden): in Facebook bzw. Instagram löschen und bestätigen. |
 | Threads | Von Hand in Threads löschen und bestätigen. |
@@ -165,7 +165,7 @@ Muss ein Beitrag wieder weg (z. B. Widerspruch einer abgebildeten Person), im Be
 
 Noch nicht ausgeführte oder fehlgeschlagene Aufträge werden dabei abgebrochen. Antrag, Löschung und Bestätigung stehen im Audit-Protokoll. **Von der Website zurückziehen** wirkt nur auf WordPress – beides ist getrennt anzustoßen. Kopien, die andere bereits geteilt oder gespeichert haben, erreicht BlaulichtCMS nicht.
 
-**Manuell exportieren** liefert den freigegebenen Text je Kanal und befristete Links zu den Dateien. Die Dateien heißen neutral nach dem Beitragstitel (z. B. `brand-in-der-altstadt-1.jpg`), nie wie die hochgeladene Datei – deren Name kann Namen oder Orte enthalten.
+**Manuell exportieren** liefert den freigegebenen Text je Netzwerk und befristete Links zu den Dateien. Die Dateien heißen neutral nach dem Beitragstitel (z. B. `brand-in-der-altstadt-1.jpg`), nie wie die hochgeladene Datei – deren Name kann Namen oder Orte enthalten.
 
 ### Datenschutz bei Facebook und Instagram
 
@@ -175,7 +175,7 @@ Die folgenden Punkte sind Hinweise zur Orientierung, keine Rechtsberatung. Die B
 - **Drittland:** Für die Übermittlung in die USA ist die Grundlage zu prüfen, z. B. die Zertifizierung von Meta nach dem EU-US Data Privacy Framework (Liste unter dataprivacyframework.gov). Ändert sich diese Grundlage, die Nutzung neu bewerten.
 - **Gemeinsame Verantwortung:** Für eine Facebook-Seite (Seiten-Insights) besteht nach der Rechtsprechung des EuGH eine gemeinsame Verantwortlichkeit mit Meta (Art. 26 DSGVO). Meta stellt dafür die *Seiten-Insights-Ergänzung bezüglich des Verantwortlichen* bereit; sie sollte geprüft und dokumentiert sein. Für Instagram-Konten gilt Entsprechendes.
 - **Datenschutzerklärung:** Die Präsenz auf Facebook bzw. Instagram, die Übermittlung an Meta und die gemeinsame Verantwortung gehören in die Datenschutzerklärung der Website bzw. der Seite. Auf der Upload-Seite weist BlaulichtCMS auf die mögliche Veröffentlichung in sozialen Medien hin (*Einstellungen → Datenschutz*).
-- **Löschen:** Nach einem Widerspruch den Beitrag über **Von sozialen Kanälen entfernen** zurückziehen (siehe oben): Facebook-Beiträge löscht BlaulichtCMS, Instagram-Beiträge müssen in Instagram gelöscht werden. Kopien bei Dritten (geteilte Beiträge, Screenshots) sind damit nicht erreicht.
+- **Löschen:** Nach einem Widerspruch den Beitrag über **Von sozialen Netzwerken entfernen** zurückziehen (siehe oben): Facebook-Beiträge löscht BlaulichtCMS, Instagram-Beiträge müssen in Instagram gelöscht werden. Kopien bei Dritten (geteilte Beiträge, Screenshots) sind damit nicht erreicht.
 - **BlaulichtCMS selbst** gibt an Meta nur die freigegebenen Inhalte und die neutral benannten Dateien weiter, keine Hinweise der hochladenden Personen und keine Originale.
 
 ## Threads
@@ -227,7 +227,7 @@ Mastodon ist ein kostenloses, dezentrales Netzwerk: Jede **Instanz** (Server) ha
 | Einstellung | Bedeutung |
 |---|---|
 | Sichtbarkeit | **Öffentlich** (Zeitleisten und Suche), **Nicht gelistet** (öffentlich lesbar, nicht in öffentlichen Zeitleisten) oder **Nur Folgende**. |
-| Inhaltswarnung | Je Beitrag optional im Beitrag unter **Soziale Kanäle**: Der Beitrag erscheint hinter der Warnung (z. B. „Einsatz mit Verletzten“) und ist erst nach einem Klick lesbar. Sie zählt zur Höchstlänge. |
+| Inhaltswarnung | Je Beitrag optional im Beitrag unter **Soziale Netzwerke**: Der Beitrag erscheint hinter der Warnung (z. B. „Einsatz mit Verletzten“) und ist erst nach einem Klick lesbar. Sie zählt zur Höchstlänge. |
 | Sprache | Sprachcode der Beiträge, Standard `de` – hilft Suche und Übersetzung. |
 
 Beim **Entfernen** löscht BlaulichtCMS den Beitrag über die Schnittstelle. Ein erneuter Versuch nach unklarem Ausgang legt keinen zweiten Beitrag an: BlaulichtCMS schickt einen Wiederholungsschutz mit (Idempotency-Key) und sucht vorher im Konto nach dem Beitrag.
@@ -256,11 +256,11 @@ WhatsApp bietet **keine Schnittstelle**, um in einen WhatsApp-Kanal zu posten. D
 
 ## Reichweite
 
-BlaulichtCMS ruft die **Aufrufe und Interaktionen** veröffentlichter Social-Posts über die offiziellen Statistik-Schnittstellen ab – **1 Stunde, 24 Stunden und 7 Tage** nach der Veröffentlichung, danach nicht mehr. Die Zahlen stehen im Beitrag unter **Soziale Kanäle – Status**, in der Übersicht **Reichweite** (Zeitraum, Kanal, Top-Beiträge) und als Dashboard-Kachel „Reichweite (7 Tage)“. Sehen darf sie, wer das Recht **Reichweite ansehen** hat (Vorgabe für Redaktion, Freigabe, Veröffentlichung und Lesezugriff).
+BlaulichtCMS ruft die **Aufrufe und Interaktionen** veröffentlichter Social-Posts über die offiziellen Statistik-Schnittstellen ab – **1 Stunde, 24 Stunden und 7 Tage** nach der Veröffentlichung, danach nicht mehr. Die Zahlen stehen im Beitrag unter **Soziale Netzwerke – Status**, in der Übersicht **Reichweite** (Zeitraum, Netzwerk, Top-Beiträge) und als Dashboard-Kachel „Reichweite (7 Tage)“. Sehen darf sie, wer das Recht **Reichweite ansehen** hat (Vorgabe für Redaktion, Freigabe, Veröffentlichung und Lesezugriff).
 
 Gespeichert werden **nur zusammengefasste Zahlen** je Beitrag – nie, wer reagiert, kommentiert oder geteilt hat.
 
-| Kanal | Zahlen | Voraussetzung |
+| Netzwerk | Zahlen | Voraussetzung |
 |---|---|---|
 | Facebook | Reaktionen, Kommentare, geteilt; mit `read_insights` auch Aufrufe, Erreichte und Klicks | `read_insights` fragt BlaulichtCMS beim (erneuten) Verbinden mit an; Seiten-Statistiken gibt es laut Meta erst ab 100 „Gefällt mir“ |
 | Instagram | Gefällt mir, Kommentare; mit `instagram_business_manage_insights` auch Aufrufe, Reichweite, geteilt, gespeichert | Recht beim (erneuten) Verbinden; Meta liefert die Werte mit bis zu 48 Stunden Verzögerung |
@@ -275,13 +275,13 @@ Gespeichert werden **nur zusammengefasste Zahlen** je Beitrag – nie, wer reagi
 
 ## Teilen von Hand
 
-Für Kanäle ohne Schnittstelle (WhatsApp-Kanal, X im Modus „Teilen von Hand“) gilt dieselbe Freigabe wie für alle anderen Kanäle. Nach **Auf sozialen Kanälen veröffentlichen** steht der Kanal im Beitrag als **Zum Teilen bereit**, und alle mit dem Recht „In sozialen Kanälen veröffentlichen“ bekommen eine Benachrichtigung.
+Für Netzwerke ohne Schnittstelle (WhatsApp-Kanal, X im Modus „Teilen von Hand“) gilt dieselbe Freigabe wie für alle anderen Netzwerke. Nach **Auf sozialen Netzwerken veröffentlichen** steht das Netzwerk im Beitrag als **Zum Teilen bereit**, und alle mit dem Recht „In sozialen Netzwerken veröffentlichen“ bekommen eine Benachrichtigung.
 
-1. Im Beitrag unter **Soziale Kanäle – Status** beim Kanal **Jetzt teilen** wählen.
+1. Im Beitrag unter **Soziale Netzwerke – Status** beim Netzwerk **Jetzt teilen** wählen.
 2. Den vorbereiteten Text **kopieren** bzw. bei X **In X öffnen** (der Text steht dann schon im Beitragsfenster). Bilder lassen sich herunterladen (Links gelten 24 Stunden) und beim Posten anhängen.
 3. Posten und danach **Als geteilt markieren** – optional mit dem Link zum geteilten Beitrag. Das steht mit Person und Zeit im Beitrag und im Audit-Protokoll.
 
-Wird die Freigabe widerrufen oder der Beitrag von den sozialen Kanälen entfernt, werden noch nicht geteilte Aufträge abgebrochen. Was schon geteilt ist, muss von Hand gelöscht und bestätigt werden.
+Wird die Freigabe widerrufen oder der Beitrag von den sozialen Netzwerken entfernt, werden noch nicht geteilte Aufträge abgebrochen. Was schon geteilt ist, muss von Hand gelöscht und bestätigt werden.
 
 ### Datenschutz bei Threads, X, WhatsApp, Mastodon und Bluesky
 
