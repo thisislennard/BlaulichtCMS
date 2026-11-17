@@ -3,9 +3,10 @@ import { z } from 'zod';
 import { many, one, pool, tx } from '../db/pool.js';
 import { assertRecentAuth, requireAnyAuth, requireAuth } from '../auth/context.js';
 import { audit } from '../lib/audit.js';
+import { csvCell } from '../lib/csv.js';
 import { badRequest, conflict, notFound } from '../lib/errors.js';
 import { EMAIL_RE } from '../press/common.js';
-import { contactFromToken, csvCell, parseCsv, postAsRelease, startRelease } from '../press/releases.js';
+import { contactFromToken, parseCsv, postAsRelease, startRelease } from '../press/releases.js';
 
 /*
  * Presseverteiler und Pressemitteilungen (#207): Kontakte (mit Herkunft/Einwilligung und Abmeldung), Verteilerlisten,

@@ -6,18 +6,9 @@ import { config } from '../config.js';
 import { mediaPaths } from './storage.js';
 import { publicFileName } from './names.js';
 import { zipDir, type FolderNode } from './folders.js';
+import { csvCell } from '../lib/csv.js';
 
 export const exportPath = (id: string) => path.join(config.mediaDir, 'exports', `${id}.zip`);
-
-/**
- * CSV-Zelle gegen Formel-Injektion absichern (Tabellenprogramme führen „=“, „+“, „-“, „@“, Tab und Zeilenumbruch am
- * Anfang als Formel aus): solche Werte bekommen ein vorangestelltes Apostroph. Danach RFC-4180-Quoting.
- */
-export function csvCell(v: unknown): string {
-  let s = v == null ? '' : Array.isArray(v) ? v.join(', ') : String(v);
-  if (/^[=+\-@\t\r\n]/.test(s)) s = `'${s}`;
-  return /[";\n\r,]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-}
 
 const SEL_LABEL: Record<string, string> = { pending: 'offen', selected: 'ausgewählt', skipped: 'übersprungen', on_hold: 'zurückgestellt' };
 const safeName = (x: string) => x.replace(/[\\/:*?"<>|\u0000-\u001f]/g, '_').trim() || '_';

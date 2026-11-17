@@ -187,4 +187,23 @@ describe('Stichwortverzeichnis', () => {
     expect((await admin.post('/keywords/import', { text: c.json, dryRun: true })).json.errors).toEqual([]);
     expect((await many<any>(`SELECT 1 FROM fire_keywords`)).length).toBeGreaterThan(180);
   });
+
+  it('CSV-Export entschärft Formeln in Bezeichnung und Kategorie (#236); Re-Import stellt den Wert wieder her', async () => {
+    const hyperlink = '=HYPERLINK("https://example.org";"Details")';
+    const list = [
+      { code: 'X 9', bezeichnung: hyperlink, kategorie: '@SUMME(A1)' },
+      { code: 'X 8', bezeichnung: '+Brand groß', kategorie: '-Kat' },
+    ];
+    expect((await admin.post('/keywords/import', { text: JSON.stringify(list) })).json).toMatchObject({ added: 2 });
+    const c = await admin.get('/keywords/export?format=csv');
+    expect(c.json).toContain(`X 9;"'=HYPERLINK(""https://example.org"";""Details"")";'@SUMME(A1);eigen;ja`);
+    expect(c.json).toContain(`X 8;'+Brand groß;'-Kat;eigen;ja`);
+    // keine Zelle beginnt mit einem Formelzeichen (auch nicht gequotet)
+    expect(c.json).not.toMatch(/(^|;)"?[=+\-@]/m);
+    // eigener Export wieder eingelesen: Schutz-Apostroph wird entfernt, Werte bleiben unverändert
+    const lines = String(c.json).replace(/^﻿/, '').split('\r\n');
+    const back = [lines[0], ...lines.filter((l) => /^X [89];/.test(l))].join('\n');
+    expect((await admin.post('/keywords/import', { text: back })).json).toMatchObject({ added: 0, updated: 0, unchanged: 2 });
+    expect(await one<any>(`SELECT label, category FROM fire_keywords WHERE code = 'X 9'`)).toEqual({ label: hyperlink, category: '@SUMME(A1)' });
+  });
 });

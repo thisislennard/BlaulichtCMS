@@ -696,7 +696,7 @@ describe('Presseverteiler und Pressemitteilungen (#207)', () => {
     const exp = await editor.raw('GET', '/press/contacts/export');
     expect(exp.headers['content-type']).toContain('text/csv');
     expect(exp.body).toContain(`'=HYPERLINK`);
-    expect(exp.body).toContain('Tom, TV;');
+    expect(exp.body).toContain('"Tom, TV";');
     expect((await reader.raw('GET', '/press/contacts/export')).status).toBe(403);
   });
 

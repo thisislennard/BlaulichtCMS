@@ -5,6 +5,7 @@
  * Lagefragen und Warnvorgänge ihren Bezug behalten.
  */
 import { many, pool, tx, type Queryable } from '../db/pool.js';
+import { csvCell, csvUncell } from '../lib/csv.js';
 import { getSettings } from '../lib/settings.js';
 import { CATALOGS, entryDetails, entryLabel, normalizeCode, OWN_LIST, resolveKeyword } from './catalog.js';
 
@@ -169,7 +170,8 @@ export function parseKeywordList(text: string): { rows: ImportRow[]; errors: str
     const sep = (lines[0] ?? '').includes(';') ? ';' : ',';
     lines.forEach((l, i) => {
       if (!l.trim()) return;
-      const [code = '', bezeichnung = '', kategorie = ''] = splitCsvLine(l, sep);
+      // Schutz-Apostroph aus dem eigenen Export („'=…“) wieder entfernen
+      const [code = '', bezeichnung = '', kategorie = ''] = splitCsvLine(l, sep).map(csvUncell);
       if (i === 0 && HEADER.test(code)) return;
       raw.push({ code, bezeichnung, kategorie, line: i + 1 });
     });
@@ -227,9 +229,10 @@ export async function importOwnList(rows: ImportRow[], userId: string | null) {
   return res;
 }
 
-const csvCell = (v: string) => (/[;"\n\r]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
-
-/** Export der ganzen Liste (aktiv und inaktiv) – als CSV wieder importierbar (code;bezeichnung;kategorie zuerst). */
+/**
+ * Export der ganzen Liste (aktiv und inaktiv) – als CSV wieder importierbar (code;bezeichnung;kategorie zuerst).
+ * Zellen mit Formel-Einleitungszeichen werden entschärft (gemeinsame csvCell); der Import nimmt das wieder zurück.
+ */
 export async function exportKeywords(format: 'csv' | 'json') {
   const rows = await many<KeywordRow>(`SELECT code, label, category, details, source, active FROM fire_keywords ORDER BY code`);
   if (format === 'json') return JSON.stringify(rows.map((r) => ({ code: r.code, bezeichnung: r.label, kategorie: r.category, meldebild: r.details, quelle: r.source, aktiv: r.active })), null, 2);

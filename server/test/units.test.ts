@@ -1210,7 +1210,7 @@ describe('Ordner, Schlagworte und CSV (Medien wie LiFeOS)', () => {
   });
   it('Schlagworte normalisieren und CSV-Zellen gegen Formel-Injektion absichern', async () => {
     const { cleanTag } = await import('../src/routes/media-organize.js');
-    const { csvCell } = await import('../src/media/exports.js');
+    const { csvCell, csvUncell } = await import('../src/lib/csv.js');
     expect(cleanTag('  Drehleiter   Nacht ')).toBe('drehleiter nacht');
     expect(cleanTag(' , ')).toBeNull();
     expect(cleanTag('x'.repeat(60))).toHaveLength(40);
@@ -1218,10 +1218,23 @@ describe('Ordner, Schlagworte und CSV (Medien wie LiFeOS)', () => {
     expect(csvCell('+49 123')).toBe("'+49 123");
     expect(csvCell('-x')).toBe("'-x");
     expect(csvCell('@cmd')).toBe("'@cmd");
+    // Tab, Wagenrücklauf und Zeilenumbruch am Anfang (#236: der Presseverteiler kannte den Zeilenumbruch nicht)
+    expect(csvCell('\t=1+1')).toBe("'\t=1+1");
+    expect(csvCell('\r=1+1')).toBe(`"'\r=1+1"`);
+    expect(csvCell('\n=1+1')).toBe(`"'\n=1+1"`);
+    // Formelzeichen in voller Breite
+    expect(csvCell('＝1+1')).toBe("'＝1+1");
     expect(csvCell('a;b')).toBe('"a;b"');
+    expect(csvCell('a,b')).toBe('"a,b"');
     expect(csvCell('sagt "hallo"')).toBe('"sagt ""hallo"""');
     expect(csvCell(['a', 'b'])).toBe('"a, b"');
     expect(csvCell(null)).toBe('');
+    expect(csvCell('F 2')).toBe('F 2');
+    // Gegenstück beim Wiedereinlesen: nur das Schutz-Apostroph vor einem Formelzeichen fällt weg
+    expect(csvUncell("'=SUMME(A1)")).toBe('=SUMME(A1)');
+    expect(csvUncell("'+49 123")).toBe('+49 123');
+    expect(csvUncell("'s Gärtchen")).toBe("'s Gärtchen");
+    expect(csvUncell('normal')).toBe('normal');
   });
 });
 

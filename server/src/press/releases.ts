@@ -178,13 +178,6 @@ export function parseCsv(text: string): string[][] {
   return rows;
 }
 
-/** CSV-Feld; Formel-Einleitungszeichen werden entschärft (Schutz vor CSV-Injection in Tabellenprogrammen). */
-export function csvCell(v: unknown): string {
-  let s = String(v ?? '');
-  if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`;
-  return /[";\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-}
-
 /* ------------------------------------------------------------------ Workflow-Ausgang */
 
 /**
