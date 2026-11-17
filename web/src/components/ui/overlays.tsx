@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useId, useRef, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useBlocker } from 'react-router';
 import { Button, cx, Input } from './core';
@@ -101,11 +101,12 @@ export function Dialog({ open, onClose, title, children, footer, width = 520 }: 
     const prev = document.activeElement as HTMLElement | null;
     const el = ref.current;
     // Bereits fokussiertes Element im Dialog (z. B. autoFocus) nicht übergehen
-    if (!el?.contains(document.activeElement)) el?.querySelector<HTMLElement>('input, textarea, select, button:not([data-close])')?.focus();
+    // Unsichtbare Felder mit tabindex=-1 (z. B. das Dateifeld hinter FilePickButton) überspringen
+    if (!el?.contains(document.activeElement)) el?.querySelector<HTMLElement>('input:not([tabindex="-1"]), textarea, select, button:not([data-close])')?.focus();
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onCloseRef.current();
       if (e.key === 'Tab' && el) {
-        const f = [...el.querySelectorAll<HTMLElement>('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])')].filter((x) => !x.hasAttribute('disabled'));
+        const f = [...el.querySelectorAll<HTMLElement>('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])')].filter((x) => !x.hasAttribute('disabled') && x.tabIndex >= 0);
         if (!f.length) return;
         if (e.shiftKey && document.activeElement === f[0]) {
           e.preventDefault();
@@ -209,6 +210,7 @@ export function DeleteDialog({ open, onClose, objectType, name, confirmValue, on
 export function Popover({ open, onClose, anchor, children, align = 'end', width = 280, className }: { open: boolean; onClose: () => void; anchor: React.RefObject<HTMLElement | null>; children: ReactNode; align?: 'start' | 'end'; width?: number; className?: string }) {
   const ref = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<{ top: number; left: number; maxHeight: number } | null>(null);
+  const placeRef = useRef<(() => void) | null>(null);
   // onClose per Ref: Inline-Funktionen der Aufrufer sollen den Effekt nicht bei jedem Rendern neu starten
   const onCloseRef = useRef(onClose);
   useEffect(() => {
@@ -230,7 +232,8 @@ export function Popover({ open, onClose, anchor, children, align = 'end', width 
         setPos({ top: Math.max(8, r.top - 6 - Math.min(h, maxHeight)), left, maxHeight });
       } else setPos({ top: r.bottom + 6, left, maxHeight: Math.max(160, below) });
     };
-    // Erst messen, dann platzieren (Höhe ist nach dem ersten Rendern bekannt)
+    // Erst messen, dann platzieren (Höhe ist nach dem ersten Rendern bekannt – siehe Layout-Effekt unten)
+    placeRef.current = place;
     requestAnimationFrame(place);
     place();
     window.addEventListener('resize', place);
@@ -242,12 +245,19 @@ export function Popover({ open, onClose, anchor, children, align = 'end', width 
     document.addEventListener('mousedown', onDown);
     document.addEventListener('keydown', onKey);
     return () => {
+      placeRef.current = null;
       window.removeEventListener('resize', place);
       window.removeEventListener('scroll', place, true);
       document.removeEventListener('mousedown', onDown);
       document.removeEventListener('keydown', onKey);
     };
   }, [open, anchor, align, width]);
+  // Beim ersten Öffnen gibt es den Inhalt erst nach dem ersten Platzieren: dann sofort mit echter Höhe neu platzieren,
+  // sonst öffnet ein Menü am unteren Fensterrand nach unten aus dem Bild (Zeilenmenüs langer Tabellen)
+  const shown = open && pos !== null;
+  useLayoutEffect(() => {
+    if (shown) placeRef.current?.();
+  }, [shown]);
   if (!open || !pos) return null;
   return createPortal(
     <div ref={ref} className={cx('fixed z-[80] bg-card border border-line rounded-card shadow-float overflow-y-auto', className)} style={{ top: pos.top, left: pos.left, width: Math.min(width, window.innerWidth - 16), maxHeight: pos.maxHeight }}>
@@ -257,8 +267,11 @@ export function Popover({ open, onClose, anchor, children, align = 'end', width 
   );
 }
 
-/** Menü mit Tastatursteuerung (↑↓ Enter Esc). */
-export function Menu({ items, label = 'Weitere Aktionen', icon = 'MoreHorizontal', size = 'md' }: { items: ({ label: string; icon?: string; onClick: () => void; danger?: boolean; disabled?: boolean; hint?: string } | null | false)[]; label?: string; icon?: string; size?: 'sm' | 'md' }) {
+/** Menüeintrag; `null`/`false` werden ausgelassen (bedingte Einträge). */
+export type MenuItem = { label: string; icon?: string; onClick: () => void; danger?: boolean; disabled?: boolean; hint?: string } | null | false;
+
+/** Menü mit Tastatursteuerung (↑↓ Enter Esc). `text` zeigt eine sichtbare Beschriftung statt nur des Symbols. */
+export function Menu({ items, label = 'Weitere Aktionen', icon = 'MoreHorizontal', size = 'md', text }: { items: MenuItem[]; label?: string; icon?: string; size?: 'sm' | 'md'; text?: string }) {
   const [open, setOpen] = useState(false);
   const btn = useRef<HTMLButtonElement>(null);
   const list = items.filter(Boolean) as { label: string; icon?: string; onClick: () => void; danger?: boolean; disabled?: boolean; hint?: string }[];
@@ -270,7 +283,9 @@ export function Menu({ items, label = 'Weitere Aktionen', icon = 'MoreHorizontal
   const focusMenu = useCallback((el: HTMLDivElement | null) => el?.focus(), []);
   return (
     <>
-      <Button ref={btn} iconOnly icon={icon} size={size} aria-label={label} aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((o) => !o)} variant="secondary" />
+      <Button ref={btn} iconOnly={!text} icon={icon} size={size} aria-label={text ? undefined : label} aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((o) => !o)} variant="secondary">
+        {text}
+      </Button>
       <Popover open={open} onClose={() => setOpen(false)} anchor={btn} width={240}>
         <div
           role="menu"

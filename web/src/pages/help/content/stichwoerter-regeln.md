@@ -15,9 +15,9 @@ So arbeitet die Liste:
 
 - **Wechsel des Landes:** Die Einträge des neuen Verzeichnisses werden übernommen bzw. wieder aktiviert, die des bisherigen deaktiviert (nicht gelöscht – Regeln und Vorgänge behalten ihren Bezug).
 - **Eigene Einträge haben Vorrang.** Ein eigener Eintrag mit demselben Kürzel ersetzt den Eintrag des Verzeichnisses. Wer Bezeichnung oder Kategorie eines Verzeichniseintrags ändert, macht ihn damit zum eigenen Eintrag.
-- **Neu übernehmen** (Stichwörter & Regeln → Stichwortverzeichnis) frischt das Verzeichnis auf, z. B. nach einem Update mit neuer Fassung. Das geschieht auch bei jedem Start. Von Hand deaktivierte Einträge bleiben dabei aus.
-- **Eigene Liste importieren:** CSV mit Semikolon in der Reihenfolge `code;bezeichnung;kategorie` (Kopfzeile optional) oder JSON (`[{"code": "…", "bezeichnung": "…", "kategorie": "…"}]`). Vorher zeigt BlaulichtCMS, wie viele Einträge übernommen und welche Zeilen übersprungen werden. Recht: „Stichwörter und Regeln pflegen“.
-- **Export** als CSV oder JSON enthält die ganze Liste mit Herkunft (Länderkürzel oder `eigen`). Die CSV lässt sich wieder importieren. Alle importierten Zeilen werden dabei zu eigenen Einträgen, also vorher auf die gewünschten Zeilen kürzen.
+- **Landesverzeichnis neu übernehmen** (Stichwörter & Regeln → Menü **Import/Export**) frischt das Verzeichnis auf, z. B. nach einem Update mit neuer Fassung. Das geschieht auch bei jedem Start. Von Hand deaktivierte Einträge bleiben dabei aus.
+- **Eigene Liste importieren** (Menü **Import/Export**): CSV mit Semikolon in der Reihenfolge `code;bezeichnung;kategorie` (Kopfzeile optional) oder JSON (`[{"code": "…", "bezeichnung": "…", "kategorie": "…"}]`). Vorher zeigt BlaulichtCMS, wie viele Einträge übernommen und welche Zeilen übersprungen werden. Recht: „Stichwörter und Regeln pflegen“.
+- **Export** als CSV oder JSON (Menü **Import/Export**) enthält die ganze Liste mit Herkunft (Länderkürzel oder `eigen`). Die CSV lässt sich wieder importieren. Alle importierten Zeilen werden dabei zu eigenen Einträgen, also vorher auf die gewünschten Zeilen kürzen.
 
 Wo die Liste wirkt:
 
@@ -30,7 +30,13 @@ Beim Abgleich zählen weder Groß- und Kleinschreibung noch Leerzeichen oder Bin
 
 ## Stichwörter und Aliase
 
-Ein Stichwort hat ein **Kürzel** (z. B. aus der Alarm- und Ausrückeordnung), eine **Bezeichnung**, eine **Kategorie** und beliebige **Aliase** für die Suche und für die Zuordnung aus FE2. Nicht mehr genutzte Stichwörter werden **deaktiviert**, nicht gelöscht. Bezeichnung, Kategorie und Aliase lassen sich über **Bearbeiten** ändern; das Kürzel bleibt fest, weil Regeln und Vorgänge darauf verweisen. Über dem Verzeichnis filtern Suchfeld und Kategorie die Liste; Lagefragen legt **Lagefrage hinzufügen** am jeweiligen Stichwort an.
+Ein Stichwort hat ein **Kürzel** (z. B. aus der Alarm- und Ausrückeordnung), eine **Bezeichnung**, eine **Kategorie** und beliebige **Aliase** für die Suche und für die Zuordnung aus FE2.
+
+Die Stichwörter stehen als **Tabelle** mit einer Zeile je Stichwort: Kürzel, Bezeichnung (dahinter leise das Meldebild), Kategorie, Herkunft, Zahl der Lagefragen und Regeln („offen“ = noch ohne fachliche Freigabe) und Status. Direkt darüber filtern **Suchfeld** (Kürzel, Bezeichnung, Meldebild, Aliase), **Kategorie** und **Inaktive zeigen**. Der Pfeil am Zeilenanfang klappt **Lagefragen und Regeln** des Stichworts auf – dort lassen sich Fragen freigeben, außer Kraft setzen und neue anlegen. Am Handy steht jedes Stichwort als kompakte Karte mit denselben Angaben.
+
+- **+ Stichwort** öffnet den Dialog zum Anlegen.
+- Das Menü **⋯** einer Zeile bietet **Bearbeiten** (Bezeichnung, Kategorie, Aliase – das Kürzel bleibt fest, weil Regeln und Vorgänge darauf verweisen), **Lagefrage hinzufügen** und **Deaktivieren**. Nicht mehr genutzte Stichwörter werden deaktiviert, nicht gelöscht; vorher fragt BlaulichtCMS nach. **Aktivieren** (bei eingeschaltetem „Inaktive zeigen“) macht es rückgängig.
+- Herkunft, Stand und Gültigkeit des Landesverzeichnisses stehen im einklappbaren Kasten **Stichwortverzeichnis** über der Tabelle.
 
 ## Lagefragen
 

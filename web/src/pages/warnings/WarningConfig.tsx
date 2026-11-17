@@ -6,8 +6,7 @@ import { Dialog, useErrorToast, useToast, useConfirm } from '../../components/ui
 import { HelpLink, HelpTip } from '../../components/ui/HelpTip';
 import { useAuth } from '../../lib/auth';
 import { fmtDateTime } from '../../lib/format';
-import { normalizeCode, STATE_OPTIONS } from '../../lib/keywords';
-import { KeywordCatalogCard } from './KeywordCatalog';
+import { KeywordsTab } from './KeywordTable';
 
 type Tab = 'stichwoerter' | 'regeln' | 'zustaendigkeiten' | 'vorlagen' | 'versand';
 const csv = (s: string) => s.split(',').map((x) => x.trim()).filter(Boolean);
@@ -39,14 +38,7 @@ export default function WarningConfig() {
   const mayRules = can('warning.rules');
   const mayApprove = can('warning.approve');
 
-  // Formulare
-  const [kw, setKw] = useState({ code: '', label: '', category: '', aliases: '' });
-  // Stichwortliste filtern (Verzeichnisse haben viele Einträge); Lagefragen-Formular nur am geöffneten Stichwort
-  const [kwFilter, setKwFilter] = useState('');
-  const [kwCat, setKwCat] = useState('');
-  const [kwInactive, setKwInactive] = useState(false);
-  const [openQ, setOpenQ] = useState<string | null>(null);
-  const [qf, setQf] = useState({ keywordId: '', key: '', text: '', options: 'ja, nein, unbekannt' });
+  // Formulare (Stichwörter und Lagefragen: KeywordTable.tsx)
   const [rf, setRf] = useState<{ lineage: string | null; keywordId: string; name: string; conditions: string; level: number; reason: string }>({ lineage: null, keywordId: '', name: '', conditions: '', level: 3, reason: '' });
   const [resp, setResp] = useState({ name: '', area: '', recipients: '' });
   const [smtp, setSmtp] = useState<any>(null);
@@ -55,23 +47,13 @@ export default function WarningConfig() {
   // Formularwerte, mit denen zuletzt eine Testmail erfolgreich war (Echtbetrieb nur mit genau diesen Werten)
   const [verifiedKey, setVerifiedKey] = useState<string | null>(null);
   const [tpl, setTpl] = useState<any>(null);
-  // Bearbeiten: Stichwort (Bezeichnung, Aliase) und Zuständigkeit (Name, Gebiet, Empfänger)
-  const [editKw, setEditKw] = useState<{ id: string; code: string; label: string; category: string; aliases: string; active: boolean; source: string } | null>(null);
+  // Bearbeiten: Zuständigkeit (Name, Gebiet, Empfänger); Stichwörter bearbeitet KeywordTable.tsx
   const [editResp, setEditResp] = useState<{ id: string; name: string; area: string; recipients: string; active: boolean } | null>(null);
 
   if (q.isLoading) return <SkeletonRows rows={6} />;
   if (q.error) return <ErrorBox title="Konfiguration konnte nicht geladen werden">{(q.error as Error).message}</ErrorBox>;
   const c = q.data;
   const kwById = Object.fromEntries(c.keywords.map((k: any) => [k.id, k]));
-  const kwCats = [...new Set<string>(c.keywords.map((k: any) => k.category).filter(Boolean))].sort();
-  const sourceName = (src: string) => (src === 'eigen' ? 'eigen' : (STATE_OPTIONS.find((x) => x.id === src)?.name ?? src));
-  const kwNeedle = kwFilter.trim().toLowerCase();
-  const kwShown = c.keywords.filter(
-    (k: any) =>
-      (kwInactive || k.active) &&
-      (!kwCat || k.category === kwCat) &&
-      (!kwNeedle || normalizeCode(k.code).startsWith(normalizeCode(kwNeedle)) || `${k.label} ${k.details} ${k.aliases.join(' ')}`.toLowerCase().includes(kwNeedle)),
-  );
   const s = smtp ?? { ...c.smtp, password: '', testMode: c.testMode.active, testRecipient: c.testMode.recipient };
   const smtpKey = (x: any) => JSON.stringify([String(x.host ?? '').trim().toLowerCase(), Number(x.port), x.security, String(x.user ?? '').trim(), String(x.from ?? '').trim(), x.password ?? '']);
   const smtpDirty = smtpKey(s) !== smtpKey({ ...c.smtp, password: '' });
@@ -113,91 +95,7 @@ export default function WarningConfig() {
         ]}
       />
 
-      {tab === 'stichwoerter' && (
-        <div className="flex flex-col gap-4">
-          <KeywordCatalogCard onChanged={refresh} />
-          {mayRules && (
-            <Card title="Stichwort anlegen" subtitle="Eigene Einträge ergänzen das Landesverzeichnis oder ersetzen gleichnamige Einträge.">
-              <div className="grid sm:grid-cols-4 gap-3 items-end">
-                <FieldWrap label="Kürzel" htmlFor="kw-code"><Input id="kw-code" value={kw.code} maxLength={40} onChange={(e) => setKw({ ...kw, code: e.target.value })} placeholder="z. B. F-WALD-2" /></FieldWrap>
-                <FieldWrap label="Bezeichnung" htmlFor="kw-label"><Input id="kw-label" value={kw.label} maxLength={300} onChange={(e) => setKw({ ...kw, label: e.target.value })} /></FieldWrap>
-                <FieldWrap label="Kategorie" htmlFor="kw-cat"><Input id="kw-cat" value={kw.category} maxLength={60} list="kw-cats" onChange={(e) => setKw({ ...kw, category: e.target.value })} placeholder="z. B. Brand" /></FieldWrap>
-                <FieldWrap label="Aliase (Komma-getrennt)" htmlFor="kw-alias"><Input id="kw-alias" value={kw.aliases} onChange={(e) => setKw({ ...kw, aliases: e.target.value })} /></FieldWrap>
-              </div>
-              <div className="mt-3">
-                <Button variant="primary" icon="Plus" disabled={!kw.code || kw.label.length < 2} onClick={async () => (await act(() => post('/warning-keywords', { code: kw.code, label: kw.label, category: kw.category, aliases: csv(kw.aliases) }), 'Stichwort angelegt')) && setKw({ code: '', label: '', category: '', aliases: '' })}>
-                  Anlegen
-                </Button>
-              </div>
-            </Card>
-          )}
-          <datalist id="kw-cats">
-            {kwCats.map((x) => (
-              <option key={x} value={x} />
-            ))}
-          </datalist>
-          <div className="flex flex-wrap gap-3 items-end">
-            <FieldWrap label="Stichwörter filtern" htmlFor="kw-filter" className="flex-1 min-w-[220px]">
-              <Input id="kw-filter" type="search" value={kwFilter} onChange={(e) => setKwFilter(e.target.value)} placeholder="Kürzel, Bezeichnung oder Meldebild" />
-            </FieldWrap>
-            <FieldWrap label="Kategorie" htmlFor="kw-catf" className="w-full sm:w-[200px]">
-              <Select id="kw-catf" value={kwCat} onChange={(e) => setKwCat(e.target.value)}>
-                <option value="">Alle</option>
-                {kwCats.map((x) => (
-                  <option key={x} value={x}>
-                    {x}
-                  </option>
-                ))}
-              </Select>
-            </FieldWrap>
-            <Switch checked={kwInactive} onChange={setKwInactive} label="Inaktive zeigen" />
-          </div>
-          {kwShown.length === 0 && <p className="m-0 text-sm text-fg-muted">Keine passenden Stichwörter.</p>}
-          {kwShown.map((k: any) => (
-            <Card
-              key={k.id}
-              title={
-                <span className="flex items-center gap-2 flex-wrap">
-                  <Chip mono>{k.code}</Chip> {normalizeCode(k.label) !== normalizeCode(k.code) && k.label} {k.category && <Badge>{k.category}</Badge>}
-                  <Badge title={k.source === 'eigen' ? 'Selbst gepflegt oder importiert' : 'Aus dem Landesverzeichnis'}>{sourceName(k.source)}</Badge>
-                  {!k.active && <Badge>inaktiv</Badge>}
-                </span>
-              }
-              subtitle={[k.details && k.details !== k.label ? k.details : '', k.aliases.length ? `Aliase: ${k.aliases.join(', ')}` : ''].filter(Boolean).join(' · ') || undefined}
-              action={mayRules && (
-                <span className="flex gap-2">
-                  <Button size="sm" icon="Pencil" onClick={() => setEditKw({ id: k.id, code: k.code, label: k.label, category: k.category ?? '', aliases: k.aliases.join(', '), active: k.active, source: k.source })}>Bearbeiten</Button>
-                  <Button size="sm" onClick={() => act(() => put(`/warning-keywords/${k.id}`, { label: k.label, aliases: k.aliases, active: !k.active }), k.active ? 'Stichwort deaktiviert' : 'Stichwort aktiviert')}>{k.active ? 'Deaktivieren' : 'Aktivieren'}</Button>
-                </span>
-              )}>
-              <ul className="flex flex-col divide-y divide-line">
-                {c.questions.filter((x: any) => x.keyword_id === k.id).map((x: any) => (
-                  <li key={x.id} className="py-2 flex flex-wrap items-center gap-2">
-                    <span className="font-mono text-meta">{x.key}</span>
-                    <span className="flex-1 min-w-[200px]">{x.text} <span className="text-fg-muted text-meta">({x.options.join(' / ')})</span></span>
-                    {x.retired_at ? <Badge>außer Kraft</Badge> : x.approved_at ? <Badge tone="success" title={`${x.approved_by_name}, ${fmtDateTime(x.approved_at)}`}>fachlich freigegeben</Badge> : <Badge tone="warning">nicht freigegeben</Badge>}
-                    {!x.approved_at && !x.retired_at && mayApprove && x.created_by !== myId && <Button size="sm" icon="Check" onClick={() => act(() => post(`/keyword-questions/${x.id}/approve`), 'Frage freigegeben')}>Freigeben</Button>}
-                    {!x.retired_at && mayRules && <Button size="sm" onClick={async () => (await ask({ title: 'Lagefrage außer Kraft setzen?', text: `„${x.text}“ wird in neuen Warnentwürfen nicht mehr gefragt.`, confirmLabel: 'Außer Kraft setzen' })) && act(() => post(`/keyword-questions/${x.id}/retire`), 'Lagefrage außer Kraft gesetzt')}>Außer Kraft</Button>}
-                  </li>
-                ))}
-              </ul>
-              {mayRules && openQ !== k.id && (
-                <div className="mt-1">
-                  <Button size="sm" icon="Plus" onClick={() => setOpenQ(k.id)}>Lagefrage hinzufügen</Button>
-                </div>
-              )}
-              {mayRules && openQ === k.id && (
-                <div className="grid sm:grid-cols-[160px_1fr_200px_auto] gap-2 items-end mt-3">
-                  <FieldWrap label="Schlüssel" htmlFor={`qk-${k.id}`}><Input id={`qk-${k.id}`} mono value={qf.keywordId === k.id ? qf.key : ''} onChange={(e) => setQf({ ...qf, keywordId: k.id, key: e.target.value })} placeholder="rauch_wohngebiet" /></FieldWrap>
-                  <FieldWrap label="Frage" htmlFor={`qt-${k.id}`}><Input id={`qt-${k.id}`} value={qf.keywordId === k.id ? qf.text : ''} onChange={(e) => setQf({ ...qf, keywordId: k.id, text: e.target.value })} /></FieldWrap>
-                  <FieldWrap label="Antworten" htmlFor={`qo-${k.id}`}><Input id={`qo-${k.id}`} value={qf.keywordId === k.id ? qf.options : 'ja, nein, unbekannt'} onChange={(e) => setQf({ ...qf, keywordId: k.id, options: e.target.value })} /></FieldWrap>
-                  <Button icon="Plus" disabled={qf.keywordId !== k.id || !qf.key || qf.text.length < 5} onClick={async () => (await act(() => post(`/warning-keywords/${k.id}/questions`, { key: qf.key, text: qf.text, options: csv(qf.options) }), 'Frage angelegt – braucht fachliche Freigabe')) && setQf({ keywordId: '', key: '', text: '', options: 'ja, nein, unbekannt' })}>Frage</Button>
-                </div>
-              )}
-            </Card>
-          ))}
-        </div>
-      )}
+      {tab === 'stichwoerter' && <KeywordsTab c={c} act={act} refresh={refresh} />}
 
       {tab === 'regeln' && (
         <div className="flex flex-col gap-4">
@@ -238,7 +136,7 @@ export default function WarningConfig() {
                   <Chip mono>{kwById[r.keyword_id]?.code ?? '?'}</Chip>
                   <strong>{r.name}</strong>
                   <span className="text-meta text-fg-muted">Version {r.version}</span>
-                  <Badge tone={r.level === 1 ? 'error' : r.level === 2 ? 'warning' : 'primary'}>Warnstufe {r.level}</Badge>
+                  <Badge tone={r.level === 1 ? 'error' : r.level === 2 ? 'warning' : 'neutral'}>Warnstufe {r.level}</Badge>
                   <StatusBadge status={r.status} labels={{ draft: 'Entwurf – nicht wirksam', approved: 'Fachlich freigegeben', retired: 'Außer Kraft' }} />
                 </div>
                 <pre className="text-meta font-mono bg-raised rounded-control p-2 whitespace-pre-wrap">{condText(r.conditions)}</pre>
@@ -410,43 +308,6 @@ export default function WarningConfig() {
             </div>
           </div>
         </Card>
-      )}
-      {editKw && (
-        <Dialog
-          open
-          onClose={() => setEditKw(null)}
-          title={`Stichwort ${editKw.code} bearbeiten`}
-          footer={
-            <>
-              <Button onClick={() => setEditKw(null)}>Abbrechen</Button>
-              <Button
-                variant="primary"
-                disabled={editKw.label.trim().length < 2}
-                onClick={async () => (await act(() => put(`/warning-keywords/${editKw.id}`, { label: editKw.label.trim(), category: editKw.category.trim(), aliases: csv(editKw.aliases), active: editKw.active }), 'Stichwort gespeichert')) && setEditKw(null)}
-              >
-                Speichern
-              </Button>
-            </>
-          }
-        >
-          <div className="flex flex-col gap-4">
-            <FieldWrap label="Kürzel" help="Das Kürzel bleibt fest – Regeln und Vorgänge beziehen sich darauf.">
-              <Input value={editKw.code} mono disabled />
-            </FieldWrap>
-            <FieldWrap label="Bezeichnung" required htmlFor="kw-label" error={editKw.label.trim().length < 2 ? 'Mindestens 2 Zeichen.' : null}>
-              <Input id="kw-label" value={editKw.label} maxLength={300} onChange={(e) => setEditKw({ ...editKw, label: e.target.value })} />
-            </FieldWrap>
-            <FieldWrap label="Kategorie" htmlFor="kw-ecat">
-              <Input id="kw-ecat" value={editKw.category} maxLength={60} list="kw-cats" onChange={(e) => setEditKw({ ...editKw, category: e.target.value })} />
-            </FieldWrap>
-            {editKw.source !== 'eigen' && (
-              <Notice>Eintrag aus dem Landesverzeichnis: Wer Bezeichnung oder Kategorie ändert, macht ihn zum eigenen Eintrag – er bleibt dann auch beim erneuten Übernehmen des Verzeichnisses so.</Notice>
-            )}
-            <FieldWrap label="Aliase (Komma-getrennt)" help="Weitere Begriffe, unter denen das Stichwort gefunden wird, z. B. Kurzformen aus FE2." htmlFor="kw-aliases">
-              <Input id="kw-aliases" value={editKw.aliases} onChange={(e) => setEditKw({ ...editKw, aliases: e.target.value })} />
-            </FieldWrap>
-          </div>
-        </Dialog>
       )}
       {editResp && (
         <Dialog
