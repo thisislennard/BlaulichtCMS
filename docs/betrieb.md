@@ -897,6 +897,7 @@ die Entwicklung; eine kritische Lücke im Laufzeitpfad führt zu einem Release u
 | `node:26-trixie-slim` | offizielles Docker-Hub-Image (Docker Official Images) | Digest im `Dockerfile` |
 | `postgres:18-trixie` | offizielles Docker-Hub-Image (Laufzeitbasis, Debian trixie) | Digest im `Dockerfile` |
 | `mwader/static-ffmpeg` | Community-Image, statisch gebaut aus den offiziellen ffmpeg-Quellen; Build-Skript und Prüfsummen der Quellen öffentlich auf GitHub (`wader/static-ffmpeg`) | Digest im `Dockerfile`; nur `ffmpeg`/`ffprobe` werden übernommen, die CI kopiert dieselben Dateien |
+| `clamav/clamav` (optional) | offizielles Image von Cisco Talos (Docker Hub), nur mit Compose-Profil `clamav` | Digest in `compose.yaml`; Signaturen lädt der Dienst selbst nach (Volume `clamav-db`) |
 
 Gesichtsvorschläge (#214): `onnxruntime-node` (Microsoft, MIT) kommt aus der npm-Registry (Version und Prüfsumme im
 `package-lock.json`); im Image bleibt nur die Linux-CPU-Bibliothek der eigenen Architektur, das YuNet-Modell (MIT)

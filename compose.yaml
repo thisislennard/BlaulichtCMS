@@ -60,7 +60,7 @@ services:
   # Optional: Schadsoftwareprüfung der Uploads mit ClamAV (#133, docs/betrieb.md „Schadsoftwareprüfung“).
   # Einschalten in .env: COMPOSE_PROFILES=clamav und CLAMAV_HOST=clamav. Ohne Profil startet der Dienst nicht.
   clamav:
-    image: clamav/clamav:1.5.4
+    image: clamav/clamav:1.5.4@sha256:7054e3f34308c384ea43cd786ea17abf899bd44af40af9f1b099853d7a5c214e
     profiles: ["clamav"]
     container_name: blaulichtcms-clamav
     restart: unless-stopped
