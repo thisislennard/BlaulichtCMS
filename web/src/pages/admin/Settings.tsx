@@ -103,6 +103,7 @@ const RANGES: Record<string, [number, number]> = {
   'privacy.receipt_days': [1, 30],
   'privacy.uploader_months': [0, 120],
   'privacy.press_request_months': [0, 120],
+  'privacy.press_open_months': [0, 120],
   'press.reminder_hours': [0, 72],
   'privacy.automation_run_days': [1, 3650],
   'automations.max_runs_per_minute': [1, 600],
@@ -502,6 +503,7 @@ export default function Settings() {
                   <NumField k="media.security_log_days" label="Sicherheitsereignisse der Upload-Seiten" help="Gekürzter IP-Hash, Link, Ereignis. 0 = unbegrenzt." unit={t("admin.common.days")} min={0} max={3650} v={v} set={set} ro={ro("media.security_log_days")} />
                   <NumField k="privacy.uploader_months" label="Angaben der Hochladenden" help="Name, E-Mail-Adresse, Aufnahmeort und -datum (je Upload-Link abfragbar) danach entfernen; die Dateien bleiben. 0 = nie." unit="Monate" min={0} max={120} v={v} set={set} ro={ro("privacy.uploader_months")} />
                   <NumField k="privacy.press_request_months" label="Erledigte Presseanfragen" help="Anfrage samt Kontaktdaten, Verlauf, Mails und Anhängen so viele Monate nach der Erledigung löschen. 0 = nie." unit="Monate" min={0} max={120} v={v} set={set} ro={ro("privacy.press_request_months")} />
+                  <NumField k="privacy.press_open_months" label="Nicht erledigte Presseanfragen" help="Neu, in Bearbeitung oder beantwortet (z. B. nie auf „erledigt“ gesetzt, fehlgeleitete Mails aus dem Presse-Postfach): so viele Monate nach der letzten Aktivität löschen. 30 Tage vorher kommt eine Benachrichtigung an „Presseanfragen bearbeiten“; jede Änderung, Notiz oder Mail setzt die Frist zurück. 0 = nie." unit="Monate" min={0} max={120} v={v} set={set} ro={ro("privacy.press_open_months")} />
                   <NumField k="privacy.warning_days" label="Warnvorgänge" help="Nach dem letzten Bearbeitungsschritt des Vorgangs samt Aktualisierungen: Fassungen mit Rückrufkontakt, PDF, Versandnachweise. 0 = nie." unit={t("admin.common.days")} v={v} set={set} ro={ro("privacy.warning_days")} />
                   <NumField k="privacy.fe2_event_days" label="Einsatzmeldungen (FE2, Feuersoftware Connect)" help="Stichwort, Einsatzart, Ort, Zeit, Einheiten. Beiträge und Warnvorgänge daraus bleiben. 0 = nie." unit={t("admin.common.days")} v={v} set={set} ro={ro("privacy.fe2_event_days")} />
                   <NumField k="privacy.automation_run_days" label="Laufprotokolle der Workflows" help="Eingangsdaten, Schritte und Freigaben abgeschlossener Läufe (1 bis 3650 Tage)." unit={t("admin.common.days")} min={1} max={3650} v={v} set={set} ro={ro("privacy.automation_run_days")} />
@@ -1150,7 +1152,7 @@ function NumField({
 
 interface RetentionReport {
   dry_run: boolean;
-  categories: { key: string; label: string; days: number; count: number; detail?: string }[];
+  categories: { key: string; label: string; days: number; count: number; detail?: string; note?: string }[];
   collections: { id: string; title: string; last_activity: string; archived: boolean; media: number; kept: number; used_in: string[] }[];
 }
 
@@ -1220,6 +1222,7 @@ function RetentionPreview({ manage, dirty }: { manage: boolean; dirty: boolean }
                   <Td align="right">
                     {fmtNumber(c.count)}
                     {c.detail && c.count ? <span className="text-fg-muted"> ({c.detail})</span> : null}
+                    {c.note ? <span className="block text-meta text-fg-muted">{c.note}</span> : null}
                   </Td>
                 </tr>
               ))}

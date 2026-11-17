@@ -173,4 +173,11 @@ Ab Werk: **Redaktion** – ansehen, bearbeiten, beantworten, Textbausteine, Pres
 
 ## Datenschutz und Löschfrist
 
-Erledigte Anfragen werden samt Kontaktdaten, Verlauf, Mails und Anhängen **12 Monate nach der Erledigung** gelöscht (*Einstellungen → Datenschutz → Erledigte Presseanfragen*, 0 = nie). Wird eine Anfrage wieder geöffnet, beginnt die Frist bei der nächsten Erledigung neu. Presseanfragen und Kontakte des Presseverteilers sind Teil der [Datenschutzanfragen](/datenschutz-anfragen) (Suche nach Name, E-Mail, Telefon, Text; Auskunft und Löschung). Wird ein Kontakt gelöscht, verschwindet seine Adresse auch aus den Versandprotokollen. Kontakte des Verteilers haben keine automatische Löschfrist – sie bleiben, bis sie gelöscht werden; Abgemeldete bleiben als „abgemeldet“ gespeichert, damit sie nicht versehentlich erneut aufgenommen werden.
+Presseanfragen werden samt Kontaktdaten, Verlauf, Mails und Anhängen automatisch gelöscht (*Einstellungen → Datenschutz*, 0 = nie):
+
+| Anfrage | gelöscht | Einstellung |
+|---|---|---|
+| erledigt | **12 Monate nach der Erledigung** | Erledigte Presseanfragen |
+| neu, in Bearbeitung oder beantwortet (z. B. nach der Antwort nie auf *Erledigt* gesetzt, fehlgeleitete Mail aus dem Presse-Postfach) | **12 Monate nach der letzten Aktivität**, frühestens 30 Tage nach der Ankündigung | Nicht erledigte Presseanfragen |
+
+Als Aktivität zählt jede Änderung, Notiz, jeder Statuswechsel und jede ein- oder ausgehende Mail – Ansehen zählt nicht. **30 Tage vor dem Löschen** einer nicht erledigten Anfrage kommt eine Benachrichtigung an alle mit „Presseanfragen bearbeiten“; die betroffenen Anfragen zeigt der Filter **Löschung angekündigt**, die Anfrage selbst einen Hinweis mit dem Datum. Wer eine Anfrage behalten will, ändert sie oder schreibt eine Notiz – das setzt die Frist zurück. Wird eine erledigte Anfrage wieder geöffnet, beginnt die Frist bei der nächsten Erledigung neu. Was gerade fällig ist, zeigt *Einstellungen → Datenschutz → Was würde gelöscht?*. Presseanfragen und Kontakte des Presseverteilers sind Teil der [Datenschutzanfragen](/datenschutz-anfragen) (Suche nach Name, E-Mail, Telefon, Text; Auskunft und Löschung). Wird ein Kontakt gelöscht, verschwindet seine Adresse auch aus den Versandprotokollen. Kontakte des Verteilers haben keine automatische Löschfrist – sie bleiben, bis sie gelöscht werden; Abgemeldete bleiben als „abgemeldet“ gespeichert, damit sie nicht versehentlich erneut aufgenommen werden.

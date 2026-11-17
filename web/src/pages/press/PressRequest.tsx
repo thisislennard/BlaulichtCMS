@@ -3,17 +3,19 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate, useParams } from 'react-router';
 import { del, get, patch, post } from '../../api/client';
 import { usePageMeta } from '../../components/layout/AppShell';
-import { Button, Card, cx, ErrorBox, FieldWrap, Input, KeyValue, PageHeader, Select, SkeletonRows, Textarea } from '../../components/ui/core';
+import { Button, Card, cx, ErrorBox, FieldWrap, Input, KeyValue, Notice, PageHeader, Select, SkeletonRows, Textarea } from '../../components/ui/core';
 import { Icon } from '../../components/ui/Icon';
 import { DeleteDialog, useErrorToast } from '../../components/ui/overlays';
 import { useAuth } from '../../lib/auth';
-import { fmtDateTime, fmtIsoInText, fromLocalInput, toLocalInput } from '../../lib/format';
+import { fmtDate, fmtDateTime, fmtIsoInText, fromLocalInput, toLocalInput } from '../../lib/format';
 import { CHANNEL_LABEL, PressStatusBadge, RequestDialog, STATUS_LABEL, usePressOptions, type PressRequest, type PressStatus } from './shared';
 import { PressMessages, type PressDetailExtras } from './Messages';
 
 interface Detail extends PressDetailExtras {
   request: PressRequest;
   events: { id: number; at: string; actor_name: string; kind: string; text: string }[];
+  /** angekündigte Löschung (Löschfrist für nicht erledigte Anfragen, #243) */
+  deletion: { at: string } | null;
 }
 
 const EVENT_ICON: Record<string, string> = { created: 'Plus', status: 'CheckCircle2', assignee: 'User', due: 'Clock', link: 'Link2', note: 'NotebookPen', edit: 'Pencil', mail_in: 'Mail', mail_out: 'Send', reply: 'Reply' };
@@ -76,6 +78,11 @@ export default function PressRequestPage() {
           )
         }
       />
+      {q.data!.deletion && (
+        <Notice tone="warning" title={`Löschung angekündigt: frühestens am ${fmtDate(q.data!.deletion.at)}`}>
+          Diese Anfrage ist nicht erledigt und hatte lange keine Aktivität. Nach der Löschfrist (Einstellungen → Datenschutz) wird sie samt Kontaktdaten, Mails und Anhängen gelöscht. Eine Änderung, Notiz oder Mail setzt die Frist zurück; „Erledigt“ startet die Frist für erledigte Anfragen.
+        </Notice>
+      )}
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_340px] items-start">
         <div className="flex flex-col gap-5 min-w-0">
           <Card title="Anfrage">

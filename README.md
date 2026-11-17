@@ -198,7 +198,8 @@ flowchart LR
 
 - **Presseanfragen:** von Hand erfassen (z. B. nach einem Anruf), Status neu → in Bearbeitung → beantwortet → erledigt,
   zuständige Person, Frist mit Erinnerung, Verknüpfung mit Einsatz und Beitrag, interne Notizen, vollständiger Verlauf,
-  Übersicht mit Filtern und Dashboard-Kachel; Löschfrist Standard 12 Monate nach Erledigung; Workflow-Eingang
+  Übersicht mit Filtern und Dashboard-Kachel; Löschfrist Standard 12 Monate nach Erledigung bzw. – für nie erledigte
+  Anfragen – nach der letzten Aktivität, mit Ankündigung 30 Tage vorher; Workflow-Eingang
   „Neue Presseanfrage“ ohne Kontaktdaten.
 - **Presse-Postfach:** Abruf per IMAP (TLS/STARTTLS) oder Microsoft 365 (Graph, gleiche App-Registrierung wie der
   Mailversand) – rein lesend, Verbindungstest vor Aktivierung, Passwort verschlüsselt; neue Mails werden Anfragen,

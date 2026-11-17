@@ -8,6 +8,7 @@ import { badRequest, notFound } from '../lib/errors.js';
 import { notify } from '../lib/notify.js';
 import { getSettings } from '../lib/settings.js';
 import { emitNewPressRequest, nextPressCaseNo, PRESS_CHANNEL_LABEL, PRESS_CHANNELS, PRESS_STATUS, PRESS_STATUS_LABEL, pressEvent, type PressChannel, type PressStatus } from '../press/common.js';
+import { PRESS_ANNOUNCED_SQL, pressRequestDeletion } from '../press/retention.js';
 
 /*
  * Presseanfragen (#204): erfassen, Status, Zuständigkeit, Frist, Verknüpfung mit Einsatz und Beitrag, Notizen, Verlauf.
@@ -123,13 +124,14 @@ export async function pressRoutes(app: FastifyInstance) {
   const manage = requireAuth('press.manage');
 
   app.get('/press/requests', { preHandler: view }, async (req) => {
-    const q = z.object({ filter: z.enum(['open', 'overdue', 'mine', 'answered', 'done', 'all']).default('open'), q: z.string().trim().max(100).default('') }).parse(req.query);
+    const q = z.object({ filter: z.enum(['open', 'overdue', 'mine', 'answered', 'done', 'expiring', 'all']).default('open'), q: z.string().trim().max(100).default('') }).parse(req.query);
     const where: string[] = [];
     const params: unknown[] = [];
     if (q.filter === 'open') where.push(`r.status IN ('new','in_progress')`);
     if (q.filter === 'overdue') where.push(`r.status IN ('new','in_progress') AND r.due_at < now()`);
     if (q.filter === 'answered') where.push(`r.status = 'answered'`);
     if (q.filter === 'done') where.push(`r.status = 'done'`);
+    if (q.filter === 'expiring') where.push(PRESS_ANNOUNCED_SQL);
     if (q.filter === 'mine') {
       params.push(req.auth!.user?.id ?? null);
       where.push(`r.assignee_id = $${params.length} AND r.status <> 'done'`);
@@ -147,8 +149,9 @@ export async function pressRoutes(app: FastifyInstance) {
       `SELECT count(*) FILTER (WHERE status IN ('new','in_progress'))::int AS open,
               count(*) FILTER (WHERE status IN ('new','in_progress') AND due_at < now())::int AS overdue,
               count(*) FILTER (WHERE assignee_id = $1 AND status <> 'done')::int AS mine,
-              count(*) FILTER (WHERE status = 'answered')::int AS answered
-         FROM press_requests`,
+              count(*) FILTER (WHERE status = 'answered')::int AS answered,
+              count(*) FILTER (WHERE ${PRESS_ANNOUNCED_SQL})::int AS expiring
+         FROM press_requests r`,
       [req.auth!.user?.id ?? null],
     );
     return { requests: rows, counts };
@@ -166,7 +169,7 @@ export async function pressRoutes(app: FastifyInstance) {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
     const r = await loadPressRequest(id);
     const events = await many<any>(`SELECT id, at, actor_name, kind, text, details FROM press_request_events WHERE request_id = $1 ORDER BY at, id`, [id]);
-    return { request: r, events, ...(await pressRequestExtras(id, req)) };
+    return { request: r, events, deletion: await pressRequestDeletion(id, await getSettings()), ...(await pressRequestExtras(id, req)) };
   });
 
   app.post('/press/requests', { preHandler: manage }, async (req) => {

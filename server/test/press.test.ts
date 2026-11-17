@@ -198,6 +198,52 @@ describe('Presseanfragen: Grundmodul (#204)', () => {
     expect(await one(`SELECT 1 FROM press_request_events WHERE request_id = $1`, [id])).toBeNull();
   });
 
+  it('Löschfrist auch ohne „erledigt“: neu/beantwortet nach der letzten Aktivität, 30 Tage vorher angekündigt (#243)', async () => {
+    const mk = async (topic: string) => (await editor.post('/press/requests', { topic, contactName: 'Erika Beispiel', contactEmail: 'erika@zeitung.example' })).json.id as string;
+    const answered = await mk('Beantwortet, nie erledigt');
+    const withMail = await mk('Alt, aber neue Mail');
+    const touched = await mk('Wird nach der Ankündigung bearbeitet');
+    await editor.patch(`/press/requests/${answered}`, { status: 'answered' });
+    const age = async (id: string) => {
+      await pool.query(`UPDATE press_requests SET created_at = now() - interval '13 months', updated_at = now() - interval '13 months', answered_at = CASE WHEN answered_at IS NULL THEN NULL ELSE now() - interval '13 months' END WHERE id = $1`, [id]);
+      await pool.query(`UPDATE press_request_events SET at = now() - interval '13 months' WHERE request_id = $1`, [id]);
+    };
+    for (const id of [answered, withMail, touched]) await age(id);
+    await pool.query(`INSERT INTO press_messages (request_id, direction, status, subject) VALUES ($1, 'in', 'received', 'Neue Mail')`, [withMail]);
+    const cat = async () => (await runRetention({ dryRun: true })).categories.find((c) => c.key === 'press_requests_open')!;
+    expect(await cat()).toMatchObject({ count: 0, days: 360, note: expect.stringContaining('2 beim nächsten Lauf anzukündigen') });
+    // erster Lauf: nur ankündigen, nichts löschen
+    await runRetention({ dryRun: false });
+    expect((await many(`SELECT 1 FROM press_requests WHERE id = ANY($1::uuid[])`, [[answered, withMail, touched]])).length).toBe(3);
+    const notes = await many<any>(`SELECT title, body, permission, link FROM notifications WHERE title LIKE '%in 30 Tagen gelöscht'`);
+    expect(notes).toHaveLength(1);
+    expect(notes[0]).toMatchObject({ permission: 'press.manage', link: '/presse?filter=expiring', title: '2 Presseanfragen werden in 30 Tagen gelöscht' });
+    expect(notes[0].body).not.toMatch(/Erika|erika@/);
+    expect((await editor.get(`/press/requests/${answered}`)).json.deletion).toEqual({ at: expect.any(String) });
+    expect((await editor.get(`/press/requests/${withMail}`)).json.deletion).toBeNull();
+    const list = (await editor.get('/press/requests?filter=expiring')).json;
+    expect(list.requests.map((r: any) => r.id).sort()).toEqual([answered, touched].sort());
+    expect(list.counts.expiring).toBe(2);
+    // zweiter Lauf: keine zweite Ankündigung; eine Notiz setzt die Frist zurück
+    await runRetention({ dryRun: false });
+    expect((await many(`SELECT 1 FROM notifications WHERE title LIKE '%in 30 Tagen gelöscht'`)).length).toBe(1);
+    expect((await editor.post(`/press/requests/${touched}/notes`, { text: 'Bleibt – Nachfrage erwartet' })).status).toBe(200);
+    expect((await editor.get(`/press/requests/${touched}`)).json.deletion).toBeNull();
+    // 30 Tage nach der Ankündigung (Frist abgelaufen): gelöscht – die übrigen bleiben
+    await pool.query(`UPDATE press_requests SET retention_notified_at = now() - interval '31 days' WHERE id = ANY($1::uuid[])`, [[answered, touched]]);
+    expect((await cat()).count).toBe(1);
+    await runRetention({ dryRun: false });
+    expect(await one(`SELECT 1 FROM press_requests WHERE id = $1`, [answered])).toBeNull();
+    expect(await one(`SELECT 1 FROM press_request_events WHERE request_id = $1`, [answered])).toBeNull();
+    expect(await one(`SELECT 1 FROM press_requests WHERE id = $1`, [withMail])).not.toBeNull();
+    expect(await one(`SELECT 1 FROM press_requests WHERE id = $1`, [touched])).not.toBeNull();
+    // 0 = nie
+    await setSettings({ 'privacy.press_open_months': 0 } as any);
+    expect(await cat()).toMatchObject({ days: 0, count: 0 });
+    await setSettings({ 'privacy.press_open_months': 12 } as any);
+    await pool.query(`DELETE FROM press_requests WHERE id = ANY($1::uuid[])`, [[withMail, touched]]);
+  });
+
   it('Datenschutzanfrage findet und löscht Presseanfragen', async () => {
     const r = await editor.post('/press/requests', { topic: 'Nachfrage', contactName: 'Max Mustermann', contactEmail: 'max@example.net' });
     const hits = (await admin.get('/privacy/search?q=max@example.net')).json.hits;

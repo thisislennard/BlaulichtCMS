@@ -60,6 +60,11 @@ export const DEFAULT_SETTINGS = {
    * Monate nach der Erledigung löschen. 0 = nie.
    */
   'privacy.press_request_months': 12,
+  /**
+   * Nicht erledigte Presseanfragen (neu, in Bearbeitung, beantwortet; #243, press/retention.ts) so viele Monate nach der
+   * letzten Aktivität löschen – 30 Tage vorher angekündigt an „Presseanfragen bearbeiten“. 0 = nie.
+   */
+  'privacy.press_open_months': 12,
   'privacy.controller': '',
   'privacy.dpo_contact': '',
   'privacy.policy_url': '',
@@ -349,6 +354,7 @@ export const SETTING_RANGES: Record<string, [number, number]> = {
   'privacy.receipt_days': [1, 30],
   'privacy.uploader_months': [0, 120],
   'privacy.press_request_months': [0, 120],
+  'privacy.press_open_months': [0, 120],
   'press.reminder_hours': [0, 72],
   'privacy.automation_run_days': [1, 3650],
   'automations.max_runs_per_minute': [1, 600],

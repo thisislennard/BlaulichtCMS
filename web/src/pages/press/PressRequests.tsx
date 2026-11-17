@@ -1,20 +1,23 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link, useNavigate } from 'react-router';
+import { Link, useNavigate, useSearchParams } from 'react-router';
 import { get, qs } from '../../api/client';
 import { Button, cx, EmptyState, ErrorBox, Input, PageHeader, SegmentedControl, SkeletonRows, Table, Td, Th } from '../../components/ui/core';
 import { useAuth } from '../../lib/auth';
 import { fmtDateTime, fmtRelative } from '../../lib/format';
 import { CHANNEL_LABEL, PressStatusBadge, RequestDialog, type PressRequestRow } from './shared';
 
-type Filter = 'open' | 'overdue' | 'mine' | 'answered' | 'done' | 'all';
+type Filter = 'open' | 'overdue' | 'mine' | 'answered' | 'done' | 'expiring' | 'all';
+const FILTERS: Filter[] = ['open', 'overdue', 'mine', 'answered', 'done', 'expiring', 'all'];
 
 /** Presseanfragen (#204): Übersicht mit Filtern (offen, überfällig, meine …) und Suche. */
 export default function PressRequests() {
   const { can } = useAuth();
   const nav = useNavigate();
   const qc = useQueryClient();
-  const [filter, setFilter] = useState<Filter>('open');
+  const [params] = useSearchParams();
+  // Benachrichtigung „… werden gelöscht“ verlinkt /presse?filter=expiring
+  const [filter, setFilter] = useState<Filter>(() => (FILTERS.includes(params.get('filter') as Filter) ? (params.get('filter') as Filter) : 'open'));
   const [q, setQ] = useState('');
   const [creating, setCreating] = useState(false);
   const list = useQuery({ queryKey: ['press-requests', filter, q], queryFn: () => get<{ requests: PressRequestRow[]; counts: Record<string, number> }>(`/press/requests${qs({ filter, q: q.trim() || undefined })}`), refetchInterval: 30_000 });
@@ -37,6 +40,7 @@ export default function PressRequests() {
             { value: 'mine', label: 'Meine', count: c?.mine },
             { value: 'answered', label: 'Beantwortet', count: c?.answered },
             { value: 'done', label: 'Erledigt' },
+            ...(c?.expiring || filter === 'expiring' ? [{ value: 'expiring' as Filter, label: 'Löschung angekündigt', count: c?.expiring }] : []),
             { value: 'all', label: 'Alle' },
           ]}
         />
