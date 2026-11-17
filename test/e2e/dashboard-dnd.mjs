@@ -176,7 +176,8 @@ try {
   await shot(page, '02-bearbeiten-hell');
 
   // Links in der Kachel bleiben bedienbar: der Kachelkörper startet kein Ziehen
-  const body = widgetLoc(page, 'approvals').locator('h3').first();
+  // Kachel-Titel sind seit #267 h2 (Card)
+  const body = widgetLoc(page, 'approvals').locator('h2').first();
   const bb = await center(body);
   await page.mouse.move(bb.x, bb.y);
   await page.mouse.down();
