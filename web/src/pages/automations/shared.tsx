@@ -58,6 +58,16 @@ export interface WorkflowTemplate {
   input?: { kinds: string[]; preset?: SlotPreset };
   rules?: { field: string; op: string; value?: string }[];
   outputs: { kind: string; preset: SlotPreset }[];
+  /** Voraussetzungen mit Stand (#263, server/src/automations/requirements.ts) */
+  requirements?: TemplateRequirement[];
+}
+
+export interface TemplateRequirement {
+  key: string;
+  label: string;
+  met: boolean;
+  detail: string;
+  fix: { path: string; label: string; permission: string };
 }
 
 export interface InputDef {

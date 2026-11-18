@@ -184,3 +184,23 @@ export function activationChecklist(x: ChecklistInput): ChecklistItem[] {
   if (!x.enabled) items.push({ id: 'enabled', label: 'Workflows global eingeschaltet', state: 'todo', hint: 'Einstellungen → Redaktion → „Workflows ausführen“.' });
   return items;
 }
+
+/* ------------------------------------------------------------------ Liste: Beschreibung nur, wenn sie etwas ergänzt */
+
+const STOP = new Set(['eine', 'einer', 'einem', 'einen', 'eines', 'wenn', 'dann', 'oder', 'sowie', 'nach', 'über', 'beim', 'wird', 'werden', 'dass', 'diese', 'dieser', 'auch', 'noch', 'nicht', 'eingeht', 'entsteht']);
+const stems = (s: string) => new Set((s.toLocaleLowerCase('de').match(/[\p{L}\p{N}]+/gu) ?? []).filter((w) => w.length >= 4 && !STOP.has(w)).map((w) => w.slice(0, 4)));
+
+/**
+ * Sagt die Beschreibung etwas anderes als die automatische Zusammenfassung (#263)? Die Liste zeigt sie sonst nicht als
+ * zweiten, fast gleichen Satz – z. B. die aus der Workflow-Vorlage übernommene Beschreibung. Vergleich über
+ * Wortanfänge: Überschneidet sich mindestens die Hälfte der Wörter des kürzeren Textes, gilt sie als gleich.
+ */
+export function descriptionAddsInfo(summary: string | null | undefined, description: string | null | undefined): boolean {
+  const d = stems(description ?? '');
+  if (!d.size) return false;
+  const s = stems(summary ?? '');
+  if (!s.size) return true;
+  let shared = 0;
+  for (const w of d) if (s.has(w)) shared++;
+  return shared / Math.min(d.size, s.size) < 0.5;
+}

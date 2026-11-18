@@ -14,11 +14,29 @@ export interface SlotPreset {
   config: Record<string, unknown>;
 }
 
+/**
+ * Voraussetzung einer Workflow-Vorlage (#263): was eingerichtet sein muss, damit der Workflow aus der Vorlage laufen
+ * kann. Der Dialog „Neuer Workflow“ zeigt den Stand und den Weg zum Einrichten (automations/requirements.ts).
+ */
+export type TemplateRequirement =
+  /** aktive eingehende Verbindung einer dieser Arten (Auslöser FE2, Feuersoftware Connect, amtliche Warnungen) */
+  | { kind: 'connection'; connectionKinds: ('fe2' | 'feuersoftware' | 'warnfeed')[] }
+  /** gekoppelte Website (Banner, Einsatzliste) */
+  | { kind: 'website' }
+  /** befüllbare Bildvorlage (Schritt „Bild aus Vorlage erzeugen“) */
+  | { kind: 'image_template' }
+  /** Kalender-Kategorie, nach der die Bedingung filtert */
+  | { kind: 'calendar_category'; name: string }
+  /** Stichwortverzeichnis mit dieser Kategorie (Bedingung „Stichwort-Kategorie“) */
+  | { kind: 'keyword_category'; name: string };
+
 export interface TemplateDef {
   id: string;
   title: string;
   description: string;
   icon: string;
+  /** Voraussetzungen (#263) – vollständig: jede Vorlage nennt alles, was sie braucht (Test in units.test.ts) */
+  requires: TemplateRequirement[];
   input?: { kinds: InputKind[]; preset?: SlotPreset };
   rules?: { field: string; op: Operator; value?: string }[];
   /** Schritt „Bild aus Vorlage erzeugen“ vor den Aktionen (#210); die Bildvorlage bleibt ein offener Platz */
@@ -34,6 +52,7 @@ export const TEMPLATES: TemplateDef[] = [
     title: 'Alarm → Banner auf der Website',
     description: 'Bei einem neuen Einsatz einen Banner-Entwurf „Einsatz in …“ für die Website vorbereiten.',
     icon: 'Megaphone',
+    requires: [{ kind: 'connection', connectionKinds: ['fe2', 'feuersoftware'] }, { kind: 'website' }],
     input: { kinds: ALARM, preset: { name: 'Alarm', config: { phases: ['neu'] } } },
     outputs: [
       {
@@ -47,6 +66,7 @@ export const TEMPLATES: TemplateDef[] = [
     title: 'DWD-Warnung → Banner + Beitragsentwurf',
     description: 'Bei einer Warnung des Deutschen Wetterdienstes einen Banner nach Warnstufe und einen Beitragsentwurf anlegen.',
     icon: 'AlertTriangle',
+    requires: [{ kind: 'connection', connectionKinds: ['warnfeed'] }, { kind: 'website' }],
     input: { kinds: ['warnfeed'], preset: { name: 'Amtliche Warnung', config: { phases: ['neu'], onlyInArea: true } } },
     rules: [{ field: 'quelle', op: 'eq', value: 'Deutscher Wetterdienst' }],
     outputs: [
@@ -65,6 +85,7 @@ export const TEMPLATES: TemplateDef[] = [
     title: 'Alarm mit Stichwort-Kategorie Brand → Beitragsentwurf',
     description: 'Nur bei Bränden (Kategorie aus dem Stichwortverzeichnis) einen Beitragsentwurf mit Stichwort und Ort anlegen.',
     icon: 'Siren',
+    requires: [{ kind: 'connection', connectionKinds: ['fe2', 'feuersoftware'] }, { kind: 'keyword_category', name: 'Brand' }],
     input: { kinds: ALARM, preset: { name: 'Alarm', config: { phases: ['neu'] } } },
     rules: [{ field: 'stichwort_kategorie', op: 'eq', value: 'Brand' }],
     outputs: [
@@ -79,6 +100,7 @@ export const TEMPLATES: TemplateDef[] = [
     title: 'Termin von Hand → Story-Bild + Beitragsentwurf',
     description: 'Termin (z. B. eine Übung) per Knopf starten: Bild aus einer Bildvorlage mit Titel und Beginn erzeugen und einen Beitragsentwurf mit dem Bild anlegen – als Story und Beitrag vorauswählbar.',
     icon: 'ImageUp',
+    requires: [{ kind: 'image_template' }],
     input: { kinds: ['manual'], preset: { name: 'Termin von Hand', config: { fields: [{ key: 'titel', label: 'Titel', example: 'Übung am Samstag' }, { key: 'beginn', label: 'Beginn', example: 'Sa., 21.11., 10 Uhr' }, { key: 'ort', label: 'Ort', example: 'Feuerwache Nord' }] } } },
     image: { label: 'Story-Bild', texts: { titel: '{{titel}}', text: '{{beginn}} · {{ort}}' }, altText: '{{titel}} – {{beginn}}, {{ort}}' },
     outputs: [
@@ -93,6 +115,7 @@ export const TEMPLATES: TemplateDef[] = [
     title: 'Warnung → Benachrichtigen',
     description: 'Bei einer neuen amtlichen Warnung im eigenen Gebiet die Redaktion in BlaulichtCMS benachrichtigen.',
     icon: 'Bell',
+    requires: [{ kind: 'connection', connectionKinds: ['warnfeed'] }],
     input: { kinds: ['warnfeed'], preset: { name: 'Amtliche Warnung', config: { phases: ['neu'], onlyInArea: true } } },
     outputs: [
       {
@@ -106,6 +129,7 @@ export const TEMPLATES: TemplateDef[] = [
     title: 'Übung im Kalender → Banner „Achtung Übung“',
     description: 'Zu Beginn eines Termins der Kategorie „Übung“ einen Banner-Entwurf auf der Website vorbereiten, der bis zum Ende der Übung gilt.',
     icon: 'CalendarDays',
+    requires: [{ kind: 'calendar_category', name: 'Übung' }, { kind: 'website' }],
     input: { kinds: ['calendar'], preset: { name: 'Kalender: Beginn eines Termins', config: { timing: 'start' } } },
     rules: [{ field: 'kategorie', op: 'eq', value: 'Übung' }],
     outputs: [
@@ -120,6 +144,7 @@ export const TEMPLATES: TemplateDef[] = [
     title: 'Kalendertermin Übung → Story-Bild + Banner',
     description: 'Zu Beginn einer Übung aus dem Kalender ein Story-Bild aus einer Bildvorlage erzeugen, einen Beitragsentwurf mit dem Bild (als Story vorauswählbar) und einen Banner „Achtung Übung“ anlegen.',
     icon: 'ImageUp',
+    requires: [{ kind: 'calendar_category', name: 'Übung' }, { kind: 'image_template' }, { kind: 'website' }],
     input: { kinds: ['calendar'], preset: { name: 'Kalender: Beginn eines Termins', config: { timing: 'start' } } },
     rules: [{ field: 'kategorie', op: 'eq', value: 'Übung' }],
     image: { label: 'Story-Bild', texts: { titel: '{{titel}}', text: '{{beginn}} · {{ort}}' }, altText: 'Übung: {{titel}} – {{beginn}}, {{ort}}' },

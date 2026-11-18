@@ -235,7 +235,9 @@ flowchart LR
 - **Vorlagen:** „Alarm → Banner auf der Website“, „DWD-Warnung → Banner + Beitragsentwurf“, „Alarm mit
   Stichwort-Kategorie Brand → Beitragsentwurf“, „Warnung → Benachrichtigen“, „Übung im Kalender → Banner
   ‚Achtung Übung‘“, „Kalendertermin Übung → Story-Bild + Banner“, „Termin von Hand → Story-Bild + Beitragsentwurf“
-  oder leer beginnen; passende Auslöser und Aktionen werden eingesetzt, offene Plätze hervorgehoben.
+  oder leer beginnen; passende Auslöser und Aktionen werden eingesetzt, offene Plätze hervorgehoben. Jede Vorlage
+  nennt vor dem Anlegen ihre Voraussetzungen (z. B. FE2-Verbindung, Website, Bildvorlage) mit Stand und Weg zum
+  Einrichten; einsatzbereite Vorlagen stehen zuerst.
 - **Geführt in drei Schritten:** *Wenn* (Auslöser) – *Nur wenn* (Feld – Vergleich – Wert, mit Vorschlägen aus dem
   Stichwortverzeichnis) – *Dann* (Aktionen). Fehlende Auslöser und Aktionen direkt im Workflow anlegen. Jeder Workflow
   steht in der Liste und im Editor als ein Satz („Wenn ein neuer Alarm … eingeht, erscheint nach Freigabe auf der

@@ -123,6 +123,27 @@ describe('Workflows mit KI: Formatbeschreibung (#199)', () => {
     }
   });
 
+  it('jede Workflow-Vorlage nennt alle Voraussetzungen, die ihr Ablauf braucht (#263)', () => {
+    // Abgeleitet aus dem Ablauf: Auslöser mit Verbindung, Banner (Website), Bild aus Vorlage, Filter auf Kategorien
+    const derived = (t: (typeof TEMPLATES)[number]) => {
+      const out: string[] = [];
+      const conn = (t.input?.kinds ?? []).filter((k) => ['fe2', 'feuersoftware', 'warnfeed'].includes(k));
+      if (conn.length) out.push(`connection:${conn.join('+')}`);
+      if (t.outputs.some((o) => o.kind === 'banner' || o.kind === 'incident_entry')) out.push('website');
+      if (t.image) out.push('image_template');
+      for (const r of t.rules ?? []) {
+        if (r.field === 'stichwort_kategorie') out.push(`keyword_category:${r.value}`);
+        if (r.field === 'kategorie' && t.input?.kinds.includes('calendar')) out.push(`calendar_category:${r.value}`);
+      }
+      return out.sort();
+    };
+    const declared = (t: (typeof TEMPLATES)[number]) =>
+      t.requires.map((r) => (r.kind === 'connection' ? `connection:${r.connectionKinds.join('+')}` : r.kind === 'calendar_category' || r.kind === 'keyword_category' ? `${r.kind}:${r.name}` : r.kind)).sort();
+    for (const t of TEMPLATES) expect(declared(t), t.id).toEqual(derived(t));
+    // Stichprobe aus dem Issue: Alarm → Banner braucht FE2/Feuersoftware und eine Website
+    expect(declared(TEMPLATES.find((t) => t.id === 'alarm-banner')!)).toEqual(['connection:fe2+feuersoftware', 'website']);
+  });
+
   it('ein Export mit allen Knotenarten (wie ihn BlaulichtCMS schreibt) erfüllt das Schema', () => {
     const parsed = parseTransferFile(aiFile());
     const { graph } = mappedGraph(parsed.automations[0], parsed, { inputs: { in1: IN }, outputs: { out1: OUT, out2: OUT2 } }, refs, new Map([['story 9:16', TPL]]));

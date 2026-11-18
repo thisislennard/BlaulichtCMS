@@ -233,6 +233,24 @@ describe('Automationen: Entwurf, Test, Aktivierung', () => {
   it('Workflow aus Vorlage: einziger passender Eingang wird eingesetzt, offene Plätze gemeldet; Satz in Liste und Prüfung', async () => {
     const cat = await editor.get('/automations/catalog');
     expect(cat.json.templates.map((t: any) => t.id)).toContain('alarm-fire-post');
+    // Voraussetzungen je Vorlage mit Stand und Weg zum Einrichten (#263)
+    const req = (id: string) => Object.fromEntries(cat.json.templates.find((t: any) => t.id === id).requirements.map((r: any) => [r.key, r]));
+    expect(req('alarm-banner')['connection:fe2+feuersoftware']).toMatchObject({ met: true, label: 'FE2 oder Feuersoftware Connect', detail: '„FE2 Leitstelle“', fix: { path: '/verbindungen', permission: 'connection.configure' } });
+    expect(req('alarm-banner').website).toMatchObject({ met: true, detail: '„Testseite“' });
+    expect(req('date-story-image').image_template).toMatchObject({ met: false, fix: { path: '/designvorlagen', permission: 'templates.manage' } });
+    expect(req('calendar-exercise-banner')['calendar_category:Übung'].met).toBe(true);
+    expect(req('alarm-fire-post')['keyword_category:Brand']).toMatchObject({ met: false, fix: { path: '/stichwoerter-regeln' } });
+    // Nicht aktive Verbindung zählt nicht; Stichwort der Kategorie erfüllt die Voraussetzung
+    const fs3 = await one<any>(`INSERT INTO connections (kind, name, status, config) VALUES ('feuersoftware', 'Feuersoftware Entwurf', 'draft', '{}') RETURNING id`);
+    await pool.query(`UPDATE connections SET status = 'draft' WHERE id = $1`, [fe2Conn.id]);
+    const kw = await one<any>(`INSERT INTO fire_keywords (code, label, category, source) VALUES ('B 9', 'Brand Test', 'brand', 'eigen') RETURNING id`);
+    const cat2 = await editor.get('/automations/catalog');
+    const r2 = cat2.json.templates.find((t: any) => t.id === 'alarm-fire-post').requirements;
+    expect(r2.find((r: any) => r.key === 'connection:fe2+feuersoftware')).toMatchObject({ met: false, detail: expect.stringMatching(/^(?=.*„FE2 Leitstelle“)(?=.*„Feuersoftware Entwurf“).* eingerichtet, aber nicht aktiv$/) });
+    expect(r2.find((r: any) => r.key === 'keyword_category:Brand')).toMatchObject({ met: true, detail: '1 Stichwort' });
+    await pool.query(`UPDATE connections SET status = 'active' WHERE id = $1`, [fe2Conn.id]);
+    await pool.query(`DELETE FROM connections WHERE id = $1`, [fs3!.id]);
+    await pool.query(`DELETE FROM fire_keywords WHERE id = $1`, [kw!.id]);
     expect((await admin.post('/automations', { name: 'Unbekannt', template: 'gibt-es-nicht' })).status).toBe(400);
     // Genau ein FE2-Eingang vorhanden → eingesetzt; Beitragsausgang auch genau einer → eingesetzt
     const c = await admin.post('/automations', { name: 'Brand aus Vorlage', template: 'alarm-fire-post' });

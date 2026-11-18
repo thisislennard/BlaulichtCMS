@@ -6,22 +6,30 @@ Ein Workflow besteht aus drei Bausteinen:
 2. **Bedingungen und Verarbeitung** – *ob* und *wie*: Bedingungen, Verzweigungen, Textvorlagen, Warten, Entprellen, Freigabe.
 3. **Aktionen** – *was* passiert, samt Gestaltung (Banner-Stil, Beitragsvorlage, E-Mail …). Eingerichtet unter [Workflows → Aktionen](/workflows/aktionen) oder direkt im Workflow.
 
-Unter [Workflows](/workflows) steht jeder Workflow mit einem Satz, was er tut – z. B. „Wenn ein neuer Alarm über „FE2 Leitstelle“ eingeht und Stichwort mit „F 2“ beginnt, erscheint nach Freigabe auf der Website ein Banner der Stufe „Warnung“.“ Rechte: **Workflows ansehen** (Administration, Redaktion, Freigabe), **Workflows verwalten** und **Workflows direkt veröffentlichen lassen** (beide nur Administration). Die Rechte heißen intern weiter `automation.*`.
+Unter [Workflows](/workflows) steht jeder Workflow mit einem Satz, was er tut (die eigene Beschreibung erscheint darunter nur, wenn sie etwas anderes sagt; vollständig beim Zeigen auf den Namen) – z. B. „Wenn ein neuer Alarm über „FE2 Leitstelle“ eingeht und Stichwort mit „F 2“ beginnt, erscheint nach Freigabe auf der Website ein Banner der Stufe „Warnung“.“ Rechte: **Workflows ansehen** (Administration, Redaktion, Freigabe), **Workflows verwalten** und **Workflows direkt veröffentlichen lassen** (beide nur Administration). Die Rechte heißen intern weiter `automation.*`.
 
 ## Neuer Workflow aus einer Vorlage
 
 **Neuer Workflow** bietet fertige Vorlagen – alle nur aus Bausteinen, die es wirklich gibt:
 
-| Vorlage | Auslöser | Nur wenn | Aktionen |
-|---|---|---|---|
-| Alarm → Banner auf der Website | FE2-Alarm oder Feuersoftware-Einsatz (neuer Einsatz) | – | Banner `Einsatz: {{stichwort_text}}`, Stufe Warnung, 3 Stunden, zur Freigabe |
-| DWD-Warnung → Banner + Beitragsentwurf | Amtliche Warnung (eigenes Gebiet) | `quelle` ist gleich „Deutscher Wetterdienst“ | Banner nach Warnstufe bis `gueltig_bis` und Beitragsentwurf „Lage“ |
-| Alarm mit Stichwort-Kategorie Brand → Beitragsentwurf | FE2-Alarm oder Feuersoftware-Einsatz | `stichwort_kategorie` ist gleich „Brand“ | Beitragsentwurf „Einsatz“ |
-| Termin von Hand → Story-Bild + Beitragsentwurf | Manueller Start mit den Feldern `titel`, `beginn`, `ort` | – | **Bild aus Vorlage erzeugen** (Bildvorlage wählen), danach Beitragsentwurf „Veranstaltung“ mit dem Bild – als Story vorauswählbar |
-| Warnung → Benachrichtigen | Amtliche Warnung (eigenes Gebiet) | – | App-Benachrichtigung an die Rolle Redaktion |
-| Übung im Kalender → Banner „Achtung Übung“ | Kalendereintrag (zu Beginn) | `kategorie` ist gleich „Übung“ | Banner „Achtung Übung“ (Hinweis) bis zum Ende des Termins (`gueltig_bis`), zur Freigabe |
-| Kalendertermin Übung → Story-Bild + Banner | Kalendereintrag (zu Beginn) | `kategorie` ist gleich „Übung“ | **Bild aus Vorlage erzeugen** mit `{{titel}}`, `{{beginn}}`, `{{ort}}` (Bildvorlage wählen), danach Beitragsentwurf mit dem Bild (Story im Beitrags-Aktion vorauswählen) und Banner „Achtung Übung“ |
-| Leer beginnen | – | – | – |
+| Vorlage | Auslöser | Nur wenn | Aktionen | Benötigt |
+|---|---|---|---|---|
+| Alarm → Banner auf der Website | FE2-Alarm oder Feuersoftware-Einsatz (neuer Einsatz) | – | Banner `Einsatz: {{stichwort_text}}`, Stufe Warnung, 3 Stunden, zur Freigabe | aktive Verbindung zu FE2 oder Feuersoftware Connect, gekoppelte Website |
+| DWD-Warnung → Banner + Beitragsentwurf | Amtliche Warnung (eigenes Gebiet) | `quelle` ist gleich „Deutscher Wetterdienst“ | Banner nach Warnstufe bis `gueltig_bis` und Beitragsentwurf „Lage“ | aktive Warnquelle (Verbindung „Amtliche Warnungen“), gekoppelte Website |
+| Alarm mit Stichwort-Kategorie Brand → Beitragsentwurf | FE2-Alarm oder Feuersoftware-Einsatz | `stichwort_kategorie` ist gleich „Brand“ | Beitragsentwurf „Einsatz“ | aktive Verbindung zu FE2 oder Feuersoftware Connect, Stichwörter der Kategorie „Brand“ (unter [Stichwörter & Regeln](/stichwoerter-regeln)) |
+| Termin von Hand → Story-Bild + Beitragsentwurf | Manueller Start mit den Feldern `titel`, `beginn`, `ort` | – | **Bild aus Vorlage erzeugen** (Bildvorlage wählen), danach Beitragsentwurf „Veranstaltung“ mit dem Bild – als Story vorauswählbar | befüllbare Bildvorlage (unter [Designvorlagen](/designvorlagen)) |
+| Warnung → Benachrichtigen | Amtliche Warnung (eigenes Gebiet) | – | App-Benachrichtigung an die Rolle Redaktion | aktive Warnquelle |
+| Übung im Kalender → Banner „Achtung Übung“ | Kalendereintrag (zu Beginn) | `kategorie` ist gleich „Übung“ | Banner „Achtung Übung“ (Hinweis) bis zum Ende des Termins (`gueltig_bis`), zur Freigabe | Kalender-Kategorie „Übung“ (mitgeliefert), gekoppelte Website |
+| Kalendertermin Übung → Story-Bild + Banner | Kalendereintrag (zu Beginn) | `kategorie` ist gleich „Übung“ | **Bild aus Vorlage erzeugen** mit `{{titel}}`, `{{beginn}}`, `{{ort}}` (Bildvorlage wählen), danach Beitragsentwurf mit dem Bild (Story im Beitrags-Aktion vorauswählen) und Banner „Achtung Übung“ | Kalender-Kategorie „Übung“, befüllbare Bildvorlage, gekoppelte Website |
+| Leer beginnen | – | – | – | – |
+
+### Voraussetzungen vor dem Anlegen
+
+Der Dialog **Neuer Workflow** zeigt je Vorlage unter **Benötigt**, ob alles eingerichtet ist (Häkchen) oder was noch fehlt (Warnzeichen) – z. B. „FE2 oder Feuersoftware Connect · noch keine Verbindung“. Daneben steht der Weg dorthin (**Verbinden →**, **Website koppeln →**, **Bildvorlage gestalten →** …), wenn das eigene Konto das Recht dazu hat; sonst nennt der Dialog den Menüpfad, unter dem es jemand mit passenden Rechten einrichten kann. Eine Verbindung zählt erst, wenn sie **aktiv** ist.
+
+- **Reihenfolge:** zuerst die Vorlagen, für die alles eingerichtet ist („Sofort einsatzbereit“), dann die übrigen („Noch etwas einzurichten“), **Leer beginnen** zuletzt. Vorausgewählt ist nichts.
+- Auch Vorlagen mit fehlender Voraussetzung lassen sich wählen: Der Workflow entsteht als Entwurf und lässt sich testen und aktivieren, sobald alles eingerichtet ist.
+- Name und Beschreibung werden aus der Vorlage vorbelegt und lassen sich ändern.
 
 Gibt es genau einen passenden Auslöser bzw. eine passende Aktion, setzt die Vorlage ihn gleich ein. Sonst bleibt der **Platz offen** (gelb, „Offen“): einen vorhandenen wählen oder mit **Neu anlegen …** direkt im Workflow einrichten – das Formular ist mit den Werten der Vorlage vorbelegt (z. B. Banner-Titel und Stufe); Pflichtangaben wie die Website oder die Verbindung wählt man selbst.
 
@@ -133,15 +141,15 @@ Die automatischen Banner amtlicher Warnungen unter [Verbindungen](/hilfe/verbind
 
 Workflows lassen sich als JSON-Datei sichern oder auf eine andere BlaulichtCMS-Instanz übertragen.
 
-- **Exportieren** (Liste der Workflows, Recht *Workflows ansehen*): einen, mehrere oder alle Workflows auswählen (höchstens 50 je Datei). Die Datei enthält Name, Beschreibung und Ablauf. Auslöser und Aktionen stehen darin nur mit **Art und Name** – ohne ihre Einstellungen, ohne Kennungen und ohne Zugangsdaten. Die Markierung **Direkt** wird nie exportiert.
-- **Importieren** (Recht *Workflows verwalten*): Datei wählen (höchstens 1 MB). BlaulichtCMS prüft Format, Version und jeden Schritt und nennt Fehler verständlich, z. B. „keine Exportdatei“ oder „aus einer neueren BlaulichtCMS-Version“. Die **Vorschau** zeigt, was angelegt wird. Je Ein- und Aktion aus der Datei einen vorhandenen derselben Art wählen – gleichnamige sind vorgeschlagen – oder **Nicht zuordnen** und später im Editor wählen.
+- **Exportieren** (Liste der Workflows, Menü **⋯** neben „Neuer Workflow“, Recht *Workflows ansehen*): einen, mehrere oder alle Workflows auswählen (höchstens 50 je Datei). Die Datei enthält Name, Beschreibung und Ablauf. Auslöser und Aktionen stehen darin nur mit **Art und Name** – ohne ihre Einstellungen, ohne Kennungen und ohne Zugangsdaten. Die Markierung **Direkt** wird nie exportiert.
+- **Importieren** (Menü **⋯**, Recht *Workflows verwalten* – ohne dieses Recht erscheint der Eintrag nicht): Datei wählen (höchstens 1 MB). BlaulichtCMS prüft Format, Version und jeden Schritt und nennt Fehler verständlich, z. B. „keine Exportdatei“ oder „aus einer neueren BlaulichtCMS-Version“. Die **Vorschau** zeigt, was angelegt wird. Je Ein- und Aktion aus der Datei einen vorhandenen derselben Art wählen – gleichnamige sind vorgeschlagen – oder **Nicht zuordnen** und später im Editor wählen.
 - **Bildvorlagen** im Schritt „Bild aus Vorlage erzeugen“ stehen in der Datei nur mit ihrem **Namen**. Beim Import wird die gleichnamige befüllbare Bildvorlage eingesetzt; fehlt sie, bleibt der Platz offen (mit Hinweis auf den Namen). Feste Bilder und die Zielsammlung werden nicht exportiert.
 - Importierte Workflows sind immer **Entwürfe**: nicht aktiv, nicht getestet, ohne Direktversand. Ist der Name schon vergeben, wird „(Import)“ angehängt. Vor dem Aktivieren im Editor prüfen und testen. Dateien aus Version 0.3.0 (Format `blaulichtcms.automations`) bleiben importierbar; das Format heißt unverändert so.
 - Statt einer Datei lässt sich der JSON-Text auch **einfügen** (**Als Text einfügen** → **Prüfen**). Fehlermeldungen nennen den Ort in der Datei als JSON-Pfad (z. B. `automations[0].graph.nodes[2].data.rules[0].op`) und was erwartet wurde; **Meldungen kopieren** übernimmt sie als Text.
 
 ## Workflows mit KI erstellen
 
-Unter **Mit KI erstellen** stehen die Formatbeschreibung (JSON-Schema), der **Katalog** dieser Installation (vorhandene Auslöser und Aktionen, Felder, Vergleiche, Bildvorlagen, Stichwortverzeichnis – ohne Zugangsdaten, Kennungen, Einsatz- oder Personendaten) und eine Vorlage für die Anfrage an eine KI. Das Ergebnis wird wie oben importiert und startet als Entwurf. **Nie Einsatz- oder Personendaten an eine KI geben.** Ablauf, Datenschutz und Dateiformat: [Workflows mit KI erstellen](/hilfe/workflows-ki).
+Unter **Mit KI erstellen** (Menü **⋯** der Workflow-Liste, nur mit dem Recht *Workflows verwalten*, weil das Ergebnis importiert wird) stehen die Formatbeschreibung (JSON-Schema), der **Katalog** dieser Installation (vorhandene Auslöser und Aktionen, Felder, Vergleiche, Bildvorlagen, Stichwortverzeichnis – ohne Zugangsdaten, Kennungen, Einsatz- oder Personendaten) und eine Vorlage für die Anfrage an eine KI. Das Ergebnis wird wie oben importiert und startet als Entwurf. **Nie Einsatz- oder Personendaten an eine KI geben.** Ablauf, Datenschutz und Dateiformat: [Workflows mit KI erstellen](/hilfe/workflows-ki).
 
 ## Beispiele
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { activationChecklist, graphToGuided, guidedToGraph, type GuidedGraph } from '../../web/src/pages/automations/workflowModel.js';
+import { activationChecklist, descriptionAddsInfo, graphToGuided, guidedToGraph, type GuidedGraph } from '../../web/src/pages/automations/workflowModel.js';
 import { graphSchema, validateGraph, type InputRef, type OutputRef } from '../src/automations/graph.js';
 import { summarizeGraph } from '../src/automations/summary.js';
 import { TEMPLATES, templateGraph } from '../src/automations/templates.js';
@@ -221,5 +221,16 @@ describe('Workflows: Bild aus Vorlage (#210)', () => {
     const miss = mappedGraph(parsed.automations[0], parsed, mapping, refs, new Map());
     expect(miss.open).toBe(1);
     expect(validateGraph(miss.graph, refs).errors.map((x) => x.message).join(' ')).toMatch(/„Story Einsatz“/);
+  });
+
+  it('Liste: Beschreibung nur, wenn sie mehr sagt als die Zusammenfassung (#263)', () => {
+    const empty = { inputs: new Map(), outputs: new Map() };
+    const summaryOf = (id: string) => summarizeGraph(templateGraph(TEMPLATES.find((t) => t.id === id)!, empty).graph, empty);
+    // Aus der Vorlage übernommene Beschreibung: fast derselbe Satz → ausgeblendet
+    for (const id of ['alarm-banner', 'warning-notify', 'calendar-exercise-banner', 'alarm-fire-post']) expect(descriptionAddsInfo(summaryOf(id), TEMPLATES.find((t) => t.id === id)!.description), id).toBe(false);
+    // Eigene Ergänzung → gezeigt; leer → nichts
+    expect(descriptionAddsInfo(summaryOf('alarm-banner'), 'Nur für die Wache Nord, abgestimmt mit der Pressestelle.')).toBe(true);
+    expect(descriptionAddsInfo(summaryOf('alarm-banner'), '  ')).toBe(false);
+    expect(descriptionAddsInfo('', 'Etwas Eigenes')).toBe(true);
   });
 });

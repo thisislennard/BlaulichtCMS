@@ -18,6 +18,7 @@ import { sendFileResponse } from './files.js';
 import { buildExport, mappedGraph, parseTransferFile, suggestions, TRANSFER_MAX_AUTOMATIONS, TRANSFER_MAX_BYTES, TransferError, type TransferFile } from '../automations/transfer.js';
 import { summarizeGraph, type SummaryLabels } from '../automations/summary.js';
 import { templateById, templateGraph, TEMPLATES } from '../automations/templates.js';
+import { templateRequirements } from '../automations/requirements.js';
 import { config } from '../config.js';
 import { buildAiCatalog } from '../automations/aicatalog.js';
 import { AI_PROMPT, CATALOG_FILE, SCHEMA_FILE, SCHEMA_URL_PATH } from '../automations/format.js';
@@ -144,6 +145,7 @@ export async function automationRoutes(app: FastifyInstance) {
   app.get('/automations/catalog', { preHandler: read }, async (req) => {
     const s = await getSettings();
     const canManage = req.auth!.permissions.has('automation.manage');
+    const requirements = await templateRequirements();
     return {
       enabled: s['automations.enabled'],
       maxRunsPerMinute: s['automations.max_runs_per_minute'],
@@ -151,7 +153,8 @@ export async function automationRoutes(app: FastifyInstance) {
       ai: { prompt: AI_PROMPT, schemaFile: SCHEMA_FILE, schemaPath: SCHEMA_URL_PATH, catalogFile: CATALOG_FILE },
       inputKinds: Object.entries(INPUT_KINDS).map(([kind, d]) => ({ kind, ...d, fields: inputFields({ kind: kind as InputKind, config: {} }) })),
       outputKinds: Object.entries(OUTPUT_KINDS).map(([kind, d]) => ({ kind, ...d })),
-      templates: TEMPLATES,
+      // Workflow-Vorlagen mit dem Stand ihrer Voraussetzungen (#263)
+      templates: TEMPLATES.map((t) => ({ ...t, requirements: requirements[t.id] })),
       nodeTypes: Object.entries(NODE_TYPES).map(([type, d]) => ({ type, ...d })),
       operators: OPERATORS,
       limits: LIMITS,
