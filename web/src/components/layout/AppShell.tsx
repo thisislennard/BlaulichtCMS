@@ -17,6 +17,7 @@ import { FeedbackView } from '../feedback/Feedback';
 import { PageInfoCtx, type PageInfo } from './page';
 import { helpHref, PageHelp } from './PageHelp';
 import { MobileTabBar } from './MobileTabBar';
+import { resolvedText, useApprovals } from '../../pages/approvals/model';
 
 /**
  * Seitentitel/Brotkrumen (#250, #267): Menüseiten erhalten Titel, Bereich und Hilfe aus der Navigation. Unterseiten und
@@ -50,8 +51,10 @@ function useCounts() {
   const fallback = useLive() === 'live' ? 120_000 : 30_000;
   const notif = useQuery({ queryKey: ['notifications'], queryFn: () => get('/notifications'), enabled: !!me, refetchInterval: fallback });
   const status = useQuery({ queryKey: ['system-status-mini'], queryFn: () => get('/system/status'), enabled: can('system.status'), refetchInterval: 30_000 });
-  const dash = useQuery({ queryKey: ['dashboard'], queryFn: () => get<any>('/dashboard'), enabled: can('post.view') && (can('approval.post') || can('publish.website')), refetchInterval: fallback });
-  const approvals = (can('approval.post') ? (dash.data?.pendingApprovals?.length ?? 0) : 0) + (can('publish.website') ? (dash.data?.readyToPublish?.length ?? 0) : 0);
+  // Freigaben über alle Arten (#251): was die Person entscheiden darf (ohne Vier-Augen-Sperre) und was sie
+  // veröffentlichen bzw. versenden darf – dieselbe Quelle wie die Seite Freigaben
+  const pending = useApprovals();
+  const approvals = (pending.data?.open ?? 0) + (pending.data?.ready.length ?? 0);
   return { notif: notif.data, status: status.data, approvals };
 }
 
@@ -232,9 +235,11 @@ function NotificationsButton() {
             >
               <Icon name={n.kind === 'error' ? 'XCircle' : n.kind === 'warning' ? 'AlertTriangle' : n.kind === 'success' ? 'CheckCircle2' : 'Info'} size={15} className={cx('mt-0.5 shrink-0', n.kind === 'error' ? 'text-err' : n.kind === 'warning' ? 'text-warn' : n.kind === 'success' ? 'text-ok' : 'text-fg-link')} />
               <span className="flex flex-col gap-0.5 min-w-0">
-                <span className={cx('text-sm', !n.read && 'font-semibold')}>{n.title}</span>
+                <span className={cx('text-sm', !n.read && 'font-semibold', n.resolved_at && 'text-fg-muted')}>{n.title}</span>
                 {n.body && <span className="text-meta text-fg-muted line-clamp-2">{n.body}</span>}
-                <span className="text-meta text-fg-muted">{fmtRelative(n.created_at)}</span>
+                {/* Erledigte Freigabe-Anfrage (#253) */}
+                {n.resolved_at && <span className="text-meta text-fg-muted">{resolvedText(n)}</span>}
+                <span className="text-meta text-fg-muted">{fmtRelative(n.updated_at ?? n.created_at)}</span>
               </span>
             </button>
           ))}

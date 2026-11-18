@@ -71,6 +71,6 @@ export const SETTINGS_INDEX: SettingsEntry[] = [
   { title: 'Wartungsmodus schalten', where: 'Verwaltung → Systemstatus', href: '/system#wartungsmodus', keywords: 'Wartungsmodus Wartung einschalten ausschalten pausieren', perm: ['system.maintenance'] },
   { title: 'Testmodus des Warnversands', where: 'Einrichtung → Stichwörter & Regeln → Testmodus', href: '/stichwoerter-regeln?tab=testmodus', keywords: 'Testmodus Testpostfach Warnversand Echtbetrieb Testmail', perm: ['warning.settings'] },
   { title: 'Persönliche Darstellung', where: 'Mein Konto → Darstellung', href: '/profil#darstellung', keywords: 'Darstellung Farbschema hell dunkel Dark Mode Animationen kompakte Tabellen', perm: [] },
-  { title: 'Persönliche Benachrichtigungen', where: 'Mein Konto → Benachrichtigungen', href: '/profil#benachrichtigungen', keywords: 'Push E-Mail Mail Benachrichtigungen Gerät Testnachricht', perm: [] },
+  { title: 'Persönliche Benachrichtigungen', where: 'Mein Konto → Benachrichtigungen', href: '/profil#benachrichtigungen', keywords: 'Glocke Push E-Mail Mail Benachrichtigungen Gerät Testnachricht stummschalten Medien Freigabe', perm: [] },
   { title: 'Passwort und Zwei-Faktor', where: 'Mein Konto', href: '/profil', keywords: 'Passwort ändern Zwei-Faktor 2FA Wiederherstellungscodes Sitzungen abmelden', perm: [] },
 ];

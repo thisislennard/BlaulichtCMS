@@ -557,8 +557,16 @@ describe('Automationen: Verarbeitung, Grenzen, Notbremse, Löschfrist', () => {
     await drain();
     expect((await one<any>(`SELECT status FROM automation_runs WHERE id = $1`, [r.json.runId]))!.status).toBe('waiting');
     expect((await approver.get('/automation-approvals')).json.some((x: any) => x.title === 'Bitte prüfen: Mitte')).toBe(true);
+    // Freigaben-Liste über alle Arten (#251) und Benachrichtigung mit Link genau auf diese Freigabe (#253)
+    const ap = await one<any>(`SELECT id FROM automation_approvals WHERE run_id = $1`, [r.json.runId]);
+    const item = (await approver.get('/approvals/pending')).json.items.find((i: any) => i.kind === 'automation' && i.id === ap!.id);
+    expect(item).toMatchObject({ title: 'Bitte prüfen: Mitte', link: `/freigaben?workflow=${ap!.id}`, blocked: null, meta: { automation_name: 'Mit Freigabe' } });
+    const note = (await approver.get('/notifications')).json.notifications.find((n: any) => n.object_type === 'automation' && !n.resolved_at);
+    expect(note).toMatchObject({ title: 'Freigabe erbeten: Bitte prüfen: Mitte', link: `/freigaben?workflow=${ap!.id}`, read: false });
     await pool.query(`UPDATE automation_approvals SET expires_at = now() - interval '1 minute' WHERE run_id = $1`, [r.json.runId]);
     expect((await automationTick()).expired).toBe(1);
+    // Frist abgelaufen: Anfrage erledigt, zählt nicht mehr als ungelesen
+    expect((await approver.get('/notifications')).json.notifications.find((n: any) => n.id === note.id)).toMatchObject({ read: true, resolved_note: 'Frist abgelaufen' });
     await drain();
     expect((await one<any>(`SELECT status FROM automation_runs WHERE id = $1`, [r.json.runId]))!.status).toBe('succeeded');
     expect(await one(`SELECT 1 FROM notifications WHERE title = 'Freigegeben: Mitte'`)).toBeNull();

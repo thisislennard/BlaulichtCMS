@@ -10,6 +10,7 @@ import { activeRole, activeRoles, roleExists } from '../auth/permissions.js';
 import { POST_STATE_SQL } from './posts.js';
 import { availableWidgets, defaultProfile, layoutIssues, normalizeLayout, resolveLayout, type DashboardModule } from '../lib/dashboard-layout.js';
 import { insightsOverview } from './insights.js';
+import { APPROVAL_LIST_PERMISSIONS, approvalOverview } from '../approvals/pending.js';
 import { warningState } from './warnings.js';
 import { entryState } from '../incidents/list.js';
 import { calendarProviders, calendarTimeZone, occurrences, toEntry, type CalendarEntry } from '../calendar/store.js';
@@ -95,6 +96,9 @@ export async function dashboardRoutes(app: FastifyInstance) {
           ORDER BY pb.created_at DESC LIMIT 15`,
       );
     }
+    // Freigaben über alle Arten (#251): dieselbe Quelle wie die Freigaben-Liste und der Zähler in der Kopfzeile –
+    // Kennzahl, Begrüßung und Redaktionsfluss zählen damit Banner, Einsatzliste, Warnentwürfe, Presse und Workflows mit
+    if (APPROVAL_LIST_PERMISSIONS.some((p) => perms.has(p))) out.approvals = await approvalOverview(req.auth!);
     if (perms.has('channel.view')) {
       out.sites = await many<any>(`SELECT id, name, status, site_url, last_seen_at, plugin_version FROM wp_sites WHERE status <> 'revoked' ORDER BY name`);
     }

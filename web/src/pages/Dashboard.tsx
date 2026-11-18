@@ -52,12 +52,12 @@ function greeting(name?: string) {
  */
 function summary(d: any, can: (perm: string) => boolean) {
   const parts: string[] = [];
-  const a = d.pendingApprovals?.length ?? 0;
+  // Freigaben über alle Arten, die die Person entscheiden darf (#251) – ohne die, die das Vier-Augen-Prinzip sperrt
+  const a = d.approvals?.open ?? 0;
   const u = d.media?.unreviewed ?? 0;
   const late = (d.myPress ?? []).filter((r: any) => r.overdue).length;
-  const review = (d.warnings?.cases ?? []).filter((c: any) => c.state === 'in_review').length;
-  if (can('approval.post') && a) parts.push(a === 1 ? 'eine Freigabe wartet auf dich' : `${a >= 20 ? 'mehr als 20' : a} Freigaben warten auf dich`);
-  if (can('warning.approve') && review) parts.push(review === 1 ? 'ein Warnentwurf wartet auf Freigabe' : `${review} Warnentwürfe warten auf Freigabe`);
+  // Warnentwürfe zählen mit (Art „Warnentwurf“ der Freigaben-Liste) – keine zweite Zeile dafür
+  if (a) parts.push(a === 1 ? 'eine Freigabe wartet auf dich' : `${a} Freigaben warten auf dich`);
   if (can('media.review') && u) parts.push(u === 1 ? 'eine Datei ist ungesichtet' : `${u} Dateien sind ungesichtet`);
   if ((can('press.manage') || can('press.reply')) && late) parts.push(late === 1 ? 'bei einer deiner Presseanfragen ist die Frist überschritten' : `bei ${late} deiner Presseanfragen ist die Frist überschritten`);
   if (!parts.length) return 'Alles ruhig – nichts wartet auf dich.';

@@ -34,7 +34,8 @@ export const navigation: NavGroup[] = [
     group: 'nav.overview',
     items: [
       { id: 'dashboard', path: '/', label: 'nav.dashboard', icon: 'LayoutDashboard', help: 'dashboard' },
-      { id: 'approvals', path: '/freigaben', label: 'nav.approvals', icon: 'ListChecks', perm: ['approval.post', 'publish.website'], badge: 'approvals', help: 'freigabe' },
+      // Freigaben über alle Arten (#251) – Rechte wie APPROVAL_PAGE_PERMS (pages/approvals/model.ts)
+      { id: 'approvals', path: '/freigaben', label: 'nav.approvals', icon: 'ListChecks', perm: ['approval.post', 'approval.banner', 'approval.incident', 'approval.automation', 'warning.approve', 'press.approve', 'publish.website', 'publish.social', 'banner.publish', 'incident.publish', 'warning.send'], badge: 'approvals', help: 'freigabe#freigaben-liste' },
       { id: 'notifications', path: '/benachrichtigungen', label: 'nav.notifications', icon: 'Bell', badge: 'notifications', help: 'benachrichtigungen' },
       { id: 'insights', path: '/reichweite', label: 'nav.insights', icon: 'ChartColumn', perm: ['insights.view'], help: 'verbindungen#reichweite' },
       { id: 'activity', path: '/aktivitaeten', label: 'nav.activity', icon: 'Activity', perm: ['audit.view'], help: 'system#aktivitaeten' },

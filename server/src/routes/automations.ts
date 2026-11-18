@@ -7,6 +7,7 @@ import { activeRoles } from '../auth/permissions.js';
 import { audit } from '../lib/audit.js';
 import { AppError, badRequest, conflict, forbidden, notFound } from '../lib/errors.js';
 import { securityAlert } from '../lib/security-alerts.js';
+import { refreshApprovalNotice } from '../approvals/notices.js';
 import { getSettings } from '../lib/settings.js';
 import { INPUT_KINDS, LIMITS, NODE_TYPES, OPERATORS, OUTPUT_KINDS, outputPorts, type InputKind, type OutputKind } from '../automations/catalog.js';
 import { INPUT_CONFIG, OUTPUT_CONFIG } from '../automations/configs.js';
@@ -464,6 +465,7 @@ export async function automationRoutes(app: FastifyInstance) {
       await cancelOpenRuns(id, 'Der Workflow wurde gelöscht.', db);
       await audit(req.auth!.actor, 'automation.deleted', { type: 'automation', id, label: a.name }, {}, 'ok', db);
     });
+    await refreshApprovalNotice('automation', { note: 'Workflow gelöscht' });
     return { ok: true };
   });
 
@@ -533,6 +535,7 @@ export async function automationRoutes(app: FastifyInstance) {
       await audit(req.auth!.actor, 'automation.disabled', { type: 'automation', id, label: a.name }, { abgebrochen: n }, 'ok', db);
       return n;
     });
+    await refreshApprovalNotice('automation', { note: 'Workflow deaktiviert' });
     return { ok: true, canceled };
   });
 
@@ -646,6 +649,7 @@ export async function automationRoutes(app: FastifyInstance) {
     if (!r) throw conflict('Der Lauf ist bereits abgeschlossen oder läuft gerade.');
     await pool.query(`UPDATE automation_approvals SET status = 'canceled' WHERE run_id = $1 AND status = 'pending'`, [id]);
     await audit(req.auth!.actor, 'automation.run_canceled', { type: 'automation', id: r.automation_id }, { lauf: id.slice(0, 8) });
+    await refreshApprovalNotice('automation', { note: 'Lauf abgebrochen' });
     return { ok: true };
   });
 

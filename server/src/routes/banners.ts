@@ -5,7 +5,7 @@ import { many, one, pool, tx } from '../db/pool.js';
 import { requireAuth } from '../auth/context.js';
 import { audit } from '../lib/audit.js';
 import { AppError, badRequest, conflict, forbidden, notFound } from '../lib/errors.js';
-import { notify } from '../lib/notify.js';
+import { decidedBy, refreshApprovalNotice } from '../approvals/notices.js';
 import { getSettings } from '../lib/settings.js';
 
 /**
@@ -147,8 +147,10 @@ export async function bannerRoutes(app: FastifyInstance) {
         db,
       );
       await audit(req.auth!.actor, 'banner.revised', { type: 'banner', id, label: u.title }, { fassung: u.revision, freigabe_entfaellt: b.approved_hash === b.content_hash }, 'ok', db);
-      return { changed: true, banner: u };
+      return { changed: true, banner: u, wasSubmitted: !!b.submitted_at };
     });
+    // Geänderte Fassung muss neu eingereicht werden – die bisherige Anfrage ist erledigt (#253)
+    if ('wasSubmitted' in res && res.wasSubmitted) await refreshApprovalNotice('banner', { note: `geändert – Fassung ${res.banner.revision} nicht eingereicht` });
     return { changed: res.changed, ...bannerPayload(res.banner) };
   });
 
@@ -158,9 +160,9 @@ export async function bannerRoutes(app: FastifyInstance) {
     if (!b) throw notFound();
     await audit(req.auth!.actor, 'banner.submitted', { type: 'banner', id, label: b.title }, { fassung: b.revision });
     // Wie bei Beiträgen und der Einsatzliste (#252): Konten mit Freigaberecht erfahren davon (Glocke, Push/E-Mail nach
-    // Wahl der Person; nach außen ohne Titel, solange notify.push_details bzw. notify.mail_details aus ist)
-    const by = req.auth!.user?.name;
-    await notify({ kind: 'info', title: `Banner zur Freigabe: ${b.title}`.slice(0, 200), body: `Fassung ${b.revision}${by ? ` · eingereicht von ${by}` : ''}`, link: bannerLink(id), permission: 'approval.banner' });
+    // Wahl der Person; nach außen ohne Titel, solange notify.push_details bzw. notify.mail_details aus ist). Mehrere
+    // offene Banner ergeben eine gebündelte Meldung (#253).
+    await refreshApprovalNotice('banner', { added: [id] });
     return { ok: true };
   });
 
@@ -186,6 +188,7 @@ export async function bannerRoutes(app: FastifyInstance) {
     );
     if (!upd.rowCount) throw conflict('Das Banner wurde inzwischen geändert, beendet oder nicht mehr zur Freigabe vorgelegt. Bitte die aktuelle Fassung prüfen.');
     await audit(req.auth!.actor, 'banner.approved', { type: 'banner', id, label: b.title }, { fassung: b.revision });
+    await refreshApprovalNotice('banner', { note: decidedBy('approved', req.auth!.actor.name) });
     return { ok: true };
   });
 
@@ -219,6 +222,7 @@ export async function bannerRoutes(app: FastifyInstance) {
       else await db.query(`UPDATE banner_jobs SET status = 'canceled' WHERE banner_id = $1 AND status = 'queued'`, [id]);
       await audit(req.auth!.actor, 'banner.ended', { type: 'banner', id, label: b.title }, {}, 'ok', db);
     });
+    await refreshApprovalNotice('banner', { note: 'Banner beendet' });
     return { ok: true };
   });
 }

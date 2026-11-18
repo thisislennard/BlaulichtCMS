@@ -5,6 +5,7 @@ import { Badge, Button, Card, cx, FieldWrap, Input, Notice, Select, Textarea, ty
 import { Icon } from '../../components/ui/Icon';
 import { Dialog, useConfirm, useErrorToast, useToast } from '../../components/ui/overlays';
 import { useAuth } from '../../lib/auth';
+import { useLinkedItem } from '../../lib/linked-item';
 import { fmtBytes, fmtDateTime, plural } from '../../lib/format';
 import type { PressRequest } from './shared';
 
@@ -148,13 +149,13 @@ function ReplyActions({ m, onChange }: { m: PressMessage; onChange: () => void }
   );
 }
 
-function MessageItem({ m, onChange }: { m: PressMessage; onChange: () => void }) {
+function MessageItem({ m, onChange, linked }: { m: PressMessage; onChange: () => void; linked?: boolean }) {
   const [html, setHtml] = useState(false);
   const [open, setOpen] = useState(true);
   const incoming = m.direction === 'in';
   const st = OUT_STATUS[m.status];
   return (
-    <li className={cx('rounded-node border border-line p-3 flex flex-col gap-2', incoming ? 'bg-card' : 'bg-raised')}>
+    <li id={`press-reply-${m.id}`} className={cx('rounded-node border p-3 flex flex-col gap-2', incoming ? 'bg-card' : 'bg-raised', linked ? 'border-primary shadow-selected' : 'border-line')}>
       <div className="flex flex-wrap items-center gap-2 text-sm">
         <Icon name={incoming ? 'Mail' : 'Reply'} size={15} className="text-fg-muted" />
         <span className="font-medium">{incoming ? m.from_name || m.from_address : `Antwort an ${m.to_addresses.join(', ')}`}</span>
@@ -339,6 +340,8 @@ function ReplyEditor({ request, approval, onDone }: { request: PressRequest; app
 export function PressMessages({ request, detail, onChange }: { request: PressRequest; detail: PressDetailExtras; onChange: () => void }) {
   const { can } = useAuth();
   const msgs = detail.messages ?? [];
+  // Verweis aus Freigaben-Liste und Benachrichtigung (#251, #253): /presse/<id>?antwort=<Antwort> hebt die Antwort hervor
+  const linked = useLinkedItem('antwort', msgs.length > 0, 'press-reply');
   const mayRecord = can('press.manage') && ORAL_CHANNELS.includes(request.channel);
   if (!msgs.length && !can('press.reply') && !mayRecord) return null;
   return (
@@ -347,7 +350,7 @@ export function PressMessages({ request, detail, onChange }: { request: PressReq
         {msgs.length > 0 ? (
           <ol className="m-0 p-0 list-none flex flex-col gap-3">
             {msgs.map((m) => (
-              <MessageItem key={m.id} m={m} onChange={onChange} />
+              <MessageItem key={m.id} m={m} onChange={onChange} linked={linked.id === m.id} />
             ))}
           </ol>
         ) : (

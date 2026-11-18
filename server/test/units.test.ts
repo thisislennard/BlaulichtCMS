@@ -1402,6 +1402,8 @@ describe('Dashboard-Layout (Kennzahlen, Spalten, Vorlagen)', () => {
     expect(availableWidgets(new Set(['official.view']))).toEqual(['warnings']);
     expect(widgetPermissions('warnings')).toEqual(['warning.view', 'official.view']);
     expect(widgetPermissions('rss')).toEqual(['source.view']);
+    // Freigaben über alle Arten (#251): Warnfreigabe ohne „Beiträge ansehen“ sieht die Freigaben-Kacheln
+    expect(availableWidgets(permissionsFor(['warning_approver']))).toEqual(['badge_approvals', 'approvals', 'warnings']);
     const onlyPosts = new Set(['post.view', 'banner.view', 'source.view', 'channel.view']);
     expect(availableWidgets(onlyPosts)).toEqual(['badge_approvals', 'badge_ready', 'badge_banners', 'approvals', 'ready', 'publications', 'sites', 'banners', 'rss']);
     // Standard bis 0.6 als Beispiel eines gespeicherten Layouts: gefiltert wird nach Recht
@@ -1678,6 +1680,18 @@ describe('Web Push und Benachrichtigungen (#191)', () => {
     expect(chosenChannels(notifyCategory('incident')!, { incident: [] })).toEqual([]);
     const ids = new Set(PERMISSIONS.map((p) => p.id));
     for (const c of NOTIFY_CATEGORIES) for (const p of c.permissions) expect(ids.has(p), `${c.id}: ${p}`).toBe(true);
+  });
+
+  it('jede Art hat eine Filtergruppe; Glocke abschaltbar außer Sicherheit und Konto (#253)', async () => {
+    const { groupOf, mutedBellCategories, NOTIFY_CATEGORIES, NOTIFY_GROUPS } = await import('../src/lib/notify-categories.js');
+    const groups = new Set(NOTIFY_GROUPS.map((g) => g.id));
+    for (const c of NOTIFY_CATEGORIES) expect(groups.has(c.group), c.id).toBe(true);
+    expect(NOTIFY_CATEGORIES.filter((c) => !c.bell).map((c) => c.id)).toEqual(['security', 'account']);
+    expect(groupOf('approval')).toBe('approvals');
+    expect(groupOf('media_new')).toBe('media');
+    expect(groupOf(null)).toBe('system');
+    expect(mutedBellCategories({ mutedNotifications: ['media_new', 'account', 'erfunden', 'approval', 'approval'] })).toEqual(['media_new', 'approval']);
+    expect(mutedBellCategories(null)).toEqual([]);
   });
 
   it('Microsoft-365-Angaben werden formal geprüft', async () => {

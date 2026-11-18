@@ -9,6 +9,24 @@ import { fmtDateTime, fmtRelative, fmtTime, getTimeZone, plural } from '../../li
 import { safeHref } from '../../lib/url';
 import { BADGE_TITLES, PANEL_TITLES } from './model';
 import { SetupTile } from './SetupChecklist';
+import { approvalDetail, KIND_LABEL, type ApprovalOverview, type PendingItem, type ReadyItem } from '../approvals/model';
+
+const READY_PERMS = ['publish.website', 'publish.social', 'banner.publish', 'incident.publish', 'warning.send'];
+
+/**
+ * Freigaben im Dashboard (#251): Über alle Arten, die die Person entscheiden darf (GET /dashboard → `approvals`, dieselbe
+ * Quelle wie die Seite Freigaben). Wer nichts freigeben darf, sieht wie bisher die eingereichten Beiträge zur Information.
+ * Entscheidbare Vorgänge zuerst, dann die ältesten.
+ */
+function useApprovalData(d: any) {
+  const { canAny } = useAuth();
+  const a: ApprovalOverview | undefined = d.approvals;
+  const decides = !!a && a.kinds.length > 0;
+  const publishes = !!a && canAny(...READY_PERMS);
+  const pending: PendingItem[] | null = decides ? [...a!.items].sort((x, y) => Number(!!x.blocked) - Number(!!y.blocked) || x.submitted_at.localeCompare(y.submitted_at)) : null;
+  const ready: ReadyItem[] | null = publishes ? a!.ready : null;
+  return { a, decides, publishes, pending, ready };
+}
 
 function List({ children }: { children: ReactNode }) {
   return <ul className="m-0 p-0 list-none flex flex-col divide-y divide-line">{children}</ul>;
@@ -30,6 +48,96 @@ function when(e: { start: string; allDay: boolean; today?: boolean }) {
 const CAL_ICON: Record<string, string> = { event: 'CalendarDays', press: 'MessageSquareQuote', post: 'FileText' };
 const WARN_KIND: Record<string, string> = { initial: 'Erstmeldung', update: 'Aktualisierung', all_clear: 'Entwarnung' };
 
+/** Kachel „Offene Freigaben“: alle Arten (#251), sonst eingereichte Beiträge zur Information. */
+function ApprovalsPanel({ d }: { d: any }) {
+  const { pending } = useApprovalData(d);
+  if (pending) {
+    return !pending.length ? (
+      <EmptyLine>Nichts wartet auf dich.</EmptyLine>
+    ) : (
+      <List>
+        {pending.slice(0, 20).map((i) => (
+          <li key={`${i.kind}:${i.id}`} className="py-2.5 flex items-center gap-3">
+            <div className="min-w-0 flex-1">
+              <Link to={i.link} className={cx('font-medium truncate block', i.blocked && '!text-fg-muted')}>
+                {i.title}
+              </Link>
+              <div className="text-meta text-fg-muted">
+                {KIND_LABEL[i.kind]}
+                {i.revision != null && i.kind !== 'incident' && (
+                  <>
+                    {' '}
+                    · <Rev n={i.revision} />
+                  </>
+                )}{' '}
+                · eingereicht {fmtRelative(i.submitted_at)}
+                {i.submitted_by_name ? ` von ${i.submitted_by_name}` : ''}
+              </div>
+              {i.blocked && <div className="text-meta text-fg-muted">{i.blocked}</div>}
+            </div>
+            {!i.blocked && <StatusBadge status="in_review" />}
+          </li>
+        ))}
+      </List>
+    );
+  }
+  return !d.pendingApprovals?.length ? (
+    <EmptyLine>Keine offenen Freigaben.</EmptyLine>
+  ) : (
+    <List>
+      {d.pendingApprovals.map((p: any) => (
+        <li key={p.id} className="py-2.5 flex items-center gap-3">
+          <div className="min-w-0 flex-1">
+            <Link to={`/beitraege/${p.id}`} className="font-medium truncate block">
+              {p.title}
+            </Link>
+            <div className="text-meta text-fg-muted">
+              <Rev n={p.number} /> · eingereicht {fmtRelative(p.submitted_at)}
+              {p.submitted_by_name ? ` von ${p.submitted_by_name}` : ''}
+            </div>
+          </div>
+          <StatusBadge status="in_review" />
+        </li>
+      ))}
+    </List>
+  );
+}
+
+/** Kachel „Bereit zur Veröffentlichung“: freigegebene Vorgänge aller Arten, die die Person veröffentlichen darf (#251). */
+function ReadyPanel({ d }: { d: any }) {
+  const { ready } = useApprovalData(d);
+  if (ready) {
+    return !ready.length ? (
+      <EmptyLine>Nichts wartet auf Veröffentlichung.</EmptyLine>
+    ) : (
+      <List>
+        {ready.slice(0, 20).map((r) => (
+          <li key={`${r.kind}:${r.id}`} className="py-2.5 flex items-center gap-2">
+            <Link to={r.link} className="font-medium flex-1 truncate">
+              {r.title}
+            </Link>
+            <span className="text-meta text-fg-muted whitespace-nowrap">{KIND_LABEL[r.kind]}</span>
+          </li>
+        ))}
+      </List>
+    );
+  }
+  return !d.readyToPublish?.length ? (
+    <EmptyLine>Nichts wartet auf die Veröffentlichung.</EmptyLine>
+  ) : (
+    <List>
+      {d.readyToPublish.map((p: any) => (
+        <li key={p.id} className="py-2.5 flex items-center gap-2">
+          <Link to={`/beitraege/${p.id}`} className="font-medium flex-1 truncate">
+            {p.title}
+          </Link>
+          <span className="text-meta text-fg-muted">{p.site_id ? 'mit Website' : 'intern'}</span>
+        </li>
+      ))}
+    </List>
+  );
+}
+
 /** Inhalt eines Widgets – rein darstellend, Daten kommen vom bestätigten Stand des Servers. */
 export function WidgetBody({ id, d }: { id: string; d: any }) {
   // Leere Kacheln: eine leise Zeile statt eines großen Leerblocks, Aktion nur mit Recht (#266, Design §6)
@@ -38,41 +146,9 @@ export function WidgetBody({ id, d }: { id: string; d: any }) {
     case 'media':
       return <FlowBoard d={d} />;
     case 'approvals':
-      return !d.pendingApprovals?.length ? (
-        <EmptyLine>Keine offenen Freigaben.</EmptyLine>
-      ) : (
-        <List>
-          {d.pendingApprovals.map((p: any) => (
-            <li key={p.id} className="py-2.5 flex items-center gap-3">
-              <div className="min-w-0 flex-1">
-                <Link to={`/beitraege/${p.id}`} className="font-medium truncate block">
-                  {p.title}
-                </Link>
-                <div className="text-meta text-fg-muted">
-                  <Rev n={p.number} /> · eingereicht {fmtRelative(p.submitted_at)}
-                  {p.submitted_by_name ? ` von ${p.submitted_by_name}` : ''}
-                </div>
-              </div>
-              <StatusBadge status="in_review" />
-            </li>
-          ))}
-        </List>
-      );
+      return <ApprovalsPanel d={d} />;
     case 'ready':
-      return !d.readyToPublish?.length ? (
-        <EmptyLine>Nichts wartet auf die Veröffentlichung.</EmptyLine>
-      ) : (
-        <List>
-          {d.readyToPublish.map((p: any) => (
-            <li key={p.id} className="py-2.5 flex items-center gap-2">
-              <Link to={`/beitraege/${p.id}`} className="font-medium flex-1 truncate">
-                {p.title}
-              </Link>
-              <span className="text-meta text-fg-muted">{p.site_id ? 'mit Website' : 'intern'}</span>
-            </li>
-          ))}
-        </List>
-      );
+      return <ReadyPanel d={d} />;
     case 'publications':
       return !d.publications?.length ? (
         <EmptyLine>Noch keine Veröffentlichung.</EmptyLine>
@@ -437,6 +513,7 @@ function More({ to, n }: { to: string; n: number }) {
 function FlowBoard({ d }: { d: any }) {
   const { can } = useAuth();
   const MAX = 3;
+  const av = useApprovalData(d);
   const approvals: any[] = d.pendingApprovals ?? [];
   const ready: any[] = d.readyToPublish ?? [];
   const pubs: any[] = d.publications ?? [];
@@ -469,7 +546,23 @@ function FlowBoard({ d }: { d: any }) {
             )}
           </FlowColumn>
         )}
-        {d.pendingApprovals && (
+        {av.pending ? (
+          <FlowColumn title="Freigabe" count={av.pending.length} hot>
+            {av.pending.slice(0, MAX).map((i) => (
+              <FlowCard
+                key={`${i.kind}:${i.id}`}
+                to={i.link}
+                title={i.title}
+                meta={`${KIND_LABEL[i.kind]}${i.revision != null && i.kind !== 'incident' ? ` · F${i.revision}` : ''} · eingereicht ${fmtTime(i.submitted_at)}`}
+                sub={i.blocked ?? (i.submitted_by_name ? `von ${i.submitted_by_name}` : approvalDetail(i))}
+                hot={!i.blocked}
+                cta={i.blocked ? undefined : 'Prüfen'}
+              />
+            ))}
+            <More to="/freigaben" n={av.pending.length - MAX} />
+            {!av.pending.length && <p className="m-0 px-0.5 text-meta text-fg-muted">Nichts offen.</p>}
+          </FlowColumn>
+        ) : d.pendingApprovals && (
           <FlowColumn title="Freigabe" count={approvals.length} hot>
             {approvals.slice(0, MAX).map((p: any) => (
               <FlowCard
@@ -486,7 +579,15 @@ function FlowBoard({ d }: { d: any }) {
             {!approvals.length && <p className="m-0 px-0.5 text-meta text-fg-muted">Nichts offen.</p>}
           </FlowColumn>
         )}
-        {d.readyToPublish && (
+        {av.ready ? (
+          <FlowColumn title="Bereit" count={av.ready.length}>
+            {av.ready.slice(0, MAX).map((r) => (
+              <FlowCard key={`${r.kind}:${r.id}`} to={r.link} title={r.title} meta={`${KIND_LABEL[r.kind]} · freigegeben`} sub={r.approved_by_name ? `von ${r.approved_by_name}` : undefined} />
+            ))}
+            <More to="/freigaben" n={av.ready.length - MAX} />
+            {!av.ready.length && <p className="m-0 px-0.5 text-meta text-fg-muted">Nichts wartet.</p>}
+          </FlowColumn>
+        ) : d.readyToPublish && (
           <FlowColumn title="Bereit" count={ready.length}>
             {ready.slice(0, MAX).map((p: any) => (
               <FlowCard key={p.id} to={`/beitraege/${p.id}`} title={p.title} meta="freigegeben" sub={p.site_id ? 'mit Website' : 'intern'} />
@@ -537,14 +638,17 @@ const LINKS: Record<string, [string, string]> = {
  * Anzahl unter dem Kachel-Titel: Jede Kachel nennt ihre Menge selbst – deshalb braucht die Standardansicht keine
  * Kennzahl zum selben Sachverhalt (#254).
  */
-function subtitleOf(id: string, d: any): string | undefined {
+function subtitleOf(id: string, d: any, av: ReturnType<typeof useApprovalData>): string | undefined {
   const capped = (list: any[] | undefined, cap: number) => (list ? (list.length >= cap ? `${cap}+` : String(list.length)) : null);
   switch (id) {
     case 'approvals': {
+      // Freigaben über alle Arten (#251), sonst eingereichte Beiträge zur Information
+      if (av.pending) return av.pending.length ? `${av.pending.length} ${av.pending.length === 1 ? 'wartet' : 'warten'} auf Freigabe${av.a!.total > av.a!.open ? ` · ${av.a!.total - av.a!.open} nur durch andere (Vier-Augen)` : ''}` : undefined;
       const n = capped(d.pendingApprovals, 20);
       return n && n !== '0' ? `${n} ${n === '1' ? 'wartet' : 'warten'} auf Freigabe` : undefined;
     }
     case 'ready': {
+      if (av.ready) return av.ready.length ? `${av.ready.length} freigegeben, noch nicht veröffentlicht` : undefined;
       const n = capped(d.readyToPublish, 20);
       return n && n !== '0' ? `${n} freigegeben, noch nicht veröffentlicht` : undefined;
     }
@@ -579,6 +683,7 @@ function subtitleOf(id: string, d: any): string | undefined {
 
 /** Eine Kachel in einer Spalte. Der Redaktionsfluss bringt seine eigene Überschrift mit, alles andere ist eine Karte. */
 export function PanelTile({ id, d }: { id: string; d: any }) {
+  const av = useApprovalData(d);
   // Checkliste „startklar“ lädt ihren Stand selbst (GET /setup/checklist, nur wenn die Kachel im Layout steht)
   if (id === 'setup') return <SetupTile />;
   if (id === 'media') {
@@ -590,7 +695,7 @@ export function PanelTile({ id, d }: { id: string; d: any }) {
   }
   const link = LINKS[id];
   return (
-    <Card title={PANEL_TITLES[id]} subtitle={subtitleOf(id, d)} action={link ? <Link to={link[0]} className="text-sm !text-fg-muted hover:!text-fg">{link[1]} →</Link> : undefined}>
+    <Card title={PANEL_TITLES[id]} subtitle={subtitleOf(id, d, av)} action={link ? <Link to={link[0]} className="text-sm !text-fg-muted hover:!text-fg">{link[1]} →</Link> : undefined}>
       <WidgetBody id={id} d={d} />
     </Card>
   );
@@ -624,6 +729,7 @@ function useServices(enabled: boolean) {
 
 export function useBadgeInfo(d: any, services?: ReturnType<typeof useServices>): (id: string) => BadgeInfo {
   const { can } = useAuth();
+  const av = useApprovalData(d);
   return (id) => {
     const capped = (list: any[] | undefined, cap: number): [number | null, string] => (list ? [list.length, list.length >= cap ? `${cap}+` : String(list.length)] : [null, '–']);
     const plain = (n: number | undefined | null): [number | null, string] => (typeof n === 'number' ? [n, String(n)] : [null, '–']);
@@ -634,10 +740,16 @@ export function useBadgeInfo(d: any, services?: ReturnType<typeof useServices>):
     let hint = '';
     switch (id) {
       case 'badge_approvals':
-        v = capped(d.pendingApprovals, 20);
         to = '/freigaben';
-        hot = can('approval.post') && (v[0] ?? 0) > 0;
-        hint = 'warten auf Freigabe';
+        if (av.decides) {
+          // alle Arten, über die die Person entscheiden darf (#251); rot, wenn etwas auf sie wartet
+          v = plain(av.a!.total);
+          hot = av.a!.open > 0;
+          hint = av.a!.total > av.a!.open ? `${av.a!.total - av.a!.open} nur durch andere (Vier-Augen)` : 'warten auf Freigabe';
+        } else {
+          v = capped(d.pendingApprovals, 20);
+          hint = 'warten auf Freigabe';
+        }
         break;
       case 'badge_unreviewed':
         v = plain(d.media?.unreviewed);
@@ -646,7 +758,7 @@ export function useBadgeInfo(d: any, services?: ReturnType<typeof useServices>):
         hint = 'geprüft, noch nicht gesichtet';
         break;
       case 'badge_ready':
-        v = capped(d.readyToPublish, 20);
+        v = av.ready ? plain(av.ready.length) : capped(d.readyToPublish, 20);
         to = '/freigaben';
         hint = 'freigegeben';
         break;

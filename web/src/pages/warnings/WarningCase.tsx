@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link, useNavigate, useParams } from 'react-router';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
 import { del, get, post, put } from '../../api/client';
 import { Badge, Button, Card, Chip, cx, ErrorBox, FieldWrap, Input, KeyValue, Notice, PageHeader, Rev, Select, SkeletonRows, StatusBadge, Textarea } from '../../components/ui/core';
 import { usePageMeta } from '../../components/layout/AppShell';
@@ -60,6 +60,7 @@ const STEPS = [
   { id: 'versand', label: 'Versand', icon: 'Send' },
 ] as const;
 type StepId = (typeof STEPS)[number]['id'];
+const stepFrom = (v: string | null): StepId | null => (STEPS.some((s) => s.id === v) ? (v as StepId) : null);
 const PLACE_KEYS = new Set(['area', 'starts_at', 'valid_until']);
 
 function useDebounced<T>(v: T, ms = 350) {
@@ -208,7 +209,13 @@ function WarningCaseInner({ id }: { id: string }) {
   const resp = useQuery({ queryKey: ['responsibilities'], queryFn: () => get<{ id: string; name: string; area: string; recipients: string[] }[]>('/responsibilities') });
   const d = q.data;
   usePageMeta({ title: d?.warning.case_no });
-  const [step, setStep] = useState<StepId>('vorgang');
+  // Verweis auf einen Schritt (#251, #253): /warnungen/<id>?schritt=pruefen aus Freigaben-Liste und Benachrichtigung
+  const [searchParams] = useSearchParams();
+  const wantedStep = stepFrom(searchParams.get('schritt'));
+  const [step, setStep] = useState<StepId>(wantedStep ?? 'vorgang');
+  useEffect(() => {
+    if (wantedStep) setStep(wantedStep);
+  }, [wantedStep, id]);
   const [v, setV] = useState<{ data: Record<string, any>; responsibilityIds: string[]; keyword: Keyword | null; answers: Record<string, string> } | null>(null);
   const [dirty, setDirty] = useState(false);
   const [busy, setBusy] = useState(false);

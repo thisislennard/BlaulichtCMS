@@ -7,7 +7,7 @@ import { Dialog, useErrorToast, useToast } from '../../components/ui/overlays';
 import { useAuth } from '../../lib/auth';
 import { fmtDateTime, fmtRelative } from '../../lib/format';
 
-interface Approval {
+export interface Approval {
   id: string;
   kind: 'approval' | 'mail';
   title: string;
@@ -20,7 +20,7 @@ interface Approval {
   can_decide: boolean;
 }
 
-/** Offene Freigaben aus Workflows („Freigabe anfordern“, E-Mail an externe Empfänger) – auf der Seite Freigaben. */
+/** Offene Freigaben aus Workflows („Freigabe anfordern“, E-Mail an externe Empfänger) – auf der Seite Workflows; alle Arten zusammen stehen unter Freigaben (#251). */
 export function AutomationApprovals({ compact }: { compact?: boolean }) {
   const { canAny, can } = useAuth();
   const q = useQuery({ queryKey: ['automation-approvals'], queryFn: () => get<Approval[]>('/automation-approvals'), enabled: canAny('approval.automation', 'automation.manage'), refetchInterval: 20_000 });
@@ -56,7 +56,8 @@ export function AutomationApprovals({ compact }: { compact?: boolean }) {
   );
 }
 
-function DecisionDialog({ a, onClose }: { a: Approval; onClose: () => void }) {
+/** Entscheidung über eine Freigabe aus einem Workflow – auch aus der Freigaben-Liste (#251) geöffnet. */
+export function DecisionDialog({ a, onClose }: { a: Approval; onClose: () => void }) {
   const qc = useQueryClient();
   const toast = useToast();
   const toastError = useErrorToast();
@@ -68,6 +69,7 @@ function DecisionDialog({ a, onClose }: { a: Approval; onClose: () => void }) {
       await post(`/automation-approvals/${a.id}/decision`, { decision, note });
       toast({ tone: 'success', title: decision === 'approved' ? 'Freigegeben – der Lauf geht weiter' : 'Abgelehnt' });
       qc.invalidateQueries({ queryKey: ['automation-approvals'] });
+      qc.invalidateQueries({ queryKey: ['approvals-pending'] });
       onClose();
     } catch (e) {
       toastError(e);

@@ -85,7 +85,9 @@ GitHub (Update-Prüfung, Updates) ◀──Abruf──────────�
   `notify.mail_details`) tragen sie Titel und Text. Push ist auf dem Weg über den Push-Dienst Ende-zu-Ende-verschlüsselt
   (RFC 8291), erscheint aber auf dem Gerät (ggf. Sperrbildschirm); die **E-Mail ist nicht Ende-zu-Ende-verschlüsselt** und
   geht an die Kontoadresse, ggf. ein privates Postfach Ehrenamtlicher – Einzelheiten per Mail nur bei dienstlichen
-  Adressen einschalten.
+  Adressen einschalten. Erledigte Freigabe-Anfragen (#253) tragen einen Vermerk mit dem Namen des entscheidenden Kontos
+  („Erledigt – freigegeben von …“, wie im Audit); er ist nicht Teil der Datenschutzsuche und entfällt mit der
+  Benachrichtigung nach 60 Tagen.
 - **Updates:** Der Worker fragt alle `updates.check_hours` Stunden (Standard 6) bei GitHub (`api.github.com`) nach
   neuen Versionen; dabei erhält GitHub die IP-Adresse des Servers und die eingesetzte Version (im User-Agent).
   Installation, Update-Pakete und der Host-Update-Helfer laden Code von GitHub, der Bau des Images die Basis-Images aus

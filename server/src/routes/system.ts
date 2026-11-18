@@ -24,6 +24,7 @@ import { normalizePublicUrl } from '../lib/urls.js';
 import { CATALOGS, STATE_IDS, stateName } from '../keywords/catalog.js';
 import { syncCatalog } from '../keywords/store.js';
 import { plural } from '../lib/text.js';
+import { groupOf, mutedBellCategories, NOTIFY_GROUPS } from '../lib/notify-categories.js';
 
 const startedAt = Date.now();
 
@@ -418,22 +419,26 @@ export async function systemRoutes(app: FastifyInstance) {
   /* Benachrichtigungen */
   const mutedCategories = async (userId: string | null): Promise<string[]> => {
     if (!userId) return [];
-    const p = await one<any>(`SELECT preferences->'mutedNotifications' AS m FROM users WHERE id = $1`, [userId]);
-    return Array.isArray(p?.m) ? p.m.map(String) : [];
+    const p = await one<any>(`SELECT preferences FROM users WHERE id = $1`, [userId]);
+    return mutedBellCategories(p?.preferences);
   };
   app.get('/notifications', { preHandler: requireAuth() }, async (req) => {
     const u = req.auth!;
-    // Stummgeschaltete Arten (Mein Konto → Benachrichtigungen, z. B. Medien) ausblenden
+    // In der Glocke stummgeschaltete Arten (Mein Konto → Benachrichtigungen) ausblenden
     const muted = await mutedCategories(u.user?.id ?? null);
+    // Erledigte Freigabe-Anfragen (#253) zählen nicht als ungelesen und erscheinen ausgegraut mit Vermerk
     const rows = await many<any>(
-      `SELECT n.*, (r.read_at IS NOT NULL) AS read FROM notifications n
+      `SELECT n.id, n.created_at, n.updated_at, n.kind, n.title, n.body, n.link, n.permission, n.category, n.count, n.object_type, n.object_id, n.resolved_at, n.resolved_note,
+              (r.read_at IS NOT NULL OR n.resolved_at IS NOT NULL) AS read
+         FROM notifications n
          LEFT JOIN notification_reads r ON r.notification_id = n.id AND r.user_id = $1
         WHERE (n.user_id = $1 OR (n.user_id IS NULL AND (n.permission IS NULL OR n.permission = ANY($2))))
           AND n.created_at > now() - interval '60 days' AND (n.category IS NULL OR NOT (n.category = ANY($3::text[])))
         ORDER BY COALESCE(n.updated_at, n.created_at) DESC, n.id DESC LIMIT 100`,
       [u.user?.id ?? null, [...u.permissions], muted],
     );
-    return { notifications: rows, unread: rows.filter((r) => !r.read).length };
+    const notifications = rows.map((n) => ({ ...n, group: groupOf(n.category) }));
+    return { notifications, unread: notifications.filter((r) => !r.read).length, groups: NOTIFY_GROUPS };
   });
 
   app.post('/notifications/read', { preHandler: requireAuth() }, async (req) => {

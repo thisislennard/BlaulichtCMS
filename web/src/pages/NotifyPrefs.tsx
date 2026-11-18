@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { del, get, post, put } from '../api/client';
-import { Badge, Button, Notice, SkeletonRows, Switch } from '../components/ui/core';
+import { Badge, Button, Notice, SkeletonRows } from '../components/ui/core';
 import { useErrorToast, useToast } from '../components/ui/overlays';
 import { HelpTip } from '../components/ui/HelpTip';
 import { Icon } from '../components/ui/Icon';
@@ -12,7 +12,8 @@ import { LoadError, SectionCard } from './admin/shared';
 
 type Channel = 'push' | 'mail';
 interface Prefs {
-  categories: { id: string; label: string; description: string; channels: Channel[]; chosen: Channel[] }[];
+  /** je Art: Glocke (bell, außer bellLocked abschaltbar), Push und E-Mail (#253: eine Matrix statt zweier Abschnitte) */
+  categories: { id: string; label: string; description: string; group: string; channels: Channel[]; chosen: Channel[]; bell: boolean; bellLocked: boolean }[];
   channels: { push: boolean; mail: boolean };
   email: string;
   subscriptions: { id: string; label: string; created_at: string; last_success_at: string | null; last_error: string | null; last_error_at: string | null; endpoint_hash: string }[];
@@ -41,7 +42,21 @@ function browserLabel(): string {
   return os ? `${b} · ${os}` : b;
 }
 
-/** „Mein Konto → Benachrichtigungen“ (#191): Kanäle je Art, Push auf diesem Gerät, weitere Geräte, Testnachricht. */
+const COLUMN = { bell: 'Glocke', push: 'Push', mail: 'E-Mail' } as const;
+
+/** Ein Feld der Matrix: Kontrollkästchen mit 40 px großer Fläche (Touch-Ziel) und vollständiger Beschriftung für Hilfsmittel. */
+function MatrixBox({ label, checked, disabled, title, onChange }: { label: string; checked: boolean; disabled?: boolean; title?: string; onChange: (on: boolean) => void }) {
+  return (
+    <label className={'inline-flex w-10 h-10 items-center justify-center rounded-control ' + (disabled ? 'cursor-not-allowed' : 'cursor-pointer hover:bg-raised')} title={title}>
+      <input type="checkbox" className="w-4 h-4 accent-[var(--bc-primary-solid)]" aria-label={label} checked={checked} disabled={disabled} onChange={(e) => onChange(e.target.checked)} />
+    </label>
+  );
+}
+
+/**
+ * „Mein Konto → Benachrichtigungen“ (#191, #253): eine Matrix je Art mit Glocke, Push und E-Mail; Push auf diesem Gerät,
+ * weitere Geräte, Testnachricht. Die Glocke ersetzt den früheren Abschnitt „Benachrichtigungen: Medien“.
+ */
 export function NotifyPrefsCard() {
   const qc = useQueryClient();
   const toast = useToast();
@@ -73,6 +88,18 @@ export function NotifyPrefsCard() {
     try {
       await put('/notify/preferences', { choices: { [id]: list } });
       refresh();
+    } catch (e) {
+      onError(e);
+    }
+  };
+  const bell = async (id: string, on: boolean) => {
+    qc.setQueryData<Prefs>(['notify-prefs'], (old) => (old ? { ...old, categories: old.categories.map((c) => (c.id === id ? { ...c, bell: on } : c)) } : old));
+    try {
+      await put('/notify/preferences', { bell: { [id]: on } });
+      refresh();
+      // Glocke und Zähler sofort ohne die abgeschaltete Art
+      qc.invalidateQueries({ queryKey: ['notifications'] });
+      qc.invalidateQueries({ queryKey: ['me'] });
     } catch (e) {
       onError(e);
     }
@@ -142,7 +169,7 @@ export function NotifyPrefsCard() {
     <SectionCard
       id="benachrichtigungen"
       title="Benachrichtigungen"
-      description="Was zusätzlich zur Glocke per Push auf die eigenen Geräte oder per E-Mail kommt. Angeboten werden nur Arten, für die das Konto Rechte hat."
+      description="Je Art: in der Glocke, per Push auf die eigenen Geräte und per E-Mail. Angeboten werden nur Arten, für die das Konto Rechte hat."
       action={
         <HelpTip title="Push und E-Mail" more="/hilfe/benachrichtigungen">
           <p className="m-0">Push erscheint auch bei geschlossener App als Mitteilung des Geräts – je Browser bzw. installierter App einmal einschalten. E-Mails gehen an {d.email || 'die Adresse des Kontos'}.</p>
@@ -203,32 +230,51 @@ export function NotifyPrefsCard() {
         </div>
       )}
 
-      {/* Arten */}
+      {/* Arten: eine Matrix (#253) */}
       <div className="flex flex-col gap-1">
         <h3 className="m-0 text-sm font-semibold">Arten</h3>
         {!d.channels.mail && <p className="m-0 text-meta text-fg-muted">E-Mail ist nicht verfügbar (Versand nicht eingerichtet oder abgeschaltet).</p>}
-        <ul className="m-0 p-0 list-none flex flex-col divide-y divide-line">
-          {d.categories.map((c) => (
-            <li key={c.id} className="flex items-start gap-4 py-2.5 flex-wrap">
-              <span className="flex-1 min-w-[200px]">
-                <span className="block text-sm font-medium">{c.label}</span>
-                <span className="block text-meta text-fg-muted">{c.description}</span>
-              </span>
-              <span className="flex gap-4 shrink-0">
-                {c.channels.map((ch) => (
-                  <span key={ch} className="w-[86px]">
-                    <Switch
-                      checked={c.chosen.includes(ch)}
-                      disabled={!d.channels[ch]}
-                      onChange={(on) => void choose(c.id, on ? [...c.chosen, ch] : c.chosen.filter((x) => x !== ch))}
-                      label={<span aria-label={`${ch === 'push' ? 'Push' : 'E-Mail'}: ${c.label}`}>{ch === 'push' ? 'Push' : 'E-Mail'}</span>}
-                    />
-                  </span>
+        <table className="w-full border-collapse text-sm">
+          <caption className="sr-only">Benachrichtigungen je Art: Glocke, Push und E-Mail</caption>
+          <thead>
+            <tr>
+              <th scope="col" className="text-left text-meta font-medium text-fg-muted py-2 pr-2 border-b border-line">
+                Art
+              </th>
+              {(['bell', 'push', 'mail'] as const).map((k) => (
+                <th key={k} scope="col" className="w-12 sm:w-16 text-center text-meta font-medium text-fg-muted py-2 border-b border-line">
+                  {COLUMN[k]}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {d.categories.map((c) => (
+              <tr key={c.id} className="border-b border-line last:border-b-0 align-top">
+                <th scope="row" className="text-left font-normal py-2.5 pr-2">
+                  <span className="block text-sm font-medium">{c.label}</span>
+                  <span className="block text-meta text-fg-muted">{c.description}</span>
+                </th>
+                <td className="text-center py-1">
+                  <MatrixBox label={`Glocke: ${c.label}`} checked={c.bell} disabled={c.bellLocked} title={c.bellLocked ? 'Immer in der Glocke' : undefined} onChange={(on) => void bell(c.id, on)} />
+                </td>
+                {(['push', 'mail'] as const).map((ch) => (
+                  <td key={ch} className="text-center py-1">
+                    {c.channels.includes(ch) ? (
+                      <MatrixBox label={`${COLUMN[ch]}: ${c.label}`} checked={c.chosen.includes(ch)} disabled={!d.channels[ch]} onChange={(on) => void choose(c.id, on ? [...c.chosen, ch] : c.chosen.filter((x) => x !== ch))} />
+                    ) : (
+                      <span className="inline-flex w-10 h-10 items-center justify-center text-fg-muted" title={ch === 'mail' ? 'E-Mail regeln die Sicherheitseinstellungen' : undefined}>
+                        <span aria-hidden="true">–</span>
+                        <span className="sr-only">{COLUMN[ch]} nicht wählbar</span>
+                      </span>
+                    )}
+                  </td>
                 ))}
-              </span>
-            </li>
-          ))}
-        </ul>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <p className="m-0 text-meta text-fg-muted">Sicherheitsmeldungen und Meldungen zum eigenen Konto erscheinen immer in der Glocke.</p>
       </div>
     </SectionCard>
   );

@@ -85,7 +85,7 @@ Die Glocke meldet zu Medien:
 - **Upload-Links:** Ein Link läuft bald ab (höchstens 24 Stunden vorher, bei kurzen Links nach drei Vierteln der Gültigkeit; nach dem Verlängern erneut) oder das Kontingent von Link bzw. Sammlung ist erreicht.
 - **Speicherplatz:** Unterschreitet der freie Speicher die Warnschwelle (Einstellungen → Medien & Upload, Standard 10 GB), erfahren es alle mit „Medien administrieren“ – höchstens alle 12 Stunden.
 
-Unter **Mein Konto → Benachrichtigungen: Medien** lässt sich jede Art für sich abschalten; die Verwaltung kann sie unter Einstellungen → Medien & Upload ganz abschalten.
+Unter [Mein Konto → Benachrichtigungen](/profil#benachrichtigungen) lässt sich jede Art für sich in der Glocke, für Push und für E-Mail abschalten; die Verwaltung kann sie unter Einstellungen → Medien & Upload ganz abschalten.
 
 ## Grenzen
 

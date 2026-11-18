@@ -32,6 +32,7 @@ import { refreshDueWarnfeeds } from './connections/warnfeed.js';
 import { pollDueFeuersoftware } from './connections/feuersoftware.js';
 import { runRetention } from './lib/retention.js';
 import { checkExpiringLinks, checkStorage } from './lib/media-notify.js';
+import { sweepApprovalNotices } from './approvals/notices.js';
 import { cleanupDesignImages } from './routes/media-design.js';
 import { checkForUpdate, updateCheckDue } from './updates/github.js';
 import { recordHostResult } from './updates/host-helper.js';
@@ -303,6 +304,8 @@ async function maintenance(isLeader: boolean) {
   // Reichweite der Social-Posts (#218): nach 1 h, 24 h und 7 Tagen; läuft im Hintergrund und nie doppelt
   if (due('social-insights', 15 * 60_000)) void runDueInsights().catch((e) => log('warn', 'insights', e.message));
   if (due('automations', 30_000)) await automationTick().catch((e) => log('warn', 'automation', e.message));
+  // Freigabe-Anfragen (#253): erledigte als erledigt markieren (abgelaufene Banner, Fristen, Wege ohne eigenen Abgleich)
+  if (due('approval-notices', 60_000)) await sweepApprovalNotices().catch((e) => log('warn', 'notify', `Freigabe-Benachrichtigungen: ${e.message}`));
   // Workflow-Auslöser „Kalendereintrag“ (#203): Beginn, Ende oder X vorher
   if (due('calendar-triggers', 30_000)) await calendarTriggerTick().catch((e) => log('warn', 'automation', `Kalender-Auslöser: ${e.message}`));
   // Presseanfragen: Erinnerung vor Ablauf der Frist und bei Überschreitung (#204)

@@ -60,16 +60,19 @@ export type EntryState = 'draft' | 'in_review' | 'approved' | 'publishing' | 'li
 
 /** Zustand aus Eintrag und letztem (nicht abgebrochenem) Auftrag. */
 export function entryState(e: { content_hash: string; approved_hash: string | null; submitted_at: unknown; withdrawn_at: unknown; revision: number }, job: { action: string; status: string; revision: number } | null): EntryState {
+  const approved = !!e.approved_hash && e.approved_hash === e.content_hash;
+  // Neu eingereichte Fassung wartet auf Freigabe – auch nach dem Zurückziehen von der Website (sonst wäre sie weder in
+  // der Freigaben-Liste noch unter „Zur Freigabe“ freizugeben, #251)
+  if (e.submitted_at && !approved) return 'in_review';
   if (job?.action === 'delete') return job.status === 'done' ? 'withdrawn' : job.status === 'failed' ? 'failed' : 'withdrawing';
   if (e.withdrawn_at) return 'withdrawn';
-  const approved = !!e.approved_hash && e.approved_hash === e.content_hash;
   if (job?.action === 'upsert' && job.revision === e.revision && approved) {
     if (job.status === 'done') return 'live';
     if (job.status === 'failed') return 'failed';
     return 'publishing';
   }
   if (approved) return 'approved';
-  return e.submitted_at ? 'in_review' : 'draft';
+  return 'draft';
 }
 
 /** Steht der Eintrag (in irgendeiner Fassung) auf der Website oder ist er dorthin unterwegs? */

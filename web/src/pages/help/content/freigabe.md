@@ -11,11 +11,45 @@ Eine Freigabe bezieht sich auf eine konkrete Fassung mit ihrer **Prüfsumme** ü
 | 3 | Veröffentlichung | **Auf … veröffentlichen** (nur mit Website) |
 | 4 | Website | Holt den Auftrag ab und meldet Adresse und WordPress-ID zurück |
 
+## Freigaben-Liste
+
+Unter [Übersicht → Freigaben](/freigaben) steht an **einer** Stelle alles, was auf eine Entscheidung wartet – über alle
+Arten, für die das Konto freigeben darf. Arten ohne passendes Recht erscheinen gar nicht.
+
+| Art | Recht | „Prüfen →“ öffnet |
+|---|---|---|
+| Beitrag | Beiträge freigeben | die [Freigabe-Ansicht](#freigabe-unterwegs-aus-der-push-mitteilung) der eingereichten Fassung |
+| Banner | Banner freigeben | die Banner-Seite mit dem Banner hervorgehoben (mit Vorschau) |
+| Einsatzliste | Einsatzliste freigeben | den Eintrag in der Einsatzliste |
+| Warnentwurf | Warnentwurf freigeben | den Schritt „Prüfen & PDF“ des Vorgangs |
+| Presseantwort | Antworten an die Presse freigeben | die Antwort in der Presseanfrage (hervorgehoben) |
+| Workflow | Freigaben in Workflows erteilen | die Entscheidung direkt in der Liste |
+
+- **Filter nach Art** mit Anzahl und **Sortierung** (neueste oder älteste zuerst). Beides steht in der Adresse, z. B.
+  `/freigaben?art=einsatzliste` – Lesezeichen und Links aus Benachrichtigungen zeigen dieselbe Ansicht.
+- **Vier-Augen-Prinzip:** Was du selbst nicht entscheiden darfst – selbst geschrieben, geändert oder eingereicht, die
+  eigene Antwort an die Presse, ein Workflow, den du zuletzt geändert oder aktiviert hast –, steht **ausgegraut mit
+  Grund** in der Liste statt zu fehlen. So ist klar, dass es auf eine andere Person wartet.
+- **Bereit zur Veröffentlichung:** Wer veröffentlichen bzw. versenden darf, sieht darunter freigegebene Beiträge (mit
+  Website oder sozialen Netzwerken), Banner, Einträge der Einsatzliste und Warnentwürfe, die noch nicht veröffentlicht
+  bzw. versandt sind – mit „Veröffentlichen →“ bzw. „Versenden →“.
+- **Zähler:** Die rote Zahl am Bereich Übersicht in der Kopfzeile zählt, was du entscheiden darfst, plus das Bereite.
+  Die Dashboard-Kennzahl „Offene Freigaben“, die Begrüßung („Eine Freigabe wartet auf dich“) und der Redaktionsfluss
+  kommen aus derselben Quelle.
+- Entschieden wird immer in der Prüfansicht der Art mit allen Regeln (Prüfsumme, Vier-Augen-Prinzip,
+  Datenschutz-Prüfung); die Liste sammelt nur. Beiträge in Arbeit und „Neuer Beitrag“ stehen unter
+  [Redaktion → Beiträge](/beitraege).
+
+Sobald etwas eingereicht wird, meldet die Glocke es – eine Meldung je Art, mehrere gebündelt („Einsatzliste: 14 Einträge
+warten auf Freigabe“). Nach der Entscheidung gilt die Meldung als erledigt, siehe
+[Benachrichtigungen](/hilfe/benachrichtigungen#freigabe-anfragen-gebuendelt-und-erledigt).
+
 ## Freigabe unterwegs: aus der Push-Mitteilung
 
 Wird eine Fassung eingereicht, bekommen alle mit dem Recht „Beiträge freigeben“ die Benachrichtigung **Freigabe
 erbeten** – in der Glocke und, wenn eingeschaltet, als Push-Mitteilung auf Handy oder Computer (Mein Konto →
-Benachrichtigungen, Art „Freigabe angefordert“).
+Benachrichtigungen, Art „Freigabe angefordert“). Warten mehrere Fassungen, fasst eine Meldung sie zusammen und führt
+auf die [Freigaben-Liste](#freigaben-liste).
 
 Antippen öffnet die **Freigabe-Ansicht** – kompakt und für das Handy gemacht:
 

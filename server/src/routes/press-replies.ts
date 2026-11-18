@@ -6,6 +6,7 @@ import { audit, SYSTEM_ACTOR } from '../lib/audit.js';
 import { badRequest, conflict, forbidden, notFound } from '../lib/errors.js';
 import { log } from '../lib/log.js';
 import { notify } from '../lib/notify.js';
+import { decidedBy, refreshApprovalNotice } from '../approvals/notices.js';
 import { getSettings } from '../lib/settings.js';
 import { enqueue } from '../jobs/queue.js';
 import { classifySmtpError } from '../warnings/mail.js';
@@ -119,7 +120,8 @@ export async function pressReplyRoutes(app: FastifyInstance) {
       if (!approval) await queueSend(row!.id, db);
       return row!;
     });
-    if (approval) await notify({ kind: 'info', title: `Antwort zur Freigabe: ${r.case_no}`, body: subject.slice(0, 200), link: `/presse/${id}`, permission: 'press.approve', category: 'approval' });
+    // Link auf die Antwort in der Anfrage; mehrere offene Antworten ergeben eine gebündelte Meldung (#253)
+    if (approval) await refreshApprovalNotice('press', { added: [msg.id] });
     return { id: msg.id, status: approval ? 'pending' : 'queued' };
   });
 
@@ -144,7 +146,8 @@ export async function pressReplyRoutes(app: FastifyInstance) {
       await audit(actor, b.decision === 'approved' ? 'press.reply_approved' : 'press.reply_rejected', { type: 'press_request', id: m.request_id, label: m.case_no }, {}, 'ok', db);
       if (b.decision === 'approved') await queueSend(id, db);
     });
-    if (m.submitted_by) await notify({ kind: b.decision === 'approved' ? 'success' : 'warning', title: `Antwort zu ${m.case_no} ${b.decision === 'approved' ? 'freigegeben – wird gesendet' : 'zurückgewiesen'}`, body: b.note.slice(0, 200), link: `/presse/${m.request_id}`, userId: m.submitted_by, category: 'press' });
+    if (m.submitted_by) await notify({ kind: b.decision === 'approved' ? 'success' : 'warning', title: `Antwort zu ${m.case_no} ${b.decision === 'approved' ? 'freigegeben – wird gesendet' : 'zurückgewiesen'}`, body: b.note.slice(0, 200), link: `/presse/${m.request_id}?antwort=${id}`, userId: m.submitted_by, category: 'press' });
+    await refreshApprovalNotice('press', { note: decidedBy(b.decision, req.auth!.actor.name) });
     return { ok: true };
   });
 
@@ -185,6 +188,7 @@ export async function pressReplyRoutes(app: FastifyInstance) {
       await pressEvent(db, m.request_id, req.auth!.actor, 'reply', `Antwort verworfen: ${m.subject}`.slice(0, 500));
       await audit(req.auth!.actor, 'press.reply_discarded', { type: 'press_request', id: m.request_id, label: m.case_no }, { stand: m.status }, 'ok', db);
     });
+    if (m.status === 'pending') await refreshApprovalNotice('press', { note: 'Antwort verworfen' });
     return { ok: true };
   });
 }

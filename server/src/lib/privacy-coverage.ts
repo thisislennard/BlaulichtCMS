@@ -133,7 +133,7 @@ const SEARCHED: Record<string, TableCoverage> = {
   post_revisions: { hit: 'post', search: ['title', 'body', 'excerpt', 'variants', 'change_note', 'media_alt'] },
   approvals: { hit: 'post', search: ['note'] },
   audit_events: { hit: 'audit', search: ['actor_name', 'object_label', 'details', 'ip'] },
-  notifications: { hit: 'notification', search: ['title', 'body'] },
+  notifications: { hit: 'notification', search: ['title', 'body'], other: { resolved_note: 'Erledigt-Vermerk einer Freigabe-Anfrage (#253, z. B. „freigegeben von <Kontoname>“): Name eines Benutzerkontos wie im Audit, keine Daten Dritter; entfällt mit der Benachrichtigung nach 60 Tagen' } },
   press_requests: { hit: 'press_request', search: ['contact_name', 'contact_email', 'contact_phone', 'outlet', 'topic', 'body'] },
   press_request_events: { hit: 'press_request', search: ['text'], other: { actor_name: 'Name der handelnden Person aus der Redaktion', details: 'Stand und Frist (keine Kontaktdaten)' } },
   press_messages: {

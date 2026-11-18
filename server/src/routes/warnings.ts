@@ -8,7 +8,7 @@ import { many, one, pool, tx, type Queryable } from '../db/pool.js';
 import { alsoAny, requireAuth } from '../auth/context.js';
 import { audit, settingsDiff } from '../lib/audit.js';
 import { AppError, badRequest, conflict, forbidden, notFound } from '../lib/errors.js';
-import { notify } from '../lib/notify.js';
+import { decidedBy, refreshApprovalNotice } from '../approvals/notices.js';
 import { getSettings, setSettings } from '../lib/settings.js';
 import { enqueue } from '../jobs/queue.js';
 import { evaluate, activeQuestions, type Suggestion } from '../warnings/levels.js';
@@ -67,6 +67,15 @@ export function warningState<A extends StateApproval>(rev: StateRev, approval: A
   if (valid && lastSend && lastSend.revision_id === rev.id) state = lastSend.status === 'accepted' ? (lastSend.acknowledged_at ? 'acknowledged' : 'sent') : lastSend.status === 'failed' ? (lastSend.resolution ? 'approved' : 'send_failed') : lastSend.status === 'unknown' && !lastSend.resolution ? 'send_unknown' : lastSend.resolution === 'delivered' ? (lastSend.acknowledged_at ? 'acknowledged' : 'sent') : lastSend.status === 'unknown' ? 'approved' : 'sending';
   return { valid, state };
 }
+
+/**
+ * SQL-Bedingung „hat bis zu dieser Fassung Inhalte des Warnentwurfs geschrieben“ (Vier-Augen-Prinzip, #153) – gemeinsam
+ * für die Entscheidung und die Freigaben-Liste (#251). Die Bestätigung der Warnstufe zählt nicht als Schreiben.
+ */
+export const warningAuthoredSql = (warningId: string, number: string, userId: string) => `EXISTS (
+  SELECT 1 FROM warning_revisions ar LEFT JOIN warning_revisions ap ON ap.warning_id = ar.warning_id AND ap.number = ar.number - 1
+   WHERE ar.warning_id = ${warningId} AND ar.number <= ${number} AND ar.created_by = ${userId}
+     AND (ap.id IS NULL OR ar.data IS DISTINCT FROM ap.data OR ar.responsibility_ids IS DISTINCT FROM ap.responsibility_ids OR ar.keyword IS DISTINCT FROM ap.keyword OR ar.answers IS DISTINCT FROM ap.answers))`;
 
 /** Bestätigte Warnstufe des Vorgängers (für Aktualisierungen anzeigen). */
 async function previousLevel(parentId: string | null) {
@@ -313,6 +322,7 @@ export async function warningRoutes(app: FastifyInstance) {
       return ids;
     });
     removeWarningFiles(deleted);
+    await refreshApprovalNotice('warning', { note: 'Vorgang gelöscht' });
     return { ok: true, deleted: deleted.length };
   });
 
@@ -327,7 +337,8 @@ export async function warningRoutes(app: FastifyInstance) {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
     const b = revisionBody.parse(req.body);
     const userId = req.auth!.user?.id ?? null;
-    return tx(async (db) => {
+    let wasSubmitted = false;
+    const out = await tx(async (db) => {
       const w = await one<any>(`SELECT * FROM warnings WHERE id = $1 FOR UPDATE`, [id], db);
       if (!w) throw notFound();
       if (w.current_revision !== b.baseRevision) throw conflict(`Der Vorgang wurde inzwischen geändert (Fassung ${w.current_revision}). Bitte neu laden.`);
@@ -344,6 +355,7 @@ export async function warningRoutes(app: FastifyInstance) {
       const next = { template_id: w.template_id, kind: w.kind, data: b.data, responsibility_ids: b.responsibilityIds, keyword, answers, level_decision: levelDecision };
       const hash = warningHash(next);
       if (hash === cur.content_hash) return { changed: false, number: cur.number };
+      wasSubmitted = !!cur.submitted_at;
       const number = cur.number + 1;
       await db.query(
         `INSERT INTO warning_revisions (warning_id, number, data, responsibility_ids, keyword, answers, suggestion, level_decision, content_hash, created_by) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
@@ -353,6 +365,9 @@ export async function warningRoutes(app: FastifyInstance) {
       await audit(req.auth!.actor, 'warning.revised', { type: 'warning', id, label: w.case_no }, { fassung: number, stufe_neu_bestaetigen: !!cur.level_decision && !levelDecision }, 'ok', db);
       return { changed: true, number, levelReset: !!cur.level_decision && !levelDecision, suggestion };
     });
+    // Die eingereichte Fassung ist überholt – ihre Freigabe-Anfrage ist erledigt (#253)
+    if (wasSubmitted) await refreshApprovalNotice('warning', { note: `neue Fassung ${out.number} gespeichert` });
+    return out;
   });
 
   /**
@@ -363,12 +378,14 @@ export async function warningRoutes(app: FastifyInstance) {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
     const b = z.object({ revision: z.number().int().min(1), level: z.number().int().min(1).max(3), reason: z.string().trim().max(500).default('') }).parse(req.body);
     const user = req.auth!.user;
-    return tx(async (db) => {
+    let wasSubmitted = false;
+    const out = await tx(async (db) => {
       const w = await one<any>(`SELECT * FROM warnings WHERE id = $1 FOR UPDATE`, [id], db);
       if (!w) throw notFound();
       if (w.kind === 'all_clear') throw badRequest('Eine Entwarnung hat keine Warnstufe.');
       if (w.current_revision !== b.revision) throw conflict('Die Fassung hat sich geändert. Bitte die aktuelle Lage bewerten.');
       const cur = await one<any>(`SELECT * FROM warning_revisions WHERE warning_id = $1 AND number = $2`, [id, w.current_revision], db);
+      wasSubmitted = !!cur.submitted_at;
       const suggestion: Suggestion = cur.suggestion ?? (await evaluate(cur.keyword?.id ?? null, cur.answers ?? {}, db));
       const changed = suggestion.level !== b.level;
       if (changed && b.reason.length < 5) throw badRequest(suggestion.level ? 'Bitte begründen, warum vom Vorschlag abgewichen wird.' : 'Ohne eindeutigen Vorschlag braucht die gewählte Stufe eine fachliche Begründung.');
@@ -383,6 +400,8 @@ export async function warningRoutes(app: FastifyInstance) {
       await audit(req.auth!.actor, changed ? 'warning.level_changed' : 'warning.level_confirmed', { type: 'warning', id, label: w.case_no }, { stufe: b.level, vorschlag: suggestion.level, regeln: decision.rules.map((r) => `${r.name} v${r.version}`), begruendung: b.reason || null }, 'ok', db);
       return { ok: true, number, level: b.level, changed };
     });
+    if (wasSubmitted) await refreshApprovalNotice('warning', { note: `neue Fassung ${out.number} gespeichert` });
+    return out;
   });
 
   app.post('/warnings/:id/submit', { preHandler: requireAuth('warning.draft') }, async (req) => {
@@ -398,7 +417,8 @@ export async function warningRoutes(app: FastifyInstance) {
     if (!rev.responsibility_ids?.length) throw badRequest('Bitte mindestens eine Zuständigkeit (Empfänger) wählen.');
     await pool.query('UPDATE warning_revisions SET submitted_at = now(), submitted_by = $2 WHERE id = $1', [rev.id, req.auth!.user?.id ?? null]);
     await audit(req.auth!.actor, 'warning.submitted', { type: 'warning', id, label: w.case_no }, { fassung: revision });
-    await notify({ kind: 'warning', title: `Warnentwurf zur Freigabe: ${w.case_no}`, body: rev.data?.headline ?? '', link: `/warnungen/${id}`, permission: 'warning.approve' });
+    // Link auf den Schritt „Prüfen & PDF“; mehrere offene Warnentwürfe ergeben eine gebündelte Meldung (#253)
+    await refreshApprovalNotice('warning', { added: [id] });
     return { ok: true };
   });
 
@@ -422,7 +442,7 @@ export async function warningRoutes(app: FastifyInstance) {
     // bei einem Fehler wieder entfernt – keine verwaisten Dateien.
     let pdfFile: string | null = null;
     try {
-      return await tx(async (db) => {
+      const out = await tx(async (db) => {
         await db.query('SELECT 1 FROM warnings WHERE id = $1 FOR UPDATE', [id]);
         const { w, rev, valid } = await loadCurrent(id, db);
         if (rev.number !== b.revision || rev.content_hash !== b.contentHash) throw conflict('Die Fassung hat sich geändert. Bitte die aktuelle Fassung prüfen.');
@@ -434,14 +454,7 @@ export async function warningRoutes(app: FastifyInstance) {
         // dieses Entwurfs geschrieben oder die Fassung eingereicht hat, darf sie nicht freigeben. Die Bestätigung der Warnstufe
         // zählt nicht als Schreiben – sie gehört zur fachlichen Prüfung der freigebenden Person.
         if (b.decision === 'approved' && user?.id && s['editorial.four_eyes']) {
-          const own = await one<any>(
-            `SELECT 1 FROM warning_revisions r LEFT JOIN warning_revisions p ON p.warning_id = r.warning_id AND p.number = r.number - 1
-              WHERE r.warning_id = $1 AND r.number <= $2 AND r.created_by = $3
-                AND (p.id IS NULL OR r.data IS DISTINCT FROM p.data OR r.responsibility_ids IS DISTINCT FROM p.responsibility_ids OR r.keyword IS DISTINCT FROM p.keyword OR r.answers IS DISTINCT FROM p.answers)
-              LIMIT 1`,
-            [id, rev.number, user.id],
-            db,
-          );
+          const own = await one<any>(`SELECT 1 WHERE ${warningAuthoredSql('$1::uuid', '$2::int', '$3::uuid')}`, [id, rev.number, user.id], db);
           if (own || rev.submitted_by === user.id) throw forbidden('Vier-Augen-Prinzip: Wer am Entwurf geschrieben oder ihn eingereicht hat, kann ihn nicht selbst freigeben.');
         }
         let pdf: Buffer | null = null;
@@ -467,6 +480,9 @@ export async function warningRoutes(app: FastifyInstance) {
         }
         return { ok: true, approvalId: a.id, pdfSha256: sha };
       });
+      // Anfrage erledigt – zählt bei niemandem mehr als ungelesen (#253)
+      await refreshApprovalNotice('warning', { note: decidedBy(b.decision, req.auth!.actor.name) });
+      return out;
     } catch (e) {
       if (pdfFile) fs.rmSync(pdfFile, { force: true });
       throw e;

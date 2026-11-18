@@ -5,6 +5,7 @@ import { audit, type Actor } from '../lib/audit.js';
 import { StepError } from '../lib/errors.js';
 import { log } from '../lib/log.js';
 import { notify, scheduleDelivery } from '../lib/notify.js';
+import { decidedBy, refreshApprovalNotice } from '../approvals/notices.js';
 import { getSettings, type Settings } from '../lib/settings.js';
 import { bannerHash, bannerLink, enqueueBannerJob } from '../routes/banners.js';
 import { revisionHash } from '../routes/posts.js';
@@ -446,7 +447,7 @@ async function awaitApproval(
     if (ap.status === 'canceled') throw new PermanentError('Die Freigabe wurde abgebrochen.');
     return then(ap.status, ap.note ?? '');
   }
-  await tx(async (db) => {
+  const approvalId = await tx(async (db) => {
     await db.query(
       `INSERT INTO automation_approvals (automation_id, run_id, node_id, kind, title, summary, expires_at) VALUES ($1,$2,$3,$4,$5,$6, now() + make_interval(hours => $7)) ON CONFLICT (run_id, node_id) DO NOTHING`,
       [ctx.run.automation_id, runId, node.id, a.kind, a.title, a.summary, a.hours],
@@ -454,8 +455,10 @@ async function awaitApproval(
     await upsertStep(db, runId, node, { status: 'waiting', input: data, info: `Wartet auf Freigabe (höchstens ${a.hours} h).`, attempt: true });
     await db.query(`UPDATE automation_runs SET status = 'waiting', resume_at = now() + make_interval(hours => $2) WHERE id = $1`, [runId, a.hours]);
     await audit(ctx.actor, 'automation.approval_requested', { type: 'automation', id: ctx.run.automation_id, label: a.title }, { lauf: String(runId).slice(0, 8), art: a.kind }, 'ok', db);
+    return (await one<{ id: string }>(`SELECT id FROM automation_approvals WHERE run_id = $1 AND node_id = $2`, [runId, node.id], db))?.id;
   });
-  await notify({ kind: 'info', title: `Freigabe erbeten: ${a.title}`.slice(0, 200), body: `Aus dem Workflow „${ctx.run.automation_name}“.`, link: '/freigaben', permission: 'approval.automation' });
+  // Benachrichtigung „Freigabe angefordert“ mit Link auf genau diese Freigabe (#253), bei mehreren gebündelt
+  if (approvalId) await refreshApprovalNotice('automation', { added: [approvalId] });
   return { pause: true };
 }
 
@@ -515,7 +518,7 @@ async function runOutput(ctx: Ctx, node: GraphNode, data: Data, prev: StepRow | 
         }
         return done({ ports: ['out'], produced: { banner_link: ids.length === 1 ? bannerLink(ids[0]) : '/banner' }, info: `Banner „${title}“ ${direct ? 'direkt veröffentlicht' : c.submit !== false ? 'angelegt und zur Freigabe eingereicht' : 'als Entwurf angelegt'} (${usable.length} Website(s)).`, log: { ...desc, banner: ids } }, db);
       }).then(async (res) => {
-        if (!direct && c.submit !== false) await notify({ kind: 'info', title: `Banner zur Freigabe: ${title}`.slice(0, 200), body: `Aus dem Workflow „${ctx.run.automation_name}“.`, link: (res.produced?.banner_link as string) || '/banner', permission: 'approval.banner' });
+        if (!direct && c.submit !== false) await refreshApprovalNotice('banner', { added: ((res.log as any)?.banner ?? []) as string[], body: `Aus dem Workflow „${ctx.run.automation_name}“.` });
         return res;
       });
     }
@@ -577,7 +580,7 @@ async function runOutput(ctx: Ctx, node: GraphNode, data: Data, prev: StepRow | 
         await audit(ctx.actor, direct ? 'automation.post_published' : 'automation.post_created', { type: 'post', id: p.id, label: title }, { ...auditDetails, website: site?.name ?? null }, 'ok', db);
         return done({ ports: ['out'], produced: { beitrag_link: `/beitraege/${p.id}`, beitrag_titel: title }, info: `Beitrag „${title}“ ${direct ? `direkt an „${site!.name}“ übergeben` : submit ? 'angelegt und zur Freigabe eingereicht' : 'als Entwurf angelegt'}.`, log: { ...desc, beitrag: p.id } }, db);
       });
-      if (submit && !direct) await notify({ kind: 'info', title: `Freigabe erbeten: ${title}`.slice(0, 200), body: `Fassung 1 – aus dem Workflow „${ctx.run.automation_name}“`, link: res.produced?.beitrag_link as string, permission: 'approval.post' });
+      if (submit && !direct) await refreshApprovalNotice('post', { added: [String((res.log as any)?.beitrag ?? '')], body: `Fassung 1 – aus dem Workflow „${ctx.run.automation_name}“` });
       else if (!direct) await notify({ kind: 'info', title: `Neuer Beitragsentwurf: ${title}`.slice(0, 200), body: `Aus dem Workflow „${ctx.run.automation_name}“.`, link: res.produced?.beitrag_link as string, permission: 'post.edit' });
       return res;
     }
@@ -702,7 +705,8 @@ async function runOutput(ctx: Ctx, node: GraphNode, data: Data, prev: StepRow | 
       });
       if (res.log && (res.log as any).eintrag) {
         const link = incidentLink(String((res.log as any).eintrag));
-        await notify(c.submit === false ? { kind: 'info', title: `Neuer Eintrag für die Einsatzliste: ${title || keyword}`.slice(0, 200), body: `Aus dem Workflow „${ctx.run.automation_name}“.`, link, permission: 'incident.edit' } : { kind: 'info', title: `Einsatzliste: Freigabe erbeten – ${title || keyword}`.slice(0, 200), body: `Aus dem Workflow „${ctx.run.automation_name}“.`, link, permission: 'approval.incident' });
+        if (c.submit === false) await notify({ kind: 'info', title: `Neuer Eintrag für die Einsatzliste: ${title || keyword}`.slice(0, 200), body: `Aus dem Workflow „${ctx.run.automation_name}“.`, link, permission: 'incident.edit' });
+        else await refreshApprovalNotice('incident', { added: [String((res.log as any).eintrag)], body: `Aus dem Workflow „${ctx.run.automation_name}“.` });
       }
       return res;
     }
@@ -733,12 +737,14 @@ export async function decideApproval(id: string, decision: 'approved' | 'rejecte
     return ap;
   });
   if (!a) throw new Error('not_pending');
+  await refreshApprovalNotice('automation', { note: decision === 'approved' ? decidedBy('approved', actor.name) : `abgelehnt von ${actor.name}` });
 }
 
 /** Worker (Leader): abgelaufene Freigaben schließen und die Läufe fortsetzen. */
 export async function expireApprovals(): Promise<number> {
   const rows = await many<any>(`UPDATE automation_approvals SET status = 'expired', decided_at = now() WHERE status = 'pending' AND expires_at < now() RETURNING run_id`);
   for (const r of rows) await resumeRun(r.run_id).catch((e) => log('warn', 'automation', `Fortsetzen nach Fristablauf: ${e.message}`));
+  if (rows.length) await refreshApprovalNotice('automation', { note: 'Frist abgelaufen' });
   return rows.length;
 }
 

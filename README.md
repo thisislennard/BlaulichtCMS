@@ -146,6 +146,11 @@ flowchart LR
 ### Freigeben
 
 - **Freigabe genau einer Fassung** (Prüfsumme) – ändert sich danach etwas, ist eine neue Freigabe nötig.
+- **Eine Freigaben-Liste für alle Arten:** Beiträge, Banner, Einsatzliste, Warnentwürfe, Antworten an die Presse und
+  Freigaben aus Workflows an einer Stelle – nur Arten, für die das Konto freigeben darf, mit Filter nach Art und
+  Sortierung; was das Vier-Augen-Prinzip sperrt, steht ausgegraut mit Grund dabei. „Prüfen →“ öffnet die Prüfansicht der
+  Art; darunter Freigegebenes, das noch auf Veröffentlichung oder Versand wartet. Zähler in der Kopfzeile, Kennzahl und
+  Begrüßung im Dashboard zählen alle Arten.
 - **Freigabe unterwegs:** die Push-Mitteilung „Freigabe erbeten“ öffnet eine kompakte Freigabe-Ansicht fürs Handy (Vorschau je Netzwerk, Bilder, Änderungen zur letzten Fassung) mit Freigeben/Ablehnen unter denselben Regeln; in Chrome/Edge/Android mit Knöpfen in der Mitteilung, die nur die Ansicht öffnen – nie ohne Vorschau.
 - **Vier-Augen-Prinzip** wählbar für Beiträge, Banner und Warnentwürfe: wer geschrieben oder eingereicht hat, gibt
   nicht selbst frei.
@@ -279,10 +284,13 @@ flowchart LR
   Bundesland, Sicherung außer Haus mit Probe-Wiederherstellung, Update-Helfer, Zwei-Faktor, Website; erkennt den Stand
   selbst, verlinkt direkt an die richtige Stelle, Punkte einzeln ausblendbar. Neue Konten sehen einmal die ersten
   Schritte ihrer Rolle.
-- **Live:** neue Uploads, Freigaben und Veröffentlichungen erscheinen ohne Neuladen; Benachrichtigungen in der App.
-- **Push und E-Mail:** je Person und Art wählbar (Freigabe angefordert, Entscheidung, Einsatz-Eingang, neue Fotos,
-  amtliche Warnungen, Verbindungsfehler, fehlgeschlagene Workflows, Updates …) – nur Arten, für die das Konto Rechte
-  hat. Push an Browser und installierte App (Web Push über den Push-Dienst des Browsers, Inhalt Ende-zu-Ende-verschlüsselt,
+- **Live:** neue Uploads, Freigaben und Veröffentlichungen erscheinen ohne Neuladen; Benachrichtigungen in der App
+  mit Filter nach Art. Freigabe-Anfragen kommen als eine Meldung je Art (mehrere gebündelt, „14 Einträge warten auf
+  Freigabe“), führen genau zum Vorgang bzw. zur gefilterten Liste und gelten nach der Entscheidung als erledigt – sie
+  zählen dann bei niemandem mehr als ungelesen.
+- **Glocke, Push und E-Mail:** je Person und Art in einer Tabelle wählbar (Freigabe angefordert, Entscheidung,
+  Einsatz-Eingang, neue Fotos, amtliche Warnungen, Verbindungsfehler, fehlgeschlagene Workflows, Updates …) – nur Arten,
+  für die das Konto Rechte hat. Push an Browser und installierte App (Web Push über den Push-Dienst des Browsers, Inhalt Ende-zu-Ende-verschlüsselt,
   kein zusätzlicher Anbieter); E-Mail über SMTP oder Microsoft 365 (Microsoft Graph als Anwendung, aktivierbar erst nach
   bestandener Testmail). Push und E-Mail tragen standardmäßig nur die Art der Benachrichtigung und einen Link –
   Stichwort, Ort oder Betreff bleiben in BlaulichtCMS, Einzelheiten lassen sich je Zustellweg (Push, E-Mail) zuschalten.

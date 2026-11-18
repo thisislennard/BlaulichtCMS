@@ -12,6 +12,7 @@ import { approvalStillValid, assertMediaPresent, assertPrivacyChecked, missingMe
 import { ALT_MAX, altCheck, cleanMediaAlt } from '../lib/accessibility.js';
 import { foldSql, searchTerms } from './search.js';
 import { postChecklist } from '../lib/post-checklist.js';
+import { decidedBy, refreshApprovalNotice } from '../approvals/notices.js';
 
 export const POST_KINDS = ['news', 'incident', 'event', 'situation'] as const;
 
@@ -159,17 +160,19 @@ export const POST_STATE_SQL = `
  */
 export async function fourEyesBlocked(postId: string, number: number, submittedBy: string | null, userId: string, db: Queryable = pool): Promise<boolean> {
   if (submittedBy === userId) return true;
-  const own = await one<any>(
-    `SELECT 1 FROM post_revisions r LEFT JOIN post_revisions p ON p.post_id = r.post_id AND p.number = r.number - 1
-      WHERE r.post_id = $1 AND r.number <= $2 AND r.created_by = $3
-        AND (p.id IS NULL OR r.title IS DISTINCT FROM p.title OR r.body IS DISTINCT FROM p.body OR r.excerpt IS DISTINCT FROM p.excerpt
-             OR r.media_ids IS DISTINCT FROM p.media_ids OR r.cover_id IS DISTINCT FROM p.cover_id OR r.variants IS DISTINCT FROM p.variants)
-      LIMIT 1`,
-    [postId, number, userId],
-    db,
-  );
+  const own = await one<any>(`SELECT 1 WHERE ${postAuthoredSql('$1::uuid', '$2::int', '$3::uuid')}`, [postId, number, userId], db);
   return !!own;
 }
+
+/**
+ * SQL-Bedingung „hat bis zu dieser Fassung Inhalte geschrieben“ (siehe fourEyesBlocked) – gemeinsam für die Entscheidung
+ * und die Freigaben-Liste (#251), damit beide dieselbe Regel anwenden. Parameter sind SQL-Ausdrücke.
+ */
+export const postAuthoredSql = (postId: string, number: string, userId: string) => `EXISTS (
+  SELECT 1 FROM post_revisions ar LEFT JOIN post_revisions ap ON ap.post_id = ar.post_id AND ap.number = ar.number - 1
+   WHERE ar.post_id = ${postId} AND ar.number <= ${number} AND ar.created_by = ${userId}
+     AND (ap.id IS NULL OR ar.title IS DISTINCT FROM ap.title OR ar.body IS DISTINCT FROM ap.body OR ar.excerpt IS DISTINCT FROM ap.excerpt
+          OR ar.media_ids IS DISTINCT FROM ap.media_ids OR ar.cover_id IS DISTINCT FROM ap.cover_id OR ar.variants IS DISTINCT FROM ap.variants))`;
 
 async function loadMedia(ids: string[]) {
   if (!ids.length) return [];
@@ -388,7 +391,7 @@ export async function postRoutes(app: FastifyInstance) {
       const noStory = ok.filter((c) => !['facebook', 'instagram'].includes(c.kind) && ['story', 'both'].includes(body.socialFormats[c.id]));
       if (noStory.length) throw badRequest('Storys gibt es nur für Facebook-Seiten und Instagram-Konten.');
     }
-    const result = await tx(async (db) => {
+    const { wasSubmitted, ...result } = await tx(async (db) => {
       const post = await one<any>('SELECT * FROM posts WHERE id = $1 FOR UPDATE', [id], db);
       if (!post) throw notFound('Beitrag nicht gefunden.');
       if (post.current_revision !== body.baseRevision) {
@@ -402,7 +405,7 @@ export async function postRoutes(app: FastifyInstance) {
       const mediaAlt = cleanMediaAlt(body.mediaAlt, media.filter((m: any) => m.kind === 'image').map((m: any) => m.id));
       const next = { title: body.title, body: body.body, excerpt: body.excerpt, media_ids: body.mediaIds, cover_id: body.coverId, site_id: body.siteId, variants, publish_at: body.publishAt, social_targets: socialTargets, social_formats: socialFormats, media_alt: mediaAlt };
       const hash = revisionHash(next);
-      if (hash === cur.content_hash) return { changed: false, number: cur.number };
+      if (hash === cur.content_hash) return { changed: false, number: cur.number, wasSubmitted: false };
       const number = cur.number + 1;
       await db.query(
         `INSERT INTO post_revisions (post_id, number, title, body, excerpt, media_ids, cover_id, site_id, content_hash, change_note, created_by, variants, publish_at, social_targets, social_formats, media_alt) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`,
@@ -413,8 +416,10 @@ export async function postRoutes(app: FastifyInstance) {
       await db.query('UPDATE posts SET current_revision = $2, title = $3, updated_at = now(), updated_by = $4 WHERE id = $1', [id, number, body.title, userId]);
       const hadApproval = await one(`SELECT 1 FROM approvals WHERE revision_id = $1 AND decision = 'approved' AND revoked_at IS NULL`, [cur.id], db);
       await audit(req.auth!.actor, 'post.revised', { type: 'post', id, label: body.title }, { fassung: number, freigabe_entfaellt: !!hadApproval }, 'ok', db);
-      return { changed: true, number, approvalInvalidated: !!hadApproval };
+      return { changed: true, number, approvalInvalidated: !!hadApproval, wasSubmitted: !!cur.submitted_at };
     });
+    // Die eingereichte Fassung ist überholt – ihre Freigabe-Anfrage ist erledigt (#253)
+    if (wasSubmitted) await refreshApprovalNotice('post', { note: `neue Fassung ${result.number} gespeichert` });
     return result;
   });
 
@@ -429,6 +434,7 @@ export async function postRoutes(app: FastifyInstance) {
     );
     if (!p) throw notFound();
     await audit(req.auth!.actor, 'post.updated', { type: 'post', id, label: p.title }, body);
+    if (body.archived !== undefined) await refreshApprovalNotice('post', { note: 'archiviert' });
     // Beim Ent-Archivieren melden, wenn Dateien der aktuellen Fassung inzwischen gelöscht wurden (#167)
     if (body.archived === false) {
       const st = await postState(id);
@@ -466,9 +472,9 @@ export async function postRoutes(app: FastifyInstance) {
     }
     await pool.query('UPDATE post_revisions SET submitted_at = now(), submitted_by = $2 WHERE id = $1', [st.current.id, req.auth!.user?.id ?? null]);
     await audit(req.auth!.actor, 'post.submitted', { type: 'post', id, label: st.current.title }, { fassung: revision });
-    // Link auf die kompakte Freigabe-Ansicht (#216); Push-Mitteilungen bekommen dort Aktionsknöpfe (lib/notify-channels.ts)
-    const by = req.auth!.user?.name;
-    await notify({ kind: 'info', title: `Freigabe erbeten: ${st.current.title}`.slice(0, 200), body: `Fassung ${revision}${by ? ` · eingereicht von ${by}` : ''}`, link: reviewLink(id, revision), permission: 'approval.post' });
+    // Eine Meldung je Art (#253): einzeln mit Link auf die Freigabe-Ansicht (#216, Push mit Aktionsknöpfen), bei mehreren
+    // offenen Fassungen gebündelt mit Link auf die Freigaben-Liste
+    await refreshApprovalNotice('post', { added: [id] });
     return { ok: true };
   });
 
@@ -604,6 +610,8 @@ export async function postRoutes(app: FastifyInstance) {
     if (res.author) {
       await notify({ kind: body.decision === 'approved' ? 'success' : 'warning', title: `${body.decision === 'approved' ? 'Freigegeben' : 'Zurückgewiesen'}: ${res.title}`.slice(0, 200), body: body.note, link: `/beitraege/${id}`, userId: res.author, category: 'decision' });
     }
+    // Anfrage erledigt – zählt bei niemandem mehr als ungelesen (#253)
+    await refreshApprovalNotice('post', { note: decidedBy(body.decision, req.auth!.actor.name) });
     return { ok: true, approvalId: res.a.id };
   });
 
@@ -637,6 +645,8 @@ export async function postRoutes(app: FastifyInstance) {
       await audit(req.auth!.actor, 'post.approval_revoked', { type: 'post', id, label: st.current.title }, { fassung: st.current.number, abgebrochen: (c1.rowCount ?? 0) + (c2.rowCount ?? 0) }, 'ok', db);
       return { canceled: (c1.rowCount ?? 0) + (c2.rowCount ?? 0) };
     });
+    // Die Fassung bleibt eingereicht und wartet wieder auf Freigabe: eine offene Meldung zählt sie mit
+    await refreshApprovalNotice('post');
     return { ok: true, canceled: res.canceled };
   });
 

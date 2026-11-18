@@ -7,11 +7,11 @@ Unter [Mein Konto → Benachrichtigungen](/profil#benachrichtigungen):
 - **Push auf diesem Gerät** einschalten: Der Browser fragt einmal, ob BlaulichtCMS Mitteilungen anzeigen darf. Push wird **je Browser bzw. installierter App** eingeschaltet – auf Handy und Laptop also jeweils einmal.
 - **Testnachricht senden** prüft, ob die Mitteilung ankommt.
 - **Weitere Geräte** zeigt alle Geräte mit Push, wann zuletzt zugestellt wurde und ob ein Gerät nicht erreichbar war. Nicht mehr genutzte Geräte hier entfernen.
-- **Arten:** je Art ein Schalter für **Push** und für **E-Mail**. Angeboten werden nur Arten, für die das Konto die nötigen Rechte hat – wer z. B. nichts freigeben darf, sieht „Freigabe angefordert“ nicht.
+- **Arten:** eine Tabelle mit **Glocke**, **Push** und **E-Mail** je Art – an einer Stelle, ohne doppelte Einträge. Angeboten werden nur Arten, für die das Konto die nötigen Rechte hat – wer z. B. nichts freigeben darf, sieht „Freigabe angefordert“ nicht. Ohne Haken bei **Glocke** erscheint die Art nicht mehr in der Glocke und zählt nicht mit; **Sicherheitsmeldungen** und Meldungen zum **eigenen Konto** bleiben immer in der Glocke.
 
 | Art | Wer sie bekommen kann | Vorgabe |
 |---|---|---|
-| Freigabe angefordert | Rechte zum Freigeben (Beiträge, Banner, Workflows, Warnentwürfe) – bei Beiträgen öffnet die Mitteilung die [Freigabe-Ansicht](/hilfe/freigabe#freigabe-unterwegs-aus-der-push-mitteilung), bei Bannern die Banner-Seite mit dem eingereichten Banner hervorgehoben | Push |
+| Freigabe angefordert | Rechte zum Freigeben (Beiträge, Banner, Einsatzliste, Warnentwürfe, Antworten an die Presse, Workflows) – eine Meldung je Art, siehe [unten](#freigabe-anfragen-gebuendelt-und-erledigt) | Push |
 | Eigene Fassung freigegeben oder zurückgewiesen | wer Fassungen einreicht | Push |
 | Einsatz-Eingang (FE2, Feuersoftware Connect) | Beiträge bearbeiten | Push |
 | Neue Entwürfe aus Workflows | Beiträge bearbeiten, Warnentwurf erstellen | – |
@@ -30,6 +30,18 @@ Unter [Mein Konto → Benachrichtigungen](/profil#benachrichtigungen):
 | Eigenes Konto | alle | Push (E-Mail regeln die Sicherheitseinstellungen) |
 
 Neue Dateien über Upload-Links werden gebündelt: höchstens eine Push-Nachricht bzw. E-Mail je Sammlung und Stunde, weitere Dateien erhöhen nur den Zähler in der Glocke.
+
+## Freigabe-Anfragen: gebündelt und erledigt
+
+Wird etwas zur Freigabe eingereicht, erscheint **eine Meldung je Art** – nicht eine je Vorgang:
+
+- **Ein Vorgang:** „Freigabe erbeten: Tag der offenen Tür“, „Banner zur Freigabe: …“, „Einsatzliste: Freigabe erbeten – …“, „Warnentwurf zur Freigabe: W-2026-0002“, „Antwort zur Freigabe: P-2026-0003“. Der Link führt genau dorthin: Freigabe-Ansicht des Beitrags, Banner hervorgehoben (`/banner?banner=…`), Eintrag der Einsatzliste (`/einsatzliste?eintrag=…`), Schritt „Prüfen & PDF“ des Warnentwurfs, Antwort in der Presseanfrage, Freigabe aus einem Workflow in der [Freigaben-Liste](/hilfe/freigabe#freigaben-liste).
+- **Mehrere:** dieselbe Meldung zählt hoch („Einsatzliste: 14 Einträge warten auf Freigabe“, „3 Banner warten auf Freigabe“) und ist für alle wieder ungelesen. Der Link führt auf die passend gefilterte Liste – bei der Einsatzliste auf „Zur Freigabe“ (`/einsatzliste?stand=in_review&jahr=alle`, dort lassen sich mehrere auf einmal freigeben), sonst auf die Freigaben-Liste mit dieser Art. Push und E-Mail kommen beim ersten Vorgang und erst nach zehn ruhigen Minuten wieder – ein Import oder eine Unwetternacht ergibt eine Mitteilung statt dreißig.
+- **Erledigt:** Nach dem Freigeben, Zurückweisen, Ändern (neue Fassung), Zurückziehen, Löschen oder Ablauf zählt die Meldung nur noch die offenen Vorgänge. Ist keiner mehr offen, gilt sie als **erledigt**: Sie zählt bei niemandem mehr als ungelesen und erscheint ausgegraut mit Vermerk, z. B. „Erledigt – freigegeben von Sam, 23:10“. Ältere Einzelmeldungen von vor dieser Bündelung gleicht der Hintergrunddienst ebenso ab.
+
+## Seite Benachrichtigungen
+
+[Übersicht → Benachrichtigungen](/benachrichtigungen) zeigt die Meldungen der letzten 60 Tage. **Alle** oder **Ungelesen** und dazu die **Art**: Freigaben · Veröffentlichungen (auch Einsatz-Eingang und Entwürfe aus Workflows) · Presse · Warnungen · Medien · Workflows · Konto und System. Die Auswahl steht in der Adresse (z. B. `/benachrichtigungen?art=freigaben`). Die Zahl am App-Symbol und an der Glocke zählt nur Ungelesenes, also keine erledigten Freigabe-Anfragen.
 
 ## Inhalt von Push und E-Mail
 

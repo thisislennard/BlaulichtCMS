@@ -18,6 +18,7 @@ import { aad, decrypt, encrypt, fingerprint, randomToken, safeEqual, sha256Hex }
 import { AppError, badRequest, unauthorized } from '../lib/errors.js';
 import { getSettings, privacyIncomplete, privacyInfo, setSettings } from '../lib/settings.js';
 import { log } from '../lib/log.js';
+import { NOTIFY_CATEGORIES, notifyCategory } from '../lib/notify-categories.js';
 import { normalizePublicUrl } from '../lib/urls.js';
 
 const SETUP_FILE = () => path.join(config.dataDir, 'setup-token.txt');
@@ -364,8 +365,11 @@ export async function authRoutes(app: FastifyInstance) {
         compactTables: z.boolean().optional(),
         sidebarCollapsed: z.boolean().optional(),
         language: z.enum(['de', 'en']).optional(),
-        /** Benachrichtigungsarten, die die Person nicht sehen möchte (Medien: neue Dateien, Links, Speicher) */
-        mutedNotifications: z.array(z.enum(['media_new', 'media_link', 'media_storage'])).max(10).optional(),
+        /** In der Glocke stummgeschaltete Arten (#253: alle abschaltbaren Arten, lib/notify-categories.ts) */
+        mutedNotifications: z
+          .array(z.string().refine((id) => !!notifyCategory(id)?.bell, 'Unbekannte oder nicht abschaltbare Art.'))
+          .max(NOTIFY_CATEGORIES.length)
+          .optional(),
         /** Begrüßungskarte neuer Konten auf dem Dashboard gelesen (#255) */
         welcomeDone: z.boolean().optional(),
       })

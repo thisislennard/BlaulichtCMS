@@ -5,6 +5,7 @@ import { requireAuth } from '../auth/context.js';
 import { audit } from '../lib/audit.js';
 import { AppError, badRequest, conflict, forbidden, notFound } from '../lib/errors.js';
 import { getSettings } from '../lib/settings.js';
+import { decidedBy, refreshApprovalNotice } from '../approvals/notices.js';
 import { notify } from '../lib/notify.js';
 import { assertPrivacyChecked, privacyAudit, privacyFindings } from '../lib/approval.js';
 import {
@@ -326,6 +327,7 @@ export async function incidentRoutes(app: FastifyInstance) {
     const removed = parsed.rows.filter((r) => coarseLocation(r.location, cfg.locations).removed).length;
     const summary = { total: parsed.rows.length, duplicates: refs.filter((r) => known.has(r)).length, location_removed: removed, columns: parsed.columns, errors: parsed.errors.slice(0, 50), preview };
     if (b.dryRun || !parsed.rows.length) return { ...summary, created: 0 };
+    const createdIds: string[] = [];
     const created = await tx(async (db) => {
       let n = 0;
       for (const r of parsed.rows) {
@@ -351,12 +353,16 @@ export async function incidentRoutes(app: FastifyInstance) {
           uid(req),
           cfg,
         );
-        if (res) n++;
+        if (res) {
+          n++;
+          createdIds.push(res.entry.id);
+        }
       }
       await audit(req.auth!.actor, 'incident.imported', { type: 'incident', label: 'CSV-Import' }, { zeilen: parsed.rows.length, angelegt: n, ort_entfernt: removed, berichte: b.includeReports, eingereicht: b.submit }, 'ok', db);
       return n;
     });
-    if (b.submit && created) await notify({ kind: 'info', title: `Einsatzliste: ${created} importierte Einträge zur Freigabe`, link: '/einsatzliste', permission: 'approval.incident' });
+    // Eine gebündelte Meldung für alle importierten Einträge (#253)
+    if (b.submit && created) await refreshApprovalNotice('incident', { added: createdIds });
     return { ...summary, created };
   });
 
@@ -394,11 +400,13 @@ export async function incidentRoutes(app: FastifyInstance) {
     await checkSite(v.siteId);
     await checkMedia(v.mediaIds);
     const f = await fieldsFrom(v);
+    let wasSubmitted = false;
     const res = await tx(async (db) => {
       const e = await one<any>('SELECT * FROM incident_entries WHERE id = $1 FOR UPDATE', [id], db);
       if (!e) throw notFound('Eintrag nicht gefunden.');
       const hash = entryHash(f);
       if (hash === e.content_hash) return false;
+      wasSubmitted = !!e.submitted_at && e.approved_hash !== e.content_hash;
       await db.query(
         `UPDATE incident_entries SET site_id = $2, content_hash = $3, alarm_at = $4, number = $5, keyword = $6, keyword_label = $7, category = $8, title = $9, location = $10, report = $11,
                 vehicles = $12, units = $13, link_url = $14, featured = $15, false_alarm = $16, media_ids = $17, revision = revision + 1, submitted_at = NULL, submitted_by = NULL,
@@ -408,6 +416,8 @@ export async function incidentRoutes(app: FastifyInstance) {
       await audit(req.auth!.actor, 'incident.revised', { type: 'incident', id, label: f.title }, { fassung: e.revision + 1, freigabe_entfaellt: e.approved_hash === e.content_hash }, 'ok', db);
       return true;
     });
+    // Geänderte Fassung muss neu eingereicht werden – die bisherige Anfrage ist erledigt (#253)
+    if (wasSubmitted) await refreshApprovalNotice('incident', { note: 'geändert – neue Fassung nicht eingereicht' });
     return { changed: res, ...entryPayload(await loadEntry(id)) };
   });
 
@@ -425,6 +435,7 @@ export async function incidentRoutes(app: FastifyInstance) {
       await db.query(`DELETE FROM incident_entries WHERE id = $1`, [id]);
       await audit(req.auth!.actor, 'incident.deleted', { type: 'incident', id, label: e.title }, { auftraege_geloescht: jobs.rowCount ?? 0 }, 'ok', db);
     });
+    await refreshApprovalNotice('incident', { note: 'Eintrag gelöscht' });
     return { ok: true };
   });
 
@@ -433,8 +444,9 @@ export async function incidentRoutes(app: FastifyInstance) {
     const e = await one<any>(`UPDATE incident_entries SET submitted_at = now(), submitted_by = $2, rejected_note = NULL WHERE id = $1 RETURNING *`, [id, uid(req)]);
     if (!e) throw notFound('Eintrag nicht gefunden.');
     await audit(req.auth!.actor, 'incident.submitted', { type: 'incident', id, label: e.title }, { fassung: e.revision });
-    // Link hebt den Eintrag in der Liste hervor (#258)
-    await notify({ kind: 'info', title: `Einsatzliste: Freigabe erbeten – ${e.title}`.slice(0, 200), body: `Fassung ${e.revision}`, link: incidentLink(id), permission: 'approval.incident' });
+    // Link hebt den Eintrag in der Liste hervor (#258); mehrere offene Einträge ergeben eine gebündelte Meldung mit
+    // Link auf die Liste „Zur Freigabe“ (#253)
+    await refreshApprovalNotice('incident', { added: [id] });
     return { ok: true };
   });
 
@@ -443,7 +455,7 @@ export async function incidentRoutes(app: FastifyInstance) {
     const rows = await many<any>(`UPDATE incident_entries SET submitted_at = now(), submitted_by = $2, rejected_note = NULL WHERE id = ANY($1::uuid[]) AND submitted_at IS NULL RETURNING id`, [ids, uid(req)]);
     if (rows.length) {
       await audit(req.auth!.actor, 'incident.submitted', { type: 'incident', label: `${rows.length} Einträge` }, { anzahl: rows.length });
-      await notify({ kind: 'info', title: `Einsatzliste: ${rows.length} Einträge zur Freigabe`, link: '/einsatzliste', permission: 'approval.incident' });
+      await refreshApprovalNotice('incident', { added: rows.map((r) => r.id) });
     }
     return { done: rows.length, skipped: ids.length - rows.length };
   });
@@ -452,6 +464,7 @@ export async function incidentRoutes(app: FastifyInstance) {
     const { id } = idParam.parse(req.params);
     const { contentHash, privacyChecked } = z.object({ contentHash: z.string().length(64), privacyChecked: z.boolean().default(false) }).parse(req.body);
     await approveOne(req, id, contentHash, !!(await getSettings())['editorial.four_eyes'], privacyChecked);
+    await refreshApprovalNotice('incident', { note: decidedBy('approved', req.auth!.actor.name) });
     return { ok: true };
   });
 
@@ -463,6 +476,7 @@ export async function incidentRoutes(app: FastifyInstance) {
     await audit(req.auth!.actor, 'incident.rejected', { type: 'incident', id, label: e.title }, { fassung: e.revision });
     const to = e.submitted_by ?? e.updated_by ?? e.created_by;
     if (to) await notify({ kind: 'warning', title: `Einsatzliste: zurückgewiesen – ${e.title}`.slice(0, 200), body: note, link: incidentLink(id), userId: to, category: 'decision' });
+    await refreshApprovalNotice('incident', { note: decidedBy('rejected', req.auth!.actor.name) });
     return { ok: true };
   });
 
@@ -479,6 +493,7 @@ export async function incidentRoutes(app: FastifyInstance) {
         skipped.push({ id: it.id, reason: String(e?.message ?? e).slice(0, 200) });
       }
     }
+    if (done) await refreshApprovalNotice('incident', { note: decidedBy('approved', req.auth!.actor.name) });
     return { done, skipped };
   });
 

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo } from "react";
 import { useNavigate } from "react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { get, post } from "../api/client";
@@ -8,22 +8,40 @@ import {
   EmptyState,
   PageHeader,
   SegmentedControl,
+  Select,
   SkeletonRows,
 } from "../components/ui/core";
+import { FilterEmpty } from "../components/ui/list";
 import { useErrorToast, useToast } from "../components/ui/overlays";
 import { Icon } from "../components/ui/Icon";
 import { t } from "../i18n";
 import { fmtDateTime, fmtRelative } from "../lib/format";
+import { resolvedText } from "./approvals/model";
+import { useListState } from "../lib/listState";
 import { LoadError } from "./admin/shared";
 
 interface Notification {
   id: number;
   created_at: string;
+  /** gebündelte Meldungen (Medien, Freigaben) werden aktualisiert */
+  updated_at: string | null;
   kind: "error" | "warning" | "info" | "success";
   title: string;
   body: string;
   link: string | null;
   read: boolean;
+  /** Filtergruppe (#253): approvals, publishing, press, warnings, media, workflows, system */
+  group: string;
+  count: number;
+  /** Erledigte Freigabe-Anfrage (#253): zählt nicht als ungelesen, ausgegraut mit Vermerk */
+  resolved_at: string | null;
+  resolved_note: string | null;
+}
+
+interface NotificationList {
+  notifications: Notification[];
+  unread: number;
+  groups: { id: string; label: string }[];
 }
 
 const KIND: Record<Notification["kind"], { icon: string; tile: string }> = {
@@ -41,17 +59,31 @@ export default function Notifications() {
   // gleicher Schlüssel wie die Glocke in der Kopfzeile → Zähler bleibt synchron
   const q = useQuery({
     queryKey: ["notifications"],
-    queryFn: () =>
-      get<{ notifications: Notification[]; unread: number }>("/notifications"),
+    queryFn: () => get<NotificationList>("/notifications"),
     refetchInterval: 30_000,
   });
-  const [filter, setFilter] = useState<"unread" | "all">("all");
+  // Filter in der Adresse (#253, wie alle Listen #260): ?anzeigen=ungelesen&art=freigaben
+  const state = useListState({ anzeigen: "alle", art: "" });
+  const filter = state.values.anzeigen === "ungelesen" ? "unread" : "all";
+  const setFilter = (v: "unread" | "all") =>
+    state.set({ anzeigen: v === "unread" ? "ungelesen" : "alle" });
   const list = q.data?.notifications ?? [];
-  const shown = filter === "unread" ? list.filter((n) => !n.read) : list;
+  const groups = q.data?.groups ?? [];
+  const art = groups.some((g) => g.id === state.values.art)
+    ? state.values.art
+    : "";
+  const ofGroup = art ? list.filter((n) => n.group === art) : list;
+  const shown = filter === "unread" ? ofGroup.filter((n) => !n.read) : ofGroup;
   const unread = q.data?.unread ?? 0;
+  // Anzahl je Gruppe für die Auswahl; Gruppen ohne Meldung erscheinen nicht
+  const perGroup = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const n of list) m.set(n.group, (m.get(n.group) ?? 0) + 1);
+    return m;
+  }, [list]);
 
   const markLocal = (ids: number[] | "all") =>
-    qc.setQueryData<{ notifications: Notification[]; unread: number }>(
+    qc.setQueryData<NotificationList>(
       ["notifications"],
       (old) => {
         if (!old) return old;
@@ -59,6 +91,7 @@ export default function Notifications() {
           ids === "all" || ids.includes(n.id) ? { ...n, read: true } : n,
         );
         return {
+          ...old,
           notifications,
           unread: notifications.filter((n) => !n.read).length,
         };
@@ -108,7 +141,7 @@ export default function Notifications() {
           </Button>
         }
       />
-      <div className="flex">
+      <div className="flex flex-wrap items-center gap-2">
         <SegmentedControl
           label={t("activity.notifications.filter")}
           value={filter}
@@ -117,15 +150,42 @@ export default function Notifications() {
             {
               value: "all",
               label: t("activity.notifications.all"),
-              count: list.length,
+              count: ofGroup.length,
             },
             {
               value: "unread",
               label: t("activity.notifications.unread"),
-              count: unread,
+              count: ofGroup.filter((n) => !n.read).length,
             },
           ]}
         />
+        {groups.length > 0 && (
+          <div className="flex items-center gap-2 min-w-0">
+            <label
+              htmlFor="notif-art"
+              className="text-sm font-medium text-fg-muted shrink-0"
+            >
+              {t("activity.notifications.group")}
+            </label>
+            <Select
+              id="notif-art"
+              value={art}
+              onChange={(e) => state.set({ art: e.target.value })}
+              className="w-auto"
+            >
+              <option value="">
+                {t("activity.notifications.allGroups")} ({list.length})
+              </option>
+              {groups
+                .filter((g) => perGroup.has(g.id) || g.id === art)
+                .map((g) => (
+                  <option key={g.id} value={g.id}>
+                    {g.label} ({perGroup.get(g.id) ?? 0})
+                  </option>
+                ))}
+            </Select>
+          </div>
+        )}
       </div>
       <section
         aria-label={t("activity.notifications.title")}
@@ -141,6 +201,13 @@ export default function Notifications() {
           </div>
         ) : !q.data ? (
           <SkeletonRows rows={5} className="p-4" />
+        ) : shown.length === 0 && art ? (
+          <div className="px-4">
+            <FilterEmpty
+              text={t("activity.notifications.emptyGroup")}
+              onReset={() => state.reset()}
+            />
+          </div>
         ) : shown.length === 0 ? (
           filter === "unread" && list.length ? (
             <EmptyState
@@ -209,12 +276,22 @@ export default function Notifications() {
                           {n.body}
                         </span>
                       )}
+                      {n.resolved_at && (
+                        <span className="text-meta text-fg-muted inline-flex items-center gap-1">
+                          <Icon
+                            name="CheckCircle2"
+                            size={13}
+                            className="shrink-0"
+                          />
+                          {resolvedText(n)}
+                        </span>
+                      )}
                       <span
                         className="text-meta text-fg-muted"
-                        title={fmtDateTime(n.created_at)}
+                        title={fmtDateTime(n.updated_at ?? n.created_at)}
                       >
                         {t(`activity.notifications.kinds.${n.kind}`)} ·{" "}
-                        {fmtRelative(n.created_at)}
+                        {fmtRelative(n.updated_at ?? n.created_at)}
                       </span>
                     </span>
                     {!n.read && (

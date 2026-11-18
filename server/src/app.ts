@@ -62,6 +62,7 @@ import { systemRoutes } from './routes/system.js';
 import { searchRoutes } from './routes/search.js';
 import { dashboardRoutes } from './routes/dashboard.js';
 import { setupChecklistRoutes } from './routes/setup-checklist.js';
+import { approvalRoutes } from './routes/approvals.js';
 import { mediaRoutes } from './routes/media.js';
 import { mediaOrganizeRoutes } from './routes/media-organize.js';
 import { mediaTrashRoutes } from './routes/media-trash.js';
@@ -257,6 +258,7 @@ export async function buildApp(): Promise<FastifyInstance> {
       await api.register(searchRoutes);
       await api.register(dashboardRoutes);
       await api.register(setupChecklistRoutes);
+      await api.register(approvalRoutes);
       await api.register(mediaRoutes);
       await api.register(mediaOrganizeRoutes);
       await api.register(mediaTrashRoutes);

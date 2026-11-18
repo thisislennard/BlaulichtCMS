@@ -6,7 +6,7 @@ import { audit, settingsDiff } from '../lib/audit.js';
 import { sha256Hex } from '../lib/crypto.js';
 import { AppError, badRequest, conflict, notFound } from '../lib/errors.js';
 import { m365ConfigProblem, m365Fingerprint, m365Send, mailReady, mailRouteLabel, resetM365TokenCache, storedM365Settings, type M365Settings } from '../lib/mail.js';
-import { categoriesFor, chosenChannels, NOTIFY_CHANNELS } from '../lib/notify-categories.js';
+import { categoriesFor, chosenChannels, mutedBellCategories, NOTIFY_CHANNELS } from '../lib/notify-categories.js';
 import { pushSubject, rotateVapidKeys, sendTestPush, vapidKeys } from '../lib/notify-channels.js';
 import { revokeSecret, storeSecret } from '../lib/secrets.js';
 import { getSettings, setSettings, type Settings } from '../lib/settings.js';
@@ -38,13 +38,15 @@ export async function notifyChannelRoutes(app: FastifyInstance) {
     const s = await getSettings(true);
     const u = await one<{ email: string; preferences: any }>('SELECT email, preferences FROM users WHERE id = $1', [a.user.id]);
     const prefs = u?.preferences?.notifyChannels;
+    const muted = new Set(mutedBellCategories(u?.preferences));
     const pushOn = !!s['notify.push_enabled'];
     const subs = await many<any>(
       `SELECT id, label, created_at, last_success_at, last_error, last_error_at, endpoint FROM push_subscriptions WHERE user_id = $1 ORDER BY created_at`,
       [a.user.id],
     );
     return {
-      categories: categoriesFor(a.permissions).map((c) => ({ id: c.id, label: c.label, description: c.description, channels: c.channels, chosen: chosenChannels(c, prefs) })),
+      // Eine Matrix je Art (#253): Glocke (abschaltbar außer Sicherheits- und Kontomeldungen), Push, E-Mail
+      categories: categoriesFor(a.permissions).map((c) => ({ id: c.id, label: c.label, description: c.description, group: c.group, channels: c.channels, chosen: chosenChannels(c, prefs), bell: !c.bell || !muted.has(c.id), bellLocked: !c.bell })),
       channels: { push: pushOn, mail: !!s['notify.mail_enabled'] && mailReady(s) },
       email: u?.email ?? '',
       // Adresse beim Push-Dienst nie ausgeben – nur ein Kennwert, an dem der Browser sein eigenes Abo wiedererkennt
@@ -56,7 +58,13 @@ export async function notifyChannelRoutes(app: FastifyInstance) {
   app.put('/notify/preferences', { preHandler: requireAuth() }, async (req) => {
     const a = req.auth!;
     if (!a.user) throw badRequest('Nur für Benutzerkonten.');
-    const b = z.object({ choices: z.record(z.string().max(40), z.array(z.enum(['push', 'mail'])).max(2)) }).parse(req.body);
+    const b = z
+      .object({
+        choices: z.record(z.string().max(40), z.array(z.enum(['push', 'mail'])).max(2)).default({}),
+        /** Glocke je Art an/aus (#253); nicht abschaltbare oder nicht angebotene Arten werden übergangen */
+        bell: z.record(z.string().max(40), z.boolean()).default({}),
+      })
+      .parse(req.body);
     const offered = new Map(categoriesFor(a.permissions).map((c) => [c.id, c]));
     const u = await one<{ preferences: any }>('SELECT preferences FROM users WHERE id = $1', [a.user.id]);
     const next: Record<string, string[]> = { ...(u?.preferences?.notifyChannels ?? {}) };
@@ -65,7 +73,13 @@ export async function notifyChannelRoutes(app: FastifyInstance) {
       if (!cat) continue; // nicht angebotene Arten still übergehen
       next[id] = NOTIFY_CHANNELS.filter((ch) => cat.channels.includes(ch) && list.includes(ch));
     }
-    await pool.query(`UPDATE users SET preferences = preferences || jsonb_build_object('notifyChannels', $2::jsonb) WHERE id = $1`, [a.user.id, JSON.stringify(next)]);
+    const muted = new Set(mutedBellCategories(u?.preferences));
+    for (const [id, on] of Object.entries(b.bell)) {
+      if (!offered.get(id)?.bell) continue;
+      if (on) muted.delete(id);
+      else muted.add(id);
+    }
+    await pool.query(`UPDATE users SET preferences = preferences || jsonb_build_object('notifyChannels', $2::jsonb, 'mutedNotifications', $3::jsonb) WHERE id = $1`, [a.user.id, JSON.stringify(next), JSON.stringify([...muted])]);
     return { ok: true };
   });
 

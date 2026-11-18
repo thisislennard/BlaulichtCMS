@@ -144,7 +144,8 @@ mit passenden Rechten sichtbar. Höchstens **6 Bereiche** mit je höchstens **7 
 ### Bestandteile
 
 - **Kopfzeile:** Bereiche als Reiter; der aktive Bereich hat eine 2 px rote Unterstreichung. Freigaben zählen als rotes
-  Badge am Bereich. Rechts Suche (`Strg K`), **Hilfe** (`?`, öffnet das Kapitel der aktuellen Seite), Farbmodus,
+  Badge am Bereich – über alle Arten, die die Person entscheiden darf (ohne Vier-Augen-Sperre), plus Freigegebenes, das
+  sie veröffentlichen darf (`GET /approvals/pending`, #251). Rechts Suche (`Strg K`), **Hilfe** (`?`, öffnet das Kapitel der aktuellen Seite), Farbmodus,
   Benachrichtigungen, Konto.
 - **Unternavigation:** die Seiten des aktiven Bereichs als Pillen; aktiv = `bg-raised` + rotes Symbol.
 - **Suche (`Strg K`, `CommandPalette`):** Seiten und Aktionen (aus der Navigation), Inhalte vom Server (`GET /search`,
@@ -229,8 +230,9 @@ Das Widget „Redaktionsfluss“ (früher „Kennzahlen“, Widget-ID weiterhin 
 **Eingang → Sichtung → Freigabe → Bereit → Veröffentlicht**
 
 - Jede Spalte zeigt eine große Mono-Zahl und bis zu drei Karten, danach „+ n weitere“.
-- Wer freigeben darf, sieht offene Freigaben als „Du bist dran“-Karte mit „Prüfen →“.
-- Die Daten kommen aus `GET /dashboard`.
+- Wer freigeben darf, sieht offene Freigaben aller Arten (Beitrag, Banner, Einsatzliste, Warnentwurf, Presseantwort,
+  Workflow) als „Du bist dran“-Karte mit „Prüfen →“; vom Vier-Augen-Prinzip gesperrte ohne roten Rand mit Grund.
+- Die Daten kommen aus `GET /dashboard` (`approvals` = dieselbe Sammlung wie die Seite Freigaben, `server/src/approvals/pending.ts`).
 - Die Spalten des Redaktionsflusses brechen um, wenn die Dashboard-Spalte schmal ist (kein waagerechtes Scrollen).
 
 ### Aufbau und Anpassen (seit 0.2.4)

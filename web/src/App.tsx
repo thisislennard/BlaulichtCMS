@@ -1,6 +1,7 @@
 import { lazy, Suspense, type ReactNode } from 'react';
 import { createBrowserRouter, Navigate, RouterProvider, useLocation, useRouteError, type RouteObject } from 'react-router';
 import { AppShell, RequirePerm, usePageMeta } from './components/layout/AppShell';
+import { APPROVAL_PAGE_PERMS } from './pages/approvals/model';
 import { LinkButton, SkeletonRows } from './components/ui/core';
 import { useAuth } from './lib/auth';
 import { InvitePage, LoginPage, MfaSetupPage, MfaVerifyPage, SetupPage } from './pages/auth/AuthPages';
@@ -33,6 +34,7 @@ const Activities = lazy(() => import('./pages/Activities'));
 const Notifications = lazy(() => import('./pages/Notifications'));
 const Profile = lazy(() => import('./pages/Profile'));
 const Posts = lazy(() => import('./pages/posts/Posts'));
+const Approvals = lazy(() => import('./pages/approvals/Approvals'));
 const PostEditor = lazy(() => import('./pages/posts/PostEditor'));
 const ReviewView = lazy(() => import('./pages/posts/ReviewView'));
 const Templates = lazy(() => import('./pages/posts/Templates'));
@@ -173,12 +175,13 @@ const router = createBrowserRouter(withErrors([
       { index: true, element: <Page><Dashboard /></Page> },
       { path: 'aktivitaeten', element: <Page perm={['audit.view']}><Activities /></Page> },
       { path: 'benachrichtigungen', element: <Page><Notifications /></Page> },
-      { path: 'beitraege', element: <Page perm={['post.view']}><Posts key="alle" /></Page> },
+      { path: 'beitraege', element: <Page perm={['post.view']}><Posts /></Page> },
       { path: 'beitraege/:id', element: <Page perm={['post.view']}><PostEditor /></Page> },
       // Freigabe-Ansicht (#216): Ziel der Push-Mitteilung „Freigabe erbeten“
       { path: 'freigabe/beitrag/:id', element: <Page perm={['approval.post']}><ReviewView /></Page> },
       { path: 'beitragsvorlagen', element: <Page perm={['post.view']}><Templates /></Page> },
-      { path: 'freigaben', element: <Page perm={['post.view']}><Posts key="freigaben" mode="approvals" /></Page> },
+      // Freigaben über alle Arten (#251): sichtbar mit einem Freigabe- oder Veröffentlichungsrecht
+      { path: 'freigaben', element: <Page perm={APPROVAL_PAGE_PERMS}><Approvals /></Page> },
       { path: 'medien', element: <Page perm={['media.view']}><Collections /></Page> },
       { path: 'medien/dateien', element: <Page perm={['media.view']}><MediaSearch /></Page> },
       { path: 'medien/papierkorb', element: <Page perm={['media.trash']}><Trash /></Page> },

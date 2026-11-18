@@ -34,16 +34,20 @@ export interface WidgetDef {
   module?: DashboardModule;
 }
 
+/** Freigeben bzw. Veröffentlichen irgendeiner Art (wie approvals/pending.ts; hier ohne Importe, siehe oben) */
+const APPROVE_ANY = ['approval.post', 'approval.banner', 'approval.incident', 'approval.automation', 'warning.approve', 'press.approve'] as const;
+const PUBLISH_ANY = ['publish.website', 'publish.social', 'banner.publish', 'incident.publish', 'warning.send'] as const;
+
 export const WIDGET_DEFS: readonly WidgetDef[] = [
-  { id: 'badge_approvals', kind: 'badge', permission: 'post.view' },
+  { id: 'badge_approvals', kind: 'badge', permission: 'post.view', anyOf: ['post.view', ...APPROVE_ANY] },
   { id: 'badge_unreviewed', kind: 'badge', permission: 'media.view' },
-  { id: 'badge_ready', kind: 'badge', permission: 'post.view' },
+  { id: 'badge_ready', kind: 'badge', permission: 'post.view', anyOf: ['post.view', ...PUBLISH_ANY] },
   { id: 'badge_banners', kind: 'badge', permission: 'banner.view', module: 'website' },
   { id: 'badge_uploads', kind: 'badge', permission: 'media.view' },
   { id: 'badge_connection_errors', kind: 'badge', permission: 'connection.configure', module: 'connections' },
   { id: 'media', kind: 'panel', permission: 'media.view' },
-  { id: 'approvals', kind: 'panel', permission: 'post.view' },
-  { id: 'ready', kind: 'panel', permission: 'post.view' },
+  { id: 'approvals', kind: 'panel', permission: 'post.view', anyOf: ['post.view', ...APPROVE_ANY] },
+  { id: 'ready', kind: 'panel', permission: 'post.view', anyOf: ['post.view', ...PUBLISH_ANY] },
   { id: 'publications', kind: 'panel', permission: 'post.view', module: 'website' },
   { id: 'uploads', kind: 'panel', permission: 'media.view' },
   { id: 'sites', kind: 'panel', permission: 'channel.view', module: 'website' },

@@ -8,7 +8,6 @@ import { FilterEmpty, ListToolbar, ResponsiveTable } from '../../components/ui/l
 import { Icon } from '../../components/ui/Icon';
 import { Dialog, useErrorToast } from '../../components/ui/overlays';
 import { useAuth } from '../../lib/auth';
-import { AutomationApprovals } from '../automations/Approvals';
 import { fmtRelative, fmtWeekdayDateTime, plural } from '../../lib/format';
 import { useListState } from '../../lib/listState';
 import { SOCIAL_LABEL, type SocialKind } from '../../lib/social';
@@ -132,11 +131,12 @@ function Targets({ p }: { p: PostListItem }) {
   );
 }
 
-export default function Posts({ mode }: { mode?: 'approvals' }) {
+/** Beiträge mit Reitern (Alle, In Arbeit, …). Freigaben aller Arten stehen unter Übersicht → Freigaben (#251). */
+export default function Posts() {
   const { can } = useAuth();
   const [create, setCreate] = useState(false);
   // Suche, Reiter und Filter in der Adresse (#260): Zurück aus dem Beitrag stellt die Liste wieder her
-  const list = useListState({ suche: '', status: mode === 'approvals' ? 'freigabe' : 'alle', art: '', ziel: '', person: '', zeitraum: '' }, { tabKeys: ['status'] });
+  const list = useListState({ suche: '', status: 'alle', art: '', ziel: '', person: '', zeitraum: '' }, { tabKeys: ['status'] });
   const v = list.values;
   const tab: Tab = v.status in TABS ? (v.status as Tab) : 'alle';
   const [term, setTerm] = useState(v.suche.trim());
@@ -162,7 +162,7 @@ export default function Posts({ mode }: { mode?: 'approvals' }) {
   return (
     <div className="flex flex-col gap-5">
       <PageHeader
-        subtitle={mode === 'approvals' ? 'Fassungen, die auf Freigabe oder Veröffentlichung warten.' : 'Jede Änderung erzeugt eine neue Fassung. Freigaben gelten genau für eine Fassung.'}
+        subtitle="Jede Änderung erzeugt eine neue Fassung. Freigaben gelten genau für eine Fassung."
         actions={
           can('post.create') && (
             <Button variant="primary" icon="Plus" onClick={() => setCreate(true)}>
@@ -171,7 +171,6 @@ export default function Posts({ mode }: { mode?: 'approvals' }) {
           )
         }
       />
-      {mode === 'approvals' && <AutomationApprovals />}
       <ListToolbar<Tab>
         search={{ value: v.suche, onChange: (s) => list.set({ suche: s }), placeholder: 'Suchen in Beiträgen', label: 'Beiträge durchsuchen (Titel und Text)' }}
         tabs={{
