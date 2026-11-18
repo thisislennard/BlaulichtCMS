@@ -67,10 +67,13 @@ check_maintenance_off() {
 # Versionierte Dateien im Installationsordner: alle 0644/0755 (#275), .env bleibt 0600
 check_modes() {
   local bad
-  bad="$(cd "$APP" && sudo git ls-files -z | sudo xargs -0 stat -c '%a %n' | awk '$1 != "644" && $1 != "755"' | head -20)"
-  [ -z "$bad" ] || { echo "$bad"; fail "Versionierte Dateien in $APP mit anderen Rechten als 0644/0755 (siehe oben)"; }
-  bad="$(cd "$APP" && sudo git ls-tree -r -d -z --name-only HEAD | sudo xargs -0 stat -c '%a %n' | awk '$1 != "755"' | head -20)"
-  [ -z "$bad" ] || { echo "$bad"; fail "Ordner in $APP mit anderen Rechten als 0755 (siehe oben)"; }
+  # ohne head in der Pipeline (SIGPIPE unter pipefail); Auszug erst danach
+  bad="$(cd "$APP" && sudo git ls-files -z | sudo xargs -0 stat -c '%a %n' | awk '$1 != "644" && $1 != "755"')" \
+    || fail "Rechte der versionierten Dateien ließen sich nicht lesen"
+  [ -z "$bad" ] || { head -n 20 <<<"$bad"; echo "($(wc -l <<<"$bad") Dateien)"; fail "Versionierte Dateien in $APP mit anderen Rechten als 0644/0755 (Auszug oben)"; }
+  bad="$(cd "$APP" && sudo git ls-tree -r -d -z --name-only HEAD | sudo xargs -0 stat -c '%a %n' | awk '$1 != "755"')" \
+    || fail "Rechte der Ordner ließen sich nicht lesen"
+  [ -z "$bad" ] || { head -n 20 <<<"$bad"; echo "($(wc -l <<<"$bad") Ordner)"; fail "Ordner in $APP mit anderen Rechten als 0755 (Auszug oben)"; }
   [ "$(sudo stat -c %a "$APP/.env")" = 600 ] || fail ".env ist nicht mehr 0600"
   echo "Rechte in $APP: versionierte Dateien 0644/0755, Ordner 0755, .env 0600"
 }
