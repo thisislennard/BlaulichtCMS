@@ -65,15 +65,20 @@ check_maintenance_off() {
   echo "Wartungsmodus aus"
 }
 # Versionierte Dateien im Installationsordner: alle 0644/0755 (#275), .env bleibt 0600
+modes_report() { # Abweichungen je Rechte-Wert zählen, je Wert bis zu 8 Beispiele
+  local m
+  echo "Abweichende Rechte (Anzahl je Wert):"; awk '{print $1}' <<<"$1" | sort | uniq -c
+  for m in $(awk '{print $1}' <<<"$1" | sort -u); do awk -v m="$m" '$1 == m && n++ < 8' <<<"$1"; done
+}
 check_modes() {
   local bad
   # ohne head in der Pipeline (SIGPIPE unter pipefail); Auszug erst danach
   bad="$(cd "$APP" && sudo git ls-files -z | sudo xargs -0 stat -c '%a %n' | awk '$1 != "644" && $1 != "755"')" \
     || fail "Rechte der versionierten Dateien ließen sich nicht lesen"
-  [ -z "$bad" ] || { head -n 20 <<<"$bad"; echo "($(wc -l <<<"$bad") Dateien)"; fail "Versionierte Dateien in $APP mit anderen Rechten als 0644/0755 (Auszug oben)"; }
+  [ -z "$bad" ] || { modes_report "$bad"; fail "Versionierte Dateien in $APP mit anderen Rechten als 0644/0755 (Auszug oben)"; }
   bad="$(cd "$APP" && sudo git ls-tree -r -d -z --name-only HEAD | sudo xargs -0 stat -c '%a %n' | awk '$1 != "755"')" \
     || fail "Rechte der Ordner ließen sich nicht lesen"
-  [ -z "$bad" ] || { head -n 20 <<<"$bad"; echo "($(wc -l <<<"$bad") Ordner)"; fail "Ordner in $APP mit anderen Rechten als 0755 (Auszug oben)"; }
+  [ -z "$bad" ] || { modes_report "$bad"; fail "Ordner in $APP mit anderen Rechten als 0755 (Auszug oben)"; }
   [ "$(sudo stat -c %a "$APP/.env")" = 600 ] || fail ".env ist nicht mehr 0600"
   echo "Rechte in $APP: versionierte Dateien 0644/0755, Ordner 0755, .env 0600"
 }
@@ -120,8 +125,10 @@ case "$STEP" in
   install-070)
     say "Erstinstallation $BASE mit install.sh $BASE (wie von Hand: sudo, umask 022) samt Update-Helfer"
     sudo git -C "$UP" show "$BASE:install.sh" > "$TMP/install-070.sh"
+    # umask 022 ausdrücklich wie bei „sudo bash install.sh“ auf einem üblichen Host (unter sudo im Runner gilt sonst 000)
     sudo env BLAULICHTCMS_REPO="$UP" BLAULICHTCMS_BRANCH=citest BLAULICHTCMS_PUBLIC_URL=http://localhost \
-      BLAULICHTCMS_PROXY_MODE=2 bash "$TMP/install-070.sh" --yes --no-cron --with-helper
+      BLAULICHTCMS_PROXY_MODE=2 bash -c 'umask 022; exec bash "$1" --yes --no-cron --with-helper' _ "$TMP/install-070.sh"
+    echo "Rechte nach der Erstinstallation (Auswahl): $(cd "$APP" && sudo stat -c '%a %n' server/package.json install.sh server | tr '\n' ' ')"
     wait_healthy || fail "$BASE startet nicht"
     systemctl is-enabled blaulichtcms-update.path
     grep -E '^(UMask|ExecStart)=' /etc/systemd/system/blaulichtcms-update.service
