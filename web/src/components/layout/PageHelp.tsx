@@ -32,7 +32,7 @@ export function PageHelp({ topic }: { topic: string }) {
         aria-haspopup="dialog"
         title={t('nav.pageHelp')}
         onClick={() => setOpen((o) => !o)}
-        className="text-fg-muted hover:text-fg w-7 h-7 inline-flex items-center justify-center rounded-chip hover:bg-raised focus-visible:shadow-ring outline-none shrink-0 align-middle"
+        className="text-fg-muted hover:text-fg w-7 h-7 max-md:w-10 max-md:h-10 inline-flex items-center justify-center rounded-chip hover:bg-raised focus-visible:shadow-ring outline-none shrink-0 align-middle"
       >
         <Icon name="CircleHelp" size={17} />
       </button>

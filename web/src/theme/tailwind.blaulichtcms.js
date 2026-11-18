@@ -50,7 +50,8 @@ export default {
         node: '12px',
         card: '14px',
       },
-      height: { 'ctl-sm': '32px', ctl: '36px', field: '38px' },
+      // Am Handy 40 px (Touch-Ziele, #264): Werte aus tokens.css, dort per Medienabfrage umgestellt
+      height: { 'ctl-sm': v('h-ctl-sm'), ctl: v('h-ctl'), field: v('h-field') },
       maxWidth: { content: '1440px' },
       boxShadow: {
         float: v('shadow-float'),

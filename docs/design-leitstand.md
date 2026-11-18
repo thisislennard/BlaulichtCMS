@@ -90,7 +90,10 @@ Abschnittslabel-Muster (z. B. im Dashboard):
 
 - Abstände im Raster von 4 px; zwischen Karten 12–20 px, Seitenrand 32 px (Handy 16 px).
 - Schatten nur für schwebende Elemente (`shadow-float`) und als Fokus-/Auswahlring (`shadow-ring`, `shadow-selected`).
-- Touch-Ziele mindestens 40 px, am Handy für Hauptaktionen 56–64 px.
+- Touch-Ziele mindestens 40 px, am Handy für Hauptaktionen 48–64 px. Unter 768 px sind die Höhen `h-ctl-sm`, `h-ctl`
+  und `h-field` 40 px (Variablen `--bc-h-*` in `tokens.css`); Segmente, Hilfe-„?“, Menüeinträge und Dialog-Schließen
+  wachsen dort ebenfalls auf 40 px (`max-md:`). Inline-Links im Fließtext sind ausgenommen (WCAG 2.5.8).
+  `test/e2e/mobile-ux.mjs` misst die Trefferflächen bei 390 px.
 
 ---
 
@@ -179,7 +182,22 @@ mit passenden Rechten sichtbar. Höchstens **6 Bereiche** mit je höchstens **7 
 | Aktive Navigation | Reiter: rote 2-px-Linie. Unternavigation, Schublade, Einstellungs- und Hilfe-Navigation: `bg-raised` + fett + rotes Symbol. |
 | `Card` | `rounded-card`, Linie, kein Schatten. Titel 15 px, Aktion rechts als leiser Link „… →“. |
 | Board-Karte (`FlowCard`) | Wie Card, kompakt. „Du bist dran“: roter Rand + `shadow-selected` + Mono-Label + roter Button. |
-| Leere Zustände | Ein Satz, leise. Keine großen Illustrationen. |
+| Leere Zustände | Ein Satz, leise. Keine großen Illustrationen. Regeln siehe unten (#266). |
+| `ListToolbar` | Werkzeugleiste **jeder** Listenseite (#260): Suche links (`Suchen in …`), Reiter (`ListTabs`), Knopf „Filter“ (weitere Kriterien; gesetzte als Chips mit ×), „Zurücksetzen“, Trefferzahl rechts. Zustand in der Adresse über `useListState` (`lib/listState.ts`): Suche heißt immer `suche`, Reiter und Filter haben sprechende Namen (`?status=veroeffentlicht&art=news`); Werte gleich dem Standard stehen nicht in der Adresse, Änderungen ersetzen den Verlaufseintrag. So stellen Zurück, Lesezeichen und Links aus Benachrichtigungen/Suche die Liste wieder her. Am Handy werden mehr als drei Reiter zum Auswahlfeld. |
+| `ResponsiveTable` | Tabelle ab 768 px, darunter Karten (#264). Spalten mit `cell` (Inhalt) und `card` (Rolle in der Karte: `title` – der erste Link darin macht die ganze Karte antippbar –, `status`, `meta`, `field`, `footer`, `hide`). Alle Kernangaben stehen in der Karte, nichts scrollt waagerecht. `from: 'lg'` blendet Nebenspalten am schmalen Laptop aus. |
+
+**Leere Zustände (#266)**
+
+| Variante | Wo | Aussehen |
+|---|---|---|
+| `EmptyLine` | in Kacheln (Dashboard), Karten, Seitenleisten, Tabellen- und Abschnittsbereichen | eine Zeile `text-sm text-fg-muted`, dahinter optional die nächste Aktion als `EmptyAction` („Noch keine Website gekoppelt. Website koppeln →“) |
+| `EmptyState` | nur seitenweit: die ganze Liste ist leer, erste Nutzung | Symbol, Titel als Absatz (nie als Überschrift), ein Satz; Hauptaktion, wenn die Person sie ausführen darf, sonst im Satz, wer es kann |
+| `FilterEmpty` | gefilterte Liste ohne Treffer | „Kein Eintrag passt zum Filter.“ + „Filter zurücksetzen“ – überall gleich |
+
+- Text = Zustand + ggf. Aktion: „Keine offenen Freigaben.“, „Nichts zu sichten.“; „Noch …“ nur, wenn etwas erwartet wird
+  („Noch keine Website gekoppelt.“). Keine Überschriften, keine Ausrufezeichen.
+- Die Aktion erscheint nur mit dem passenden Recht (`can(…)`); ohne Recht entfällt sie oder der Satz nennt, wer es kann.
+- Eine leere Dashboard-Kachel schrumpft auf Kopf + eine Zeile.
 
 ---
 

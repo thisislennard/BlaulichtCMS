@@ -66,6 +66,14 @@
   --bc-r-node: 12px;
   --bc-r-card: 14px;
 
+  /* Höhen der Bedienelemente; am Handy mindestens 40 px (Touch-Ziele, Design §4, #264) */
+  --bc-h-ctl-sm: 32px;
+  --bc-h-ctl: 36px;
+  --bc-h-field: 38px;
+  /* Höhe der unteren Leiste am Handy (MobileTabBar, #264) – feste Elemente unten (Speicherleiste, Hinweise) rechnen
+     damit: bottom: var(--bc-bottom-bar). Am Desktop 0. */
+  --bc-bottom-bar: 0px;
+
   /* Schatten */
   --bc-shadow-float: 0 16px 40px rgba(17, 20, 24, .16);
   --bc-ring: 0 0 0 3px rgba(210, 31, 60, .22);
@@ -122,6 +130,17 @@
 }
 
 /* Mobile Navigation (Schublade) folgt dem Farbmodus; aktiver Punkt mit Signalrot-Markierung */
+@media (max-width: 767.98px) {
+  :root {
+    --bc-h-ctl-sm: 40px;
+    --bc-h-ctl: 40px;
+    --bc-h-field: 40px;
+  }
+  /* Nur wenn die Leiste wirklich angezeigt wird (angemeldet, nicht beim Tippen) */
+  :root:has(.bc-tabbar[data-visible="true"]) {
+    --bc-bottom-bar: calc(60px + env(safe-area-inset-bottom, 0px));
+  }
+}
 .bc-sidebar a[aria-current="page"] { box-shadow: inset 3px 0 0 var(--bc-signal); }
 .bc-signal-bg { background: var(--bc-signal); color: var(--bc-on-primary); }
 

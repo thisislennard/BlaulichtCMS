@@ -21,7 +21,7 @@ export function HelpTip({ title, children, width = 340, more }: { title: string;
         aria-haspopup="dialog"
         title="Hilfe"
         onClick={() => setOpen((o) => !o)}
-        className="text-fg-muted hover:text-fg w-6 h-6 inline-flex items-center justify-center rounded-chip hover:bg-raised focus-visible:shadow-ring outline-none"
+        className="text-fg-muted hover:text-fg w-6 h-6 max-md:w-10 max-md:h-10 max-md:-my-2 inline-flex items-center justify-center rounded-chip hover:bg-raised focus-visible:shadow-ring outline-none"
       >
         <Icon name="CircleHelp" size={15} />
       </button>

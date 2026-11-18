@@ -369,7 +369,7 @@ export function SegmentedControl<T extends string>({ value, onChange, options, l
           type="button"
           aria-pressed={value === o.value}
           onClick={() => onChange(o.value)}
-          className={cx('px-3 rounded-chip text-sm font-medium whitespace-nowrap transition-colors duration-fast inline-flex items-center gap-1.5', size === 'sm' ? 'h-[26px]' : 'h-[30px]', value === o.value ? 'bg-raised text-fg' : 'text-fg-muted hover:text-fg')}
+          className={cx('px-3 rounded-chip text-sm font-medium whitespace-nowrap transition-colors duration-fast inline-flex items-center gap-1.5 max-md:h-10', size === 'sm' ? 'h-[26px]' : 'h-[30px]', value === o.value ? 'bg-raised text-fg' : 'text-fg-muted hover:text-fg')}
         >
           {o.label}
           {o.count != null && <span className="text-meta text-fg-muted tabular">{o.count}</span>}
@@ -437,6 +437,11 @@ export function SkeletonRows({ rows = 5, className }: { rows?: number; className
   );
 }
 
+/**
+ * Leerer Zustand einer ganzen Seite bzw. Liste (#266): erste Nutzung oder nichts vorhanden. Titel als Absatz (keine
+ * Überschrift), `action` = nächste Aktion, wenn die Person sie ausführen darf – sonst im `text` sagen, wer es kann.
+ * In Kacheln, Karten, Seitenleisten und Tabellenbereichen stattdessen `EmptyLine`; gefilterte Listen: `FilterEmpty`.
+ */
 export function EmptyState({ icon = 'Inbox', title, text, action }: { icon?: string; title: ReactNode; text?: ReactNode; action?: ReactNode }) {
   return (
     <div className="flex flex-col items-center text-center gap-3 py-10 px-4">
@@ -449,6 +454,33 @@ export function EmptyState({ icon = 'Inbox', title, text, action }: { icon?: str
       </div>
       {action}
     </div>
+  );
+}
+
+/**
+ * Leise Leermeldung in Kacheln, Karten, Seitenleisten und Tabellenbereichen (#266): eine Zeile, Zustand + ggf. die
+ * nächste Aktion als `EmptyAction` („Noch keine Website gekoppelt. Website koppeln →“).
+ */
+export function EmptyLine({ children, action, className }: { children: ReactNode; action?: ReactNode; className?: string }) {
+  return (
+    <p className={cx('m-0 text-sm text-fg-muted', className)}>
+      {children}
+      {action && <> {action}</>}
+    </p>
+  );
+}
+
+/** Nächste Aktion in einer Leermeldung: leiser Link bzw. Knopf mit Pfeil, am Handy 40 px hoch. */
+export function EmptyAction({ to, onClick, children }: { to?: string; onClick?: () => void; children: ReactNode }) {
+  const cls = 'inline-flex items-center gap-1 max-md:min-h-10 font-medium !text-fg hover:!text-primary underline-offset-2 hover:underline whitespace-nowrap';
+  return to ? (
+    <Link to={to} className={cls}>
+      {children} →
+    </Link>
+  ) : (
+    <button type="button" onClick={onClick} className={cls}>
+      {children} →
+    </button>
   );
 }
 
