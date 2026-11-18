@@ -385,6 +385,8 @@ async function freshSetup() {
   const optLink = await admin.post(`/collections/${col.collection.id}/links`, { label: 'Mit Optionen', fields: { name: 'optional', email: 'optional' }, consentRequired: true, consentText: 'Ich habe die Aufnahmen selbst gemacht.' }).catch((e) => (console.log('  (Link)', e.message), null));
   await admin.post('/templates', { name: 'Testvorlage', kind: 'news', title: 'Vorlagentitel', body: 'Vorlagentext' });
   rss = await rssServer();
+  // Der Test-Feed läuft lokal: Quellen nehmen interne Adressen nur nach Freigabe an (Einstellungen → Sicherheit)
+  await admin.req('PATCH', '/settings', { 'security.allowed_private_hosts': ['127.0.0.1'] }).catch((e) => console.log('  (Interne Ziele)', e.message));
   await admin.post('/rss/feeds', { url: `http://127.0.0.1:${rss.address().port}/feed.xml`, title: 'Testquelle' }).catch((e) => console.log('  (RSS)', e.message));
   const conn = await admin.post('/connections', { kind: 'fe2', name: 'FE2 Test', config: {} }).catch((e) => (console.log('  (Verbindung)', e.message), null));
   const wf = await admin.post('/connections', { kind: 'warnfeed', name: 'Amtliche Warnungen Test', config: {} }).catch((e) => (console.log('  (Warnfeed)', e.message), null));
