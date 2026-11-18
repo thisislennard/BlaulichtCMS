@@ -40,12 +40,6 @@ export default function CalendarPage() {
   const qc = useQueryClient();
   const [view, setViewState] = useState<View>(initialView);
   const [anchor, setAnchor] = useState(today());
-  // ?datum=JJJJ-MM-TT (Treffer der Suche Strg K, #259) öffnet den Kalender an diesem Tag
-  const [params] = useSearchParams();
-  const datum = params.get('datum');
-  useEffect(() => {
-    if (datum && /^\d{4}-\d{2}-\d{2}$/.test(datum)) setAnchor(datum);
-  }, [datum]);
   const [cats, setCats] = useState<string[]>([]);
   const [source, setSource] = useState('');
   const [open, setOpen] = useState<CalendarEntry | null>(null);
@@ -71,7 +65,7 @@ export default function CalendarPage() {
   const refresh = () => qc.invalidateQueries({ queryKey: ['calendar'] });
   const entries = q.data?.entries ?? [];
 
-  // Verweis aus den Aktivitäten (/kalender?termin=<id>, #258): zum Termin springen und ihn öffnen. Serien zeigen den
+  // Verweis aus den Aktivitäten und der Suche Strg K (/kalender?termin=<id>, #258, #259): zum Termin springen und ihn öffnen. Serien zeigen den
   // Termin in der aktuellen Ansicht, sonst den ersten Termin der Serie.
   const [params, setParams] = useSearchParams();
   const termin = params.get('termin');

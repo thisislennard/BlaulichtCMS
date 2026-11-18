@@ -26,5 +26,5 @@ Die Suche findet in einem Feld:
 - **Einstellungen** (z. B. „SMTP“, „Sicherung“, „Zeitzone“) mit dem Weg dorthin,
 - **Hilfe**-Abschnitte im Volltext.
 
-Groß- und Kleinschreibung spielt keine Rolle, Umlaute dürfen fehlen („Stichworter“, „Uebung“ und „Ubung“ finden dasselbe), mehrere Wörter müssen alle vorkommen. Treffer stehen nach Bereichen gruppiert, je Bereich höchstens fünf; **Alle Treffer in …** öffnet die gefilterte Liste. Eine Vorgangsnummer wie `P-2026-0001` oder `W-2026-0001` steht als **Direkt öffnen** ganz oben – `Enter` springt sofort zum Vorgang.
+Groß- und Kleinschreibung spielt keine Rolle, Umlaute dürfen fehlen („Stichworter“, „Uebung“ und „Ubung“ finden dasselbe), mehrere Wörter müssen alle vorkommen. Treffer stehen nach Bereichen gruppiert, je Bereich höchstens fünf; **Alle Treffer in …** öffnet die gefilterte Liste, ein Termin öffnet den Kalender an seinem Tag. Eine Vorgangsnummer wie `P-2026-0001` oder `W-2026-0001` steht als **Direkt öffnen** ganz oben – `Enter` springt sofort zum Vorgang.
 

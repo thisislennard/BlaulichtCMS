@@ -164,7 +164,7 @@ describe('Suche: Inhalte aller Bereiche mit Leserecht (Server)', () => {
   it('Einsatzliste, Kalender, Workflows, Verbindungen und Designvorlagen', async () => {
     expect((await search(admin, 'Kaminbrand')).results).toEqual([expect.objectContaining({ group: 'Einsatzliste', title: 'Kaminbrand', subtitle: 'F 2 · Nord · 14.11.2026', href: '/einsatzliste?suche=Kaminbrand' })]);
     const ev = (await search(admin, 'ubungsdienst')).results;
-    expect(ev).toEqual([expect.objectContaining({ group: 'Kalender', title: 'Übungsdienst', subtitle: '04.12.2026 · Gerätehaus', href: '/kalender?datum=2026-12-04' })]);
+    expect(ev).toEqual([expect.objectContaining({ group: 'Kalender', title: 'Übungsdienst', subtitle: '04.12.2026 · Gerätehaus', href: expect.stringMatching(/^\/kalender\?termin=[0-9a-f-]{36}$/) })]);
     expect((await search(admin, 'Unwetter')).results[0]).toMatchObject({ group: 'Workflows', title: 'Unwetter-Banner' });
     expect((await search(admin, 'Leitstelle')).results[0]).toMatchObject({ group: 'Verbindungen', title: 'FE2 Leitstelle' });
     expect((await search(admin, 'Gartenfest')).results[0]).toMatchObject({ group: 'Designvorlagen', title: 'Logo Gartenfest', subtitle: 'Designvorlage' });

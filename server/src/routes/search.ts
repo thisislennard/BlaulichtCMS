@@ -77,8 +77,7 @@ interface Source {
   where?: string;
 }
 
-/** Tag eines Zeitpunkts in der Zeitzone der Instanz: Anzeige (TT.MM.JJJJ) und Adresse des Kalenders (JJJJ-MM-TT). */
-const dayOf = (v: Date | string, tz: string) => new Date(v).toLocaleDateString('sv-SE', { timeZone: tz });
+/** Tag eines Zeitpunkts in der Zeitzone der Instanz (TT.MM.JJJJ). */
 const fmtDate = (v: Date | string, tz: string) => new Date(v).toLocaleDateString('de-DE', { timeZone: tz, day: '2-digit', month: '2-digit', year: 'numeric' });
 const enc = encodeURIComponent;
 
@@ -109,7 +108,7 @@ const SOURCES: Source[] = [
     from: `SELECT id, title, location AS subtitle, starts_at AS at FROM calendar_events`,
     where: 'recurrence_id IS NULL',
     fields: ['title', 'location'],
-    href: (r, tz) => `/kalender?datum=${dayOf(r.at, tz)}`,
+    href: (r) => `/kalender?termin=${r.id}`,
   },
   {
     type: 'warning',
