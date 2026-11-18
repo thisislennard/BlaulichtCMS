@@ -6,6 +6,7 @@ import { api, del as apiDel } from '../../api/client';
 import { Badge, Button, Card, Chip, EmptyState, ErrorBox, FieldWrap, FilePickButton, Input, PageHeader, SegmentedControl, Select, SkeletonRows, Switch, Textarea } from '../../components/ui/core';
 import { Icon } from '../../components/ui/Icon';
 import { Dialog, useConfirm, useErrorToast, useToast } from '../../components/ui/overlays';
+import { FormProblems, useFormCheck } from '../../components/ui/form';
 import { useAuth } from '../../lib/auth';
 import { fmtRelative } from '../../lib/format';
 import { useListState } from '../../lib/listState';
@@ -83,6 +84,7 @@ export function TemplateMetaDialog({ tpl, onClose, onSaved }: { tpl?: Partial<Te
       setBusy(false);
     }
   };
+  const check = useFormCheck({ 'dt-title': v.title.trim().length < 2 && 'Bitte einen Titel angeben (mindestens 2 Zeichen).' });
   return (
     <Dialog
       open
@@ -92,13 +94,14 @@ export function TemplateMetaDialog({ tpl, onClose, onSaved }: { tpl?: Partial<Te
       footer={
         <>
           <Button onClick={onClose}>Abbrechen</Button>
-          <Button variant="primary" loading={busy} disabled={v.title.trim().length < 2} onClick={save}>
+          <Button variant="primary" loading={busy} onClick={() => check.submit(save)}>
             {editing ? 'Speichern' : 'Anlegen'}
           </Button>
         </>
       }
     >
       <div className="flex flex-col gap-4">
+        <FormProblems check={check} />
         {!editing && (
           <SegmentedControl
             label="Art der Designvorlage"
@@ -121,7 +124,7 @@ export function TemplateMetaDialog({ tpl, onClose, onSaved }: { tpl?: Partial<Te
             </Select>
           </FieldWrap>
         )}
-        <FieldWrap label="Titel" required htmlFor="dt-title">
+        <FieldWrap label="Titel" required htmlFor="dt-title" error={check.error('dt-title')}>
           <Input id="dt-title" value={v.title} onChange={(e) => setV({ ...v, title: e.target.value })} maxLength={150} placeholder="z. B. Logo der Organisation" />
         </FieldWrap>
         <FieldWrap label="Kategorie" htmlFor="dt-cat" help={cats.data?.length === 0 ? 'Kategorien legst du in der Bibliothek unter „Kategorien“ an.' : undefined}>

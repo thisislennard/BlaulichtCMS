@@ -5,6 +5,7 @@ import { Badge, Button, Card, EmptyLine, EmptyState, FieldWrap, FilePickButton, 
 import { FilterEmpty, ListToolbar, ResponsiveTable } from '../../components/ui/list';
 import { useListState } from '../../lib/listState';
 import { Dialog, useConfirm, useErrorToast, useToast } from '../../components/ui/overlays';
+import { FormProblems, useFormCheck } from '../../components/ui/form';
 import { useAuth } from '../../lib/auth';
 import { fmtDate, plural } from '../../lib/format';
 import { CheckList } from '../automations/shared';
@@ -47,13 +48,13 @@ const today = () => new Date().toISOString().slice(0, 10);
 export const usePressLists = () => useQuery({ queryKey: ['press-lists'], queryFn: () => get<PressList[]>('/press/lists') });
 
 /** Felder für Herkunft und Rechtsgrundlage (Kontakt und Import). */
-function BasisFields({ v, set, disabled, idPrefix, defaults }: { v: { origin: string; legalBasis: LegalBasis | ''; consentAt: string; consent?: string }; set: (p: Partial<{ origin: string; legalBasis: LegalBasis | ''; consentAt: string; consent: string }>) => void; disabled?: boolean; idPrefix: string; defaults?: boolean }) {
+function BasisFields({ v, set, disabled, idPrefix, defaults, err }: { v: { origin: string; legalBasis: LegalBasis | ''; consentAt: string; consent?: string }; set: (p: Partial<{ origin: string; legalBasis: LegalBasis | ''; consentAt: string; consent: string }>) => void; disabled?: boolean; idPrefix: string; defaults?: boolean; err?: (id: string) => string | null }) {
   return (
     <>
-      <FieldWrap label={defaults ? 'Herkunft (für Zeilen ohne Angabe)' : 'Herkunft'} required={!defaults} htmlFor={`${idPrefix}-origin`} help="Woher stammt die Adresse? z. B. Visitenkarte, Anfrage per Mail, Impressum der Redaktion.">
+      <FieldWrap label={defaults ? 'Herkunft (für Zeilen ohne Angabe)' : 'Herkunft'} required={!defaults} htmlFor={`${idPrefix}-origin`} error={err?.(`${idPrefix}-origin`)} help="Woher stammt die Adresse? z. B. Visitenkarte, Anfrage per Mail, Impressum der Redaktion.">
         <Input id={`${idPrefix}-origin`} value={v.origin} maxLength={500} disabled={disabled} onChange={(e) => set({ origin: e.target.value })} placeholder={defaults ? 'z. B. Presseliste der Kreisverwaltung 2026' : undefined} />
       </FieldWrap>
-      <FieldWrap label={defaults ? 'Rechtsgrundlage (für Zeilen ohne Angabe)' : 'Rechtsgrundlage'} required={!defaults} htmlFor={`${idPrefix}-basis`} help="Die Festlegung trifft die verantwortliche Stelle (Hilfe → Presse → Presseverteiler).">
+      <FieldWrap label={defaults ? 'Rechtsgrundlage (für Zeilen ohne Angabe)' : 'Rechtsgrundlage'} required={!defaults} htmlFor={`${idPrefix}-basis`} error={err?.(`${idPrefix}-basis`)} help="Die Festlegung trifft die verantwortliche Stelle (Hilfe → Presse → Presseverteiler).">
         <Select id={`${idPrefix}-basis`} value={v.legalBasis} disabled={disabled} onChange={(e) => set({ legalBasis: e.target.value as LegalBasis | '' })}>
           <option value="">– bitte wählen –</option>
           {BASIS_OPTIONS.map((o) => (
@@ -64,7 +65,7 @@ function BasisFields({ v, set, disabled, idPrefix, defaults }: { v: { origin: st
         </Select>
       </FieldWrap>
       {v.legalBasis === 'consent' && (
-        <FieldWrap label={defaults ? 'Einwilligung am (für Zeilen ohne Datum)' : 'Einwilligung am'} required={!defaults} htmlFor={`${idPrefix}-consent-at`}>
+        <FieldWrap label={defaults ? 'Einwilligung am (für Zeilen ohne Datum)' : 'Einwilligung am'} required={!defaults} htmlFor={`${idPrefix}-consent-at`} error={err?.(`${idPrefix}-consent-at`)}>
           <Input id={`${idPrefix}-consent-at`} type="date" value={v.consentAt} max={today()} disabled={disabled} onChange={(e) => set({ consentAt: e.target.value })} />
         </FieldWrap>
       )}
@@ -80,7 +81,14 @@ function ContactDialog({ contact, lists, onClose }: { contact: Contact | null; l
   const set = (p: Partial<typeof v>) => setV((x) => ({ ...x, ...p }));
   // abgemeldet: Sperrvermerk – nur mit „Wieder anmelden“ (neue Einwilligung) änderbar
   const locked = !!contact?.unsubscribed_at && !resubscribe;
-  const valid = v.email.includes('@') && !!v.origin.trim() && !!v.legalBasis && (v.legalBasis !== 'consent' || !!v.consentAt) && (v.legalBasis !== 'other' || !!v.consent.trim());
+  // Prüfen statt sperren (#268)
+  const check = useFormCheck({
+    'ct-mail': !v.email.includes('@') && 'Bitte eine E-Mail-Adresse angeben.',
+    'ct-origin': !v.origin.trim() && 'Bitte die Herkunft der Adresse angeben.',
+    'ct-basis': !v.legalBasis && 'Bitte die Rechtsgrundlage wählen.',
+    'ct-consent-at': v.legalBasis === 'consent' && !v.consentAt && 'Bitte das Datum der Einwilligung angeben.',
+    'ct-consent': v.legalBasis === 'other' && !v.consent.trim() && 'Bitte die andere Rechtsgrundlage im Nachweis beschreiben.',
+  });
   const save = async () => {
     setBusy(true);
     try {
@@ -103,16 +111,17 @@ function ContactDialog({ contact, lists, onClose }: { contact: Contact | null; l
       footer={
         <>
           <Button onClick={onClose}>Abbrechen</Button>
-          <Button variant="primary" loading={busy} disabled={!valid || locked} onClick={save}>
+          <Button variant="primary" loading={busy} disabled={locked} aria-describedby={locked ? 'ct-locked' : undefined} onClick={() => check.submit(save)}>
             Speichern
           </Button>
         </>
       }
     >
       <div className="flex flex-col gap-4">
+        <FormProblems check={check} />
         {contact?.unsubscribed_at && (
           <Notice tone="warning" title={`Abgemeldet am ${fmtDate(contact.unsubscribed_at)}`}>
-            Dieser Kontakt hat sich über den Abmeldelink abgemeldet und erhält keine Pressemitteilungen mehr. Gespeichert bleibt nur der Sperrvermerk (Adresse, Zeitpunkt, Rechtsgrundlage), damit die Adresse nicht erneut aufgenommen wird.
+            <span id="ct-locked">Dieser Kontakt hat sich über den Abmeldelink abgemeldet und erhält keine Pressemitteilungen mehr. Gespeichert bleibt nur der Sperrvermerk (Adresse, Zeitpunkt, Rechtsgrundlage), damit die Adresse nicht erneut aufgenommen wird.</span>
           </Notice>
         )}
         {contact?.unsubscribed_at && <Switch checked={resubscribe} onChange={setResubscribe} label="Wieder anmelden" description="Nur mit einer neuen Einwilligung, erteilt nach der Abmeldung: Rechtsgrundlage „Einwilligung“ mit Datum." />}
@@ -123,14 +132,14 @@ function ContactDialog({ contact, lists, onClose }: { contact: Contact | null; l
           <FieldWrap label="Medium/Redaktion" htmlFor="ct-outlet">
             <Input id="ct-outlet" value={v.outlet} maxLength={200} disabled={locked} onChange={(e) => set({ outlet: e.target.value })} />
           </FieldWrap>
-          <FieldWrap label="E-Mail" required htmlFor="ct-mail">
+          <FieldWrap label="E-Mail" required htmlFor="ct-mail" error={check.error('ct-mail')}>
             <Input id="ct-mail" type="email" value={v.email} maxLength={254} autoComplete="off" disabled={locked} onChange={(e) => set({ email: e.target.value })} />
           </FieldWrap>
           <FieldWrap label="Telefon" htmlFor="ct-phone">
             <Input id="ct-phone" type="tel" value={v.phone} maxLength={60} autoComplete="off" disabled={locked} onChange={(e) => set({ phone: e.target.value })} />
           </FieldWrap>
-          <BasisFields v={v} set={set} disabled={locked} idPrefix="ct" />
-          <FieldWrap label="Nachweis / Bemerkung" required={v.legalBasis === 'other'} htmlFor="ct-consent" help="z. B. „Zustimmung per Mail vom 01.11.2026, abgelegt im Postfach“ oder bei anderer Grundlage, welche.">
+          <BasisFields v={v} set={set} disabled={locked} idPrefix="ct" err={check.error} />
+          <FieldWrap label="Nachweis / Bemerkung" required={v.legalBasis === 'other'} htmlFor="ct-consent" error={check.error('ct-consent')} help="z. B. „Zustimmung per Mail vom 01.11.2026, abgelegt im Postfach“ oder bei anderer Grundlage, welche.">
             <Input id="ct-consent" value={v.consent} maxLength={500} disabled={locked} onChange={(e) => set({ consent: e.target.value })} />
           </FieldWrap>
         </div>
@@ -174,13 +183,14 @@ function ImportDialog({ onClose }: { onClose: () => void }) {
       title="Kontakte importieren (CSV)"
       footer={
         <>
+          {preview ? !preview.neu && !preview.aktualisiert && <span id="ci-why" className="mr-auto self-center text-meta text-fg-muted">Nichts Neues zu importieren.</span> : !csv && <span id="ci-why" className="mr-auto self-center text-meta text-fg-muted">Erst eine CSV-Datei wählen oder Zeilen einfügen.</span>}
           <Button onClick={onClose}>Abbrechen</Button>
           {preview ? (
-            <Button variant="primary" loading={busy} disabled={!preview.neu && !preview.aktualisiert} onClick={() => run(false)}>
+            <Button variant="primary" loading={busy} disabled={!preview.neu && !preview.aktualisiert} aria-describedby={!preview.neu && !preview.aktualisiert ? 'ci-why' : undefined} onClick={() => run(false)}>
               Importieren
             </Button>
           ) : (
-            <Button variant="primary" loading={busy} disabled={!csv} onClick={() => run(true)}>
+            <Button variant="primary" loading={busy} disabled={!csv} aria-describedby={!csv ? 'ci-why' : undefined} onClick={() => run(true)}>
               Prüfen
             </Button>
           )}
@@ -243,6 +253,7 @@ function ListDialog({ list, onClose }: { list: PressList | null; onClose: () => 
       toastError(e);
     }
   };
+  const check = useFormCheck({ 'ls-name': name.trim().length < 2 && 'Bitte einen Namen angeben (mindestens 2 Zeichen).' });
   return (
     <Dialog
       open
@@ -251,14 +262,15 @@ function ListDialog({ list, onClose }: { list: PressList | null; onClose: () => 
       footer={
         <>
           <Button onClick={onClose}>Abbrechen</Button>
-          <Button variant="primary" disabled={name.trim().length < 2} onClick={save}>
+          <Button variant="primary" onClick={() => check.submit(save)}>
             Speichern
           </Button>
         </>
       }
     >
       <div className="flex flex-col gap-4">
-        <FieldWrap label="Name" required htmlFor="ls-name">
+        <FormProblems check={check} />
+        <FieldWrap label="Name" required htmlFor="ls-name" error={check.error('ls-name')}>
           <Input id="ls-name" value={name} maxLength={120} onChange={(e) => setName(e.target.value)} placeholder="z. B. Lokalpresse, Rundfunk" />
         </FieldWrap>
         <FieldWrap label="Beschreibung" htmlFor="ls-desc">

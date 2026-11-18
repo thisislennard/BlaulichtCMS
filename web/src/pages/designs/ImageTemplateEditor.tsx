@@ -5,7 +5,8 @@ import { api, get, put } from '../../api/client';
 import { Button, Card, cx, ErrorBox, FieldWrap, FilePickButton, Input, Notice, PageHeader, SegmentedControl, Select, SkeletonRows, Switch } from '../../components/ui/core';
 import { usePageMeta } from '../../components/layout/AppShell';
 import { Icon } from '../../components/ui/Icon';
-import { UnsavedChangesGuard, useErrorToast, useToast } from '../../components/ui/overlays';
+import { useErrorToast, useToast } from '../../components/ui/overlays';
+import { SaveBar } from '../../components/ui/form';
 import { useServerPreview, type Layout, type LayoutElement } from './ImageFill';
 
 /*
@@ -333,6 +334,7 @@ export default function ImageTemplateEditor() {
     update(g.id, fitInside(g.mode === 'move' ? { ...s, x: s.x + dx, y: s.y + dy } : { ...s, w: s.w + dx, h: s.h + dy }, layout));
   };
   const endDrag = () => (drag.current = null);
+  const [savedAt, setSavedAt] = useState<number | null>(null);
   const save = async () => {
     setBusy(true);
     try {
@@ -342,6 +344,7 @@ export default function ImageTemplateEditor() {
       qc.invalidateQueries({ queryKey: ['design-template', id] });
       qc.invalidateQueries({ queryKey: ['design-templates'] });
       toast({ tone: 'success', title: 'Layout gespeichert' });
+      setSavedAt(Date.now());
     } catch (e) {
       toastError(e);
     } finally {
@@ -352,7 +355,6 @@ export default function ImageTemplateEditor() {
   const presetKey = presets.find((p) => p.width === layout.width && p.height === layout.height)?.key ?? 'custom';
   return (
     <div className="flex flex-col gap-5">
-      <UnsavedChangesGuard when={dirty} />
       <div>
         <Link to={`/designvorlagen/${id}`} className="text-sm inline-flex items-center gap-1">
           <Icon name="ArrowLeft" size={14} /> {detail.data?.title}
@@ -360,11 +362,6 @@ export default function ImageTemplateEditor() {
       </div>
       <PageHeader
         subtitle="Elemente mit der Maus ziehen oder auswählen und mit den Pfeiltasten verschieben. Die Vorschau zeigt das Ergebnis genau so, wie es erzeugt wird."
-        actions={
-          <Button variant="primary" icon="Save" loading={busy} disabled={!dirty} onClick={save}>
-            Speichern
-          </Button>
-        }
       />
       <div className="grid gap-5 xl:grid-cols-[minmax(0,3fr)_minmax(340px,2fr)]">
         <Card bodyClassName="flex flex-col gap-2">
@@ -475,6 +472,8 @@ export default function ImageTemplateEditor() {
           )}
         </div>
       </div>
+      {/* Eine Speichern-Leiste (#268) statt eines blassen roten Knopfs oben */}
+      <SaveBar dirty={dirty} saving={busy} onSave={save} onDiscard={() => setLayout(JSON.parse(saved))} savedAt={savedAt} />
     </div>
   );
 }

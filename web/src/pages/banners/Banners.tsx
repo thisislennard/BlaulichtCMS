@@ -5,6 +5,7 @@ import type { BannerDisplay, Site } from '../../api/types';
 import { Button, Card, cx, EmptyAction, EmptyLine, EmptyState, ErrorBox, FieldWrap, Input, Notice, PageHeader, Rev, Select, SkeletonRows, StatusBadge, Textarea } from '../../components/ui/core';
 import { FilterEmpty, ListToolbar } from '../../components/ui/list';
 import { Dialog, useErrorToast, useToast, useConfirm } from '../../components/ui/overlays';
+import { FormProblems, useFormCheck } from '../../components/ui/form';
 import { useAuth } from '../../lib/auth';
 import { useLinkedItem } from '../../lib/linked-item';
 import { useListState } from '../../lib/listState';
@@ -95,6 +96,12 @@ function BannerDialog({ banner, sites, onClose }: { banner: Banner | null; sites
     linkText: banner?.link_text ?? '',
     display: (banner?.display ?? 'auto') as BannerDisplay,
   });
+  // Prüfen statt sperren (#268)
+  const check = useFormCheck({
+    'b-site': !v.siteId && 'Bitte eine Website wählen.',
+    'b-title': v.title.trim().length < 2 && 'Bitte einen Titel angeben (mindestens 2 Zeichen).',
+    'b-end': (!v.endsAt ? 'Bitte den Ablauf angeben – danach blendet die Website das Banner aus.' : v.startsAt && v.endsAt <= v.startsAt ? 'Der Ablauf liegt vor dem Start.' : null),
+  });
   const save = async () => {
     const body = { ...v, startsAt: fromLocalInput(v.startsAt), endsAt: fromLocalInput(v.endsAt), linkUrl: v.linkUrl.trim() || null, linkText: v.linkText.trim() || null };
     try {
@@ -116,15 +123,16 @@ function BannerDialog({ banner, sites, onClose }: { banner: Banner | null; sites
       footer={
         <>
           <Button onClick={onClose}>Abbrechen</Button>
-          <Button variant="primary" disabled={v.title.trim().length < 2 || !v.siteId} onClick={save}>
+          <Button variant="primary" onClick={() => check.submit(save)}>
             Speichern
           </Button>
         </>
       }
     >
       <div className="flex flex-col gap-4">
+        <FormProblems check={check} />
         <BannerPreview b={{ tone: v.tone as any, title: v.title, text: v.text, link_url: v.linkUrl || null, link_text: v.linkText || null }} />
-        <FieldWrap label="Website" htmlFor="b-site">
+        <FieldWrap label="Website" htmlFor="b-site" required error={check.error('b-site')}>
           <Select id="b-site" value={v.siteId} onChange={(e) => setV({ ...v, siteId: e.target.value })}>
             {sites.map((s) => (
               <option key={s.id} value={s.id}>
@@ -133,7 +141,7 @@ function BannerDialog({ banner, sites, onClose }: { banner: Banner | null; sites
             ))}
           </Select>
         </FieldWrap>
-        <FieldWrap label="Titel" required htmlFor="b-title">
+        <FieldWrap label="Titel" required htmlFor="b-title" error={check.error('b-title')}>
           <Input id="b-title" value={v.title} onChange={(e) => setV({ ...v, title: e.target.value })} maxLength={120} />
         </FieldWrap>
         <FieldWrap label="Text" htmlFor="b-text">
@@ -166,7 +174,7 @@ function BannerDialog({ banner, sites, onClose }: { banner: Banner | null; sites
           <FieldWrap label="Start" htmlFor="b-start">
             <Input id="b-start" type="datetime-local" value={v.startsAt} onChange={(e) => setV({ ...v, startsAt: e.target.value })} />
           </FieldWrap>
-          <FieldWrap label="Ablauf" required help="Die Website blendet das Banner danach selbst aus – auch ohne Verbindung." htmlFor="b-end">
+          <FieldWrap label="Ablauf" required help="Die Website blendet das Banner danach selbst aus – auch ohne Verbindung." htmlFor="b-end" error={check.error('b-end')}>
             <Input id="b-end" type="datetime-local" value={v.endsAt} onChange={(e) => setV({ ...v, endsAt: e.target.value })} />
           </FieldWrap>
           <FieldWrap label="Link (optional)" htmlFor="b-link">
@@ -213,9 +221,9 @@ export default function Banners() {
     <div className="flex flex-col gap-5">
       <PageHeader
         subtitle="Zeitgesteuerte Hinweise auf der Website – mehrere gleichzeitig, sortiert nach Priorität."
-        actions={can('banner.edit') && can('channel.view') && <Button variant="primary" icon="Plus" disabled={!activeSites.length} onClick={() => setEdit(null)}>Neues Banner</Button>}
+        actions={can('banner.edit') && can('channel.view') && <Button variant="primary" icon="Plus" disabled={!activeSites.length} aria-describedby={!activeSites.length ? 'banner-no-site' : undefined} onClick={() => setEdit(null)}>Neues Banner</Button>}
       />
-      {!activeSites.length && sites.data && <Notice>Für Banner muss zuerst eine Website gekoppelt sein (Einrichtung → Websites).</Notice>}
+      {!activeSites.length && sites.data && <Notice><span id="banner-no-site">Für Banner muss zuerst eine Website gekoppelt sein (Einrichtung → Websites).</span></Notice>}
       {q.isLoading && <SkeletonRows rows={4} />}
       {q.error && <ErrorBox title="Banner konnten nicht geladen werden">{(q.error as Error).message}</ErrorBox>}
       {linkedMissing && (

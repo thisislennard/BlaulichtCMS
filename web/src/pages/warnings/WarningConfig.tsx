@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { get, post, put } from '../../api/client';
 import { Badge, Button, Card, Chip, ErrorBox, FieldWrap, Input, Notice, PageHeader, Select, SkeletonRows, StatusBadge, Switch, Tabs, Textarea } from '../../components/ui/core';
 import { Dialog, useErrorToast, useToast, useConfirm } from '../../components/ui/overlays';
+import { FormProblems, useFormCheck } from '../../components/ui/form';
 import { HelpLink, HelpTip } from '../../components/ui/HelpTip';
 import { useAuth } from '../../lib/auth';
 import { fmtDateTime } from '../../lib/format';
@@ -65,6 +66,17 @@ export default function WarningConfig() {
   // Bearbeiten: Zuständigkeit (Name, Gebiet, Empfänger); Stichwörter bearbeitet KeywordTable.tsx
   const [editResp, setEditResp] = useState<{ id: string; name: string; area: string; recipients: string; active: boolean } | null>(null);
 
+  // Prüfen statt sperren (#268): Regel und Zuständigkeit nennen fehlende Angaben am Feld
+  const ruleCheck = useFormCheck({
+    'r-kw': !rf.keywordId && 'Bitte ein Stichwort wählen.',
+    'r-name': rf.name.trim().length < 3 && 'Bitte einen Namen angeben (mindestens 3 Zeichen).',
+    'r-cond': !rf.conditions.trim() && 'Bitte mindestens eine Bedingung angeben.',
+    'r-reason': rf.reason.trim().length < 10 && 'Bitte fachlich begründen (mindestens 10 Zeichen).',
+  });
+  const respCheck = useFormCheck({
+    'rs-name': resp.name.trim().length < 2 && 'Bitte einen Namen angeben (mindestens 2 Zeichen).',
+    'rs-rcpt': !csv(resp.recipients).length && 'Bitte mindestens eine E-Mail-Adresse angeben.',
+  });
   if (q.isLoading) return <SkeletonRows rows={6} />;
   if (q.error) return <ErrorBox title="Konfiguration konnte nicht geladen werden">{(q.error as Error).message}</ErrorBox>;
   const c = q.data;
@@ -114,27 +126,28 @@ export default function WarningConfig() {
         <div className="flex flex-col gap-4">
           {mayRules && (
             <Card title={rf.lineage ? 'Neue Version einer Regel' : 'Regel anlegen'} subtitle="Wirksam erst nach fachlicher Freigabe. Bedingungen: eine Zeile je Frage, z. B. „evakuierung = ja“ oder „wind = stark | sehr stark“.">
+              <FormProblems check={ruleCheck} className="mb-3" />
               <div className="grid sm:grid-cols-2 gap-3">
-                <FieldWrap label="Stichwort" htmlFor="r-kw">
+                <FieldWrap label="Stichwort" htmlFor="r-kw" required error={ruleCheck.error('r-kw')}>
                   <Select id="r-kw" value={rf.keywordId} onChange={(e) => setRf({ ...rf, keywordId: e.target.value })} disabled={!!rf.lineage}>
                     <option value="">– wählen –</option>
                     {c.keywords.map((k: any) => <option key={k.id} value={k.id}>{k.code} – {k.label}</option>)}
                   </Select>
                 </FieldWrap>
-                <FieldWrap label="Name" htmlFor="r-name"><Input id="r-name" value={rf.name} onChange={(e) => setRf({ ...rf, name: e.target.value })} /></FieldWrap>
-                <FieldWrap label="Bedingungen" htmlFor="r-cond"><Textarea id="r-cond" rows={3} mono value={rf.conditions} onChange={(e) => setRf({ ...rf, conditions: e.target.value })} /></FieldWrap>
+                <FieldWrap label="Name" htmlFor="r-name" required error={ruleCheck.error('r-name')}><Input id="r-name" value={rf.name} onChange={(e) => setRf({ ...rf, name: e.target.value })} /></FieldWrap>
+                <FieldWrap label="Bedingungen" htmlFor="r-cond" required error={ruleCheck.error('r-cond')}><Textarea id="r-cond" rows={3} mono value={rf.conditions} onChange={(e) => setRf({ ...rf, conditions: e.target.value })} /></FieldWrap>
                 <div className="flex flex-col gap-3">
                   <FieldWrap label="Ergebnis" htmlFor="r-lvl">
                     <Select id="r-lvl" value={rf.level} onChange={(e) => setRf({ ...rf, level: Number(e.target.value) })}>
                       {[1, 2, 3].map((l) => <option key={l} value={l}>Warnstufe {l}</option>)}
                     </Select>
                   </FieldWrap>
-                  <FieldWrap label="Fachliche Begründung" htmlFor="r-reason"><Textarea id="r-reason" rows={2} value={rf.reason} onChange={(e) => setRf({ ...rf, reason: e.target.value })} /></FieldWrap>
+                  <FieldWrap label="Fachliche Begründung" htmlFor="r-reason" required error={ruleCheck.error('r-reason')}><Textarea id="r-reason" rows={2} value={rf.reason} onChange={(e) => setRf({ ...rf, reason: e.target.value })} /></FieldWrap>
                 </div>
               </div>
               <div className="flex gap-2 mt-3">
-                <Button variant="primary" icon="Save" disabled={!rf.keywordId || rf.name.length < 3 || rf.reason.length < 10 || !rf.conditions.trim()}
-                  onClick={async () => (await act(() => post('/warning-rules', { lineage: rf.lineage, keywordId: rf.keywordId, name: rf.name, conditions: parseConditions(rf.conditions), level: rf.level, reason: rf.reason }), 'Regel als Entwurf gespeichert')) && setRf({ lineage: null, keywordId: '', name: '', conditions: '', level: 3, reason: '' })}>
+                <Button variant="primary" icon="Save"
+                  onClick={() => ruleCheck.submit(async () => (await act(() => post('/warning-rules', { lineage: rf.lineage, keywordId: rf.keywordId, name: rf.name, conditions: parseConditions(rf.conditions), level: rf.level, reason: rf.reason }), 'Regel als Entwurf gespeichert')) && (setRf({ lineage: null, keywordId: '', name: '', conditions: '', level: 3, reason: '' }), ruleCheck.reset()))}>
                   Als Entwurf speichern
                 </Button>
                 {rf.lineage && <Button onClick={() => setRf({ lineage: null, keywordId: '', name: '', conditions: '', level: 3, reason: '' })}>Abbrechen</Button>}
@@ -171,13 +184,14 @@ export default function WarningConfig() {
         <div className="flex flex-col gap-4">
           {mayRules && (
             <Card title="Zuständigkeit anlegen" subtitle="Empfänger der Übergabe-Mail. Im Testmodus geht der Versand trotzdem nur an das Testpostfach.">
+              <FormProblems check={respCheck} className="mb-3" />
               <div className="grid sm:grid-cols-3 gap-3">
-                <FieldWrap label="Name" htmlFor="rs-name"><Input id="rs-name" value={resp.name} onChange={(e) => setResp({ ...resp, name: e.target.value })} /></FieldWrap>
+                <FieldWrap label="Name" htmlFor="rs-name" required error={respCheck.error('rs-name')}><Input id="rs-name" value={resp.name} onChange={(e) => setResp({ ...resp, name: e.target.value })} /></FieldWrap>
                 <FieldWrap label="Gebiet" htmlFor="rs-area"><Input id="rs-area" value={resp.area} onChange={(e) => setResp({ ...resp, area: e.target.value })} /></FieldWrap>
-                <FieldWrap label="E-Mail-Adressen (Komma-getrennt)" htmlFor="rs-rcpt"><Input id="rs-rcpt" value={resp.recipients} onChange={(e) => setResp({ ...resp, recipients: e.target.value })} /></FieldWrap>
+                <FieldWrap label="E-Mail-Adressen (Komma-getrennt)" htmlFor="rs-rcpt" required error={respCheck.error('rs-rcpt')}><Input id="rs-rcpt" value={resp.recipients} onChange={(e) => setResp({ ...resp, recipients: e.target.value })} /></FieldWrap>
               </div>
               <div className="mt-3">
-                <Button variant="primary" icon="Plus" disabled={resp.name.length < 2 || !csv(resp.recipients).length} onClick={async () => (await act(() => post('/responsibilities', { name: resp.name, area: resp.area, recipients: csv(resp.recipients) }), 'Zuständigkeit angelegt')) && setResp({ name: '', area: '', recipients: '' })}>
+                <Button variant="primary" icon="Plus" onClick={() => respCheck.submit(async () => (await act(() => post('/responsibilities', { name: resp.name, area: resp.area, recipients: csv(resp.recipients) }), 'Zuständigkeit angelegt')) && (setResp({ name: '', area: '', recipients: '' }), respCheck.reset()))}>
                   Anlegen
                 </Button>
               </div>

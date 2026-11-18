@@ -4,6 +4,7 @@ import { useSearchParams } from 'react-router';
 import { del, get, post, put } from '../../api/client';
 import { Badge, Button, Card, EmptyState, FieldWrap, Input, Notice, PageHeader, Select, SkeletonRows, Table, Td, Textarea, Th, type Tone } from '../../components/ui/core';
 import { Dialog, useConfirm, useErrorToast, useToast } from '../../components/ui/overlays';
+import { FormProblems, useFormCheck } from '../../components/ui/form';
 import { useAuth } from '../../lib/auth';
 import { FilterEmpty, ListToolbar } from '../../components/ui/list';
 import { useListState } from '../../lib/listState';
@@ -59,6 +60,7 @@ function Editor({ id, onClose }: { id: string | null; onClose: () => void }) {
       toastError(e);
     }
   };
+  const check = useFormCheck({ 'rl-subject': !!v && v.subject.trim().length < 2 && 'Bitte einen Betreff angeben (mindestens 2 Zeichen).' });
   return (
     <Dialog
       open
@@ -68,7 +70,7 @@ function Editor({ id, onClose }: { id: string | null; onClose: () => void }) {
       footer={
         <>
           <Button onClick={onClose}>Abbrechen</Button>
-          <Button variant="primary" disabled={!v || v.subject.trim().length < 2} onClick={save}>
+          <Button variant="primary" loading={!v} onClick={() => check.submit(save)}>
             Entwurf speichern
           </Button>
         </>
@@ -78,6 +80,7 @@ function Editor({ id, onClose }: { id: string | null; onClose: () => void }) {
         <SkeletonRows rows={4} />
       ) : (
         <div className="flex flex-col gap-4">
+          <FormProblems check={check} />
           <FieldWrap label="Aus einem Beitrag übernehmen" htmlFor="rl-post" help="Übernimmt Titel und Text der aktuellen Fassung – danach frei änderbar.">
             <Select
               id="rl-post"
@@ -102,7 +105,7 @@ function Editor({ id, onClose }: { id: string | null; onClose: () => void }) {
               ))}
             </Select>
           </FieldWrap>
-          <FieldWrap label="Betreff" required htmlFor="rl-subject">
+          <FieldWrap label="Betreff" required htmlFor="rl-subject" error={check.error('rl-subject')}>
             <Input id="rl-subject" value={v.subject} maxLength={300} onChange={(e) => setV({ ...v, subject: e.target.value })} />
           </FieldWrap>
           <FieldWrap label="Text" required htmlFor="rl-body" help="Reiner Text. Unter jede Mail setzt BlaulichtCMS einen persönlichen Abmeldelink.">

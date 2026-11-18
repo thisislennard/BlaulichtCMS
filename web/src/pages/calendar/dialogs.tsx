@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { del, get, post, put } from '../../api/client';
 import { Badge, Button, Chip, cx, FieldWrap, Input, Notice, Select, Spinner, Switch, Textarea } from '../../components/ui/core';
 import { Dialog, useConfirm, useErrorToast, useToast } from '../../components/ui/overlays';
+import { FormProblems, useFormCheck } from '../../components/ui/form';
 import { HelpTip } from '../../components/ui/HelpTip';
 import { Icon } from '../../components/ui/Icon';
 import { fromLocalInput, toLocalInput, plural } from '../../lib/format';
@@ -138,7 +139,15 @@ function EventForm({ target, detail, categories, onClose, onSaved }: { target: E
     }
   };
 
-  const invalidTimes = f.allDay ? !f.startDate || (!!f.endDate && f.endDate < f.startDate) : !f.start || !f.end || f.end < f.start;
+  // Prüfen statt sperren (#268): fehlende Angaben werden beim Speichern am Feld genannt
+  const check = useFormCheck({
+    'ev-title': !f.title.trim() && 'Bitte einen Titel angeben.',
+    ...(f.allDay
+      ? { 'ev-sd': !f.startDate && 'Bitte den ersten Tag angeben.', 'ev-ed': !!f.endDate && f.endDate < f.startDate && 'Das Ende liegt vor dem Beginn.' }
+      : { 'ev-s': !f.start && 'Bitte den Beginn angeben.', 'ev-e': (!f.end ? 'Bitte das Ende angeben.' : f.start && f.end < f.start ? 'Das Ende liegt vor dem Beginn.' : null) }),
+    'ev-weekdays': canRepeat && f.repeat === 'weekly' && !f.weekdays.length && 'Bitte mindestens einen Wochentag wählen.',
+    'ev-until': canRepeat && !!f.repeat && f.ends === 'until' && !f.until && 'Bitte den letzten möglichen Tag angeben.',
+  });
   const title = target.instance ? 'Diesen Termin der Serie bearbeiten' : target.id ? (detail?.rrule ? 'Serie bearbeiten' : 'Termin bearbeiten') : 'Neuer Termin';
   return (
     <Dialog
@@ -149,13 +158,14 @@ function EventForm({ target, detail, categories, onClose, onSaved }: { target: E
       footer={
         <>
           <Button onClick={onClose}>Abbrechen</Button>
-          <Button variant="primary" loading={busy} disabled={!f.title.trim() || invalidTimes || (f.repeat === 'weekly' && !f.weekdays.length) || (f.ends === 'until' && !!f.repeat && !f.until)} onClick={save}>
+          <Button variant="primary" loading={busy} onClick={() => check.submit(save)}>
             Speichern
           </Button>
         </>
       }
     >
       <div className="flex flex-col gap-4">
+        <FormProblems check={check} />
         {target.instance && <Notice>Die Änderung gilt nur für den Termin am {rangeText(target.entry!)}. Die übrigen Termine der Serie bleiben unverändert.</Notice>}
         {detail?.rrule && !target.instance && (
           <Notice>
@@ -163,13 +173,13 @@ function EventForm({ target, detail, categories, onClose, onSaved }: { target: E
             {(detail.exdates?.length ?? 0) + (detail.overrideCount ?? 0) > 0 && ' Gelöschte und einzeln geänderte Termine wandern mit, wenn sich Beginn, Uhrzeit oder Wiederholung ändern; was danach zu keinem Termin der Serie mehr passt, entfällt.'}
           </Notice>
         )}
-        <FieldWrap label="Titel" htmlFor="ev-title" required>
+        <FieldWrap label="Titel" htmlFor="ev-title" required error={check.error('ev-title')}>
           <Input id="ev-title" value={f.title} maxLength={300} onChange={(e) => set({ title: e.target.value })} />
         </FieldWrap>
         <Switch checked={f.allDay} onChange={(v) => set({ allDay: v })} label="Ganztägig" description="Ohne Uhrzeit, auch über mehrere Tage." />
         {f.allDay ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <FieldWrap label="Von" htmlFor="ev-sd" required>
+            <FieldWrap label="Von" htmlFor="ev-sd" required error={check.error('ev-sd')}>
               <Input id="ev-sd" type="date" value={f.startDate} onChange={(e) => set({ startDate: e.target.value, endDate: f.endDate && f.endDate >= e.target.value ? f.endDate : e.target.value })} />
             </FieldWrap>
             <FieldWrap label="Bis (einschließlich)" htmlFor="ev-ed" error={f.endDate && f.endDate < f.startDate ? 'Das Ende liegt vor dem Beginn.' : null}>
@@ -178,7 +188,7 @@ function EventForm({ target, detail, categories, onClose, onSaved }: { target: E
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <FieldWrap label="Beginn" htmlFor="ev-s" required>
+            <FieldWrap label="Beginn" htmlFor="ev-s" required error={check.error('ev-s')}>
               <Input
                 id="ev-s"
                 type="datetime-local"
@@ -191,7 +201,7 @@ function EventForm({ target, detail, categories, onClose, onSaved }: { target: E
                 }}
               />
             </FieldWrap>
-            <FieldWrap label="Ende" htmlFor="ev-e" required error={f.end && f.start && f.end < f.start ? 'Das Ende liegt vor dem Beginn.' : null}>
+            <FieldWrap label="Ende" htmlFor="ev-e" required error={check.error('ev-e') ?? (f.end && f.start && f.end < f.start ? 'Das Ende liegt vor dem Beginn.' : null)}>
               <Input id="ev-e" type="datetime-local" value={f.end} min={f.start} onChange={(e) => set({ end: e.target.value })} />
             </FieldWrap>
           </div>
@@ -243,7 +253,7 @@ function EventForm({ target, detail, categories, onClose, onSaved }: { target: E
               )}
             </div>
             {f.repeat === 'weekly' && (
-              <div role="group" aria-label="Wochentage" className="flex flex-wrap gap-1.5">
+              <div id="ev-weekdays" tabIndex={-1} role="group" aria-label="Wochentage" aria-invalid={!!check.error('ev-weekdays') || undefined} className="flex flex-wrap gap-1.5 outline-none">
                 {[1, 2, 3, 4, 5, 6, 0].map((d) => {
                   const on = f.weekdays.includes(d);
                   return (
@@ -252,6 +262,11 @@ function EventForm({ target, detail, categories, onClose, onSaved }: { target: E
                     </button>
                   );
                 })}
+                {check.error('ev-weekdays') && (
+                  <p className="m-0 basis-full text-meta text-err" role="alert">
+                    {check.error('ev-weekdays')}
+                  </p>
+                )}
               </div>
             )}
             {(f.repeat === 'monthly' || f.repeat === 'yearly') && (
@@ -284,7 +299,7 @@ function EventForm({ target, detail, categories, onClose, onSaved }: { target: E
                   </Select>
                 </FieldWrap>
                 {f.ends === 'until' && (
-                  <FieldWrap label="Letzter möglicher Tag" htmlFor="ev-until" required>
+                  <FieldWrap label="Letzter möglicher Tag" htmlFor="ev-until" required error={check.error('ev-until')}>
                     <Input id="ev-until" type="date" value={f.until} min={startDay} onChange={(e) => set({ until: e.target.value })} />
                   </FieldWrap>
                 )}

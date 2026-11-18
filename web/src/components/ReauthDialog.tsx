@@ -3,6 +3,7 @@ import { post, setReauthHandler } from '../api/client';
 import { useAuth } from '../lib/auth';
 import { Button, FieldWrap, Input } from './ui/core';
 import { Dialog } from './ui/overlays';
+import { FormProblems, useFormCheck } from './ui/form';
 
 /**
  * Dialog für die erneute Bestätigung kritischer Aktionen (Admin-Rechte vergeben, Zwei-Faktor zurücksetzen,
@@ -42,8 +43,12 @@ export function ReauthProvider({ children }: { children: ReactNode }) {
     setCode('');
   };
 
-  const submit = async (e: FormEvent) => {
+  const check = useFormCheck({ 'reauth-pw': !pw && 'Bitte das Passwort eingeben.', 'reauth-code': needCode && code.replace(/\s/g, '').length < 6 && 'Bitte den sechsstelligen Code eingeben.' });
+  const submit = (e: FormEvent) => {
     e.preventDefault();
+    check.submit(send);
+  };
+  const send = async () => {
     setBusy(true);
     setError(null);
     try {
@@ -69,7 +74,7 @@ export function ReauthProvider({ children }: { children: ReactNode }) {
             <Button variant="ghost" onClick={() => finish(false)}>
               Abbrechen
             </Button>
-            <Button variant="primary" type="submit" form="reauth-form" loading={busy} disabled={!pw || (needCode && code.replace(/\s/g, '').length < 6)}>
+            <Button variant="primary" type="submit" form="reauth-form" loading={busy}>
               Bestätigen
             </Button>
           </>
@@ -79,11 +84,12 @@ export function ReauthProvider({ children }: { children: ReactNode }) {
           <p className="m-0 text-sm text-fg-muted">
             Diese Änderung ist sicherheitskritisch. Bitte mit deinem Passwort{needCode ? ' und einem aktuellen Code aus der Authenticator-App' : ''} bestätigen. Die Bestätigung gilt 10 Minuten.
           </p>
-          <FieldWrap label="Passwort" required htmlFor="reauth-pw">
+          <FormProblems check={check} />
+          <FieldWrap label="Passwort" required htmlFor="reauth-pw" error={check.error('reauth-pw')}>
             <Input id="reauth-pw" type="password" autoComplete="current-password" value={pw} onChange={(e) => setPw(e.target.value)} autoFocus invalid={!!error} />
           </FieldWrap>
           {needCode && (
-            <FieldWrap label="Aktueller Code aus der Authenticator-App" required htmlFor="reauth-code">
+            <FieldWrap label="Aktueller Code aus der Authenticator-App" required htmlFor="reauth-code" error={check.error('reauth-code')}>
               <Input id="reauth-code" mono inputMode="numeric" autoComplete="one-time-code" placeholder="123456" value={code} onChange={(e) => setCode(e.target.value)} />
             </FieldWrap>
           )}

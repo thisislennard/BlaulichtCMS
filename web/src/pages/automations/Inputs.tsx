@@ -5,6 +5,7 @@ import { del, post, put } from '../../api/client';
 import { Button, Card, Chip, EmptyState, ErrorBox, FieldWrap, Input, Notice, PageHeader, SkeletonRows, Switch } from '../../components/ui/core';
 import { Icon } from '../../components/ui/Icon';
 import { Dialog, useConfirm, useErrorToast, useToast } from '../../components/ui/overlays';
+import { FormProblems, useFormCheck } from '../../components/ui/form';
 import { useAuth } from '../../lib/auth';
 import { fmtDateTime } from '../../lib/format';
 import { usePageMeta } from '../../components/layout/AppShell';
@@ -65,6 +66,7 @@ export function InputDialog({ input, kind, cat, onClose, preset }: { input: Inpu
   };
   const fields = (c.fields ?? []) as { key: string; label: string; example: string }[];
   const setField = (i: number, patch: Partial<{ key: string; label: string; example: string }>) => set({ fields: fields.map((f, j) => (j === i ? { ...f, ...patch } : f)) });
+  const check = useFormCheck({ 'in-name': name.trim().length < 2 && 'Bitte einen Namen angeben (mindestens 2 Zeichen).' });
   return (
     <Dialog
       open
@@ -74,15 +76,16 @@ export function InputDialog({ input, kind, cat, onClose, preset }: { input: Inpu
       footer={
         <>
           <Button onClick={() => onClose(false)}>Abbrechen</Button>
-          <Button variant="primary" loading={busy} disabled={name.trim().length < 2} onClick={save}>
+          <Button variant="primary" loading={busy} onClick={() => check.submit(save)}>
             Speichern
           </Button>
         </>
       }
     >
       <div className="flex flex-col gap-4">
+        <FormProblems check={check} />
         <p className="m-0 text-sm text-fg-muted">{def.description}</p>
-        <FieldWrap label="Name" htmlFor="in-name" required help="So erscheint der Auslöser in der Palette des Editors.">
+        <FieldWrap label="Name" htmlFor="in-name" required error={check.error('in-name')} help="So erscheint der Auslöser in der Palette des Editors.">
           <Input id="in-name" value={name} maxLength={120} onChange={(e) => setName(e.target.value)} />
         </FieldWrap>
         {def.source === 'connection' && (

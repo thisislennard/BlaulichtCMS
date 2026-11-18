@@ -195,8 +195,9 @@ export function TestDialog({ automationId, inputs, onClose, onDone }: { automati
       title="Testlauf"
       footer={
         <>
+          {!sel && <span id="tr-why" className="mr-auto self-center text-meta text-fg-muted">Erst einen Auslöser wählen.</span>}
           <Button onClick={onClose}>Schließen</Button>
-          <Button variant="primary" icon="FlaskConical" loading={busy} disabled={!sel} onClick={run}>
+          <Button variant="primary" icon="FlaskConical" loading={busy} disabled={!sel} aria-describedby={!sel ? 'tr-why' : undefined} onClick={run}>
             {result ? 'Erneut testen' : 'Testlauf starten'}
           </Button>
         </>
@@ -255,8 +256,9 @@ export function StartDialog({ automationId, inputs, onClose, onStarted }: { auto
       title="Workflow jetzt starten"
       footer={
         <>
+          {!sel && <span id="st-why" className="mr-auto self-center text-meta text-fg-muted">Erst einen Auslöser wählen.</span>}
           <Button onClick={onClose}>Abbrechen</Button>
-          <Button variant="primary" icon="Play" loading={busy} disabled={!sel} onClick={start}>
+          <Button variant="primary" icon="Play" loading={busy} disabled={!sel} aria-describedby={!sel ? 'st-why' : undefined} onClick={start}>
             Starten
           </Button>
         </>

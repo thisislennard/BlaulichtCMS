@@ -7,6 +7,7 @@ import { Button, Chip, EmptyAction, EmptyLine, EmptyState, ErrorBox, FieldWrap, 
 import { FilterEmpty, ListToolbar, ResponsiveTable } from '../../components/ui/list';
 import { Icon } from '../../components/ui/Icon';
 import { Dialog, useErrorToast } from '../../components/ui/overlays';
+import { FormProblems, useFormCheck } from '../../components/ui/form';
 import { useAuth } from '../../lib/auth';
 import { fmtRelative, fmtWeekdayDateTime, plural } from '../../lib/format';
 import { useListState } from '../../lib/listState';
@@ -33,6 +34,7 @@ export function NewPostDialog({ onClose }: { onClose: () => void }) {
       setBusy(false);
     }
   };
+  const check = useFormCheck({ 'p-title': title.trim().length < 2 && 'Bitte einen Arbeitstitel angeben (mindestens 2 Zeichen).' });
   return (
     <Dialog
       open
@@ -41,14 +43,15 @@ export function NewPostDialog({ onClose }: { onClose: () => void }) {
       footer={
         <>
           <Button onClick={onClose}>Abbrechen</Button>
-          <Button variant="primary" icon="Plus" loading={busy} disabled={title.trim().length < 2} onClick={create}>
+          <Button variant="primary" icon="Plus" loading={busy} onClick={() => check.submit(create)}>
             Anlegen
           </Button>
         </>
       }
     >
-      <form className="flex flex-col gap-4" onSubmit={(e) => (e.preventDefault(), title.trim().length >= 2 && create())}>
-        <FieldWrap label="Arbeitstitel" required htmlFor="p-title">
+      <form className="flex flex-col gap-4" onSubmit={(e) => (e.preventDefault(), check.submit(create))}>
+        <FormProblems check={check} />
+        <FieldWrap label="Arbeitstitel" required htmlFor="p-title" error={check.error('p-title')}>
           <Input id="p-title" value={title} onChange={(e) => setTitle(e.target.value)} maxLength={200} placeholder="z. B. Übung am Wochenende" />
         </FieldWrap>
         {(tpls.data?.length ?? 0) > 0 && (

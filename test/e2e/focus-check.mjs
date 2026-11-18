@@ -138,6 +138,31 @@ async function checkFields(page, where, scope, seen) {
   }
 }
 
+/**
+ * Pflichtfelder (#268): Jedes sichtbare Sternchen (`data-required-mark`) gehört zu einem Feld mit aria-required="true";
+ * die rote Hauptaktion eines Dialogs ist nicht stumm gesperrt (gesperrt nur mit Beschreibung per aria-describedby).
+ */
+async function checkRequired(page, where, scope) {
+  const r = await page.evaluate((sel) => {
+    const root = sel ? [...document.querySelectorAll(sel)].pop() : document.querySelector('main');
+    if (!root) return { missing: [], silent: [] };
+    const missing = [];
+    for (const m of root.querySelectorAll('[data-required-mark]')) {
+      const label = m.closest('label');
+      if (!label || !label.getClientRects().length) continue;
+      const ctl = label.control ?? (label.htmlFor ? document.getElementById(label.htmlFor) : null);
+      if (!ctl || ctl.getAttribute('aria-required') !== 'true') missing.push(label.innerText.replace(/\s+/g, ' ').trim().slice(0, 60));
+    }
+    const silent = sel
+      ? [...root.querySelectorAll('button.bg-primary-solid[disabled]')].filter((b) => b.getClientRects().length && !b.getAttribute('aria-describedby') && !b.querySelector('.animate-spin')).map((b) => (b.innerText || b.getAttribute('aria-label') || '').trim().slice(0, 40))
+      : [];
+    return { missing, silent };
+  }, scope);
+  for (const f of r.missing) failures.push({ where, field: f, problem: 'Pflichtfeld ohne aria-required' });
+  for (const b of r.silent) failures.push({ where, field: b, problem: 'Hauptaktion ohne sichtbaren Grund gesperrt' });
+  if (r.missing.length || r.silent.length) console.log(`  ✘ ${where}: ${[...r.missing.map((x) => `Pflichtfeld „${x}“ ohne aria-required`), ...r.silent.map((x) => `„${x}“ stumm gesperrt`)].join('; ')}`);
+}
+
 /* ------------------------------------------ Dialoge ------------------------------------------ */
 
 const dialogOpen = (page) => page.locator('[role=dialog]').first().isVisible().catch(() => false);
@@ -209,6 +234,7 @@ async function afterClick(page, route, where, label, seen) {
   if (DEBUG) console.log(`    · Klick „${label}“ → ${(await dialogOpen(page)) ? 'Dialog' : new URL(page.url()).pathname}`);
   if (await dialogOpen(page)) {
     const title = (await page.locator('[role=dialog] h2').last().innerText().catch(() => '')).trim();
+    await checkRequired(page, `${where} › Dialog „${title || label}“`, '[role=dialog]');
     await checkFields(page, `${where} › Dialog „${title || label}“`, '[role=dialog]', new Set());
     await closeDialogs(page, route);
   } else {
@@ -265,6 +291,7 @@ async function scanRoute(page, route, opts = {}) {
 async function scanRouteInner(page, route, { buttons = true } = {}) {
   await gotoRoute(page, route);
   const seen = new Set();
+  await checkRequired(page, route, null);
   await checkFields(page, route, null, seen);
   if (!buttons) return;
   // Jeder Reiter der Seite ist ein eigener Ausgangszustand (Felder, Schaltflächen, Dialoge darin)
@@ -529,7 +556,7 @@ try {
   let n = 0;
   churn = setInterval(() => editor.post('/posts', { title: `Live-Ereignis ${++n}`, kind: 'news' }).catch(() => {}), 2000);
 
-  const routes = ['/', '/beitraege', `/beitraege/${post.id}`, `/beitraege/${sub.id}`, '/beitragsvorlagen', '/kalender', '/freigaben', '/medien', `/medien/${col.collection.id}`, '/medien/dateien', '/medien/papierkorb', '/medienverwaltung', '/upload-seite', ...(st.linkId ? [`/upload-seite?link=${st.linkId}`] : []), '/designvorlagen', ...(st.designTemplateId ? [`/designvorlagen/${st.designTemplateId}`] : []), ...(st.imageTemplateId ? [`/designvorlagen/${st.imageTemplateId}`, `/designvorlagen/${st.imageTemplateId}/editor`] : []), '/quellen', '/presse', '/presse/verteiler', '/presse/mitteilungen', '/presse/textbausteine', '/presse-postfach', ...(st.pressId ? [`/presse/${st.pressId}`] : []), '/banner', '/websites', '/warnungen', '/stichwoerter-regeln', ...(warn ? [`/warnungen/${warn.id}`] : []), '/verbindungen', ...(conn ? [`/verbindungen/${conn.id}`, `/verbindungen/${conn.id}?ansicht=empfangsprotokoll`] : []), ...(st.warnfeedId ? [`/verbindungen/${st.warnfeedId}`, `/verbindungen/${st.warnfeedId}?ansicht=empfangsprotokoll`] : []), ...(st.feuersoftwareId ? [`/verbindungen/${st.feuersoftwareId}`] : []), ...[st.threadsId, st.xApiId, st.whatsappId, st.mastodonId, st.blueskyId].filter(Boolean).map((x) => `/verbindungen/${x}`), '/amtliche-warnungen', '/reichweite', '/workflows', '/workflows/ausloeser', '/workflows/aktionen', ...(st.automationId ? [`/workflows/${st.automationId}`] : []), '/benutzer', '/system', '/protokolle', '/datenschutz-anfragen', '/einstellungen', '/profil', '/hilfe', '/hilfe/presse', '/aktivitaeten', '/benachrichtigungen'];
+  const routes = ['/', '/beitraege', `/beitraege/${post.id}`, `/beitraege/${sub.id}`, '/beitragsvorlagen', '/kalender', '/freigaben', '/medien', `/medien/${col.collection.id}`, '/medien/dateien', '/medien/papierkorb', '/medienverwaltung', '/upload-seite', ...(st.linkId ? [`/upload-seite?link=${st.linkId}`] : []), '/designvorlagen', ...(st.designTemplateId ? [`/designvorlagen/${st.designTemplateId}`] : []), ...(st.imageTemplateId ? [`/designvorlagen/${st.imageTemplateId}`, `/designvorlagen/${st.imageTemplateId}/editor`] : []), '/quellen', '/presse', '/presse/verteiler', '/presse/mitteilungen', '/presse/textbausteine', '/presse-postfach', ...(st.pressId ? [`/presse/${st.pressId}`] : []), '/banner', '/websites', '/warnungen', '/stichwoerter-regeln', ...(warn ? [`/warnungen/${warn.id}`] : []), '/verbindungen', ...(conn ? [`/verbindungen/${conn.id}`, `/verbindungen/${conn.id}?ansicht=empfangsprotokoll`] : []), ...(st.warnfeedId ? [`/verbindungen/${st.warnfeedId}`, `/verbindungen/${st.warnfeedId}?ansicht=empfangsprotokoll`] : []), ...(st.feuersoftwareId ? [`/verbindungen/${st.feuersoftwareId}`] : []), ...[st.threadsId, st.xApiId, st.whatsappId, st.mastodonId, st.blueskyId].filter(Boolean).map((x) => `/verbindungen/${x}`), '/amtliche-warnungen', '/reichweite', '/workflows', '/workflows/ausloeser', '/workflows/aktionen', ...(st.automationId ? [`/workflows/${st.automationId}`] : []), '/benutzer', '/system', '/protokolle', '/datenschutz-anfragen', '/einstellungen', ...['organisation', 'datenschutz', 'loeschfristen', 'medien', 'redaktion', 'e-mail', 'sicherheit', 'sicherung', 'updates', 'workflows', 'system'].map((x) => `/einstellungen/${x}`), '/profil', '/hilfe', '/hilfe/presse', '/aktivitaeten', '/benachrichtigungen'];
   // Freigabe-Ansicht aus der Push-Mitteilung (#216)
   routes.splice(4, 0, `/freigabe/beitrag/${sub.id}?fassung=2`);
   for (const r of routes) await scanRoute(page, r);

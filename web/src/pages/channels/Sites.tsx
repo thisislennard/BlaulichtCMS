@@ -290,7 +290,8 @@ function BridgeUpdates() {
             }>
               <Input id="br-note" value={note} onChange={(e) => setNote(e.target.value)} />
             </FieldWrap>
-            <Button variant="primary" icon="CheckCircle2" disabled={note.trim().length < 5} onClick={() => act(() => post('/sites/bridge-release', { version: bundled.version, note }))}>
+            {note.trim().length < 5 && <span id="br-why" className="self-center text-meta text-fg-muted">Erst eine Prüfnotiz eintragen (mindestens 5 Zeichen).</span>}
+            <Button variant="primary" icon="CheckCircle2" disabled={note.trim().length < 5} aria-describedby={note.trim().length < 5 ? 'br-why' : undefined} onClick={() => act(() => post('/sites/bridge-release', { version: bundled.version, note }))}>
               Version {bundled.version} für alle freigeben
             </Button>
           </div>

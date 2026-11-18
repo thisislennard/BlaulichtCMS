@@ -8,6 +8,7 @@ import { FilterEmpty, ListToolbar, ResponsiveTable } from '../../components/ui/l
 import { Icon } from '../../components/ui/Icon';
 import { HelpTip } from '../../components/ui/HelpTip';
 import { Dialog, Menu, useConfirm, useErrorToast, useToast } from '../../components/ui/overlays';
+import { FormProblems, useFormCheck } from '../../components/ui/form';
 import { KeywordMeaning } from '../../components/KeywordMeaning';
 import { useAuth } from '../../lib/auth';
 import { useLinkedItem } from '../../lib/linked-item';
@@ -141,6 +142,11 @@ function EntryDialog({ entry, cfg, onClose }: { entry: Entry | null; cfg: Config
     }
   };
   const sites = cfg.sites.filter((s) => s.status === 'active' || s.id === v.siteId);
+  // Prüfen statt sperren (#268)
+  const check = useFormCheck({
+    'i-at': !v.alarmAt && 'Bitte die Alarmzeit angeben.',
+    'i-title': v.title.trim().length < 2 && 'Bitte die Einsatzmeldung angeben (mindestens 2 Zeichen).',
+  });
   return (
     <Dialog
       open
@@ -150,16 +156,17 @@ function EntryDialog({ entry, cfg, onClose }: { entry: Entry | null; cfg: Config
       footer={
         <>
           <Button onClick={() => onClose(false)}>Abbrechen</Button>
-          <Button variant="primary" loading={busy} disabled={v.title.trim().length < 2 || !v.alarmAt} onClick={save}>
+          <Button variant="primary" loading={busy} onClick={() => check.submit(save)}>
             Speichern
           </Button>
         </>
       }
     >
       <div className="flex flex-col gap-4">
+        <FormProblems check={check} />
         <Notice icon="ShieldCheck">Öffentlich sichtbar: keine Adressen, keine Namen, keine Kennzeichen. Der Ort nur als Ortsteil bzw. Gemeinde.</Notice>
         <div className="grid sm:grid-cols-3 gap-4">
-          <FieldWrap label="Alarmzeit" required htmlFor="i-at" className="sm:col-span-2">
+          <FieldWrap label="Alarmzeit" required htmlFor="i-at" className="sm:col-span-2" error={check.error('i-at')}>
             <Input id="i-at" type="datetime-local" value={v.alarmAt} onChange={(e) => set({ alarmAt: e.target.value })} />
           </FieldWrap>
           <FieldWrap label="Lfd. Nr." htmlFor="i-nr" help="Leer = nach Alarmzeit gezählt">
@@ -175,7 +182,7 @@ function EntryDialog({ entry, cfg, onClose }: { entry: Entry | null; cfg: Config
             <Input id="i-cat" value={v.category} onChange={(e) => set({ category: e.target.value })} maxLength={60} />
           </FieldWrap>
         </div>
-        <FieldWrap label="Einsatzmeldung" required htmlFor="i-title">
+        <FieldWrap label="Einsatzmeldung" required htmlFor="i-title" error={check.error('i-title')}>
           <Input id="i-title" value={v.title} onChange={(e) => set({ title: e.target.value })} maxLength={200} placeholder="z. B. Kaminbrand" />
         </FieldWrap>
         <div className="grid sm:grid-cols-2 gap-4">
@@ -301,11 +308,12 @@ function ImportDialog({ cfg, onClose }: { cfg: Config; onClose: (done: boolean) 
       title="Einsätze importieren (CSV)"
       footer={
         <>
+          {(!res || !res.total || res.total === res.duplicates) && <span id="ii-why" className="mr-auto self-center text-meta text-fg-muted">{!csv ? 'Erst eine CSV-Datei wählen oder Zeilen einfügen.' : !res ? 'Erst „Prüfen“.' : 'Keine neuen Einträge zum Importieren.'}</span>}
           <Button onClick={() => onClose(false)}>Abbrechen</Button>
           <Button disabled={!csv} loading={busy && !res} onClick={() => run(true)}>
             Prüfen
           </Button>
-          <Button variant="primary" disabled={!res || !res.total || res.total === res.duplicates} loading={busy && !!res} onClick={() => run(false)}>
+          <Button variant="primary" disabled={!res || !res.total || res.total === res.duplicates} aria-describedby={!res || !res.total || res.total === res.duplicates ? 'ii-why' : undefined} loading={busy && !!res} onClick={() => run(false)}>
             {res ? `${res.total - res.duplicates} importieren` : 'Importieren'}
           </Button>
         </>
@@ -485,8 +493,9 @@ function PrivacyConfirmDialog({ entry, action, onClose, onDone }: { entry: Entry
       title={action === 'approve' ? 'Eintrag freigeben' : 'Auf der Website veröffentlichen'}
       footer={
         <>
+          {checks.some((c) => !c) && <span id="ip-why" className="mr-auto self-center text-meta text-fg-muted">Erst alle Punkte der Datenschutz-Prüfung bestätigen.</span>}
           <Button onClick={onClose}>Abbrechen</Button>
-          <Button variant="primary" loading={busy} disabled={checks.some((c) => !c)} onClick={submit}>
+          <Button variant="primary" loading={busy} disabled={checks.some((c) => !c)} aria-describedby={checks.some((c) => !c) ? 'ip-why' : undefined} onClick={submit}>
             {action === 'approve' ? 'Freigeben' : 'Veröffentlichen'}
           </Button>
         </>

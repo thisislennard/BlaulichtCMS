@@ -193,9 +193,14 @@ export function ImageFillDialog({ templateId: initial, postId, onClose, onDone }
               Andere Bildvorlage
             </Button>
           )}
+          {layout && missing.length > 0 && (
+            <span id="if-why" className="self-center text-meta text-fg-muted">
+              Noch nötig: {missing.map((e) => e.label).join(', ')}
+            </span>
+          )}
           <Button onClick={onClose}>Abbrechen</Button>
           {layout && (
-            <Button variant="primary" icon="ImageUp" loading={busy} disabled={missing.length > 0} onClick={generate}>
+            <Button variant="primary" icon="ImageUp" loading={busy} disabled={missing.length > 0} aria-describedby={missing.length > 0 ? 'if-why' : undefined} onClick={generate}>
               Bild erzeugen
             </Button>
           )}

@@ -14,6 +14,7 @@ import {
   SkeletonRows,
 } from "../components/ui/core";
 import { CopyButton, Dialog, useErrorToast, useToast } from "../components/ui/overlays";
+import { FormProblems, useFormCheck } from "../components/ui/form";
 import { Icon } from "../components/ui/Icon";
 import { t } from "../i18n";
 import { useAuth } from "../lib/auth";
@@ -659,8 +660,12 @@ function RenewRecoveryDialog({ onClose }: { onClose: () => void }) {
   const [codes, setCodes] = useState<string[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const submit = async (e: FormEvent) => {
+  const check = useFormCheck({ "rc-pw": !pw && "Bitte das Passwort eingeben.", "rc-code": code.replace(/\s/g, "").length < 6 && "Bitte den sechsstelligen Code eingeben." });
+  const submit = (e: FormEvent) => {
     e.preventDefault();
+    check.submit(send);
+  };
+  const send = async () => {
     setBusy(true);
     setError(null);
     try {
@@ -693,7 +698,7 @@ function RenewRecoveryDialog({ onClose }: { onClose: () => void }) {
         ) : (
           <>
             <Button onClick={onClose}>Abbrechen</Button>
-            <Button type="submit" form="renew-form" variant="primary" loading={busy} disabled={!pw || code.replace(/\s/g, "").length < 6}>
+            <Button type="submit" form="renew-form" variant="primary" loading={busy}>
               Neue Codes erzeugen
             </Button>
           </>
@@ -716,10 +721,11 @@ function RenewRecoveryDialog({ onClose }: { onClose: () => void }) {
       ) : (
         <form id="renew-form" onSubmit={submit} className="flex flex-col gap-4">
           <p className="m-0 text-sm text-fg-muted">Alle bisherigen Wiederherstellungscodes werden dabei ungültig.</p>
-          <FieldWrap label="Passwort" required htmlFor="rc-pw">
+          <FormProblems check={check} />
+          <FieldWrap label="Passwort" required htmlFor="rc-pw" error={check.error("rc-pw")}>
             <Input id="rc-pw" type="password" autoComplete="current-password" value={pw} onChange={(e) => setPw(e.target.value)} autoFocus />
           </FieldWrap>
-          <FieldWrap label="Aktueller Code aus der Authenticator-App" required htmlFor="rc-code">
+          <FieldWrap label="Aktueller Code aus der Authenticator-App" required htmlFor="rc-code" error={check.error("rc-code")}>
             <Input id="rc-code" mono inputMode="numeric" autoComplete="one-time-code" placeholder="123456" value={code} onChange={(e) => setCode(e.target.value)} />
           </FieldWrap>
           {error && <p role="alert" className="m-0 text-sm text-err">{error}</p>}

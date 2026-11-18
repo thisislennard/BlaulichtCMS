@@ -4,6 +4,7 @@ import { Link } from 'react-router';
 import { get, post, put } from '../../api/client';
 import { Badge, Button, Card, ErrorBox, FieldWrap, Input, Notice, SegmentedControl, Select, SkeletonRows, Switch, Table, Td, Th, EmptyLine } from '../../components/ui/core';
 import { SecretField, useErrorToast, useToast } from '../../components/ui/overlays';
+import { SaveBar } from '../../components/ui/form';
 import { fmtDateTime, fmtRelative, plural } from '../../lib/format';
 
 interface MailboxResponse {
@@ -38,6 +39,7 @@ export function MailboxSettings() {
   const [password, setPassword] = useState('');
   const [test, setTest] = useState<{ ok: boolean; text: string } | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [savedAt, setSavedAt] = useState<number | null>(null);
   useEffect(() => {
     if (q.data && !v) setV(q.data.config);
   }, [q.data, v]);
@@ -68,6 +70,7 @@ export function MailboxSettings() {
       setV(r.config);
       setPassword('');
       toast({ tone: 'success', title: enabled ? 'Abruf eingeschaltet' : 'Gespeichert' });
+      setSavedAt(Date.now());
       refresh();
     });
   const s = q.data!.state;
@@ -156,9 +159,6 @@ export function MailboxSettings() {
             >
               Verbindung testen
             </Button>
-            <Button loading={busy === 'save'} onClick={() => save(v.enabled)}>
-              Speichern
-            </Button>
             {v.enabled && (
               <Button icon="RefreshCw" loading={busy === 'poll'} onClick={() => run('poll', async () => {
                 const r = await post<{ imported?: number; skipped?: number; more?: boolean; error?: string }>('/press/mailbox/poll');
@@ -178,6 +178,14 @@ export function MailboxSettings() {
           />
         </div>
       </Card>
+      {/* Eine Speichern-Leiste für die Angaben zum Postfach (#268); „Abruf eingeschaltet“ schaltet sofort */}
+      <SaveBar
+        dirty={JSON.stringify(v) !== JSON.stringify(q.data!.config) || !!password}
+        saving={busy === 'save'}
+        onSave={() => save(v.enabled)}
+        onDiscard={() => (setV(q.data!.config), setPassword(''), setTest(null))}
+        savedAt={savedAt}
+      />
       <Card title="Empfangsprotokoll" subtitle={`Jede abgerufene Mail mit Entscheidung – ${q.data!.retentionDays} Tage aufbewahrt (Einstellungen → Löschfristen → Empfangsprotokoll).`}>
         {logs.data && !logs.data.length ? (
           <EmptyLine>Noch nichts abgerufen.</EmptyLine>

@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { del, get, post, put } from '../../api/client';
 import { Badge, Button, cx, FieldWrap, Input, Notice, Select, Spinner, Switch, EmptyLine } from '../../components/ui/core';
 import { CopyButton, Dialog, OneTimeSecret, useConfirm, useErrorToast, useToast } from '../../components/ui/overlays';
+import { FormProblems, useFormCheck } from '../../components/ui/form';
 import { HelpTip } from '../../components/ui/HelpTip';
 import { Icon } from '../../components/ui/Icon';
 import { fmtDateTime, fmtRelative, plural } from '../../lib/format';
@@ -82,6 +83,7 @@ function SourceForm({ source, categories, onDone, onCancel }: { source?: Source;
       setBusy(null);
     }
   };
+  const check = useFormCheck({ 'src-name': !name.trim() && 'Bitte einen Namen angeben.' });
   return (
     <div className="flex flex-col gap-3 border border-line rounded-node p-3">
       <FieldWrap
@@ -138,7 +140,7 @@ function SourceForm({ source, categories, onDone, onCancel }: { source?: Source;
         </div>
       )}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <FieldWrap label="Name" htmlFor="src-name" required>
+        <FieldWrap label="Name" htmlFor="src-name" required error={check.error('src-name')}>
           <Input id="src-name" value={name} maxLength={120} onChange={(e) => setName(e.target.value)} placeholder="z. B. Wehr-Kalender" />
         </FieldWrap>
         <FieldWrap label="Kategorie" htmlFor="src-cat" help="Gilt für alle Termine der Quelle.">
@@ -161,11 +163,13 @@ function SourceForm({ source, categories, onDone, onCancel }: { source?: Source;
           </Select>
         </FieldWrap>
       </div>
-      <div className="flex justify-end gap-2">
+      <FormProblems check={check} />
+      <div className="flex justify-end flex-wrap gap-2">
+        {!tested && <span id="src-why" className="mr-auto self-center text-meta text-fg-muted">Erst die Verbindung testen – gespeichert wird nur eine Adresse, die geantwortet hat.</span>}
         <Button variant="ghost" onClick={onCancel}>
           Abbrechen
         </Button>
-        <Button variant="primary" loading={busy === 'save'} disabled={!name.trim() || !tested} onClick={save} title={!tested ? 'Erst die Verbindung testen' : undefined}>
+        <Button variant="primary" loading={busy === 'save'} disabled={!tested} aria-describedby={!tested ? 'src-why' : undefined} onClick={() => check.submit(save)}>
           {source ? 'Speichern' : 'Kalender hinzufügen'}
         </Button>
       </div>

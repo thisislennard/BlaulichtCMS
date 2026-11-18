@@ -5,6 +5,7 @@ import { del, post, put } from '../../api/client';
 import { Button, Card, Chip, EmptyState, ErrorBox, FieldWrap, Input, Notice, PageHeader, Select, SkeletonRows, Switch } from '../../components/ui/core';
 import { Icon } from '../../components/ui/Icon';
 import { Dialog, useConfirm, useErrorToast, useToast } from '../../components/ui/overlays';
+import { FormProblems, useFormCheck } from '../../components/ui/form';
 import { useAuth } from '../../lib/auth';
 import { fmtDateTime } from '../../lib/format';
 import { BannerPreview, DISPLAY_OPTIONS } from '../banners/Banners';
@@ -60,6 +61,7 @@ export function OutputDialog({ output, kind, cat, onClose, preset }: { output: O
   };
   const previewTone = c.tone === 'auto' ? 'danger' : c.tone;
   const strip = (s: string) => String(s ?? '').replace(/\{\{\s*([a-z0-9_]+)\s*\}\}/g, '[$1]');
+  const check = useFormCheck({ 'o-name': name.trim().length < 2 && 'Bitte einen Namen angeben (mindestens 2 Zeichen).' });
   return (
     <Dialog
       open
@@ -69,15 +71,16 @@ export function OutputDialog({ output, kind, cat, onClose, preset }: { output: O
       footer={
         <>
           <Button onClick={() => onClose(false)}>Abbrechen</Button>
-          <Button variant="primary" loading={busy} disabled={name.trim().length < 2} onClick={save}>
+          <Button variant="primary" loading={busy} onClick={() => check.submit(save)}>
             Speichern
           </Button>
         </>
       }
     >
       <div className="flex flex-col gap-4">
+        <FormProblems check={check} />
         <p className="m-0 text-sm text-fg-muted">{def.description}</p>
-        <FieldWrap label="Name" htmlFor="o-name" required help="So erscheint die Aktion in der Palette des Editors.">
+        <FieldWrap label="Name" htmlFor="o-name" required error={check.error('o-name')} help="So erscheint die Aktion in der Palette des Editors.">
           <Input id="o-name" value={name} maxLength={120} onChange={(e) => setName(e.target.value)} />
         </FieldWrap>
         <Notice icon="Braces">

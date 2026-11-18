@@ -392,7 +392,12 @@ function PasswordGate({ token, organization, onUnlocked }: { token: string; orga
           {error}
         </p>
       )}
-      <Button type="submit" variant="primary" icon="LockOpen" className="!h-12" loading={busy} disabled={!pw}>
+      {!pw && (
+        <span id="pw-why" className="sr-only">
+          Erst das Passwort eingeben.
+        </span>
+      )}
+      <Button type="submit" variant="primary" icon="LockOpen" className="!h-12" loading={busy} disabled={!pw} aria-describedby={!pw ? 'pw-why' : undefined}>
         Weiter
       </Button>
     </form>

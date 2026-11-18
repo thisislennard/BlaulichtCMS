@@ -4,6 +4,7 @@ import { get, patch, post, put } from '../../api/client';
 import { Button, Chip, FieldWrap, Input, Notice, Select } from '../../components/ui/core';
 import { Icon } from '../../components/ui/Icon';
 import { Dialog, Menu, useConfirm, useErrorToast, useToast } from '../../components/ui/overlays';
+import { FormProblems, useFormCheck } from '../../components/ui/form';
 import { plural } from '../../lib/format';
 
 export interface Folder {
@@ -169,10 +170,11 @@ function FolderNameDialog({ collectionId, folder, parent, onClose, onSaved }: { 
       setBusy(false);
     }
   };
+  const check = useFormCheck({ 'fd-name': !name.trim() && 'Bitte einen Namen angeben.' });
   return (
-    <Dialog open onClose={onClose} title={folder ? 'Ordner umbenennen' : 'Neuer Ordner'} width={440} footer={<><Button onClick={onClose}>Abbrechen</Button><Button variant="primary" loading={busy} disabled={!name.trim()} onClick={save}>Speichern</Button></>}>
-      <FieldWrap label="Name" htmlFor="fd-name" required>
-        <Input id="fd-name" value={name} maxLength={80} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && name.trim() && void save()} />
+    <Dialog open onClose={onClose} title={folder ? 'Ordner umbenennen' : 'Neuer Ordner'} width={440} footer={<><Button onClick={onClose}>Abbrechen</Button><Button variant="primary" loading={busy} onClick={() => check.submit(save)}>Speichern</Button></>}>
+      <FieldWrap label="Name" htmlFor="fd-name" required error={check.error('fd-name')}>
+        <Input id="fd-name" value={name} maxLength={80} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && check.submit(save)} />
       </FieldWrap>
     </Dialog>
   );

@@ -4,7 +4,8 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, get, put } from '../../api/client';
 import { Button, Card, cx, ErrorBox, FieldWrap, FilePickButton, Input, Notice, PageHeader, SegmentedControl, Select, SkeletonRows, Switch, Textarea } from '../../components/ui/core';
 import { Icon } from '../../components/ui/Icon';
-import { UnsavedChangesGuard, useConfirm, useErrorToast, useToast } from '../../components/ui/overlays';
+import { useConfirm, useErrorToast, useToast } from '../../components/ui/overlays';
+import { SaveBar } from '../../components/ui/form';
 import { useAuth } from '../../lib/auth';
 import { DesignedPage, type DesignBlock, type UploadDesign } from '../public/DesignedPage';
 import type { LinkInfo } from '../public/UploadPage';
@@ -172,6 +173,7 @@ export default function DesignEditor() {
   const [addType, setAddType] = useState('heading');
   const [busy, setBusy] = useState(false);
   const [dirty, setDirty] = useState(false);
+  const [savedAt, setSavedAt] = useState<number | null>(null);
   useEffect(() => {
     if (!q.data) return;
     setDesign(structuredClone(linkId ? (q.data.own ?? q.data.default) : q.data.design));
@@ -214,6 +216,7 @@ export default function DesignEditor() {
       await put(linkId ? `/upload-links/${linkId}/design` : '/media/design', { design: value });
       toast({ tone: 'success', title: 'Gestaltung gespeichert' });
       setDirty(false);
+      setSavedAt(Date.now());
       qc.invalidateQueries({ queryKey: ['design'] });
     } catch (e) {
       toastError(e);
@@ -227,7 +230,6 @@ export default function DesignEditor() {
   const d = design!;
   return (
     <div className="flex flex-col gap-5">
-      <UnsavedChangesGuard when={dirty} />
       <PageHeader
         subtitle={linkId ? `${q.data.link.title}${q.data.link.label ? ` · ${q.data.link.label}` : ''}` : 'Standard für alle Upload-Links ohne eigene Gestaltung.'}
         actions={
@@ -244,9 +246,12 @@ export default function DesignEditor() {
                   Standard verwenden
                 </Button>
               )}
-              <Button variant="primary" icon="Save" loading={busy} disabled={!dirty && (own || !linkId)} onClick={() => void save(d)}>
-                Speichern
-              </Button>
+              {/* Link mit Standardgestaltung: unverändert als eigene Gestaltung übernehmen; sonst speichert die Leiste unten */}
+              {linkId && !own && !dirty && (
+                <Button icon="Save" loading={busy} onClick={() => void save(d)}>
+                  Als eigene Gestaltung speichern
+                </Button>
+              )}
             </>
           )
         }
@@ -334,6 +339,19 @@ export default function DesignEditor() {
           <p className="m-0 text-meta text-fg-muted">Die Vorschau nutzt Beispieldaten; Datenschutzangaben kommen auf der echten Seite aus Einstellungen → Datenschutz & Recht.</p>
         </div>
       </div>
+      {/* Eine Speichern-Leiste (#268) */}
+      {canSave && (
+        <SaveBar
+          dirty={dirty}
+          saving={busy}
+          onSave={() => void save(d)}
+          onDiscard={() => {
+            setDesign(structuredClone(linkId ? (q.data.own ?? q.data.default) : q.data.design));
+            setDirty(false);
+          }}
+          savedAt={savedAt}
+        />
+      )}
     </div>
   );
 }

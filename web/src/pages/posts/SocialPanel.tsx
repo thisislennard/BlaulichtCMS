@@ -5,6 +5,7 @@ import { get, post } from '../../api/client';
 import { Badge, Button, Card, Chip, FieldWrap, Input, Notice, Rev, Select, SkeletonRows, StatusBadge, Textarea } from '../../components/ui/core';
 import { HelpTip } from '../../components/ui/HelpTip';
 import { CopyButton, Dialog, useErrorToast, useToast } from '../../components/ui/overlays';
+import { FormProblems, useFormCheck } from '../../components/ui/form';
 import { useAuth } from '../../lib/auth';
 import { fmtDateTime, plural } from '../../lib/format';
 import { BLUESKY_MAX, blueskyLength, mastodonLength, SOCIAL_KINDS, SOCIAL_LABEL, STORY_KINDS, threadsLength, xLength, type SocialKind } from '../../lib/social';
@@ -342,6 +343,7 @@ function ShareDialog({ item, onClose }: { item: any; onClose: (changed: boolean)
     }
   };
   const isX = item.kind === 'x';
+  const check = useFormCheck({ 'share-url': !!url.trim() && !/^https:\/\/\S+$/.test(url.trim()) && 'Bitte eine vollständige https-Adresse eintragen oder das Feld leer lassen.' });
   return (
     <Dialog
       open
@@ -351,7 +353,7 @@ function ShareDialog({ item, onClose }: { item: any; onClose: (changed: boolean)
       footer={
         <>
           <Button onClick={() => onClose(false)}>Schließen</Button>
-          <Button variant="primary" icon="Check" loading={busy} disabled={!d || (!!url.trim() && !/^https:\/\/\S+$/.test(url.trim()))} onClick={mark}>
+          <Button variant="primary" icon="Check" loading={busy || !d} onClick={() => check.submit(mark)}>
             Als geteilt markieren
           </Button>
         </>
@@ -392,7 +394,7 @@ function ShareDialog({ item, onClose }: { item: any; onClose: (changed: boolean)
               </ul>
             </div>
           )}
-          <FieldWrap label="Link zum geteilten Beitrag (optional)" htmlFor="share-url" help="Nur https-Adressen. Erscheint im Verlauf des Beitrags.">
+          <FieldWrap label="Link zum geteilten Beitrag (optional)" htmlFor="share-url" error={check.error('share-url')} help="Nur https-Adressen. Erscheint im Verlauf des Beitrags.">
             <Input id="share-url" type="url" value={url} onChange={(e) => setUrl(e.target.value)} maxLength={500} />
           </FieldWrap>
         </div>

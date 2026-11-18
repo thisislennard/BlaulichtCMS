@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { get, patch, post } from '../../api/client';
 import { Badge, Button, FieldWrap, Input, Select, Textarea, type Tone } from '../../components/ui/core';
 import { Dialog, useErrorToast } from '../../components/ui/overlays';
+import { FormProblems, useFormCheck } from '../../components/ui/form';
 import { fromLocalInput, toLocalInput } from '../../lib/format';
 
 /** Presseanfragen (#204): gemeinsame Typen, Beschriftungen und der Dialog zum Erfassen/Bearbeiten. */
@@ -91,6 +92,7 @@ export function RequestDialog({ request, onClose }: { request?: PressRequest; on
       setBusy(false);
     }
   };
+  const check = useFormCheck({ 'pr-topic': v.topic.trim().length < 2 && 'Bitte das Thema angeben (mindestens 2 Zeichen).' });
   return (
     <Dialog
       open
@@ -100,14 +102,15 @@ export function RequestDialog({ request, onClose }: { request?: PressRequest; on
       footer={
         <>
           <Button onClick={() => onClose()}>Abbrechen</Button>
-          <Button variant="primary" loading={busy} disabled={v.topic.trim().length < 2} onClick={save}>
+          <Button variant="primary" loading={busy} onClick={() => check.submit(save)}>
             {request ? 'Speichern' : 'Anfrage anlegen'}
           </Button>
         </>
       }
     >
       <div className="flex flex-col gap-4">
-        <FieldWrap label="Thema" required htmlFor="pr-topic">
+        <FormProblems check={check} />
+        <FieldWrap label="Thema" required htmlFor="pr-topic" error={check.error('pr-topic')}>
           <Input id="pr-topic" value={v.topic} maxLength={300} onChange={(e) => set({ topic: e.target.value })} placeholder="z. B. Brand in der Lagerhalle" />
         </FieldWrap>
         <FieldWrap label="Anfrage" htmlFor="pr-body" help="Was genau wird gefragt? Bei Anrufen: Stichpunkte zum Gespräch.">

@@ -4,6 +4,7 @@ import { del, get, post } from '../../api/client';
 import { Badge, Button, Card, cx, FieldWrap, Input, Notice, Select, Textarea, type Tone } from '../../components/ui/core';
 import { Icon } from '../../components/ui/Icon';
 import { Dialog, useConfirm, useErrorToast, useToast } from '../../components/ui/overlays';
+import { FormProblems, useFormCheck } from '../../components/ui/form';
 import { useAuth } from '../../lib/auth';
 import { useLinkedItem } from '../../lib/linked-item';
 import { fmtBytes, fmtDateTime, plural } from '../../lib/format';
@@ -225,13 +226,15 @@ function RecordAnswer({ request, onDone, onCancel }: { request: PressRequest; on
       setBusy(false);
     }
   };
+  const check = useFormCheck({ 'ra-text': !text.trim() && 'Bitte festhalten, was geantwortet wurde.' });
   return (
     <div className="flex flex-col gap-3 border-t border-line pt-4">
-      <FieldWrap label="Was wurde geantwortet?" required htmlFor="ra-text" help={`Kurz festhalten, was ${request.channel === 'phone' ? 'am Telefon' : 'vor Ort'} gesagt wurde. Steht im Verlauf; der Status wird „Beantwortet“.`}>
+      <FormProblems check={check} />
+      <FieldWrap label="Was wurde geantwortet?" required htmlFor="ra-text" error={check.error('ra-text')} help={`Kurz festhalten, was ${request.channel === 'phone' ? 'am Telefon' : 'vor Ort'} gesagt wurde. Steht im Verlauf; der Status wird „Beantwortet“.`}>
         <Textarea id="ra-text" rows={4} value={text} maxLength={5000} onChange={(e) => setText(e.target.value)} />
       </FieldWrap>
       <div className="flex flex-wrap gap-2">
-        <Button variant="primary" icon="Check" loading={busy} disabled={!text.trim()} onClick={save}>
+        <Button variant="primary" icon="Check" loading={busy} onClick={() => check.submit(save)}>
           Antwort festhalten
         </Button>
         <Button onClick={onCancel}>Abbrechen</Button>
@@ -290,17 +293,23 @@ function ReplyEditor({ request, approval, onDone }: { request: PressRequest; app
       setBusy(false);
     }
   };
+  const check = useFormCheck({
+    'rp-to': !list(to).length && 'Bitte mindestens eine Empfängeradresse angeben.',
+    'rp-subject': subject.trim().length < 2 && 'Bitte einen Betreff angeben (mindestens 2 Zeichen).',
+    'rp-body': !body.trim() && 'Bitte den Text der Antwort schreiben.',
+  });
   return (
     <div className="flex flex-col gap-3 border-t border-line pt-4">
+      <FormProblems check={check} />
       <div className="grid sm:grid-cols-2 gap-3">
-        <FieldWrap label="An" required htmlFor="rp-to">
+        <FieldWrap label="An" required htmlFor="rp-to" error={check.error('rp-to')}>
           <Input id="rp-to" type="text" inputMode="email" value={to} onChange={(e) => setTo(e.target.value)} />
         </FieldWrap>
         <FieldWrap label="Kopie an" htmlFor="rp-cc" help="Mehrere Adressen mit Komma trennen.">
           <Input id="rp-cc" type="text" inputMode="email" value={cc} onChange={(e) => setCc(e.target.value)} />
         </FieldWrap>
       </div>
-      <FieldWrap label="Betreff" required htmlFor="rp-subject" help={`Die Vorgangsnummer [${request.case_no}] wird angehängt – so landen Rückfragen bei dieser Anfrage.`}>
+      <FieldWrap label="Betreff" required htmlFor="rp-subject" error={check.error('rp-subject')} help={`Die Vorgangsnummer [${request.case_no}] wird angehängt – so landen Rückfragen bei dieser Anfrage.`}>
         <Input id="rp-subject" value={subject} maxLength={300} onChange={(e) => setSubject(e.target.value)} />
       </FieldWrap>
       {!!snippets.data?.length && (
@@ -322,12 +331,12 @@ function ReplyEditor({ request, approval, onDone }: { request: PressRequest; app
           </Select>
         </FieldWrap>
       )}
-      <FieldWrap label="Text" required htmlFor="rp-body">
+      <FieldWrap label="Text" required htmlFor="rp-body" error={check.error('rp-body')}>
         <Textarea id="rp-body" rows={10} value={body} maxLength={50000} onChange={(e) => setBody(e.target.value)} />
       </FieldWrap>
       {approval && <Notice>Antworten werden vor dem Versand von einer zweiten Person freigegeben (Einstellungen → Redaktion & Freigabe).</Notice>}
       <div className="flex flex-wrap gap-2">
-        <Button variant="primary" icon="Send" loading={busy} disabled={!list(to).length || subject.trim().length < 2 || !body.trim()} onClick={send}>
+        <Button variant="primary" icon="Send" loading={busy} onClick={() => check.submit(send)}>
           {approval ? 'Zur Freigabe einreichen' : 'Senden'}
         </Button>
         <Button onClick={() => setOpen(false)}>Abbrechen</Button>

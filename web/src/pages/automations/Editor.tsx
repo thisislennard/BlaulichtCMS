@@ -26,7 +26,8 @@ import { Graph as DagreGraph, layout as dagreLayout } from '@dagrejs/dagre';
 import { del, get, post, put } from '../../api/client';
 import { Badge, Button, Card, cx, ErrorBox, FieldWrap, Input, Notice, PageHeader, SegmentedControl, Select, SkeletonRows, Textarea } from '../../components/ui/core';
 import { Icon } from '../../components/ui/Icon';
-import { Dialog, Menu, UnsavedChangesGuard, useConfirm, useErrorToast, useToast } from '../../components/ui/overlays';
+import { Dialog, Menu, useConfirm, useErrorToast, useToast } from '../../components/ui/overlays';
+import { FormProblems, SaveBar, useFormCheck } from '../../components/ui/form';
 import { usePageMeta } from '../../components/layout/AppShell';
 import { useAuth } from '../../lib/auth';
 import { fmtDateTime } from '../../lib/format';
@@ -409,6 +410,7 @@ function EditorInner({ a, cat, inputs, outputs }: { a: AutomationDetail; cat: Ca
   const [dialog, setDialog] = useState<null | 'test' | 'start' | 'meta' | 'direct'>(null);
   const [runId, setRunId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [savedAt, setSavedAt] = useState<number | null>(null);
   const past = useRef<string[]>([]);
   const future = useRef<string[]>([]);
   const lastRecord = useRef(0);
@@ -599,6 +601,7 @@ function EditorInner({ a, cat, inputs, outputs }: { a: AutomationDetail; cat: Ca
       setValidation({ ...r.validation, summary: r.summary });
       qc.setQueryData(['automation', a.id], (old: AutomationDetail | undefined) => (old ? { ...old, ...r, graph } : old));
       qc.invalidateQueries({ queryKey: ['automations'] });
+      setSavedAt(Date.now());
       toast({ tone: 'success', title: 'Gespeichert', text: r.validation.ok ? 'Für das Aktivieren ist ein erfolgreicher Testlauf nötig.' : 'Der Ablauf hat noch Fehler (siehe Prüfung).' });
       return true;
     } catch (e) {
@@ -733,17 +736,11 @@ function EditorInner({ a, cat, inputs, outputs }: { a: AutomationDetail; cat: Ca
   return (
     <EditorCtx.Provider value={ctx}>
       <div className="flex flex-col gap-4 w-full max-w-[1920px] mx-auto px-4 md:px-6 pt-8 pb-14" onKeyDown={onKey}>
-        <UnsavedChangesGuard when={dirty && !readOnly} text="Der Ablauf hat ungespeicherte Änderungen. Beim Verlassen gehen sie verloren." />
         <PageHeader
           title={meta.name}
           subtitle={meta.description || undefined}
           actions={
             <>
-              {!readOnly && (
-                <Button variant={dirty ? 'primary' : 'secondary'} icon="Save" loading={saving} disabled={!dirty} onClick={save}>
-                  Speichern
-                </Button>
-              )}
               {!readOnly && (
                 <Button icon="FlaskConical" disabled={!validation.ok} title={validation.ok ? 'Entwurf mit Beispieldaten testen' : 'Erst die Fehler beheben'} onClick={openTest}>
                   Testlauf
@@ -970,6 +967,8 @@ function EditorInner({ a, cat, inputs, outputs }: { a: AutomationDetail; cat: Ca
           </aside>
         </div>
         )}
+        {/* Eine Speichern-Leiste (#268): schwebt unten, sobald der Ablauf Änderungen hat; Strg+S speichert ebenfalls */}
+        {!readOnly && <SaveBar dirty={dirty} saving={saving} onSave={() => void save()} savedAt={savedAt} guardText="Der Ablauf hat ungespeicherte Änderungen. Beim Verlassen gehen sie verloren." />}
       </div>
 
       {dialog === 'test' && (
@@ -999,6 +998,7 @@ function EditorInner({ a, cat, inputs, outputs }: { a: AutomationDetail; cat: Ca
 
 function MetaDialog({ value, onClose, onSave }: { value: { name: string; description: string }; onClose: () => void; onSave: (v: { name: string; description: string }) => void }) {
   const [v, setV] = useState(value);
+  const check = useFormCheck({ 'm-name': v.name.trim().length < 2 && 'Bitte einen Namen angeben (mindestens 2 Zeichen).' });
   return (
     <Dialog
       open
@@ -1007,14 +1007,15 @@ function MetaDialog({ value, onClose, onSave }: { value: { name: string; descrip
       footer={
         <>
           <Button onClick={onClose}>Abbrechen</Button>
-          <Button variant="primary" disabled={v.name.trim().length < 2} onClick={() => onSave({ name: v.name.trim(), description: v.description.trim() })}>
+          <Button variant="primary" onClick={() => check.submit(() => onSave({ name: v.name.trim(), description: v.description.trim() }))}>
             Übernehmen
           </Button>
         </>
       }
     >
       <div className="flex flex-col gap-4">
-        <FieldWrap label="Name" htmlFor="m-name" required>
+        <FormProblems check={check} />
+        <FieldWrap label="Name" htmlFor="m-name" required error={check.error('m-name')}>
           <Input id="m-name" value={v.name} maxLength={120} onChange={(e) => setV({ ...v, name: e.target.value })} />
         </FieldWrap>
         <FieldWrap label="Beschreibung" htmlFor="m-desc" help="Wird mit „Speichern“ übernommen.">

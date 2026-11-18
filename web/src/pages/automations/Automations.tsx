@@ -8,6 +8,7 @@ import { useListState } from '../../lib/listState';
 import { useIsPhone } from '../../lib/media';
 import { rank, searchTerms } from '../../lib/searchText';
 import { Dialog, Menu, useErrorToast, useToast, type MenuItem } from '../../components/ui/overlays';
+import { FormProblems, useFormCheck } from '../../components/ui/form';
 import { Icon } from '../../components/ui/Icon';
 import { useAuth } from '../../lib/auth';
 import { fmtRelative, plural } from '../../lib/format';
@@ -110,6 +111,8 @@ function CreateDialog({ onClose, templates }: { onClose: () => void; templates: 
     { id: 'todo', label: 'Noch etwas einzurichten', items: templates.filter((t) => !ready(t)) },
   ].filter((g) => g.items.length);
   const chosen = templates.find((t) => t.id === tpl);
+  // Prüfen statt sperren (#268)
+  const check = useFormCheck({ 'a-template': tpl === null && 'Bitte eine Workflow-Vorlage oder „Leer beginnen“ wählen.', 'a-name': name.trim().length < 2 && 'Bitte einen Namen angeben (mindestens 2 Zeichen).' });
   const missing = (chosen?.requirements ?? []).filter((r) => !r.met);
   const tile = (t: { id: string; title: string; description: string; icon: string }, extra?: ReactNode) => (
     <div key={t.id || 'leer'} onClick={() => choose(t.id)} className={cx('flex flex-col gap-2 p-3 rounded-node border cursor-pointer focus-within:shadow-ring', tpl === t.id ? 'border-primary bg-primary-soft shadow-selected' : 'border-line bg-card hover:bg-raised')}>
@@ -134,15 +137,17 @@ function CreateDialog({ onClose, templates }: { onClose: () => void; templates: 
       footer={
         <>
           <Button onClick={onClose}>Abbrechen</Button>
-          <Button variant="primary" loading={busy} disabled={tpl === null || name.trim().length < 2} onClick={create}>
+          <Button variant="primary" loading={busy} onClick={() => check.submit(create)}>
             Anlegen und öffnen
           </Button>
         </>
       }
     >
       <div className="flex flex-col gap-4">
-        <fieldset className="m-0 p-0 border-0 flex flex-col gap-3">
+        <FormProblems check={check} />
+        <fieldset id="a-template" tabIndex={-1} aria-invalid={!!check.error('a-template') || undefined} aria-required="true" className="m-0 p-0 border-0 flex flex-col gap-3 outline-none">
           <legend className="text-sm font-medium mb-2">Workflow-Vorlage wählen</legend>
+          {check.error('a-template') && <p className="m-0 text-meta text-err" role="alert">{check.error('a-template')}</p>}
           {groups.map((g) => (
             <div key={g.id} className="flex flex-col gap-2">
               <span className="font-mono text-[12px] font-medium uppercase tracking-[0.08em] text-fg-muted">{g.label}</span>
@@ -157,8 +162,8 @@ function CreateDialog({ onClose, templates }: { onClose: () => void; templates: 
             {missing.map((r) => r.label).join(', ')}: Der Workflow wird als Entwurf angelegt. Testen und aktivieren lässt er sich, sobald {missing.length === 1 ? 'sie eingerichtet ist' : 'alles eingerichtet ist'}.
           </Notice>
         )}
-        <FieldWrap label="Name" htmlFor="a-name" required>
-          <Input id="a-name" value={name} maxLength={120} onChange={(e) => setName(e.target.value)} placeholder="z. B. Unwetter-Banner" onKeyDown={(e) => e.key === 'Enter' && tpl !== null && name.trim().length >= 2 && create()} />
+        <FieldWrap label="Name" htmlFor="a-name" required error={check.error('a-name')}>
+          <Input id="a-name" value={name} maxLength={120} onChange={(e) => setName(e.target.value)} placeholder="z. B. Unwetter-Banner" onKeyDown={(e) => e.key === 'Enter' && check.submit(create)} />
         </FieldWrap>
         <FieldWrap label="Beschreibung (optional)" htmlFor="a-desc">
           <Textarea id="a-desc" rows={2} maxLength={500} value={description} onChange={(e) => setDescription(e.target.value)} />

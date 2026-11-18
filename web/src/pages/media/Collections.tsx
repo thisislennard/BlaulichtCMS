@@ -7,6 +7,7 @@ import { MediaNav } from './MediaNav';
 import { Pager } from './gallery';
 import { Icon } from '../../components/ui/Icon';
 import { Dialog, useErrorToast } from '../../components/ui/overlays';
+import { FormProblems, useFormCheck } from '../../components/ui/form';
 import { useAuth } from '../../lib/auth';
 import { fmtDate, fmtRelative } from '../../lib/format';
 import { DEFAULT_VALIDITY, ValidityPicker, validityPayload, type Validity } from './UploadLinks';
@@ -25,6 +26,7 @@ export function NewCollectionDialog({ open, onClose, postId, defaultTitle, title
   const [eventDate, setEventDate] = useState('');
   const [createLink, setCreateLink] = useState(mayLinks);
   const [busy, setBusy] = useState(false);
+  const check = useFormCheck({ 'c-title': title.trim().length < 2 && 'Bitte einen Titel angeben (mindestens 2 Zeichen).' });
   return (
     <Dialog
       open={open}
@@ -37,8 +39,7 @@ export function NewCollectionDialog({ open, onClose, postId, defaultTitle, title
             variant="primary"
             icon="Plus"
             loading={busy}
-            disabled={title.trim().length < 2}
-            onClick={async () => {
+            onClick={() => check.submit(async () => {
               setBusy(true);
               try {
                 const v = validityPayload(validity);
@@ -50,7 +51,7 @@ export function NewCollectionDialog({ open, onClose, postId, defaultTitle, title
               } finally {
                 setBusy(false);
               }
-            }}
+            })}
           >
             Sammlung anlegen
           </Button>
@@ -58,7 +59,8 @@ export function NewCollectionDialog({ open, onClose, postId, defaultTitle, title
       }
     >
       <div className="flex flex-col gap-4">
-        <FieldWrap label="Titel" required htmlFor="c-title">
+        <FormProblems check={check} />
+        <FieldWrap label="Titel" required htmlFor="c-title" error={check.error('c-title')}>
           <Input id="c-title" value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} placeholder="z. B. Sommerfest 2026" />
         </FieldWrap>
         <FieldWrap label="Zweck" help="Erscheint auf der Upload-Seite und auf dem Aushang." htmlFor="c-purpose">

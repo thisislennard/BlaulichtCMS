@@ -91,8 +91,13 @@ export function MediaPicker({ collections, chosen, initial, onClose, onAdd }: { 
       width={760}
       footer={
         <>
+          {!picked.length && (
+            <span id="mp-why" className="mr-auto self-center text-meta text-fg-muted">
+              Noch keine Datei gewählt.
+            </span>
+          )}
           <Button onClick={onClose}>Abbrechen</Button>
-          <Button variant="primary" disabled={!picked.length} onClick={() => (onAdd(picked), onClose())}>
+          <Button variant="primary" disabled={!picked.length} aria-describedby={!picked.length ? 'mp-why' : undefined} onClick={() => (onAdd(picked), onClose())}>
             {picked.length} übernehmen
           </Button>
         </>
@@ -208,6 +213,7 @@ function PostEditorInner({ id }: { id: string }) {
   const [picker, setPicker] = useState<false | { collection?: string }>(false);
   const [submitting, setSubmitting] = useState<false | 'first' | 'again'>(false);
   const [saving, setSaving] = useState(false);
+  const [savedAt, setSavedAt] = useState<number | null>(null);
   const [decision, setDecision] = useState<'approved' | 'rejected' | null>(null);
   const [collectLink, setCollectLink] = useState<{ url: string; expires_at: string } | null>(null);
   const [dragIdx, setDragIdx] = useState<number | null>(null);
@@ -295,6 +301,7 @@ function PostEditorInner({ id }: { id: string }) {
       });
       if (res.changed) toast({ tone: 'success', title: `Fassung ${res.number} gespeichert`, text: res.approvalInvalidated ? 'Die bisherige Freigabe gilt nicht für die neue Fassung.' : undefined });
       await refresh();
+      setSavedAt(Date.now());
     } catch (e) {
       if (e instanceof ApiError && e.status === 409) toast({ tone: 'warning', title: 'Beitrag wurde inzwischen geändert', text: e.message });
       else toastError(e);
@@ -880,6 +887,7 @@ function PostEditorInner({ id }: { id: string }) {
           saving={saving}
           onSave={save}
           onDiscard={() => base && (setDraft(fromRev(base)), setStale(false))}
+          savedAt={savedAt}
           saveLabel="Neue Fassung speichern"
           problems={draft.title.trim().length < 2 ? [{ id: 'e-title', message: 'Bitte einen Titel mit mindestens zwei Zeichen angeben.' }] : []}
           guardText="Der Beitrag hat ungespeicherte Änderungen. Beim Verlassen gehen sie verloren."

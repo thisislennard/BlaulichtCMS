@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { del, get, post, put } from '../../api/client';
 import { Button, Card, Chip, FieldWrap, Input, SkeletonRows, Textarea, EmptyLine, EmptyAction } from '../../components/ui/core';
 import { Dialog, useConfirm, useErrorToast } from '../../components/ui/overlays';
+import { FormProblems, useFormCheck } from '../../components/ui/form';
 import { SNIPPET_PLACEHOLDERS } from './Messages';
 
 interface Snippet {
@@ -29,6 +30,7 @@ function SnippetDialog({ snippet, onClose }: { snippet: Snippet | null; onClose:
       setBusy(false);
     }
   };
+  const check = useFormCheck({ 'sn-title': title.trim().length < 2 && 'Bitte eine Bezeichnung angeben (mindestens 2 Zeichen).', 'sn-body': !body.trim() && 'Bitte den Text des Bausteins angeben.' });
   return (
     <Dialog
       open
@@ -38,17 +40,18 @@ function SnippetDialog({ snippet, onClose }: { snippet: Snippet | null; onClose:
       footer={
         <>
           <Button onClick={onClose}>Abbrechen</Button>
-          <Button variant="primary" loading={busy} disabled={title.trim().length < 2 || !body.trim()} onClick={save}>
+          <Button variant="primary" loading={busy} onClick={() => check.submit(save)}>
             Speichern
           </Button>
         </>
       }
     >
       <div className="flex flex-col gap-4">
-        <FieldWrap label="Bezeichnung" required htmlFor="sn-title">
+        <FormProblems check={check} />
+        <FieldWrap label="Bezeichnung" required htmlFor="sn-title" error={check.error('sn-title')}>
           <Input id="sn-title" value={title} maxLength={120} onChange={(e) => setTitle(e.target.value)} placeholder="z. B. Begrüßung, Verweis auf Pressemitteilung" />
         </FieldWrap>
-        <FieldWrap label="Text" required htmlFor="sn-body" help="Platzhalter werden beim Einfügen in eine Antwort durch die Angaben der Anfrage ersetzt.">
+        <FieldWrap label="Text" required htmlFor="sn-body" error={check.error('sn-body')} help="Platzhalter werden beim Einfügen in eine Antwort durch die Angaben der Anfrage ersetzt.">
           <Textarea id="sn-body" rows={8} value={body} maxLength={20000} onChange={(e) => setBody(e.target.value)} />
         </FieldWrap>
         <div className="flex flex-wrap gap-1.5" aria-label="Platzhalter">

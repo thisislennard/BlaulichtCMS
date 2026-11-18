@@ -338,7 +338,12 @@ function RoleEditor({ state, data, onClose, onSaved }: { state: EditorState; dat
             <Button variant="ghost" onClick={onClose}>
               Abbrechen
             </Button>
-            <Button variant="primary" disabled={!dirty || !nameOk} onClick={() => setReview(true)}>
+            {(!dirty || !nameOk) && (
+              <span id="role-why" className="sr-only">
+                {!nameOk ? "Erst einen Namen eintragen." : "Noch keine Änderung."}
+              </span>
+            )}
+            <Button variant="primary" disabled={!dirty || !nameOk} aria-describedby={!dirty || !nameOk ? "role-why" : undefined} onClick={() => setReview(true)}>
               Weiter: Änderung prüfen
             </Button>
           </>
