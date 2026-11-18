@@ -267,7 +267,8 @@ export function Lightbox({ items, start, onClose, onDetails }: { items: MediaIte
           <Button icon="ChevronLeft" disabled={idx === 0} onClick={() => go(-1)}>
             Vorherige
           </Button>
-          <Button variant="primary" iconRight="ChevronRight" disabled={idx >= items.length - 1} onClick={() => go(1)}>
+          {/* Blättern ist Navigation, keine Hauptaktion (#270): neutral wie „Vorherige“, am Ende gesperrt */}
+          <Button iconRight="ChevronRight" disabled={idx >= items.length - 1} onClick={() => go(1)}>
             Nächste
           </Button>
         </>
