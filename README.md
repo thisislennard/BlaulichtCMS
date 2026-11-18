@@ -9,7 +9,7 @@ Fotos per Link vom Handy sammeln · sichten · Beiträge schreiben · Fassung fr
 [![CI](https://github.com/thisislennard/BlaulichtCMS/actions/workflows/ci.yml/badge.svg)](https://github.com/thisislennard/BlaulichtCMS/actions/workflows/ci.yml)
 [![Sicherheitsprüfung](https://github.com/thisislennard/BlaulichtCMS/actions/workflows/security.yml/badge.svg)](https://github.com/thisislennard/BlaulichtCMS/actions/workflows/security.yml)
 [![Lizenz: GPL-3.0](https://img.shields.io/badge/Lizenz-GPL--3.0--or--later-blue)](LICENSE)
-![Version](https://img.shields.io/badge/Version-0.6.2-D21F3C)
+![Version](https://img.shields.io/badge/Version-0.7.0-D21F3C)
 ![TypeScript](https://img.shields.io/badge/TypeScript-7-3178C6?logo=typescript&logoColor=white)
 ![Node.js](https://img.shields.io/badge/Node.js-26-5FA04E?logo=nodedotjs&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-18-4169E1?logo=postgresql&logoColor=white)
@@ -19,10 +19,10 @@ Fotos per Link vom Handy sammeln · sichten · Beiträge schreiben · Fassung fr
 
 </div>
 
-![Dashboard von BlaulichtCMS](docs/bilder/dashboard.webp)
+![Dashboard von BlaulichtCMS (Rolle Redaktion)](docs/bilder/dashboard.webp)
 
 > [!NOTE]
-> **Version 0.6.2 – noch vor dem ersten Produktivbetrieb.** Der Funktionsumfang ist vollständig und automatisiert
+> **Version 0.7.0 – noch vor dem ersten Produktivbetrieb.** Der Funktionsumfang ist vollständig und automatisiert
 > getestet; was mit echten Fremdsystemen geprüft ist und was noch nicht, steht unter
 > [Teststand und Grenzen](docs/technik.md#teststand-und-grenzen). Alle Screenshots stammen aus einer Testinstanz mit fiktiven Daten.
 
@@ -93,7 +93,8 @@ flowchart LR
 - **Speicherübersicht:** Verbrauch je Sammlung, Ordner und Art, Papierkorb, Quarantäne und ZIP-Downloads, freier Platz
   mit Warnschwelle; Frist und Höchstgröße der ZIP-Downloads einstellbar.
 - **Abgebildete Personen:** Markierungen für erkennbare Personen, Verletzte, Kennzeichen und sensible Inhalte;
-  markierte Medien verlangen vor der Freigabe eine bewusste Datenschutz-Prüfung.
+  markierte Medien verlangen vor der Freigabe eine bewusste Datenschutz-Prüfung – bei Beiträgen, in der Einsatzliste
+  und bei Bildern aus Vorlagen (sie erben die Markierungen ihrer Quellbilder).
 - **Unkenntlich machen:** Bereiche verpixeln, weichzeichnen oder abdecken, Kennzeichen mit einem Klick (Werkzeug „Kennzeichen anklicken“: Bereich in Kennzeichenform, Größe wählbar), Bilder zuschneiden, Videos ohne Ton
   veröffentlichen – das Original bleibt unverändert.
 - **Gesichter automatisch vorschlagen:** lokale Gesichtssuche (YuNet, MIT) schlägt Bereiche zum Unkenntlichmachen vor –
@@ -298,6 +299,8 @@ flowchart LR
   bestandener Testmail). Push und E-Mail tragen standardmäßig nur die Art der Benachrichtigung und einen Link –
   Stichwort, Ort oder Betreff bleiben in BlaulichtCMS, Einzelheiten lassen sich je Zustellweg (Push, E-Mail) zuschalten.
 - **App für Handy und Computer:** installierbar (PWA) auf Android, iPhone/iPad und am Computer (Chrome, Edge, Safari am Mac – „Zum Dock hinzufügen“), mit eigenem Fenster, Push-Mitteilungen des Betriebssystems, Zähler ungelesener Benachrichtigungen am App-Symbol und Schnellzugriffen auf Neuer Beitrag, Fotos sammeln und Freigaben; „App installieren“ im Benutzermenü.
+- **Leerzustände mit nächstem Schritt:** leere Kacheln als leise Zeile, leere Seiten mit der passenden Aktion
+  (z. B. „Neuer Beitrag“, „Fotos sammeln“).
 - **Einheitliche Listen:** jede Liste mit derselben Werkzeugleiste (Suche, Reiter, Filter als Chips, Trefferzahl); Suche
   und Filter stehen in der Adresse – Zurück, Lesezeichen und Links aus Benachrichtigungen zeigen dieselbe Auswahl. Die
   Beitragsliste zeigt Website und soziale Netzwerke als Ziele samt geplantem Zeitpunkt; die Einsatzliste eine Zeile je Eintrag.
@@ -307,8 +310,10 @@ flowchart LR
 - **Schnell bedienbar:** Suche mit `Strg` + `K` über Seiten, Schnellaktionen, Inhalte aller Bereiche mit Leserecht,
   Einstellungen und Hilfe (Vorgangsnummern wie `P-2026-0001` springen direkt zum Vorgang); „?“ an jedem Seitentitel
   und in der Kopfzeile führt zum passenden Hilfe-Kapitel; Navigation nach Aufgaben (Übersicht, Redaktion, Presse,
-  Warnungen, Einrichtung, Verwaltung); vollständig per Tastatur nutzbar, heller und dunkler Modus, Design „Leitstand“
-  für draußen und nachts.
+  Warnungen, Einrichtung, Verwaltung) mit höchstens sieben Punkten je Bereich, frühere Adressen leiten weiter;
+  verbindliche Begriffe (Glossar in der Hilfe); vollständig per Tastatur nutzbar, heller und dunkler Modus (je Konto
+  unter *Mein Konto*), Design „Leitstand“ für draußen und nachts mit einem Akzent – Rot nur für die Hauptaktion und
+  Handlungsbedarf.
 - **Eine Zeitzone für alles:** Anzeigen und Eingaben (Listen, Verläufe, Fristen, Ablauf von Upload-Links, geplante
   Veröffentlichung, Kalender, Begrüßung, Platzhalter `{datum}`, Zeitpläne) folgen der Zeitzone unter *Einstellungen →
   Organisation* (Standard Europe/Berlin), nicht der des Geräts; Sommer-/Winterzeit automatisch.
@@ -316,7 +321,7 @@ flowchart LR
   Medien & Upload, Redaktion & Freigabe, E-Mail & Push, Sicherheit, Sicherung, Updates & Wartung, Workflows, System)
   mit einer Speichern-Leiste und Rückfrage beim Verlassen; „Einstellung finden“ springt direkt zum Feld. Alle
   Löschfristen samt Probelauf auf einer Seite, SMTP und Microsoft 365 samt Testmail an einer Stelle.
-- **Formulare für alle:** Pflichtfelder auch für Screenreader gekennzeichnet; „Speichern“ und „Anlegen“ bleiben
+- **Formulare für alle:** eigener Fenstertitel und genau eine Hauptüberschrift je Seite; Pflichtfelder auch für Screenreader gekennzeichnet; „Speichern“ und „Anlegen“ bleiben
   bedienbar und nennen fehlende Angaben direkt am Feld; lange Formulare (Einstellungen, Beitrag, Workflow,
   Bildvorlage, Upload-Seite, Presse-Postfach) mit einer gemeinsamen Speichern-Leiste und Rückfrage beim Verlassen.
 - **Hilfe-Center:** 32 Kapitel mit Volltextsuche direkt in der App.
@@ -330,7 +335,11 @@ flowchart LR
   angezeigt. Vergabe nur innerhalb der eigenen Rechte, Vorschau der Änderung vor dem Speichern, sofort wirksam;
   die Zwei-Faktor-Pflicht richtet sich nach den Rechten.
 - **Anmeldung:** Einladung per Link, Zwei-Faktor-Anmeldung mit Wiederherstellungscodes, erneute Bestätigung für
-  kritische Aktionen, Schutz vor gezieltem Aussperren.
+  kritische Aktionen, Schutz vor gezieltem Aussperren; eine eingeschaltete Zwei-Faktor-Pflicht gilt sofort, auch für
+  bestehende Sitzungen.
+- **Gespeicherte Zugangsdaten** (Presse-Postfach, Mastodon, Bluesky, SMTP, WebDAV) gelten nur für das Ziel, für das sie
+  eingegeben wurden; Abrufe (Feeds, Kalender-Abos, Presse-Postfach, Updates) gehen an interne Server nur nach Freigabe
+  unter *Einstellungen → Sicherheit*.
 - **Nachvollziehbar:** Aktivitätsprotokoll mit Hash-Kette gegen nachträgliche Änderungen, optional an Syslog;
   Aktivitäten als lesbare Sätze, nach Modul filterbar, mit Link zum betroffenen Objekt; Alarmierung bei
   auffälligen Ereignissen.
@@ -341,8 +350,10 @@ flowchart LR
   Anhangnamen), Versandprotokolle, Kalender, Einsatzliste und Vorlagen –, Export als ZIP mit Originalen sowie
   Presseanfragen samt Mails und Anhängen, Löschen oder Pseudonymisieren je Treffer. Ein Test stellt sicher, dass jede
   neue Tabelle mit Personenbezug abgedeckt oder begründet ausgenommen ist.
-- **Löschfristen** für Sammlungen, Upload-Links, Warnvorgänge, Einsatzmeldungen (FE2, Feuersoftware Connect), Presseanfragen und Protokolle – mit Vorschau „Was würde
-  gelöscht?“.
+- **Löschfristen** für Sammlungen, Upload-Links, Warnvorgänge, Einsatzmeldungen (FE2, Feuersoftware Connect),
+  Presseanfragen (auch nie erledigte, mit Ankündigung), Versandprotokolle der Pressemitteilungen, Aufträge der
+  Einsatzliste an die Website und Protokolle – alle auf einer Seite mit Vorschau „Was würde gelöscht?“; Kontakte im
+  Presseverteiler kommen nach einer Frist zur Wiedervorlage.
 - **Vorlagen** für Verarbeitungsverzeichnis und Datenschutz-Folgenabschätzung mit allen Modulen, Empfängern und
   Drittlandübermittlungen (Meta, X, Bluesky, Mastodon, Microsoft 365, Push-Dienste, GitHub) und Rechtsgrundlagen zur
   Prüfung durch die oder den Datenschutzbeauftragten.
@@ -357,7 +368,7 @@ flowchart LR
   Prüfung – mit eingerichtetem **Update-Helfer** lässt sich auch dieses Update in der App anstoßen (prüft das signierte
   Release, baut, sichert, wechselt, bei Fehler zurück; Fortschritt und Protokollauszug in der App), ohne dem Container
   Zugriff auf Docker zu geben. Ohne Helfer nennt die Seite die Schritte am Host (ein Aufruf des Installationsskripts).
-- **Sicherung:** täglich, verschlüsselt, auf Wunsch zusätzlich **außer Haus** auf ein NAS (WebDAV, mit Prüfsummenkontrolle und Aufbewahrung je Tag/Woche/Monat); **Probe-Wiederherstellung** in eine Wegwerf-Datenbank auf Knopfdruck und nach Zeitplan, mit Ergebnisprotokoll im Systemstatus.
+- **Sicherung:** täglich, verschlüsselt, auf Wunsch zusätzlich **außer Haus** auf ein NAS (WebDAV, mit Prüfsummenkontrolle und Aufbewahrung je Tag/Woche/Monat, Standard 7/4/3; Hinweis auf frühere Ziele, auf denen noch Sicherungen liegen); **Probe-Wiederherstellung** in eine Wegwerf-Datenbank auf Knopfdruck und nach Zeitplan, mit Ergebnisprotokoll im Systemstatus.
 - **Systemstatus:** Dienste, Speicher, Sicherungen, Probe-Wiederherstellung, Audit-Integrität, Wartungsmodus und
   Vorabprüfung vor Updates.
 - **Geprüft bei jeder Änderung:** Server-Tests gegen echtes PostgreSQL, Browsertests der Kernabläufe (Einrichtung,
@@ -371,12 +382,21 @@ flowchart LR
 <table>
   <tr>
     <td width="33%"><b>Upload am Handy</b><br/>ohne Konto, Fortschritt je Datei<br/><br/><img src="docs/bilder/upload-handy.webp" alt="Upload-Seite am Handy"/></td>
-    <td width="33%"><b>Sichtung</b><br/>Auswählen oder Überspringen<br/><br/><img src="docs/bilder/sichtung-handy.webp" alt="Sichtung am Handy"/></td>
-    <td width="33%"><b>Beitrag am Handy</b><br/>Status, Freigabe, bestätigte URL<br/><br/><img src="docs/bilder/beitrag-handy.webp" alt="Beitrag am Handy"/></td>
+    <td width="33%"><b>Sichtung</b><br/>Auswählen, Zurückstellen oder Überspringen<br/><br/><img src="docs/bilder/sichtung-handy.webp" alt="Sichtung am Handy"/></td>
+    <td width="33%"><b>Am Handy</b><br/>untere Leiste mit Schnellaktionen<br/><br/><img src="docs/bilder/dashboard-handy.webp" alt="Dashboard am Handy mit unterer Leiste"/></td>
+  </tr>
+  <tr>
+    <td colspan="2"><b>Freigaben</b><br/>eine Liste für alle Arten, darunter Freigegebenes, das noch wartet<br/><br/><img src="docs/bilder/freigaben.webp" alt="Freigaben-Liste über alle Arten"/></td>
+    <td><b>Beitrag am Handy</b><br/>nächster Schritt, Status, bestätigte URL<br/><br/><img src="docs/bilder/beitrag-handy.webp" alt="Beitrag am Handy"/></td>
   </tr>
   <tr>
     <td colspan="2"><b>Beitrag mit Freigabe</b><br/>Fassungen, Prüfsumme, Veröffentlichungen<br/><br/><img src="docs/bilder/beitrag.webp" alt="Beitrag mit Freigabe"/></td>
     <td><b>Sammlung</b><br/>Upload-Links mit QR-Code und Aushang<br/><br/><img src="docs/bilder/sammlung.webp" alt="Sammlung"/></td>
+  </tr>
+  <tr>
+    <td><b>Suche</b><br/><code>Strg</code> + <code>K</code> über alle Bereiche<br/><br/><img src="docs/bilder/suche.webp" alt="Suche über alle Bereiche"/></td>
+    <td><b>Einstellungen</b><br/>je Bereich eine Seite<br/><br/><img src="docs/bilder/einstellungen.webp" alt="Übersicht der Einstellungen"/></td>
+    <td><b>BlaulichtCMS startklar</b><br/>Checkliste nach der Installation<br/><br/><img src="docs/bilder/startklar.webp" alt="Checkliste BlaulichtCMS startklar"/></td>
   </tr>
   <tr>
     <td><b>Auf der Website</b><br/>veröffentlicht von der BlaulichtCMS Bridge<br/><br/><img src="docs/bilder/wordpress-beitrag.webp" alt="Beitrag auf WordPress"/></td>
@@ -386,7 +406,7 @@ flowchart LR
   <tr>
     <td><b>Warnentwurf am Handy</b><br/>Stichwort, Lagefragen, Vorschlag<br/><br/><img src="docs/bilder/warnentwurf-handy.webp" alt="Warnentwurf-Assistent am Handy"/></td>
     <td><b>Freigegebene PDF</b><br/>mit bestätigter Warnstufe und Prüfsumme<br/><br/><img src="docs/bilder/warnentwurf-pdf.webp" alt="PDF eines Warnentwurfs"/></td>
-    <td><b>Regeln pflegen</b><br/>versioniert, fachlich freigegeben<br/><br/><img src="docs/bilder/warnstufen-regeln.webp" alt="Pflege der Warnstufen-Regeln"/></td>
+    <td><b>Stichwörter &amp; Regeln</b><br/>kompakte Tabelle, Lagefragen und Regeln je Zeile<br/><br/><img src="docs/bilder/stichwoerter-regeln.webp" alt="Stichwörter mit Lagefragen und Regeln"/></td>
   </tr>
   <tr>
     <td colspan="2"><b>Workflows</b><br/>geführt in drei Schritten: Wenn – Nur wenn – Dann<br/><br/><img src="docs/bilder/workflow.webp" alt="Workflow in der geführten Ansicht"/></td>

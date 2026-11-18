@@ -145,6 +145,6 @@ await new Promise((resolve, reject) => zip.outputStream.pipe(fs.createWriteStrea
 checkZipEntries(zipEntryInfos(new AdmZip(zipPath)));
 const digest = crypto.createHash('sha256').update(fs.readFileSync(zipPath)).digest('hex');
 fs.writeFileSync(`${zipPath}.sha256`, `${digest}  ${name}\n`);
-fs.writeFileSync(`${zipPath}.notes.md`, `${notes}\n\n---\n\nSHA-256 von \`${name}\`: \`${digest}\`\n\nInstallation: ${minImageVersion === version ? 'neues Image nötig – am Docker-Host `sudo bash /opt/apps/blaulichtcms/install.sh`' : 'Einstellungen → Updates (signiert)'}. ${minImageNote(minImageVersion)}\n`);
+fs.writeFileSync(`${zipPath}.notes.md`, `${notes}\n\n---\n\nSHA-256 von \`${name}\`: \`${digest}\`\n\nInstallation: ${minImageVersion === version ? `neues Image nötig – mit eingerichtetem Update-Helfer unter Einstellungen → Updates & Wartung („Image-Update auf ${version} anstoßen“), sonst am Docker-Host \`sudo bash /opt/apps/blaulichtcms/install.sh\`` : 'Einstellungen → Updates & Wartung (signiert)'}. ${minImageNote(minImageVersion)}\n`);
 console.log(`${name}: ${files.length + 2} Dateien, ${Math.round(fs.statSync(zipPath).size / 1024)} KB`);
 console.log(`SHA-256 ${digest}`);

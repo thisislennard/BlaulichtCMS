@@ -340,10 +340,13 @@ nicht archivierten Beiträge (bei 4 800 Beiträgen ohne Freigaben 46 ms) – Bei
 
 ## Teststand und Grenzen
 
-**Automatisiert (bei jedem Push in der CI):** Typprüfung, rund 600 Server-Tests gegen echtes PostgreSQL (inklusive
+**Automatisiert (bei jedem Push in der CI):** Typprüfung, rund 780 Server-Tests gegen echtes PostgreSQL (inklusive
 Video-Verarbeitung mit ffmpeg), Build, PHP-Lint des Plugins, Probelauf mit Docker Compose (Rollen, Schlüsselwechsel,
 Audit-Kette), Abhängigkeits-, Image- und Secret-Scan sowie Browsertests der Kernabläufe mit Playwright/Chromium
-(Einrichtung mit Zwei-Faktor, Beitrag bis zur Freigabe, Workflow aus Vorlage, Rollen, Dashboard, Fokus-Check).
+(Einrichtung mit Zwei-Faktor, Beitrag bis zur Freigabe, Workflow aus Vorlage, Rollen, Dashboard, Sichtung ohne Scrollen,
+Listen und Handy mit Touch-Zielen, Fokus-Check auf wichtigen Ansichten). Vor jedem Release lokal: Fokus-Check über alle
+Ansichten und Dialoge (inklusive Seitentitel, Überschriften und Pflichtfeldern) und eine Durchsicht der Hauptseiten im
+dunklen Modus bei 1440 und 390 px (0.7.0: Kontoschema „Dunkel“, alle Seiten dunkel, kein seitlicher Überlauf).
 Wöchentlich prüft ein Workflow alle festgelegten Versionen und meldet Neuerungen in einem Issue. Dazu kommen Abnahmetests über Browser, Container und ein
 Test-WordPress (`test/e2e/`, Upload-Link bis Website, fortsetzbarer Upload, Warnentwurf, fehlgeschlagenes Update mit
 Rückweg, Wiederherstellung, PostgreSQL-Upgrade). Das Update aus der App ist mit dem echten Supervisor durchgespielt
@@ -382,14 +385,18 @@ Ergebnisse je Verbindung: [docs/integrationen.md](integrationen.md).
 - Update-Helfer für Image-Updates aus der App (#226): Anfrage, Statusauswertung, Rate-Limit und Protokoll mit Tests
   (`server/test/host-update.test.ts`); Helfer und `install.sh --unattended` mit Docker-Stellvertreter trocken getestet
   (Erfolg, Rückweg, Abbruch vor dem Wechsel, abgelehnte Anfragen, falsche Signatur, Neustart mit neuer `install.sh`).
-  Der Helfer ist noch nicht auf einem echten Host mit systemd gelaufen: systemd-Units, Path-Unit, `setpriv`, die Härtung
-  und ein Image-Update aus der App mit echtem Docker-Build auf dem Zielhost noch prüfen.
+  Auf einem echten Host (RHEL-artig, SELinux im Modus Enforcing) sind Einrichtung, Path-Unit und die Anmeldung des
+  Helfers bei der App geprüft (0.6.1). Ein vollständiges Image-Update aus der App mit echtem Docker-Build steht noch
+  aus – erstmals mit dem Update auf 0.7.0; Verlauf in `/var/log/blaulichtcms-update.log`.
 - Sicherung außer Haus und Probe-Wiederherstellung (#212): gegen einen WebDAV-Stellvertreter mit echtem TLS getestet;
   mit dem echten NAS (z. B. Synology „WebDAV Server“) und die zeitgesteuerte Probe auf dem Zielhost noch prüfen.
 - Freigabe aus der Push-Mitteilung (#216): Ob ein Gerät Aktionsknöpfe zeigt, entscheidet der Browser; auf echten
   Geräten (Android, iPhone, Windows, macOS) noch ansehen.
 - Gesichtsvorschläge (#214): Erkennungsrate und Rechenzeit auf echten Einsatzfotos und auf der Zielhardware (2 Kerne)
   messen; geprüft ist das Modell bisher auf gemeinfreien Testfotos und einem Entwicklungsrechner.
+- Presse-Postfach auf internen Mailservern (#234): Die Zielprüfung (nur öffentliche Adressen und Ports 143/993, sonst
+  Freigabe unter *Einstellungen → Sicherheit → Interne Ziele freigeben*) ist gegen IMAP-Stellvertreter getestet; mit
+  einem echten internen Mailserver noch prüfen.
 - Datenschutz: Angaben unter *Einstellungen → Datenschutz & Recht* ausfüllen, Verarbeitungsverzeichnis und DSFA mit den
   Vorlagen in [docs/datenschutz.md](datenschutz.md) erstellen.
 
