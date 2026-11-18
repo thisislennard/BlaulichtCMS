@@ -11,6 +11,8 @@ import { NewCollectionDialog } from './media/Collections';
 import { NewPostDialog } from './posts/Posts';
 import { columnStyle, fromEdit, isPanel, sameLayout, toEdit, type EditLayout, type Layout, type LayoutResponse } from './dashboard/model';
 import { BadgeTile, PanelTile } from './dashboard/widgets';
+import { WelcomeCard } from './dashboard/Welcome';
+import { useSetupChecklist } from './dashboard/SetupChecklist';
 
 // Bearbeitungsmodus (Drag-and-drop) erst laden, wenn „Anpassen“ gewählt wird – hält die Startseite schlank
 const loadEditor = () => import('./dashboard/Editor');
@@ -44,19 +46,30 @@ function greeting(name?: string) {
   return name ? `${g}, ${name}.` : 'Übersicht';
 }
 
-function summary(d: any, canApprove: boolean) {
+/**
+ * Zeile unter der Begrüßung: nur Vorgänge, die die Person selbst erledigen darf (#254) – Freigaben nur mit
+ * Freigaberecht, ungesichtete Dateien nur mit Sichtungsrecht, Presse-Fristen nur für die eigenen Anfragen.
+ */
+function summary(d: any, can: (perm: string) => boolean) {
   const parts: string[] = [];
   const a = d.pendingApprovals?.length ?? 0;
   const u = d.media?.unreviewed ?? 0;
-  if (canApprove && a) parts.push(a === 1 ? 'Eine Freigabe wartet auf dich' : `${a} Freigaben warten auf dich`);
-  if (u) parts.push(u === 1 ? 'eine Datei ist ungesichtet' : `${u} Dateien sind ungesichtet`);
+  const late = (d.myPress ?? []).filter((r: any) => r.overdue).length;
+  const review = (d.warnings?.cases ?? []).filter((c: any) => c.state === 'in_review').length;
+  if (can('approval.post') && a) parts.push(a === 1 ? 'eine Freigabe wartet auf dich' : `${a >= 20 ? 'mehr als 20' : a} Freigaben warten auf dich`);
+  if (can('warning.approve') && review) parts.push(review === 1 ? 'ein Warnentwurf wartet auf Freigabe' : `${review} Warnentwürfe warten auf Freigabe`);
+  if (can('media.review') && u) parts.push(u === 1 ? 'eine Datei ist ungesichtet' : `${u} Dateien sind ungesichtet`);
+  if ((can('press.manage') || can('press.reply')) && late) parts.push(late === 1 ? 'bei einer deiner Presseanfragen ist die Frist überschritten' : `bei ${late} deiner Presseanfragen ist die Frist überschritten`);
   if (!parts.length) return 'Alles ruhig – nichts wartet auf dich.';
   const s = parts.join(', ');
   return s.charAt(0).toUpperCase() + s.slice(1) + '.';
 }
 
 /** Anzeige ohne Bearbeitung: Kennzahlen oben, darunter die Spalten (am Handy die eigene Reihenfolge untereinander). */
-function DashboardView({ layout, available, d, mobile }: { layout: Layout; available: string[]; d: any; mobile: boolean }) {
+function DashboardView({ layout, available: all, d, mobile }: { layout: Layout; available: string[]; d: any; mobile: boolean }) {
+  // Checkliste „startklar“: nur solange ein Punkt offen und nicht ausgeblendet ist (#255)
+  const setup = useSetupChecklist(all.includes('setup') && [...layout.columns.flatMap((c) => c.widgets), ...layout.mobile].includes('setup'));
+  const available = setup.data && !setup.data.visible ? all.filter((id) => id !== 'setup') : all;
   const badges = layout.badges.filter((id) => available.includes(id));
   const columns = layout.columns.map((c) => ({ weight: c.weight, widgets: c.widgets.filter((id) => available.includes(id)) })).filter((c) => c.widgets.length);
   const mobileList = layout.mobile.filter((id) => available.includes(id) && isPanel(id));
@@ -138,7 +151,7 @@ export default function Dashboard() {
     setBusy(true);
     try {
       await put('/dashboard/layout', { scope, role, layout });
-      toast({ tone: 'success', title: scope === 'personal' ? (layout ? 'Dashboard gespeichert' : 'Auf Dashboard-Vorlage zurückgesetzt') : layout ? 'Dashboard-Vorlage gespeichert' : 'Vorlage entfernt' });
+      toast({ tone: 'success', title: scope === 'personal' ? (layout ? 'Dashboard gespeichert' : 'Standard wiederhergestellt') : layout ? 'Dashboard-Vorlage gespeichert' : 'Dashboard-Vorlage entfernt' });
       await qc.invalidateQueries({ queryKey: ['dashboard-layout'] });
       if (scope === 'personal') setDraft(null);
     } catch (e) {
@@ -157,7 +170,7 @@ export default function Dashboard() {
         title={greeting(first)}
         subtitle={
           <span>
-            {q.data ? summary(d, can('approval.post')) : me?.instance.organization}
+            {q.data ? summary(d, can) : me?.instance.organization}
             {d.confirmedAt && <span className="font-mono text-[12px] text-fg-muted"> · Stand {fmtTime(d.confirmedAt, true)}</span>}
           </span>
         }
@@ -186,8 +199,10 @@ export default function Dashboard() {
                 Abbrechen
               </Button>
               {lq.data?.source === 'personal' && (
+                // Persönliche Anpassung aufheben: dann gilt die Dashboard-Vorlage der Administration bzw. die
+                // mitgelieferte Standardansicht der Rolle (#254)
                 <Button disabled={busy} icon="RotateCcw" onClick={() => save('personal', undefined, null)}>
-                  Auf Dashboard-Vorlage zurücksetzen
+                  Standard wiederherstellen
                 </Button>
               )}
               <Button variant="primary" icon="Save" loading={busy} onClick={() => draft && save('personal', undefined, fromEdit(draft))}>
@@ -197,6 +212,8 @@ export default function Dashboard() {
           )
         }
       />
+      {/* Einmalige Begrüßung neuer Konten (#255); die Administration hat stattdessen die Checkliste „startklar“ */}
+      {!editing && me && me.user.preferences.welcomeDone !== true && !can('settings.general') && lq.data && <WelcomeCard profile={lq.data.profile} />}
       {live === 'reconnecting' && <Notice tone="warning">Verbindung unterbrochen. Angezeigt wird der zuletzt bestätigte Stand; nach der Wiederverbindung wird neu geladen.</Notice>}
       {(q.isLoading || lq.isLoading) && <SkeletonRows rows={6} />}
       {q.error && <ErrorBox title="Dashboard konnte nicht geladen werden">{(q.error as Error).message}</ErrorBox>}

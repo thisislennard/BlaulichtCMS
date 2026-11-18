@@ -6,15 +6,73 @@ import { requireAuth } from '../auth/context.js';
 import { AppError, badRequest } from '../lib/errors.js';
 import { audit } from '../lib/audit.js';
 import { getSettings, setSettings } from '../lib/settings.js';
-import { activeRoles, roleExists } from '../auth/permissions.js';
+import { activeRole, activeRoles, roleExists } from '../auth/permissions.js';
 import { POST_STATE_SQL } from './posts.js';
-import { availableWidgets, layoutIssues, normalizeLayout, resolveLayout } from '../lib/dashboard-layout.js';
+import { availableWidgets, defaultProfile, layoutIssues, normalizeLayout, resolveLayout, type DashboardModule } from '../lib/dashboard-layout.js';
 import { insightsOverview } from './insights.js';
+import { warningState } from './warnings.js';
+import { entryState } from '../incidents/list.js';
+import { calendarProviders, calendarTimeZone, occurrences, toEntry, type CalendarEntry } from '../calendar/store.js';
+import { localDate, midnight } from '../calendar/recurrence.js';
+
+const DAY_MS = 86_400_000;
+
+/**
+ * Module ohne Einrichtung bzw. ohne jeden Eintrag (#254): ihre Kacheln fehlen in der mitgelieferten Standardansicht,
+ * bis das Modul genutzt wird – dann erscheinen sie von selbst. Eine Abfrage mit EXISTS je Modul.
+ */
+export async function unusedModules(): Promise<Set<DashboardModule>> {
+  const r = (await one<Record<DashboardModule, boolean>>(
+    `SELECT EXISTS (SELECT 1 FROM wp_sites WHERE status <> 'revoked') AS website,
+            EXISTS (SELECT 1 FROM rss_feeds) AS rss,
+            EXISTS (SELECT 1 FROM calendar_events) OR EXISTS (SELECT 1 FROM calendar_sources) AS calendar,
+            EXISTS (SELECT 1 FROM press_requests) OR EXISTS (SELECT 1 FROM settings WHERE key = 'press.mailbox' AND value IS NOT NULL AND value <> 'null'::jsonb) AS press,
+            EXISTS (SELECT 1 FROM warnings) OR EXISTS (SELECT 1 FROM connections WHERE kind = 'warnfeed' AND deleted_at IS NULL) AS warnings,
+            EXISTS (SELECT 1 FROM incident_entries) OR EXISTS (SELECT 1 FROM connections WHERE kind IN ('fe2','feuersoftware') AND deleted_at IS NULL) AS incidents,
+            EXISTS (SELECT 1 FROM automations WHERE deleted_at IS NULL) AS automations,
+            EXISTS (SELECT 1 FROM connections WHERE deleted_at IS NULL) AS connections,
+            EXISTS (SELECT 1 FROM connections WHERE kind NOT IN ('fe2','feuersoftware','warnfeed') AND deleted_at IS NULL) AS social`,
+  ))!;
+  return new Set((Object.keys(r) as DashboardModule[]).filter((k) => !r[k]));
+}
+
+/** Kalender der nächsten 7 Tage (#254): eigene und eingelesene Termine plus Einträge der Anbieter mit Recht (Presse-Fristen, geplante Beiträge). */
+async function upcomingCalendar(perms: ReadonlySet<string>, userId: string | null, log: { warn: (o: unknown, m: string) => void }) {
+  const tz = await calendarTimeZone();
+  const now = Date.now();
+  const today = localDate(now, tz);
+  const from = new Date(midnight(today, tz));
+  const to = new Date(+from + 8 * DAY_MS);
+  const entries: CalendarEntry[] = perms.has('calendar.view') ? (await occurrences(from, to)).map(toEntry) : [];
+  for (const p of calendarProviders()) {
+    if (!perms.has(p.permission)) continue;
+    try {
+      entries.push(...(await p.list(from, to, { permissions: new Set(perms), userId })));
+    } catch (e) {
+      log.warn({ err: e }, `Kalender-Anbieter ${p.id} fehlgeschlagen`);
+    }
+  }
+  // Ganztägige Termine enden um Mitternacht des Folgetags; „heute“ = beginnt heute oder läuft heute noch
+  const endDay = (e: CalendarEntry) => localDate(Date.parse(e.end) - (e.allDay && Date.parse(e.end) > Date.parse(e.start) ? 1 : 0), tz);
+  const isToday = (e: CalendarEntry) => localDate(Date.parse(e.start), tz) <= today && endDay(e) >= today;
+  const sevenDays = now + 7 * DAY_MS;
+  // Überfällige Presse-Fristen bleiben sichtbar (sie liegen vor „jetzt“), sonst nur, was noch nicht vorbei ist
+  const upcoming = entries
+    .filter((e) => (e.overdue || Date.parse(e.end) >= now || (e.allDay && endDay(e) >= today)) && Date.parse(e.start) < sevenDays)
+    .sort((a, b) => a.start.localeCompare(b.start) || a.title.localeCompare(b.title, 'de'));
+  return {
+    timeZone: tz,
+    today: entries.filter(isToday).length,
+    total: upcoming.length,
+    upcoming: upcoming.slice(0, 8).map((e) => ({ key: e.key, kind: e.kind, id: e.id, title: e.title, start: e.start, end: e.end, allDay: e.allDay, location: e.location, link: e.link ?? (e.kind === 'event' ? `/kalender?termin=${e.id}` : null), overdue: !!e.overdue, color: e.category?.color ?? e.color ?? null, today: isToday(e) })),
+  };
+}
 
 export async function dashboardRoutes(app: FastifyInstance) {
   /** Erstes Dashboard: offene Freigaben, bestätigter Veröffentlichungsstand, Medieneingang, Kanäle. */
   app.get('/dashboard', { preHandler: requireAuth() }, async (req) => {
     const perms = req.auth!.permissions;
+    const userId = req.auth!.user?.id ?? null;
     const out: Record<string, unknown> = {};
     if (perms.has('post.view')) {
       const submitted = await many<any>(
@@ -94,6 +152,111 @@ export async function dashboardRoutes(app: FastifyInstance) {
       // Aktive Verbindungen, deren letzter Abruf oder Versand fehlgeschlagen ist (Kennzahl „Verbindungsfehler“)
       out.connectionErrors = (await one<{ n: number }>(`SELECT count(*)::int AS n FROM connections WHERE status = 'active' AND deleted_at IS NULL AND last_error IS NOT NULL`))!.n;
     }
+    if (perms.has('post.edit') && userId) {
+      // Meine Entwürfe (#254): eigene, noch nicht eingereichte oder zurückgewiesene Beiträge
+      out.myDrafts = await many<any>(
+        `SELECT x.id, x.rev_title AS title, x.current_revision AS number, x.state, x.updated_at, count(*) OVER ()::int AS total
+           FROM (${POST_STATE_SQL} WHERE p.archived_at IS NULL AND (p.created_by = $1 OR r.created_by = $1)) x
+          WHERE x.state IN ('draft','rejected') ORDER BY x.state = 'rejected' DESC, x.updated_at DESC LIMIT 6`,
+        [userId],
+      );
+    }
+    if (perms.has('calendar.view')) {
+      out.calendar = await upcomingCalendar(perms, userId, req.log);
+    }
+    if (perms.has('press.view')) {
+      // Mir zugewiesene Presseanfragen (#254), überfällige zuerst, dann nach Frist; ohne Kontaktdaten
+      out.myPress = await many<any>(
+        `SELECT r.id, r.case_no, r.topic, r.outlet, r.status, r.due_at, (r.due_at < now()) AS overdue, count(*) OVER ()::int AS total
+           FROM press_requests r WHERE r.assignee_id = $1 AND r.status IN ('new','in_progress')
+          ORDER BY (r.due_at < now()) DESC, r.due_at ASC NULLS LAST, r.created_at DESC LIMIT 6`,
+        [userId],
+      );
+      out.pressUnassigned = (await one<{ n: number }>(`SELECT count(*)::int AS n FROM press_requests WHERE assignee_id IS NULL AND status IN ('new','in_progress')`))!.n;
+    }
+    if (perms.has('warning.view') || perms.has('official.view')) {
+      const w: Record<string, unknown> = {};
+      if (perms.has('warning.view')) {
+        // Offene Warnvorgänge: alles, was noch nicht versandt ist (Zustand wie in der Liste, #184)
+        const rows = await many<any>(
+          `SELECT w.id, w.case_no, w.kind, w.current_revision, w.updated_at, r.data->>'headline' AS headline,
+                  r.id AS rev_id, r.content_hash AS rev_hash, r.submitted_at AS rev_submitted_at,
+                  a.decision AS a_decision, a.content_hash AS a_hash, a.decided_at AS a_decided_at,
+                  s.revision_id AS s_revision_id, s.status AS s_status, s.resolution AS s_resolution, s.acknowledged_at AS s_acknowledged_at
+             FROM warnings w JOIN warning_revisions r ON r.warning_id = w.id AND r.number = w.current_revision
+             LEFT JOIN LATERAL (SELECT decision, content_hash, decided_at FROM warning_approvals WHERE revision_id = r.id ORDER BY decided_at DESC LIMIT 1) a ON true
+             LEFT JOIN LATERAL (SELECT revision_id, status, resolution, acknowledged_at FROM warning_sends WHERE warning_id = w.id ORDER BY created_at DESC LIMIT 1) s ON true
+            WHERE w.archived_at IS NULL AND w.updated_at > now() - interval '30 days' ORDER BY w.updated_at DESC LIMIT 100`,
+        );
+        // Was die Person tun kann, steht vorn: Freigabe (warning.approve), Versand (warning.send), sonst Entwürfe
+        const rank = (st: string) =>
+          ['send_failed', 'send_unknown'].includes(st) ? 0 : st === 'in_review' && perms.has('warning.approve') ? 1 : st === 'approved' && perms.has('warning.send') ? 2 : ['draft', 'rejected'].includes(st) ? 3 : 4;
+        const open = rows
+          .map((r) => ({
+            id: r.id,
+            case_no: r.case_no,
+            kind: r.kind,
+            headline: r.headline,
+            number: r.current_revision,
+            updated_at: r.updated_at,
+            state: warningState(
+              { id: r.rev_id, content_hash: r.rev_hash, submitted_at: r.rev_submitted_at },
+              r.a_decision ? { decision: r.a_decision, content_hash: r.a_hash, decided_at: r.a_decided_at } : null,
+              r.s_status ? { revision_id: r.s_revision_id, status: r.s_status, resolution: r.s_resolution, acknowledged_at: r.s_acknowledged_at } : null,
+            ).state,
+          }))
+          .filter((x) => !['sent', 'acknowledged'].includes(x.state))
+          .sort((a, b) => rank(a.state) - rank(b.state));
+        w.cases = open.slice(0, 5);
+        w.casesTotal = open.length;
+      }
+      if (perms.has('official.view')) {
+        // Gültige amtliche Warnungen (nicht ausgeblendet, nicht aufgehoben/ersetzt, nicht abgelaufen), neueste zuerst
+        const official = await many<any>(
+          `SELECT w.id, w.severity, w.event, w.headline, w.in_area, w.expires_at, w.received_at, count(*) OVER ()::int AS total
+             FROM official_warnings w
+            WHERE w.dismissed_at IS NULL AND NOT w.cancelled AND w.superseded_by IS NULL AND w.msg_type <> 'Cancel'
+              AND (w.expires_at IS NULL OR w.expires_at > now())
+            ORDER BY w.in_area DESC, w.received_at DESC LIMIT 4`,
+        );
+        w.official = official;
+        w.officialTotal = official[0]?.total ?? 0;
+      }
+      out.warnings = w;
+    }
+    if (perms.has('incident.view')) {
+      // Einsatzliste (#254): zur Freigabe, freigegeben (noch nicht übergeben) und Übertragungsfehler
+      const rows = await many<any>(
+        `SELECT e.id, e.title, e.keyword, e.alarm_at, e.revision, e.content_hash, e.approved_hash, e.submitted_at, e.withdrawn_at,
+                j.status AS job_status, j.action AS job_action, j.revision AS job_revision, j.error AS job_error
+           FROM incident_entries e
+           LEFT JOIN LATERAL (SELECT status, action, revision, error FROM incident_jobs WHERE entry_id = e.id AND status <> 'canceled' ORDER BY created_at DESC LIMIT 1) j ON true
+          WHERE e.submitted_at IS NOT NULL OR j.status = 'failed'
+          ORDER BY e.alarm_at DESC LIMIT 200`,
+      );
+      const items = rows
+        .map((e) => ({ id: e.id, title: e.title, keyword: e.keyword, alarm_at: e.alarm_at, error: e.job_status === 'failed' ? e.job_error : null, state: entryState(e, e.job_status ? { status: e.job_status, action: e.job_action, revision: e.job_revision } : null) }))
+        .filter((e) => ['in_review', 'approved', 'failed'].includes(e.state));
+      const order: Record<string, number> = { failed: 0, in_review: 1, approved: 2 };
+      items.sort((a, b) => order[a.state] - order[b.state]);
+      out.incidents = { counts: { failed: items.filter((e) => e.state === 'failed').length, in_review: items.filter((e) => e.state === 'in_review').length, approved: items.filter((e) => e.state === 'approved').length }, items: items.slice(0, 6) };
+    }
+    if (perms.has('automation.read')) {
+      // Workflows mit Fehlern (#254): fehlgeschlagene Läufe der letzten 7 Tage je Workflow (Testläufe zählen nicht)
+      out.automations = {
+        failed: await many<any>(
+          `SELECT a.id, a.name, count(*)::int AS failures, max(r.finished_at) AS last_failed_at,
+                  (array_agg(r.error ORDER BY r.created_at DESC))[1] AS last_error
+             FROM automation_runs r JOIN automations a ON a.id = r.automation_id
+            WHERE r.status = 'failed' AND r.mode = 'live' AND r.created_at > now() - interval '7 days' AND a.deleted_at IS NULL
+            GROUP BY a.id, a.name ORDER BY max(r.created_at) DESC LIMIT 6`,
+        ),
+        enabled: (await getSettings())['automations.enabled'] !== false,
+      };
+    }
+    // Bewusst nicht hier (#254/#255): Kennzahl „Dienste“ nutzt GET /system/status (dieselbe Abfrage wie die Statuszeile)
+    // und die Kachel „BlaulichtCMS startklar“ GET /setup/checklist – beide nur, wenn sie auf dem Dashboard stehen. Die
+    // Kopfzeile fragt GET /dashboard regelmäßig für den Freigabe-Zähler ab; das soll leicht bleiben.
     out.confirmedAt = new Date().toISOString();
     return out;
   });
@@ -108,10 +271,17 @@ export async function dashboardRoutes(app: FastifyInstance) {
     const a = req.auth!;
     const s = await getSettings();
     const shared = (s['dashboard.layouts'] ?? {}) as Record<string, unknown>;
-    const { layout, source } = resolveLayout({ personal: (a.user?.preferences as any)?.dashboard, shared, roles: a.roles, perms: a.permissions });
+    // Mitgelieferte Standardansicht (#254): erste passende Rolle; eigene Rollen nach ihren Rechten
+    const profile = defaultProfile(a.roles, (id) => {
+      const r = activeRole(id);
+      return r ? new Set(r.permissions) : undefined;
+    });
+    const { layout, source } = resolveLayout({ personal: (a.user?.preferences as any)?.dashboard, shared, roles: a.roles, perms: a.permissions, profile, unused: await unusedModules() });
     return {
       layout,
       source,
+      /** Profil der mitgelieferten Standardansicht (für „Standard wiederherstellen“ und die Begrüßung neuer Konten) */
+      profile,
       widgets: availableWidgets(a.permissions),
       // Nur mit „Dashboard-Vorlagen speichern“: für wen es gemeinsame Vorlagen gibt ('*' = alle) und welche Rollen
       // (mitgelieferte und eigene) zur Auswahl stehen

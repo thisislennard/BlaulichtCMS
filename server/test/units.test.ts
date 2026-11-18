@@ -12,8 +12,8 @@ import * as P from '../src/auth/permissions.js';
 import { revisionHash } from '../src/routes/posts.js';
 import { normalizePublicUrl } from '../src/lib/urls.js';
 import { fileSlug, publicFileName } from '../src/media/names.js';
-import { availableWidgets, DEFAULT_LAYOUT, layoutIssues, migrateLegacyDesktop, normalizeLayout, resolveLayout, WIDGET_DEFS, widgetPermission } from '../src/lib/dashboard-layout.js';
-import { PERMISSIONS } from '../src/auth/permissions.js';
+import { availableWidgets, DEFAULT_LAYOUT, defaultLayoutFor, defaultProfile, LEGACY_DEFAULT_BADGES, layoutIssues, migrateLegacyDesktop, normalizeLayout, profileFor, resolveLayout, ROLE_DEFAULT_LAYOUTS, WIDGET_DEFS, widgetPermission, widgetPermissions, type DashboardLayout, type DashboardModule } from '../src/lib/dashboard-layout.js';
+import { PERMISSIONS, SYSTEM_ROLES } from '../src/auth/permissions.js';
 
 describe('Maskierung', () => {
   it('ersetzt sensible Felder und bekannte Geheimnisse', () => {
@@ -1397,10 +1397,16 @@ describe('Dashboard-Layout (Kennzahlen, Spalten, Vorlagen)', () => {
   it('zeigt nur Widgets, für die das Recht da ist', () => {
     expect(availableWidgets(EDITOR)).not.toContain('badge_connection_errors');
     expect(availableWidgets(EDITOR)).toContain('media');
-    expect(availableWidgets(permissionsFor(['warning_author']))).toEqual([]);
+    // Warnentwurf: nur die Kachel „Warnungen“ (#254) – sie genügt mit warning.view oder official.view
+    expect(availableWidgets(permissionsFor(['warning_author']))).toEqual(['warnings']);
+    expect(availableWidgets(new Set(['official.view']))).toEqual(['warnings']);
+    expect(widgetPermissions('warnings')).toEqual(['warning.view', 'official.view']);
+    expect(widgetPermissions('rss')).toEqual(['source.view']);
     const onlyPosts = new Set(['post.view', 'banner.view', 'source.view', 'channel.view']);
     expect(availableWidgets(onlyPosts)).toEqual(['badge_approvals', 'badge_ready', 'badge_banners', 'approvals', 'ready', 'publications', 'sites', 'banners', 'rss']);
-    const l = normalizeLayout(DEFAULT_LAYOUT, onlyPosts);
+    // Standard bis 0.6 als Beispiel eines gespeicherten Layouts: gefiltert wird nach Recht
+    const OLD = { version: 2, badges: [...LEGACY_DEFAULT_BADGES], columns: [{ weight: 5, widgets: ['media', 'publications', 'rss'] }, { weight: 3, widgets: ['approvals', 'uploads', 'banners', 'sites'] }], mobile: ['approvals', 'ready', 'uploads', 'publications', 'banners'] };
+    const l = normalizeLayout(OLD, onlyPosts);
     for (const id of ids(l)) expect(onlyPosts.has(widgetPermission(id)!), id).toBe(true);
     expect(l.badges).toEqual(['badge_approvals', 'badge_ready', 'badge_banners']);
     expect(l.columns).toEqual([
@@ -1422,8 +1428,8 @@ describe('Dashboard-Layout (Kennzahlen, Spalten, Vorlagen)', () => {
       { weight: 3, widgets: ['approvals', 'publications', 'banners', 'sites'] },
     ]);
     expect(l.mobile).toEqual(old.mobile);
-    // Alte Layouts kannten keine Kennzahlen: Standardreihe, nach Recht gefiltert
-    expect(l.badges).toEqual(DEFAULT_LAYOUT.badges);
+    // Alte Layouts kannten keine Kennzahlen: Standardreihe von damals, nach Recht gefiltert (bleibt so, #254)
+    expect(l.badges).toEqual(LEGACY_DEFAULT_BADGES);
     expect(normalizeLayout(old, EDITOR).badges).not.toContain('badge_connection_errors');
     // Kein Widget geht verloren, keines kommt hinzu
     expect(l.columns.flatMap((c) => c.widgets).sort()).toEqual(old.desktop.map((w) => w.id).sort());
@@ -1485,6 +1491,77 @@ describe('Dashboard-Layout (Kennzahlen, Spalten, Vorlagen)', () => {
     expect(normalizeLayout(DEFAULT_LAYOUT, null)).toEqual(DEFAULT_LAYOUT);
   });
 
+  it('Standardansicht je Rolle (#254): für jede mitgelieferte Rolle, gültig, nur erlaubte Widgets, nichts doppelt', () => {
+    // Jede mitgelieferte Rolle hat eine eigene Standardansicht (plus das Profil „press“ für eigene Rollen)
+    for (const r of SYSTEM_ROLES) expect(ROLE_DEFAULT_LAYOUTS[r.id], r.id).toBeTruthy();
+    expect(Object.keys(ROLE_DEFAULT_LAYOUTS).sort()).toEqual([...SYSTEM_ROLES.map((r) => r.id), 'press'].sort());
+    /** Sachverhalt je Widget: der Redaktionsfluss enthält Eingang, Sichtung, Freigabe, Bereit und Veröffentlicht. */
+    const TOPICS: Record<string, string[]> = {
+      media: ['uploads', 'unreviewed', 'approvals', 'ready', 'publications'],
+      badge_approvals: ['approvals'], approvals: ['approvals'], badge_unreviewed: ['unreviewed'], badge_ready: ['ready'], ready: ['ready'],
+      badge_uploads: ['uploads'], uploads: ['uploads'], publications: ['publications'], badge_banners: ['banners'], banners: ['banners'],
+      badge_press: ['press'], press: ['press'], my_press: ['press'], badge_calendar_today: ['calendar'], calendar_upcoming: ['calendar'],
+    };
+    for (const [profile, layout] of [...Object.entries(ROLE_DEFAULT_LAYOUTS), ['generic', DEFAULT_LAYOUT] as const]) {
+      expect(layoutIssues(layout), profile).toEqual([]);
+      expect(normalizeLayout(layout, ALL), profile).toEqual(layout);
+      // Desktop (Kennzahlen + Spalten) und Handy (Kennzahlen + Handy-Liste): jeder Sachverhalt höchstens einmal
+      for (const view of [[...layout.badges, ...layout.columns.flatMap((x) => x.widgets)], [...layout.badges, ...layout.mobile]]) {
+        const seen = view.flatMap((id) => TOPICS[id] ?? [id]);
+        expect(seen.length, `${profile}: ${seen.join(', ')}`).toBe(new Set(seen).size);
+      }
+      // Handy zeigt dieselben Kacheln wie die Spalten
+      expect([...layout.mobile].sort(), profile).toEqual(layout.columns.flatMap((x) => x.widgets).sort());
+    }
+    // Die mitgelieferte Rolle sieht ihre Standardansicht vollständig (mit den Vorgaberechten fällt nichts weg)
+    for (const r of SYSTEM_ROLES) {
+      const own = permissionsFor([r.id]);
+      expect(defaultLayoutFor(r.id, own), r.id).toEqual(ROLE_DEFAULT_LAYOUTS[r.id]);
+    }
+  });
+
+  it('Standardansicht: erste passende Rolle, eigene Rollen nach Rechten, Module ohne Einrichtung fehlen', () => {
+    const perms = (id: string) => (id.startsWith('r_') ? CUSTOM[id] : new Set(SYSTEM_ROLES.find((r) => r.id === id)?.permissions ?? []));
+    const CUSTOM: Record<string, Set<string>> = {
+      r_presse: new Set(['press.view', 'press.manage', 'press.reply', 'post.view']),
+      r_kalender: new Set(['calendar.view']),
+      r_technik: new Set(['settings.view', 'settings.general', 'system.status']),
+    };
+    expect(defaultProfile(['editor', 'media_manager'], perms)).toBe('editor');
+    expect(defaultProfile(['media_manager', 'editor'], perms)).toBe('media_manager');
+    expect(defaultProfile(['r_presse', 'viewer'], perms)).toBe('press');
+    expect(defaultProfile(['r_kalender', 'approver'], perms)).toBe('approver');
+    expect(defaultProfile(['r_kalender'], perms)).toBe('generic');
+    expect(defaultProfile(['r_technik'], perms)).toBe('platform_admin');
+    expect(defaultProfile(['press'], () => undefined)).toBe('generic');
+    expect(defaultProfile([], perms)).toBe('generic');
+    expect(profileFor(new Set(['post.view', 'post.edit', 'press.manage']))).toBe('editor');
+    expect(profileFor(new Set(['press.view', 'press.approve']))).toBe('approver');
+    expect(profileFor(new Set(['warning.view', 'warning.send']))).toBe('warning_sender');
+
+    // Frische Instanz: Module ohne Einrichtung fallen weg …
+    const unused = new Set<DashboardModule>(['website', 'rss', 'calendar', 'press', 'warnings', 'incidents', 'automations', 'connections', 'social']);
+    const panels = (l: DashboardLayout) => l.columns.flatMap((x) => x.widgets);
+    const admin = defaultLayoutFor('platform_admin', ALL, unused);
+    expect(admin.badges).toEqual(['badge_services']);
+    expect(panels(admin)).toEqual(['setup', 'approvals']);
+    expect(admin.mobile).toEqual(['setup', 'approvals']);
+    expect(panels(defaultLayoutFor('editor', EDITOR, unused))).toEqual(['media', 'my_drafts']);
+    // … außer es bliebe nichts übrig: dann gilt die Ansicht ohne Modulfilter (nie ein leeres Dashboard)
+    expect(panels(defaultLayoutFor('viewer', permissionsFor(['viewer']), unused))).toEqual(['publications', 'calendar_upcoming']);
+    expect(panels(defaultLayoutFor('warning_author', permissionsFor(['warning_author']), unused))).toEqual(['warnings']);
+    // Allgemeiner Rückfall: nur, was die Person sehen darf
+    expect(panels(defaultLayoutFor('generic', CUSTOM.r_kalender, unused))).toEqual(['calendar_upcoming']);
+
+    // resolveLayout: Modulfilter nur für die mitgelieferte Ansicht – eigene Layouts und Vorlagen bleiben, wie sie sind
+    const mine = { badges: ['badge_banners'], columns: [{ weight: 3, widgets: ['rss', 'sites'] }], mobile: ['rss'] };
+    expect(resolveLayout({ personal: mine, roles: ['editor'], perms: ALL, profile: 'editor', unused }).layout).toEqual({ version: 2, ...mine });
+    expect(resolveLayout({ shared: { editor: mine }, roles: ['editor'], perms: ALL, profile: 'editor', unused })).toEqual({ layout: { version: 2, ...mine }, source: 'role' });
+    expect(resolveLayout({ shared: { '*': mine }, roles: ['editor'], perms: ALL, profile: 'editor', unused }).source).toBe('shared');
+    expect(resolveLayout({ roles: ['editor'], perms: EDITOR, profile: 'editor', unused })).toEqual({ layout: defaultLayoutFor('editor', EDITOR, unused), source: 'default' });
+    expect(resolveLayout({ roles: ['editor'], perms: EDITOR, profile: 'editor' }).layout).toEqual(ROLE_DEFAULT_LAYOUTS.editor);
+  });
+
   it('prüft beim Speichern die Form streng', () => {
     const ok = { badges: ['badge_ready'], columns: [{ weight: 2, widgets: ['rss'] }, { weight: 5, widgets: [] }], mobile: [] };
     expect(layoutIssues(ok)).toEqual([]);
@@ -1521,8 +1598,10 @@ describe('Dashboard-Layout (Kennzahlen, Spalten, Vorlagen)', () => {
     expect(pick({ shared })).toEqual(['role', 'rss']);
     expect(pick({ shared, roles: ['viewer', 'approver'] })).toEqual(['role', 'banners']);
     expect(pick({ shared, roles: ['viewer'] })).toEqual(['shared', 'sites']);
-    expect(pick({ shared: {} })).toEqual(['default', 'media,publications,rss']);
-    expect(pick({ shared: null, personal: 'kaputt' })).toEqual(['default', 'media,publications,rss']);
+    // Ohne Vorlage: mitgelieferte Standardansicht des Profils (#254), ohne Profil der allgemeine Standard
+    expect(pick({ shared: {}, profile: 'editor' })).toEqual(['default', 'media,my_drafts']);
+    expect(pick({ shared: null, personal: 'kaputt', profile: 'editor' })).toEqual(['default', 'media,my_drafts']);
+    expect(pick({ shared: {} })).toEqual(['default', 'media,calendar_upcoming']);
     // Vorlage mit Widgets, für die das Recht fehlt: werden beim Ausliefern entfernt
     const tpl = { badges: ['badge_connection_errors', 'badge_ready'], columns: [{ weight: 5, widgets: ['media', 'rss'] }], mobile: ['media'] };
     const r = resolveLayout({ shared: { '*': tpl }, roles: ['warning_author'], perms: new Set(['post.view', 'banner.view', 'source.view', 'channel.view']) });

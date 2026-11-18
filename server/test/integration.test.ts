@@ -1180,6 +1180,8 @@ describe('RSS, Live-Status und Dashboard (M2)', () => {
   it('speichert Dashboards persönlich und als Rollenvorlage (Kennzahlen, Spalten, Handy)', async () => {
     const def = await editor.get('/dashboard/layout');
     expect(def.json.source).toBe('default');
+    // Mitgelieferte Standardansicht der ersten Rolle (#254): Redaktion
+    expect(def.json.profile).toBe('editor');
     expect(def.json.layout.version).toBe(2);
     expect(def.json.layout.columns.map((c: any) => c.weight)).toEqual([5, 3]);
     // Rechte: Redaktion sieht die Kennzahl „Verbindungsfehler“ nicht, die Administration schon; Vorlagenliste nur für die Administration
@@ -1189,7 +1191,9 @@ describe('RSS, Live-Status und Dashboard (M2)', () => {
     expect(def.json.templates).toBeUndefined();
     const adminDef = await admin.get('/dashboard/layout');
     expect(adminDef.json.widgets).toContain('badge_connection_errors');
-    expect(adminDef.json.layout.badges).toContain('badge_connection_errors');
+    expect(adminDef.json.profile).toBe('platform_admin');
+    expect(adminDef.json.layout.badges).toContain('badge_services');
+    expect(adminDef.json.layout.columns[0].widgets).toEqual(['setup', 'approvals']);
     expect(adminDef.json.templates).toEqual([]);
 
     const layout = { badges: ['badge_ready', 'badge_connection_errors', 'badge_approvals'], columns: [{ weight: 2, widgets: ['rss'] }, { weight: 5, widgets: ['approvals', 'media'] }, { weight: 3, widgets: [] }], mobile: ['approvals'] };
@@ -1366,14 +1370,15 @@ describe('Warnentwürfe (M3) und Warnstufen-Assistent (#41)', () => {
   });
 
   it('zeigt ohne Lese-Rechte keine Dashboard-Widgets – auch nicht aus Vorlagen oder eigenen Angaben', async () => {
-    // „Warnentwurf“ hat weder „Beiträge ansehen“ noch „Medien sichten“
+    // „Warnentwurf“ hat weder „Beiträge ansehen“ noch „Medien sichten“ – nur die Kachel „Warnungen“ (#254)
     const lone = author;
     const full = { badges: ['badge_approvals', 'badge_unreviewed', 'badge_connection_errors'], columns: [{ weight: 5, widgets: ['media', 'approvals'] }, { weight: 3, widgets: ['rss', 'uploads'] }], mobile: ['media', 'rss'] };
     const empty = { version: 2, badges: [], columns: [{ weight: 5, widgets: [] }, { weight: 3, widgets: [] }], mobile: [] };
     const def = await lone.get('/dashboard/layout');
-    expect(def.json.widgets).toEqual([]);
+    expect(def.json.widgets).toEqual(['warnings']);
+    expect(def.json.profile).toBe('warning_author');
     expect(def.json.layout.badges).toEqual([]);
-    expect(def.json.layout.columns.flatMap((c: any) => c.widgets)).toEqual([]);
+    expect(def.json.layout.columns.flatMap((c: any) => c.widgets)).toEqual(['warnings']);
     expect((await admin.put('/dashboard/layout', { scope: 'role', role: 'warning_author', layout: full })).status).toBe(200);
     const tpl = await lone.get('/dashboard/layout');
     expect(tpl.json.source).toBe('role');
@@ -1383,7 +1388,10 @@ describe('Warnentwürfe (M3) und Warnstufen-Assistent (#41)', () => {
     expect(mine.json.source).toBe('personal');
     expect(mine.json.layout).toEqual(empty);
     const d = (await lone.get('/dashboard')).json;
-    expect(Object.keys(d)).toEqual(['confirmedAt']);
+    expect(Object.keys(d)).toEqual(['warnings', 'confirmedAt']);
+    // Warnvorgänge ja (warning.view), amtliche Warnungen nein (official.view fehlt)
+    expect(Array.isArray(d.warnings.cases)).toBe(true);
+    expect(d.warnings.official).toBeUndefined();
     await lone.put('/dashboard/layout', { scope: 'personal', layout: null });
     expect((await admin.put('/dashboard/layout', { scope: 'role', role: 'warning_author', layout: null })).status).toBe(200);
   });

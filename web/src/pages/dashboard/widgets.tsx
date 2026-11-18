@@ -1,15 +1,34 @@
 import type { ReactNode } from 'react';
 import { Link } from 'react-router';
+import { useQuery } from '@tanstack/react-query';
+import { get } from '../../api/client';
 import { Card, cx, EmptyState, Rev, StatusBadge } from '../../components/ui/core';
 import { Icon } from '../../components/ui/Icon';
 import { useAuth } from '../../lib/auth';
-import { fmtDateTime, fmtRelative, fmtTime, plural } from '../../lib/format';
+import { fmtDateTime, fmtRelative, fmtTime, getTimeZone, plural } from '../../lib/format';
 import { safeHref } from '../../lib/url';
 import { BADGE_TITLES, PANEL_TITLES } from './model';
+import { SetupTile } from './SetupChecklist';
 
 function List({ children }: { children: ReactNode }) {
   return <ul className="m-0 p-0 list-none flex flex-col divide-y divide-line">{children}</ul>;
 }
+
+/** Leise Zwischenüberschrift in einer Kachel (Kachel-Titel ist h2, #267). */
+function SubHeading({ children }: { children: ReactNode }) {
+  return <h3 className="m-0 mt-1 font-mono text-[11.5px] font-medium uppercase tracking-[0.06em] text-fg-muted">{children}</h3>;
+}
+
+const dayFmt = () => new Intl.DateTimeFormat('de-DE', { timeZone: getTimeZone(), weekday: 'short', day: '2-digit', month: '2-digit' });
+
+/** „heute 14:00“, „Mi., 19.11. 14:00“, ganztägig ohne Uhrzeit. */
+function when(e: { start: string; allDay: boolean; today?: boolean }) {
+  const day = e.today ? 'heute' : dayFmt().format(new Date(e.start));
+  return e.allDay ? `${day} · ganztägig` : `${day} ${fmtTime(e.start)}`;
+}
+
+const CAL_ICON: Record<string, string> = { event: 'CalendarDays', press: 'MessageSquareQuote', post: 'FileText' };
+const WARN_KIND: Record<string, string> = { initial: 'Erstmeldung', update: 'Aktualisierung', all_clear: 'Entwarnung' };
 
 /** Inhalt eines Widgets – rein darstellend, Daten kommen vom bestätigten Stand des Servers. */
 export function WidgetBody({ id, d }: { id: string; d: any }) {
@@ -91,7 +110,7 @@ export function WidgetBody({ id, d }: { id: string; d: any }) {
                 {c.title}
               </Link>
               <span className="text-meta text-fg-muted">
-                {c.uploads} · {fmtRelative(c.last_upload)}
+                {plural(c.uploads, 'Datei', 'Dateien')} · {fmtRelative(c.last_upload)}
               </span>
             </li>
           ))}
@@ -172,6 +191,182 @@ export function WidgetBody({ id, d }: { id: string; d: any }) {
                     {t.title}
                   </Link>
                   <span className="text-meta text-fg-muted font-mono tabular">{new Intl.NumberFormat('de-DE').format(t.interactions)} Interaktionen</span>
+                </li>
+              ))}
+            </List>
+          )}
+        </div>
+      );
+    case 'my_drafts':
+      return !d.myDrafts?.length ? (
+        <EmptyState icon="FileText" title="Keine offenen Entwürfe" />
+      ) : (
+        <List>
+          {d.myDrafts.map((p: any) => (
+            <li key={p.id} className="py-2.5 flex items-center gap-3">
+              <div className="min-w-0 flex-1">
+                <Link to={`/beitraege/${p.id}`} className="font-medium truncate block">
+                  {p.title}
+                </Link>
+                <div className="text-meta text-fg-muted">
+                  <Rev n={p.number} /> · geändert {fmtRelative(p.updated_at)}
+                </div>
+              </div>
+              <StatusBadge status={p.state} />
+            </li>
+          ))}
+        </List>
+      );
+    case 'calendar_upcoming':
+      return !d.calendar?.upcoming?.length ? (
+        <EmptyState icon="CalendarDays" title="Keine Termine in den nächsten 7 Tagen" />
+      ) : (
+        <List>
+          {d.calendar.upcoming.map((e: any) => (
+            <li key={e.key} className="py-2.5 flex items-start gap-3">
+              <Icon name={CAL_ICON[e.kind] ?? 'CalendarDays'} size={16} className={cx('mt-0.5 shrink-0', e.overdue ? 'text-err' : 'text-fg-muted')} />
+              <div className="min-w-0 flex-1">
+                {e.link ? (
+                  <Link to={e.link} className="font-medium truncate block">
+                    {e.title}
+                  </Link>
+                ) : (
+                  <span className="font-medium truncate block">{e.title}</span>
+                )}
+                <span className={cx('text-meta', e.overdue ? 'text-err' : 'text-fg-muted')}>
+                  {e.overdue ? `Frist überschritten · ${fmtDateTime(e.start)}` : when(e)}
+                  {e.location ? ` · ${e.location}` : ''}
+                </span>
+              </div>
+            </li>
+          ))}
+        </List>
+      );
+    case 'my_press':
+      return (
+        <div className="flex flex-col gap-2">
+          {!d.myPress?.length ? (
+            <EmptyState icon="MessageSquareQuote" title="Dir ist keine offene Presseanfrage zugewiesen" />
+          ) : (
+            <List>
+              {d.myPress.map((r: any) => (
+                <li key={r.id} className="py-2.5 flex flex-col">
+                  <Link to={`/presse/${r.id}`} className="font-medium truncate">
+                    {r.topic}
+                  </Link>
+                  <span className={cx('text-meta flex items-center gap-1.5 flex-wrap', r.overdue ? 'text-err' : 'text-fg-muted')}>
+                    {r.overdue && <Icon name="AlertTriangle" size={13} />}
+                    <span className="font-mono">{r.case_no}</span>
+                    {r.outlet ? ` · ${r.outlet}` : ''}
+                    {r.due_at ? ` · ${r.overdue ? 'Frist überschritten' : 'Frist'} ${fmtDateTime(r.due_at)}` : ' · ohne Frist'}
+                  </span>
+                </li>
+              ))}
+            </List>
+          )}
+          {d.pressUnassigned > 0 && (
+            <Link to="/presse" className="text-sm !text-fg-muted hover:!text-fg">
+              {plural(d.pressUnassigned, 'offene Anfrage', 'offene Anfragen')} ohne Zuständigkeit →
+            </Link>
+          )}
+        </div>
+      );
+    case 'warnings': {
+      const w = d.warnings ?? {};
+      const cases: any[] = w.cases ?? [];
+      const official: any[] = w.official ?? [];
+      if (!cases.length && !official.length)
+        return <EmptyState icon="Siren" title={w.cases && w.official ? 'Kein offener Warnentwurf, keine gültige amtliche Warnung' : w.cases ? 'Kein offener Warnentwurf' : 'Keine gültige amtliche Warnung'} />;
+      return (
+        <div className="flex flex-col gap-2">
+          {w.cases && (
+            <>
+              <SubHeading>Warnentwürfe</SubHeading>
+              {cases.length ? (
+                <List>
+                  {cases.map((c) => (
+                    <li key={c.id} className="py-2.5 flex items-center gap-3">
+                      <div className="min-w-0 flex-1">
+                        <Link to={`/warnungen/${c.id}`} className="font-medium truncate block">
+                          {c.headline || WARN_KIND[c.kind] || c.case_no}
+                        </Link>
+                        <span className="text-meta text-fg-muted">
+                          <span className="font-mono">{c.case_no}</span> · {WARN_KIND[c.kind] ?? c.kind} · Fassung {c.number}
+                        </span>
+                      </div>
+                      <StatusBadge status={c.state} />
+                    </li>
+                  ))}
+                </List>
+              ) : (
+                <p className="m-0 text-meta text-fg-muted">Kein offener Warnentwurf.</p>
+              )}
+            </>
+          )}
+          {w.official && (
+            <>
+              <SubHeading>Amtliche Warnungen</SubHeading>
+              {official.length ? (
+                <List>
+                  {official.map((o) => (
+                    <li key={o.id} className="py-2.5 flex flex-col">
+                      <Link to="/amtliche-warnungen" className="font-medium truncate">
+                        {o.headline || o.event}
+                      </Link>
+                      <span className="text-meta text-fg-muted">
+                        {[o.event && o.headline ? o.event : '', o.in_area ? 'im eigenen Gebiet' : '', o.expires_at ? `bis ${fmtDateTime(o.expires_at)}` : `seit ${fmtRelative(o.received_at)}`].filter(Boolean).join(' · ')}
+                      </span>
+                    </li>
+                  ))}
+                </List>
+              ) : (
+                <p className="m-0 text-meta text-fg-muted">Keine gültige amtliche Warnung.</p>
+              )}
+            </>
+          )}
+        </div>
+      );
+    }
+    case 'incidents':
+      return !d.incidents?.items?.length ? (
+        <EmptyState icon="ListOrdered" title="Nichts wartet" text="Keine Einträge zur Freigabe, nichts freigegeben und offen, kein Übertragungsfehler." />
+      ) : (
+        <List>
+          {d.incidents.items.map((e: any) => (
+            <li key={e.id} className="py-2.5 flex items-center gap-3">
+              <div className="min-w-0 flex-1">
+                <Link to={`/einsatzliste?eintrag=${e.id}`} className="font-medium truncate block">
+                  {e.title}
+                </Link>
+                <span className={cx('text-meta truncate block', e.error ? 'text-err' : 'text-fg-muted')}>
+                  {[e.keyword, fmtDateTime(e.alarm_at), e.error ? String(e.error).slice(0, 120) : ''].filter(Boolean).join(' · ')}
+                </span>
+              </div>
+              <StatusBadge status={e.state} labels={{ approved: 'Freigegeben, nicht veröffentlicht' }} />
+            </li>
+          ))}
+        </List>
+      );
+    case 'automations':
+      return (
+        <div className="flex flex-col gap-2">
+          {d.automations && !d.automations.enabled && <p className="m-0 text-meta text-err flex items-center gap-1.5"><Icon name="AlertTriangle" size={13} /> Workflows sind unter Einstellungen ausgeschaltet – es starten keine Läufe.</p>}
+          {!d.automations?.failed?.length ? (
+            <EmptyState icon="Workflow" title="Keine fehlgeschlagenen Läufe in den letzten 7 Tagen" />
+          ) : (
+            <List>
+              {d.automations.failed.map((a: any) => (
+                <li key={a.id} className="py-2.5 flex flex-col">
+                  <Link to={`/workflows/${a.id}`} className="font-medium truncate">
+                    {a.name}
+                  </Link>
+                  <span className="text-meta text-err flex items-center gap-1.5 min-w-0">
+                    <Icon name="XCircle" size={13} className="shrink-0" />
+                    <span className="truncate">
+                      {plural(a.failures, 'Fehler', 'Fehler')} · zuletzt {fmtRelative(a.last_failed_at)}
+                      {a.last_error ? ` · ${String(a.last_error).slice(0, 120)}` : ''}
+                    </span>
+                  </span>
                 </li>
               ))}
             </List>
@@ -266,7 +461,7 @@ function FlowBoard({ d }: { d: any }) {
         {d.media && (
           <FlowColumn title="Sichtung" count={d.media.unreviewed} hot={can('media.review')}>
             {d.media.unreviewed > 0 ? (
-              <FlowCard to="/medien" title={`${d.media.unreviewed} ${d.media.unreviewed === 1 ? 'Datei' : 'Dateien'} offen`} meta={d.media.quarantine ? `${d.media.quarantine} in Prüfung` : 'geprüft, ohne Standort'} hot={can('media.review')} cta={can('media.review') ? 'Sichten' : undefined} />
+              <FlowCard to="/medien" title={`${plural(d.media.unreviewed, 'Datei', 'Dateien')} offen`} meta={d.media.quarantine ? `${d.media.quarantine} in Prüfung` : 'geprüft, ohne Standort'} hot={can('media.review')} cta={can('media.review') ? 'Sichten' : undefined} />
             ) : (
               <p className="m-0 px-0.5 text-meta text-fg-muted">Alles gesichtet.</p>
             )}
@@ -320,10 +515,70 @@ function FlowBoard({ d }: { d: any }) {
   );
 }
 
-const LINKS: Record<string, [string, string]> = { approvals: ['/freigaben', 'Alle'], sites: ['/websites', 'Verwalten'], banners: ['/banner', 'Alle'], rss: ['/quellen', 'Alle'], uploads: ['/medien', 'Alle'], press: ['/presse', 'Alle'], insights: ['/reichweite', 'Übersicht'] };
+const LINKS: Record<string, [string, string]> = {
+  approvals: ['/freigaben', 'Alle'],
+  sites: ['/websites', 'Verwalten'],
+  banners: ['/banner', 'Alle'],
+  rss: ['/quellen', 'Alle'],
+  uploads: ['/medien', 'Alle'],
+  press: ['/presse', 'Alle'],
+  insights: ['/reichweite', 'Übersicht'],
+  my_drafts: ['/beitraege', 'Alle Beiträge'],
+  calendar_upcoming: ['/kalender', 'Kalender'],
+  my_press: ['/presse', 'Alle'],
+  warnings: ['/warnungen', 'Alle'],
+  incidents: ['/einsatzliste', 'Alle'],
+  automations: ['/workflows', 'Alle'],
+};
+
+/**
+ * Anzahl unter dem Kachel-Titel: Jede Kachel nennt ihre Menge selbst – deshalb braucht die Standardansicht keine
+ * Kennzahl zum selben Sachverhalt (#254).
+ */
+function subtitleOf(id: string, d: any): string | undefined {
+  const capped = (list: any[] | undefined, cap: number) => (list ? (list.length >= cap ? `${cap}+` : String(list.length)) : null);
+  switch (id) {
+    case 'approvals': {
+      const n = capped(d.pendingApprovals, 20);
+      return n && n !== '0' ? `${n} ${n === '1' ? 'wartet' : 'warten'} auf Freigabe` : undefined;
+    }
+    case 'ready': {
+      const n = capped(d.readyToPublish, 20);
+      return n && n !== '0' ? `${n} freigegeben, noch nicht veröffentlicht` : undefined;
+    }
+    case 'my_drafts':
+      return d.myDrafts?.length ? `${plural(d.myDrafts[0].total, 'Entwurf', 'Entwürfe')} von dir` : undefined;
+    case 'calendar_upcoming':
+      return d.calendar ? `${d.calendar.today} heute · ${plural(d.calendar.total, 'Eintrag', 'Einträge')} in 7 Tagen` : undefined;
+    case 'my_press': {
+      const total = d.myPress?.[0]?.total ?? 0;
+      const overdue = (d.myPress ?? []).filter((r: any) => r.overdue).length;
+      return total ? `${total} offen${overdue ? ` · ${overdue} überfällig` : ''}` : undefined;
+    }
+    case 'warnings': {
+      const w = d.warnings ?? {};
+      const parts = [w.casesTotal ? plural(w.casesTotal, 'offener Warnentwurf', 'offene Warnentwürfe') : '', w.officialTotal ? plural(w.officialTotal, 'amtliche Warnung', 'amtliche Warnungen') : ''].filter(Boolean);
+      return parts.join(' · ') || undefined;
+    }
+    case 'incidents': {
+      const c = d.incidents?.counts;
+      if (!c) return undefined;
+      return [c.failed ? `${c.failed} mit Fehler` : '', c.in_review ? `${c.in_review} zur Freigabe` : '', c.approved ? `${c.approved} freigegeben` : ''].filter(Boolean).join(' · ') || undefined;
+    }
+    case 'automations': {
+      const n = (d.automations?.failed ?? []).reduce((a: number, x: any) => a + x.failures, 0);
+      return n ? `${plural(n, 'fehlgeschlagener Lauf', 'fehlgeschlagene Läufe')} in 7 Tagen` : undefined;
+    }
+    case 'banners':
+      return d.banners?.length ? plural(d.banners.length, 'Banner aktiv', 'Banner aktiv') : undefined;
+  }
+  return undefined;
+}
 
 /** Eine Kachel in einer Spalte. Der Redaktionsfluss bringt seine eigene Überschrift mit, alles andere ist eine Karte. */
 export function PanelTile({ id, d }: { id: string; d: any }) {
+  // Checkliste „startklar“ lädt ihren Stand selbst (GET /setup/checklist, nur wenn die Kachel im Layout steht)
+  if (id === 'setup') return <SetupTile />;
   if (id === 'media') {
     return (
       <div className="min-w-0">
@@ -333,7 +588,7 @@ export function PanelTile({ id, d }: { id: string; d: any }) {
   }
   const link = LINKS[id];
   return (
-    <Card title={PANEL_TITLES[id]} action={link ? <Link to={link[0]} className="text-sm !text-fg-muted hover:!text-fg">{link[1]} →</Link> : undefined}>
+    <Card title={PANEL_TITLES[id]} subtitle={subtitleOf(id, d)} action={link ? <Link to={link[0]} className="text-sm !text-fg-muted hover:!text-fg">{link[1]} →</Link> : undefined}>
       <WidgetBody id={id} d={d} />
     </Card>
   );
@@ -353,7 +608,19 @@ interface BadgeInfo {
   hint: string;
 }
 
-export function useBadgeInfo(d: any): (id: string) => BadgeInfo {
+/**
+ * Kennzahl „Dienste“: dieselbe Abfrage wie die Statuszeile (GET /system/status, gemeinsamer Zwischenspeicher) – kein
+ * zweiter Systemstatus bei jedem Dashboard-Abruf.
+ */
+function useServices(enabled: boolean) {
+  const { can } = useAuth();
+  const q = useQuery({ queryKey: ['system-status-mini'], queryFn: () => get<any>('/system/status'), enabled: enabled && can('system.status'), refetchInterval: 30_000 });
+  if (!q.data) return null;
+  const bad = (q.data.services ?? []).filter((x: any) => x.state !== 'ok');
+  return { problems: bad.length as number, error: bad.some((x: any) => x.state === 'error'), names: bad.map((x: any) => x.name as string) };
+}
+
+export function useBadgeInfo(d: any, services?: ReturnType<typeof useServices>): (id: string) => BadgeInfo {
   const { can } = useAuth();
   return (id) => {
     const capped = (list: any[] | undefined, cap: number): [number | null, string] => (list ? [list.length, list.length >= cap ? `${cap}+` : String(list.length)] : [null, '–']);
@@ -404,6 +671,20 @@ export function useBadgeInfo(d: any): (id: string) => BadgeInfo {
         error = (v[0] ?? 0) > 0;
         hint = error ? 'Verbindung prüfen' : 'alle Verbindungen laufen';
         break;
+      case 'badge_calendar_today':
+        v = plain(d.calendar?.today);
+        to = '/kalender';
+        hint = 'Termine und Fristen';
+        break;
+      case 'badge_services': {
+        const sv = services;
+        v = sv ? [sv.problems, sv.problems ? String(sv.problems) : 'OK'] : [null, '–'];
+        to = '/system';
+        error = !!sv?.error;
+        hot = !!sv?.problems && !sv.error;
+        hint = sv?.problems ? sv.names.join(', ') : 'alle laufen';
+        break;
+      }
     }
     return { value: v[0], text: v[1], to, hot, error, hint };
   };
@@ -411,7 +692,8 @@ export function useBadgeInfo(d: any): (id: string) => BadgeInfo {
 
 /** Kompakte Kennzahl: Beschriftung, große Mono-Zahl, eine leise Zeile. Die ganze Fläche führt zur passenden Seite. */
 export function BadgeTile({ id, d, className }: { id: string; d: any; className?: string }) {
-  const info = useBadgeInfo(d)(id);
+  const services = useServices(id === 'badge_services');
+  const info = useBadgeInfo(d, services)(id);
   return (
     <Link to={info.to} data-dash-tile={id} className={cx('flex flex-col gap-0.5 min-w-0 px-4 py-3 rounded-node bg-card border border-line !text-fg transition-shadow duration-fast hover:shadow-ring', className)}>
       <span className="text-meta text-fg-muted truncate">{BADGE_TITLES[id]}</span>

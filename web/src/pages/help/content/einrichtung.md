@@ -13,6 +13,8 @@ Dann `/einrichtung` öffnen und in zwei Schritten festlegen:
 
 Die öffentliche Adresse steht in Einladungen, Upload-Links und QR-Codes. Später ändern geht unter **Einstellungen → Organisation** – bereits gedruckte QR-Codes zeigen dann aber weiter auf die alte Adresse.
 
+Danach führt die Kachel **BlaulichtCMS startklar** im Dashboard durch alles Weitere vor dem Echtbetrieb – siehe [Dashboard → BlaulichtCMS startklar](/hilfe/dashboard#blaulichtcms-startklar).
+
 ## Einstellungen im Überblick
 
 Unter [Verwaltung → Einstellungen](/einstellungen) hat jeder Bereich eine eigene Seite mit einer Speichern-Leiste („Ungespeicherte Änderungen · Verwerfen · Speichern“); wer die Seite mit offenen Änderungen verlässt, wird gefragt. **Einstellung finden** über der Übersicht (und die Suche mit Strg K) springt direkt zum Feld. Jede Seite lässt sich mit „Einstellungen ansehen“ lesen; ändern lässt sich jedes Feld nur mit dem passenden Recht.

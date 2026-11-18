@@ -26,6 +26,7 @@ const F = (page: string, key: string, title: string, keywords = '', perm: string
 export const SETTINGS_INDEX: SettingsEntry[] = [
   // Unterseiten
   P('organisation', 'Organisation', 'Instanzname Organisation Absendername Namen Öffentliche Adresse URL Zeitzone Bundesland Stichwortverzeichnis Sprache Allgemein'),
+  P('organisation', 'Checkliste „BlaulichtCMS startklar“', 'Checkliste startklar Ersteinrichtung ausgeblendet einblenden Echtbetrieb', ['settings.general'], 'startklar'),
   P('datenschutz', 'Datenschutz & Recht', 'Verantwortliche Stelle Datenschutzbeauftragte DSB Datenschutzerklärung Impressum DSGVO Hinweis Upload-Seite Art. 13'),
   P('loeschfristen', 'Löschfristen', 'Löschfrist Aufbewahrung aufbewahren löschen Papierkorb Sammlungen Upload-Links Presseanfragen Warnvorgänge Einsatzmeldungen Empfangsprotokoll Versandprotokolle Wiedervorlage Systemprotokoll Audit-Protokoll IP-Adressen Laufprotokolle'),
   P('medien', 'Medien & Upload', 'Dateigröße Dateitypen Video Inhaltsprüfung Schadsoftware Gesichtsvorschläge Speicher Warnschwelle Upload-Link Gültigkeit Kontingent Hochladen ZIP Standortdaten Kamera Medien'),

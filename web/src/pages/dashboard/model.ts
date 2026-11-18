@@ -16,6 +16,8 @@ export interface Layout {
 export interface LayoutResponse {
   layout: Layout;
   source: 'personal' | 'role' | 'shared' | 'default';
+  /** Profil der mitgelieferten Standardansicht (Rolle bzw. „press“/„generic“, #254) */
+  profile?: string;
   widgets: string[];
   templates?: string[];
   /** Rollen für gemeinsame Vorlagen (mitgelieferte und eigene), nur mit „Dashboard-Vorlagen speichern“ */
@@ -52,6 +54,13 @@ export const PANEL_TITLES: Record<string, string> = {
   rss: 'Quellen (RSS)',
   press: 'Presseanfragen',
   insights: 'Reichweite (7 Tage)',
+  setup: 'BlaulichtCMS startklar',
+  my_drafts: 'Meine Entwürfe',
+  calendar_upcoming: 'Nächste Termine',
+  my_press: 'Meine Presseanfragen',
+  warnings: 'Warnungen',
+  incidents: 'Einsatzliste',
+  automations: 'Workflows mit Fehlern',
 };
 
 export const BADGE_TITLES: Record<string, string> = {
@@ -62,6 +71,8 @@ export const BADGE_TITLES: Record<string, string> = {
   badge_uploads: 'Uploads in 24 Std.',
   badge_connection_errors: 'Verbindungsfehler',
   badge_press: 'Offene Presseanfragen',
+  badge_calendar_today: 'Termine heute',
+  badge_services: 'Dienste',
 };
 
 export const isBadge = (id: string) => id in BADGE_TITLES;

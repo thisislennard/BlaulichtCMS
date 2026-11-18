@@ -11,6 +11,7 @@ import { navTrail } from '../../../config/navText';
 import { LoadError, SectionCard } from '../shared';
 import { fmtUptime, useSystemStatus } from '../SystemStatus';
 import { fieldId, FieldGrid, NumField, SettingsForm, SwitchField, TextAreaField, TextField, useSettingsForm, useSettingsQuery } from './model';
+import { SetupChecklistSetting } from './SetupChecklist';
 
 /* ---------------------------------------------------------------------------------------------- Organisation */
 
@@ -124,6 +125,8 @@ export function OrganisationPage() {
   return (
     <SettingsForm keys={ORG_KEYS} label="Organisation">
       <OrganisationFields />
+      {/* Checkliste „BlaulichtCMS startklar“ (#255): Stand und ausgeblendete Punkte wieder zeigen */}
+      <SetupChecklistSetting />
     </SettingsForm>
   );
 }

@@ -29,7 +29,7 @@ const startedAt = Date.now();
 
 /** Einstellungen, die nicht über die allgemeine Einstellungsseite geändert werden dürfen. */
 const INTERNAL_KEYS = new Set<SettingKey>([
-  'setup.completed', 'dashboard.layouts', 'smtp.password_secret_id', 'smtp.verified', 'system.maintenance',
+  'setup.completed', 'setup.checklist_hidden', 'dashboard.layouts', 'smtp.password_secret_id', 'smtp.verified', 'system.maintenance',
   // Gestaltung der Upload-Seite: eigene Seite mit eigener Prüfung (routes/media-design.ts)
   'media.upload_design',
   // In-App-Updates: eigene Seite und eigene Prüfung (routes/updates.ts) – Token nie in der allgemeinen Liste

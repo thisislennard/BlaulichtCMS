@@ -241,7 +241,28 @@ Das Widget „Redaktionsfluss“ (früher „Kennzahlen“, Widget-ID weiterhin 
 - Bedienelemente im Bearbeitungsmodus sind mindestens 40 px hoch (Touch-Ziele). „Für mich speichern“ ist die einzige rote Aktion.
 - Welche Widgets es gibt und welches Recht sie brauchen, steht nur in `server/src/lib/dashboard-layout.ts`.
 
-Die Begrüßung richtet sich nach der Tageszeit („Guten Abend, Alex.“), darunter eine Zeile, was gerade wartet.
+### Standardansicht je Rolle (seit #254)
+
+- Reihenfolge: persönliches Layout → Dashboard-Vorlage der ersten Rolle mit Vorlage → Dashboard-Vorlage für alle →
+  **mitgelieferte Standardansicht** der ersten passenden Rolle (`ROLE_DEFAULT_LAYOUTS`; eigene Rollen nach ihren Rechten,
+  `profileFor`, Profil `press` für Presse-Rechte ohne Redaktion). „Standard wiederherstellen“ löscht nur das persönliche Layout.
+- **Jeder Sachverhalt höchstens einmal:** Redaktionsfluss *oder* Einzelkacheln (Freigaben, Bereit, Uploads,
+  Veröffentlichungen); eine Kennzahl nur, wenn ihr Thema keine eigene Kachel hat. Jede Kachel nennt ihre Anzahl selbst
+  (`Card`-Untertitel). `units.test.ts` prüft das für alle Standardansichten (Desktop und Handy).
+- **Nicht genutzte Module** (Widget-Feld `module`: Website, Quellen, Kalender, Presse, Warnungen, Einsatzliste, Workflows,
+  Verbindungen, soziale Netzwerke) fehlen in der Standardansicht, bis es dort etwas gibt; bliebe keine Kachel übrig,
+  gilt die Ansicht ohne diesen Filter. Gespeicherte Layouts und Vorlagen bleiben unverändert.
+- Unterüberschriften in einer Kachel sind `h3` (Kachel-Titel `h2`, Seitentitel `h1`, #267).
+- **Checkliste „BlaulichtCMS startklar“** (#255, Kachel `setup`, Recht `settings.general`): Zeile = Status-Symbol
+  (erledigt `CircleCheck` grün, offen `CircleDashed`, Pflicht rot) + Titel + neutrales Badge „Pflicht/empfohlen/optional“
+  + eine Zeile Erklärung + Link „Bereich → Seite →“ (aus Menü bzw. Einstellungs-Index, `whereOf`) + „×“ zum Ausblenden
+  (40 px). Stand kommt von `GET /setup/checklist`, nicht aus `GET /dashboard`.
+- **Begrüßung neuer Konten** (#255): einmalige `Card` über den Kennzahlen mit drei nummerierten Schritten der Rolle,
+  Links „Hilfe“, „App installieren“, „Push einschalten“ und „Verstanden“ (sekundär – die Hauptaktion der Seite bleibt
+  „Neuer Beitrag“). Nicht für die Administration (sie hat die Checkliste).
+
+Die Begrüßung richtet sich nach der Tageszeit („Guten Abend, Alex.“), darunter eine Zeile, was gerade wartet – nur
+Vorgänge, die die Person selbst erledigen darf (Freigaberecht, Sichtungsrecht, eigene Presseanfragen).
 
 ---
 

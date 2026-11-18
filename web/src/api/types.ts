@@ -20,6 +20,8 @@ export interface Preferences {
   language?: 'de' | 'en';
   /** stummgeschaltete Benachrichtigungsarten (Medien) */
   mutedNotifications?: string[];
+  /** Begrüßungskarte neuer Konten gelesen (#255) */
+  welcomeDone?: boolean;
 }
 
 export type PostState = 'draft' | 'in_review' | 'approved' | 'rejected' | 'scheduled' | 'publishing' | 'published' | 'failed' | 'unknown' | 'deactivated';

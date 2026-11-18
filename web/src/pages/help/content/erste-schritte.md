@@ -25,7 +25,9 @@ Alle verbindlichen Begriffe stehen unter [Begriffe](/hilfe/begriffe).
 
 ## Für Administratoren: die ersten zehn Minuten
 
+Nach der Ersteinrichtung steht oben im [Dashboard](/) die Kachel **BlaulichtCMS startklar**. Sie zeigt alle offenen Punkte vor dem Echtbetrieb – Pflichtangaben für die Upload-Seiten, E-Mail-Versand, Bundesland, Sicherung außer Haus, Update-Helfer, Zwei-Faktor, Website – erkennt den Stand selbst und führt mit einem Link direkt an die richtige Stelle (Einzelheiten unter [Dashboard → BlaulichtCMS startklar](/hilfe/dashboard#blaulichtcms-startklar)). Die wichtigsten Schritte:
+
 1. Ersteinrichtung abschließen (Organisation, öffentliche Adresse, Zeitzone) – siehe [Einrichtung](/hilfe/einrichtung).
-2. Unter [Benutzer und Rollen](/benutzer) die Redaktion einladen. Jede Person bekommt einen persönlichen, einmaligen Link.
+2. Unter [Benutzer und Rollen](/benutzer) die Redaktion einladen. Jede Person bekommt einen persönlichen, einmaligen Link; neue Konten sehen nach der Anmeldung einmal die ersten Schritte ihrer Rolle.
 3. Optional unter [Websites](/websites) die WordPress-Website koppeln – siehe [WordPress verbinden](/hilfe/wordpress).
 4. Einen Testbeitrag anlegen und den ganzen Ablauf einmal durchspielen.

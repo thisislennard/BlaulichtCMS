@@ -151,7 +151,7 @@
     },
     "dashboard": {
       "title": "Dashboard und Live-Status",
-      "summary": "Widgets anordnen, mobile Reihenfolge, Vorlagen für Rollen, bestätigter Stand."
+      "summary": "Standardansicht je Rolle, Checkliste „BlaulichtCMS startklar“, Widgets anordnen, Dashboard-Vorlagen, bestätigter Stand."
     },
     "warnentwurf": {
       "title": "Warnentwurf und Übergabe",

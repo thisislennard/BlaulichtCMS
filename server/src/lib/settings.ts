@@ -277,6 +277,11 @@ export const DEFAULT_SETTINGS = {
   'backup.keep': 14,
 
   'setup.completed': false,
+  /**
+   * Checkliste „BlaulichtCMS startklar“ (#255, lib/setup-checklist.ts): ausgeblendete Punkte (für die ganze Instanz).
+   * Gilt nur, solange ein Punkt offen ist; unter Einstellungen → Organisation wieder einblendbar.
+   */
+  'setup.checklist_hidden': [] as string[],
 };
 
 export type SettingKey = keyof typeof DEFAULT_SETTINGS;

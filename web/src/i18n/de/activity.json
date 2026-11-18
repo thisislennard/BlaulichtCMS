@@ -52,7 +52,8 @@
       "trusted_device_removed": "Gemerktes Gerät entfernt"
     },
     "setup": {
-      "complete": "Ersteinrichtung abgeschlossen"
+      "complete": "Ersteinrichtung abgeschlossen",
+      "checklist_changed": "Checkliste „startklar“ angepasst"
     },
     "user": {
       "invited": "Benutzer eingeladen",
@@ -473,7 +474,8 @@
       "trusted_device_removed": "hat ein gemerktes Gerät der Zwei-Faktor-Anmeldung entfernt"
     },
     "setup": {
-      "complete": "hat BlaulichtCMS eingerichtet"
+      "complete": "hat BlaulichtCMS eingerichtet",
+      "checklist_changed": "hat Punkte der Checkliste „BlaulichtCMS startklar“ aus- oder eingeblendet"
     },
     "user": {
       "invited": "hat „{o}“ eingeladen",

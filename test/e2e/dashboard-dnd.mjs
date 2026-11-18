@@ -6,7 +6,7 @@
  *    und ganze Spalten untereinander – jeweils mit Maus, Touch und Tastatur,
  *  - Escape ein laufendes Verschieben zurücknimmt und „Abbrechen“ exakt den Stand vor dem Bearbeiten zeigt,
  *  - Spaltenbreite, „Spalte hinzufügen“, Löschen leerer Spalten, Aus-/Einblenden funktionieren,
- *  - „Für mich speichern“ alles in einem Aufruf speichert, „Auf Vorlage zurücksetzen“ und Vorlagen funktionieren,
+ *  - „Für mich speichern“ alles in einem Aufruf speichert, „Standard wiederherstellen“ und Vorlagen funktionieren,
  *  - die Seite dabei nie waagerecht überläuft (Desktop, Tablet, Handy; hell und dunkel).
  *
  * Voraussetzung: laufende Instanz mit den Testdaten des Fokus-Tests (`test/e2e/out/focus-state.json`, also zuerst
@@ -296,11 +296,18 @@ try {
   await page.getByRole('button', { name: 'Dashboard-Vorlage entfernen' }).click();
   await sleep(700);
   check('Vorlage entfernt', same((await admin.get('/dashboard/layout')).templates, []));
-  // Auf Vorlage zurücksetzen
-  await page.getByRole('button', { name: 'Auf Dashboard-Vorlage zurücksetzen' }).click();
+  // Standard wiederherstellen: persönliche Anpassung weg, es gilt die mitgelieferte Standardansicht der Rolle (#254)
+  await page.getByRole('button', { name: 'Standard wiederherstellen' }).click();
   await page.locator('[data-dash-view-column]').first().waitFor({ timeout: 8000 });
   await sleep(400);
-  check('Zurücksetzen: Standardlayout gilt wieder', (await admin.get('/dashboard/layout')).source === 'default' && same(await viewState(page), startView), JSON.stringify(await viewState(page)));
+  const def = await admin.get('/dashboard/layout');
+  const dv = await viewState(page);
+  const defPanels = def.layout.columns.flatMap((c) => c.widgets).filter((id) => id !== 'setup');
+  check(
+    'Standard wiederherstellen: Standardansicht der Administration gilt wieder',
+    def.source === 'default' && def.profile === 'platform_admin' && same(dv.badges, def.layout.badges) && same(dv.columns.flatMap((c) => c.widgets).filter((id) => id !== 'setup'), defPanels),
+    JSON.stringify(dv),
+  );
   check('Keine Fehler in der Browser-Konsole (Desktop)', errors.length === 0, errors.slice(0, 3).join(' | '));
   await ctx.close();
 

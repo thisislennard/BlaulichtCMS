@@ -268,9 +268,17 @@ flowchart LR
 - **Verständliche Rückmeldungen:** Zeitüberschreitung, abgelaufene Sitzung (mit Rückweg), offline bzw. Server nicht
   erreichbar (mit automatischem erneutem Versuch), kein Zugriff, Seite nicht gefunden, Wartung, zu viele Versuche (mit
   Wartezeit) und unerwartete Fehler (mit Details) – jeweils mit Symbol, Erklärung und „Was tun?“.
-- **Dashboard:** Kennzahlen-Reihe und Kacheln in bis zu vier Spalten (offene Freigaben, bestätigter Stand der
-  Veröffentlichungen, neue Uploads, Banner, Websites, Presseanfragen, Reichweite); per Drag-and-drop mit Maus, Finger
-  oder Tastatur anpassbar, eigene Reihenfolge fürs Handy, Vorlagen für alle oder je Rolle.
+- **Dashboard:** mitgelieferte Standardansicht je Rolle (Administration, Redaktion, Freigabe, Veröffentlichung, Presse,
+  Warnrollen, Lesezugriff) ohne doppelte Kacheln; Kennzahlen und Kacheln in bis zu vier Spalten (Redaktionsfluss, Meine
+  Entwürfe, Freigaben, Nächste Termine samt Presse-Fristen, Meine Presseanfragen, Warnungen, Einsatzliste, Workflows mit
+  Fehlern, bestätigter Stand der Veröffentlichungen, Websites, Reichweite …); Kacheln nicht genutzter Bereiche erscheinen
+  erst, wenn es dort etwas gibt. Per Drag-and-drop mit Maus, Finger oder Tastatur anpassbar, eigene Reihenfolge fürs
+  Handy, Dashboard-Vorlagen für alle oder je Rolle, „Standard wiederherstellen“.
+- **BlaulichtCMS startklar:** Checkliste für die Administration nach der Installation – Organisation, öffentliche Adresse
+  (HTTPS, Reverse Proxy), verantwortliche Stelle, Datenschutzerklärung und Impressum, E-Mail-Versand mit Testmail,
+  Bundesland, Sicherung außer Haus mit Probe-Wiederherstellung, Update-Helfer, Zwei-Faktor, Website; erkennt den Stand
+  selbst, verlinkt direkt an die richtige Stelle, Punkte einzeln ausblendbar. Neue Konten sehen einmal die ersten
+  Schritte ihrer Rolle.
 - **Live:** neue Uploads, Freigaben und Veröffentlichungen erscheinen ohne Neuladen; Benachrichtigungen in der App.
 - **Push und E-Mail:** je Person und Art wählbar (Freigabe angefordert, Entscheidung, Einsatz-Eingang, neue Fotos,
   amtliche Warnungen, Verbindungsfehler, fehlgeschlagene Workflows, Updates …) – nur Arten, für die das Konto Rechte
