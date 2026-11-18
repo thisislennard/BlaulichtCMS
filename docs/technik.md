@@ -106,6 +106,16 @@ Personen. Routen `GET /insights`, `GET /posts/:id/insights` (Recht `insights.vie
   Übergabe: Bridge (`alt`), Facebook (`alt_text_custom`), Instagram-Bildbeiträge und Threads (`alt_text`), X
   (`POST /2/media/metadata`), Mastodon (`description`), Bluesky (`alt`). Einstellung `editorial.alt_text_required`:
   Freigabe blockiert (Fehler `alt_text_required`) oder nur Warnung.
+- Prüfliste vor dem Einreichen (#262): `server/src/lib/post-checklist.ts` (`GET /posts/:id/checklist`, Recht
+  `post.view`) fasst die vorhandenen Prüfungen zusammen – Text, gelöschte Dateien (`missingMediaCount`),
+  `altCheck`, `privacyFindings`, Formatprüfung je Netzwerk (`connections/social-check.ts`, auch Grundlage von
+  `GET /posts/:id/social-check`), Zustand von Website und Verbindungen. `POST /posts/:id/submit` lehnt mit
+  `submit_blocked` ab, wenn ein Punkt die Freigabe ohnehin scheitern ließe (kein Text, gelöschte Dateien,
+  Alternativtext als Pflicht); Hinweise blockieren nicht.
+- Texte je Netzwerk (#262): `server/src/lib/social-text.ts` (Zählregeln, Höchstlängen, `socialText`,
+  `socialTextTooLong`) ist **gemeinsamer Code**: Der Server nutzt ihn beim Senden (über `connections/channels.ts`),
+  die Oberfläche importiert dieselbe Datei (`web/src/lib/social.ts`) für Zeichenzähler und die Vorschau je Netzwerk.
+  Deshalb ohne Node- und Datenbank-Abhängigkeiten (Unit-Test in `text-limits.test.ts`).
 - Lesbarkeit: `web/src/lib/readability.ts` (Flesch-Amstad, erste Wiener Sachtextformel, Silbennäherung für das
   Deutsche, Hinweise), im Browser gerechnet; Tests in `server/test/readability.test.ts`.
 

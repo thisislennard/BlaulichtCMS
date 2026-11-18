@@ -66,7 +66,7 @@ export function SocialTargetsCard({ draft, onChange, editable }: { draft: Social
   if (!can('connection.view') && !draft.social.length) return null;
   if (!list.length && !draft.social.length)
     return (
-      <Card title="Soziale Netzwerke">
+      <Card id="netzwerke" title="Soziale Netzwerke">
         <p className="m-0 text-sm text-fg-muted">Kein soziales Netzwerk verbunden. {can('connection.configure') && <Link to="/verbindungen">Verbindung einrichten</Link>}</p>
       </Card>
     );
@@ -77,7 +77,7 @@ export function SocialTargetsCard({ draft, onChange, editable }: { draft: Social
   // Höchstlänge der Mastodon-Instanz(en) laut letztem Test – bei mehreren gilt die kleinste
   const mastodonMax = Math.min(...chosen('mastodon').map((id) => Number(list.find((t) => t.id === id)?.capabilities?.max_characters) || 500), 500 * 100);
   return (
-    <Card title="Soziale Netzwerke" subtitle="Jedes Netzwerk hat einen eigenen Status. Eine Änderung der Auswahl oder des Formats verlangt eine neue Freigabe.">
+    <Card id="netzwerke" title="Soziale Netzwerke" subtitle="Jedes Netzwerk hat einen eigenen Status. Eine Änderung der Auswahl oder des Formats verlangt eine neue Freigabe.">
       <div className="flex flex-col gap-3">
         {list.map((t) => {
           const on = draft.social.includes(t.id);
@@ -157,7 +157,7 @@ export function SocialTargetsCard({ draft, onChange, editable }: { draft: Social
 }
 
 /** Formatprüfung, Veröffentlichen, Status je Netzwerk, gezieltes Wiederholen, Teilen von Hand, manueller Export. */
-export function SocialStatusCard({ postId, revision, hash, approved, targets, items, dirty, onChanged }: { postId: string; revision: number; hash: string; approved: boolean; targets: string[]; items: any[]; dirty: boolean; onChanged: () => void }) {
+export function SocialStatusCard({ postId, revision, hash, approved, targets, items, dirty, onChanged, primary = true }: { postId: string; revision: number; hash: string; approved: boolean; targets: string[]; items: any[]; dirty: boolean; onChanged: () => void; /** rote Hauptaktion? Nein, wenn daneben schon eine steht (#262) */ primary?: boolean }) {
   const { can } = useAuth();
   const toast = useToast();
   const toastError = useErrorToast();
@@ -193,7 +193,7 @@ export function SocialStatusCard({ postId, revision, hash, approved, targets, it
         {approved && targets.length > 0 && can('publish.social') && !dirty && (
           <div className="flex flex-col gap-2">
             <div className="flex flex-wrap gap-2">
-              <Button variant="primary" icon="Share2" onClick={() => act(() => post(`/posts/${postId}/social`, { revision, contentHash: hash }), 'Veröffentlichung auf sozialen Netzwerken beauftragt')}>
+              <Button variant={primary && !items.some((s) => s.status === 'ready') ? 'primary' : 'secondary'} icon="Share2" onClick={() => act(() => post(`/posts/${postId}/social`, { revision, contentHash: hash }), 'Veröffentlichung auf sozialen Netzwerken beauftragt')}>
                 Auf sozialen Netzwerken veröffentlichen
               </Button>
               <Button icon="Download" onClick={async () => setExp(await get(`/posts/${postId}/social-export`).catch((e) => (toastError(e), null)))}>
@@ -245,7 +245,7 @@ export function SocialStatusCard({ postId, revision, hash, approved, targets, it
                 )}
                 {s.status === 'ready' && can('publish.social') && (
                   <div>
-                    <Button size="sm" variant="primary" icon="Share2" onClick={() => setSharing(s)}>
+                    <Button size="sm" variant={primary && s.id === items.find((x) => x.status === 'ready')?.id ? 'primary' : 'secondary'} icon="Share2" onClick={() => setSharing(s)}>
                       Jetzt teilen
                     </Button>
                   </div>

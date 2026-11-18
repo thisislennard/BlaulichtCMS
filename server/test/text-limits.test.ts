@@ -3,6 +3,10 @@ import { fitText, utf16Length } from '../src/lib/text.js';
 import { blueskyLength, socialText, socialTextTooLong } from '../src/connections/channels.js';
 import { renderTemplate } from '../src/automations/logic.js';
 import { blueskyLength as webBlueskyLength } from '../../web/src/lib/social.js';
+import * as webSocial from '../../web/src/lib/social.js';
+import * as shared from '../src/lib/social-text.js';
+import fs from 'node:fs';
+import path from 'node:path';
 
 /* Kanaltexte und Workflow-Vorlagen kürzen an Zeichengrenzen (#232). Ohne Datenbank. */
 
@@ -50,5 +54,21 @@ describe('Kanaltexte und Vorlagen kürzen an Zeichengrenzen (#232)', () => {
     const plain = 'Wort '.repeat(50);
     expect(webBlueskyLength(plain)).toBe(blueskyLength(plain));
     expect(webBlueskyLength(plain)).toBe(250);
+  });
+
+  it('Oberfläche und Server nutzen denselben Code für Zählregeln und gesendeten Text (#262)', () => {
+    // Vorschau je Netzwerk und Zeichenzähler im Beitrag: dieselben Funktionen, keine Nachbildung
+    for (const k of ['socialText', 'socialTextTooLong', 'channelLength', 'channelMax', 'limitsFor', 'xLength', 'threadsLength', 'mastodonLength', 'blueskyLength'] as const) expect((webSocial as any)[k], k).toBe((shared as any)[k]);
+    expect(socialText).toBe(shared.socialText);
+    // Die gemeinsame Datei muss im Browser laufen: keine Node- oder Datenbank-Abhängigkeiten
+    const src = fs.readFileSync(path.join(__dirname, '../src/lib/social-text.ts'), 'utf8');
+    expect(src).not.toMatch(/from 'node:|Buffer\.|from '\.\.\/db|from 'pg'/);
+    const imports = [...src.matchAll(/from '([^']+)'/g)].map((m) => m[1]);
+    expect(imports).toEqual(['./text.js']);
+    expect(fs.readFileSync(path.join(__dirname, '../src/lib/text.ts'), 'utf8')).not.toMatch(/^import /m);
+    // Gekürzt wird im Browser wie auf dem Server
+    const rev = { title: 'Titel', body: 'Wort '.repeat(100), variants: {} };
+    expect(webSocial.socialText(rev, 'x', 'https://example.org/b')).toBe(socialText(rev, 'x', 'https://example.org/b'));
+    expect(webSocial.channelLength('x', webSocial.socialText(rev, 'x'))).toBeLessThanOrEqual(280);
   });
 });

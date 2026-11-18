@@ -19,18 +19,18 @@ import { sendFileResponse } from './files.js';
 import { publicFileName } from '../media/names.js';
 import { connectionSecrets, connectionUsage, KIND_LABEL, loadConnection, requireRetest, retestRelevantConfig, saveTest, scrub, updateConnectionSecrets, type Connection, type ConnectionKind } from '../connections/common.js';
 import { FE2_ALLOWED_FIELDS, FE2_DEFAULT_MAPPING, handleFe2Event } from '../connections/fe2.js';
-import { checkFormats, checkStoryFormats, connectionTestImage, deleteFacebookPost, facebookAuthorizeUrl, facebookExchange, instagramAuthorizeUrl, instagramExchange, mediaForRevision, mediaUrl, storyImage, testFacebook, testInstagram } from '../connections/meta.js';
-import { formatsFor, isManualChannel, isSocialKind, limitsFor, markerFor, postLink, shareTarget, SOCIAL_KINDS, socialText, socialTextTooLong, type SocialChannel } from '../connections/channels.js';
-import { checkThreadsFormats, testThreads, threadsAuthorizeUrl, threadsExchange } from '../connections/threads.js';
-import { checkXFormats, deleteXPost, testX, X_SECRET_KEYS } from '../connections/x.js';
-import { checkMastodonFormats, deleteMastodonPost, mastodonAuthorizeUrl, mastodonExchange, MASTODON_VISIBILITY, normalizeInstance, registerMastodonApp, testMastodon } from '../connections/mastodon.js';
-import { checkBlueskyFormats, deleteBlueskyPost, normalizeService, testBluesky } from '../connections/bluesky.js';
+import { connectionTestImage, deleteFacebookPost, facebookAuthorizeUrl, facebookExchange, instagramAuthorizeUrl, instagramExchange, mediaForRevision, mediaUrl, storyImage, testFacebook, testInstagram } from '../connections/meta.js';
+import { formatsFor, isManualChannel, isSocialKind, limitsFor, markerFor, postLink, shareTarget, SOCIAL_KINDS, socialText } from '../connections/channels.js';
+import { testThreads, threadsAuthorizeUrl, threadsExchange } from '../connections/threads.js';
+import { deleteXPost, testX, X_SECRET_KEYS } from '../connections/x.js';
+import { deleteMastodonPost, mastodonAuthorizeUrl, mastodonExchange, MASTODON_VISIBILITY, normalizeInstance, registerMastodonApp, testMastodon } from '../connections/mastodon.js';
+import { deleteBlueskyPost, normalizeService, testBluesky } from '../connections/bluesky.js';
 import { notify } from '../lib/notify.js';
 import { FEUERSOFTWARE_DEFAULT_INTERVAL, FEUERSOFTWARE_INTERVALS, pollFeuersoftware, testFeuersoftware } from '../connections/feuersoftware.js';
 import { endBanner, insecureFeed, insecureFeedUrl, REVIEW_CHECKS, refreshWarnfeed, testWarnfeed, warningBannerText } from '../connections/warnfeed.js';
 import { listReceipts, Receipt, RECEIPT_CAP, receiptItems, receiptRaw } from '../connections/receipts.js';
 import { getSettings } from '../lib/settings.js';
-import { kindSupportsAlt } from '../lib/accessibility.js';
+import { altIssue, socialChecks } from '../connections/social-check.js';
 import { plural } from '../lib/text.js';
 
 /** Öffentliche Sicht auf eine Verbindung – nie mit Geheimnissen. */
@@ -695,28 +695,8 @@ export async function connectionRoutes(app: FastifyInstance) {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
     const st = await postState(id);
     if (!st) throw notFound();
-    const media = await mediaForRevision(st.current);
-    const targets = st.current.social_targets?.length ? await many<any>(`SELECT id, kind, config, CASE WHEN deleted_at IS NOT NULL THEN 'Verbindung gelöscht' ELSE name END AS name, status, capabilities FROM connections WHERE id = ANY($1)`, [st.current.social_targets]) : [];
-    const link = await postLink(id);
-    return targets.map((t) => {
-      const kind = t.kind as SocialChannel;
-      const text = socialText(st.current, kind, link, limitsFor(t));
-      const formats = formatsFor(kind, (st.current.social_formats ?? {})[t.id]);
-      const tooLong = socialTextTooLong(st.current, kind, link, limitsFor(t));
-      const issues: string[] = [];
-      if (formats.includes('feed')) {
-        if (kind === 'facebook' || kind === 'instagram') issues.push(...checkFormats(kind, media, text));
-        else if (kind === 'threads') issues.push(...checkThreadsFormats(media, tooLong));
-        else if (kind === 'x') issues.push(...checkXFormats(t, media, tooLong));
-        else if (kind === 'mastodon') issues.push(...checkMastodonFormats(t, media, tooLong));
-        else if (kind === 'bluesky') issues.push(...checkBlueskyFormats(media, tooLong));
-      }
-      if (formats.includes('story')) issues.push(...checkStoryFormats(kind as 'facebook' | 'instagram', media));
-      // Barrierefreiheit (#217): Bilder ohne Alternativtext bei Kanälen, die ihn übernehmen
-      const noAlt = media.filter((m: any) => m.kind === 'image' && !m.alt).length;
-      if (noAlt && formats.includes('feed') && kindSupportsAlt(kind, t.config)) issues.push(`${noAlt === 1 ? 'Ein Bild hat' : `${noAlt} Bilder haben`} keinen Alternativtext – Menschen mit Screenreader erfahren nicht, was zu sehen ist.`);
-      return { id: t.id, kind: t.kind, name: t.name, status: t.status, text, formats, manual: isManualChannel(t), link, issues };
-    });
+    // Gemeinsame Prüfung mit der Prüfliste vor dem Einreichen (connections/social-check.ts, #262)
+    return (await socialChecks(id, st.current)).map(({ formatIssues, altMissing, deleted: _deleted, ...c }) => ({ ...c, issues: [...formatIssues, ...(altMissing ? [altIssue(altMissing)] : [])] }));
   });
 
   /** Veröffentlichen auf den gewählten sozialen Netzwerken – nur mit gültiger Freigabe genau dieser Fassung. */

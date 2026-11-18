@@ -140,9 +140,15 @@ try {
     await ep.waitForURL(/\/beitraege\/[0-9a-f-]{36}$/);
     postId = ep.url().split('/').pop();
     await ep.locator('#e-body').fill('Am Samstag üben wir gemeinsam mit den Nachbarwehren.\n\nZuschauer sind willkommen.');
-    await ep.getByRole('button', { name: 'Neue Fassung speichern' }).first().click();
-    await ep.getByRole('button', { name: 'Gespeichert' }).first().waitFor();
+    // Speichern-Leiste (#262): verschwindet nach dem Speichern, oben steht dann leise „Gespeichert …“
+    await ep.locator('[data-save-bar]').getByRole('button', { name: 'Neue Fassung speichern' }).click();
+    await ep.locator('[data-save-bar]').waitFor({ state: 'detached' });
+    await ep.getByText(/Gespeichert \d/).first().waitFor();
+    // Einreichen zeigt zuerst die Prüfliste (intern ohne Ziel: Hinweis, kein Hindernis)
     await ep.getByRole('button', { name: 'Zur Freigabe einreichen' }).click();
+    const check = ep.getByRole('dialog', { name: 'Zur Freigabe einreichen' });
+    await check.getByText('Kein Veröffentlichungsziel gewählt').waitFor();
+    await check.getByRole('button', { name: /^(Trotzdem einreichen|Einreichen)$/ }).click();
     await ep.getByText(/^Eingereicht /).waitFor();
     // Vier-Augen: wer eingereicht hat, sieht keine Freigabe-Schaltfläche (Recht „Beiträge freigeben“ fehlt der Redaktion)
     if (await ep.getByRole('button', { name: 'Freigeben', exact: true }).count()) throw new Error('Redaktion sieht „Freigeben“');

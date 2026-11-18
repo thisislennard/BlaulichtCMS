@@ -4936,6 +4936,55 @@ describe('Barrierefreiheit: Alternativtext je Bild (#217)', () => {
     const a = (await editor.get(`/posts/${p2}`)).json.accessibility;
     expect(a.applies).toBe(false);
   });
+
+  it('Prüfliste vor dem Einreichen (#262): dieselben Prüfungen wie Freigabe und Senden, blockiert nur, was die Freigabe ohnehin verhindert', async () => {
+    const img3 = (await readyPhoto('Prüfliste', 'pruefliste-key-0001')).id;
+    const xc = (await one<any>(`INSERT INTO connections (kind, name, status, config) VALUES ('x', 'X Prüfliste', 'active', '{}') RETURNING id`))!.id;
+    const igc = (await one<any>(`INSERT INTO connections (kind, name, status, config) VALUES ('instagram', 'Instagram Prüfliste', 'tested', '{}') RETURNING id`))!.id;
+    const p3 = (await editor.post('/posts', { title: 'Prüfliste (fiktiv)' })).json.id;
+    let d = (await editor.get(`/posts/${p3}`)).json;
+    // Nur intern, ohne Text: Text blockiert, fehlendes Ziel ist ein Hinweis
+    let c = (await editor.get(`/posts/${p3}/checklist`)).json;
+    expect(c.blocking).toBe(true);
+    expect(c.items.find((i: any) => i.key === 'text')).toMatchObject({ level: 'blocking', section: 'text' });
+    expect(c.items.find((i: any) => i.key === 'targets')).toMatchObject({ level: 'warning', section: 'website' });
+    const long = 'Sehr langer Text über die neue Drehleiter. '.repeat(12);
+    await editor.put(`/posts/${p3}/revision`, { baseRevision: d.revision.number, title: d.revision.title, body: long, mediaIds: [img3], coverId: null, siteId: siteId2, socialTargets: [xc, igc] });
+    d = (await editor.get(`/posts/${p3}`)).json;
+    c = (await editor.get(`/posts/${p3}/checklist`)).json;
+    expect(c.revision).toBe(d.revision.number);
+    const item = (k: string) => c.items.find((i: any) => i.key === k);
+    expect(c.blocking).toBe(false);
+    expect(item('text').level).toBe('ok');
+    expect(item('targets')).toMatchObject({ level: 'ok', title: expect.stringMatching(/Website „Barrierefreie Testwebsite“, X „X Prüfliste“, Instagram „Instagram Prüfliste“|Website „Barrierefreie Testwebsite“, Instagram „Instagram Prüfliste“, X „X Prüfliste“/) });
+    expect(item('cover')).toMatchObject({ level: 'warning', section: 'medien' });
+    expect(item('alt')).toMatchObject({ level: 'warning', title: 'Ein Bild ohne Alternativtext' });
+    // Zeichengrenze von X mit derselben Regel wie beim Senden; nicht aktive Verbindung wird übersprungen
+    expect(item(`social:${xc}`).details.join(' ')).toMatch(/X: Text auf 280 Zeichen gekürzt/);
+    expect(item(`social:${igc}`).details.join(' ')).toMatch(/nicht aktiv/);
+    // Alternativtexte stehen im eigenen Punkt, nicht zusätzlich je Netzwerk; die Formatprüfung meldet sie weiterhin
+    expect(item(`social:${igc}`).details.join(' ')).not.toMatch(/Alternativtext/);
+    expect((await editor.get(`/posts/${p3}/social-check`)).json.find((x: any) => x.id === igc).issues.join(' ')).toMatch(/keinen Alternativtext/);
+    expect(c.warnings).toBe(c.items.filter((i: any) => i.level === 'warning').length);
+    // Alternativtext als Pflicht: Prüfliste blockiert, Einreichen wird abgelehnt (die Freigabe scheiterte sonst später)
+    await admin.patch('/settings', { 'editorial.alt_text_required': true });
+    try {
+      c = (await editor.get(`/posts/${p3}/checklist`)).json;
+      expect(c.blocking).toBe(true);
+      expect(c.items.find((i: any) => i.key === 'alt').level).toBe('blocking');
+      const blocked = await editor.post(`/posts/${p3}/submit`, { revision: d.revision.number });
+      expect(blocked.status).toBe(400);
+      expect(blocked.json.error).toBe('submit_blocked');
+      expect(blocked.json.message).toMatch(/Ein Bild ohne Alternativtext/);
+    } finally {
+      await admin.patch('/settings', { 'editorial.alt_text_required': false });
+    }
+    // Hinweise blockieren nicht
+    const ok = await editor.post(`/posts/${p3}/submit`, { revision: d.revision.number });
+    expect(ok.status, JSON.stringify(ok.json)).toBe(200);
+    expect((await anonymous.get(`/posts/${p3}/checklist`)).status).toBe(401);
+    await pool.query(`DELETE FROM connections WHERE id = ANY($1)`, [[xc, igc]]);
+  });
 });
 
 describe('Keine Empfängeradressen im Audit (#185)', () => {

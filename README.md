@@ -107,8 +107,13 @@ flowchart LR
 - **Beitragsarten:** Nachricht, Einsatzbericht, Veranstaltung, Lage-Info – mit Vorlagen für wiederkehrende Texte.
 - **Fassungen:** Jede Änderung an Text, Medien oder Veröffentlichungszielen erzeugt eine neue Fassung; Unterschiede sind
   nachvollziehbar.
-- **Texte je Netzwerk:** eigener Text für Website, Facebook, Instagram, Threads, X, Mastodon, Bluesky und WhatsApp-Kanal, Vorschau je Netzwerk und Zeichenzähler, geplanter
+- **Texte je Netzwerk:** eigener Text für Website, Facebook, Instagram, Threads, X, Mastodon, Bluesky und WhatsApp-Kanal,
+  Vorschau je Netzwerk mit genau dem gesendeten (ggf. gekürzten) Text, Story-Vorschau und Zeichenzähler, geplanter
   Veröffentlichungstermin.
+- **Geführt zum Einreichen:** „Nächster Schritt“ zeigt den Weg Text → Medien (Sichtung, Übernahme) → Alternativtexte →
+  Ziele → Einreichen; vor dem Einreichen eine Prüfliste aus denselben Prüfungen wie Freigabe und Veröffentlichen
+  (Ziele, Titelbild, Alternativtexte, Datenschutz-Prüfung, Formate und Zeichengrenzen je Netzwerk); Speichern-Leiste
+  auf allen Bildschirmgrößen.
 - **Barrierefreiheit:** Alternativtext je Bild (in der Medienverwaltung hinterlegt und wiederverwendet, an Website
   und soziale Netzwerke übergeben), Freigabe mit Warnung oder Pflicht; Lesbarkeitshinweis im Editor mit
   Flesch-Amstad und Wiener Sachtextformel, langen Sätzen, Abkürzungen, Linktexten wie „hier“ und Hashtags – ohne KI.

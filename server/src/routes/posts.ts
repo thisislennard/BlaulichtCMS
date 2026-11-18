@@ -11,6 +11,7 @@ import { createCollection, createUploadLink, freshLinkUrl, uploadLinkUrl } from 
 import { approvalStillValid, assertMediaPresent, assertPrivacyChecked, missingMediaCount, privacyAudit, privacyFindings } from '../lib/approval.js';
 import { ALT_MAX, altCheck, cleanMediaAlt } from '../lib/accessibility.js';
 import { foldSql, searchTerms } from './search.js';
+import { postChecklist } from '../lib/post-checklist.js';
 
 export const POST_KINDS = ['news', 'incident', 'event', 'situation'] as const;
 
@@ -304,8 +305,11 @@ export async function postRoutes(app: FastifyInstance) {
     );
     const collections = await many<any>(
       `SELECT c.id, c.title, (SELECT count(*)::int FROM media m WHERE m.collection_id = c.id AND m.status = 'ready' AND m.deleted_at IS NULL) AS media_count,
-              (SELECT count(*)::int FROM media m WHERE m.collection_id = c.id AND m.status = 'ready' AND m.deleted_at IS NULL AND m.selection = 'selected') AS selected_count
-         FROM collections c WHERE c.post_id = $1 ORDER BY c.created_at`,
+              (SELECT count(*)::int FROM media m WHERE m.collection_id = c.id AND m.status = 'ready' AND m.deleted_at IS NULL AND m.selection = 'selected') AS selected_count,
+              (SELECT count(*)::int FROM media m WHERE m.collection_id = c.id AND m.status = 'ready' AND m.deleted_at IS NULL AND m.selection = 'pending') AS pending_count,
+              -- Ausgewählte Dateien (#262): „n ausgewählt, noch nicht übernommen“ im nächsten Schritt
+              (SELECT COALESCE(array_agg(m.id ORDER BY m.created_at), '{}') FROM media m WHERE m.collection_id = c.id AND m.status = 'ready' AND m.deleted_at IS NULL AND m.selection = 'selected') AS selected_ids
+         FROM collections c WHERE c.post_id = $1 AND c.deleted_at IS NULL ORDER BY c.created_at`,
       [id],
     );
     const cur = st.current;
@@ -434,6 +438,17 @@ export async function postRoutes(app: FastifyInstance) {
     return { ok: true };
   });
 
+  /**
+   * Prüfliste der aktuellen Fassung (#262): fehlende Ziele, Titelbild, Alternativtexte, Datenschutz-Prüfung, Formate und
+   * Zeichengrenzen je Netzwerk – aus denselben Prüfungen wie Freigabe und Veröffentlichen (lib/post-checklist.ts).
+   */
+  app.get('/posts/:id/checklist', { preHandler: requireAuth('post.view') }, async (req) => {
+    const { id } = z.object({ id: z.uuid() }).parse(req.params);
+    const st = await postState(id);
+    if (!st) throw notFound('Beitrag nicht gefunden.');
+    return { revision: st.current.number, ...(await postChecklist(id, st.current)) };
+  });
+
   app.post('/posts/:id/submit', { preHandler: requireAuth('post.submit') }, async (req) => {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
     const { revision } = z.object({ revision: z.number().int().min(1) }).parse(req.body);
@@ -442,6 +457,13 @@ export async function postRoutes(app: FastifyInstance) {
     if (st.current.number !== revision) throw conflict('Es gibt eine neuere Fassung. Bitte neu laden.');
     if (st.validApproval) throw badRequest('Diese Fassung ist bereits freigegeben.');
     if (!st.current.body.trim()) throw badRequest('Bitte zuerst einen Text schreiben.');
+    // Prüfliste (#262): Einreichen nur, wenn die Freigabe nicht ohnehin scheitern würde (gelöschte Dateien,
+    // Alternativtext als Pflicht); Hinweise blockieren nicht
+    const check = await postChecklist(id, st.current);
+    if (check.blocking) {
+      const blocking = check.items.filter((i) => i.level === 'blocking');
+      throw new AppError(400, 'submit_blocked', `Einreichen nicht möglich: ${blocking.map((i) => i.title).join(' · ')}.`, { items: blocking });
+    }
     await pool.query('UPDATE post_revisions SET submitted_at = now(), submitted_by = $2 WHERE id = $1', [st.current.id, req.auth!.user?.id ?? null]);
     await audit(req.auth!.actor, 'post.submitted', { type: 'post', id, label: st.current.title }, { fassung: revision });
     // Link auf die kompakte Freigabe-Ansicht (#216); Push-Mitteilungen bekommen dort Aktionsknöpfe (lib/notify-channels.ts)

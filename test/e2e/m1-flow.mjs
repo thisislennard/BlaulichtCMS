@@ -304,9 +304,10 @@ try {
     const dlg = op.getByRole('dialog', { name: 'Medien übernehmen' });
     await dlg.locator('button[aria-pressed]').first().click();
     await dlg.getByRole('button', { name: /übernehmen$/ }).click();
-    await op.getByRole('button', { name: 'Neue Fassung speichern' }).click();
-    await op.getByRole('button', { name: 'Gespeichert' }).waitFor();
+    await op.locator('[data-save-bar]').getByRole('button', { name: 'Neue Fassung speichern' }).click();
+    await op.locator('[data-save-bar]').waitFor({ state: 'detached' });
     await op.getByRole('button', { name: 'Zur Freigabe einreichen' }).click();
+    await op.getByRole('dialog', { name: 'Zur Freigabe einreichen' }).getByRole('button', { name: /^(Trotzdem einreichen|Einreichen)$/ }).click();
     await op.getByText('Eingereicht', { exact: false }).first().waitFor();
     return 'eingereicht';
   });
@@ -375,11 +376,12 @@ try {
   await step('Zielkanal wählen erzeugt neue Fassung – alte Freigabe gilt nicht mehr', async () => {
     await op.goto(postUrl);
     await op.selectOption('#e-site', { label: 'WordPress: Testwebsite' });
-    await op.getByRole('button', { name: 'Neue Fassung speichern' }).click();
-    await op.getByRole('button', { name: 'Gespeichert' }).waitFor();
+    await op.locator('[data-save-bar]').getByRole('button', { name: 'Neue Fassung speichern' }).click();
+    await op.locator('[data-save-bar]').waitFor({ state: 'detached' });
     await op.getByText('Entwurf').first().waitFor();
     expect((await op.getByRole('button', { name: /veröffentlichen/ }).count()) === 0, 'Veröffentlichen ohne neue Freigabe möglich');
     await op.getByRole('button', { name: 'Zur Freigabe einreichen' }).click();
+    await op.getByRole('dialog', { name: 'Zur Freigabe einreichen' }).getByRole('button', { name: /^(Trotzdem einreichen|Einreichen)$/ }).click();
     return 'neue Fassung, Status Entwurf → eingereicht';
   });
 
@@ -504,9 +506,10 @@ try {
     await op.waitForURL(/\/beitraege\/[0-9a-f-]{36}$/);
     const url = op.url();
     await op.fill('#e-body', 'Nur zur internen Abstimmung.');
-    await op.getByRole('button', { name: 'Neue Fassung speichern' }).click();
-    await op.getByRole('button', { name: 'Gespeichert' }).waitFor();
+    await op.locator('[data-save-bar]').getByRole('button', { name: 'Neue Fassung speichern' }).click();
+    await op.locator('[data-save-bar]').waitFor({ state: 'detached' });
     await op.getByRole('button', { name: 'Zur Freigabe einreichen' }).click();
+    await op.getByRole('dialog', { name: 'Zur Freigabe einreichen' }).getByRole('button', { name: /^(Trotzdem einreichen|Einreichen)$/ }).click();
     await page.goto(url);
     await page.getByRole('button', { name: 'Freigeben' }).click();
     await page.getByRole('dialog').getByRole('button', { name: 'Freigeben' }).click();

@@ -11,6 +11,40 @@
 
 Unter [Einrichtung → Beitragsvorlagen](/beitragsvorlagen) stehen Vorlagen für wiederkehrende Beiträge, z. B. „Einsatzbericht kurz“: Name, Art, Titelvorschlag, Text und Kurzfassung. Platzhalter wie `[Datum]` oder `[Ort]` erleichtern das Ausfüllen. Beim Anlegen eines Beitrags („Neuer Beitrag“) lässt sich eine Beitragsvorlage wählen; Titel, Art und Text werden dann vorbelegt. Anlegen und ändern darf, wer „Beitragsvorlagen verwalten“ hat. Beitragsvorlagen sind etwas anderes als [Designvorlagen](/hilfe/designvorlagen) (Dateien wie Logos und Bildvorlagen) – siehe [Begriffe](/hilfe/begriffe).
 
+## Nächster Schritt
+
+Rechts im Beitrag (am Handy oben als kurze Zeile, die Karte selbst folgt nach dem Inhalt) zeigt **Nächster Schritt**, wo der Entwurf steht – der erste offene Punkt ist hervorgehoben:
+
+| Schritt | Erledigt, wenn … | Weg dorthin |
+|---|---|---|
+| Text | Titel und Text geschrieben | – |
+| Medien | Dateien im Beitrag; optional | **Jetzt sichten →**, wenn Dateien einer Sammlung des Beitrags noch auf Sichtung warten (öffnet die Sichtung dieser Sammlung); **Übernehmen →**, wenn ausgewählte Dateien noch nicht im Beitrag sind |
+| Alternativtexte | jedes Bild hat einen (*x von y*) | **Ergänzen →** springt zu den Medien |
+| Ziele | Website oder soziales Netzwerk gewählt („nur intern“ ist erlaubt, wird aber genannt) | **Ziele →** springt zur Website-Auswahl |
+| Einreichen | – | **Zur Freigabe einreichen** öffnet die Prüfliste |
+
+Rot ist immer nur **eine** Hauptaktion: im Entwurf „Zur Freigabe einreichen“, bei ungespeicherten Änderungen „Neue Fassung speichern“ in der Leiste unten. „Gespeichert 14:32“ steht leise unter dem Titel.
+
+## Speichern
+
+Sobald etwas geändert ist, erscheint unten die Leiste **Ungespeicherte Änderungen · Verwerfen · Neue Fassung speichern** – am Desktop wie am Handy, ohne nach oben scrollen zu müssen. **Verwerfen** stellt die gespeicherte Fassung wieder her. Wer die Seite mit ungespeicherten Änderungen verlässt, wird vorher gefragt. Eingereicht werden kann nur eine gespeicherte Fassung.
+
+## Prüfliste vor dem Einreichen
+
+**Zur Freigabe einreichen** zeigt zuerst eine Prüfliste der gespeicherten Fassung – mit denselben Prüfungen, die Freigabe und Veröffentlichen ohnehin machen:
+
+- **Ziele:** keines gewählt (der Beitrag bliebe intern), Website nicht aktiv, Termin schon vorbei.
+- **Titelbild** für die Website.
+- **Alternativtexte** der Bilder (siehe [Alternativtext](#alternativtext)).
+- **Datenschutz-Prüfung:** markierte Dateien und offene Gesichtsvorschläge – die Freigabe verlangt dann eine ausdrücklich bestätigte Prüfung.
+- **Je soziales Netzwerk:** Anforderungen wie „Instagram braucht mindestens ein Bild oder Video“, Anzahl und Art der Dateien, Storys im Hochformat und **Zeichengrenzen** („X: Text auf 280 Zeichen gekürzt“); nicht aktive Verbindungen werden genannt.
+
+Hinweise (gelb) blockieren nicht: **Trotzdem einreichen** geht, die Freigabe sieht dieselben Hinweise. Gesperrt (rot) ist nur, woran die Freigabe ohnehin scheitern würde: kein Text, inzwischen gelöschte Dateien oder fehlende Alternativtexte, wenn sie unter Einstellungen → Redaktion Pflicht sind. **Beheben →** springt in den passenden Abschnitt.
+
+## Vorschau je Netzwerk
+
+Die Karte **Vorschau** hat einen Reiter je gewähltem Ziel: **Website** (bzw. „Interne Ansicht“), dann jedes soziale Netzwerk und **Story**, wenn ein Netzwerk als Story gewählt ist. Jeder Reiter zeigt den Text, der **tatsächlich gesendet** wird – den eigenen Text für das Netzwerk oder Titel und Kurzfassung bzw. Text, gekürzt nach denselben Regeln wie beim Senden (Zeichenzählung des Netzwerks, „…“ am Ende, der Link zur Website zählt mit, sobald der Beitrag dort veröffentlicht ist). Darunter: Zeichenzahl, Hinweis auf eine Kürzung und **Eigenen Text … schreiben** (springt zum Feld unter „Soziale Netzwerke“). Die Story zeigt die erste Datei im Hochformat.
+
 ## Fassungen
 
 Jedes Speichern mit geändertem Inhalt erzeugt eine neue, unveränderliche **Fassung** (Fassung 1, 2, 3 …). Eine Fassung umfasst Titel, Text, Kurzfassung, Medien in ihrer Reihenfolge, das Titelbild und den Website. Speichern ohne Änderung erzeugt keine neue Fassung.
@@ -24,6 +58,7 @@ Absätze durch eine Leerzeile trennen. Die Website übernimmt den Text als einfa
 ## Medien
 
 - **Medien übernehmen** öffnet die Auswahl aus den Sammlungen (zuerst die des Beitrags).
+- Ohne Medien nennt die Karte, was ansteht: „3 Dateien warten in „…“ auf Sichtung“ mit **Jetzt sichten** bzw. „2 ausgewählte Dateien bereit“ mit **Übernehmen**. Dieselben Knöpfe stehen in der Karte **Sammlungen**.
 - Mit den Pfeilen die Reihenfolge ändern, mit „Als Titelbild“ das Beitragsbild festlegen.
 - Veröffentlicht wird immer die geprüfte Fassung ohne Standortdaten.
 

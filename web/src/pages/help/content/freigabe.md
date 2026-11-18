@@ -6,7 +6,7 @@ Eine Freigabe bezieht sich auf eine konkrete Fassung mit ihrer **Prüfsumme** ü
 
 | Schritt | Wer (Recht) | Aktion |
 |---|---|---|
-| 1 | Redaktion | **Zur Freigabe einreichen** |
+| 1 | Redaktion | **Zur Freigabe einreichen** (mit [Prüfliste](/hilfe/beitraege#pruefliste-vor-dem-einreichen)) |
 | 2 | Freigabe | **Freigeben** oder **Zurückweisen** (mit Begründung) |
 | 3 | Veröffentlichung | **Auf … veröffentlichen** (nur mit Website) |
 | 4 | Website | Holt den Auftrag ab und meldet Adresse und WordPress-ID zurück |

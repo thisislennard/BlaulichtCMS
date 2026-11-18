@@ -5,13 +5,18 @@ import { ApiError, get, patch, post, put } from '../../api/client';
 import type { MediaItem, Publication, Site } from '../../api/types';
 import { usePageMeta } from '../../components/layout/AppShell';
 import { ShareActions } from '../../components/share';
-import { Badge, Button, Card, cx, ErrorBox, FieldWrap, Input, Notice, PageHeader, Rev, Select, SkeletonRows, StatusBadge, Textarea } from '../../components/ui/core';
+import { Badge, Button, Card, cx, ErrorBox, FieldWrap, Input, LinkButton, Notice, PageHeader, Rev, Select, SkeletonRows, StatusBadge, Textarea } from '../../components/ui/core';
 import { Icon } from '../../components/ui/Icon';
-import { Dialog, UnsavedChangesGuard, useErrorToast, useToast } from '../../components/ui/overlays';
+import { Dialog, useErrorToast, useToast } from '../../components/ui/overlays';
+import { SaveBar } from '../../components/ui/form';
 import { useAuth } from '../../lib/auth';
-import { fmtDateTime, fmtRelative, fromLocalInput, toLocalInput } from '../../lib/format';
+import { fmtDateTime, fmtRelative, fmtTime, fromLocalInput, plural, toLocalInput } from '../../lib/format';
+import { SOCIAL_LABEL } from '../../lib/social';
 import { KIND_LABEL } from './Posts';
-import { cleanFormats, SocialStatusCard, SocialTargetsCard } from './SocialPanel';
+import { cleanFormats, SocialStatusCard, SocialTargetsCard, useSocialTargets } from './SocialPanel';
+import { draftSteps, NextStepCard, type Step } from './NextStep';
+import { SubmitDialog, usePostChecklist, type CheckSection } from './SubmitCheck';
+import { NetworkPreview } from './NetworkPreview';
 import { safeHref } from '../../lib/url';
 import { openFaces, PrivacyDialog, SENSITIVE_LABELS } from '../media/PrivacyDialog';
 import { ImageFillDialog } from '../designs/ImageFill';
@@ -33,7 +38,7 @@ interface PostDetail {
   lastDecision: { decision: string; note: string; decided_by_name: string; decided_at: string } | null;
   revisions: { id: string; number: number; title: string; change_note: string; created_at: string; created_by_name: string | null; decision: string | null }[];
   publications: Publication[];
-  collections: { id: string; title: string; media_count: number; selected_count: number }[];
+  collections: { id: string; title: string; media_count: number; selected_count: number; pending_count?: number; selected_ids?: string[] }[];
   social: any[];
 }
 
@@ -70,24 +75,9 @@ const wpOf = (v: any) => ({ title: v?.wordpress?.title ?? '', body: v?.wordpress
 /** Website-Fassung zählt nur mit Website – sonst ist sie unsichtbar und darf keine neue Fassung auslösen. */
 const NO_WP = { title: '', body: '', excerpt: '', categories: [] as number[] };
 
-/** Einfache Absätze wie auf der Website (Leerzeile = neuer Absatz). */
-function Paragraphs({ text }: { text: string }) {
-  const parts = text.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
-  if (!parts.length) return <p className="m-0 text-fg-muted">Noch kein Text.</p>;
-  return (
-    <>
-      {parts.map((p, i) => (
-        <p key={i} className="m-0 whitespace-pre-line">
-          {p}
-        </p>
-      ))}
-    </>
-  );
-}
-
-export function MediaPicker({ collections, chosen, onClose, onAdd }: { collections: PostDetail['collections']; chosen: string[]; onClose: () => void; onAdd: (m: MediaItem[]) => void }) {
+export function MediaPicker({ collections, chosen, initial, onClose, onAdd }: { collections: PostDetail['collections']; chosen: string[]; initial?: string; onClose: () => void; onAdd: (m: MediaItem[]) => void }) {
   const all = useQuery({ queryKey: ['collections', false], queryFn: () => get<any[]>('/collections') });
-  const [cid, setCid] = useState(collections[0]?.id ?? '');
+  const [cid, setCid] = useState(initial ?? collections[0]?.id ?? '');
   const [onlySelected, setOnlySelected] = useState(true);
   const [picked, setPicked] = useState<MediaItem[]>([]);
   const detail = useQuery({ queryKey: ['collection', cid], queryFn: () => get<any>(`/collections/${cid}`), enabled: !!cid });
@@ -154,6 +144,46 @@ export function MediaPicker({ collections, chosen, onClose, onAdd }: { collectio
   );
 }
 
+/**
+ * Hinweis ohne Medien, passend zur Lage (#262): Dateien warten auf Sichtung → Sprung in die Sichtung der Sammlung;
+ * ausgewählte Dateien → übernehmen; sonst der Weg über „Fotos sammeln“.
+ */
+function MediaHint({ collections, chosen, canReview, canPick, onPick }: { collections: PostDetail['collections']; chosen: string[]; canReview: boolean; canPick: boolean; onPick: (collectionId: string) => void }) {
+  const pending = collections.filter((c) => (c.pending_count ?? 0) > 0);
+  const ready = collections.map((c) => ({ c, n: (c.selected_ids ?? []).filter((x) => !chosen.includes(x)).length })).filter((e) => e.n > 0);
+  if (!pending.length && !ready.length) return <p className="m-0 text-sm text-fg-muted">Noch keine Medien. Über „Fotos sammeln“ einen Upload-Link erzeugen, sichten und ausgewählte Dateien hier übernehmen.</p>;
+  return (
+    <ul className="m-0 p-0 list-none flex flex-col gap-2 text-sm">
+      {pending.map((c) => (
+        <li key={`p-${c.id}`} className="flex flex-wrap items-center gap-2">
+          <Icon name="AlertTriangle" size={15} className="text-warn shrink-0" />
+          <span className="flex-1 min-w-[180px]">
+            {plural(c.pending_count ?? 0, 'Datei wartet', 'Dateien warten')} in „{c.title}“ auf Sichtung.
+          </span>
+          {canReview && (
+            <LinkButton size="sm" to={`/medien/${c.id}?sichten=1`} icon="CheckSquare">
+              Jetzt sichten
+            </LinkButton>
+          )}
+        </li>
+      ))}
+      {ready.map(({ c, n }) => (
+        <li key={`r-${c.id}`} className="flex flex-wrap items-center gap-2">
+          <Icon name="CircleCheck" size={15} className="text-ok shrink-0" />
+          <span className="flex-1 min-w-[180px]">
+            {plural(n, 'ausgewählte Datei', 'ausgewählte Dateien')} in „{c.title}“ bereit.
+          </span>
+          {canPick && (
+            <Button size="sm" icon="Plus" onClick={() => onPick(c.id)}>
+              Übernehmen
+            </Button>
+          )}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 /** Bei Wechsel auf einen anderen Beitrag frisch beginnen (kein Zustand des vorherigen). */
 export default function PostEditor() {
   const { id = '' } = useParams();
@@ -174,7 +204,9 @@ function PostEditorInner({ id }: { id: string }) {
   const [draft, setDraft] = useState<Draft | null>(null);
   const [mediaCache, setMediaCache] = useState<Record<string, MediaItem>>({});
   const [fromTemplate, setFromTemplate] = useState(false);
-  const [picker, setPicker] = useState(false);
+  // Medien übernehmen (#262): optional mit vorgewählter Sammlung („n ausgewählt, noch nicht übernommen“)
+  const [picker, setPicker] = useState<false | { collection?: string }>(false);
+  const [submitting, setSubmitting] = useState<false | 'first' | 'again'>(false);
   const [saving, setSaving] = useState(false);
   const [decision, setDecision] = useState<'approved' | 'rejected' | null>(null);
   const [collectLink, setCollectLink] = useState<{ url: string; expires_at: string } | null>(null);
@@ -225,6 +257,9 @@ function PostEditorInner({ id }: { id: string }) {
   }, [d?.revision.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const dirty = useMemo(() => !!draft && !!base && differs(draft, base), [draft, base]); // eslint-disable-line react-hooks/exhaustive-deps
+  const socialTargets = useSocialTargets();
+  const isDraft = ['draft', 'rejected'].includes(q.data?.state ?? '');
+  const checklist = usePostChecklist(id, q.data?.revision.number ?? 0, !!q.data && isDraft && !dirty && can('post.submit'));
 
   if (q.error) return <ErrorBox title="Beitrag konnte nicht geladen werden">{(q.error as Error).message}</ErrorBox>;
   if (q.isLoading || !draft) return <SkeletonRows rows={8} />;
@@ -241,14 +276,17 @@ function PostEditorInner({ id }: { id: string }) {
   const activeSites = (sites.data ?? []).filter((s) => s.status === 'active');
   const site = (sites.data ?? []).find((s) => s.id === r.site_id);
 
+  // Texte je Netzwerk wie gespeichert – dieselben Werte nutzt die Vorschau je Netzwerk
+  const { fb, ig, th, xt, wa, md, mdCw, bs } = draft;
+  const socialVariants = { ...(fb.trim() ? { facebook: { body: fb } } : {}), ...(ig.trim() ? { instagram: { body: ig } } : {}), ...(th.trim() ? { threads: { body: th } } : {}), ...(xt.trim() ? { x: { body: xt } } : {}), ...(wa.trim() ? { whatsapp: { body: wa } } : {}), ...(md.trim() || mdCw.trim() ? { mastodon: { ...(md.trim() ? { body: md } : {}), ...(mdCw.trim() ? { cw: mdCw } : {}) } } : {}), ...(bs.trim() ? { bluesky: { body: bs } } : {}) };
   const save = async () => {
     setSaving(true);
     try {
-      const { wp, publishAt, social, formats, fb, ig, th, xt, wa, md, mdCw, bs, mediaAlt, ...rest } = draft;
+      const { wp, publishAt, social, formats, fb: _fb, ig: _ig, th: _th, xt: _xt, wa: _wa, md: _md, mdCw: _mdCw, bs: _bs, mediaAlt, ...rest } = draft;
       const res = await put<any>(`/posts/${id}/revision`, {
         baseRevision: (base ?? r).number,
         ...rest,
-        variants: { ...(rest.siteId ? { wordpress: wp } : {}), ...(fb.trim() ? { facebook: { body: fb } } : {}), ...(ig.trim() ? { instagram: { body: ig } } : {}), ...(th.trim() ? { threads: { body: th } } : {}), ...(xt.trim() ? { x: { body: xt } } : {}), ...(wa.trim() ? { whatsapp: { body: wa } } : {}), ...(md.trim() || mdCw.trim() ? { mastodon: { ...(md.trim() ? { body: md } : {}), ...(mdCw.trim() ? { cw: mdCw } : {}) } } : {}), ...(bs.trim() ? { bluesky: { body: bs } } : {}) },
+        variants: { ...(rest.siteId ? { wordpress: wp } : {}), ...socialVariants },
         socialTargets: social,
         socialFormats: cleanFormats(formats, social),
         // Alternativtext je Bild: eigener Text, sonst der aus der Medienverwaltung – beides wird Teil der Fassung
@@ -273,6 +311,42 @@ function PostEditorInner({ id }: { id: string }) {
     }
     await refresh();
   };
+  /** In einen Abschnitt springen (Anker) und das erste Feld fokussieren (#262). */
+  const go = (section: string, fieldId?: string) => {
+    const el = document.getElementById(section);
+    if (!el) return;
+    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    const field = (fieldId ? document.getElementById(fieldId) : el.querySelector<HTMLElement>('input:not([disabled]), textarea:not([disabled]), select:not([disabled]), button:not([disabled])')) as HTMLElement | null;
+    field?.focus({ preventScroll: true });
+  };
+  const goFix = (s: CheckSection) => go(s);
+  const siteName = (sites.data ?? []).find((x) => x.id === draft.siteId)?.name ?? (draft.siteId ? 'Website' : null);
+  const chosenTargets = draft.social.map((cid) => (socialTargets.data ?? []).find((t) => t.id === cid)).filter((t): t is NonNullable<typeof t> => !!t);
+  const steps = draftSteps({
+    title: draft.title,
+    body: draft.body,
+    mediaIds: draft.mediaIds,
+    media: mediaCache,
+    mediaAlt: draft.mediaAlt,
+    coverId: draft.coverId,
+    collections: d!.collections,
+    targets: [...(siteName ? [`Website „${siteName}“`] : []), ...(chosenTargets.length ? chosenTargets.map((t) => SOCIAL_LABEL[t.kind]) : draft.social.length ? [plural(draft.social.length, 'soziales Netzwerk', 'soziale Netzwerke')] : [])],
+  });
+  const canSubmit = can('post.submit');
+  const stepAction = (st: Step) => {
+    if (!st.target) return null;
+    if ('review' in st.target) return can('media.review') ? <LinkButton size="sm" to={`/medien/${st.target.review}?sichten=1`}>Jetzt sichten →</LinkButton> : null;
+    if ('pick' in st.target) {
+      const cid = st.target.pick;
+      return editable && can('media.view') ? <Button size="sm" onClick={() => setPicker({ collection: cid })}>Übernehmen →</Button> : null;
+    }
+    const sec = st.target.section;
+    return editable ? <Button size="sm" variant="ghost" onClick={() => go(sec)}>{st.key === 'ziele' ? 'Ziele →' : st.key === 'alt' ? 'Ergänzen →' : st.key === 'text' ? 'Zum Text →' : 'Zu den Medien →'}</Button> : null;
+  };
+  const nextStep = steps.find((x) => x.state === 'todo');
+  // Link zur Website wie beim Senden: letzte erfolgreiche Veröffentlichung mit https-Adresse
+  const link = [...d!.publications].filter((p) => p.action === 'publish' && p.status === 'published' && p.remote_url?.startsWith('https://')).sort((a, b) => String(b.result_at ?? b.created_at).localeCompare(String(a.result_at ?? a.created_at)))[0]?.remote_url ?? null;
+  const websitePublishVisible = d!.state === 'approved' && !!r.site_id && can('publish.website') && !dirty;
   const move = (i: number, dir: -1 | 1) =>
     setDraft((dr) => {
       if (!dr) return dr;
@@ -284,8 +358,7 @@ function PostEditorInner({ id }: { id: string }) {
     });
 
   return (
-    <div className={cx('flex flex-col gap-5', editable && dirty && 'pb-24 md:pb-0')}>
-      <UnsavedChangesGuard when={dirty} text="Der Beitrag hat ungespeicherte Änderungen. Beim Verlassen gehen sie verloren." />
+    <div className="flex flex-col gap-5">
       <PageHeader
         title={r.title}
         subtitle={
@@ -293,7 +366,16 @@ function PostEditorInner({ id }: { id: string }) {
             <StatusBadge status={d!.state} />
             <span>{KIND_LABEL[d!.post.kind]}</span>
             <span>· <Rev n={r.number} /></span>
-            <span>· geändert {fmtRelative(r.created_at)}</span>
+            {/* Zustand statt rotem Knopf (#262): leise „Gespeichert 14:32“ bzw. „Ungespeicherte Änderungen“ */}
+            {editable && dirty ? (
+              <span className="inline-flex items-center gap-1.5">
+                · <span className="w-2 h-2 rounded-full bg-warn" aria-hidden="true" /> Ungespeicherte Änderungen
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1" title={fmtDateTime(r.created_at)}>
+                · <Icon name="CheckCircle2" size={14} className="text-ok" /> Gespeichert {new Date(r.created_at).toDateString() === new Date().toDateString() ? fmtTime(r.created_at) : fmtRelative(r.created_at)}
+              </span>
+            )}
           </span>
         }
         actions={
@@ -313,14 +395,21 @@ function PostEditorInner({ id }: { id: string }) {
                 Fotos sammeln
               </Button>
             )}
-            {editable && (
-              <Button variant="primary" icon="Save" loading={saving} disabled={!dirty} onClick={save}>
-                {dirty ? 'Neue Fassung speichern' : 'Gespeichert'}
-              </Button>
-            )}
           </>
         }
       />
+      {/* Handy (#262): oben nur eine kompakte Zeile mit dem nächsten Schritt; die Karten folgen nach dem Inhalt */}
+      <div className="lg:hidden flex items-center gap-2 flex-wrap px-3 py-2 rounded-card border border-line bg-card text-sm">
+        <span className="font-mono text-[11px] font-medium uppercase tracking-[0.08em] text-fg-muted">Nächster Schritt</span>
+        <span className="flex-1 min-w-[140px] font-medium">
+          {editable && dirty ? 'Neue Fassung speichern' : isDraft ? (nextStep ? `${nextStep.label}: ${nextStep.detail ?? ''}` : 'Zur Freigabe einreichen') : <StatusBadge status={d!.state} />}
+        </span>
+        {!(editable && dirty) && (
+          <Button size="sm" iconRight="ArrowDown" onClick={() => go('status')}>
+            {isDraft ? 'Zum Schritt' : 'Status'}
+          </Button>
+        )}
+      </div>
       {stale && (
         <Notice tone="warning">
           Inzwischen wurde eine neuere Fassung ({r.number}) gespeichert. Die ungespeicherten Änderungen beruhen auf Fassung {base?.number}; Speichern wird deshalb abgelehnt.{' '}
@@ -349,7 +438,7 @@ function PostEditorInner({ id }: { id: string }) {
 
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px] items-start">
         <div className="flex flex-col gap-5 min-w-0">
-          <Card title="Text">
+          <Card id="text" title="Text">
             <div className="flex flex-col gap-4">
               <FieldWrap label="Titel" required htmlFor="e-title">
                 <Input id="e-title" value={draft.title} disabled={!editable} onChange={(e) => setDraft({ ...draft, title: e.target.value })} maxLength={200} />
@@ -374,6 +463,7 @@ function PostEditorInner({ id }: { id: string }) {
           </Card>
 
           <Card
+            id="medien"
             title="Medien"
             subtitle="Öffentlich verwendet wird eine geprüfte Fassung ohne Standortdaten."
             action={
@@ -386,7 +476,7 @@ function PostEditorInner({ id }: { id: string }) {
                     </Button>
                   )}
                   {can('media.view') && (
-                    <Button size="sm" icon="Plus" onClick={() => setPicker(true)}>
+                    <Button size="sm" icon="Plus" onClick={() => setPicker({})}>
                       Medien übernehmen
                     </Button>
                   )}
@@ -395,7 +485,7 @@ function PostEditorInner({ id }: { id: string }) {
             }
           >
             {draft.mediaIds.length === 0 ? (
-              <p className="m-0 text-sm text-fg-muted">Noch keine Medien. Über „Fotos sammeln“ einen Upload-Link erzeugen, sichten und ausgewählte Dateien hier übernehmen.</p>
+              <MediaHint collections={d!.collections} chosen={draft.mediaIds} canReview={can('media.review')} canPick={editable && can('media.view')} onPick={(c) => setPicker({ collection: c })} />
             ) : (
               <ul className="m-0 p-0 list-none grid gap-3 grid-cols-2 sm:grid-cols-3">
                 {draft.mediaIds.map((mid, i) => {
@@ -473,7 +563,7 @@ function PostEditorInner({ id }: { id: string }) {
             )}
           </Card>
 
-          <Card title="Website">
+          <Card id="website" title="Website">
             <FieldWrap label="Veröffentlichen auf" help="Ohne Website bleibt der Beitrag intern. Eine Änderung der Website verlangt eine neue Freigabe." htmlFor="e-site">
               <Select id="e-site" value={draft.siteId ?? ''} disabled={!editable} onChange={(e) => setDraft({ ...draft, siteId: e.target.value || null, wp: { ...draft.wp, categories: [] } })}>
                 <option value="">Nur intern (keine Veröffentlichung)</option>
@@ -514,40 +604,71 @@ function PostEditorInner({ id }: { id: string }) {
 
           <SocialTargetsCard draft={{ social: draft.social, formats: draft.formats, fb: draft.fb, ig: draft.ig, th: draft.th, xt: draft.xt, wa: draft.wa, md: draft.md, mdCw: draft.mdCw, bs: draft.bs }} editable={editable} onChange={(x) => setDraft({ ...draft, ...x })} />
 
-          <Card title="Vorschau" subtitle={draft.siteId ? 'So erscheint der Beitrag auf der Website (Darstellung abhängig vom Theme).' : 'Interne Ansicht'}>
-            <article className="flex flex-col gap-3 max-w-[680px]">
-              <h2 className="m-0 text-title font-semibold">{(draft.siteId && draft.wp.title) || draft.title}</h2>
-              {draft.coverId && mediaCache[draft.coverId]?.has_preview && <img src={`/api/v1/media/${draft.coverId}/preview`} alt="" className="w-full rounded-control" />}
-              <div className="flex flex-col gap-3 text-base leading-relaxed">
-                <Paragraphs text={(draft.siteId && draft.wp.body) || draft.body} />
-              </div>
-            </article>
-          </Card>
+          <NetworkPreview
+            input={{
+              title: draft.title,
+              body: draft.body,
+              excerpt: draft.excerpt,
+              site: draft.siteId ? { name: siteName ?? 'Website', title: draft.wp.title, body: draft.wp.body, excerpt: draft.wp.excerpt } : null,
+              coverId: draft.coverId,
+              media: draft.mediaIds.map((mid) => mediaCache[mid]).filter((m): m is MediaItem => !!m).map((m) => ({ ...m, alt_text: draft.mediaAlt[m.id] ?? m.alt_text })),
+              variants: socialVariants,
+              targets: chosenTargets.map((t) => ({ target: t, format: draft.formats[t.id] ?? 'feed' })),
+              link,
+            }}
+            onEditOwn={(fieldId) => go('netzwerke', fieldId)}
+          />
         </div>
 
-        <div className="flex flex-col gap-5 order-first lg:order-none">
-          <Card title="Freigabe und Veröffentlichung">
+        <div className="flex flex-col gap-5">
+          {isDraft ? (
+            <NextStepCard
+              id="status"
+              state={d!.state}
+              revision={r.number}
+              steps={steps}
+              actionFor={stepAction}
+              notice={
+                d!.state === 'rejected' && d!.lastDecision ? (
+                  <Notice tone="error" title={`Zurückgewiesen von ${d!.lastDecision.decided_by_name}`}>
+                    {d!.lastDecision.note}
+                  </Notice>
+                ) : undefined
+              }
+              submit={{
+                detail: dirty
+                  ? 'Erst speichern – Freigaben beziehen sich immer auf eine gespeicherte Fassung.'
+                  : !canSubmit
+                    ? 'Einreichen darf, wer das Recht „Zur Freigabe einreichen“ hat.'
+                    : checklist.data
+                      ? checklist.data.blocking
+                        ? 'Prüfliste: Einreichen noch nicht möglich'
+                        : checklist.data.warnings
+                          ? `Prüfliste: ${plural(checklist.data.warnings, 'Hinweis', 'Hinweise')}`
+                          : 'Prüfliste: alles bereit'
+                      : 'Vor dem Einreichen erscheint eine Prüfliste.',
+                action:
+                  canSubmit && !dirty ? (
+                    d!.state === 'rejected' ? (
+                      <Button icon="Send" className="w-full" onClick={() => setSubmitting('again')}>
+                        Unverändert erneut einreichen
+                      </Button>
+                    ) : (
+                      <Button variant="primary" icon="Send" className="w-full" onClick={() => setSubmitting('first')}>
+                        Zur Freigabe einreichen
+                      </Button>
+                    )
+                  ) : undefined,
+              }}
+            />
+          ) : (
+          <Card id="status" title="Freigabe und Veröffentlichung">
             <div className="flex flex-col gap-3 text-sm">
               <div className="flex items-center gap-2">
                 <StatusBadge status={d!.state} />
                 <Rev n={r.number} className="text-fg-muted" />
               </div>
               {dirty && <Notice>Erst speichern – Freigaben beziehen sich immer auf eine gespeicherte Fassung.</Notice>}
-              {d!.state === 'draft' && can('post.submit') && !dirty && (
-                <Button variant="primary" icon="Send" onClick={() => act(() => post(`/posts/${id}/submit`, { revision: r.number }), 'Zur Freigabe eingereicht')}>
-                  Zur Freigabe einreichen
-                </Button>
-              )}
-              {d!.state === 'rejected' && d!.lastDecision && (
-                <Notice tone="error" title={`Zurückgewiesen von ${d!.lastDecision.decided_by_name}`}>
-                  {d!.lastDecision.note}
-                </Notice>
-              )}
-              {d!.state === 'rejected' && can('post.submit') && !dirty && (
-                <Button icon="Send" onClick={() => act(() => post(`/posts/${id}/submit`, { revision: r.number }), 'Erneut eingereicht')}>
-                  Unverändert erneut einreichen
-                </Button>
-              )}
               {d!.state === 'in_review' && (
                 <>
                   <p className="m-0 text-fg-muted">Eingereicht {fmtRelative(r.submitted_at)}.</p>
@@ -575,7 +696,7 @@ function PostEditorInner({ id }: { id: string }) {
                 </div>
               )}
               {d!.state === 'approved' && !r.site_id && !(r.social_targets ?? []).length && <Notice tone="success">Intern freigegeben. Für eine Veröffentlichung einen Website wählen und erneut freigeben lassen.</Notice>}
-              {d!.state === 'approved' && r.site_id && can('publish.website') && !dirty && (
+              {websitePublishVisible && (
                 <Button variant="primary" icon="Globe" onClick={() => act(() => post(`/posts/${id}/publish`, { revision: r.number, contentHash: r.content_hash }), 'Veröffentlichung beauftragt')}>
                   Auf {site?.name ?? 'Website'} veröffentlichen
                 </Button>
@@ -594,8 +715,10 @@ function PostEditorInner({ id }: { id: string }) {
               )}
             </div>
           </Card>
+          )}
 
-          <SocialStatusCard postId={id} revision={r.number} hash={r.content_hash} approved={!!d!.approval} targets={r.social_targets ?? []} items={d!.social ?? []} dirty={dirty} onChanged={refresh} />
+          {/* Höchstens eine rote Hauptaktion (#262): neben „Auf Website veröffentlichen“ ist das Netzwerk-Veröffentlichen sekundär */}
+          <SocialStatusCard postId={id} revision={r.number} hash={r.content_hash} approved={!!d!.approval} targets={r.social_targets ?? []} items={d!.social ?? []} dirty={dirty} onChanged={refresh} primary={!websitePublishVisible} />
 
           <Card title="Veröffentlichungen">
             {d!.publications.length === 0 ? (
@@ -651,15 +774,34 @@ function PostEditorInner({ id }: { id: string }) {
           {d!.collections.length > 0 && (
             <Card title="Sammlungen">
               <ul className="m-0 p-0 list-none flex flex-col gap-2 text-sm">
-                {d!.collections.map((c) => (
-                  <li key={c.id}>
-                    {can('media.view') ? <Link to={`/medien/${c.id}`}>{c.title}</Link> : c.title}
-                    <span className="text-fg-muted">
-                      {' '}
-                      · {c.media_count} Dateien · {c.selected_count} ausgewählt
-                    </span>
-                  </li>
-                ))}
+                {d!.collections.map((c) => {
+                  const notTaken = (c.selected_ids ?? []).filter((x) => !draft.mediaIds.includes(x)).length;
+                  return (
+                    <li key={c.id} className="flex flex-col gap-1.5">
+                      <span>
+                        {can('media.view') ? <Link to={`/medien/${c.id}`}>{c.title}</Link> : c.title}
+                        <span className="text-fg-muted">
+                          {' '}
+                          · {plural(c.media_count, 'Datei', 'Dateien')} · {c.selected_count} ausgewählt
+                        </span>
+                      </span>
+                      {(!!c.pending_count || (notTaken > 0 && editable)) && (
+                        <span className="flex flex-wrap gap-2">
+                          {!!c.pending_count && can('media.review') && (
+                            <LinkButton size="sm" to={`/medien/${c.id}?sichten=1`} icon="CheckSquare">
+                              {c.pending_count} sichten
+                            </LinkButton>
+                          )}
+                          {notTaken > 0 && editable && can('media.view') && (
+                            <Button size="sm" icon="Plus" onClick={() => setPicker({ collection: c.id })}>
+                              {notTaken} übernehmen
+                            </Button>
+                          )}
+                        </span>
+                      )}
+                    </li>
+                  );
+                })}
               </ul>
             </Card>
           )}
@@ -688,6 +830,7 @@ function PostEditorInner({ id }: { id: string }) {
         <MediaPicker
           collections={d!.collections}
           chosen={draft.mediaIds}
+          initial={picker.collection}
           onClose={() => setPicker(false)}
           onAdd={(ms) => {
             setMediaCache((c) => ({ ...c, ...Object.fromEntries(ms.map((m) => [m.id, m])) }));
@@ -708,14 +851,7 @@ function PostEditorInner({ id }: { id: string }) {
       )}
       {unpublishing && <UnpublishDialog postId={id} onClose={() => (setUnpublishing(false), refresh())} />}
       {resolving && <ResolveDialog publication={resolving} onClose={() => (setResolving(null), refresh())} />}
-      {/* Handy: Speichern immer erreichbar, sobald es Änderungen gibt (der Kopf-Button liegt weit oben) */}
-      {editable && dirty && (
-        <div className="md:hidden fixed bottom-[var(--bc-bottom-bar)] inset-x-0 z-30 bg-card border-t border-line px-4 py-3 shadow-float">
-          <Button variant="primary" icon="Save" className="w-full h-12" loading={saving} onClick={save}>
-            Neue Fassung speichern
-          </Button>
-        </div>
-      )}
+      {submitting && <SubmitDialog postId={id} revision={r.number} again={submitting === 'again'} onClose={() => setSubmitting(false)} onFix={goFix} onDone={refresh} />}
       {decision && (
         <DecisionDialog
           decision={decision}
@@ -735,6 +871,18 @@ function PostEditorInner({ id }: { id: string }) {
           onClose={() => setPrivacyMedia(null)}
           // Zähler aus dem Beitrag verwerfen: offen ist, was in der gespeicherten Liste noch offen ist
           onSaved={(x) => setMediaCache((c) => ({ ...c, [x.id]: { ...c[x.id], ...x, faces_open: undefined } }))}
+        />
+      )}
+      {/* Speichern ohne Scrollen erreichbar (#262): gemeinsame Speichern-Leiste wie in den Einstellungen (#268) */}
+      {editable && (
+        <SaveBar
+          dirty={dirty}
+          saving={saving}
+          onSave={save}
+          onDiscard={() => base && (setDraft(fromRev(base)), setStale(false))}
+          saveLabel="Neue Fassung speichern"
+          problems={draft.title.trim().length < 2 ? [{ id: 'e-title', message: 'Bitte einen Titel mit mindestens zwei Zeichen angeben.' }] : []}
+          guardText="Der Beitrag hat ungespeicherte Änderungen. Beim Verlassen gehen sie verloren."
         />
       )}
       {collectLink && (
