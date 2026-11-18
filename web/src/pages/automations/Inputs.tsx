@@ -228,7 +228,7 @@ export default function Inputs() {
       {cat.data && !cat.data.enabled && <Notice tone="warning" title="Workflows sind abgeschaltet">Unter Einstellungen → Workflows lassen sie sich wieder einschalten.</Notice>}
       {(q.isLoading || cat.isLoading) && <SkeletonRows rows={4} />}
       {q.error && <ErrorBox title="Auslöser konnten nicht geladen werden">{(q.error as Error).message}</ErrorBox>}
-      {q.data && q.data.length === 0 && <EmptyState icon="Zap" title="Noch keine Auslöser" text="Ein Auslöser legt fest, welches Ereignis einen Workflow startet." />}
+      {q.data && q.data.length === 0 && <EmptyState icon="Zap" title="Noch keine Auslöser." text={manage ? 'Ein Auslöser legt fest, welches Ereignis einen Workflow startet.' : 'Auslöser legt an, wer Workflows verwalten darf.'} action={manage && <Button icon="Plus" disabled={!cat.data} onClick={() => setChoose(true)}>Neuer Auslöser</Button>} />}
       <div className="grid gap-4 lg:grid-cols-2">
         {(q.data ?? []).map((i) => {
           const kind = cat.data?.inputKinds.find((k) => k.kind === i.kind);

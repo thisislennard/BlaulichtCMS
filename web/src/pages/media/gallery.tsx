@@ -161,7 +161,7 @@ export function Pager({ page, pages, onPage, total }: { page: number; pages: num
 /** Markierungsfeld (Mehrfachauswahl) – eigenes Element, damit Klick auf die Vorschau weiter die Großansicht öffnet. */
 export function MarkBox({ checked, onChange, label, className }: { checked: boolean; onChange: (v: boolean) => void; label: string; className?: string }) {
   return (
-    <label className={cx('inline-flex items-center justify-center w-8 h-8 rounded-chip cursor-pointer', className)}>
+    <label className={cx('inline-flex items-center justify-center w-8 h-8 max-md:w-tap max-md:h-tap rounded-chip cursor-pointer', className)}>
       <input type="checkbox" className="w-4 h-4 accent-[var(--bc-primary-solid)]" checked={checked} onChange={(e) => onChange(e.target.checked)} aria-label={label} />
     </label>
   );

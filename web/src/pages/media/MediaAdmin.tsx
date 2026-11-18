@@ -3,7 +3,7 @@ import { Link } from 'react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { get, post, qs } from '../../api/client';
 import type { MediaItem } from '../../api/types';
-import { Badge, Button, Card, EmptyState, ErrorBox, FieldWrap, PageHeader, Select, SkeletonRows, Textarea } from '../../components/ui/core';
+import { Badge, Button, Card, ErrorBox, FieldWrap, PageHeader, Select, SkeletonRows, Textarea, EmptyLine } from '../../components/ui/core';
 import { Dialog, useConfirm, useErrorToast, useToast } from '../../components/ui/overlays';
 import { fmtDateTime, fmtRelative, plural } from '../../lib/format';
 import { mediaName } from './gallery';
@@ -179,7 +179,7 @@ export default function MediaAdmin() {
             ))}
           </Select>
         </FieldWrap>
-        {events.data && events.data.items.length === 0 && <EmptyState icon="ShieldCheck" title="Keine Ereignisse" />}
+        {events.data && events.data.items.length === 0 && <EmptyLine>Keine Ereignisse.</EmptyLine>}
         {events.data && events.data.items.length > 0 && (
           <div className="overflow-x-auto">
             <table className="w-full text-sm border-collapse">

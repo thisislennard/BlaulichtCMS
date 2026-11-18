@@ -359,7 +359,7 @@ function WarningCaseInner({ id }: { id: string }) {
                 type="button"
                 onClick={() => go(s.id)}
                 aria-current={s.id === step ? 'step' : undefined}
-                className={cx('flex items-center gap-2 h-9 px-3 rounded-full border text-sm whitespace-nowrap', s.id === step ? 'bg-raised border-fg/40 text-fg font-semibold' : 'bg-card border-line text-fg font-medium hover:bg-raised')}
+                className={cx('flex items-center gap-2 h-9 max-md:h-tap px-3 rounded-full border text-sm whitespace-nowrap', s.id === step ? 'bg-raised border-fg/40 text-fg font-semibold' : 'bg-card border-line text-fg font-medium hover:bg-raised')}
               >
                 <span className={cx('w-5 h-5 rounded-full inline-flex items-center justify-center font-mono text-[11px]', s.id === step ? 'border border-primary text-primary' : stepDone[s.id] ? 'bg-ok-soft text-ok' : 'bg-raised')}>
                   {stepDone[s.id] && s.id !== step ? <Icon name="Check" size={12} /> : i + 1}

@@ -5,7 +5,7 @@ import { ApiError, del, get, patch, post } from '../../api/client';
 import type { MediaItem, UploadLink } from '../../api/types';
 import { usePageMeta } from '../../components/layout/AppShell';
 import { UploadLinksCard } from './UploadLinks';
-import { Badge, Button, cx, EmptyState, ErrorBox, FieldWrap, Input, Notice, PageHeader, Select, SkeletonRows, StatusBadge, Tabs } from '../../components/ui/core';
+import { Badge, Button, cx, ErrorBox, FieldWrap, Input, Notice, PageHeader, Select, SkeletonRows, StatusBadge, Tabs, EmptyLine, EmptyAction } from '../../components/ui/core';
 import { Icon } from '../../components/ui/Icon';
 import { Dialog, Menu, useErrorToast, useToast, useConfirm } from '../../components/ui/overlays';
 import { useAuth } from '../../lib/auth';
@@ -278,7 +278,7 @@ export default function CollectionDetail() {
           <span className="flex flex-wrap gap-x-3 gap-y-1 items-center">
             {c.purpose && <span>{c.purpose}</span>}
             {c.post_id ? (
-              <Link to={`/beitraege/${c.post_id}`} className="flex items-center gap-1">
+              <Link to={`/beitraege/${c.post_id}`} className="bc-tap-y flex items-center gap-1">
                 <Icon name="FileText" size={13} /> {c.post_title}
               </Link>
             ) : (
@@ -380,7 +380,7 @@ export default function CollectionDetail() {
         <div className="flex flex-wrap items-center gap-3 justify-between">
           <div className="flex items-center gap-2 text-sm">
             {canMark && (
-              <label className="inline-flex items-center gap-2 cursor-pointer">
+              <label className="inline-flex items-center gap-2 cursor-pointer max-md:min-h-tap">
                 <input type="checkbox" className="w-4 h-4 accent-[var(--bc-primary-solid)]" checked={allOnPage} onChange={(e) => setMarked((s) => {
                   const n = new Set(s);
                   for (const m of pageItems) if (e.target.checked) n.add(m.id);
@@ -442,7 +442,9 @@ export default function CollectionDetail() {
         </div>
       )}
       {current.length === 0 ? (
-        <EmptyState icon="Images" title={filter === 'pending' ? 'Nichts zu sichten' : 'Keine Dateien'} text={filter === 'pending' && media.length === 0 && (may.upload || may.links) ? 'Teile den Upload-Link oder lade selbst Dateien hoch.' : undefined} />
+        <EmptyLine className="py-4" action={filter !== 'all' && media.length > 0 ? <EmptyAction onClick={() => setFilter('all')}>Alle Dateien zeigen</EmptyAction> : media.length === 0 && may.upload && !c.archived_at ? <EmptyAction onClick={() => fileRef.current?.click()}>Hochladen</EmptyAction> : undefined}>
+          {filter === 'pending' ? 'Nichts zu sichten.' : media.length === 0 ? (may.upload || may.links ? 'Noch keine Dateien – Upload-Link teilen oder selbst hochladen.' : 'Noch keine Dateien.') : 'Keine Datei in dieser Ansicht.'}
+        </EmptyLine>
       ) : prefs.view === 'list' ? (
         <MediaList items={pageItems} marked={canMark ? marked : undefined} onMark={canMark ? mark : undefined} onOpen={setLightbox} menu={menuFor} />
       ) : (

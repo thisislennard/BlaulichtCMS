@@ -104,7 +104,7 @@ function DashboardView({ layout, available: all, d, mobile }: { layout: Layout; 
           ))}
         </div>
       )}
-      {empty && !badges.length && <EmptyState icon="LayoutDashboard" title="Keine Widgets" text="Über „Anpassen“ Widgets hinzufügen." />}
+      {empty && !badges.length && <EmptyState icon="LayoutDashboard" title="Noch keine Widgets." text="Über „Anpassen“ Widgets hinzufügen." />}
     </>
   );
 }

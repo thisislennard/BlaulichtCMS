@@ -208,4 +208,53 @@ describe('Suche: Inhalte aller Bereiche mit Leserecht (Server)', () => {
     // LIKE-Sonderzeichen werden nicht als Platzhalter verwendet
     expect((await search(admin, '%')).results).toEqual([]);
   });
+
+  it('„Alle Treffer in …“ auch für Beiträge; Banner und Personen verlinken in die gefilterte Liste (#260)', async () => {
+    for (let i = 1; i <= 6; i++) expect((await admin.post('/posts', { title: `Sammelbeitrag ${i}`, kind: 'news' })).status).toBe(200);
+    const r = await search(admin, 'Sammelbeitrag');
+    expect(r.more).toEqual({ Beiträge: '/beitraege?suche=Sammelbeitrag' });
+    expect((await search(admin, 'Lea Lesen')).results.find((x) => x.group === 'Personen')).toMatchObject({ href: '/benutzer?suche=lesen%40example.org' });
+  });
+
+  describe('Listen (#260): Suche und Ziele der Beitragsliste, Sammlungen mit offenen Dateien', () => {
+    const list = async (c: Client, qs = '') => {
+      const r = await c.get(`/posts${qs}`);
+      expect(r.status, JSON.stringify(r.json)).toBe(200);
+      return r.json as any[];
+    };
+
+    it('GET /posts?q= sucht in Titel und Text der aktuellen Fassung, ohne Groß-/Kleinschreibung und mit Umlauten', async () => {
+      const p = (await admin.post('/posts', { title: 'Übung am Samstag', kind: 'event' })).json;
+      const put = await admin.raw('PUT', `/posts/${p.id}/revision`, { baseRevision: 1, title: 'Übung am Samstag', body: 'Großübung mit der Drehleiter am Gerätehaus.' });
+      expect(put.status, JSON.stringify(put.json)).toBe(200);
+      expect((await list(admin, '?q=uebung')).map((x) => x.id)).toContain(p.id);
+      expect((await list(admin, '?q=drehleiter%20GERAETEHAUS')).map((x) => x.id)).toEqual([p.id]);
+      expect(await list(admin, '?q=drehleiter%20keller')).toEqual([]);
+      expect((await list(admin)).length).toBeGreaterThan(1);
+      // Leserecht genügt
+      expect((await list(reader, '?q=drehleiter')).map((x) => x.id)).toEqual([p.id]);
+    });
+
+    it('Beitragsliste zeigt soziale Netzwerke als Ziel und den geplanten Zeitpunkt', async () => {
+      const conn = await one<any>(`INSERT INTO connections (kind, name, status, config) VALUES ('mastodon', 'Mastodon Musterwehr', 'active', '{}') RETURNING id`);
+      const p = (await admin.post('/posts', { title: 'Nur im Netzwerk', kind: 'news' })).json;
+      const at = new Date(Date.now() + 3 * 86_400_000).toISOString();
+      const put = await admin.raw('PUT', `/posts/${p.id}/revision`, { baseRevision: 1, title: 'Nur im Netzwerk', body: 'Text', socialTargets: [conn!.id], publishAt: at });
+      expect(put.status, JSON.stringify(put.json)).toBe(200);
+      const row = (await list(admin, '?q=Nur%20im%20Netzwerk'))[0];
+      expect(row).toMatchObject({ id: p.id, site_name: null, social: [{ kind: 'mastodon', name: 'Mastodon Musterwehr', status: null }] });
+      expect(new Date(row.scheduled_at).toISOString()).toBe(at);
+      // ohne Termin und Netzwerk: nur intern, nichts geplant
+      const plain = (await list(admin, '?q=Brand%20Gartenhutte'))[0];
+      expect(plain).toMatchObject({ social: [], scheduled_at: null });
+    });
+
+    it('GET /collections?pending=1 liefert nur Sammlungen mit offenen Dateien', async () => {
+      const all = (await admin.get('/collections?paged=1&status=active')).json;
+      expect(all.total).toBeGreaterThan(0);
+      const pending = (await admin.get('/collections?paged=1&status=active&pending=1')).json;
+      // Die Testsammlungen haben keine Dateien – also nichts zu sichten
+      expect(pending).toMatchObject({ total: 0, items: [] });
+    });
+  });
 });

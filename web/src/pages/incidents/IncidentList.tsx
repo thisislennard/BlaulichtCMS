@@ -570,7 +570,7 @@ function IncidentState({ e }: { e: Entry }) {
         </span>
       )}
       {e.state === 'live' && e.job?.remote_url ? (
-        <a href={e.job.remote_url} target="_blank" rel="noreferrer" title={`Auf ${e.site_name ?? 'der Website'} ansehen`} aria-label={`Auf ${e.site_name ?? 'der Website'} ansehen (öffnet in neuem Tab)`} className="inline-flex items-center justify-center w-6 h-6 max-md:w-10 max-md:h-10 rounded-chip !text-fg-muted hover:!text-fg hover:bg-raised">
+        <a href={e.job.remote_url} target="_blank" rel="noreferrer" title={`Auf ${e.site_name ?? 'der Website'} ansehen`} aria-label={`Auf ${e.site_name ?? 'der Website'} ansehen (öffnet in neuem Tab)`} className="inline-flex items-center justify-center w-6 h-6 max-md:w-tap max-md:h-tap rounded-chip !text-fg-muted hover:!text-fg hover:bg-raised">
           <Icon name="ExternalLink" size={14} />
         </a>
       ) : (
@@ -797,7 +797,7 @@ export default function IncidentList() {
                 card: 'footer',
                 cell: (e) =>
                   phone ? (
-                    <label className="inline-flex items-center gap-2 min-h-10 pr-2 text-sm cursor-pointer">
+                    <label className="inline-flex items-center gap-2 min-h-tap pr-2 text-sm cursor-pointer">
                       <input type="checkbox" className="w-5 h-5" checked={sel.has(e.id)} onChange={() => toggle(e.id)} />
                       Auswählen
                     </label>

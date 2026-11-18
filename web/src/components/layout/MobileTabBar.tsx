@@ -163,7 +163,7 @@ function QuickSheet({ actions, onClose }: { actions: QuickAction[]; onClose: () 
           <h2 id="quick-sheet-title" className="m-0 text-section font-semibold">
             Schnellaktionen
           </h2>
-          <button type="button" aria-label="Schließen" onClick={onClose} className="w-10 h-10 inline-flex items-center justify-center rounded-chip text-fg-muted hover:text-fg hover:bg-raised">
+          <button type="button" aria-label="Schließen" onClick={onClose} className="w-tap h-tap inline-flex items-center justify-center rounded-chip text-fg-muted hover:text-fg hover:bg-raised">
             <Icon name="X" size={18} />
           </button>
         </div>
@@ -181,7 +181,7 @@ function QuickSheet({ actions, onClose }: { actions: QuickAction[]; onClose: () 
                 <ul className="m-0 p-0 pl-[52px] list-none flex flex-col">
                   {pend.map((c) => (
                     <li key={c.id}>
-                      <button type="button" className="w-full flex items-center justify-between gap-3 min-h-11 px-3 rounded-control text-left text-sm hover:bg-raised" onClick={() => go(`/medien/${c.id}?sichten=1`)}>
+                      <button type="button" className="w-full flex items-center justify-between gap-3 min-h-tap px-3 rounded-control text-left text-sm hover:bg-raised" onClick={() => go(`/medien/${c.id}?sichten=1`)}>
                         <span className="truncate">{c.title}</span>
                         <span className="font-mono text-meta text-fg-muted shrink-0">{c.pending_count} offen</span>
                       </button>

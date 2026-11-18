@@ -10,6 +10,8 @@ import {
   EmptyState,
   PageHeader,
   SkeletonRows,
+  EmptyLine,
+  EmptyAction,
 } from "../components/ui/core";
 import { FilterEmpty, ListToolbar } from "../components/ui/list";
 import { useListState } from "../lib/listState";
@@ -151,29 +153,18 @@ export default function Activities() {
               text={t("activity.emptyText")}
             />
           ) : (
-            <EmptyState
-              icon="Filter"
-              title={t("activity.emptyFiltered")}
-              text={
-                q.hasNextPage
-                  ? t("activity.emptyFilteredText")
-                  : t("activity.emptyFilteredText")
-              }
+            <EmptyLine
+              className="p-4"
               action={
                 q.hasNextPage ? (
-                  <Button
-                    loading={q.isFetchingNextPage}
-                    onClick={() => q.fetchNextPage()}
-                  >
-                    {t("activity.loadMore")}
-                  </Button>
+                  <EmptyAction onClick={() => q.fetchNextPage()}>{t("activity.loadMore")}</EmptyAction>
                 ) : (
-                  <Button onClick={() => setArea("all")}>
-                    {t("activity.showAll")}
-                  </Button>
+                  <EmptyAction onClick={() => ls.reset()}>{t("activity.showAll")}</EmptyAction>
                 )
               }
-            />
+            >
+              {t("activity.emptyFiltered")}.
+            </EmptyLine>
           )}
         </div>
       ) : (

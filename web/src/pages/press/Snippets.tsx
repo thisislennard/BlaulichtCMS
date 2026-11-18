@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { del, get, post, put } from '../../api/client';
-import { Button, Card, Chip, EmptyState, FieldWrap, Input, SkeletonRows, Textarea } from '../../components/ui/core';
+import { Button, Card, Chip, FieldWrap, Input, SkeletonRows, Textarea, EmptyLine, EmptyAction } from '../../components/ui/core';
 import { Dialog, useConfirm, useErrorToast } from '../../components/ui/overlays';
 import { SNIPPET_PLACEHOLDERS } from './Messages';
 
@@ -74,7 +74,7 @@ export function SnippetSettings() {
   return (
     <Card title="Bausteine" subtitle="Wiederkehrende Formulierungen für Antworten – mit Platzhaltern wie {{name}} oder {{thema}}." action={<Button size="sm" icon="Plus" onClick={() => setEdit(null)}>Neuer Baustein</Button>}>
       {q.isLoading && <SkeletonRows rows={3} />}
-      {q.data && !q.data.length && <EmptyState icon="TextCursorInput" title="Noch keine Textbausteine" />}
+      {q.data && !q.data.length && <EmptyLine action={<EmptyAction onClick={() => setEdit(null)}>Neuer Baustein</EmptyAction>}>Noch keine Textbausteine.</EmptyLine>}
       <ul className="m-0 p-0 list-none flex flex-col divide-y divide-line">
         {(q.data ?? []).map((s) => (
           <li key={s.id} className="py-3 flex items-start gap-3">

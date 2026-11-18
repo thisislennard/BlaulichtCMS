@@ -142,6 +142,11 @@ jobs:
         env:
           BLAULICHTCMS_URL: http://127.0.0.1:7311
         run: node test/e2e/review-layout.mjs
+      - name: Listen und Handy – Filter in der Adresse, Touch-Ziele, untere Leiste
+        if: ${{ !cancelled() }}
+        env:
+          BLAULICHTCMS_URL: http://127.0.0.1:7311
+        run: node test/e2e/mobile-ux.mjs
       - name: Protokolle der Instanzen sammeln
         if: failure()
         run: cp "$RUNNER_TEMP"/*-api.log "$RUNNER_TEMP"/*-worker.log test/e2e/out/ || true

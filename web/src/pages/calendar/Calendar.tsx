@@ -160,7 +160,7 @@ export default function CalendarPage() {
           {catChips.map((c) => {
             const on = cats.includes(c.id);
             return (
-              <button key={c.id} type="button" aria-pressed={on} onClick={() => toggleCat(c.id)} className={cx('h-8 px-2.5 rounded-full border text-sm inline-flex items-center gap-1.5', on ? 'bg-raised border-fg text-fg' : 'border-line text-fg-muted hover:text-fg')}>
+              <button key={c.id} type="button" aria-pressed={on} onClick={() => toggleCat(c.id)} className={cx('h-8 max-md:h-tap px-2.5 rounded-full border text-sm inline-flex items-center gap-1.5', on ? 'bg-raised border-fg text-fg' : 'border-line text-fg-muted hover:text-fg')}>
                 <span aria-hidden="true" className="w-2.5 h-2.5 rounded-full" style={{ background: c.color }} />
                 {c.name}
               </button>

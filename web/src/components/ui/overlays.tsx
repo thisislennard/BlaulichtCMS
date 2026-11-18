@@ -155,7 +155,7 @@ export function Dialog({ open, onClose, title, children, footer, width = 520 }: 
           <h2 id={hid} className="m-0 text-section font-semibold">
             {title}
           </h2>
-          <button type="button" data-close aria-label="Schließen" onClick={onClose} className="text-fg-muted hover:text-fg w-8 h-8 max-md:w-10 max-md:h-10 inline-flex items-center justify-center rounded-chip hover:bg-raised">
+          <button type="button" data-close aria-label="Schließen" onClick={onClose} className="text-fg-muted hover:text-fg w-8 h-8 max-md:w-tap max-md:h-tap inline-flex items-center justify-center rounded-chip hover:bg-raised">
             <Icon name="X" size={16} />
           </button>
         </div>
@@ -345,7 +345,7 @@ export function Menu({ items, label = 'Weitere Aktionen', icon = 'MoreHorizontal
                 setOpen(false);
                 it.onClick();
               }}
-              className={cx('w-full flex items-center gap-2.5 h-9 max-md:h-10 px-2.5 rounded-chip text-sm text-left disabled:opacity-50', i === active && 'bg-raised', it.danger ? 'text-err' : 'text-fg')}
+              className={cx('w-full flex items-center gap-2.5 h-9 max-md:h-tap px-2.5 rounded-chip text-sm text-left disabled:opacity-50', i === active && 'bg-raised', it.danger ? 'text-err' : 'text-fg')}
             >
               {it.icon && <Icon name={it.icon} size={15} />}
               {it.label}

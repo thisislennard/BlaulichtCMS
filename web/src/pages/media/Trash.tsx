@@ -105,7 +105,7 @@ export default function Trash() {
       )}
       {q.isLoading && <SkeletonRows rows={4} />}
       {q.error && <ErrorBox title="Papierkorb konnte nicht geladen werden">{(q.error as Error).message}</ErrorBox>}
-      {empty && <EmptyState icon="Trash2" title="Der Papierkorb ist leer" />}
+      {empty && <EmptyState icon="Trash2" title="Der Papierkorb ist leer." />}
       {d && d.collections.length > 0 && (
         <Card title="Sammlungen" bodyClassName="!p-0">
           <ul className="m-0 p-0 list-none divide-y divide-line">

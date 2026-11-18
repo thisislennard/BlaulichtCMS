@@ -2,7 +2,7 @@ import { Link } from 'react-router';
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { get, post } from '../../api/client';
-import { Badge, Button, Card, EmptyState, FieldWrap, Input, Notice, Select, SkeletonRows, Table, Td, Th, type Tone } from '../../components/ui/core';
+import { Badge, Button, Card, FieldWrap, Input, Notice, Select, SkeletonRows, Table, Td, Th, type Tone, EmptyLine } from '../../components/ui/core';
 import { JsonView } from '../../components/ui/data';
 import { Dialog, useErrorToast } from '../../components/ui/overlays';
 import { fmtDateTime, fmtDuration } from '../../lib/format';
@@ -124,7 +124,7 @@ export function RunsCard({ automationId, onOpen }: { automationId: string; onOpe
   return (
     <Card title="Läufe" subtitle="Live- und Testläufe der letzten Zeit. Protokolle werden nach der eingestellten Frist gelöscht." bodyClassName="p-0">
       {q.isLoading && <SkeletonRows rows={3} className="p-4" />}
-      {q.data && q.data.length === 0 && <EmptyState icon="History" title="Noch keine Läufe" text="Ein Testlauf zeigt Schritt für Schritt, was passieren würde." />}
+      {q.data && q.data.length === 0 && <EmptyLine className="px-5 pb-5">Noch keine Läufe. Ein Testlauf zeigt Schritt für Schritt, was passieren würde.</EmptyLine>}
       {q.data && q.data.length > 0 && (
         <Table>
           <thead>

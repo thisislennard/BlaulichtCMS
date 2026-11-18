@@ -219,7 +219,14 @@ export function OfficialWarnings() {
           </Select>
         </FieldWrap>
       )}
-      {q.data?.length === 0 && <EmptyState icon="AlertTriangle" title="Keine amtlichen Warnungen" text="Keine Warnquelle verbunden oder aktuell keine Meldungen." />}
+      {q.data?.length === 0 && (
+        <EmptyState
+          icon="AlertTriangle"
+          title="Keine amtlichen Warnungen."
+          text={feeds.length || !can('connection.configure') ? 'Aktuell liegen keine Meldungen der verbundenen Warnquellen vor.' : 'Noch keine Warnquelle verbunden.'}
+          action={!feeds.length && can('connection.configure') && <LinkButton to="/verbindungen" icon="Plug">Warnquelle verbinden</LinkButton>}
+        />
+      )}
       <div className="flex flex-col gap-3">
         {(q.data ?? []).map((w) => (
           <Card key={w.id}>

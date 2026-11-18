@@ -149,9 +149,9 @@ export function ListToolbar<T extends string>({
       {(active.length > 0 || (filtered && onReset)) && (
         <div className="flex flex-wrap items-center gap-2">
           {active.map((f) => (
-            <span key={f.key} className="inline-flex items-center gap-1 h-7 max-md:h-10 pl-2.5 pr-1 rounded-chip bg-raised text-meta text-fg">
+            <span key={f.key} className="inline-flex items-center gap-1 h-7 max-md:h-tap pl-2.5 pr-1 rounded-chip bg-raised text-meta text-fg">
               <span className="text-fg-muted">{f.label}:</span> {shownLabel(f)}
-              <button type="button" aria-label={`Filter „${f.label}“ entfernen`} onClick={() => f.onChange('')} className="w-6 h-6 max-md:w-9 max-md:h-9 inline-flex items-center justify-center rounded-chip text-fg-muted hover:text-fg hover:bg-card">
+              <button type="button" aria-label={`Filter „${f.label}“ entfernen`} onClick={() => f.onChange('')} className="w-6 h-6 max-md:w-tap max-md:h-tap inline-flex items-center justify-center rounded-chip text-fg-muted hover:text-fg hover:bg-card">
                 <Icon name="X" size={13} />
               </button>
             </span>
@@ -289,11 +289,15 @@ export function ResponsiveTable<T>({
                 ))}
               </dl>
             )}
-            {by('footer').map((c) => (
-              <div key={c.key} className="flex flex-wrap gap-2">
-                {c.cell(r)}
+            {by('footer').length > 0 && (
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                {by('footer').map((c) => (
+                  <div key={c.key} className="flex flex-wrap items-center gap-2">
+                    {c.cell(r)}
+                  </div>
+                ))}
               </div>
-            ))}
+            )}
           </li>
         ))}
       </ul>

@@ -7,7 +7,6 @@ import {
   Button,
   Card,
   cx,
-  EmptyState,
   LinkButton,
   PageHeader,
   Skeleton,
@@ -16,6 +15,8 @@ import {
   Td,
   Th,
   type Tone,
+  EmptyLine,
+  EmptyAction,
 } from "../../components/ui/core";
 import { KpiCard } from "../../components/ui/data";
 import { Icon } from "../../components/ui/Icon";
@@ -448,11 +449,9 @@ export default function SystemStatus() {
         {!d ? (
           <SkeletonRows rows={2} className="px-5" />
         ) : d.workers.length === 0 ? (
-          <EmptyState
-            icon="RefreshCw"
-            title={t("admin.system.noWorkers")}
-            text={t("admin.system.noWorkersText")}
-          />
+          <EmptyLine className="px-5 pb-3">
+            {t("admin.system.noWorkers")}. {t("admin.system.noWorkersText")}
+          </EmptyLine>
         ) : (
           <Table className="relative">
             <thead>
@@ -519,18 +518,9 @@ export default function SystemStatus() {
         {!d ? (
           <SkeletonRows rows={3} className="px-5" />
         ) : d.sites.length === 0 ? (
-          <EmptyState
-            icon="Globe"
-            title="Keine Website gekoppelt"
-            text="Der interne Redaktionsablauf funktioniert auch ohne Website."
-            action={
-              can("channel.sites") && (
-                <LinkButton to="/websites" icon="Plus">
-                  Website koppeln
-                </LinkButton>
-              )
-            }
-          />
+          <EmptyLine className="px-5 pb-3" action={can("channel.sites") && <EmptyAction to="/websites">Website koppeln</EmptyAction>}>
+            Noch keine Website gekoppelt – der interne Redaktionsablauf funktioniert auch ohne.
+          </EmptyLine>
         ) : (
           <Table className="relative">
             <thead>

@@ -23,6 +23,12 @@ BlaulichtCMS ist das Redaktionssystem für Öffentlichkeitsarbeit und Krisenkomm
 
 Alle verbindlichen Begriffe stehen unter [Begriffe](/hilfe/begriffe).
 
+## Listen durchsuchen und filtern
+
+Alle Listen (Beiträge, Medien, Presseanfragen, Einsatzliste, Warnentwürfe, Banner, Workflows, Personen, Aktivitäten, Protokolle …) haben oben dieselbe Werkzeugleiste: **Suchfeld** links („Suchen in …“), die **Reiter** der Liste (z. B. Offen · Erledigt · Alle), den Knopf **Filter** für weitere Kriterien und rechts die Zahl der Treffer. Gesetzte Filter stehen als Chips darunter und lassen sich einzeln mit × oder gemeinsam mit **Zurücksetzen** entfernen.
+
+Suche und Filter stehen in der **Adresse** der Seite (z. B. `/presse?filter=done&suche=brand`): **Zurück** aus einer Anfrage oder einem Beitrag zeigt wieder dieselbe gefilterte Liste, und die Adresse lässt sich als Lesezeichen speichern oder weitergeben. Findet die Suche nichts, steht dort „Kein Eintrag passt zum Filter.“ mit **Filter zurücksetzen**. Am Handy werden Tabellen zu Karten mit allen wichtigen Angaben; mehr als drei Reiter erscheinen dort als Auswahlfeld.
+
 ## Für Administratoren: die ersten zehn Minuten
 
 Nach der Ersteinrichtung steht oben im [Dashboard](/) die Kachel **BlaulichtCMS startklar**. Sie zeigt alle offenen Punkte vor dem Echtbetrieb – Pflichtangaben für die Upload-Seiten, E-Mail-Versand, Bundesland, Sicherung außer Haus, Update-Helfer, Zwei-Faktor, Website – erkennt den Stand selbst und führt mit einem Link direkt an die richtige Stelle (Einzelheiten unter [Dashboard → BlaulichtCMS startklar](/hilfe/dashboard#blaulichtcms-startklar)). Die wichtigsten Schritte:

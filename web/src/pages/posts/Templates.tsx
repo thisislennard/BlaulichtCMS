@@ -99,7 +99,7 @@ export default function Templates() {
       />
       {q.isLoading && <SkeletonRows rows={4} />}
       {q.error && <ErrorBox title="Beitragsvorlagen konnten nicht geladen werden">{(q.error as Error).message}</ErrorBox>}
-      {q.data && q.data.length === 0 && <EmptyState icon="FileText" title="Noch keine Beitragsvorlage" />}
+      {q.data && q.data.length === 0 && <EmptyState icon="FileText" title="Noch keine Beitragsvorlage." text={can('post.templates') ? 'Eine Beitragsvorlage gibt Art, Titel und Text für wiederkehrende Beiträge vor.' : 'Beitragsvorlagen legt an, wer Vorlagen verwalten darf.'} action={can('post.templates') && <Button icon="Plus" onClick={() => setEdit(null)}>Neue Beitragsvorlage</Button>} />}
       {q.data && q.data.length > 0 && (
         <Table>
           <thead>

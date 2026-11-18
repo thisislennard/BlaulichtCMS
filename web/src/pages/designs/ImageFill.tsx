@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api, get } from '../../api/client';
 import type { MediaItem } from '../../api/types';
-import { Button, cx, EmptyState, FieldWrap, Input, Notice, Select, Skeleton, Textarea } from '../../components/ui/core';
+import { Button, cx, FieldWrap, Input, Notice, Select, Skeleton, Textarea, EmptyLine } from '../../components/ui/core';
 import { Icon } from '../../components/ui/Icon';
 import { Dialog, useErrorToast, useToast } from '../../components/ui/overlays';
 import { useAuth } from '../../lib/auth';
@@ -116,7 +116,7 @@ function TemplateChooser({ onPick }: { onPick: (id: string) => void }) {
   const q = useQuery({ queryKey: ['design-templates', '', '', '', 'image'], queryFn: () => get<{ templates: TemplateListItem[] }>('/design-templates?kind=image') });
   if (q.isLoading) return <Skeleton className="h-40" />;
   const list = q.data?.templates ?? [];
-  if (!list.length) return <EmptyState icon="ImageUp" title="Noch keine befüllbare Bildvorlage" text="Bildvorlagen legt die Verwaltung unter Redaktion → Designvorlagen an." />;
+  if (!list.length) return <EmptyLine>Noch keine befüllbare Bildvorlage. Bildvorlagen legt an, wer Designvorlagen verwalten darf (Redaktion → Designvorlagen).</EmptyLine>;
   return (
     <ul className="m-0 p-0 list-none grid gap-3 grid-cols-2 sm:grid-cols-3">
       {list.map((t) => (

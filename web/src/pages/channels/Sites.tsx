@@ -131,7 +131,7 @@ export default function Sites() {
       {q.isLoading && <SkeletonRows rows={3} />}
       {q.error && <ErrorBox title="Websites konnten nicht geladen werden">{(q.error as Error).message}</ErrorBox>}
       {q.data && q.data.length === 0 && (
-        <EmptyState icon="Globe" title="Noch keine Website gekoppelt" text="Ohne Website funktioniert der interne Ablauf mit Freigaben trotzdem vollständig." action={manage && <Button variant="primary" icon="Plus" onClick={() => setAdding(true)}>Website koppeln</Button>} />
+        <EmptyState icon="Globe" title="Noch keine Website gekoppelt." text={manage ? 'Ohne Website funktioniert der interne Ablauf mit Freigaben trotzdem vollständig.' : 'Websites koppelt, wer das Recht „Websites koppeln und widerrufen“ hat.'} action={manage && <Button variant="primary" icon="Plus" onClick={() => setAdding(true)}>Website koppeln</Button>} />
       )}
       <div className="grid gap-4 md:grid-cols-2">
         {(q.data ?? []).map((s) => {

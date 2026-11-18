@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router';
 import { get, post, put } from '../../api/client';
-import { Badge, Button, Card, EmptyState, ErrorBox, FieldWrap, Input, Notice, SegmentedControl, Select, SkeletonRows, Switch, Table, Td, Th } from '../../components/ui/core';
+import { Badge, Button, Card, ErrorBox, FieldWrap, Input, Notice, SegmentedControl, Select, SkeletonRows, Switch, Table, Td, Th, EmptyLine } from '../../components/ui/core';
 import { SecretField, useErrorToast, useToast } from '../../components/ui/overlays';
 import { fmtDateTime, fmtRelative, plural } from '../../lib/format';
 
@@ -180,7 +180,7 @@ export function MailboxSettings() {
       </Card>
       <Card title="Empfangsprotokoll" subtitle={`Jede abgerufene Mail mit Entscheidung – ${q.data!.retentionDays} Tage aufbewahrt (Einstellungen → Löschfristen → Empfangsprotokoll).`}>
         {logs.data && !logs.data.length ? (
-          <EmptyState icon="Inbox" title="Noch nichts abgerufen" />
+          <EmptyLine>Noch nichts abgerufen.</EmptyLine>
         ) : (
           <Table>
             <thead>

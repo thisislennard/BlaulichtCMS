@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { del, get, post, put } from '../../api/client';
-import { Badge, Button, cx, EmptyState, FieldWrap, Input, Notice, Select, Spinner, Switch } from '../../components/ui/core';
+import { Badge, Button, cx, FieldWrap, Input, Notice, Select, Spinner, Switch, EmptyLine } from '../../components/ui/core';
 import { CopyButton, Dialog, OneTimeSecret, useConfirm, useErrorToast, useToast } from '../../components/ui/overlays';
 import { HelpTip } from '../../components/ui/HelpTip';
 import { Icon } from '../../components/ui/Icon';
@@ -240,7 +240,7 @@ export function SourcesDialog({ categories, onClose }: { categories: CalendarCat
         {!q.data ? (
           <Spinner />
         ) : !q.data.length && form !== 'new' ? (
-          <EmptyState icon="CalendarDays" title="Noch kein Kalender eingelesen" />
+          <EmptyLine>Noch kein externer Kalender eingelesen.</EmptyLine>
         ) : (
           <ul className="m-0 p-0 list-none flex flex-col gap-3">
             {q.data.map((s) => (

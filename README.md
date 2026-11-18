@@ -295,6 +295,12 @@ flowchart LR
   bestandener Testmail). Push und E-Mail tragen standardmäßig nur die Art der Benachrichtigung und einen Link –
   Stichwort, Ort oder Betreff bleiben in BlaulichtCMS, Einzelheiten lassen sich je Zustellweg (Push, E-Mail) zuschalten.
 - **App für Handy und Computer:** installierbar (PWA) auf Android, iPhone/iPad und am Computer (Chrome, Edge, Safari am Mac – „Zum Dock hinzufügen“), mit eigenem Fenster, Push-Mitteilungen des Betriebssystems, Zähler ungelesener Benachrichtigungen am App-Symbol und Schnellzugriffen auf Neuer Beitrag, Fotos sammeln und Freigaben; „App installieren“ im Benutzermenü.
+- **Einheitliche Listen:** jede Liste mit derselben Werkzeugleiste (Suche, Reiter, Filter als Chips, Trefferzahl); Suche
+  und Filter stehen in der Adresse – Zurück, Lesezeichen und Links aus Benachrichtigungen zeigen dieselbe Auswahl. Die
+  Beitragsliste zeigt Website und soziale Netzwerke als Ziele samt geplantem Zeitpunkt; die Einsatzliste eine Zeile je Eintrag.
+- **Am Handy:** untere Leiste mit Dashboard, Beiträgen, Freigaben (je nach Recht), „＋ Aktionen“ (Fotos sammeln, Sichten,
+  Neuer Beitrag, Neue Erstmeldung, Anfrage erfassen – höchstens zwei Tipps) und „Mehr“; Tabellen als Karten,
+  Bedienelemente mindestens 40 × 40 px.
 - **Schnell bedienbar:** Suche mit `Strg` + `K` über Seiten, Schnellaktionen, Inhalte aller Bereiche mit Leserecht,
   Einstellungen und Hilfe (Vorgangsnummern wie `P-2026-0001` springen direkt zum Vorgang); „?“ an jedem Seitentitel
   und in der Kopfzeile führt zum passenden Hilfe-Kapitel; Navigation nach Aufgaben (Übersicht, Redaktion, Presse,

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { get } from '../../api/client';
-import { Badge, Button, Card, cx, EmptyState, ErrorBox, FieldWrap, Select, SkeletonRows, type Tone } from '../../components/ui/core';
+import { Badge, Button, Card, cx, ErrorBox, FieldWrap, Select, SkeletonRows, type Tone, EmptyLine } from '../../components/ui/core';
 import { Icon } from '../../components/ui/Icon';
 import { HelpTip } from '../../components/ui/HelpTip';
 import { CopyButton } from '../../components/ui/overlays';
@@ -63,13 +63,7 @@ export function ReceiptLog({ id, kind }: { id: string; kind: string }) {
         </div>
         {q.error && <ErrorBox title="Empfangsprotokoll konnte nicht geladen werden">{(q.error as Error).message}</ErrorBox>}
         {q.isLoading && <SkeletonRows rows={4} />}
-        {q.data?.items.length === 0 && (
-          <EmptyState
-            icon="Inbox"
-            title={filter ? 'Keine passenden Einträge' : 'Noch nichts empfangen'}
-            text={filter ? 'Für diesen Filter gibt es zurzeit keinen Eintrag.' : kind === 'fe2' ? 'Einträge entstehen, sobald FE2 eine Meldung an die Eingangsadresse sendet.' : 'Einträge entstehen bei jedem Abruf – beim Testen, mit „Jetzt abrufen“ und planmäßig, sobald die Verbindung aktiv ist.'}
-          />
-        )}
+        {q.data?.items.length === 0 && <EmptyLine>{filter ? 'Für diesen Filter gibt es zurzeit keinen Eintrag.' : kind === 'fe2' ? 'Einträge entstehen, sobald FE2 eine Meldung an die Eingangsadresse sendet.' : 'Einträge entstehen bei jedem Abruf – beim Testen, mit „Jetzt abrufen“ und planmäßig, sobald die Verbindung aktiv ist.'}</EmptyLine>}
         {!!q.data?.items.length && (
           <ul className="m-0 p-0 list-none flex flex-col border border-line rounded-card divide-y divide-line">
             {q.data.items.map((r: any) => (

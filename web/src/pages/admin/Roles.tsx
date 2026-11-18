@@ -4,7 +4,7 @@
 import { useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { del, post, put } from "../../api/client";
-import { Badge, Button, Card, cx, EmptyState, FieldWrap, Input, Notice, Select, Textarea } from "../../components/ui/core";
+import { Badge, Button, Card, cx, FieldWrap, Input, Notice, Select, Textarea, EmptyLine } from "../../components/ui/core";
 import { Dialog, Menu, errorText, useToast } from "../../components/ui/overlays";
 import { Icon } from "../../components/ui/Icon";
 import { useAuth } from "../../lib/auth";
@@ -413,7 +413,7 @@ function RoleEditor({ state, data, onClose, onSaved }: { state: EditorState; dat
             </section>
           );
         })}
-        {q && !data.permissions.some(visible) && <EmptyState icon="Search" title="Kein Recht gefunden" text="Bitte einen anderen Suchbegriff versuchen." />}
+        {q && !data.permissions.some(visible) && <EmptyLine>Kein Recht passt zur Suche.</EmptyLine>}
       </div>
     </Dialog>
   );

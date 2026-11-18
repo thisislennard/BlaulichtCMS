@@ -252,7 +252,7 @@ export default function Outputs() {
       <Notice icon="ShieldCheck">Aktionen legen Entwürfe und Benachrichtigungen an – die Freigabe bleibt bei den Menschen. Direktversand ist nur je Workflow mit eigenem Recht möglich.</Notice>
       {(q.isLoading || cat.isLoading) && <SkeletonRows rows={4} />}
       {q.error && <ErrorBox title="Aktionen konnten nicht geladen werden">{(q.error as Error).message}</ErrorBox>}
-      {q.data && q.data.length === 0 && <EmptyState icon="Send" title="Noch keine Aktionen" text="Eine Aktion legt fest, was ein Workflow tut – etwa einen Banner-Entwurf im Stil „Unwetter“ anlegen." />}
+      {q.data && q.data.length === 0 && <EmptyState icon="Send" title="Noch keine Aktionen." text={manage ? 'Eine Aktion legt fest, was ein Workflow tut – etwa einen Banner-Entwurf im Stil „Unwetter“ anlegen.' : 'Aktionen legt an, wer Workflows verwalten darf.'} action={manage && <Button icon="Plus" disabled={!cat.data} onClick={() => setChoose(true)}>Neue Aktion</Button>} />}
       <div className="grid gap-4 lg:grid-cols-2">
         {(q.data ?? []).map((o) => {
           const kind = cat.data?.outputKinds.find((k) => k.kind === o.kind);

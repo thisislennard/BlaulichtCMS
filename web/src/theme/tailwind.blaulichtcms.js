@@ -52,6 +52,8 @@ export default {
       },
       // Am Handy 40 px (Touch-Ziele, #264): Werte aus tokens.css, dort per Medienabfrage umgestellt
       height: { 'ctl-sm': v('h-ctl-sm'), ctl: v('h-ctl'), field: v('h-field') },
+      // Touch-Ziel 40 px (Design §4): h-tap, w-tap, min-h-tap … – die Abstände (h-10 usw.) rechnen mit 14 px je rem
+      spacing: { tap: '40px' },
       maxWidth: { content: '1440px' },
       boxShadow: {
         float: v('shadow-float'),

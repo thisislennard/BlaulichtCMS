@@ -167,7 +167,7 @@ Der **Verlauf** zeigt jede Änderung mit Person und Zeitpunkt (Status, Zuständi
 
 ## Übersicht und Dashboard
 
-Die Übersicht filtert nach **Offen**, **Überfällig**, **Meine**, **Beantwortet**, **Erledigt** und **Alle** und durchsucht Nummer, Thema, Medium und Name. Fürs [Dashboard](/) gibt es die Kachel **Presseanfragen** (offene Anfragen nach Frist) und die Kennzahl **Offene Presseanfragen** (rot, sobald eine Frist überschritten ist) – über *Dashboard anpassen* einblenden.
+Die Übersicht filtert nach **Offen**, **Überfällig**, **Meine**, **Beantwortet**, **Erledigt** und **Alle** und durchsucht Nummer, Thema, Medium und Name. Reiter und Suche bleiben beim Zurück aus einer Anfrage erhalten (sie stehen in der Adresse, z. B. `/presse?filter=done`). Am Handy steht jede Anfrage als Karte mit Medium, Zuständigkeit und Frist – überfällige Fristen rot. Fürs [Dashboard](/) gibt es die Kachel **Presseanfragen** (offene Anfragen nach Frist) und die Kennzahl **Offene Presseanfragen** (rot, sobald eine Frist überschritten ist) – über *Dashboard anpassen* einblenden.
 
 ## Workflows
 

@@ -1,3 +1,9 @@
+## Beitragsliste
+
+Die Liste unter [Redaktion → Beiträge](/beitraege) zeigt je Beitrag Titel, Art, Fassung, Status, **Ziele** und die letzte Änderung. Unter **Ziele** stehen die Website (mit Symbol zum Ansehen, sobald veröffentlicht) und die gewählten sozialen Netzwerke – mit Haken, wenn dort veröffentlicht, mit Fehlerzeichen, wenn es fehlgeschlagen ist; „nur intern“, wenn kein Ziel gewählt ist. Ein geplanter Zeitpunkt erscheint als „geplant für Sa., 21.11., 09:00“.
+
+Das **Suchfeld** durchsucht Titel und Text der aktuellen Fassung (Groß-/Kleinschreibung und Umlaute egal: „Uebung“ findet „Übung“). Die Reiter **In Arbeit**, **Freigabe & Veröffentlichung** und **Veröffentlicht** grenzen nach Status ein; unter **Filter** gibt es **Art**, **Ziel** (Website, ein soziales Netzwerk oder nur intern), **Zuletzt geändert von** und **Geändert** (heute, 7 Tage, 30 Tage, 12 Monate). Alles steht in der Adresse – Zurück aus einem Beitrag stellt die Auswahl wieder her.
+
 ## Arten
 
 | Art | Wofür |

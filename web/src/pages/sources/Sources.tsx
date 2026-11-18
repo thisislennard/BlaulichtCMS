@@ -2,7 +2,10 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { del, get, post, put } from '../../api/client';
-import { Button, Card, EmptyState, ErrorBox, FieldWrap, Input, Notice, PageHeader, SegmentedControl, SkeletonRows } from '../../components/ui/core';
+import { Button, Card, EmptyAction, EmptyLine, EmptyState, ErrorBox, FieldWrap, Input, Notice, PageHeader, SkeletonRows } from '../../components/ui/core';
+import { FilterEmpty, ListToolbar } from '../../components/ui/list';
+import { useListState } from '../../lib/listState';
+import { rank, searchTerms } from '../../lib/searchText';
 import { Icon } from '../../components/ui/Icon';
 import { Dialog, useErrorToast, useToast, useConfirm } from '../../components/ui/overlays';
 import { HelpLink, HelpTip } from '../../components/ui/HelpTip';
@@ -163,12 +166,16 @@ export default function Sources() {
   const qc = useQueryClient();
   const nav = useNavigate();
   const toastError = useErrorToast();
-  const [filter, setFilter] = useState<'new' | 'starred' | 'hidden'>('new');
+  // Reiter und Suche in der Adresse (#260)
+  const ls = useListState({ ansicht: 'new', suche: '' }, { tabKeys: ['ansicht'] });
+  const filter = (['new', 'starred', 'hidden'] as const).find((x) => x === ls.values.ansicht) ?? 'new';
+  const terms = searchTerms(ls.values.suche);
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<any>(null);
   const feeds = useQuery({ queryKey: ['rss', 'feeds'], queryFn: () => get<any[]>('/rss/feeds') });
   const items = useQuery({ queryKey: ['rss', 'items', filter], queryFn: () => get<any[]>(`/rss/items?filter=${filter}`) });
   const refresh = () => qc.invalidateQueries({ queryKey: ['rss'] });
+  const shownItems = (items.data ?? []).filter((i) => !terms.length || rank(terms, i.title ?? '', `${i.feed_title ?? ''} ${i.summary ?? ''}`) !== null);
   const manage = can('source.manage');
   const mayItems = can('source.items');
   const itemAction = async (id: string, action: string) => {
@@ -185,12 +192,24 @@ export default function Sources() {
       />
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_320px] items-start">
         <div className="flex flex-col gap-4 min-w-0">
-          <SegmentedControl label="Filter" value={filter} onChange={setFilter} options={[{ value: 'new', label: 'Neu' }, { value: 'starred', label: 'Gemerkt' }, { value: 'hidden', label: 'Ausgeblendet' }]} />
+          <ListToolbar<'new' | 'starred' | 'hidden'>
+            search={{ value: ls.values.suche, onChange: (v) => ls.set({ suche: v }), placeholder: 'Suchen in Meldungen', label: 'Meldungen durchsuchen (Titel, Quelle)' }}
+            tabs={{ label: 'Ansicht', value: filter, onChange: (v) => ls.set({ ansicht: v }), options: [{ value: 'new', label: 'Neu' }, { value: 'starred', label: 'Gemerkt' }, { value: 'hidden', label: 'Ausgeblendet' }] }}
+            count={items.data ? { n: shownItems.length, one: 'Meldung', many: 'Meldungen' } : undefined}
+            onReset={() => ls.reset(['ansicht'])}
+          />
           {items.isLoading && <SkeletonRows rows={5} />}
           {items.error && <ErrorBox title="Einträge konnten nicht geladen werden">{(items.error as Error).message}</ErrorBox>}
-          {items.data && items.data.length === 0 && <EmptyState icon="Newspaper" title="Keine Einträge" />}
+          {items.data && shownItems.length === 0 &&
+            (terms.length ? (
+              <FilterEmpty onReset={() => ls.reset(['ansicht'])} />
+            ) : feeds.data && !feeds.data.length ? (
+              <EmptyState icon="Newspaper" title="Noch keine Quelle." text={manage ? 'RSS- oder Atom-Feeds liefern Anregungen für Themen.' : 'Quellen fügt hinzu, wer Quellen verwalten darf.'} action={manage && <Button icon="Plus" onClick={() => setAdding(true)}>Quelle hinzufügen</Button>} />
+            ) : (
+              <EmptyLine action={filter !== 'new' && <EmptyAction onClick={() => ls.set({ ansicht: 'new' })}>Neue Meldungen zeigen</EmptyAction>}>{filter === 'starred' ? 'Nichts gemerkt.' : filter === 'hidden' ? 'Nichts ausgeblendet.' : 'Keine neuen Meldungen.'}</EmptyLine>
+            ))}
           <ul className="m-0 p-0 list-none flex flex-col gap-3">
-            {(items.data ?? []).map((i) => (
+            {shownItems.map((i) => (
               <li key={i.id}>
                 <Card>
                   <div className="flex flex-col gap-2">

@@ -106,7 +106,7 @@ function Targets({ p }: { p: PostListItem }) {
             <Icon name="Globe" size={12} />
             <span className="truncate max-w-[160px]">{p.site_name}</span>
             {p.published_url && (
-              <a href={safeHref(p.published_url)} target="_blank" rel="noopener noreferrer" title={p.published_url} aria-label={`Auf der Website ansehen: ${p.published_url} (öffnet in neuem Tab)`} className="inline-flex items-center justify-center max-md:w-8 max-md:h-8 !text-fg-muted hover:!text-fg">
+              <a href={safeHref(p.published_url)} target="_blank" rel="noopener noreferrer" title={p.published_url} aria-label={`Auf der Website ansehen: ${p.published_url} (öffnet in neuem Tab)`} className="inline-flex items-center justify-center max-md:w-tap max-md:h-tap !text-fg-muted hover:!text-fg">
                 <Icon name="ExternalLink" size={12} />
               </a>
             )}

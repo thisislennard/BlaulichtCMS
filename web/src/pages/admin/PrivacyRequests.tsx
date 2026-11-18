@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router";
 import { download, get, post, qs } from "../../api/client";
-import { Badge, Button, Card, EmptyState, ErrorBox, Input, Notice, PageHeader } from "../../components/ui/core";
+import { Badge, Button, Card, EmptyLine, ErrorBox, Input, Notice, PageHeader } from "../../components/ui/core";
 import { useConfirm, useErrorToast, useToast } from "../../components/ui/overlays";
 import { fmtDateTime } from "../../lib/format";
 
@@ -166,7 +166,7 @@ export default function PrivacyRequests() {
         </p>
       </Card>
       {error && <ErrorBox title="Suche nicht möglich">{error}</ErrorBox>}
-      {hits && hits.length === 0 && <EmptyState icon="SearchX" title="Keine Treffer" text={`Zu „${searched}“ sind keine Daten gespeichert. Sicherungen enthalten gelöschte Daten noch bis zu deren Ablauf.`} />}
+      {hits && hits.length === 0 && <EmptyLine>Zu „{searched}“ sind keine Daten gespeichert. Sicherungen enthalten gelöschte Daten noch bis zu deren Ablauf.</EmptyLine>}
       {groups.map((g) => (
         <Card key={g.kind} title={KIND_LABEL[g.kind] ?? g.kind} subtitle={`${g.items.length} Treffer${g.items.length >= 200 ? " (gekürzt – Suche genauer fassen)" : ""}`}>
           <ul className="m-0 p-0 list-none flex flex-col divide-y divide-line">

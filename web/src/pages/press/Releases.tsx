@@ -269,7 +269,7 @@ export default function Releases() {
             {rows.map((r) => (
               <li key={r.id} className="py-3 flex flex-wrap items-center gap-3">
                 <div className="min-w-0 flex-1">
-                  <button type="button" className="font-medium text-left hover:underline max-md:min-h-10" onClick={() => openProtocol(r.id)}>
+                  <button type="button" className="font-medium text-left hover:underline max-md:min-h-tap" onClick={() => openProtocol(r.id)}>
                     {r.subject}
                   </button>
                   <div className="text-meta text-fg-muted">

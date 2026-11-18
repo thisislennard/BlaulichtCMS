@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
-import { cx, EmptyState } from '../../components/ui/core';
+import { cx, EmptyLine } from '../../components/ui/core';
 import { Icon } from '../../components/ui/Icon';
 import { addDays, byDay, dayKey, dayLabel, dayOfMonth, entryColor, entryDays, monthIndex, pad, timeOf, timeText, today, weekdayOf, WEEKDAYS_SHORT, type CalendarEntry } from './model';
 
@@ -281,7 +281,7 @@ export function ListView({ entries, from, to, onOpen, wrapEntry = ident }: ViewP
   const map = byDay(entries, from, to);
   const days = [...map.keys()].sort();
   const t = today();
-  if (!days.length) return <EmptyState icon="CalendarDays" title="Keine Einträge in diesem Zeitraum" text="Filter prüfen oder einen anderen Zeitraum wählen." />;
+  if (!days.length) return <EmptyLine className="py-6">Keine Einträge in diesem Zeitraum. Filter prüfen oder einen anderen Zeitraum wählen.</EmptyLine>;
   return (
     <div className="flex flex-col gap-4">
       {days.map((d) => (

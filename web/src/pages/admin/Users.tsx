@@ -21,6 +21,7 @@ import {
   SegmentedControl,
   SkeletonRows,
   Tabs,
+  EmptyLine,
 } from "../../components/ui/core";
 import { FilterEmpty, ListToolbar, ResponsiveTable } from "../../components/ui/list";
 import { useListState } from "../../lib/listState";
@@ -1212,11 +1213,7 @@ function UserActivity() {
         ) : q.isLoading ? (
           <SkeletonRows rows={6} className="p-4" />
         ) : events.length === 0 ? (
-          <EmptyState
-            icon="ScrollText"
-            title={t("admin.logs.empty")}
-            text={t("activity.emptyFilteredText")}
-          />
+          <EmptyLine className="p-4">Keine Einträge für diese Auswahl.</EmptyLine>
         ) : (
           <AuditTable events={events} />
         )}

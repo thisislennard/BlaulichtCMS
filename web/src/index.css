@@ -52,6 +52,30 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* Karten am Handy (ResponsiveTable, #264): der erste Link bzw. Knopf im Titel macht die ganze Karte antippbar,
+   weitere Bedienelemente liegen darüber. */
+.bc-list-card {
+  position: relative;
+}
+.bc-list-card .bc-card-title :is(a, button):first-of-type::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+}
+.bc-list-card :is(a, button, input, select, textarea, label, summary):not(.bc-card-title :is(a, button):first-of-type) {
+  position: relative;
+  z-index: 1;
+}
+
+/* Textlinks in Listen und Kacheln: am Handy 40 px hohe Trefferfläche, ohne das Layout zu verschieben (#264) */
+@media (max-width: 767.98px) {
+  .bc-tap-y {
+    padding-block: 11px;
+    margin-block: -11px;
+  }
+}
+
 .bc-compact table td,
 .bc-compact table th {
   padding-top: 6px !important;

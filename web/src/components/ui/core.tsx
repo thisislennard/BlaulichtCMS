@@ -2,6 +2,7 @@ import { createContext, forwardRef, useContext, useEffect, useId, useRef, type B
 import { Link } from 'react-router';
 import { Icon } from './Icon';
 import { usePageInfo } from '../layout/page';
+import { useIsPhone } from '../../lib/media';
 
 export function cx(...c: (string | false | null | undefined)[]) {
   return c.filter(Boolean).join(' ');
@@ -35,7 +36,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
       className={cx(
         'inline-flex items-center justify-center gap-2 rounded-control font-medium text-sm whitespace-nowrap transition-colors duration-fast ease-out disabled:opacity-55',
         size === 'sm' ? 'h-ctl-sm' : 'h-ctl',
-        iconOnly ? (size === 'sm' ? 'w-8 px-0' : 'w-9 px-0') : 'px-3.5',
+        iconOnly ? (size === 'sm' ? 'w-8 px-0 max-md:w-tap' : 'w-9 px-0 max-md:w-tap') : 'px-3.5',
         VARIANTS[variant],
         className,
       )}
@@ -416,6 +417,21 @@ export function Switch({ checked, onChange, label, description, disabled, id }: 
 }
 
 export function SegmentedControl<T extends string>({ value, onChange, options, label, size = 'md' }: { value: T; onChange: (v: T) => void; options: { value: T; label: ReactNode; count?: number }[]; label: string; size?: 'sm' | 'md' }) {
+  // Am Handy laufen mehr als drei Segmente über den Rand – dann als Auswahlfeld (#264), sofern die Beschriftungen Text sind
+  const phone = useIsPhone();
+  if (phone && options.length > 3 && options.every((o) => typeof o.label === 'string'))
+    return (
+      <div className="w-full">
+        <Select aria-label={label} value={value} onChange={(e) => onChange(e.target.value as T)}>
+          {options.map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label as string}
+              {o.count != null ? ` (${o.count})` : ''}
+            </option>
+          ))}
+        </Select>
+      </div>
+    );
   return (
     <div role="group" aria-label={label} className="inline-flex p-[3px] border border-line rounded-control bg-card max-w-full overflow-x-auto">
       {options.map((o) => (
@@ -424,7 +440,7 @@ export function SegmentedControl<T extends string>({ value, onChange, options, l
           type="button"
           aria-pressed={value === o.value}
           onClick={() => onChange(o.value)}
-          className={cx('px-3 rounded-chip text-sm font-medium whitespace-nowrap transition-colors duration-fast inline-flex items-center gap-1.5 max-md:h-10', size === 'sm' ? 'h-[26px]' : 'h-[30px]', value === o.value ? 'bg-raised text-fg' : 'text-fg-muted hover:text-fg')}
+          className={cx('px-3 rounded-chip text-sm font-medium whitespace-nowrap transition-colors duration-fast inline-flex items-center justify-center gap-1.5 max-md:h-tap max-md:min-w-tap', size === 'sm' ? 'h-[26px]' : 'h-[30px]', value === o.value ? 'bg-raised text-fg' : 'text-fg-muted hover:text-fg')}
         >
           {o.label}
           {o.count != null && <span className="text-meta text-fg-muted tabular">{o.count}</span>}
@@ -449,7 +465,7 @@ export function Tabs<T extends string>({ value, onChange, tabs, label }: { value
             if (e.key === 'ArrowRight') onChange(tabs[(i + 1) % tabs.length].value);
             if (e.key === 'ArrowLeft') onChange(tabs[(i - 1 + tabs.length) % tabs.length].value);
           }}
-          className={cx('relative h-10 px-3 text-sm font-medium whitespace-nowrap transition-colors duration-fast', value === t.value ? 'text-fg' : 'text-fg-muted hover:text-fg')}
+          className={cx('relative h-10 max-md:h-tap px-3 text-sm font-medium whitespace-nowrap transition-colors duration-fast', value === t.value ? 'text-fg' : 'text-fg-muted hover:text-fg')}
         >
           {t.label}
           {t.count != null && <span className="ml-1.5 text-meta text-fg-muted tabular">{t.count}</span>}
@@ -527,7 +543,7 @@ export function EmptyLine({ children, action, className }: { children: ReactNode
 
 /** Nächste Aktion in einer Leermeldung: leiser Link bzw. Knopf mit Pfeil, am Handy 40 px hoch. */
 export function EmptyAction({ to, onClick, children }: { to?: string; onClick?: () => void; children: ReactNode }) {
-  const cls = 'inline-flex items-center gap-1 max-md:min-h-10 font-medium !text-fg hover:!text-primary underline-offset-2 hover:underline whitespace-nowrap';
+  const cls = 'inline-flex items-center gap-1 max-md:min-h-tap font-medium !text-fg hover:!text-primary underline-offset-2 hover:underline whitespace-nowrap';
   return to ? (
     <Link to={to} className={cls}>
       {children} →

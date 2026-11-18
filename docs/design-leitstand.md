@@ -91,9 +91,12 @@ Abschnittslabel-Muster (z. B. im Dashboard):
 - Abstände im Raster von 4 px; zwischen Karten 12–20 px, Seitenrand 32 px (Handy 16 px).
 - Schatten nur für schwebende Elemente (`shadow-float`) und als Fokus-/Auswahlring (`shadow-ring`, `shadow-selected`).
 - Touch-Ziele mindestens 40 px, am Handy für Hauptaktionen 48–64 px. Unter 768 px sind die Höhen `h-ctl-sm`, `h-ctl`
-  und `h-field` 40 px (Variablen `--bc-h-*` in `tokens.css`); Segmente, Hilfe-„?“, Menüeinträge und Dialog-Schließen
-  wachsen dort ebenfalls auf 40 px (`max-md:`). Inline-Links im Fließtext sind ausgenommen (WCAG 2.5.8).
-  `test/e2e/mobile-ux.mjs` misst die Trefferflächen bei 390 px.
+  und `h-field` 40 px (Variablen `--bc-h-*` in `tokens.css`); Reiter, Segmente, Symbolknöpfe, Hilfe-„?“, Menüeinträge,
+  Kästchen in Medienkacheln und Dialog-Schließen wachsen dort ebenfalls auf 40 px. Achtung: Die Schrift-Basis ist 14 px,
+  `h-10` ist also nur 35 px – für Touch-Ziele `h-tap`/`w-tap`/`min-h-tap` (40 px, meist als `max-md:h-tap`) verwenden.
+  Textlinks in Listen und Kacheln bekommen mit `bc-tap-y` am Handy eine 40 px hohe Trefferfläche, ohne das Layout zu
+  verschieben. Inline-Links im Fließtext sind ausgenommen (WCAG 2.5.8). `test/e2e/mobile-ux.mjs` misst die
+  Trefferflächen bei 390 px auf Dashboard, Beiträgen, Sammlung, Presse, Kalender, Einsatzliste und Warnentwurf.
 
 ---
 

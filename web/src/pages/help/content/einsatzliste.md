@@ -11,6 +11,10 @@ Die Einsatzliste zeigt die Einsätze auf der Website – als Tabelle oder Karten
 
 Ein Eintrag enthält: Alarmzeit, laufende Nummer (leer = die Website zählt nach Alarmzeit im Jahr), Stichwort mit **Bedeutung** und **Kategorie** aus dem [Stichwortverzeichnis](/hilfe/stichwoerter-regeln) (leer lassen = automatisch), Einsatzmeldung, Ort, optional Fahrzeuge, weitere Kräfte, Kurzbericht, einen Link zu einem ausführlichen Bericht und Bilder (öffentliche Fassung ohne Standortdaten; das erste ist das Vorschaubild). **Besonderer Einsatz** hebt einen Eintrag hervor; auf der Website lassen sich besondere Einsätze auch einzeln auflisten. **Fehlalarm** erscheint als Kennzeichnung und in der Statistik.
 
+## Liste
+
+Jeder Eintrag steht in **einer Zeile**: Nummer, Datum, Stichwort, Einsatzmeldung, Ort und Stand. Bedeutung und Kategorie stehen hinter dem Stichwort nur, wenn sie davon abweichen (also nicht „Brand · Brand“). Merkmale erscheinen als Symbole hinter der Meldung (Stern = besonders hervorgehoben, Bild mit Anzahl, Schild = Datenschutz-Prüfung, „i“ = Herkunft und Fassung als Tooltip); beim Stand zeigt ein Pfeil-Symbol den Eintrag auf der Website, ein Warnzeichen den Fehler als Tooltip. Mit **Kompakte Tabellen** unter [Mein Konto](/profil) werden die Zeilen noch enger. Suche, Stand und Jahr stehen in der Adresse; am Handy erscheinen die Einträge als Karten.
+
 ## Freigabe und Veröffentlichung
 
 1. Eintrag prüfen und **Zur Freigabe einreichen** (Menü am Ende der Zeile).

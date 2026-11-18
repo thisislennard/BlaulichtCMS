@@ -87,13 +87,13 @@ export function FolderBar({ collectionId, folders, current, onOpen, manage, coun
     <div className="flex flex-col gap-2">
       <div className="flex flex-wrap items-center gap-2">
         <nav aria-label="Ordnerpfad" className="flex flex-wrap items-center gap-1 text-sm">
-          <button type="button" className="inline-flex items-center gap-1 px-1.5 h-7 rounded-chip hover:bg-raised" aria-current={current === null ? 'location' : undefined} onClick={() => onOpen(null)}>
+          <button type="button" className="inline-flex items-center gap-1 px-1.5 h-7 max-md:h-tap rounded-chip hover:bg-raised" aria-current={current === null ? 'location' : undefined} onClick={() => onOpen(null)}>
             <Icon name="FolderOpen" size={14} /> Oberste Ebene
           </button>
           {path.map((f) => (
             <span key={f.id} className="inline-flex items-center gap-1">
               <Icon name="ChevronRight" size={13} className="text-fg-muted" />
-              <button type="button" className="px-1.5 h-7 rounded-chip hover:bg-raised font-medium" aria-current={f.id === current ? 'location' : undefined} onClick={() => onOpen(f.id)}>
+              <button type="button" className="px-1.5 h-7 max-md:h-tap rounded-chip hover:bg-raised font-medium" aria-current={f.id === current ? 'location' : undefined} onClick={() => onOpen(f.id)}>
                 {f.name}
               </button>
             </span>
@@ -101,7 +101,7 @@ export function FolderBar({ collectionId, folders, current, onOpen, manage, coun
         </nav>
         <span className="flex-1" />
         {folders.length > 0 && (
-          <label className="inline-flex items-center gap-2 text-sm cursor-pointer">
+          <label className="inline-flex items-center gap-2 text-sm cursor-pointer max-md:min-h-tap">
             <input type="checkbox" className="w-4 h-4 accent-[var(--bc-primary-solid)]" checked={deep} onChange={(e) => setDeep(e.target.checked)} />
             Unterordner einbeziehen
           </label>
@@ -116,7 +116,7 @@ export function FolderBar({ collectionId, folders, current, onOpen, manage, coun
         <ul className="m-0 p-0 list-none grid gap-2 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
           {children.map((f) => (
             <li key={f.id} className="flex items-center gap-1 border border-line rounded-node bg-card pr-1">
-              <button type="button" className="flex-1 min-w-0 flex items-center gap-2 px-3 h-11 text-left text-sm" onClick={() => onOpen(f.id)}>
+              <button type="button" className="flex-1 min-w-0 flex items-center gap-2 px-3 h-11 max-md:h-tap text-left text-sm" onClick={() => onOpen(f.id)}>
                 <Icon name="Folder" size={16} className="text-fg-muted shrink-0" />
                 <span className="truncate font-medium">{f.name}</span>
                 <span className="ml-auto font-mono text-meta text-fg-muted">{counts[f.id] ?? 0}</span>

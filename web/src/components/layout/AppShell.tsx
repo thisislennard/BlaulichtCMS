@@ -208,7 +208,7 @@ function NotificationsButton() {
   }, [notif, unread]);
   return (
     <>
-      <button ref={ref} type="button" onClick={() => setOpen((o) => !o)} aria-label={`Benachrichtigungen${unread ? `, ${unread} neu` : ''}`} aria-expanded={open} className="relative w-9 h-9 max-md:w-10 max-md:h-10 rounded-control border border-line bg-transparent inline-flex items-center justify-center text-fg-muted hover:text-fg hover:bg-raised">
+      <button ref={ref} type="button" onClick={() => setOpen((o) => !o)} aria-label={`Benachrichtigungen${unread ? `, ${unread} neu` : ''}`} aria-expanded={open} className="relative w-9 h-9 max-md:w-tap max-md:h-tap rounded-control border border-line bg-transparent inline-flex items-center justify-center text-fg-muted hover:text-fg hover:bg-raised">
         <Icon name="Bell" size={16} />
         {unread > 0 && <span aria-hidden="true" className="absolute top-[7px] right-[8px] w-2 h-2 rounded-full bg-primary border-2 border-card" />}
       </button>
@@ -264,7 +264,7 @@ function UserMenu() {
   if (!me) return null;
   return (
     <>
-      <button ref={ref} type="button" onClick={() => setOpen((o) => !o)} aria-label={`Benutzerprofil von ${me.user.name}`} aria-expanded={open} className="rounded-full inline-flex items-center justify-center min-w-10 min-h-10">
+      <button ref={ref} type="button" onClick={() => setOpen((o) => !o)} aria-label={`Benutzerprofil von ${me.user.name}`} aria-expanded={open} className="rounded-full inline-flex items-center justify-center min-w-tap min-h-tap">
         <Avatar name={me.user.name} size={36} strong />
       </button>
       <Popover open={open} onClose={() => setOpen(false)} anchor={ref} width={260}>
@@ -366,7 +366,7 @@ function StatusStrip({ crumbs, title }: { crumbs: { label: string; to?: string }
 /** Hilfe-Knopf in der Kopfzeile (#265): öffnet das Kapitel der aktuellen Seite bzw. die Startseite der Hilfe. */
 function HelpButton({ topic }: { topic?: string }) {
   return (
-    <Link to={helpHref(topic)} aria-label={t('nav.pageHelp')} title={`${t('nav.pageHelp')} (?)`} className="w-9 h-9 max-md:w-10 max-md:h-10 rounded-control border border-line inline-flex items-center justify-center !text-fg-muted hover:!text-fg hover:bg-raised">
+    <Link to={helpHref(topic)} aria-label={t('nav.pageHelp')} title={`${t('nav.pageHelp')} (?)`} className="w-9 h-9 max-md:w-tap max-md:h-tap rounded-control border border-line inline-flex items-center justify-center !text-fg-muted hover:!text-fg hover:bg-raised">
       <Icon name="CircleHelp" size={16} />
     </Link>
   );
@@ -465,21 +465,21 @@ export function AppShell() {
           </div>
         )}
         <header className="sticky top-0 z-40 bg-card border-b border-line">
-          <div className="h-14 flex items-center gap-3 md:gap-8 px-4 md:px-8">
-            <Link to="/" className="flex items-center gap-2.5 !text-fg min-w-0 min-h-10">
+          <div className="h-14 flex items-center gap-2 md:gap-8 px-4 md:px-8">
+            <Link to="/" className="flex items-center gap-2.5 !text-fg min-w-0 min-h-tap">
               <BrandMark />
               <span className="font-semibold text-section tracking-[-0.01em]">BlaulichtCMS</span>
               <span className="hidden xl:inline text-fg-muted">/</span>
               <span className="hidden xl:inline text-sm text-fg-muted truncate max-w-[200px]">{me?.instance.organization || me?.instance.name}</span>
             </Link>
             <TopNav activeGroup={activeGroup} />
-            <div className="ml-auto flex items-center gap-2">
+            <div className="ml-auto flex items-center gap-1 md:gap-2 shrink-0">
               <button type="button" onClick={() => setPaletteOpen(true)} aria-label={t('nav.searchLabel')} className="hidden lg:flex items-center gap-2 h-9 w-[240px] px-3 rounded-control border border-line bg-bg text-fg-muted text-sm hover:bg-raised">
                 <Icon name="Search" size={15} />
                 <span className="flex-1 text-left truncate">Suchen</span>
                 <Kbd>Strg K</Kbd>
               </button>
-              <button type="button" onClick={() => setPaletteOpen(true)} aria-label={t('nav.searchLabel')} className="lg:hidden w-9 h-9 max-md:w-10 max-md:h-10 rounded-control border border-line inline-flex items-center justify-center text-fg-muted">
+              <button type="button" onClick={() => setPaletteOpen(true)} aria-label={t('nav.searchLabel')} className="lg:hidden w-9 h-9 max-md:w-tap max-md:h-tap rounded-control border border-line inline-flex items-center justify-center text-fg-muted">
                 <Icon name="Search" size={16} />
               </button>
               <HelpButton topic={help} />
