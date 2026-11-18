@@ -58,7 +58,7 @@ Ein- und ausschalten lässt sich der Wartungsmodus außerdem im [Systemstatus](/
 sudo bash /opt/apps/blaulichtcms/install.sh
 ```
 
-Das Installationsskript holt den neuen Stand, baut das Image und ruft damit `scripts/update.sh … --rollback` auf. Das Update-Skript schaltet den Wartungsmodus ein, wartet auf „bereit“, legt eine vollständige Sicherung außerhalb des Volumes an, wechselt das Image, prüft den Start und beendet den Wartungsmodus. Mit `--rollback` kehrt es bei einem Fehler automatisch zum alten Image **mit** dem Datenstand von vor dem Update zurück. Bricht das Update vor dem Imagewechsel ab, wird der Wartungsmodus wieder beendet und der bisherige Stand läuft weiter.
+Das Installationsskript holt den neuen Stand, baut das Image, prüft es in einem Probelauf ohne Netz (Selbsttest: alle Programmdateien lesbar, Programm lädt) und ruft damit `scripts/update.sh … --rollback` auf. Besteht das Image den Selbsttest nicht, bricht es ab, bevor etwas geändert wird. Das Update-Skript schaltet den Wartungsmodus ein, wartet auf „bereit“, legt eine vollständige Sicherung außerhalb des Volumes an, wechselt das Image, prüft den Start und beendet den Wartungsmodus. Mit `--rollback` kehrt es bei einem Fehler automatisch zum alten Image **mit** dem Datenstand von vor dem Update zurück – das Datenvolume wird dabei erst ersetzt, wenn die Sicherung geprüft ist; besteht sie die Prüfung nicht, bleibt das Volume unverändert und die Ausgabe nennt den Weg von Hand. Bricht das Update vor dem Imagewechsel ab, wird der Wartungsmodus wieder beendet und der bisherige Stand läuft weiter.
 
 ### Wenn ein Update ein neues Image braucht
 

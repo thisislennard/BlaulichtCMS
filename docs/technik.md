@@ -343,7 +343,10 @@ nicht archivierten Beiträge (bei 4 800 Beiträgen ohne Freigaben 46 ms) – Bei
 
 **Automatisiert (bei jedem Push in der CI):** Typprüfung, rund 780 Server-Tests gegen echtes PostgreSQL (inklusive
 Video-Verarbeitung mit ffmpeg), Build, PHP-Lint des Plugins, Probelauf mit Docker Compose (Rollen, Schlüsselwechsel,
-Audit-Kette), Abhängigkeits-, Image- und Secret-Scan sowie Browsertests der Kernabläufe mit Playwright/Chromium
+Audit-Kette; Image aus einer Arbeitskopie mit Dateirechten 0600/0700), Update-Wege mit echtem Docker
+(`test/docker/update-wege.sh`, #275: Image-Update von 0.7.0 über den Update-Helfer unter systemd, `install.sh` 0.7.0
+von Hand mit umask 077, Rückweg mit root-eigener Sicherung, gescheiterte Prüfung der Sicherung mit anschließendem
+Rückweg von Hand, Selbsttest des Images), Abhängigkeits-, Image- und Secret-Scan sowie Browsertests der Kernabläufe mit Playwright/Chromium
 (Einrichtung mit Zwei-Faktor, Beitrag bis zur Freigabe, Workflow aus Vorlage, Rollen, Dashboard, Sichtung ohne Scrollen,
 Listen und Handy mit Touch-Zielen, Fokus-Check auf wichtigen Ansichten). Vor jedem Release lokal: Fokus-Check über alle
 Ansichten und Dialoge (inklusive Seitentitel, Überschriften und Pflichtfeldern) und eine Durchsicht der Hauptseiten im
@@ -387,8 +390,10 @@ Ergebnisse je Verbindung: [docs/integrationen.md](integrationen.md).
   (`server/test/host-update.test.ts`); Helfer und `install.sh --unattended` mit Docker-Stellvertreter trocken getestet
   (Erfolg, Rückweg, Abbruch vor dem Wechsel, abgelehnte Anfragen, falsche Signatur, Neustart mit neuer `install.sh`).
   Auf einem echten Host (RHEL-artig, SELinux im Modus Enforcing) sind Einrichtung, Path-Unit und die Anmeldung des
-  Helfers bei der App geprüft (0.6.1). Ein vollständiges Image-Update aus der App mit echtem Docker-Build steht noch
-  aus – erstmals mit dem Update auf 0.7.0; Verlauf in `/var/log/blaulichtcms-update.log`.
+  Helfers bei der App geprüft (0.6.1). Das erste Image-Update aus der App (0.6.1 → 0.7.0) scheiterte dort an
+  Dateirechten aus der umask des Dienstes, der Rückweg an einem Prüfschritt ohne root-Rechte (#275, behoben in 0.7.1).
+  Seitdem läuft der vollständige Weg (Helfer unter systemd → `install.sh` → Build, Selbsttest, Sicherung, Wechsel,
+  Rückweg) in der CI mit echtem Docker; ein Image-Update aus der App auf dem echten Host steht mit 0.7.1 aus.
 - Sicherung außer Haus und Probe-Wiederherstellung (#212): gegen einen WebDAV-Stellvertreter mit echtem TLS getestet;
   mit dem echten NAS (z. B. Synology „WebDAV Server“) und die zeitgesteuerte Probe auf dem Zielhost noch prüfen.
 - Freigabe aus der Push-Mitteilung (#216): Ob ein Gerät Aktionsknöpfe zeigt, entscheidet der Browser; auf echten

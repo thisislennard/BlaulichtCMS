@@ -149,7 +149,11 @@ root lesbar.
 
 ## Wiederherstellen in einer frischen Instanz
 
+Als root im Installationsordner (Archiv und Schlüssel sind nur für root lesbar):
+
 ```
+sudo -i
+cd /opt/apps/blaulichtcms
 docker compose down
 scripts/restore-volume.sh <zielordner>/blaulichtcms-<zeitpunkt>.tar.gz.enc
 docker compose up -d

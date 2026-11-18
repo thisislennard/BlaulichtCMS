@@ -522,9 +522,12 @@ Kopie außerhalb des Volumes, weil Medien nicht enthalten sind.
 ## Wiederherstellung
 
 In einer frischen Instanz (neuer Host oder leeres Volume), mit dem Sicherungsschlüssel unter
-`/etc/blaulichtcms/backup.key` (bzw. `BLAULICHTCMS_BACKUP_KEY_FILE`):
+`/etc/blaulichtcms/backup.key` (bzw. `BLAULICHTCMS_BACKUP_KEY_FILE`) – als root im Installationsordner (Archive und
+Schlüssel gehören root und sind nur für root lesbar):
 
 ```bash
+sudo -i
+cd /opt/apps/blaulichtcms
 docker compose down
 scripts/restore-volume.sh /opt/apps/blaulichtcms-sicherungen/taeglich/blaulichtcms-2026-11-14-023000.tar.gz.enc
 docker compose up -d
@@ -532,7 +535,12 @@ docker compose up -d
 
 Das Skript prüft zuerst die Prüfsumme und entschlüsselt das ganze Archiv einmal zur Probe; erst wenn beides stimmt,
 packt es in das leere Volume aus. Fehlt die `.sha256`-Datei, bricht es ab (bewusst übergehen: `--ohne-pruefsumme`).
-Ältere, unverschlüsselte `.tar.gz` lassen sich weiterhin einspielen.
+Ältere, unverschlüsselte `.tar.gz` lassen sich weiterhin einspielen. Prüfung und Auspacken laufen im Container als
+root – bis 0.7.0 lief die Probe-Entschlüsselung als Benutzer des Images und scheiterte an den root-eigenen Dateien
+(„Permission denied“, #275); dasselbe galt für die Prüfung in `scripts/verify-backup.sh`.
+
+Ein **bestehendes** Volume ersetzen (z. B. nach einem fehlgeschlagenen Update): erst die Sicherung prüfen, dann das
+Volume entfernen – genau in dieser Reihenfolge, siehe [Rückweg nach fehlgeschlagenem Update](#rückweg-nach-fehlgeschlagenem-update).
 
 **Nur die Datenbank zurückspielen** (Datenbanksicherung `.bcbk`, z. B. vom Ziel außer Haus geholt unter
 *Einstellungen → Sicherung → Sicherung außer Haus → Sicherungen auf dem Ziel*, oder von Hand nach `/data/backups` kopiert; in einer
@@ -637,6 +645,9 @@ nächsten Aufruf gilt der Kanal.
 
 `scripts/update.sh`
 
+- prüft zuerst das **neue Image** (`scripts/image-selftest.sh`, #275): ohne Netz, ohne Datenvolume, als Benutzer des
+  Images – alle Dateien unter `/app` lesbar, Programm samt Paketkonfiguration und nativen Modulen ladbar
+  (`cli.js self-check --release`). Besteht es nicht, bricht das Skript ab, bevor irgendetwas geändert wird (Exit 3);
 0. prüft **vor** dem Wartungsmodus, ob im Sicherungsziel genug Platz ist;
 1. schaltet den **Wartungsmodus** ein: keine neuen schreibenden Vorgänge, keine neuen Hintergrundaufträge, die Bridge
    erhält keine neuen Aufträge (bestehende Banner auf der Website bleiben unverändert);
@@ -646,11 +657,21 @@ nächsten Aufruf gilt der Kanal.
 4. setzt `BLAULICHTCMS_IMAGE` in `.env` und startet den Container mit dem neuen Image;
 5. wartet auf den Healthcheck und den Selbsttest und beendet den Wartungsmodus.
 
-Bricht das Skript **vor** dem Imagewechsel ab (Vorabprüfung nicht bereit, zu wenig Platz, Sicherung fehlgeschlagen),
-beendet es den Wartungsmodus wieder; der bisherige Stand läuft weiter. Scheitert der Start des neuen Images
-(auch `docker compose up` selbst), greift der Rückweg. Exit-Codes: `0` erfolgreich, `3` vor dem Wechsel abgebrochen
-(bisheriger Stand läuft), `4` Wechsel gescheitert und automatisch zurückgenommen, `5` Handeln nötig (Anleitung in der
-Ausgabe). `install.sh` formuliert seine Abschlussmeldung danach.
+Bricht das Skript **vor** dem Imagewechsel ab (Selbsttest nicht bestanden, Vorabprüfung nicht bereit, zu wenig Platz,
+Sicherung fehlgeschlagen), beendet es den Wartungsmodus wieder; der bisherige Stand läuft weiter. Scheitert der Start
+des neuen Images (auch `docker compose up` selbst), greift der Rückweg:
+
+1. Das Protokoll des neuen Containers (letzte 150 Zeilen, ohne Zugangsdaten) kommt in die Ausgabe – beim Update-Helfer
+   damit in dessen Protokoll und als Auszug in die App –, bevor der Container entfernt wird.
+2. Die Sicherung von vor dem Update wird **geprüft** (`scripts/verify-backup.sh`: Prüfsumme, vollständiges
+   Entschlüsseln, Archiv lesbar, Datenbank und Schlüssel enthalten). Besteht sie nicht, bleibt das Datenvolume
+   unverändert, der neue Container wird angehalten und die Ausgabe nennt den Weg von Hand (Exit 5).
+3. Erst dann: Container entfernen, Volume entfernen, Sicherung in ein frisches Volume einspielen, bisheriges Image
+   starten, Wartungsmodus aus (Exit 4).
+
+Exit-Codes: `0` erfolgreich, `3` vor dem Wechsel abgebrochen (bisheriger Stand läuft), `4` Wechsel gescheitert und
+automatisch zurückgenommen, `5` Handeln nötig (Anleitung in der Ausgabe). `install.sh` formuliert seine
+Abschlussmeldung danach. Wartezeit auf einen gesunden Start: `BLAULICHTCMS_HEALTH_TIMEOUT` Sekunden (Standard 180).
 
 Ist der Container **gestoppt** (z. B. nach einem Absturz), nimmt `install.sh` trotzdem den Update-Weg, sobald das
 Datenvolume existiert und ein anderes Image eingetragen ist: Sicherung mit dem bisherigen Image, Wechsel, Prüfung und
@@ -736,7 +757,9 @@ Installation bisher über die Oberfläche aktualisiert wurde:
    `--rebuild` ist dafür nicht nötig – die neue Version bekommt ohnehin einen neuen Image-Namen.
 3. **Was das Skript tut:** `git fetch --tags`, neuesten Release-Tag auf `main` wählen (Kanal `release`, Standard;
    Signatur- und CI-Prüfung optional), auschecken, Image `blaulichtcms:<version>-<commit>` mit `--pull` bauen (einige
-   Minuten, Protokoll `build.log`), dann `scripts/update.sh … --rollback`: Vorabprüfung und Wartungsmodus, Warten auf
+   Minuten, Protokoll `build.log`), Selbsttest des Images (`selftest.log`; ein schon vorhandenes Image mit diesem
+   Namen, das ihn nicht besteht, wird ohne Cache neu gebaut), dann `scripts/update.sh … --rollback`: Vorabprüfung und
+   Wartungsmodus, Warten auf
    laufende Aufträge, verschlüsselte Volume-Sicherung nach `/opt/apps/blaulichtcms-sicherungen/vor-update`, Wechsel von
    `BLAULICHTCMS_IMAGE` in `.env`, Neustart mit Migrationen, Healthcheck und Selbsttest, Wartungsmodus aus. Bei einem
    Fehler automatisch zurück zum alten Image mit dem Datenstand von vor dem Update.
@@ -781,9 +804,11 @@ Eingerichtet werden:
    ohne Netz und ohne Rechte im bisherigen Image (`scripts/host-update-verify.mjs`). Ist
    `/etc/blaulichtcms/allowed_signers` hinterlegt, muss zusätzlich die Tag-Signatur stimmen. Ohne Release-Paket (z. B.
    privates Repository) und ohne `allowed_signers` lehnt der Helfer ab.
-4. Danach läuft `install.sh --unattended` mit genau diesem Tag (`BLAULICHTCMS_EXPECT_TAG`): keine Rückfragen, nichts
-   wird nachinstalliert oder neu eingerichtet (keine Proxy-Verbindung, kein Cron), sonst der bekannte Weg – bauen,
-   Wartungsmodus, Sicherung, Wechsel, Prüfung, bei Fehler automatischer Rückweg.
+4. Danach läuft `install.sh --unattended` mit genau diesem Tag (`BLAULICHTCMS_EXPECT_TAG`) und `umask 022`: keine
+   Rückfragen, nichts wird nachinstalliert oder neu eingerichtet (keine Proxy-Verbindung, kein Cron), sonst der bekannte
+   Weg – bauen, Selbsttest, Wartungsmodus, Sicherung, Wechsel, Prüfung, bei Fehler automatischer Rückweg. Endet der Lauf
+   nicht erfolgreich, übernimmt der Helfer die Ausgabe von `install.sh` (ohne Zugangsdaten) in
+   `/var/log/blaulichtcms-update.log`.
 5. Fortschritt (Phase, Schritt, alle 30 Sekunden ein Lebenszeichen) und Ergebnis schreibt der Helfer – wieder mit der
    Kennung des Volumes – nach `host-update/status.json`: `success`, `rolled_back` (Rückweg erfolgreich), `aborted` (vor
    dem Wechsel abgebrochen, bisherige Version läuft), `failed` (Handeln nötig) oder `rejected`, dazu ein
@@ -797,6 +822,14 @@ Prüfen am Host: `systemctl status blaulichtcms-update.path blaulichtcms-update`
 **Grenzen:** Ein privates Repository braucht für `install.sh` ein `GITHUB_TOKEN`, das der Helfer nicht hat – dort Updates
 weiter von Hand. Der Helfer verwendet die Umgebung vom Einrichten (z. B. `HTTPS_PROXY`); ändert sie sich, `install.sh`
 erneut mit den neuen Werten aufrufen. Die Unit-Dateien bringt jeder Lauf von `install.sh` auf den neuen Stand.
+
+**Dateirechte (#275):** Der Dienst läuft mit `UMask=0077` (Protokolle und Zustand nur für root). Bis 0.7.0 erbte
+`install.sh` diese umask; `git checkout` schrieb geänderte Dateien dann mit 0600, das Image übernahm die Rechte und der
+Container startete nicht („Cannot read package config … permission denied“). Seit 0.7.1 setzt `install.sh` selbst
+`umask 022` und vereinheitlicht die Rechte der versionierten Dateien (0644/0755), der Helfer startet es mit `umask 022`,
+und das Dockerfile setzt die Rechte in der Build-Stufe unabhängig vom Host. Ein Update von 0.7.0 aus beginnt noch mit
+Helfer und `install.sh` 0.7.0: Das holt den neuen Stand (noch mit `umask 077`) und startet dann das neue `install.sh`,
+das die Rechte vor dem Build richtet.
 
 **Neue Fassung von `install.sh`:** Holt `install.sh` einen Stand mit geänderter `install.sh`, startet es sich ab dieser
 Version selbst neu und läuft mit der neuen Fassung weiter. Bis 0.5.0 lief der Rest eines Updates noch mit der alten
@@ -855,13 +888,27 @@ fehlgeschlagene Migration wird vollständig zurückgerollt; die Daten bleiben un
 
 ### Rückweg nach fehlgeschlagenem Update
 
+`scripts/update.sh` gibt diese Befehle mit den echten Werten (bisheriges Image, Archiv, Schlüsseldatei) aus, wenn es
+nicht automatisch zurückgehen konnte. Als root im Installationsordner, der Reihe nach:
+
 ```bash
-docker compose down
-docker volume rm blaulichtcms_data
-BLAULICHTCMS_IMAGE=<altes-image> scripts/restore-volume.sh /opt/apps/blaulichtcms-sicherungen/vor-update/blaulichtcms-<zeitpunkt>.tar.gz.enc
-sed -i 's|^BLAULICHTCMS_IMAGE=.*|BLAULICHTCMS_IMAGE=<altes-image>|' .env && docker compose up -d --no-build
-docker compose exec blaulichtcms node server/dist/cli.js maintenance off
+sudo -i
+cd /opt/apps/blaulichtcms
+# Ein verketteter Befehl: erst prüfen – nur wenn die Prüfung besteht, Container und Volume entfernen, einspielen, starten
+BLAULICHTCMS_IMAGE=<altes-image> scripts/verify-backup.sh /opt/apps/blaulichtcms-sicherungen/vor-update/blaulichtcms-<zeitpunkt>.tar.gz.enc \
+  && docker compose down && docker volume rm -f blaulichtcms_data \
+  && BLAULICHTCMS_IMAGE=<altes-image> scripts/restore-volume.sh /opt/apps/blaulichtcms-sicherungen/vor-update/blaulichtcms-<zeitpunkt>.tar.gz.enc \
+  && sed -i 's|^BLAULICHTCMS_IMAGE=.*|BLAULICHTCMS_IMAGE=<altes-image>|' .env \
+  && docker compose up -d --no-build
+# Die Sicherung entstand im Wartungsmodus: beenden, sobald der Container bereit ist
+for i in $(seq 1 60); do docker compose exec -T blaulichtcms node server/dist/cli.js maintenance off && break; sleep 5; done
 ```
+
+Liegt der Sicherungsschlüssel nicht unter `/etc/blaulichtcms/backup.key`, `BLAULICHTCMS_BACKUP_KEY_FILE=<pfad>` vor beide
+Skripte setzen. `BLAULICHTCMS_IMAGE` nur je Befehl angeben, nicht exportieren – sonst ginge es auch späteren
+`docker compose`-Aufrufen vor `.env`. Das Protokoll des gescheiterten Containers vorher sichern, solange es ihn noch
+gibt: `docker compose logs --tail 300 blaulichtcms > /root/blaulichtcms-update-fehler.log`. Die CI führt genau die
+ausgegebenen Befehle nach einem Rückweg mit gescheiterter Prüfung aus.
 
 Image **und** passender Datenstand gehören zusammen: Nach einer erfolgreichen Migration lässt sich das alte Image
 nicht einfach wieder starten (Startprüfung). Der Rückweg führt immer über die Sicherung von vor dem Update.
