@@ -52,12 +52,14 @@ export function MediaDetailsDialog({ mediaId, manage, onClose, onSaved }: { medi
       footer={
         manage ? (
           <>
-            <Button onClick={onClose}>Schließen</Button>
+            {!dirty && <span id="md-why" className="mr-auto self-center text-meta text-fg-muted">Noch keine Änderung.</span>}
+          <Button onClick={onClose}>Schließen</Button>
             <Button
               variant="primary"
               icon="Save"
               loading={busy}
               disabled={!dirty}
+            aria-describedby={!dirty ? 'md-why' : undefined}
               onClick={async () => {
                 setBusy(true);
                 try {

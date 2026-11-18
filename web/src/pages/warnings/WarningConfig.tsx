@@ -318,10 +318,12 @@ export default function WarningConfig() {
           title="Zuständigkeit bearbeiten"
           footer={
             <>
-              <Button onClick={() => setEditResp(null)}>Abbrechen</Button>
+              {editResp.name.trim().length < 2 || !csv(editResp.recipients).length && <span id="er-why" className="mr-auto self-center text-meta text-fg-muted">Name und mindestens eine E-Mail-Adresse angeben (siehe Felder).</span>}
+          <Button onClick={() => setEditResp(null)}>Abbrechen</Button>
               <Button
                 variant="primary"
                 disabled={editResp.name.trim().length < 2 || !csv(editResp.recipients).length}
+            aria-describedby={editResp.name.trim().length < 2 || !csv(editResp.recipients).length ? 'er-why' : undefined}
                 onClick={async () => (await act(() => put(`/responsibilities/${editResp.id}`, { name: editResp.name.trim(), area: editResp.area.trim(), recipients: csv(editResp.recipients), active: editResp.active }), 'Zuständigkeit gespeichert')) && setEditResp(null)}
               >
                 Speichern

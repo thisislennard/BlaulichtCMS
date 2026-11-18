@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { del, get, post, put } from '../../api/client';
 import { Button, EmptyState, ErrorBox, FieldWrap, Input, PageHeader, Select, SkeletonRows, Table, Td, Textarea, Th } from '../../components/ui/core';
 import { Dialog, useErrorToast, useToast } from '../../components/ui/overlays';
+import { FormProblems, useFormCheck } from '../../components/ui/form';
 import { useAuth } from '../../lib/auth';
 import { fmtRelative } from '../../lib/format';
 import { KIND_LABEL } from './Posts';
@@ -23,6 +24,7 @@ function TemplateDialog({ tpl, onClose }: { tpl: Partial<Tpl> | null; onClose: (
   const toast = useToast();
   const [busy, setBusy] = useState(false);
   const [v, setV] = useState({ name: tpl?.name ?? '', kind: tpl?.kind ?? 'news', title: tpl?.title ?? '', body: tpl?.body ?? '', excerpt: tpl?.excerpt ?? '' });
+  const check = useFormCheck({ 't-name': v.name.trim().length < 2 && 'Bitte einen Namen angeben (mindestens 2 Zeichen).' });
   return (
     <Dialog
       open
@@ -34,9 +36,8 @@ function TemplateDialog({ tpl, onClose }: { tpl: Partial<Tpl> | null; onClose: (
           <Button onClick={onClose}>Abbrechen</Button>
           <Button
             variant="primary"
-            disabled={v.name.trim().length < 2}
             loading={busy}
-            onClick={async () => {
+            onClick={() => check.submit(async () => {
               if (busy) return;
               setBusy(true);
               try {
@@ -48,7 +49,7 @@ function TemplateDialog({ tpl, onClose }: { tpl: Partial<Tpl> | null; onClose: (
                 toastError(e);
                 setBusy(false);
               }
-            }}
+            })}
           >
             Speichern
           </Button>
@@ -56,7 +57,8 @@ function TemplateDialog({ tpl, onClose }: { tpl: Partial<Tpl> | null; onClose: (
       }
     >
       <div className="flex flex-col gap-4">
-        <FieldWrap label="Name der Beitragsvorlage" required htmlFor="t-name">
+        <FormProblems check={check} />
+        <FieldWrap label="Name der Beitragsvorlage" required htmlFor="t-name" error={check.error('t-name')}>
           <Input id="t-name" value={v.name} onChange={(e) => setV({ ...v, name: e.target.value })} maxLength={100} placeholder="z. B. Einsatzbericht kurz" />
         </FieldWrap>
         <FieldWrap label="Titel (Vorschlag)" help="Wird beim Anlegen eines Beitrags vorbelegt." htmlFor="t-title">

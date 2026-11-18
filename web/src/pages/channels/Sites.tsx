@@ -205,10 +205,12 @@ export default function Sites() {
           title="Website koppeln"
           footer={
             <>
-              <Button onClick={() => setAdding(false)}>Abbrechen</Button>
+              {name.trim().length < 2 && <span id="sp-why" className="mr-auto self-center text-meta text-fg-muted">Erst einen Namen eintragen (mindestens 2 Zeichen).</span>}
+          <Button onClick={() => setAdding(false)}>Abbrechen</Button>
               <Button
                 variant="primary"
                 disabled={name.trim().length < 2}
+            aria-describedby={name.trim().length < 2 ? 'sp-why' : undefined}
                 onClick={async () => {
                   try {
                     const p = await post<Pairing>('/sites', { name: name.trim() });

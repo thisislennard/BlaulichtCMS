@@ -228,12 +228,14 @@ export function MoveCopyDialog({ mode, ids, defaultCollection, onClose, onDone }
       width={480}
       footer={
         <>
+          {!collectionId && <span id="mv-why" className="mr-auto self-center text-meta text-fg-muted">Erst eine Sammlung wählen.</span>}
           <Button onClick={onClose}>Abbrechen</Button>
           <Button
             variant="primary"
             icon={mode === 'move' ? 'FolderInput' : 'CopyPlus'}
             loading={busy}
             disabled={!collectionId}
+            aria-describedby={!collectionId ? 'mv-why' : undefined}
             onClick={async () => {
               setBusy(true);
               try {

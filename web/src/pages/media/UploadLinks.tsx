@@ -91,12 +91,13 @@ export function NewLinkDialog({ collectionId, folders = [], onClose, onCreated }
       title="Neuer Upload-Link"
       footer={
         <>
+          {(validity.mode === 'date' && !validity.date) || !!optsValid(opts) && <span id="ul-why" className="mr-auto self-center text-meta text-fg-muted">{optsValid(opts) ?? 'Erst Datum und Uhrzeit des Ablaufs wählen.'}</span>}
           <Button onClick={onClose}>Abbrechen</Button>
           <Button
             variant="primary"
             loading={busy}
             disabled={(validity.mode === 'date' && !validity.date) || !!optsValid(opts)}
-            title={optsValid(opts) ?? undefined}
+            aria-describedby={(validity.mode === 'date' && !validity.date) || !!optsValid(opts) ? 'ul-why' : undefined}
             onClick={async () => {
               setBusy(true);
               try {
@@ -193,11 +194,13 @@ function DeadlineDialog({ link, onClose, onSaved }: { link: UploadLink; onClose:
       width={440}
       footer={
         <>
+          {!date && <span id="ue-why" className="mr-auto self-center text-meta text-fg-muted">Erst Datum und Uhrzeit wählen.</span>}
           <Button onClick={onClose}>Abbrechen</Button>
           <Button
             variant="primary"
             loading={busy}
             disabled={!date}
+            aria-describedby={!date ? 'ue-why' : undefined}
             onClick={async () => {
               setBusy(true);
               try {

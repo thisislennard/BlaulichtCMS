@@ -30,11 +30,13 @@ export function ExportDialog({ items, onClose }: { items: AutomationListItem[]; 
       title="Workflows exportieren"
       footer={
         <>
+          {!sel.size || tooMany && <span id="tx-why" className="mr-auto self-center text-meta text-fg-muted">{tooMany ? 'Höchstens 50 Workflows auf einmal.' : 'Erst mindestens einen Workflow wählen.'}</span>}
           <Button onClick={onClose}>Abbrechen</Button>
           <Button
             variant="primary"
             icon="Download"
             disabled={!sel.size || tooMany}
+            aria-describedby={!sel.size || tooMany ? 'tx-why' : undefined}
             onClick={() => {
               download(`/automations/export?ids=${[...sel].join(',')}`);
               onClose();

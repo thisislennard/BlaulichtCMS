@@ -697,7 +697,7 @@ export default function IncidentList() {
                 <Button icon="FileUp" onClick={() => setImporting(true)} disabled={!c}>
                   Importieren
                 </Button>
-                <Button variant="primary" icon="Plus" onClick={() => setEdit(null)} disabled={!c}>
+                <Button variant="primary" icon="Plus" onClick={() => setEdit(null)} loading={!c}>
                   Neuer Eintrag
                 </Button>
               </>

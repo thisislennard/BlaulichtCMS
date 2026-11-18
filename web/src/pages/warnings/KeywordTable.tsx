@@ -333,11 +333,13 @@ export function KeywordsTab({ c, act, refresh }: { c: any; act: Act; refresh: ()
           title="Stichwort anlegen"
           footer={
             <>
-              <Button onClick={() => setCreate(null)}>Abbrechen</Button>
+              {!create.code.trim() || create.label.trim().length < 2 && <span id="kc-why" className="mr-auto self-center text-meta text-fg-muted">Kürzel und Bezeichnung (mindestens 2 Zeichen) angeben.</span>}
+          <Button onClick={() => setCreate(null)}>Abbrechen</Button>
               <Button
                 variant="primary"
                 icon="Plus"
                 disabled={!create.code.trim() || create.label.trim().length < 2}
+            aria-describedby={!create.code.trim() || create.label.trim().length < 2 ? 'kc-why' : undefined}
                 onClick={async () => (await act(() => post('/warning-keywords', { code: create.code, label: create.label, category: create.category, aliases: csv(create.aliases) }), 'Stichwort angelegt')) && setCreate(null)}
               >
                 Anlegen
@@ -372,11 +374,13 @@ export function KeywordsTab({ c, act, refresh }: { c: any; act: Act; refresh: ()
           title={`Lagefrage zu ${question.kw.code}`}
           footer={
             <>
-              <Button onClick={() => setQuestion(null)}>Abbrechen</Button>
+              {!question.key.trim() || question.text.trim().length < 5 && <span id="kq-why" className="mr-auto self-center text-meta text-fg-muted">Schlüssel und Frage (mindestens 5 Zeichen) angeben.</span>}
+          <Button onClick={() => setQuestion(null)}>Abbrechen</Button>
               <Button
                 variant="primary"
                 icon="Plus"
                 disabled={!question.key.trim() || question.text.trim().length < 5}
+            aria-describedby={!question.key.trim() || question.text.trim().length < 5 ? 'kq-why' : undefined}
                 onClick={async () => {
                   const kwId = question.kw.id;
                   if (await act(() => post(`/warning-keywords/${kwId}/questions`, { key: question.key, text: question.text, options: csv(question.options) }), 'Frage angelegt – braucht fachliche Freigabe')) {
@@ -412,10 +416,12 @@ export function KeywordsTab({ c, act, refresh }: { c: any; act: Act; refresh: ()
           title={`Stichwort ${edit.code} bearbeiten`}
           footer={
             <>
-              <Button onClick={() => setEdit(null)}>Abbrechen</Button>
+              {edit.label.trim().length < 2 && <span id="ke-why" className="mr-auto self-center text-meta text-fg-muted">Die Bezeichnung braucht mindestens 2 Zeichen.</span>}
+          <Button onClick={() => setEdit(null)}>Abbrechen</Button>
               <Button
                 variant="primary"
                 disabled={edit.label.trim().length < 2}
+            aria-describedby={edit.label.trim().length < 2 ? 'ke-why' : undefined}
                 onClick={async () => (await act(() => put(`/warning-keywords/${edit.id}`, { label: edit.label.trim(), category: edit.category.trim(), aliases: csv(edit.aliases), active: edit.active }), 'Stichwort gespeichert')) && setEdit(null)}
               >
                 Speichern

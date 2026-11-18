@@ -42,12 +42,14 @@ function AddFeedDialog({ onClose }: { onClose: () => void }) {
       title="Quelle hinzufügen"
       footer={
         <>
+          {!/^https?:\/\//.test(url) && <span id="rs-why" className="mr-auto self-center text-meta text-fg-muted">Erst die Adresse des Feeds mit http(s):// eintragen.</span>}
           <Button onClick={onClose}>Abbrechen</Button>
           {!preview ? (
             <Button
               variant="primary"
               loading={busy}
               disabled={!/^https?:\/\//.test(url)}
+            aria-describedby={!/^https?:\/\//.test(url) ? 'rs-why' : undefined}
               onClick={async () => {
                 setBusy(true);
                 setErr(null);
@@ -124,12 +126,14 @@ function EditFeedDialog({ feed, onClose }: { feed: any; onClose: () => void }) {
       title="Quelle bearbeiten"
       footer={
         <>
+          {!valid && <span id="re-why" className="mr-auto self-center text-meta text-fg-muted">Titel und Adresse prüfen (siehe Felder).</span>}
           <Button onClick={onClose}>Abbrechen</Button>
           <Button
             variant="primary"
             icon="Save"
             loading={busy}
             disabled={!valid}
+            aria-describedby={!valid ? 're-why' : undefined}
             onClick={async () => {
               setBusy(true);
               setErr(null);

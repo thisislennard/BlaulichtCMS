@@ -93,8 +93,10 @@ export function SubmitDialog({ postId, revision, again, onClose, onFix, onDone }
       title={again ? 'Erneut einreichen' : 'Zur Freigabe einreichen'}
       footer={
         <>
+          {!d || d.blocking && <span id="sc-why" className="mr-auto self-center text-meta text-fg-muted">{!d ? 'Prüfliste wird geladen …' : 'Erst die rot markierten Punkte erledigen.'}</span>}
           <Button onClick={onClose}>Abbrechen</Button>
-          <Button variant="primary" icon="Send" loading={busy} disabled={!d || d.blocking} onClick={submit}>
+          <Button variant="primary" icon="Send" loading={busy} disabled={!d || d.blocking}
+            aria-describedby={!d || d.blocking ? 'sc-why' : undefined} onClick={submit}>
             {d && d.warnings > 0 ? 'Trotzdem einreichen' : 'Einreichen'}
           </Button>
         </>

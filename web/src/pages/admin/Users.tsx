@@ -1001,10 +1001,12 @@ function UserTable({
         title="Benutzer umbenennen"
         footer={
           <>
-            <Button onClick={() => setRenaming(null)}>Abbrechen</Button>
+            {newName.trim().length < 2 && <span id="rn-why" className="mr-auto self-center text-meta text-fg-muted">Der Name braucht mindestens 2 Zeichen.</span>}
+          <Button onClick={() => setRenaming(null)}>Abbrechen</Button>
             <Button
               variant="primary"
               disabled={newName.trim().length < 2}
+            aria-describedby={newName.trim().length < 2 ? 'rn-why' : undefined}
               onClick={async () => {
                 try {
                   await patch(`/users/${renaming!.id}`, { name: newName.trim() });

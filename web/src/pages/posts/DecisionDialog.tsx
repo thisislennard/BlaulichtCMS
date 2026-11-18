@@ -3,6 +3,7 @@ import { post } from '../../api/client';
 import type { MediaItem } from '../../api/types';
 import { Button, FieldWrap, Notice, Textarea } from '../../components/ui/core';
 import { Dialog, useErrorToast, useToast } from '../../components/ui/overlays';
+import { FormProblems, useFormCheck } from '../../components/ui/form';
 import { openFaces, PrivacyChecklistHint, SENSITIVE_LABELS } from '../media/PrivacyDialog';
 
 /** Prüfpunkte bei markierten Medien (#118) – alle müssen bestätigt sein, bevor die Fassung freigegeben werden kann. */
@@ -40,6 +41,12 @@ export function DecisionDialog({ decision, revision, hash, postId, flagged, face
   const needsCheck = decision === 'approved' && (flagged.length > 0 || facesOpen.length > 0);
   const [checks, setChecks] = useState<boolean[]>(PRIVACY_CHECKS.map(() => false));
   const [busy, setBusy] = useState(false);
+  // Prüfen statt sperren (#268); gesperrt bleibt nur die Freigabe ohne Pflicht-Alternativtexte (Grund steht im Dialog)
+  const check = useFormCheck({
+    'dec-privacy': needsCheck && checks.some((c) => !c) && 'Bitte alle Punkte der Datenschutz-Prüfung bestätigen.',
+    'dec-note': decision === 'rejected' && !note.trim() && 'Bitte eine Begründung angeben.',
+  });
+  const altBlocked = decision === 'approved' && altRequired && altMissing > 0;
   return (
     <Dialog
       open
@@ -51,8 +58,9 @@ export function DecisionDialog({ decision, revision, hash, postId, flagged, face
           <Button
             variant={decision === 'approved' ? 'primary' : 'danger'}
             loading={busy}
-            disabled={(decision === 'rejected' && !note.trim()) || (needsCheck && checks.some((c) => !c)) || (decision === 'approved' && altRequired && altMissing > 0)}
-            onClick={async () => {
+            disabled={altBlocked}
+            aria-describedby={altBlocked ? 'dec-alt' : undefined}
+            onClick={() => check.submit(async () => {
               setBusy(true);
               try {
                 await post(`/posts/${postId}/decision`, { revision, contentHash: hash, decision, note: note.trim(), privacyChecked: needsCheck && checks.every(Boolean), via });
@@ -63,7 +71,7 @@ export function DecisionDialog({ decision, revision, hash, postId, flagged, face
                 toastError(e);
                 setBusy(false);
               }
-            }}
+            })}
           >
             {decision === 'approved' ? 'Freigeben' : 'Zurückweisen'}
           </Button>
@@ -71,12 +79,14 @@ export function DecisionDialog({ decision, revision, hash, postId, flagged, face
       }
     >
       <div className="flex flex-col gap-3 text-sm">
+        <FormProblems check={check} />
         <p className="m-0">
           Die Entscheidung gilt genau für Fassung {revision} (Prüfsumme <code>{hash.slice(0, 10)}</code>). Jede spätere Änderung an Text, Medien oder Veröffentlichungszielen braucht eine neue Freigabe.
         </p>
         {needsCheck && (
-          <fieldset className="m-0 p-3 border border-warn rounded-node flex flex-col gap-2">
+          <fieldset id="dec-privacy" tabIndex={-1} aria-invalid={!!check.error('dec-privacy') || undefined} className="m-0 p-3 border border-warn rounded-node flex flex-col gap-2 outline-none">
             <legend className="px-1 font-medium">Datenschutz-Prüfung</legend>
+            {check.error('dec-privacy') && <p className="m-0 text-meta text-err" role="alert">{check.error('dec-privacy')}</p>}
             {flagged.length > 0 && (
               <p className="m-0">
                 {flagged.length === 1 ? 'Eine Datei ist' : `${flagged.length} Dateien sind`} markiert: {[...new Set(flagged.flatMap((m) => m.sensitive_flags ?? []))].map((f) => SENSITIVE_LABELS[f]).join(', ')}.
@@ -92,8 +102,8 @@ export function DecisionDialog({ decision, revision, hash, postId, flagged, face
         )}
         {decision === 'approved' && altMissing > 0 && (
           <Notice tone={altRequired ? 'error' : 'warning'} title="Barrierefreiheit">
-            {altMissing === 1 ? 'Ein Bild hat' : `${altMissing} Bilder haben`} keinen Alternativtext. Menschen mit Screenreader erfahren dann nicht, was zu sehen ist.{' '}
-            {altRequired ? 'Alternativtexte sind Pflicht (Einstellungen → Redaktion & Freigabe): bitte zurückweisen oder ergänzen lassen.' : 'Freigeben ist trotzdem möglich.'}
+            <span id="dec-alt">{altMissing === 1 ? 'Ein Bild hat' : `${altMissing} Bilder haben`} keinen Alternativtext. Menschen mit Screenreader erfahren dann nicht, was zu sehen ist.{' '}
+            {altRequired ? 'Alternativtexte sind Pflicht (Einstellungen → Redaktion & Freigabe): bitte zurückweisen oder ergänzen lassen.' : 'Freigeben ist trotzdem möglich.'}</span>
           </Notice>
         )}
         {decision === 'approved' && facesRunning.length > 0 && (
@@ -102,7 +112,7 @@ export function DecisionDialog({ decision, revision, hash, postId, flagged, face
           </Notice>
         )}
         {decision === 'approved' && !needsCheck && <PrivacyChecklistHint />}
-        <FieldWrap label={decision === 'approved' ? 'Anmerkung (optional)' : 'Begründung'} required={decision === 'rejected'} htmlFor="dec-note">
+        <FieldWrap label={decision === 'approved' ? 'Anmerkung (optional)' : 'Begründung'} required={decision === 'rejected'} htmlFor="dec-note" error={check.error('dec-note')}>
           <Textarea id="dec-note" rows={3} value={note} onChange={(e) => setNote(e.target.value)} maxLength={500} />
         </FieldWrap>
       </div>

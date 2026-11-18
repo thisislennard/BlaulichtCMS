@@ -685,11 +685,13 @@ function EditCollectionDialog({ collection, onClose }: { collection: { id: strin
       title="Sammlung bearbeiten"
       footer={
         <>
+          {!valid && <span id="ce-why" className="mr-auto self-center text-meta text-fg-muted">Der Titel braucht mindestens 2 Zeichen.</span>}
           <Button onClick={onClose}>Abbrechen</Button>
           <Button
             variant="primary"
             loading={busy}
             disabled={!valid}
+            aria-describedby={!valid ? 'ce-why' : undefined}
             onClick={async () => {
               setBusy(true);
               try {

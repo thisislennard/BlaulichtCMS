@@ -225,7 +225,7 @@ export default function Inputs() {
     <div className="flex flex-col gap-5">
       <PageHeader
         subtitle="Auslöser für Workflows: Einsätze, amtliche Warnungen, RSS-Einträge, Uploads, Zeitpläne, Presseanfragen, Kalendertermine und manueller Start."
-        actions={manage && <Button variant="primary" icon="Plus" disabled={!cat.data} onClick={() => setChoose(true)}>Neuer Auslöser</Button>}
+        actions={manage && <Button variant="primary" icon="Plus" loading={!cat.data} onClick={() => setChoose(true)}>Neuer Auslöser</Button>}
       />
       <WorkflowTabs />
       {cat.data && !cat.data.enabled && <Notice tone="warning" title="Workflows sind abgeschaltet">Unter Einstellungen → Workflows lassen sie sich wieder einschalten.</Notice>}

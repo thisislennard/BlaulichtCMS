@@ -8,7 +8,7 @@ import { ShareActions } from '../../components/share';
 import { Badge, Button, Card, cx, ErrorBox, FieldWrap, Input, LinkButton, Notice, PageHeader, Rev, Select, SkeletonRows, StatusBadge, Textarea } from '../../components/ui/core';
 import { Icon } from '../../components/ui/Icon';
 import { Dialog, useErrorToast, useToast } from '../../components/ui/overlays';
-import { SaveBar } from '../../components/ui/form';
+import { FormProblems, SaveBar, useFormCheck } from '../../components/ui/form';
 import { useAuth } from '../../lib/auth';
 import { fmtDateTime, fmtRelative, fmtTime, fromLocalInput, plural, toLocalInput } from '../../lib/format';
 import { SOCIAL_LABEL } from '../../lib/social';
@@ -942,6 +942,7 @@ function ResolveDialog({ publication: p, onClose }: { publication: Publication; 
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
   const un = p.action === 'unpublish';
+  const check = useFormCheck({ 'res-outcome': !outcome && 'Bitte das Ergebnis auf der Website wählen.', 'res-note': note.trim().length < 3 && 'Bitte kurz festhalten, wie geprüft wurde (mindestens 3 Zeichen).' });
   return (
     <Dialog
       open
@@ -952,8 +953,8 @@ function ResolveDialog({ publication: p, onClose }: { publication: Publication; 
           <Button onClick={onClose}>Abbrechen</Button>
           <Button
             variant="primary"
-            disabled={busy || !outcome || note.trim().length < 3}
-            onClick={async () => {
+            loading={busy}
+            onClick={() => check.submit(async () => {
               setBusy(true);
               try {
                 await post(`/publications/${p.id}/resolve`, { outcome, note: note.trim() });
@@ -963,7 +964,7 @@ function ResolveDialog({ publication: p, onClose }: { publication: Publication; 
                 toastError(e);
                 setBusy(false);
               }
-            }}
+            })}
           >
             Festhalten
           </Button>
@@ -974,14 +975,15 @@ function ResolveDialog({ publication: p, onClose }: { publication: Publication; 
         <p className="m-0">
           Die Kopplung von „{p.site_name}“ wurde widerrufen, nachdem die Website den Auftrag abgeholt hatte. Sie kann das Ergebnis nicht mehr melden. Bitte auf der Website nachsehen, ob der Beitrag {un ? 'zurückgezogen wurde' : 'dort steht'}, und das Ergebnis festhalten.
         </p>
-        <FieldWrap label="Ergebnis auf der Website" required htmlFor="res-outcome">
+        <FormProblems check={check} />
+        <FieldWrap label="Ergebnis auf der Website" required htmlFor="res-outcome" error={check.error('res-outcome')}>
           <Select id="res-outcome" value={outcome} onChange={(e) => setOutcome(e.target.value as 'done' | 'not_done' | '')}>
             <option value="">Bitte wählen</option>
             <option value="done">{un ? 'Zurückgezogen (steht nicht mehr öffentlich)' : 'Veröffentlicht (steht auf der Website)'}</option>
             <option value="not_done">{un ? 'Nicht zurückgezogen' : 'Nicht veröffentlicht'}</option>
           </Select>
         </FieldWrap>
-        <FieldWrap label="Wie geprüft?" required htmlFor="res-note">
+        <FieldWrap label="Wie geprüft?" required htmlFor="res-note" error={check.error('res-note')}>
           <Textarea id="res-note" rows={2} value={note} onChange={(e) => setNote(e.target.value)} maxLength={300} />
         </FieldWrap>
         <p className="m-0 text-fg-muted">Das Ergebnis wird im Protokoll festgehalten. Ein veröffentlichter Beitrag lässt sich über eine neu gekoppelte Website derselben Adresse zurückziehen.</p>

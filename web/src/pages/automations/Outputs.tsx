@@ -249,7 +249,7 @@ export default function Outputs() {
     <div className="flex flex-col gap-5">
       <PageHeader
         subtitle="Aktionen mit ihrer Gestaltung: Banner-Stil, Beitragsvorlage, E-Mail, App-Benachrichtigung, Warnentwurf."
-        actions={manage && <Button variant="primary" icon="Plus" disabled={!cat.data} onClick={() => setChoose(true)}>Neue Aktion</Button>}
+        actions={manage && <Button variant="primary" icon="Plus" loading={!cat.data} onClick={() => setChoose(true)}>Neue Aktion</Button>}
       />
       <WorkflowTabs />
       <Notice icon="ShieldCheck">Aktionen legen Entwürfe und Benachrichtigungen an – die Freigabe bleibt bei den Menschen. Direktversand ist nur je Workflow mit eigenem Recht möglich.</Notice>
