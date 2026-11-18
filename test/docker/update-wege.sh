@@ -21,6 +21,7 @@
 #  selbsttest    update.sh auf ein Image mit für den Laufzeitbenutzer unlesbarer Datei → Exit 3, nichts geändert
 #  handweg       install.sh 0.7.0 von Hand mit umask 077 auf v0.7.99; ein fehlerhaftes Image mit dem Ziel-Namen
 #                existiert schon (wie nach dem Vorfall) → wird ohne Cache neu gebaut, Update erfolgreich
+#  verify-gross  verify-backup.sh mit großem Inhaltsverzeichnis gegen einen Docker-Stellvertreter (ohne Docker lauffähig)
 # ============================================================================================================
 # SC1111: deutsche Anführungszeichen in Meldungen sind gewollt; SC2024: Protokolle gehören dem CI-Benutzer
 # shellcheck disable=SC1111,SC2024
@@ -294,6 +295,23 @@ PY
     check_modes
     check_backup_modes
     echo "Update-Helfer nach install.sh: $(systemctl is-active blaulichtcms-update.path || true)" ;;
+
+  verify-gross)
+    say "verify-backup.sh mit großem Inhaltsverzeichnis (Datenbank und Schlüssel ganz vorn), Docker-Stellvertreter"
+    # Ohne Docker: der Stellvertreter gibt nur das Inhaltsverzeichnis aus. Früher meldete die Prüfung hier je nach
+    # Reihenfolge im Archiv „enthält keine Datenbank“ (SIGPIPE in „printf | grep -q“ unter pipefail)
+    d="$TMP/verify-gross"; rm -rf "$d"; mkdir -p "$d/bin" "$d/arch"
+    printf '%s\n' '#!/usr/bin/env bash' \
+      "printf './\\n./postgres/\\n./postgres/PG_VERSION\\n./secrets/\\n./secrets/master.key\\n'" \
+      "seq 1 300000 | sed 's#^#./media/originale/datei-#'" > "$d/bin/docker"
+    chmod +x "$d/bin/docker"
+    echo x > "$d/arch/blaulichtcms-2026-01-01-000000.tar.gz"
+    (cd "$d/arch" && sha256sum blaulichtcms-2026-01-01-000000.tar.gz > blaulichtcms-2026-01-01-000000.tar.gz.sha256)
+    for i in 1 2 3; do
+      out="$(PATH="$d/bin:$PATH" BLAULICHTCMS_IMAGE=stellvertreter bash "$WS/scripts/verify-backup.sh" "$d/arch/blaulichtcms-2026-01-01-000000.tar.gz" 2>&1)" \
+        || { echo "$out"; fail "Lauf $i: verify-backup.sh meldet eine vollständige Sicherung als fehlerhaft"; }
+      echo "Lauf $i: $out"
+    done ;;
 
   *) fail "Unbekannter Schritt: $STEP" ;;
 esac

@@ -55,8 +55,11 @@ esac
 # Als root im Container (#275): Archiv und Schlüssel gehören root (0600) – der Benutzer des Images könnte sie nicht lesen
 LIST="$(docker run --rm -u 0 --network none "${MOUNTS[@]}" --entrypoint sh "$IMAGE" -c "$READ" _ "$NAME")" \
   || fail "$NAME lässt sich nicht vollständig entschlüsseln bzw. lesen (beschädigt, verändert oder falscher Schlüssel)."
-printf '%s\n' "$LIST" | grep -qE '^(\./)?postgres/PG_VERSION$' || fail "$NAME enthält keine Datenbank (postgres/PG_VERSION fehlt)."
-if ! printf '%s\n' "$LIST" | grep -qE '^(\./)?secrets/master\.key$'; then
+# Suche ohne Pipeline (#275): Bei „printf | grep -q“ beendet grep nach dem ersten Treffer, printf schreibt bei großen
+# Archiven noch und stirbt an SIGPIPE – unter pipefail galt die Datenbank dann fälschlich als fehlend (je nach Reihenfolge
+# im Archiv, also scheinbar zufällig)
+grep -qE '^(\./)?postgres/PG_VERSION$' <<<"$LIST" || fail "$NAME enthält keine Datenbank (postgres/PG_VERSION fehlt)."
+if ! grep -qE '^(\./)?secrets/master\.key$' <<<"$LIST"; then
   grep -q '^BLAULICHTCMS_MASTER_KEY=.' .env 2>/dev/null || fail "$NAME enthält keinen Master-Schlüssel (secrets/master.key) und .env gibt keinen vor."
 fi
 FILES="$(printf '%s\n' "$LIST" | grep -vc '/$' || true)"

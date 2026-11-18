@@ -226,6 +226,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+      - name: verify-backup.sh mit großem Inhaltsverzeichnis (ohne Docker)
+        run: bash test/docker/update-wege.sh verify-gross
       - name: Testquelle (Zweig auf v0.7.0, dieser Stand als Folge-Release)
         run: bash test/docker/update-wege.sh vorbereiten
       - name: Erstinstallation 0.7.0 mit install.sh 0.7.0 und Update-Helfer
