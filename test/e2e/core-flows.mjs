@@ -134,7 +134,8 @@ try {
     await ectx.addCookies(toCookies(editor.cookie));
     const ep = await ectx.newPage();
     await ep.goto(`${BC}/beitraege`);
-    await ep.getByRole('button', { name: 'Neuer Beitrag' }).click();
+    // Seitenkopf; bei leerer Liste bietet die Leermeldung denselben Knopf noch einmal an (#260) – je nach Ladezeit zwei Treffer
+    await ep.getByRole('button', { name: 'Neuer Beitrag' }).first().click();
     await ep.locator('#p-title').fill('Übung am Wochenende');
     await ep.getByRole('dialog').getByRole('button', { name: 'Anlegen' }).click();
     await ep.waitForURL(/\/beitraege\/[0-9a-f-]{36}$/);
@@ -160,12 +161,15 @@ try {
   await run('Beitrag freigeben (Administration)', async () => {
     await page.goto(`${BC}/freigaben`);
     await page.getByRole('link', { name: /Übung am Wochenende/ }).first().click();
-    await page.waitForURL(new RegExp(`/beitraege/${postId}$`));
+    // Die Freigaben-Liste führt seit #251 in die Prüfansicht der Art (Beitrag: /freigabe/beitrag/<id>?fassung=n)
+    await page.waitForURL(new RegExp(`/(beitraege|freigabe/beitrag)/${postId}`));
     await page.getByRole('button', { name: 'Freigeben', exact: true }).click();
     const dlg = page.getByRole('dialog');
     await dlg.getByRole('heading', { name: /Fassung \d+ freigeben/ }).waitFor();
     await dlg.locator('#dec-note').fill('Passt so.');
     await dlg.getByRole('button', { name: 'Freigeben', exact: true }).click();
+    await dlg.waitFor({ state: 'detached' });
+    await page.goto(`${BC}/beitraege/${postId}`);
     await page.getByText(`Freigegeben von ${ADMIN.name}`).waitFor();
     return 'freigegeben';
   });
