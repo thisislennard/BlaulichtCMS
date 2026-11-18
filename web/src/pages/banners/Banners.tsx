@@ -5,6 +5,7 @@ import type { BannerDisplay, Site } from '../../api/types';
 import { Link } from 'react-router';
 import { Button, Card, cx, EmptyAction, EmptyLine, EmptyState, ErrorBox, FieldWrap, Input, MetaLine, Notice, PageHeader, Rev, Select, SkeletonRows, StatusBadge, Textarea } from '../../components/ui/core';
 import { FilterEmpty, ListToolbar } from '../../components/ui/list';
+import { BANNER_TABS, inBannerTab, olderRevisionLive } from './bannerTabs';
 import { Dialog, useErrorToast, useToast, useConfirm } from '../../components/ui/overlays';
 import { FormProblems, useFormCheck } from '../../components/ui/form';
 import { useAuth } from '../../lib/auth';
@@ -74,13 +75,6 @@ const TONE: Record<string, { label: string; cls: string }> = {
   danger: { label: 'Gefahr', cls: 'bg-site-danger-bg text-site-danger-fg border-site-danger-line' },
 };
 const PRIO = { 1: 'niedrig', 2: 'normal', 3: 'hoch' } as Record<number, string>;
-/** Reiter der Bannerliste (#260) */
-const BANNER_TABS: Record<string, { label: string; states: string[] | null }> = {
-  alle: { label: 'Alle', states: null },
-  aktiv: { label: 'Aktiv und geplant', states: ['live', 'scheduled', 'publishing', 'approved'] },
-  arbeit: { label: 'In Arbeit', states: ['draft', 'in_review', 'rejected', 'failed'] },
-  beendet: { label: 'Beendet', states: ['ended', 'expired'] },
-};
 /** Darstellung auf der Website (#186). „auto“ folgt der Einstellung der Website je Schweregrad. */
 export const DISPLAY_OPTIONS: { value: BannerDisplay; label: string }[] = [
   { value: 'auto', label: 'Nach Schweregrad (Einstellung der Website)' },
@@ -251,9 +245,8 @@ export default function Banners() {
   const ls = useListState({ suche: '', status: 'alle' }, { tabKeys: ['status'] });
   const tab = BANNER_TABS[ls.values.status] ? ls.values.status : 'alle';
   const terms = searchTerms(ls.values.suche);
-  const inTab = (b: Banner, t: string) => !BANNER_TABS[t].states || BANNER_TABS[t].states!.includes(b.state);
   const found = (q.data ?? []).filter((b) => !terms.length || rank(terms, b.title, `${b.text} ${b.site_name}`) !== null);
-  const rows = found.filter((b) => inTab(b, tab) || b.id === linked.id);
+  const rows = found.filter((b) => inBannerTab(b, tab) || b.id === linked.id);
   return (
     <div className="flex flex-col gap-5">
       <PageHeader
@@ -276,7 +269,7 @@ export default function Banners() {
       {!!q.data?.length && (
         <ListToolbar
           search={{ value: ls.values.suche, onChange: (s) => ls.set({ suche: s }), placeholder: 'Suchen in Bannern', label: 'Banner durchsuchen (Titel, Text, Website)' }}
-          tabs={{ label: 'Status', value: tab, onChange: (s) => ls.set({ status: s }), options: Object.entries(BANNER_TABS).map(([value, t]) => ({ value, label: t.label, count: found.filter((b) => inTab(b, value)).length })) }}
+          tabs={{ label: 'Status', value: tab, onChange: (s) => ls.set({ status: s }), options: Object.entries(BANNER_TABS).map(([value, t]) => ({ value, label: t.label, count: found.filter((b) => inBannerTab(b, value)).length })) }}
           count={{ n: rows.length, one: 'Banner', many: 'Banner' }}
           onReset={() => ls.reset(['status'])}
         />
@@ -310,7 +303,7 @@ export default function Banners() {
               </MetaLine>
               <BannerOrigin b={b} />
               <BannerPreview b={b} />
-              {b.live_revision != null && b.live_revision !== b.revision && ['draft', 'in_review', 'approved'].includes(b.state) && (
+              {olderRevisionLive(b) && (
                 <div className="text-meta text-fg-muted">
                   Auf der Website steht noch Fassung {b.live_revision} – bis die neue Fassung freigegeben und veröffentlicht ist.
                 </div>

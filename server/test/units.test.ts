@@ -2262,3 +2262,23 @@ describe('Banner folgt dem Vorgang: Vorgang-Schlüssel (#274)', () => {
     expect(await chainRoots('P', ['Q'], load)).toEqual(['P']);
   });
 });
+
+describe('Bannerliste: Reiter „Aktiv und geplant“ (#274)', () => {
+  it('ein Banner, dessen frühere Fassung noch auf der Website steht, zählt auch als aktiv', async () => {
+    const { inBannerTab, olderRevisionLive } = await import('../../web/src/pages/banners/bannerTabs.js');
+    const updated = { state: 'in_review', revision: 2, live_revision: 1 };
+    expect(olderRevisionLive(updated)).toBe(true);
+    expect(inBannerTab(updated, 'aktiv')).toBe(true);
+    expect(inBannerTab(updated, 'arbeit')).toBe(true);
+    expect(inBannerTab(updated, 'beendet')).toBe(false);
+    expect(inBannerTab({ state: 'draft', revision: 3, live_revision: 2 }, 'aktiv')).toBe(true);
+  });
+  it('ohne Fassung auf der Website bleibt es bei der Zuordnung nach Stand', async () => {
+    const { inBannerTab, olderRevisionLive } = await import('../../web/src/pages/banners/bannerTabs.js');
+    expect(inBannerTab({ state: 'in_review', revision: 1, live_revision: null }, 'aktiv')).toBe(false);
+    expect(inBannerTab({ state: 'live', revision: 2, live_revision: 2 }, 'aktiv')).toBe(true);
+    expect(olderRevisionLive({ state: 'live', revision: 2, live_revision: 2 })).toBe(false);
+    expect(inBannerTab({ state: 'ended', revision: 2, live_revision: null }, 'aktiv')).toBe(false);
+    expect(inBannerTab({ state: 'ended', revision: 2, live_revision: null }, 'alle')).toBe(true);
+  });
+});

@@ -117,11 +117,18 @@ export async function dashboardRoutes(app: FastifyInstance) {
       );
     }
     if (perms.has('banner.view')) {
+      // Was auf der Website steht: die zuletzt übertragene Fassung. Eine neuere Fassung in Freigabe (z. B. Aktualisierung
+      // aus einem Workflow, #274) ändert daran nichts, bis sie veröffentlicht ist.
       out.banners = await many<any>(
-        `SELECT b.id, b.title, b.tone, b.priority, b.ends_at, s.name AS site_name FROM banners b JOIN wp_sites s ON s.id = b.site_id
-          WHERE b.ended_at IS NULL AND b.ends_at > now() AND b.starts_at <= now()
-            AND EXISTS (SELECT 1 FROM banner_jobs j WHERE j.banner_id = b.id AND j.action = 'upsert' AND j.revision = b.revision AND j.status = 'done')
-          ORDER BY b.priority DESC, b.starts_at DESC LIMIT 10`,
+        `SELECT id, title, tone, priority, ends_at, site_name FROM (
+           SELECT b.id, live.p->>'title' AS title, live.p->>'tone' AS tone, (live.p->>'priority')::int AS priority,
+                  (live.p->>'starts_at')::timestamptz AS starts_at, (live.p->>'ends_at')::timestamptz AS ends_at, s.name AS site_name
+             FROM banners b JOIN wp_sites s ON s.id = b.site_id
+             JOIN LATERAL (SELECT j.payload AS p FROM banner_jobs j WHERE j.banner_id = b.id AND j.action = 'upsert' AND j.status = 'done'
+                            ORDER BY j.created_at DESC LIMIT 1) live ON true
+            WHERE b.ended_at IS NULL) x
+          WHERE ends_at > now() AND starts_at <= now()
+          ORDER BY priority DESC, starts_at DESC LIMIT 10`,
       );
     }
     if (perms.has('source.view')) {

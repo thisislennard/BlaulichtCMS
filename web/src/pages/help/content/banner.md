@@ -30,7 +30,7 @@ Für einen einzelnen Hinweis lässt sich die Darstellung in BlaulichtCMS fest w�
 
 Banner kann auch ein [Workflow](/hilfe/workflows) anlegen, z. B. bei einer amtlichen Warnung oder einem neuen Einsatz. Die Liste zeigt dann die Herkunft: **Aus Workflow „…“** und – wenn die Banner-Aktion **Banner folgt dem Vorgang** nutzt – **folgt der Warnung** bzw. **folgt dem Einsatz**.
 
-- Eine **Aktualisierung** der Warnung bzw. des Einsatzes ändert dieses Banner, statt ein neues anzulegen. War es schon freigegeben und veröffentlicht, wird die neue Fassung zur Freigabe eingereicht; auf der Website bleibt so lange die bisherige Fassung stehen („Auf der Website steht noch Fassung …“).
+- Eine **Aktualisierung** der Warnung bzw. des Einsatzes ändert dieses Banner, statt ein neues anzulegen. War es schon freigegeben und veröffentlicht, wird die neue Fassung zur Freigabe eingereicht; auf der Website bleibt so lange die bisherige Fassung stehen („Auf der Website steht noch Fassung …“). Solange zählt das Banner auch unter **Aktiv und geplant**, und das Dashboard zeigt unter „Banner aktiv“ die Fassung, die auf der Website steht.
 - Die **Entwarnung** bzw. **Einsatz beendet** beendet das Banner sofort und nimmt es von der Website; die Liste zeigt dann **Beendet: Entwarnung** bzw. **Beendet: Einsatz beendet**.
 - Ein Banner, das jemand mit **Jetzt beenden** beendet hat, legt der Workflow nicht neu an. Wer den Text von Hand ändert, übernimmt ihn – spätere Aktualisierungen überschreiben ihn nicht, das Ende des Vorgangs beendet das Banner trotzdem.
 

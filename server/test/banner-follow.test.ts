@@ -237,6 +237,8 @@ describe('Banner folgt dem Vorgang: amtliche Warnungen (#274)', () => {
     expect(await jobsOf(u.id)).toEqual([{ action: 'upsert', revision: 3, status: 'done' }]);
     const list = (await admin.get('/banners')).json.find((x: any) => x.id === u.id);
     expect(list).toMatchObject({ state: 'in_review', live_revision: 3, revision: 4 });
+    // Dashboard „Banner aktiv“: zeigt die Fassung auf der Website, nicht die eingereichte neue
+    expect((await admin.get('/dashboard')).json.banners.filter((x: any) => x.id === u.id)).toMatchObject([{ title: b.title, tone: b.tone }]);
     expect((await stepsOf(f.automationId)).at(-1)!.info).toMatch(/neue Fassung ist zur Freigabe eingereicht; auf der Website bleibt die bisherige Fassung/);
     // Freigabe-Benachrichtigung verweist auf genau dieses Banner
     expect(await one(`SELECT 1 FROM notifications WHERE permission = 'approval.banner' AND resolved_at IS NULL AND link = $1`, [`/banner?banner=${u.id}`])).not.toBeNull();
@@ -258,6 +260,7 @@ describe('Banner folgt dem Vorgang: amtliche Warnungen (#274)', () => {
     expect(await one(`SELECT 1 FROM notifications WHERE permission = 'approval.banner' AND resolved_at IS NULL`)).toBeNull();
     const list = (await admin.get('/banners')).json.find((x: any) => x.id === bs[0].id);
     expect(list).toMatchObject({ state: 'ended', ended_reason: 'entwarnung', live_revision: null });
+    expect((await admin.get('/dashboard')).json.banners.some((x: any) => x.id === bs[0].id)).toBe(false);
   });
 
   it('Auslöser nur „Neue Warnung“: Aktualisierung startet nichts, die Entwarnung beendet trotzdem', async () => {
