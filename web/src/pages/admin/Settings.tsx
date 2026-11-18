@@ -877,7 +877,7 @@ export default function Settings() {
           {dirty && (
             <div
               role="status"
-              className="sticky bottom-4 z-20 flex items-center gap-3 flex-wrap px-4 py-3 rounded-card border border-line bg-raised shadow-float"
+              className="sticky bottom-[calc(var(--bc-bottom-bar)+16px)] z-20 flex items-center gap-3 flex-wrap px-4 py-3 rounded-card border border-line bg-raised shadow-float"
             >
               <span
                 className="w-2 h-2 rounded-full bg-warn shrink-0"

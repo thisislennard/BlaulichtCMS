@@ -16,6 +16,7 @@ import { LegalLinks } from '../legal/LegalLinks';
 import { FeedbackView } from '../feedback/Feedback';
 import { PageInfoCtx, type PageInfo } from './page';
 import { helpHref, PageHelp } from './PageHelp';
+import { MobileTabBar } from './MobileTabBar';
 
 /**
  * Seitentitel/Brotkrumen (#250, #267): Menüseiten erhalten Titel, Bereich und Hilfe aus der Navigation. Unterseiten und
@@ -93,7 +94,7 @@ function CountBadge({ n, strong }: { n: number; strong?: boolean }) {
   );
 }
 
-/** Mobile Navigation (Schublade): vollständige Liste aller Bereiche. */
+/** Mobile Navigation (Schublade, „Mehr“ in der unteren Leiste): vollständige Liste aller Bereiche. */
 function MobileNav({ onNavigate }: { onNavigate: () => void }) {
   const { me } = useAuth();
   const { pathname } = useLocation();
@@ -204,7 +205,7 @@ function NotificationsButton() {
   }, [notif, unread]);
   return (
     <>
-      <button ref={ref} type="button" onClick={() => setOpen((o) => !o)} aria-label={`Benachrichtigungen${unread ? `, ${unread} neu` : ''}`} aria-expanded={open} className="relative w-9 h-9 rounded-control border border-line bg-transparent inline-flex items-center justify-center text-fg-muted hover:text-fg hover:bg-raised">
+      <button ref={ref} type="button" onClick={() => setOpen((o) => !o)} aria-label={`Benachrichtigungen${unread ? `, ${unread} neu` : ''}`} aria-expanded={open} className="relative w-9 h-9 max-md:w-10 max-md:h-10 rounded-control border border-line bg-transparent inline-flex items-center justify-center text-fg-muted hover:text-fg hover:bg-raised">
         <Icon name="Bell" size={16} />
         {unread > 0 && <span aria-hidden="true" className="absolute top-[7px] right-[8px] w-2 h-2 rounded-full bg-primary border-2 border-card" />}
       </button>
@@ -258,7 +259,7 @@ function UserMenu() {
   if (!me) return null;
   return (
     <>
-      <button ref={ref} type="button" onClick={() => setOpen((o) => !o)} aria-label={`Benutzerprofil von ${me.user.name}`} aria-expanded={open} className="rounded-full">
+      <button ref={ref} type="button" onClick={() => setOpen((o) => !o)} aria-label={`Benutzerprofil von ${me.user.name}`} aria-expanded={open} className="rounded-full inline-flex items-center justify-center min-w-10 min-h-10">
         <Avatar name={me.user.name} size={36} strong />
       </button>
       <Popover open={open} onClose={() => setOpen(false)} anchor={ref} width={260}>
@@ -360,7 +361,7 @@ function StatusStrip({ crumbs, title }: { crumbs: { label: string; to?: string }
 /** Hilfe-Knopf in der Kopfzeile (#265): öffnet das Kapitel der aktuellen Seite bzw. die Startseite der Hilfe. */
 function HelpButton({ topic }: { topic?: string }) {
   return (
-    <Link to={helpHref(topic)} aria-label={t('nav.pageHelp')} title={`${t('nav.pageHelp')} (?)`} className="w-9 h-9 rounded-control border border-line inline-flex items-center justify-center !text-fg-muted hover:!text-fg hover:bg-raised">
+    <Link to={helpHref(topic)} aria-label={t('nav.pageHelp')} title={`${t('nav.pageHelp')} (?)`} className="w-9 h-9 max-md:w-10 max-md:h-10 rounded-control border border-line inline-flex items-center justify-center !text-fg-muted hover:!text-fg hover:bg-raised">
       <Icon name="CircleHelp" size={16} />
     </Link>
   );
@@ -418,6 +419,7 @@ export function AppShell() {
     };
   }, [mobileOpen]);
   const { activeId, activeGroup, title, crumbs, help, docTitle } = usePageFrame(pathname, meta);
+  const navGroups = useNavGroups();
   useEffect(() => {
     document.title = docTitle;
   }, [docTitle]);
@@ -459,10 +461,7 @@ export function AppShell() {
         )}
         <header className="sticky top-0 z-40 bg-card border-b border-line">
           <div className="h-14 flex items-center gap-3 md:gap-8 px-4 md:px-8">
-            <button ref={menuBtnRef} type="button" aria-label={t('nav.menu')} onClick={() => setMobileOpen(true)} className="md:hidden w-10 h-10 inline-flex items-center justify-center rounded-control border border-line">
-              <Icon name="Menu" size={17} />
-            </button>
-            <Link to="/" className="flex items-center gap-2.5 !text-fg min-w-0">
+            <Link to="/" className="flex items-center gap-2.5 !text-fg min-w-0 min-h-10">
               <BrandMark />
               <span className="font-semibold text-section tracking-[-0.01em]">BlaulichtCMS</span>
               <span className="hidden xl:inline text-fg-muted">/</span>
@@ -475,7 +474,7 @@ export function AppShell() {
                 <span className="flex-1 text-left truncate">Suchen</span>
                 <Kbd>Strg K</Kbd>
               </button>
-              <button type="button" onClick={() => setPaletteOpen(true)} aria-label={t('nav.searchLabel')} className="lg:hidden w-9 h-9 rounded-control border border-line inline-flex items-center justify-center text-fg-muted">
+              <button type="button" onClick={() => setPaletteOpen(true)} aria-label={t('nav.searchLabel')} className="lg:hidden w-9 h-9 max-md:w-10 max-md:h-10 rounded-control border border-line inline-flex items-center justify-center text-fg-muted">
                 <Icon name="Search" size={16} />
               </button>
               <HelpButton topic={help} />
@@ -493,7 +492,10 @@ export function AppShell() {
           </PageInfoCtx.Provider>
         </main>
         {!meta.fullBleed && <LegalLinks className="pb-6 print:hidden" />}
+        {/* Platz für die untere Leiste am Handy (#264) */}
+        <div aria-hidden="true" className="md:hidden shrink-0 h-[var(--bc-bottom-bar)]" />
       </div>
+      <MobileTabBar items={navGroups.flatMap((g) => g.items)} activeId={activeId} moreOpen={mobileOpen} onMore={() => setMobileOpen(true)} moreRef={menuBtnRef} />
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
     </PageMetaCtx.Provider>
   );

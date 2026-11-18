@@ -25,6 +25,18 @@ Deinstallieren: in der App über das Menü oben rechts (Chrome/Edge: „Blaulich
 - **Android / Chrome / Edge:** „App installieren“ antippen bzw. im Browsermenü „Zum Startbildschirm hinzufügen“.
 - **iPhone / iPad:** In Safari „Teilen“ → „Zum Home-Bildschirm“. Push gibt es auf iPhone und iPad nur in der installierten App (ab iOS 16.4).
 
+## Untere Leiste am Handy
+
+Auf schmalen Bildschirmen (Handy, unter 768 px Breite) steht unten eine Leiste mit fünf Feldern – im Browser wie in der installierten App:
+
+| Feld | Inhalt |
+|---|---|
+| **Dashboard**, **Beiträge**, **Freigaben** | die häufigsten Seiten, nur mit passendem Recht; fehlt eines, rückt die nächste Seite nach (z. B. Presseanfragen oder Warnentwürfe). Freigaben zeigt die Zahl offener Freigaben. |
+| **＋ Aktionen** | Schnellaktionen je nach Recht: **Fotos sammeln** (Sammlung mit Upload-Link und QR-Code), **Sichten** (Sammlungen mit offenen Dateien – ein Tipp öffnet die Sichtung), **Neuer Beitrag**, **Neue Erstmeldung** (Warnentwurf), **Anfrage erfassen** (Presse) |
+| **Mehr** | alle Bereiche und Seiten wie im Menü am Computer |
+
+So ist jede dieser Aufgaben von jeder Seite aus mit höchstens zwei Tipps erreichbar. Während du in ein Textfeld tippst, blendet sich die Leiste aus. Listen wie Beiträge, Presseanfragen und Einsatzliste stehen am Handy als Karten mit allen wichtigen Angaben untereinander.
+
 ## Schnellzugriffe
 
 Ein langer Druck auf das App-Symbol zeigt die Schnellzugriffe – am Computer mit Chrome oder Edge ein Rechtsklick auf das Symbol in Taskleiste, Startmenü bzw. Dock (Safari am Mac bietet keine Schnellzugriffe):

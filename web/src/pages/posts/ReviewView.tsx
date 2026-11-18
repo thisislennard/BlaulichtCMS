@@ -375,7 +375,7 @@ export default function ReviewView() {
       </div>
 
       {d.can_decide && (
-        <div className="fixed md:static bottom-0 inset-x-0 z-30 bg-card md:bg-transparent border-t md:border-0 border-line px-4 md:px-0 py-3 md:py-0 shadow-float md:shadow-none">
+        <div className="fixed md:static bottom-[var(--bc-bottom-bar)] inset-x-0 z-30 bg-card md:bg-transparent border-t md:border-0 border-line px-4 md:px-0 py-3 md:py-0 shadow-float md:shadow-none">
           <div className="max-w-[760px] mx-auto grid grid-cols-2 gap-2">
             <Button icon="X" className="h-12 md:h-ctl" onClick={() => setDecision('rejected')}>
               Ablehnen

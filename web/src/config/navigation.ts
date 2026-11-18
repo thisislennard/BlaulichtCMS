@@ -93,6 +93,32 @@ export const navigation: NavGroup[] = [
   },
 ];
 
+/**
+ * Untere Leiste am Handy (#264, Design §5): drei Ziele aus der Navigation in dieser Reihenfolge – nur sichtbare
+ * (Rechte wie oben); fehlt eines, rückt das nächste nach. In der Mitte stehen die Schnellaktionen, rechts „Mehr“
+ * (die Schublade mit allen Bereichen).
+ */
+export const MOBILE_TABS: string[] = ['dashboard', 'posts', 'approvals', 'pressRequests', 'warnings', 'media', 'calendar', 'incidents', 'notifications'];
+
+/**
+ * Schnellaktionen der unteren Leiste (Knopf „＋“), je nach Recht. `sichten` listet zusätzlich die Sammlungen mit
+ * offenen Dateien (ein Tipp öffnet die Sichtung); höchstens zwei Tipps von jeder Seite aus.
+ */
+export interface QuickAction {
+  id: 'collect' | 'review' | 'post' | 'warning' | 'press';
+  label: string;
+  hint: string;
+  icon: string;
+  perm: string[];
+}
+export const QUICK_ACTIONS: QuickAction[] = [
+  { id: 'collect', label: 'Fotos sammeln', hint: 'Sammlung mit Upload-Link und QR-Code', icon: 'Camera', perm: ['media.collections'] },
+  { id: 'review', label: 'Sichten', hint: 'Offene Fotos und Videos', icon: 'CheckSquare', perm: ['media.review'] },
+  { id: 'post', label: 'Neuer Beitrag', hint: 'Entwurf anlegen', icon: 'FileText', perm: ['post.create'] },
+  { id: 'warning', label: 'Neue Erstmeldung', hint: 'Warnentwurf anlegen', icon: 'Siren', perm: ['warning.draft'] },
+  { id: 'press', label: 'Anfrage erfassen', hint: 'Presseanfrage von Hand', icon: 'MessageSquareQuote', perm: ['press.manage'] },
+];
+
 /** Seiten ohne Menüpunkt mit eigener Hilfe (Mein Konto, Hilfe selbst). */
 export const PAGE_HELP: Record<string, string> = { '/profil': 'anmeldung', '/hilfe': 'erste-schritte' };
 

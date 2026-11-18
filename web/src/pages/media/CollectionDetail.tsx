@@ -116,6 +116,15 @@ export default function CollectionDetail() {
     }),
     [media],
   );
+  // Schnellaktion „Sichten“ am Handy (/medien/<id>?sichten=1, #264): Sichtung gleich öffnen
+  const wantsReview = params.get('sichten') === '1';
+  useEffect(() => {
+    if (!wantsReview || !q.data) return;
+    if (may.review && lists.all.length > 0) setReview(true);
+    const next = new URLSearchParams(params);
+    next.delete('sichten');
+    setParams(next, { replace: true });
+  }, [wantsReview, q.data]); // eslint-disable-line react-hooks/exhaustive-deps
   const current = lists[filter];
   const pages = Math.max(1, Math.ceil(current.length / prefs.perPage));
   const pageItems = current.slice((Math.min(page, pages) - 1) * prefs.perPage, Math.min(page, pages) * prefs.perPage);

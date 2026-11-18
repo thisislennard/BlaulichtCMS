@@ -23,12 +23,13 @@ const RUNNING = /^(running|sending|publishing|scheduled|sent|queued)$/;
 
 /**
  * Dateien, in denen eine rot gefüllte Fläche gewollt ist: Hauptknopf und Schalter (Basiskomponenten), Zähler und
- * ungelesene Mitteilungen (Kopfzeile, Mitteilungen), „Du bist dran“ (Dashboard), heutiger Tag im Kalender, gewähltes
+ * ungelesene Mitteilungen (Kopfzeile, untere Leiste am Handy, Mitteilungen), „Du bist dran“ (Dashboard), heutiger Tag im Kalender, gewähltes
  * Element im Bildvorlagen-Editor, Fortschritt auf der öffentlichen Upload-Seite.
  */
 const FILLED_RED_ALLOWED = new Set([
   'components/ui/core.tsx',
   'components/layout/AppShell.tsx',
+  'components/layout/MobileTabBar.tsx',
   'pages/Notifications.tsx',
   'pages/dashboard/widgets.tsx',
   'pages/calendar/views.tsx',

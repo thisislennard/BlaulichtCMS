@@ -710,7 +710,7 @@ function PostEditorInner({ id }: { id: string }) {
       {resolving && <ResolveDialog publication={resolving} onClose={() => (setResolving(null), refresh())} />}
       {/* Handy: Speichern immer erreichbar, sobald es Änderungen gibt (der Kopf-Button liegt weit oben) */}
       {editable && dirty && (
-        <div className="md:hidden fixed bottom-0 inset-x-0 z-30 bg-card border-t border-line px-4 py-3 shadow-float">
+        <div className="md:hidden fixed bottom-[var(--bc-bottom-bar)] inset-x-0 z-30 bg-card border-t border-line px-4 py-3 shadow-float">
           <Button variant="primary" icon="Save" className="w-full h-12" loading={saving} onClick={save}>
             Neue Fassung speichern
           </Button>

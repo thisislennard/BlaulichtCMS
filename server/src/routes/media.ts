@@ -520,12 +520,16 @@ export async function mediaRoutes(app: FastifyInstance) {
         status: z.enum(['active', 'archived', 'all']).optional(),
         page: z.coerce.number().int().min(1).max(10000).default(1),
         perPage: z.coerce.number().int().min(6).max(96).default(24),
+        // nur Sammlungen mit offenen Dateien (Sichtung; Schnellaktion „Sichten“ am Handy, Filter der Liste, #264)
+        pending: z.enum(['1', 'true']).optional(),
       })
       .parse(req.query);
     const status = q.status ?? (q.archived ? 'all' : 'active');
     const like = q.q ? `%${q.q.replace(/[\\%_]/g, (ch) => `\\${ch}`)}%` : null;
     const where = `c.deleted_at IS NULL AND ($1 = 'all' OR ($1 = 'active') = (c.archived_at IS NULL)) AND ($2::uuid IS NULL OR c.post_id = $2)
-                   AND ($3::text IS NULL OR c.title ILIKE $3 OR c.purpose ILIKE $3 OR c.note ILIKE $3)`;
+                   AND ($3::text IS NULL OR c.title ILIKE $3 OR c.purpose ILIKE $3 OR c.note ILIKE $3)${
+                     q.pending ? ` AND EXISTS (SELECT 1 FROM media m WHERE m.collection_id = c.id AND m.deleted_at IS NULL AND m.status = 'ready' AND m.selection = 'pending')` : ''
+                   }`;
     const params = [status, q.postId ?? null, like];
     const rows = await many<any>(
       // Zähler in einem Durchlauf je Sammlung (Index media_collection_state_idx) statt vier Unterabfragen, Titelbild

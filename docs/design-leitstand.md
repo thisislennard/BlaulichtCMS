@@ -157,7 +157,25 @@ mit passenden Rechten sichtbar. Höchstens **6 Bereiche** mit je höchstens **7 
   Hilfe-Kapitel (aus `help` des Menüpunkts; `PageHeader help="kapitel#anker"` für einen anderen Abschnitt). Darunter
   folgen Abschnitte mit `<h2>` (`Card`) – keine Ebene überspringen.
 - **Fenstertitel:** „Seite – Bereich · Organisation“, Detailseiten „Objekt – Menüpunkt · Organisation“.
-- **Handy (< 768 px):** Menü-Button öffnet die Schublade mit allen Bereichen; Suche und Hilfe als Symbol.
+- **Handy (< 768 px):** untere Leiste `MobileTabBar` (#264) statt Menü-Knopf in der Kopfzeile; Suche, Hilfe,
+  Benachrichtigungen und Konto bleiben als Symbole oben.
+
+  ```
+  ┌──────────┬──────────┬──────────┬──────────┬──────────┐
+  │ Übersicht│ Beiträge │    ＋    │Freigaben③│   Mehr   │
+  │    ▣     │    ▤     │ Aktionen │    ☑     │    ☰     │
+  └──────────┴──────────┴──────────┴──────────┴──────────┘
+  ```
+
+  - Drei Ziele aus `MOBILE_TABS` (`config/navigation.ts`) in dieser Reihenfolge, nur mit Recht; fehlt eines, rückt das
+    nächste nach (z. B. Presse statt Beiträge). Aktiv = fett + rotes Symbol; Freigaben mit rotem Zähler.
+  - **＋ Aktionen** öffnet die Schnellaktionen (`QUICK_ACTIONS`, je nach Recht): Fotos sammeln (Sammlung mit Upload-Link
+    und QR-Code), Sichten (Sammlungen mit offenen Dateien, ein Tipp öffnet die Sichtung über `/medien/<id>?sichten=1`),
+    Neuer Beitrag, Neue Erstmeldung, Anfrage erfassen – jede Kernaufgabe mit höchstens zwei Tipps von jeder Seite aus.
+  - **Mehr** öffnet die Schublade mit allen Bereichen und Seiten (Gliederung wie oben).
+  - Die Leiste ist 60 px hoch (+ sicherer Bereich unten) und tritt zurück, solange ein Textfeld bearbeitet wird. Feste
+    oder klebende Elemente unten (Speicherleisten, Entscheidungsleiste, Hinweise) rechnen mit `var(--bc-bottom-bar)`
+    (am Desktop 0).
 - **Farbmodus:** Der Sonne/Mond-Schalter speichert `preferences.theme` im Profil – dieselbe Einstellung wie unter „Mein Konto“.
 
 ---

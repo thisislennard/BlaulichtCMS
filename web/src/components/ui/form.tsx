@@ -146,7 +146,7 @@ export function SaveBar({ dirty, count, saving, error, problems = [], onSave, on
     <>
       {guard && <UnsavedChangesGuard when={dirty} text={guardText ?? 'Es gibt ungespeicherte Änderungen. Beim Verlassen gehen sie verloren.'} />}
       {dirty ? (
-        <div role="region" aria-labelledby={labelId} className={cx('sticky bottom-4 z-20 flex items-center gap-3 flex-wrap px-4 py-3 rounded-card border border-line bg-raised shadow-float', className)} data-save-bar="">
+        <div role="region" aria-labelledby={labelId} className={cx('sticky bottom-[calc(var(--bc-bottom-bar)+16px)] z-20 flex items-center gap-3 flex-wrap px-4 py-3 rounded-card border border-line bg-raised shadow-float', className)} data-save-bar="">
           <span className="w-2 h-2 rounded-full bg-warn shrink-0" aria-hidden="true" />
           <span id={labelId} role="status" className="text-sm font-medium flex-1 min-w-[160px]">
             Ungespeicherte Änderungen

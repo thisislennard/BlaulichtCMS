@@ -96,7 +96,7 @@ export function OfflineBanner() {
         ? shown.message || d.text
         : d.text;
   return (
-    <div role="status" aria-live="polite" data-connection={shown.kind} className="fixed bottom-3 left-1/2 -translate-x-1/2 z-[100] bg-card text-fg border border-warn/60 rounded-card px-4 py-3 shadow-float text-sm flex items-start gap-3 w-[min(640px,92vw)]">
+    <div role="status" aria-live="polite" data-connection={shown.kind} className="fixed bottom-[calc(var(--bc-bottom-bar)+12px)] left-1/2 -translate-x-1/2 z-[100] bg-card text-fg border border-warn/60 rounded-card px-4 py-3 shadow-float text-sm flex items-start gap-3 w-[min(640px,92vw)]">
       <Icon name={d.icon} size={18} className="text-warn shrink-0 mt-0.5" />
       <div className="flex-1 min-w-0 flex flex-col gap-0.5">
         <strong className="font-semibold">{d.title}</strong>

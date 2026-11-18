@@ -773,7 +773,7 @@ function WarningCaseInner({ id }: { id: string }) {
       )}
 
       {/* Fußleiste: auf dem Handy fest unten */}
-      <div className="fixed md:static bottom-0 inset-x-0 z-30 bg-card md:bg-transparent border-t md:border-0 border-line px-4 py-3 md:p-0 flex items-center gap-2">
+      <div className="fixed md:static bottom-[var(--bc-bottom-bar)] inset-x-0 z-30 bg-card md:bg-transparent border-t md:border-0 border-line px-4 py-3 md:p-0 flex items-center gap-2">
         <Button icon="ArrowLeft" disabled={idx === 0} onClick={() => go(STEPS[Math.max(0, idx - 1)].id)}>
           Zurück
         </Button>
