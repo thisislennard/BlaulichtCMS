@@ -26,6 +26,10 @@ RUN --mount=type=secret,id=build_ca,required=false --mount=type=cache,target=/ro
     if [ -f /run/secrets/build_ca ]; then export NODE_EXTRA_CA_CERTS=/run/secrets/build_ca; fi; \
     npm ci --no-audit --no-fund
 COPY . .
+# Rechte unabhängig vom Host (#275): Ein mit umask 077 ausgecheckter Stand hat Dateien mit 0600 und Ordner mit 0700.
+# COPY übernimmt diese Rechte, die Laufzeitstufe ebenso (COPY --from) – der unprivilegierte Benutzer könnte dann z. B.
+# server/package.json nicht lesen. Hier einheitlich 0644/0755 (ausführbare Dateien behalten ihr x-Bit).
+RUN find . -path ./node_modules -prune -o -path './*/node_modules' -prune -o -exec chmod u+rwX,go+rX,go-w {} +
 RUN npm run build
 
 FROM node:26-trixie-slim@sha256:e6bedef217677b276c591795e169840edd9096dbf13f29df8ef8d1856b8820bc AS deps
@@ -84,6 +88,9 @@ COPY --from=build /src/wordpress-plugin/blaulichtcms-bridge ./wordpress-plugin/b
 
 RUN mkdir -p /data && chown -R blaulichtcms:blaulichtcms /data
 USER blaulichtcms
+# Alles unter /app muss für den Laufzeitbenutzer lesbar sein (#275) – sonst bricht der Build hier ab statt erst der Start
+RUN bad="$(find /app ! -type l \( ! -readable -o -type d ! -executable \) -print 2>&1 | head -n 20)"; \
+    if [ -n "$bad" ]; then echo "Für $(id -un) nicht lesbar:" >&2; echo "$bad" >&2; exit 1; fi
 VOLUME ["/data"]
 EXPOSE 7310
 

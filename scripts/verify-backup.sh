@@ -52,7 +52,8 @@ case "$NAME" in
   *)
     READ='tar -tzf "/backup/$1"' ;;
 esac
-LIST="$(docker run --rm --network none "${MOUNTS[@]}" --entrypoint sh "$IMAGE" -c "$READ" _ "$NAME")" \
+# Als root im Container (#275): Archiv und Schlüssel gehören root (0600) – der Benutzer des Images könnte sie nicht lesen
+LIST="$(docker run --rm -u 0 --network none "${MOUNTS[@]}" --entrypoint sh "$IMAGE" -c "$READ" _ "$NAME")" \
   || fail "$NAME lässt sich nicht vollständig entschlüsseln bzw. lesen (beschädigt, verändert oder falscher Schlüssel)."
 printf '%s\n' "$LIST" | grep -qE '^(\./)?postgres/PG_VERSION$' || fail "$NAME enthält keine Datenbank (postgres/PG_VERSION fehlt)."
 if ! printf '%s\n' "$LIST" | grep -qE '^(\./)?secrets/master\.key$'; then

@@ -23,6 +23,7 @@
 #    - Höchstens ein Lauf je 10 Minuten, Sperre gegen parallele Läufe (auch gegen ein gleichzeitiges install.sh).
 # ============================================================================================================
 set -euo pipefail
+# Eigene Dateien (Protokolle, Zustand, Prüfordner) nur für root; install.sh läuft dagegen mit umask 022 (siehe unten)
 umask 077
 # Bytegenau arbeiten (Prüfungen und Textmuster unabhängig von der Sprache des Hosts)
 export LC_ALL=C
@@ -129,6 +130,13 @@ write_status() {
 --- build.log (Auszug) ---
 $(tail -n 12 "$APP_DIR/build.log" | cut -c1-300 | redact)"
   fi
+  # Startet das neue Image nicht, gibt scripts/update.sh vor dem Rückweg dessen Protokoll aus (#275) – der Grund soll in
+  # der App sichtbar bleiben, auch wenn die Ausgabe des Rückwegs danach weiterläuft
+  if [ -f "$RUNLOG" ] && grep -q '^--- Protokoll des neuen Containers' "$RUNLOG"; then
+    tail="$tail
+--- Protokoll des neuen Containers (Auszug) ---
+$(sed -n '/^--- Protokoll des neuen Containers/,/^--- Ende des Protokolls/p' "$RUNLOG" | sed '1d;$d' | tail -n 25 | cut -c1-300 | redact)"
+  fi
   tail="$(printf '%s' "$tail" | tail -c 12000)"
   printf '{"v":1,"helperVersion":%s,"requestId":"%s","userId":"%s","state":"%s","phase":"%s","step":"%s","targetVersion":"%s","fromVersion":"%s","image":"%s","backupFile":"%s","message":"%s","startedAt":"%s","updatedAt":"%s","finishedAt":"%s","logTail":"%s"}\n' \
     "$HELPER_VERSION" "$REQ_ID" "$REQ_USER" "$STATE" "$PHASE" "$(json_str "$STEP")" "$TARGET" "$(json_str "$FROM_VERSION")" "$(json_str "$IMAGE_NEW")" \
@@ -137,6 +145,13 @@ $(tail -n 12 "$APP_DIR/build.log" | cut -c1-300 | redact)"
 }
 finish() { # finish <state> <meldung>
   STATE="$1"; MESSAGE="$2"; PHASE="done"; FINISHED="$(now_iso)"
+  # Ohne Erfolg die Ausgabe von install.sh dauerhaft ins Protokoll übernehmen (#275) – last-run.log überschreibt die
+  # nächste Anfrage
+  if [ "$STATE" != success ] && [ "$STATE" != rejected ] && [ -s "$RUNLOG" ]; then
+    echo "--- Ausgabe von install.sh (Anfrage $REQ_ID) ---"
+    redact < "$RUNLOG"
+    echo "--- Ende der Ausgabe ---"
+  fi
   say "Ergebnis: $STATE – $MESSAGE"
   write_status
   exit 0
@@ -240,8 +255,10 @@ fi
 # ------------------------------------------------------------------------ install.sh nicht-interaktiv
 say "Starte install.sh --unattended für $TAG" | tee -a "$RUNLOG"
 PHASE=prepare; STEP="Programmcode holen"; write_status
-# Ohne Terminal (stdin /dev/null): install.sh fragt nichts, --unattended installiert nichts nach und richtet nichts neu ein
-BLAULICHTCMS_EXPECT_TAG="$TAG" bash "$APP_DIR/install.sh" --unattended </dev/null >>"$RUNLOG" 2>&1 &
+# Ohne Terminal (stdin /dev/null): install.sh fragt nichts, --unattended installiert nichts nach und richtet nichts neu ein.
+# umask 022 (#275): Mit der umask dieses Dienstes (077) checkte git geänderte Dateien mit 0600 aus, die der Benutzer im
+# Image nicht lesen kann. install.sh setzt sie ab 0.7.1 selbst; hier zusätzlich für den Fall eines älteren install.sh.
+( umask 022; BLAULICHTCMS_EXPECT_TAG="$TAG" exec bash "$APP_DIR/install.sh" --unattended ) </dev/null >>"$RUNLOG" 2>&1 &
 pid=$!
 last_write=0
 phase_of() { # Phase aus der letzten Schrittmeldung von install.sh bzw. scripts/update.sh

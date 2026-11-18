@@ -45,6 +45,10 @@
 #    BLAULICHTCMS_BUILD_CA         PEM-Datei einer Proxy-CA für den Build (TLS-aufbrechender Proxy)
 # ============================================================================================================
 set -euo pipefail
+# Feste umask für Programmcode, Build und Compose (#275): Aufrufer mit umask 077 (z. B. der Update-Helfer unter systemd)
+# ließen git sonst Dateien mit 0600 auschecken, die der unprivilegierte Benutzer im Image nicht lesen kann. Geheimes
+# (.env, Sicherungsschlüssel, Sicherungsziel, Helfer-Umgebung) wird weiterhin ausdrücklich mit 0600/0700 angelegt.
+umask 022
 
 APP_DIR="${BLAULICHTCMS_DIR:-/opt/apps/blaulichtcms}"
 BACKUP_DIR="${BLAULICHTCMS_BACKUP_DIR:-/opt/apps/blaulichtcms-sicherungen}"
@@ -407,6 +411,23 @@ else
   ok "geholt: $(git log -1 --format='%h %s' | cut -c1-70) ($TARGET_LABEL)"
 fi
 cd "$APP_DIR"
+# Rechte der versionierten Dateien vereinheitlichen (#275): Ein Lauf mit umask 077 (Update-Helfer bis 0.7.0) hat
+# geänderte Dateien mit 0600 und neue Ordner mit 0700 ausgecheckt. Nur reguläre Dateien und Ordner aus Git (keine
+# symbolischen Links, nichts Unversioniertes wie .env); ausführbare Dateien behalten ihr x-Bit.
+normalize_modes() {
+  local entry p
+  git ls-files -s -z | while IFS= read -r -d '' entry; do
+    p="${entry#*$'\t'}"
+    case "$entry" in
+      100644\ *|100755\ *) if [ -f "$p" ] && [ ! -L "$p" ]; then printf '%s\0' "$p"; fi ;;
+    esac
+  done | xargs -0 -r chmod u+rw,go+r,go-w,a+X -- || return 1
+  git ls-tree -r -d -z --name-only HEAD | while IFS= read -r -d '' p; do
+    if [ -d "$p" ] && [ ! -L "$p" ]; then printf '%s\0' "$p"; fi
+  done | xargs -0 -r chmod u+rwx,go+rx,go-w -- || return 1
+  chmod u+rwx,go+rx,go-w . || return 1
+}
+normalize_modes || die "Die Rechte der Programmdateien in $APP_DIR ließen sich nicht vereinheitlichen."
 VERSION="$(cat VERSION 2>/dev/null || echo 0.0.0)"
 ok "BlaulichtCMS $VERSION"
 case "$TARGET_REF" in refs/tags/v*) [ "${TARGET_REF#refs/tags/v}" = "$VERSION" ] || warn "Tag ${TARGET_REF#refs/tags/} und VERSION ($VERSION) stimmen nicht überein." ;; esac
@@ -429,8 +450,7 @@ port_busy() { # belegt durch etwas anderes als BlaulichtCMS?
 NEW_ENV=0
 if [ ! -f .env ]; then
   [ "$UNATTENDED" = 1 ] && die "Keine .env in $APP_DIR – der nicht-interaktive Modus richtet nichts neu ein."
-  cp .env.example .env
-  chmod 600 .env
+  install -m 600 .env.example .env
   NEW_ENV=1
   # Abbruch während der Fragen: halbe .env wieder entfernen, sonst überspränge der nächste Lauf die Konfiguration
   trap '[ -f "$APP_DIR/.env.unfertig" ] && rm -f "$APP_DIR/.env" "$APP_DIR/.env.unfertig"' EXIT
@@ -574,22 +594,47 @@ if [ -n "${BLAULICHTCMS_BUILD_CA:-}" ]; then
   BUILD_ARGS+=(--secret "id=build_ca,src=$BLAULICHTCMS_BUILD_CA")
   ok "Proxy-CA für den Build: $BLAULICHTCMS_BUILD_CA"
 fi
-if docker image inspect "$IMAGE" >/dev/null 2>&1; then
-  ok "$IMAGE ist bereits gebaut"
-  # Hinweis, wenn die Basis-Images des laufenden Stands veraltet sind (#103)
-  created="$(docker image inspect -f '{{.Created}}' "$IMAGE" 2>/dev/null | cut -c1-10)"
-  if [ -n "$created" ] && [ "$(( ($(date +%s) - $(date -d "$created" +%s 2>/dev/null || date +%s)) / 86400 ))" -gt 30 ]; then
-    warn "Das Image ist vom $created (älter als 30 Tage). Sicherheitsupdates der Basis-Images einspielen: sudo bash $APP_DIR/install.sh --rebuild"
-  fi
-else
-  LOG="$APP_DIR/build.log"
+LOG="$APP_DIR/build.log"
+SELFTEST_LOG="$APP_DIR/selftest.log"
+build_image() { # build_image [weitere Optionen für docker build]
   echo "  Protokoll: $LOG"
   # --pull: Basis-Images immer neu laden – sonst bleiben Sicherheitsupdates aus dem Cache des ersten Builds hängen (#103)
-  if ! DOCKER_BUILDKIT=1 docker build --pull --progress=plain "${BUILD_ARGS[@]}" -t "$IMAGE" . >"$LOG" 2>&1; then
+  if ! DOCKER_BUILDKIT=1 docker build --pull --progress=plain "$@" "${BUILD_ARGS[@]}" -t "$IMAGE" . >"$LOG" 2>&1; then
     tail -25 "$LOG" | sed 's/^/  │ /'
     die "Der Build ist fehlgeschlagen (Auszug oben, vollständig in $LOG). Hinter einem Proxy: HTTPS_PROXY und ggf. BLAULICHTCMS_BUILD_CA setzen."
   fi
   ok "$IMAGE gebaut"
+}
+# Selbsttest vor Wartungsmodus, Sicherung und Wechsel (#275): ohne Netz, als Benutzer des Images – alle Dateien
+# lesbar, Programm samt Paketkonfiguration und nativen Modulen ladbar (scripts/image-selftest.sh)
+selftest() { bash scripts/image-selftest.sh "$IMAGE" >"$SELFTEST_LOG" 2>&1; }
+BUILT=0
+if docker image inspect "$IMAGE" >/dev/null 2>&1; then
+  if selftest; then
+    ok "$IMAGE ist bereits gebaut (Selbsttest bestanden)"
+    # Hinweis, wenn die Basis-Images des laufenden Stands veraltet sind (#103)
+    created="$(docker image inspect -f '{{.Created}}' "$IMAGE" 2>/dev/null | cut -c1-10)"
+    if [ -n "$created" ] && [ "$(( ($(date +%s) - $(date -d "$created" +%s 2>/dev/null || date +%s)) / 86400 ))" -gt 30 ]; then
+      warn "Das Image ist vom $created (älter als 30 Tage). Sicherheitsupdates der Basis-Images einspielen: sudo bash $APP_DIR/install.sh --rebuild"
+    fi
+  else
+    # z. B. ein Image, das ein älteres install.sh aus einem Stand mit falschen Dateirechten gebaut hat
+    warn "Das vorhandene Image $IMAGE besteht den Selbsttest nicht – es wird entfernt und ohne Cache neu gebaut:"
+    tail -8 "$SELFTEST_LOG" | sed 's/^/  │ /'
+    docker image rm "$IMAGE" >/dev/null 2>&1 || warn "$IMAGE ließ sich nicht entfernen (noch von einem Container verwendet?) – der Neubau übernimmt den Namen."
+    build_image --no-cache
+    BUILT=1
+  fi
+else
+  build_image
+  BUILT=1
+fi
+if [ "$BUILT" = 1 ]; then
+  if ! selftest; then
+    tail -20 "$SELFTEST_LOG" | sed 's/^/  │ /'
+    die_rc 3 "Das neu gebaute Image $IMAGE besteht den Selbsttest nicht (Auszug oben, vollständig in $SELFTEST_LOG) – abgebrochen, bevor am Betrieb etwas geändert wurde; ein laufendes BlaulichtCMS läuft unverändert weiter. Der nächste Lauf baut das Image ohne Cache neu."
+  fi
+  ok "Selbsttest bestanden (ohne Netz, als Benutzer des Images: Dateien lesbar, Programm lädt)"
   # Optional: Schwachstellenprüfung vor dem Wechsel, wenn Trivy auf dem Host installiert ist (blockiert nicht)
   if command -v trivy >/dev/null; then
     if trivy image --quiet --severity CRITICAL,HIGH --ignore-unfixed --exit-code 1 "$IMAGE" >"$APP_DIR/trivy.log" 2>&1; then

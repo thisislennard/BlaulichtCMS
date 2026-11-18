@@ -45,7 +45,9 @@ chmod 700 "$TARGET" 2>/dev/null || echo "Hinweis: Rechte von $TARGET ließen sic
 STAMP="$(date +%Y-%m-%d-%H%M%S)"
 if [ "$UNENCRYPTED" = 1 ]; then FILE="blaulichtcms-${STAMP}.tar.gz"; else FILE="blaulichtcms-${STAMP}.tar.gz.enc"; fi
 
-need=$(docker run --rm --network none -v "$VOLUME":/data:ro --entrypoint du "$IMAGE" -sb /data | cut -f1)
+# Als root (nur lesend eingebunden, #275): einzelne nicht für den Benutzer des Images lesbare Dateien im Volume ließen
+# du sonst scheitern
+need=$(docker run --rm -u 0 --network none -v "$VOLUME":/data:ro --entrypoint du "$IMAGE" -sb /data | cut -f1)
 free=$(df -B1 --output=avail "$TARGET" | tail -1)
 if [ "$free" -lt $((need + need / 5)) ]; then
   echo "Zu wenig Platz im Ziel: benötigt ca. $((need / 1048576)) MB, frei $((free / 1048576)) MB." >&2

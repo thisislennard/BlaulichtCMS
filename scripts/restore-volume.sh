@@ -56,15 +56,19 @@ fi
 CRYPT_MOUNTS=()
 if [ "$ENCRYPTED" = 1 ]; then
   CRYPT_MOUNTS=(-v "$KEY_FILE":/run/blaulichtcms-backup.key:ro -v "$SCRIPT_DIR/volume-crypt.mjs":/run/volume-crypt.mjs:ro)
-  # Erst vollständig prüfen (Schlüssel, Authentizität, Vollständigkeit), dann auspacken – nie halb einspielen
-  docker run --rm --network none -v "$DIR":/backup:ro "${CRYPT_MOUNTS[@]}" --entrypoint sh "$IMAGE" -c \
+  # Erst vollständig prüfen (Schlüssel, Authentizität, Vollständigkeit), dann auspacken – nie halb einspielen.
+  # Als root im Container (#275): Archiv und Schlüssel gehören root (0600), der Benutzer des Images liest sie nicht.
+  docker run --rm -u 0 --network none -v "$DIR":/backup:ro "${CRYPT_MOUNTS[@]}" --entrypoint sh "$IMAGE" -c \
     'node /run/volume-crypt.mjs verify /run/blaulichtcms-backup.key < "/backup/$1"' _ "$NAME" \
     || { echo "Archiv lässt sich nicht entschlüsseln oder ist verändert – Abbruch, nichts eingespielt." >&2; exit 1; }
 fi
 
 # Mit Compose-Labels anlegen, damit „docker compose“ das Volume als eigenes erkennt
 docker volume create --label com.docker.compose.project="${VOLUME%%_*}" --label com.docker.compose.volume="${VOLUME#*_}" "$VOLUME" >/dev/null
-if [ -n "$(docker run --rm -v "$VOLUME":/data --entrypoint ls "$IMAGE" -A /data)" ]; then
+# Leer? Als root und mit eigenem Fehlerfall (#275): ein nicht lesbares Volume gilt nicht als leer
+content="$(docker run --rm -u 0 --network none -v "$VOLUME":/data --entrypoint ls "$IMAGE" -A /data)" \
+  || { echo "Inhalt des Volumes $VOLUME ließ sich nicht prüfen – Abbruch, nichts eingespielt." >&2; exit 1; }
+if [ -n "$content" ]; then
   echo "Das Volume $VOLUME ist nicht leer. Zum Überschreiben zuerst entfernen: docker volume rm $VOLUME" >&2
   exit 1
 fi
