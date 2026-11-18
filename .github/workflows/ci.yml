@@ -165,8 +165,16 @@ jobs:
     needs: test
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # Wie ein Checkout mit umask 077 (Update-Helfer bis 0.7.0, #275): Dateien 0600, Ordner 0700. Das Image muss
+      # trotzdem für seinen unprivilegierten Benutzer lesbar sein – das Dockerfile vereinheitlicht die Rechte.
+      - name: Arbeitskopie nur für den Eigentümer lesbar
+        run: |
+          chmod -R go-rwx .
+          stat -c '%a %n' . server server/package.json server/migrations VERSION
       - name: Image bauen
         run: docker build -t blaulichtcms:ci .
+      - name: Selbsttest des Images (ohne Netz, als Benutzer des Images)
+        run: bash scripts/image-selftest.sh blaulichtcms:ci
       - name: Imagegröße (Verlauf je Ebene)
         run: |
           echo "Image: $(( $(docker image inspect blaulichtcms:ci --format '{{.Size}}') / 1000000 )) MB"
@@ -207,3 +215,55 @@ jobs:
       - name: Aufräumen
         if: always()
         run: docker compose down -v
+
+  # Update-Wege mit echtem Docker (#275): Image-Update über den Update-Helfer unter systemd (UMask=0077) von 0.7.0 auf
+  # einen Folge-Release dieses Stands, dann Rückwege mit root-eigenen Sicherungen (Erfolg, Prüfung scheitert,
+  # Selbsttest scheitert). Ablauf und Prüfungen: test/docker/update-wege.sh
+  update-helfer:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Testquelle (Zweig auf v0.7.0, dieser Stand als Folge-Release)
+        run: bash test/docker/update-wege.sh vorbereiten
+      - name: Erstinstallation 0.7.0 mit install.sh 0.7.0 und Update-Helfer
+        run: bash test/docker/update-wege.sh install-070
+      - name: Folge-Release mit signiertem Tag
+        run: bash test/docker/update-wege.sh release
+      - name: Update über den Update-Helfer (systemd, UMask=0077)
+        run: bash test/docker/update-wege.sh helfer
+      - name: Rückweg mit root-eigener Sicherung (Exit 4, Daten zurück)
+        run: bash test/docker/update-wege.sh rueckweg
+      - name: Prüfung der Sicherung scheitert (Exit 5, Volume bleibt), dann Rückweg von Hand
+        run: bash test/docker/update-wege.sh pruefung
+      - name: Selbsttest scheitert (Exit 3, nichts geändert)
+        run: bash test/docker/update-wege.sh selbsttest
+      - name: Protokolle bei Fehler
+        if: failure()
+        run: |
+          sudo tail -n 200 /var/log/blaulichtcms-update.log || true
+          sudo journalctl -u blaulichtcms-update --no-pager -n 100 || true
+          cd /opt/apps/blaulichtcms && sudo docker compose logs --tail 100 blaulichtcms || true
+
+  # Weg von Hand (#275): install.sh 0.7.0 als root mit umask 077 auf den Folge-Release; ein fehlerhaftes Image mit dem
+  # Ziel-Namen existiert schon (wie nach dem fehlgeschlagenen Update auf 0.7.0) und wird neu gebaut
+  update-handweg:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Testquelle (Zweig auf v0.7.0, dieser Stand als Folge-Release)
+        run: bash test/docker/update-wege.sh vorbereiten
+      - name: Erstinstallation 0.7.0 mit install.sh 0.7.0
+        run: bash test/docker/update-wege.sh install-070
+      - name: Folge-Release mit signiertem Tag
+        run: bash test/docker/update-wege.sh release
+      - name: install.sh 0.7.0 von Hand mit umask 077, fehlerhaftes Ziel-Image vorhanden
+        run: bash test/docker/update-wege.sh handweg
+      - name: Protokolle bei Fehler
+        if: failure()
+        run: cd /opt/apps/blaulichtcms && sudo docker compose logs --tail 100 blaulichtcms || true
