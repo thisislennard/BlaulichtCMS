@@ -91,7 +91,13 @@ async function mouseDrag(page, fromLoc, target) {
 }
 
 /** Finger-Geste über das DevTools-Protokoll (echte Touch-Ereignisse, keine Maus). */
-async function touchDrag(page, cdp, fromLoc, target) {
+async function touchDrag(page, cdp, fromLoc, target, { centerFirst = false } = {}) {
+  // Griff mittig in den sichtbaren Bereich holen: scrollIntoViewIfNeeded legt ihn sonst an den oberen Rand – unter die
+  // feste Kopfzeile – bzw. in die Randzone, in der dnd-kit beim Ziehen mitscrollt (dann verfehlt der Finger das Ziel)
+  if (centerFirst) {
+    await fromLoc.evaluate((el) => el.scrollIntoView({ block: 'center', inline: 'nearest' }));
+    await sleep(150);
+  }
   const a = await center(fromLoc);
   const pt = (p) => [{ x: Math.round(p.x), y: Math.round(p.y), id: 1 }];
   await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: pt(a) });
@@ -329,7 +335,8 @@ try {
   await touchDrag(tp, cdp, handle(tp, 'widget', 'sites'), () => pointIn(widgetLoc(tp, 'uploads'), 0.5, 0.3));
   s = await editState(tp);
   check('Touch: Kachel innerhalb der Spalte', same(s.columns[1].widgets, ['sites', 'uploads', 'banners']), JSON.stringify(s.columns[1]));
-  await touchDrag(tp, cdp, handle(tp, 'badge', 'badge_approvals'), () => pointIn(tp.locator('[data-dash-badge="badge_ready"]'), 0.6, 0.5));
+  // Die Kennzahlen stehen unter der Karte „Dashboard anpassen“, deren Widget-Katalog seit #254 länger ist: Reihe erst mittig holen
+  await touchDrag(tp, cdp, handle(tp, 'badge', 'badge_approvals'), () => pointIn(tp.locator('[data-dash-badge="badge_ready"]'), 0.6, 0.5), { centerFirst: true });
   s = await editState(tp);
   check('Touch: Kennzahl in der Reihe', s.badges.indexOf('badge_approvals') === 2, JSON.stringify(s.badges));
   await touchDrag(tp, cdp, handle(tp, 'column', 1), () => pointIn(columnLoc(tp, 2), 0.7, 0.05));
