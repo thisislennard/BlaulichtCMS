@@ -135,6 +135,11 @@ mit passenden Rechten sichtbar. Höchstens **6 Bereiche** mit je höchstens **7 
   Einrichtung, Betrieb nach Verwaltung.
 - **Keine dritte Menüebene:** Bausteine einer Seite sind Reiter mit eigener Adresse (`PageTabs`, z. B. Medien,
   Workflows) oder Reiter in der Seite (`Tabs`), keine eigenen Menüpunkte.
+- **Einstellungen (#256):** `/einstellungen` ist die Übersicht der Bereiche (am Handy die Liste), jeder Bereich eine
+  Unterseite `/einstellungen/<bereich>` mit linker Einstellungs-Navigation – Registry `config/settingsPages.ts`
+  (Bezeichnung, Hilfe, Rechte), Suchbegriffe in `config/settingsIndex.ts` (Ziel Unterseite bzw. Feld `#s-<schlüssel>`).
+  Jede Unterseite hat genau eine Speichern-Leiste (`SaveScope`); neue Einstellungen kommen auf die passende Unterseite,
+  persönliche Einstellungen nach Mein Konto.
 - **Bezeichnung = Titel:** Menübezeichnung, Seitentitel (`PageHeader` ohne `title` übernimmt sie), letzter Brotkrumen
   und Fenstertitel sind gleich. Unter- und Detailseiten setzen ihren Titel mit `usePageMeta({ title })`; Seiten ohne
   Menüpunkt ordnen sich mit `usePageMeta({ navId })` einem Bereich zu (Freigabe-Ansicht → Übersicht/Freigaben).
