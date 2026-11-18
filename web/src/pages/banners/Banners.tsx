@@ -2,10 +2,14 @@ import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { get, post, put } from '../../api/client';
 import type { BannerDisplay, Site } from '../../api/types';
-import { Button, Card, cx, EmptyState, ErrorBox, FieldWrap, Input, Notice, PageHeader, Rev, Select, SkeletonRows, StatusBadge, Textarea } from '../../components/ui/core';
+import { Button, Card, cx, EmptyAction, EmptyLine, EmptyState, ErrorBox, FieldWrap, Input, Notice, PageHeader, Rev, Select, SkeletonRows, StatusBadge, Textarea } from '../../components/ui/core';
+import { FilterEmpty, ListToolbar } from '../../components/ui/list';
 import { Dialog, useErrorToast, useToast, useConfirm } from '../../components/ui/overlays';
 import { useAuth } from '../../lib/auth';
 import { useLinkedItem } from '../../lib/linked-item';
+import { useListState } from '../../lib/listState';
+import { rank, searchTerms } from '../../lib/searchText';
+import { navPath } from '../../config/navigation';
 import { fmtDateTime, fromLocalInput, toLocalInput } from '../../lib/format';
 
 interface Banner {
@@ -37,6 +41,13 @@ const TONE: Record<string, { label: string; cls: string }> = {
   danger: { label: 'Gefahr', cls: 'bg-site-danger-bg text-site-danger-fg border-site-danger-line' },
 };
 const PRIO = { 1: 'niedrig', 2: 'normal', 3: 'hoch' } as Record<number, string>;
+/** Reiter der Bannerliste (#260) */
+const BANNER_TABS: Record<string, { label: string; states: string[] | null }> = {
+  alle: { label: 'Alle', states: null },
+  aktiv: { label: 'Aktiv und geplant', states: ['live', 'scheduled', 'publishing', 'approved'] },
+  arbeit: { label: 'In Arbeit', states: ['draft', 'in_review', 'rejected', 'failed'] },
+  beendet: { label: 'Beendet', states: ['ended', 'expired'] },
+};
 /** Darstellung auf der Website (#186). „auto“ folgt der Einstellung der Website je Schweregrad. */
 export const DISPLAY_OPTIONS: { value: BannerDisplay; label: string }[] = [
   { value: 'auto', label: 'Nach Schweregrad (Einstellung der Website)' },
@@ -191,6 +202,13 @@ export default function Banners() {
   // Aus Benachrichtigung oder Aktivitäten: /banner?banner=<id> hebt dieses Banner hervor (#252)
   const linked = useLinkedItem('banner', !!q.data);
   const linkedMissing = !!linked.id && !!q.data && !q.data.some((b) => b.id === linked.id);
+  // Suche und Reiter in der Adresse (#260)
+  const ls = useListState({ suche: '', status: 'alle' }, { tabKeys: ['status'] });
+  const tab = BANNER_TABS[ls.values.status] ? ls.values.status : 'alle';
+  const terms = searchTerms(ls.values.suche);
+  const inTab = (b: Banner, t: string) => !BANNER_TABS[t].states || BANNER_TABS[t].states!.includes(b.state);
+  const found = (q.data ?? []).filter((b) => !terms.length || rank(terms, b.title, `${b.text} ${b.site_name}`) !== null);
+  const rows = found.filter((b) => inTab(b, tab) || b.id === linked.id);
   return (
     <div className="flex flex-col gap-5">
       <PageHeader
@@ -210,9 +228,30 @@ export default function Banners() {
           </div>
         </Notice>
       )}
-      {q.data && q.data.length === 0 && <EmptyState icon="Megaphone" title="Keine Banner" />}
+      {!!q.data?.length && (
+        <ListToolbar
+          search={{ value: ls.values.suche, onChange: (s) => ls.set({ suche: s }), placeholder: 'Suchen in Bannern', label: 'Banner durchsuchen (Titel, Text, Website)' }}
+          tabs={{ label: 'Status', value: tab, onChange: (s) => ls.set({ status: s }), options: Object.entries(BANNER_TABS).map(([value, t]) => ({ value, label: t.label, count: found.filter((b) => inTab(b, value)).length })) }}
+          count={{ n: rows.length, one: 'Banner', many: 'Banner' }}
+          onReset={() => ls.reset(['status'])}
+        />
+      )}
+      {q.data && q.data.length === 0 && (
+        <EmptyState
+          icon="Megaphone"
+          title="Noch keine Banner."
+          text={!can('banner.edit') ? 'Banner legt die Redaktion an.' : activeSites.length ? 'Ein Banner erscheint zeitgesteuert als Hinweis auf der Website.' : 'Für Banner muss zuerst eine Website gekoppelt sein.'}
+          action={can('banner.edit') && can('channel.view') && (activeSites.length ? <Button icon="Plus" onClick={() => setEdit(null)}>Neues Banner</Button> : can('channel.sites') && <EmptyAction to={navPath('sites')}>Website koppeln</EmptyAction>)}
+        />
+      )}
+      {!!q.data?.length && !rows.length &&
+        (terms.length ? (
+          <FilterEmpty onReset={() => ls.reset(['status'])} />
+        ) : (
+          <EmptyLine action={<EmptyAction onClick={() => ls.set({ status: 'alle' })}>Alle Banner zeigen</EmptyAction>}>Kein Banner in „{BANNER_TABS[tab].label}“.</EmptyLine>
+        ))}
       <div className="flex flex-col gap-4">
-        {(q.data ?? []).map((b) => (
+        {rows.map((b) => (
           <Card key={b.id} id={`banner-${b.id}`} className={cx(linked.id === b.id && 'ring-2 ring-primary')}>
             <div className="flex flex-col gap-3">
               <div className="flex flex-wrap items-center gap-2 text-sm">

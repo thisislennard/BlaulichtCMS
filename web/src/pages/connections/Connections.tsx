@@ -8,6 +8,9 @@ import { Icon } from '../../components/ui/Icon';
 import { Dialog, OneTimeSecret, useConfirm, useErrorToast, useToast } from '../../components/ui/overlays';
 import { fmtRelative } from '../../lib/format';
 import { safeHref } from '../../lib/url';
+import { FilterEmpty, ListToolbar } from '../../components/ui/list';
+import { useListState } from '../../lib/listState';
+import { rank, searchTerms } from '../../lib/searchText';
 
 export const CONN_STATE: Record<string, string> = { draft: 'Eingerichtet – Test ausstehend', tested: 'Getestet – bereit zum Aktivieren', active: 'Aktiv', disabled: 'Angehalten', revoked: 'Widerrufen' };
 export const KINDS = [
@@ -28,8 +31,15 @@ export default function Connections() {
   const toastError = useErrorToast();
   const { can } = useAuth();
   const configure = can('connection.configure');
-  const [showDeleted, setShowDeleted] = useState(false);
+  // Suche, Art, Status und „Gelöschte anzeigen“ in der Adresse (#260)
+  const ls = useListState({ suche: '', art: '', status: '', geloeschte: '' });
+  const showDeleted = ls.values.geloeschte === '1' && can('connection.delete');
+  const setShowDeleted = (v: boolean) => ls.set({ geloeschte: v ? '1' : '' });
   const q = useQuery({ queryKey: ['connections', showDeleted], queryFn: () => get<any[]>(`/connections${showDeleted ? '?deleted=1' : ''}`) });
+  const terms = searchTerms(ls.values.suche);
+  const all = q.data ?? [];
+  const rows = all.filter((c) => (!terms.length || rank(terms, c.name, `${c.kind_label} ${c.account?.name ?? ''} ${c.account?.username ?? ''}`) !== null) && (!ls.values.art || c.kind === ls.values.art) && (!ls.values.status || c.status === ls.values.status));
+  const kinds = [...new Map(all.map((c) => [c.kind, c.kind_label] as [string, string])).entries()];
   const [create, setCreate] = useState<{ kind: string; name: string } | null>(null);
   const [token, setToken] = useState<{ id: string; token: string } | null>(null);
   const submit = async () => {
@@ -54,12 +64,31 @@ export default function Connections() {
           )
         }
       />
+      {(all.length > 0 || showDeleted) && (
+        <ListToolbar
+          search={{ value: ls.values.suche, onChange: (v) => ls.set({ suche: v }), placeholder: 'Suchen in Verbindungen', label: 'Verbindungen durchsuchen (Name, Art, Konto)' }}
+          filters={[
+            { key: 'art', label: 'Art', value: ls.values.art, onChange: (v) => ls.set({ art: v }), allLabel: 'Alle Arten', options: kinds.map(([value, label]) => ({ value, label })) },
+            { key: 'status', label: 'Status', value: ls.values.status, onChange: (v) => ls.set({ status: v }), options: Object.entries(CONN_STATE).map(([value, label]) => ({ value, label: String(label) })) },
+          ]}
+          count={{ n: rows.length, one: 'Verbindung', many: 'Verbindungen' }}
+          onReset={() => ls.reset(['geloeschte'])}
+        />
+      )}
       {configure && can('connection.delete') && <Switch checked={showDeleted} onChange={setShowDeleted} label="Gelöschte anzeigen" description="Auch widerrufene und gelöschte Verbindungen – zur Nachvollziehbarkeit, ohne Zugangsdaten." />}
       {q.isLoading && <SkeletonRows rows={4} />}
       {q.error && <ErrorBox title="Verbindungen konnten nicht geladen werden">{(q.error as Error).message}</ErrorBox>}
-      {q.data?.length === 0 && <EmptyState icon="Plug" title="Keine Verbindungen" text={configure ? 'Facebook, Instagram, Threads, X, WhatsApp-Kanal, FE2, Feuersoftware Connect oder amtliche Warnungen lassen sich hier anbinden.' : undefined} />}
+      {q.data?.length === 0 && (
+        <EmptyState
+          icon="Plug"
+          title="Noch keine Verbindung."
+          text={configure ? 'Facebook, Instagram, Threads, X, WhatsApp-Kanal, FE2, Feuersoftware Connect oder amtliche Warnungen lassen sich hier anbinden.' : 'Verbindungen richtet ein, wer Verbindungen verwalten darf.'}
+          action={configure && <Button icon="Plus" onClick={() => setCreate({ kind: 'fe2', name: '' })}>Neue Verbindung</Button>}
+        />
+      )}
+      {all.length > 0 && !rows.length && <FilterEmpty onReset={() => ls.reset(['geloeschte'])} />}
       <div className="grid gap-3 md:grid-cols-2">
-        {(q.data ?? []).map((c) => {
+        {rows.map((c) => {
           const body = (
             <>
               <div className="flex items-center gap-2 flex-wrap">

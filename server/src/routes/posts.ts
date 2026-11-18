@@ -10,6 +10,7 @@ import { getSettings } from '../lib/settings.js';
 import { createCollection, createUploadLink, freshLinkUrl, uploadLinkUrl } from './media.js';
 import { approvalStillValid, assertMediaPresent, assertPrivacyChecked, missingMediaCount, privacyAudit, privacyFindings } from '../lib/approval.js';
 import { ALT_MAX, altCheck, cleanMediaAlt } from '../lib/accessibility.js';
+import { foldSql, searchTerms } from './search.js';
 
 export const POST_KINDS = ['news', 'incident', 'event', 'situation'] as const;
 
@@ -212,8 +213,34 @@ const revisionInput = z.object({
 
 export async function postRoutes(app: FastifyInstance) {
   app.get('/posts', { preHandler: requireAuth('post.view') }, async (req) => {
-    const q = z.object({ state: z.string().max(20).optional(), archived: z.enum(['true', 'false', '1', '0']).transform((v) => v === 'true' || v === '1').default(false) }).parse(req.query);
-    const rows = await many<any>(`${POST_STATE_SQL} WHERE ($1::boolean OR p.archived_at IS NULL) ORDER BY p.updated_at DESC LIMIT 300`, [q.archived]);
+    const q = z
+      .object({
+        state: z.string().max(20).optional(),
+        archived: z.enum(['true', 'false', '1', '0']).transform((v) => v === 'true' || v === '1').default(false),
+        // Suche in Titel, Text und Kurzfassung der aktuellen Fassung (#260), wie die Suche (Strg K) ohne Groß-/Klein-
+        // schreibung und mit vereinheitlichten Umlauten; alle Wörter müssen vorkommen
+        q: z.string().trim().max(100).optional(),
+      })
+      .parse(req.query);
+    const params: unknown[] = [q.archived];
+    const terms = q.q ? searchTerms(q.q) : [];
+    const hay = foldSql(`r.title || ' ' || coalesce(r.body, '') || ' ' || coalesce(r.excerpt, '')`);
+    const conds = terms.map((t) => (params.push(`%${t}%`), `${hay} LIKE $${params.length}`));
+    // Ziele der Liste (#260): Website und soziale Netzwerke der aktuellen Fassung samt Stand, geplanter Zeitpunkt
+    const rows = await many<any>(
+      `SELECT x.*, r.publish_at, p.updated_by,
+              (SELECT run_at FROM publications WHERE revision_id = x.revision_id AND action = 'publish' ORDER BY created_at DESC LIMIT 1) AS pb_run_at,
+              (SELECT coalesce(json_agg(json_build_object('kind', c.kind, 'name', c.name,
+                        'status', (SELECT sp.status FROM social_publications sp WHERE sp.revision_id = x.revision_id AND sp.connection_id = c.id ORDER BY sp.created_at DESC LIMIT 1))
+                      ORDER BY c.kind, c.name), '[]'::json)
+                 FROM connections c WHERE c.id = ANY(r.social_targets) AND c.deleted_at IS NULL) AS social
+         FROM (${POST_STATE_SQL} WHERE ($1::boolean OR p.archived_at IS NULL)) x
+         JOIN post_revisions r ON r.id = x.revision_id
+         JOIN posts p ON p.id = x.id
+        ${conds.length ? `WHERE ${conds.join(' AND ')}` : ''}
+        ORDER BY x.updated_at DESC LIMIT 300`,
+      params,
+    );
     const out = rows.map((p) => ({
       id: p.id,
       kind: p.kind,
@@ -226,6 +253,10 @@ export async function postRoutes(app: FastifyInstance) {
       state: p.state as PostState,
       published_url: p.state === 'published' ? p.pb_url : null,
       archived: !!p.archived_at,
+      updated_by: p.updated_by ?? null,
+      social: (p.social ?? []) as { kind: string; name: string; status: string | null }[],
+      // geplant: Auftrag mit späterem Termin bzw. Termin der Fassung, solange noch nicht veröffentlicht
+      scheduled_at: p.state === 'scheduled' ? p.pb_run_at : p.publish_at && !['published', 'publishing', 'deactivated'].includes(p.state) && new Date(p.publish_at) > new Date() ? p.publish_at : null,
     }));
     return q.state ? out.filter((p) => p.state === q.state) : out;
   });

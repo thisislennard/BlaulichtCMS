@@ -1,9 +1,10 @@
 import { useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link } from 'react-router';
+import { Link, useSearchParams } from 'react-router';
 import { get, post, put, del } from '../../api/client';
 import type { MediaItem } from '../../api/types';
-import { Badge, Button, Card, Chip, cx, EmptyState, ErrorBox, FieldWrap, FilePickButton, Input, Notice, PageHeader, SegmentedControl, Select, SkeletonRows, StatusBadge, Switch, Table, Td, Textarea, Th } from '../../components/ui/core';
+import { Badge, Button, Card, Chip, cx, EmptyAction, EmptyLine, EmptyState, ErrorBox, FieldWrap, FilePickButton, Input, Notice, PageHeader, Select, SkeletonRows, StatusBadge, Switch, Table, Td, Textarea, Th } from '../../components/ui/core';
+import { FilterEmpty, ListToolbar, ResponsiveTable } from '../../components/ui/list';
 import { Icon } from '../../components/ui/Icon';
 import { HelpTip } from '../../components/ui/HelpTip';
 import { Dialog, Menu, useConfirm, useErrorToast, useToast } from '../../components/ui/overlays';
@@ -14,7 +15,8 @@ import { fmtDate, fmtDateTime, fmtTime, fromLocalInput, toLocalInput, plural } f
 import { MediaPicker } from '../posts/PostEditor';
 import { PRIVACY_CHECKS, PrivacyCheckList } from '../posts/DecisionDialog';
 import { SENSITIVE_LABELS } from '../media/PrivacyDialog';
-import { useSucheParam } from '../../lib/urlParams';
+import { useListState } from '../../lib/listState';
+import { useIsPhone } from '../../lib/media';
 
 /** Einsatzliste der Website (#213): Einträge vorschlagen, bearbeiten, freigeben, veröffentlichen und zurückziehen. */
 
@@ -84,6 +86,13 @@ const FILTERS = [
   { value: 'problem', label: 'Fehler' },
 ] as const;
 type Filter = (typeof FILTERS)[number]['value'];
+/** Bedeutung und Kategorie nur, wenn sie vom Stichwort abweichen und sich unterscheiden (kein „Brand · Brand“, #260). */
+export function keywordExtras(e: { keyword: string; keyword_label: string; category: string }): string[] {
+  const norm = (s: string) => s.trim().toLowerCase().replace(/\s+/g, ' ');
+  const out: string[] = [];
+  for (const x of [e.keyword_label, e.category]) if (x && norm(x) !== norm(e.keyword) && !out.some((o) => norm(o) === norm(x))) out.push(x);
+  return out;
+}
 const matches = (e: Entry, f: Filter) =>
   f === 'all' || (f === 'open' && ['draft', 'withdrawn'].includes(e.state)) || (f === 'problem' && e.state === 'failed') || e.state === f || (f === 'live' && ['live', 'publishing'].includes(e.state));
 
@@ -507,6 +516,75 @@ function PrivacyConfirmDialog({ entry, action, onClose, onDone }: { entry: Entry
   );
 }
 
+/* ------------------------------------------------------------------ Zeile */
+
+/** Merkmale eines Eintrags als kleine Symbole in derselben Zeile (eine Zeile je Eintrag, #260). */
+function IncidentMarks({ e }: { e: Entry }) {
+  // Ausgeschrieben: „F1“ läse sich neben dem Stichwort „F 1“ wie ein Einsatzstichwort (#257)
+  const info = [SOURCE[e.source], `Fassung ${e.revision}`].join(' · ');
+  return (
+    <span className="inline-flex items-center gap-1.5 shrink-0 text-fg-muted">
+      {e.featured && (
+        <span className="inline-flex" title="besonders hervorgehoben">
+          <Icon name="Star" size={13} />
+          <span className="sr-only">besonders hervorgehoben</span>
+        </span>
+      )}
+      {e.false_alarm && <Chip className="!h-[18px]">Fehlalarm</Chip>}
+      {e.media_ids.length > 0 && (
+        <span className="inline-flex items-center gap-0.5 text-meta" title={plural(e.media_ids.length, 'Bild', 'Bilder')}>
+          <Icon name="Image" size={13} />
+          {e.media_ids.length}
+          <span className="sr-only"> {e.media_ids.length === 1 ? 'Bild' : 'Bilder'}</span>
+        </span>
+      )}
+      {e.privacy.approve_check && (
+        <span className="inline-flex text-warn" title="Markierte Bilder oder offene Gesichtsvorschläge: Freigabe und Veröffentlichung nur mit bestätigter Datenschutz-Prüfung">
+          <Icon name="ShieldAlert" size={13} />
+          <span className="sr-only">Datenschutz-Prüfung nötig</span>
+        </span>
+      )}
+      <span className="inline-flex" title={info}>
+        <Icon name="Info" size={13} />
+        <span className="sr-only">{info}</span>
+      </span>
+    </span>
+  );
+}
+
+/** Stand in einer Zeile: Badge, Website und „Ansehen“ als Symbol mit Tooltip, Fehler als Symbol (#260). */
+function IncidentState({ e }: { e: Entry }) {
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <StatusBadge status={e.state} labels={LABELS} />
+      {e.rejected_note && e.state === 'draft' && (
+        <span className="inline-flex text-err" title={`Zurückgewiesen: ${e.rejected_note}`}>
+          <Icon name="Undo2" size={14} />
+          <span className="sr-only">Zurückgewiesen: {e.rejected_note}</span>
+        </span>
+      )}
+      {e.state === 'failed' && e.job?.error && (
+        <span className="inline-flex text-err" title={e.job.error}>
+          <Icon name="AlertTriangle" size={14} />
+          <span className="sr-only">{e.job.error}</span>
+        </span>
+      )}
+      {e.state === 'live' && e.job?.remote_url ? (
+        <a href={e.job.remote_url} target="_blank" rel="noreferrer" title={`Auf ${e.site_name ?? 'der Website'} ansehen`} aria-label={`Auf ${e.site_name ?? 'der Website'} ansehen (öffnet in neuem Tab)`} className="inline-flex items-center justify-center w-6 h-6 max-md:w-10 max-md:h-10 rounded-chip !text-fg-muted hover:!text-fg hover:bg-raised">
+          <Icon name="ExternalLink" size={14} />
+        </a>
+      ) : (
+        e.site_name && (
+          <span className="inline-flex text-fg-muted" title={`Website: ${e.site_name}`}>
+            <Icon name="Globe" size={13} />
+            <span className="sr-only">Website: {e.site_name}</span>
+          </span>
+        )
+      )}
+    </span>
+  );
+}
+
 /* ------------------------------------------------------------------ Seite */
 
 export default function IncidentList() {
@@ -515,11 +593,14 @@ export default function IncidentList() {
   const ask = useConfirm();
   const toast = useToast();
   const toastError = useErrorToast();
-  // Verweis aus Aktivitäten oder Benachrichtigung (/einsatzliste?eintrag=<id>, #258): alle Jahre laden, Eintrag hervorheben
-  const [year, setYear] = useState<string>(() => (new URLSearchParams(window.location.search).has('eintrag') ? 'alle' : ''));
-  const [filter, setFilter] = useState<Filter>('all');
-  const [search, setSearch] = useState('');
-  useSucheParam(setSearch);
+  const phone = useIsPhone();
+  // Jahr, Stand und Suche in der Adresse (#260); Verweis aus Aktivitäten oder Benachrichtigung
+  // (/einsatzliste?eintrag=<id>, #258): ohne Jahr alle Jahre laden, Eintrag hervorheben
+  const ls = useListState({ jahr: '', stand: 'all', suche: '' }, { tabKeys: ['stand', 'jahr'] });
+  const [params] = useSearchParams();
+  const year = ls.values.jahr || (params.has('eintrag') ? 'alle' : '');
+  const filter: Filter = FILTERS.some((f) => f.value === ls.values.stand) ? (ls.values.stand as Filter) : 'all';
+  const search = ls.values.suche;
   const [sel, setSel] = useState<Set<string>>(new Set());
   const [edit, setEdit] = useState<Entry | null | undefined>(undefined);
   const [importing, setImporting] = useState(false);
@@ -541,6 +622,27 @@ export default function IncidentList() {
     refresh();
   };
   const needle = search.trim().toLowerCase();
+  const actionsFor = (e: Entry) => [
+    can('incident.edit') && { label: 'Bearbeiten', icon: 'Pencil', onClick: () => setEdit(e) },
+    can('incident.edit') && ['draft', 'withdrawn'].includes(e.state) && !e.submitted_at && { label: 'Zur Freigabe einreichen', icon: 'Send', onClick: () => act(() => post(`/incidents/${e.id}/submit`), 'Eingereicht') },
+    can('approval.incident') && e.state === 'in_review' && { label: e.privacy.approve_check ? 'Freigeben (mit Datenschutz-Prüfung) …' : 'Freigeben', icon: 'Check', onClick: () => (e.privacy.approve_check ? setPrivacy({ entry: e, action: 'approve' }) : act(() => post(`/incidents/${e.id}/approve`, { contentHash: e.content_hash }), 'Freigegeben')) },
+    can('approval.incident') && e.state === 'in_review' && { label: 'Zurückweisen', icon: 'Undo2', onClick: () => (setNote(''), setReject(e)) },
+    can('incident.publish') && ['approved', 'failed'].includes(e.state) && !!e.approved_at && { label: e.privacy.publish_check ? 'Auf Website veröffentlichen (mit Datenschutz-Prüfung) …' : 'Auf Website veröffentlichen', icon: 'Globe', onClick: () => (e.privacy.publish_check ? setPrivacy({ entry: e, action: 'publish' }) : act(() => post(`/incidents/${e.id}/publish`, { contentHash: e.content_hash }), 'Wird übertragen')) },
+    can('incident.publish') &&
+      (['live', 'publishing'].includes(e.state) || (e.job?.action === 'upsert' && ['approved', 'in_review', 'draft'].includes(e.state) && e.job.status === 'done')) && {
+        label: 'Von Website zurückziehen',
+        icon: 'CircleStop',
+        danger: true,
+        onClick: async () => (await ask({ title: 'Von der Website zurückziehen?', text: `„${e.title}“ verschwindet beim nächsten Abruf der Bridge aus der Einsatzliste der Website.`, confirmLabel: 'Zurückziehen' })) && act(() => post(`/incidents/${e.id}/withdraw`), 'Wird zurückgezogen'),
+      },
+    can('incident.edit') &&
+      ['draft', 'in_review', 'approved', 'withdrawn'].includes(e.state) && {
+        label: 'Löschen',
+        icon: 'Trash2',
+        danger: true,
+        onClick: async () => (await ask({ title: 'Eintrag löschen?', text: `„${e.title}“ wird endgültig gelöscht.`, confirmLabel: 'Löschen' })) && act(() => del(`/incidents/${e.id}`), 'Gelöscht'),
+      },
+  ];
   const list = useMemo(
     () => (q.data?.entries ?? []).filter((e) => matches(e, filter) && (!needle || [e.title, e.keyword, e.keyword_label, e.location, e.category].some((x) => x.toLowerCase().includes(needle)))),
     [q.data, filter, needle],
@@ -624,9 +726,14 @@ export default function IncidentList() {
           </ul>
         </Card>
       )}
-      <div className="flex flex-wrap gap-3 items-end">
-        <FieldWrap label="Jahr" htmlFor="inc-year" className="w-36">
-          <Select id="inc-year" value={year || String(q.data?.year ?? '')} onChange={(e) => (setYear(e.target.value), setSel(new Set()))}>
+      <ListToolbar<Filter>
+        search={{ value: search, onChange: (s) => ls.set({ suche: s }), placeholder: 'Suchen in der Einsatzliste', label: 'Einsatzliste durchsuchen (Stichwort, Meldung, Ort)' }}
+        tabs={{ label: 'Stand', value: filter, onChange: (f) => (ls.set({ stand: f }), setSel(new Set())), options: FILTERS.map((f) => ({ value: f.value, label: f.label, count: (q.data?.entries ?? []).filter((e) => matches(e, f.value)).length })) }}
+        count={q.data ? { n: list.length, one: 'Eintrag', many: 'Einträge' } : undefined}
+        onReset={() => ls.reset(['stand', 'jahr'])}
+      >
+        <div className="w-full sm:w-40">
+          <Select aria-label="Jahr" value={year || String(q.data?.year ?? '')} onChange={(e) => (ls.set({ jahr: e.target.value }), setSel(new Set()))}>
             {years.map((y) => (
               <option key={y.year} value={y.year}>
                 {y.year} ({y.n})
@@ -635,12 +742,8 @@ export default function IncidentList() {
             {!years.some((y) => y.year === new Date().getFullYear()) && <option value={new Date().getFullYear()}>{new Date().getFullYear()} (0)</option>}
             <option value="alle">Alle Jahre</option>
           </Select>
-        </FieldWrap>
-        <SegmentedControl label="Stand" size="sm" value={filter} onChange={(f) => (setFilter(f), setSel(new Set()))} options={FILTERS.map((f) => ({ value: f.value, label: f.label, count: (q.data?.entries ?? []).filter((e) => matches(e, f.value)).length }))} />
-        <FieldWrap label="Suche" htmlFor="inc-q" className="min-w-[12rem] flex-1">
-          <Input id="inc-q" type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Stichwort, Meldung, Ort" />
-        </FieldWrap>
-      </div>
+        </div>
+      </ListToolbar>
       {chosen.length > 0 && (
         <div className="flex flex-wrap items-center gap-2 p-3 rounded-card border border-line bg-raised" role="region" aria-label="Auswahl">
           <span className="text-sm font-medium">{chosen.length} ausgewählt</span>
@@ -662,101 +765,90 @@ export default function IncidentList() {
       )}
       {q.isLoading && <SkeletonRows rows={6} />}
       {q.error && <ErrorBox title="Einsatzliste konnte nicht geladen werden">{(q.error as Error).message}</ErrorBox>}
-      {q.data && list.length === 0 && <EmptyState icon="ListOrdered" title="Keine Einträge" text={q.data.entries.length ? 'Kein Eintrag passt zum Filter.' : 'Einträge entstehen aus Einsatzmeldungen, per Workflow, von Hand oder per Import.'} />}
+      {q.data && list.length === 0 &&
+        (needle ? (
+          <FilterEmpty onReset={() => ls.reset(['stand', 'jahr'])} />
+        ) : q.data.entries.length ? (
+          <EmptyLine className="py-4" action={<EmptyAction onClick={() => ls.set({ stand: 'all' })}>Alle Einträge zeigen</EmptyAction>}>
+            Kein Eintrag in „{FILTERS.find((f) => f.value === filter)?.label}“.
+          </EmptyLine>
+        ) : (
+          <EmptyState
+            icon="ListOrdered"
+            title={year === 'alle' ? 'Noch keine Einträge.' : 'Keine Einträge in diesem Jahr.'}
+            text={can('incident.edit') ? 'Einträge entstehen aus Einsatzmeldungen, per Workflow, von Hand oder per Import.' : 'Einträge legt die Redaktion an oder sie entstehen aus Einsatzmeldungen.'}
+            action={can('incident.edit') && c && <Button icon="Plus" onClick={() => setEdit(null)}>Neuer Eintrag</Button>}
+          />
+        ))}
       {list.length > 0 && (
-        <Card bodyClassName="p-0">
-          <Table>
-            <thead>
-              <tr>
-                <Th className="w-8">
-                  <input type="checkbox" aria-label="Alle auswählen" checked={chosen.length === list.length} onChange={(e) => setSel(e.target.checked ? new Set(list.map((x) => x.id)) : new Set())} />
-                </Th>
-                <Th>Nr.</Th>
-                <Th>Datum</Th>
-                <Th>Stichwort</Th>
-                <Th>Einsatzmeldung</Th>
-                <Th>Ort</Th>
-                <Th>Stand</Th>
-                <Th align="right">
-                  <span className="sr-only">Aktionen</span>
-                </Th>
-              </tr>
-            </thead>
-            <tbody>
-              {list.map((e) => (
-                <tr key={e.id} id={`incident-${e.id}`} className={cx(linked.id === e.id ? 'bg-primary-soft' : 'hover:bg-raised')}>
-                  <Td>
+        <Card bodyClassName={phone ? '!p-0 border-0' : 'p-0'} className={phone ? '!bg-transparent !border-0' : undefined}>
+          <ResponsiveTable
+            label="Einträge der Einsatzliste"
+            dense
+            rows={list}
+            rowKey={(e) => e.id}
+            rowId={(e) => `incident-${e.id}`}
+            rowClassName={(e) => (linked.id === e.id ? (phone ? '!border-primary bg-primary-soft' : 'bg-primary-soft') : !phone && 'hover:bg-raised')}
+            columns={[
+              {
+                key: 'sel',
+                header: <input type="checkbox" aria-label="Alle auswählen" checked={chosen.length === list.length} onChange={(ev) => setSel(ev.target.checked ? new Set(list.map((x) => x.id)) : new Set())} />,
+                className: 'w-8',
+                card: 'footer',
+                cell: (e) =>
+                  phone ? (
+                    <label className="inline-flex items-center gap-2 min-h-10 pr-2 text-sm cursor-pointer">
+                      <input type="checkbox" className="w-5 h-5" checked={sel.has(e.id)} onChange={() => toggle(e.id)} />
+                      Auswählen
+                    </label>
+                  ) : (
                     <input type="checkbox" aria-label={`${e.title} auswählen`} checked={sel.has(e.id)} onChange={() => toggle(e.id)} />
-                  </Td>
-                  <Td mono>{e.number ?? '–'}</Td>
-                  <Td className="whitespace-nowrap tabular">
+                  ),
+              },
+              { key: 'nr', header: 'Nr.', className: 'font-mono text-meta tabular', cardLabel: 'Nr.', cell: (e) => e.number ?? '–' },
+              {
+                key: 'date',
+                header: 'Datum',
+                className: 'whitespace-nowrap tabular',
+                cell: (e) => (
+                  <>
                     {fmtDate(e.alarm_at)} <span className="text-fg-muted">{fmtTime(e.alarm_at)}</span>
-                  </Td>
-                  <Td>
-                    <div>{e.keyword || '–'}</div>
-                    {(e.keyword_label || e.category) && <div className="text-meta text-fg-muted">{[e.keyword_label, e.category].filter(Boolean).join(' · ')}</div>}
-                  </Td>
-                  <Td>
-                    <button type="button" className="text-left font-medium hover:underline" onClick={() => setEdit(e)}>
+                  </>
+                ),
+              },
+              {
+                key: 'keyword',
+                header: 'Stichwort',
+                className: 'max-w-[14rem]',
+                cell: (e) => {
+                  const extra = keywordExtras(e);
+                  return (
+                    <span className="block md:truncate" title={[e.keyword, ...extra].filter(Boolean).join(' · ')}>
+                      {e.keyword || '–'}
+                      {extra.length > 0 && <span className="text-fg-muted"> · {extra.join(' · ')}</span>}
+                    </span>
+                  );
+                },
+              },
+              {
+                key: 'title',
+                header: 'Einsatzmeldung',
+                card: 'title',
+                className: 'max-w-[26rem]',
+                cell: (e) => (
+                  <span className="flex items-center gap-2 min-w-0">
+                    <button type="button" className="text-left font-medium hover:underline md:truncate min-w-0" title={e.title} onClick={() => setEdit(e)}>
                       {e.title}
                     </button>
-                    <div className="text-meta text-fg-muted flex flex-wrap gap-x-2">
-                      {e.featured && <span className="inline-flex items-center gap-1"><Icon name="Star" size={12} /> besonders</span>}
-                      {e.false_alarm && <span>Fehlalarm</span>}
-                      {e.media_ids.length > 0 && <span>{plural(e.media_ids.length, 'Bild', 'Bilder')}</span>}
-                      {e.privacy.approve_check && (
-                        <span className="inline-flex items-center gap-1 text-warn" title="Markierte Bilder oder offene Gesichtsvorschläge: Freigabe und Veröffentlichung nur mit bestätigter Datenschutz-Prüfung">
-                          <Icon name="ShieldAlert" size={12} /> Datenschutz-Prüfung
-                        </span>
-                      )}
-                      <span>{SOURCE[e.source]}</span>
-                      {/* Ausgeschrieben: „F1“ läse sich neben dem Stichwort „F 1“ wie ein Einsatzstichwort (#257) */}
-                      <span>Fassung {e.revision}</span>
-                    </div>
-                  </Td>
-                  <Td>{e.location || '–'}</Td>
-                  <Td>
-                    <StatusBadge status={e.state} labels={LABELS} />
-                    {e.site_name && <div className="text-meta text-fg-muted">{e.site_name}</div>}
-                    {e.rejected_note && e.state === 'draft' && <div className="text-meta text-err" title={e.rejected_note}>Zurückgewiesen</div>}
-                    {e.state === 'failed' && e.job?.error && <div className="text-meta text-err">{e.job.error}</div>}
-                    {e.state === 'live' && e.job?.remote_url && (
-                      <a className="text-meta" href={e.job.remote_url} target="_blank" rel="noreferrer">
-                        Ansehen
-                      </a>
-                    )}
-                  </Td>
-                  <Td align="right">
-                    <Menu
-                      size="sm"
-                      label={`Aktionen für ${e.title}`}
-                      items={[
-                        can('incident.edit') && { label: 'Bearbeiten', icon: 'Pencil', onClick: () => setEdit(e) },
-                        can('incident.edit') && ['draft', 'withdrawn'].includes(e.state) && !e.submitted_at && { label: 'Zur Freigabe einreichen', icon: 'Send', onClick: () => act(() => post(`/incidents/${e.id}/submit`), 'Eingereicht') },
-                        can('approval.incident') && e.state === 'in_review' && { label: e.privacy.approve_check ? 'Freigeben (mit Datenschutz-Prüfung) …' : 'Freigeben', icon: 'Check', onClick: () => (e.privacy.approve_check ? setPrivacy({ entry: e, action: 'approve' }) : act(() => post(`/incidents/${e.id}/approve`, { contentHash: e.content_hash }), 'Freigegeben')) },
-                        can('approval.incident') && e.state === 'in_review' && { label: 'Zurückweisen', icon: 'Undo2', onClick: () => (setNote(''), setReject(e)) },
-                        can('incident.publish') && ['approved', 'failed'].includes(e.state) && !!e.approved_at && { label: e.privacy.publish_check ? 'Auf Website veröffentlichen (mit Datenschutz-Prüfung) …' : 'Auf Website veröffentlichen', icon: 'Globe', onClick: () => (e.privacy.publish_check ? setPrivacy({ entry: e, action: 'publish' }) : act(() => post(`/incidents/${e.id}/publish`, { contentHash: e.content_hash }), 'Wird übertragen')) },
-                        can('incident.publish') &&
-                          (['live', 'publishing'].includes(e.state) || (e.job?.action === 'upsert' && ['approved', 'in_review', 'draft'].includes(e.state) && e.job.status === 'done')) && {
-                            label: 'Von Website zurückziehen',
-                            icon: 'CircleStop',
-                            danger: true,
-                            onClick: async () => (await ask({ title: 'Von der Website zurückziehen?', text: `„${e.title}“ verschwindet beim nächsten Abruf der Bridge aus der Einsatzliste der Website.`, confirmLabel: 'Zurückziehen' })) && act(() => post(`/incidents/${e.id}/withdraw`), 'Wird zurückgezogen'),
-                          },
-                        can('incident.edit') &&
-                          ['draft', 'in_review', 'approved', 'withdrawn'].includes(e.state) && {
-                            label: 'Löschen',
-                            icon: 'Trash2',
-                            danger: true,
-                            onClick: async () => (await ask({ title: 'Eintrag löschen?', text: `„${e.title}“ wird endgültig gelöscht.`, confirmLabel: 'Löschen' })) && act(() => del(`/incidents/${e.id}`), 'Gelöscht'),
-                          },
-                      ]}
-                    />
-                  </Td>
-                </tr>
-              ))}
-            </tbody>
-          </Table>
+                    <IncidentMarks e={e} />
+                  </span>
+                ),
+              },
+              { key: 'location', header: 'Ort', className: 'max-w-[12rem] md:truncate', cell: (e) => e.location || '–' },
+              { key: 'state', header: 'Stand', card: 'status', className: 'whitespace-nowrap', cell: (e) => <IncidentState e={e} /> },
+              { key: 'actions', header: <span className="sr-only">Aktionen</span>, align: 'right', card: 'footer', cell: (e) => <Menu size="sm" label={`Aktionen für ${e.title}`} items={actionsFor(e)} /> },
+            ]}
+          />
         </Card>
       )}
       <p className="m-0 text-meta text-fg-muted">

@@ -1,5 +1,7 @@
 import { Fragment, useEffect, useState } from "react";
 import { useSearchParams } from "react-router";
+import { FilterEmpty, ListToolbar } from "../../components/ui/list";
+import { useListState } from "../../lib/listState";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { get, qs } from "../../api/client";
 import {
@@ -61,6 +63,7 @@ export default function Logs() {
         label={t("admin.logs.title")}
         value={tab}
         onChange={(v) =>
+          // Filter gehören zum Reiter – beim Wechsel leeren
           setParams(v === "audit" ? { tab: "audit" } : {}, { replace: true })
         }
         tabs={[
@@ -74,7 +77,7 @@ export default function Logs() {
       />
       <div role="tabpanel">
         {tab === "system" ? (
-          <SystemLog initialQ={params.get("q") ?? ""} />
+          <SystemLog />
         ) : (
           <AuditLog />
         )}
@@ -90,10 +93,12 @@ const LEVEL_TONE: Record<string, Tone> = {
   debug: "neutral",
 };
 
-function SystemLog({ initialQ }: { initialQ: string }) {
-  const [level, setLevel] = useState<"all" | "info" | "warn" | "error">("all");
-  const [source, setSource] = useState("");
-  const [search, setSearch] = useState(initialQ);
+function SystemLog() {
+  // Stufe, Quelle und Suche in der Adresse (#260)
+  const ls = useListState({ stufe: "all", quelle: "", suche: "" }, { tabKeys: ["stufe"] });
+  const level = (["all", "info", "warn", "error"] as const).find((x) => x === ls.values.stufe) ?? "all";
+  const source = ls.values.quelle;
+  const search = ls.values.suche;
   const q = useDebounced(search.trim());
   const [open, setOpen] = useState<Set<number>>(new Set());
   const [sources, setSources] = useState<string[]>([]);
@@ -123,47 +128,12 @@ function SystemLog({ initialQ }: { initialQ: string }) {
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex gap-2 flex-wrap items-center">
-        <SegmentedControl
-          label={t("admin.logs.level")}
-          value={level}
-          onChange={setLevel}
-          options={(["all", "info", "warn", "error"] as const).map((v) => ({
-            value: v,
-            label: t(`admin.logs.levels.${v}`),
-          }))}
-        />
-        <div className="w-[180px]">
-          <Select
-            aria-label={t("admin.logs.source")}
-            value={source}
-            onChange={(e) => setSource(e.target.value)}
-            className="h-[38px]"
-          >
-            <option value="">{t("admin.logs.allSources")}</option>
-            {sources.map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))}
-          </Select>
-        </div>
-        <div className="relative flex-1 min-w-[220px]">
-          <Icon
-            name="Search"
-            size={15}
-            className="absolute left-3 top-1/2 -translate-y-1/2 text-fg-muted pointer-events-none"
-          />
-          <Input
-            type="search"
-            aria-label={t("admin.logs.search")}
-            placeholder={t("admin.logs.search")}
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-9"
-          />
-        </div>
-      </div>
+      <ListToolbar<"all" | "info" | "warn" | "error">
+        search={{ value: search, onChange: (v) => ls.set({ suche: v }), placeholder: t("admin.logs.search") }}
+        tabs={{ label: t("admin.logs.level"), value: level, onChange: (v) => ls.set({ stufe: v }), options: (["all", "info", "warn", "error"] as const).map((v) => ({ value: v, label: t(`admin.logs.levels.${v}`) })) }}
+        filters={[{ key: "quelle", label: t("admin.logs.source"), value: source, onChange: (v) => ls.set({ quelle: v }), allLabel: t("admin.logs.allSources"), options: sources.map((s) => ({ value: s, label: s })) }]}
+        onReset={() => ls.reset(["stufe"])}
+      />
 
       <section
         aria-label={t("admin.logs.tabs.system")}
@@ -176,24 +146,13 @@ function SystemLog({ initialQ }: { initialQ: string }) {
         ) : logs.isLoading ? (
           <SkeletonRows rows={8} className="p-4" />
         ) : rows.length === 0 ? (
-          <EmptyState
-            icon="ScrollText"
-            title={t("admin.logs.empty")}
-            text={t("admin.logs.emptyText")}
-            action={
-              filtered && (
-                <Button
-                  onClick={() => {
-                    setLevel("all");
-                    setSource("");
-                    setSearch("");
-                  }}
-                >
-                  {t("admin.logs.reset")}
-                </Button>
-              )
-            }
-          />
+          filtered ? (
+            <div className="px-4">
+              <FilterEmpty onReset={() => ls.reset()} />
+            </div>
+          ) : (
+            <EmptyState icon="ScrollText" title="Noch keine Meldungen." text="Hier erscheinen Meldungen von Server und Worker." />
+          )
         ) : (
           <div className="overflow-x-auto relative">
             <table className="w-full border-collapse text-sm min-w-[720px]">
@@ -279,7 +238,7 @@ function SystemLog({ initialQ }: { initialQ: string }) {
                                   <button
                                     type="button"
                                     className="font-mono text-fg-link hover:text-fg"
-                                    onClick={() => setSearch(r.correlation_id!)}
+                                    onClick={() => ls.set({ suche: r.correlation_id! })}
                                     title={t("admin.logs.search")}
                                   >
                                     {r.correlation_id}
@@ -334,11 +293,11 @@ function SystemLog({ initialQ }: { initialQ: string }) {
 }
 
 function AuditLog() {
-  const [search, setSearch] = useState("");
-  const [actor, setActor] = useState("");
-  const [result, setResult] = useState<"all" | "ok" | "failed" | "denied">(
-    "all",
-  );
+  // Suche, Person und Ergebnis in der Adresse (#260)
+  const ls = useListState({ suche: "", person: "", ergebnis: "all" }, { tabKeys: ["ergebnis"] });
+  const search = ls.values.suche;
+  const actor = ls.values.person;
+  const result = (["all", "ok", "failed", "denied"] as const).find((x) => x === ls.values.ergebnis) ?? "all";
   const q = useDebounced(search.trim());
   const a = useDebounced(actor.trim());
   const audit = useInfiniteQuery({
@@ -354,40 +313,12 @@ function AuditLog() {
   const filtered = !!q || !!a || result !== "all";
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex gap-2 flex-wrap items-center">
-        <div className="relative flex-[2_1_240px]">
-          <Icon
-            name="Search"
-            size={15}
-            className="absolute left-3 top-1/2 -translate-y-1/2 text-fg-muted pointer-events-none"
-          />
-          <Input
-            type="search"
-            aria-label={t("admin.logs.searchAudit")}
-            placeholder={t("admin.logs.searchAudit")}
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-9"
-          />
-        </div>
-        <div className="flex-[1_1_180px]">
-          <Input
-            aria-label={t("admin.logs.actorFilter")}
-            placeholder={t("admin.logs.actorFilter")}
-            value={actor}
-            onChange={(e) => setActor(e.target.value)}
-          />
-        </div>
-        <SegmentedControl
-          label={t("admin.logs.result")}
-          value={result}
-          onChange={setResult}
-          options={(["all", "ok", "failed", "denied"] as const).map((v) => ({
-            value: v,
-            label: t(`admin.logs.results.${v}`),
-          }))}
-        />
-      </div>
+      <ListToolbar<"all" | "ok" | "failed" | "denied">
+        search={{ value: search, onChange: (v) => ls.set({ suche: v }), placeholder: t("admin.logs.searchAudit") }}
+        tabs={{ label: t("admin.logs.result"), value: result, onChange: (v) => ls.set({ ergebnis: v }), options: (["all", "ok", "failed", "denied"] as const).map((v) => ({ value: v, label: t(`admin.logs.results.${v}`) })) }}
+        filters={[{ key: "person", label: t("admin.logs.actorFilter"), type: "text", value: actor, onChange: (v) => ls.set({ person: v }) }]}
+        onReset={() => ls.reset(["ergebnis"])}
+      />
       <section
         aria-label={t("admin.logs.tabs.audit")}
         className="bg-card border border-line rounded-card min-w-0"
@@ -399,24 +330,13 @@ function AuditLog() {
         ) : audit.isLoading ? (
           <SkeletonRows rows={8} className="p-4" />
         ) : events.length === 0 ? (
-          <EmptyState
-            icon="ScrollText"
-            title={t("admin.logs.empty")}
-            text={t("admin.logs.emptyText")}
-            action={
-              filtered && (
-                <Button
-                  onClick={() => {
-                    setSearch("");
-                    setActor("");
-                    setResult("all");
-                  }}
-                >
-                  {t("admin.logs.reset")}
-                </Button>
-              )
-            }
-          />
+          filtered ? (
+            <div className="px-4">
+              <FilterEmpty onReset={() => ls.reset()} />
+            </div>
+          ) : (
+            <EmptyState icon="ScrollText" title="Noch keine Einträge." text="Hier erscheinen Änderungen, Anmeldungen und Freigaben." />
+          )
         ) : (
           <AuditTable events={events} />
         )}

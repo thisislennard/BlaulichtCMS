@@ -27,6 +27,13 @@ export function fmtTime(v: string | number | Date | null | undefined, seconds = 
   return new Intl.DateTimeFormat('de-DE', { timeZone, hour: '2-digit', minute: '2-digit', ...(seconds ? { second: '2-digit' } : {}) }).format(d);
 }
 
+/** „Sa., 21.11., 09:00“ – kurze Zeitangabe mit Wochentag (geplante Veröffentlichung, #260). */
+export function fmtWeekdayDateTime(v: string | number | Date | null | undefined): string {
+  const d = toDate(v);
+  if (!d || Number.isNaN(d.getTime())) return '–';
+  return new Intl.DateTimeFormat('de-DE', { timeZone, weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }).format(d);
+}
+
 /**
  * ISO-Zeitpunkte in gespeicherten Texten (z. B. Verlauf einer Presseanfrage: „Frist: 2026-11-15T22:26:51.000Z → …“)
  * lesbar in der eingestellten Zeitzone. Der Server speichert bewusst ISO (zeitzonenneutral), damit ältere Einträge

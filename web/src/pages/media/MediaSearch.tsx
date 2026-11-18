@@ -12,6 +12,8 @@ import { Lightbox, MarkBox, MediaList, MediaThumb, mediaName, Pager, useGalleryP
 import { MediaDetailsDialog } from './MediaDetails';
 import { MediaNav } from './MediaNav';
 import { usePageMeta } from '../../components/layout/AppShell';
+import { FilterEmpty, ListToolbar } from '../../components/ui/list';
+import { useListState } from '../../lib/listState';
 import { MoveCopyDialog, TagsDialog, useTagSuggestions } from './organize';
 
 interface Filters {
@@ -26,7 +28,9 @@ interface Filters {
   from: string;
   to: string;
 }
-const EMPTY: Filters = { q: '', kind: '', selection: '', status: 'ready', tag: '', collection: '', via: '', flagged: '', from: '', to: '' };
+/** Filter ↔ Parameter der Adresse (#260), z. B. /medien/dateien?sichtung=pending&suche=brand */
+const URL_KEYS: Record<keyof Filters, string> = { q: 'suche', kind: 'art', selection: 'sichtung', status: 'stand', tag: 'schlagwort', collection: 'sammlung', via: 'herkunft', flagged: 'markiert', from: 'von', to: 'bis' };
+const URL_DEFAULTS = { suche: '', art: '', sichtung: '', stand: '', schlagwort: '', sammlung: '', herkunft: '', markiert: '', von: '', bis: '' };
 
 /** Mediensuche über alle Sammlungen (wie „Medien“ in LiFeOS): Name, Typ, Sichtung, Schlagwort, Zeitraum, Hochladende. */
 export default function MediaSearch() {
@@ -40,8 +44,10 @@ export default function MediaSearch() {
   const toast = useToast();
   const toastError = useErrorToast();
   const prefs = useGalleryPrefs();
-  const [draft, setDraft] = useState<Filters>(EMPTY);
-  const [f, setF] = useState<Filters>(EMPTY);
+  // Filter in der Adresse (#260): Zurück, Lesezeichen und die Schnellaktion „Sichten“ zeigen dieselbe Auswahl
+  const ls = useListState(URL_DEFAULTS);
+  const draft = Object.fromEntries((Object.keys(URL_KEYS) as (keyof Filters)[]).map((k) => [k, ls.values[URL_KEYS[k] as keyof typeof URL_DEFAULTS]])) as unknown as Filters;
+  const [f, setF] = useState<Filters>(draft);
   const [page, setPage] = useState(1);
   const [marked, setMarked] = useState<Set<string>>(new Set());
   const [lightbox, setLightbox] = useState<number | null>(null);
@@ -63,13 +69,15 @@ export default function MediaSearch() {
   const tags = useTagSuggestions();
   const cols = useQuery({ queryKey: ['collections', 'targets'], queryFn: () => get<any[]>('/collections?archived=true') });
   // Suchtext verzögert übernehmen, Auswahlfelder sofort
+  const draftKey = JSON.stringify(draft);
   useEffect(() => {
+    if (draftKey === JSON.stringify(f)) return;
     const t = setTimeout(() => (setF(draft), setPage(1)), draft.q === f.q ? 0 : 350);
     return () => clearTimeout(t);
-  }, [draft]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [draftKey]); // eslint-disable-line react-hooks/exhaustive-deps
   const q = useQuery({
     queryKey: ['media-search', f, page, prefs.perPage],
-    queryFn: () => get<{ items: MediaItem[]; total: number; page: number; pages: number }>(`/media/search${qs({ ...f, page, perPage: prefs.perPage })}`),
+    queryFn: () => get<{ items: MediaItem[]; total: number; page: number; pages: number }>(`/media/search${qs({ ...f, status: f.status || 'ready', page, perPage: prefs.perPage })}`),
     placeholderData: keepPreviousData,
   });
   const items = q.data?.items ?? [];
@@ -80,7 +88,7 @@ export default function MediaSearch() {
     else n.delete(id);
     return n;
   });
-  const set = (k: keyof Filters, v: string) => setDraft((d) => ({ ...d, [k]: v }));
+  const set = (k: keyof Filters, v: string) => ls.set({ [URL_KEYS[k]]: v } as Partial<typeof URL_DEFAULTS>);
   const bulkSelection = async (selection: string) => {
     try {
       const r = await post<{ updated: number }>('/media/bulk', { ids: [...marked], action: 'selection', selection });
@@ -105,79 +113,23 @@ export default function MediaSearch() {
     <div className="flex flex-col gap-5">
       <PageHeader subtitle="Fotos und Videos über alle Sammlungen suchen und ordnen." />
       <MediaNav />
-      <form className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 items-end" onSubmit={(e) => e.preventDefault()} aria-label="Filter">
-        <FieldWrap label="Suche" htmlFor="ms-q" className="sm:col-span-2">
-          <Input id="ms-q" type="search" value={draft.q} placeholder="Name, Beschreibung, Hinweis, Sammlung oder Vorgangsnummer" onChange={(e) => set('q', e.target.value)} />
-        </FieldWrap>
-        <FieldWrap label="Sammlung" htmlFor="ms-col">
-          <Select id="ms-col" value={draft.collection} onChange={(e) => set('collection', e.target.value)}>
-            <option value="">Alle Sammlungen</option>
-            {(cols.data ?? []).map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.title}
-              </option>
-            ))}
-          </Select>
-        </FieldWrap>
-        <FieldWrap label="Schlagwort" htmlFor="ms-tag">
-          <Select id="ms-tag" value={draft.tag} onChange={(e) => set('tag', e.target.value)}>
-            <option value="">Alle</option>
-            {tags.map((t) => (
-              <option key={t.id} value={t.name}>
-                {t.name} ({t.count})
-              </option>
-            ))}
-          </Select>
-        </FieldWrap>
-        <FieldWrap label="Art" htmlFor="ms-kind">
-          <Select id="ms-kind" value={draft.kind} onChange={(e) => set('kind', e.target.value)}>
-            <option value="">Fotos und Videos</option>
-            <option value="image">Nur Fotos</option>
-            <option value="video">Nur Videos</option>
-          </Select>
-        </FieldWrap>
-        <FieldWrap label="Sichtung" htmlFor="ms-sel">
-          <Select id="ms-sel" value={draft.selection} onChange={(e) => set('selection', e.target.value)}>
-            <option value="">Alle</option>
-            <option value="pending">Offen</option>
-            <option value="selected">Ausgewählt</option>
-            <option value="on_hold">Zurückgestellt</option>
-            <option value="skipped">Übersprungen</option>
-          </Select>
-        </FieldWrap>
-        <FieldWrap label="Hochgeladen" htmlFor="ms-via">
-          <Select id="ms-via" value={draft.via} onChange={(e) => set('via', e.target.value)}>
-            <option value="">Alle</option>
-            <option value="link">Über Upload-Link</option>
-            <option value="intern">Intern</option>
-          </Select>
-        </FieldWrap>
-        <FieldWrap label="Stand" htmlFor="ms-status">
-          <Select id="ms-status" value={draft.status} onChange={(e) => set('status', e.target.value)}>
-            <option value="ready">Geprüft</option>
-            <option value="problems">In Prüfung / gesperrt / abgewiesen</option>
-          </Select>
-        </FieldWrap>
-        <FieldWrap label="Eingang ab" htmlFor="ms-from">
-          <Input id="ms-from" type="date" value={draft.from} onChange={(e) => set('from', e.target.value)} />
-        </FieldWrap>
-        <FieldWrap label="Eingang bis" htmlFor="ms-to">
-          <Input id="ms-to" type="date" value={draft.to} onChange={(e) => set('to', e.target.value)} />
-        </FieldWrap>
-        <label className="inline-flex items-center gap-2 text-sm cursor-pointer h-ctl">
-          <input type="checkbox" className="w-4 h-4 accent-[var(--bc-primary-solid)]" checked={!!draft.flagged} onChange={(e) => set('flagged', e.target.checked ? '1' : '')} />
-          Nur mit Datenschutz-Markierung
-        </label>
-        <Button variant="ghost" icon="X" onClick={() => setDraft(EMPTY)}>
-          Filter zurücksetzen
-        </Button>
-      </form>
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="text-sm text-fg-muted" aria-live="polite">
-          {q.data ? `${q.data.total} Treffer` : ''}
-        </div>
-        <ViewControls view={prefs.view} setView={prefs.setView} perPage={prefs.perPage} setPerPage={(n) => (prefs.setPerPage(n), setPage(1))} />
-      </div>
+      <ListToolbar
+        search={{ value: draft.q, onChange: (v) => set('q', v), placeholder: 'Suchen in allen Dateien', label: 'Dateien durchsuchen (Name, Beschreibung, Hinweis, Sammlung oder Vorgangsnummer)' }}
+        filters={[
+          { key: 'collection', label: 'Sammlung', value: draft.collection, onChange: (v) => set('collection', v), allLabel: 'Alle Sammlungen', options: (cols.data ?? []).map((c) => ({ value: c.id, label: c.title })) },
+          { key: 'tag', label: 'Schlagwort', value: draft.tag, onChange: (v) => set('tag', v), options: tags.map((t) => ({ value: t.name, label: `${t.name} (${t.count})` })) },
+          { key: 'kind', label: 'Art', value: draft.kind, onChange: (v) => set('kind', v), allLabel: 'Fotos und Videos', options: [{ value: 'image', label: 'Nur Fotos' }, { value: 'video', label: 'Nur Videos' }] },
+          { key: 'selection', label: 'Sichtung', value: draft.selection, onChange: (v) => set('selection', v), options: [{ value: 'pending', label: 'Offen' }, { value: 'selected', label: 'Ausgewählt' }, { value: 'on_hold', label: 'Zurückgestellt' }, { value: 'skipped', label: 'Übersprungen' }] },
+          { key: 'via', label: 'Hochgeladen', value: draft.via, onChange: (v) => set('via', v), options: [{ value: 'link', label: 'Über Upload-Link' }, { value: 'intern', label: 'Intern' }] },
+          { key: 'status', label: 'Stand', value: draft.status, onChange: (v) => set('status', v), allLabel: 'Geprüft', options: [{ value: 'problems', label: 'In Prüfung / gesperrt / abgewiesen' }] },
+          { key: 'flagged', label: 'Datenschutz', value: draft.flagged, onChange: (v) => set('flagged', v), options: [{ value: '1', label: 'Nur mit Datenschutz-Markierung' }] },
+          { key: 'from', label: 'Eingang ab', type: 'date', value: draft.from, onChange: (v) => set('from', v) },
+          { key: 'to', label: 'Eingang bis', type: 'date', value: draft.to, onChange: (v) => set('to', v) },
+        ]}
+        count={q.data ? { n: q.data.total, one: 'Treffer', many: 'Treffer' } : undefined}
+        onReset={() => ls.reset()}
+        actions={<ViewControls view={prefs.view} setView={prefs.setView} perPage={prefs.perPage} setPerPage={(n) => (prefs.setPerPage(n), setPage(1))} />}
+      />
       {canMark && marked.size > 0 && (
         <div role="region" aria-label="Sammelaktionen" className="sticky top-2 z-10 flex flex-wrap items-center gap-2 p-2.5 rounded-card border border-line-strong bg-card shadow-float">
           <span className="font-mono text-sm px-1">{marked.size} markiert</span>
@@ -219,7 +171,7 @@ export default function MediaSearch() {
       )}
       {q.isLoading && <SkeletonRows rows={5} />}
       {q.error && <ErrorBox title="Suche fehlgeschlagen">{(q.error as Error).message}</ErrorBox>}
-      {q.data && items.length === 0 && <EmptyState icon="Search" title="Keine Treffer" text="Filter anpassen oder zurücksetzen." />}
+      {q.data && items.length === 0 && (ls.changed ? <FilterEmpty onReset={() => ls.reset()} /> : <EmptyState icon="Images" title="Noch keine Dateien." text="Fotos und Videos kommen über Sammlungen und Upload-Links hierher." />)}
       {items.length > 0 &&
         (prefs.view === 'list' ? (
           <MediaList items={items} marked={canMark ? marked : undefined} onMark={canMark ? mark : undefined} onOpen={setLightbox} menu={menuFor} extraColumn={{ label: 'Sammlung', render: (m) => <Link to={`/medien/${m.collection_id}`}>{m.collection_title}</Link> }} />

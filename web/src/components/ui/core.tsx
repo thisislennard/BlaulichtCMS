@@ -227,8 +227,8 @@ export function Rev({ n, className }: { n: number | string; className?: string }
   );
 }
 
-export function Chip({ children, className, mono }: { children: ReactNode; className?: string; mono?: boolean }) {
-  return <span className={cx('inline-flex items-center gap-1 h-[22px] px-2 rounded-chip bg-raised text-meta text-fg-muted whitespace-nowrap', mono && 'font-mono', className)}>{children}</span>;
+export function Chip({ children, className, mono, title }: { children: ReactNode; className?: string; mono?: boolean; title?: string }) {
+  return <span title={title} className={cx('inline-flex items-center gap-1 h-[22px] px-2 rounded-chip bg-raised text-meta text-fg-muted whitespace-nowrap', mono && 'font-mono', className)}>{children}</span>;
 }
 
 /* ----------------------------------------- Card ---------------------------------------- */

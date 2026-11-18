@@ -2,12 +2,16 @@ import { useState, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router';
 import { get, post } from '../../api/client';
-import { Badge, Button, Card, cx, EmptyState, ErrorBox, FieldWrap, Input, LinkButton, Notice, PageHeader, SkeletonRows, Table, Td, Textarea, Th } from '../../components/ui/core';
+import { Badge, Button, Card, cx, EmptyState, ErrorBox, FieldWrap, Input, LinkButton, Notice, PageHeader, SkeletonRows, Textarea } from '../../components/ui/core';
+import { FilterEmpty, ListToolbar, ResponsiveTable } from '../../components/ui/list';
+import { useListState } from '../../lib/listState';
+import { useIsPhone } from '../../lib/media';
+import { rank, searchTerms } from '../../lib/searchText';
 import { Dialog, Menu, useErrorToast, useToast, type MenuItem } from '../../components/ui/overlays';
 import { Icon } from '../../components/ui/Icon';
 import { useAuth } from '../../lib/auth';
 import { fmtRelative, plural } from '../../lib/format';
-import { AutomationBadge, DirectBadge, RunBadge, useCatalog, type TemplateRequirement, type WorkflowTemplate } from './shared';
+import { AUTOMATION_STATUS, AutomationBadge, DirectBadge, RunBadge, useCatalog, type TemplateRequirement, type WorkflowTemplate } from './shared';
 import { descriptionAddsInfo } from './workflowModel';
 import { activeNavId } from '../../config/navigation';
 import { navTrail } from '../../config/navText';
@@ -178,6 +182,15 @@ export default function Automations() {
     !!q.data?.length && { label: 'Exportieren', icon: 'Download', onClick: () => setTransfer('export') },
     manage && { label: 'Mit KI erstellen', icon: 'Sparkles', disabled: !cat.data?.ai, onClick: () => setTransfer('ai') },
   ];
+  const phone = useIsPhone();
+  // Suche, Reiter und Filter in der Adresse (#260)
+  const ls = useListState({ suche: '', status: 'alle', ausloeser: '' }, { tabKeys: ['status'] });
+  const status = ls.values.status === 'alle' || AUTOMATION_STATUS[ls.values.status] ? ls.values.status : 'alle';
+  const terms = searchTerms(ls.values.suche);
+  const all = q.data ?? [];
+  const found = all.filter((a) => (!terms.length || rank(terms, a.name, `${a.summary ?? ''} ${a.description ?? ''} ${a.inputs.map(kindLabel).join(' ')}`) !== null) && (!ls.values.ausloeser || a.inputs.includes(ls.values.ausloeser)));
+  const rows = found.filter((a) => status === 'alle' || a.status === status);
+  const inputKinds = [...new Set(all.flatMap((a) => a.inputs))];
   return (
     <div className="flex flex-col gap-5">
       <PageHeader
@@ -208,62 +221,90 @@ export default function Automations() {
       {q.data && q.data.length === 0 && (
         <EmptyState
           icon="Workflow"
-          title="Noch kein Workflow"
-          text="Mit „Neuer Workflow“ eine Workflow-Vorlage wählen oder leer beginnen. Fehlende Auslöser und Aktionen lassen sich direkt im Workflow anlegen."
-          action={<LinkButton to="/hilfe/workflows" icon="BookOpen">Hilfe: Workflows</LinkButton>}
+          title="Noch kein Workflow."
+          text={manage ? 'Eine Workflow-Vorlage wählen oder leer beginnen. Fehlende Auslöser und Aktionen lassen sich direkt im Workflow anlegen.' : 'Workflows legt an, wer Workflows verwalten darf.'}
+          action={manage ? <Button icon="Plus" onClick={() => setCreate(true)}>Neuer Workflow</Button> : <LinkButton to="/hilfe/workflows" icon="BookOpen">Hilfe: Workflows</LinkButton>}
         />
       )}
       {q.data && q.data.length > 0 && (
-        <Card bodyClassName="p-0">
-          <Table>
-            <thead>
-              <tr>
-                <Th>Workflow</Th>
-                <Th>Status</Th>
-                <Th>Auslöser</Th>
-                <Th>Letzter Lauf</Th>
-                <Th align="right">Läufe 24 h</Th>
-              </tr>
-            </thead>
-            <tbody>
-              {q.data.map((a) => (
-                <tr key={a.id} className="hover:bg-raised">
-                  <Td>
+        <ListToolbar
+          search={{ value: ls.values.suche, onChange: (s) => ls.set({ suche: s }), placeholder: 'Suchen in Workflows', label: 'Workflows durchsuchen (Name, Beschreibung, Auslöser)' }}
+          tabs={{
+            label: 'Status',
+            value: status,
+            onChange: (s) => ls.set({ status: s }),
+            options: [{ value: 'alle', label: 'Alle', count: found.length }, ...Object.entries(AUTOMATION_STATUS).map(([value, s]) => ({ value, label: s.label, count: found.filter((a) => a.status === value).length }))],
+          }}
+          filters={[{ key: 'ausloeser', label: 'Auslöser', value: ls.values.ausloeser, onChange: (s) => ls.set({ ausloeser: s }), options: inputKinds.map((k) => ({ value: k, label: kindLabel(k) })) }]}
+          count={{ n: rows.length, one: 'Workflow', many: 'Workflows' }}
+          onReset={() => ls.reset(['status'])}
+        />
+      )}
+      {q.data && q.data.length > 0 && rows.length === 0 && <FilterEmpty onReset={() => ls.reset()} />}
+      {rows.length > 0 && (
+        <Card bodyClassName={phone ? '!p-0' : 'p-0'} className={phone ? '!bg-transparent !border-0' : undefined}>
+          <ResponsiveTable
+            label="Workflows"
+            rows={rows}
+            rowKey={(a) => a.id}
+            rowClassName={() => !phone && 'hover:bg-raised'}
+            columns={[
+              {
+                key: 'name',
+                header: 'Workflow',
+                card: 'title',
+                cell: (a) => (
+                  <>
                     <Link to={`/workflows/${a.id}`} className="font-medium" title={a.description || undefined}>
                       {a.name}
                     </Link>
                     {/* Eine Zeile Zusammenfassung; die Beschreibung nur, wenn sie etwas anderes sagt (#263) */}
-                    {a.summary && <div className="text-sm line-clamp-1 max-w-[640px]" title={a.summary}>{a.summary}</div>}
-                    {descriptionAddsInfo(a.summary, a.description) && <div className="text-meta text-fg-muted line-clamp-1 max-w-[640px]" title={a.description}>{a.description}</div>}
-                  </Td>
-                  <Td>
-                    <div className="flex flex-wrap gap-1.5 items-center">
-                      <AutomationBadge status={a.status} />
-                      {a.active && <span className="font-mono text-meta text-fg-muted" title={`Aktive Version ${a.active.version}`}>V{a.active.version}</span>}
-                      {a.status === 'active' && a.active && !a.active.current && <Badge tone="warning">Entwurf geändert</Badge>}
-                      {a.direct_publish && <DirectBadge />}
-                      {a.pending_approvals > 0 && <Badge tone="warning">{plural(a.pending_approvals, 'Freigabe', 'Freigaben')} offen</Badge>}
-                    </div>
-                  </Td>
-                  <Td className="text-sm text-fg-muted">{a.inputs.map(kindLabel).join(', ') || '–'}</Td>
-                  <Td>
-                    {a.last_run ? (
-                      <span className="inline-flex items-center gap-2">
-                        <RunBadge status={a.last_run.status} />
-                        <span className="text-meta text-fg-muted">{fmtRelative(a.last_run.at)}</span>
-                      </span>
-                    ) : (
-                      <span className="text-meta text-fg-muted">noch keiner</span>
-                    )}
-                  </Td>
-                  <Td align="right" mono>
+                    {a.summary && <div className="text-sm font-normal line-clamp-1 max-w-[640px]" title={a.summary}>{a.summary}</div>}
+                    {descriptionAddsInfo(a.summary, a.description) && <div className="text-meta font-normal text-fg-muted line-clamp-1 max-w-[640px]" title={a.description}>{a.description}</div>}
+                  </>
+                ),
+              },
+              {
+                key: 'status',
+                header: 'Status',
+                cell: (a) => (
+                  <div className="flex flex-wrap gap-1.5 items-center">
+                    <AutomationBadge status={a.status} />
+                    {a.active && <span className="font-mono text-meta text-fg-muted" title={`Aktive Version ${a.active.version}`}>V{a.active.version}</span>}
+                    {a.status === 'active' && a.active && !a.active.current && <Badge tone="warning">Entwurf geändert</Badge>}
+                    {a.direct_publish && <DirectBadge />}
+                    {a.pending_approvals > 0 && <Badge tone="warning">{plural(a.pending_approvals, 'Freigabe', 'Freigaben')} offen</Badge>}
+                  </div>
+                ),
+              },
+              { key: 'inputs', header: 'Auslöser', className: 'text-sm text-fg-muted', cell: (a) => a.inputs.map(kindLabel).join(', ') || '–' },
+              {
+                key: 'last',
+                header: 'Letzter Lauf',
+                cell: (a) =>
+                  a.last_run ? (
+                    <span className="inline-flex items-center gap-2">
+                      <RunBadge status={a.last_run.status} />
+                      <span className="text-meta text-fg-muted">{fmtRelative(a.last_run.at)}</span>
+                    </span>
+                  ) : (
+                    <span className="text-meta text-fg-muted">noch keiner</span>
+                  ),
+              },
+              {
+                key: 'runs',
+                header: 'Läufe 24 h',
+                align: 'right',
+                className: 'font-mono text-meta tabular',
+                cell: (a) => (
+                  <>
                     {a.runs_24h}
                     {a.failed_24h > 0 && <span className="text-err"> · {a.failed_24h} Fehler</span>}
-                  </Td>
-                </tr>
-              ))}
-            </tbody>
-          </Table>
+                  </>
+                ),
+              },
+            ]}
+          />
         </Card>
       )}
       {create && <CreateDialog templates={cat.data?.templates ?? []} onClose={() => setCreate(false)} />}

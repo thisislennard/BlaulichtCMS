@@ -37,6 +37,11 @@ export interface PostListItem {
   state: PostState;
   published_url: string | null;
   archived: boolean;
+  updated_by: string | null;
+  /** soziale Netzwerke der aktuellen Fassung mit Stand der Veröffentlichung (#260) */
+  social: { kind: string; name: string; status: string | null }[];
+  /** geplanter Veröffentlichungszeitpunkt, solange noch nicht veröffentlicht */
+  scheduled_at: string | null;
 }
 
 export interface MediaItem {

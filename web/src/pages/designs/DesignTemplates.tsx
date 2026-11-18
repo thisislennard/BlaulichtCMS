@@ -8,7 +8,8 @@ import { Icon } from '../../components/ui/Icon';
 import { Dialog, useConfirm, useErrorToast, useToast } from '../../components/ui/overlays';
 import { useAuth } from '../../lib/auth';
 import { fmtRelative } from '../../lib/format';
-import { useSucheParam } from '../../lib/urlParams';
+import { useListState } from '../../lib/listState';
+import { FilterEmpty, ListToolbar } from '../../components/ui/list';
 
 export interface TemplateListItem {
   id: string;
@@ -318,12 +319,10 @@ function FontsDialog({ onClose }: { onClose: () => void }) {
 export default function DesignTemplates() {
   const { can } = useAuth();
   const nav = useNavigate();
-  const [search, setSearch] = useState('');
-  const [term, setTerm] = useState('');
-  useSucheParam(setSearch);
-  const [category, setCategory] = useState('');
-  const [format, setFormat] = useState('');
-  const [kind, setKind] = useState('');
+  // Suche und Filter in der Adresse (#260)
+  const ls = useListState({ suche: '', kategorie: '', format: '', art: '' });
+  const { suche: search, kategorie: category, format, art: kind } = ls.values;
+  const [term, setTerm] = useState(search.trim());
   const [create, setCreate] = useState(false);
   const [cats, setCats] = useState(false);
   const [fonts, setFonts] = useState(false);
@@ -359,41 +358,29 @@ export default function DesignTemplates() {
           )
         }
       />
-      <div className="flex flex-wrap items-end gap-3">
-        <Input type="search" aria-label="Designvorlagen durchsuchen" placeholder="Titel, Beschreibung, Schlagwort …" value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-[320px]" />
-        <Select aria-label="Kategorie" value={category} onChange={(e) => setCategory(e.target.value)} className="max-w-[220px]">
-          <option value="">Alle Kategorien</option>
-          {(categories.data ?? []).map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name}
-            </option>
-          ))}
-          <option value="none">Ohne Kategorie</option>
-        </Select>
-        <Select aria-label="Format" value={format} onChange={(e) => setFormat(e.target.value)} className="max-w-[220px]">
-          <option value="">Alle Formate</option>
-          {(q.data?.formats ?? []).map((f) => (
-            <option key={f.key} value={f.key}>
-              {f.label}
-            </option>
-          ))}
-        </Select>
-        <Select aria-label="Art" value={kind} onChange={(e) => setKind(e.target.value)} className="max-w-[220px]">
-          <option value="">Alle Arten</option>
-          <option value="files">Dateien zum Herunterladen</option>
-          <option value="image">Befüllbare Bildvorlagen</option>
-        </Select>
-      </div>
+      <ListToolbar
+        search={{ value: search, onChange: (v) => ls.set({ suche: v }), placeholder: 'Suchen in Designvorlagen', label: 'Designvorlagen durchsuchen (Titel, Beschreibung, Schlagwort)' }}
+        filters={[
+          { key: 'kategorie', label: 'Kategorie', value: category, onChange: (v) => ls.set({ kategorie: v }), allLabel: 'Alle Kategorien', options: [...(categories.data ?? []).map((c) => ({ value: c.id, label: c.name })), { value: 'none', label: 'Ohne Kategorie' }] },
+          { key: 'format', label: 'Format', value: format, onChange: (v) => ls.set({ format: v }), allLabel: 'Alle Formate', options: (q.data?.formats ?? []).map((f) => ({ value: f.key, label: f.label })) },
+          { key: 'art', label: 'Art', value: kind, onChange: (v) => ls.set({ art: v }), allLabel: 'Alle Arten', options: [{ value: 'files', label: 'Dateien zum Herunterladen' }, { value: 'image', label: 'Befüllbare Bildvorlagen' }] },
+        ]}
+        count={list ? { n: list.length, one: 'Designvorlage', many: 'Designvorlagen' } : undefined}
+        onReset={() => ls.reset()}
+      />
       {q.isLoading && <SkeletonRows rows={4} />}
       {q.error && <ErrorBox title="Designvorlagen konnten nicht geladen werden">{(q.error as Error).message}</ErrorBox>}
-      {list && list.length === 0 && (
-        <EmptyState
-          icon="Palette"
-          title={filtered ? 'Keine passende Designvorlage' : 'Noch keine Designvorlage'}
-          text={filtered ? 'Suche oder Filter anpassen.' : 'Lege Logos, Layouts und Bildvorlagen hier ab, damit alle dieselben aktuellen Dateien verwenden.'}
-          action={!filtered && can('templates.manage') && <Button variant="primary" icon="Plus" onClick={() => setCreate(true)}>Neue Designvorlage</Button>}
-        />
-      )}
+      {list && list.length === 0 &&
+        (filtered ? (
+          <FilterEmpty onReset={() => ls.reset()} />
+        ) : (
+          <EmptyState
+            icon="Palette"
+            title="Noch keine Designvorlage."
+            text={can('templates.manage') ? 'Lege Logos, Layouts und Bildvorlagen hier ab, damit alle dieselben aktuellen Dateien verwenden.' : 'Designvorlagen legt an, wer Designvorlagen verwalten darf.'}
+            action={can('templates.manage') && <Button icon="Plus" onClick={() => setCreate(true)}>Neue Designvorlage</Button>}
+          />
+        ))}
       {list && list.length > 0 && (
         <ul className="m-0 p-0 list-none grid gap-4 grid-cols-1 sm:grid-cols-2 xl:grid-cols-3">
           {list.map((t) => (

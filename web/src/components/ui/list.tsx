@@ -218,6 +218,8 @@ export interface Column<T> {
    * `footer` (unten, z. B. Aktionen), `hide` (nur in der Tabelle).
    */
   card?: 'title' | 'status' | 'meta' | 'field' | 'footer' | 'hide';
+  /** `false`: nur in der Karte (z. B. zusammengefasste Meta-Zeile) */
+  table?: false;
   /** Beschriftung in der Karte, falls `header` kein Text ist */
   cardLabel?: string;
 }
@@ -235,6 +237,7 @@ export function ResponsiveTable<T>({
   onRowClick,
   label,
   className,
+  dense,
 }: {
   rows: T[];
   columns: Column<T>[];
@@ -247,6 +250,8 @@ export function ResponsiveTable<T>({
   /** Name der Liste für Bildschirmleser (Karten) */
   label: string;
   className?: string;
+  /** engere Zeilen (lange Listen wie die Einsatzliste: eine Zeile ≤ 52 px) */
+  dense?: boolean;
 }) {
   const phone = useIsPhone();
   if (phone) {
@@ -295,11 +300,12 @@ export function ResponsiveTable<T>({
     );
   }
   const hide = (c: Column<T>) => (c.from === 'lg' ? 'hidden lg:table-cell' : c.from === 'xl' ? 'hidden xl:table-cell' : undefined);
+  const cols = columns.filter((c) => c.table !== false);
   return (
     <Table className={className}>
       <thead>
         <tr>
-          {columns.map((c) => (
+          {cols.map((c) => (
             <Th key={c.key} align={c.align} className={cx(hide(c), c.className)}>
               {c.header}
             </Th>
@@ -309,8 +315,8 @@ export function ResponsiveTable<T>({
       <tbody>
         {rows.map((r) => (
           <tr key={rowKey(r)} id={rowId?.(r)} className={cx(onRowClick && 'cursor-pointer hover:bg-raised', rowClassName?.(r))} onClick={onRowClick ? (e) => !(e.target as HTMLElement).closest('a, button, input, select, label') && onRowClick(r) : undefined}>
-            {columns.map((c) => (
-              <Td key={c.key} align={c.align} className={cx(hide(c), c.className)}>
+            {cols.map((c) => (
+              <Td key={c.key} align={c.align} className={cx(hide(c), dense && '!py-2', c.className)}>
                 {c.cell(r)}
               </Td>
             ))}

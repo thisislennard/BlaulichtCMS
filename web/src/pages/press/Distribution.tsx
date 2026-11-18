@@ -1,7 +1,9 @@
 import { useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { del, download, get, post, put } from '../../api/client';
-import { Badge, Button, Card, EmptyState, FieldWrap, FilePickButton, Input, Notice, PageHeader, Select, SkeletonRows, Switch, Table, Tabs, Td, Textarea, Th } from '../../components/ui/core';
+import { Badge, Button, Card, EmptyLine, EmptyState, FieldWrap, FilePickButton, Input, Notice, PageHeader, Select, SkeletonRows, Switch, Tabs, Textarea } from '../../components/ui/core';
+import { FilterEmpty, ListToolbar, ResponsiveTable } from '../../components/ui/list';
+import { useListState } from '../../lib/listState';
 import { Dialog, useConfirm, useErrorToast, useToast } from '../../components/ui/overlays';
 import { useAuth } from '../../lib/auth';
 import { fmtDate, plural } from '../../lib/format';
@@ -273,9 +275,13 @@ export default function Distribution() {
   const ask = useConfirm();
   const toastError = useErrorToast();
   const { can } = useAuth();
-  const [tab, setTab] = useState<'contacts' | 'lists'>('contacts');
-  const [q, setQ] = useState('');
-  const [listFilter, setListFilter] = useState('');
+  // Reiter, Suche und Liste in der Adresse (#260)
+  const ls = useListState({ bereich: 'kontakte', suche: '', liste: '' }, { tabKeys: ['bereich'] });
+  const tab: 'contacts' | 'lists' = ls.values.bereich === 'listen' ? 'lists' : 'contacts';
+  const setTab = (t: 'contacts' | 'lists') => ls.set({ bereich: t === 'lists' ? 'listen' : 'kontakte' });
+  const q = ls.values.suche;
+  const listFilter = ls.values.liste;
+  const setListFilter = (v: string) => ls.set({ liste: v });
   const toast = useToast();
   const [edit, setEdit] = useState<Contact | null | undefined>(undefined);
   const [editList, setEditList] = useState<PressList | null | undefined>(undefined);
@@ -313,22 +319,12 @@ export default function Distribution() {
       <Tabs label="Bereich" value={tab} onChange={setTab} tabs={[{ value: 'contacts', label: 'Kontakte', count: contacts.data?.length }, { value: 'lists', label: 'Verteilerlisten', count: lists.data?.length }]} />
       {tab === 'contacts' && (
         <>
-          <div className="flex flex-wrap gap-3">
-            <div className="w-full sm:w-72">
-              <Input type="search" aria-label="Kontakte durchsuchen" placeholder="Name, Medium, E-Mail …" value={q} onChange={(e) => setQ(e.target.value)} />
-            </div>
-            <div className="w-full sm:w-60">
-              <Select aria-label="Nach Liste filtern" value={listFilter} onChange={(e) => setListFilter(e.target.value)}>
-                <option value="">Alle Listen</option>
-                <option value="review">Zu prüfen ({toReview})</option>
-                {(lists.data ?? []).map((l) => (
-                  <option key={l.id} value={l.id}>
-                    {l.name}
-                  </option>
-                ))}
-              </Select>
-            </div>
-          </div>
+          <ListToolbar
+            search={{ value: q, onChange: (v) => ls.set({ suche: v }), placeholder: 'Suchen in Kontakten', label: 'Kontakte durchsuchen (Name, Medium, E-Mail)' }}
+            filters={[{ key: 'liste', label: 'Liste', value: listFilter, onChange: setListFilter, allLabel: 'Alle Listen', options: [{ value: 'review', label: `Zu prüfen (${toReview})` }, ...(lists.data ?? []).map((l) => ({ value: l.id, label: l.name }))] }]}
+            count={contacts.data ? { n: shown.length, one: 'Kontakt', many: 'Kontakte' } : undefined}
+            onReset={() => ls.reset(['bereich'])}
+          />
           {toReview > 0 && listFilter !== 'review' && (
             <Notice tone="warning" title={`${plural(toReview, 'Kontakt', 'Kontakte')} zu prüfen`}>
               Ohne vermerkte Rechtsgrundlage oder lange ohne Pressemitteilung und Änderung (Einstellungen → Datenschutz → Wiedervorlage). Prüfen, ob die Adresse noch stimmt und gebraucht wird – dann ergänzen bzw. „Geprüft“, sonst löschen. Automatisch gelöscht wird nichts.{' '}
@@ -338,21 +334,24 @@ export default function Distribution() {
             </Notice>
           )}
           {contacts.isLoading && <SkeletonRows rows={5} />}
-          {contacts.data && !shown.length && <EmptyState icon="BookUser" title="Keine Kontakte" text="Kontakte einzeln hinzufügen oder als CSV importieren." />}
+          {contacts.data && !shown.length &&
+            (q.trim() || listFilter ? (
+              <FilterEmpty onReset={() => ls.reset(['bereich'])} />
+            ) : (
+              <EmptyState icon="BookUser" title="Noch keine Kontakte." text="Kontakte einzeln hinzufügen oder als CSV importieren." action={<Button icon="Plus" onClick={() => setEdit(null)}>Kontakt hinzufügen</Button>} />
+            ))}
           {shown.length > 0 && (
-            <Table>
-              <thead>
-                <tr>
-                  <Th>Kontakt</Th>
-                  <Th className="hidden md:table-cell">Listen</Th>
-                  <Th className="hidden lg:table-cell">Herkunft / Grundlage</Th>
-                  <Th />
-                </tr>
-              </thead>
-              <tbody>
-                {shown.map((c) => (
-                  <tr key={c.id}>
-                    <Td>
+            <ResponsiveTable
+              label="Kontakte"
+              rows={shown}
+              rowKey={(c) => c.id}
+              columns={[
+                {
+                  key: 'contact',
+                  header: 'Kontakt',
+                  card: 'title',
+                  cell: (c) => (
+                    <>
                       <div className="font-medium">{c.name || c.email}</div>
                       <div className="text-meta text-fg-muted">
                         {c.outlet ? `${c.outlet} · ` : ''}
@@ -361,10 +360,18 @@ export default function Distribution() {
                       {c.unsubscribed_at && <Badge tone="warning">Abgemeldet</Badge>}
                       {c.review === 'basis' && <Badge tone="warning" title="Herkunft und Rechtsgrundlage ergänzen">Grundlage fehlt</Badge>}
                       {c.review === 'inactive' && <Badge tone="neutral" title={`Letzte Pressemitteilung, Änderung oder Prüfung: ${fmtDate(c.last_activity)}`}>Zu prüfen</Badge>}
-                    </Td>
-                    <Td className="hidden md:table-cell text-sm">{c.list_ids.map(listName).filter(Boolean).join(', ') || '–'}</Td>
-                    <Td className="hidden lg:table-cell text-meta text-fg-muted">{[c.origin, basisShort(c.legal_basis) + (c.consent_at ? ` vom ${fmtDate(c.consent_at)}` : ''), c.consent].filter(Boolean).join(' · ') || '–'}</Td>
-                    <Td align="right">
+                    </>
+                  ),
+                },
+                { key: 'lists', header: 'Listen', className: 'text-sm', cell: (c) => c.list_ids.map(listName).filter(Boolean).join(', ') || '–' },
+                { key: 'basis', header: 'Herkunft / Grundlage', from: 'lg', className: 'text-meta text-fg-muted', cell: (c) => [c.origin, basisShort(c.legal_basis) + (c.consent_at ? ` vom ${fmtDate(c.consent_at)}` : ''), c.consent].filter(Boolean).join(' · ') || '–' },
+                {
+                  key: 'actions',
+                  header: <span className="sr-only">Aktionen</span>,
+                  align: 'right',
+                  card: 'footer',
+                  cell: (c) => (
+                    <>
                       <div className="flex justify-end gap-1">
                         {c.review === 'inactive' && (
                           <Button
@@ -400,17 +407,17 @@ export default function Distribution() {
                           }}
                         />
                       </div>
-                    </Td>
-                  </tr>
-                ))}
-              </tbody>
-            </Table>
+                    </>
+                  ),
+                },
+              ]}
+            />
           )}
         </>
       )}
       {tab === 'lists' && (
         <Card>
-          {lists.data && !lists.data.length && <EmptyState icon="List" title="Noch keine Verteilerliste" />}
+          {lists.data && !lists.data.length && <EmptyLine>Noch keine Verteilerliste. Mit „Neue Liste“ Kontakte für Pressemitteilungen gruppieren.</EmptyLine>}
           <ul className="m-0 p-0 list-none flex flex-col divide-y divide-line">
             {(lists.data ?? []).map((l) => (
               <li key={l.id} className="py-3 flex items-center gap-3">

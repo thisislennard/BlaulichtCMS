@@ -5,6 +5,9 @@ import { del, get, post, put } from '../../api/client';
 import { Badge, Button, Card, EmptyState, FieldWrap, Input, Notice, PageHeader, Select, SkeletonRows, Table, Td, Textarea, Th, type Tone } from '../../components/ui/core';
 import { Dialog, useConfirm, useErrorToast, useToast } from '../../components/ui/overlays';
 import { useAuth } from '../../lib/auth';
+import { FilterEmpty, ListToolbar } from '../../components/ui/list';
+import { useListState } from '../../lib/listState';
+import { rank, searchTerms } from '../../lib/searchText';
 import { fmtDateTime } from '../../lib/format';
 import { CheckList } from '../automations/shared';
 import { usePressLists } from './Distribution';
@@ -220,6 +223,22 @@ export default function Releases() {
   const q = useQuery({ queryKey: ['press-releases'], queryFn: () => get<ReleaseRow[]>('/press/releases'), refetchInterval: 15_000 });
   const openId = params.get('id');
   const refresh = () => qc.invalidateQueries({ queryKey: ['press-releases'] });
+  // Suche und Reiter in der Adresse (#260); das Versandprotokoll (?id=) bleibt davon unberührt
+  const ls = useListState({ suche: '', status: 'alle' }, { tabKeys: ['status'] });
+  const status = ls.values.status === 'alle' || STATUS[ls.values.status as keyof typeof STATUS] ? ls.values.status : 'alle';
+  const terms = searchTerms(ls.values.suche);
+  const found = (q.data ?? []).filter((r) => !terms.length || rank(terms, r.subject) !== null);
+  const rows = found.filter((r) => status === 'alle' || r.status === status);
+  const openProtocol = (id: string) => setParams((p) => {
+    const n = new URLSearchParams(p);
+    n.set('id', id);
+    return n;
+  });
+  const closeProtocol = () => setParams((p) => {
+    const n = new URLSearchParams(p);
+    n.delete('id');
+    return n;
+  });
   return (
     <div className="flex flex-col gap-5">
       <PageHeader
@@ -227,14 +246,30 @@ export default function Releases() {
         actions={can('press.release') && <Button variant="primary" icon="Plus" onClick={() => setEdit(null)}>Neue Pressemitteilung</Button>}
       />
       {q.isLoading && <SkeletonRows rows={4} />}
-      {q.data && !q.data.length && <EmptyState icon="Newspaper" title="Noch keine Pressemitteilung" text="Frei schreiben oder aus einem Beitrag übernehmen." />}
       {!!q.data?.length && (
+        <ListToolbar
+          search={{ value: ls.values.suche, onChange: (v) => ls.set({ suche: v }), placeholder: 'Suchen in Pressemitteilungen', label: 'Pressemitteilungen durchsuchen (Betreff)' }}
+          tabs={{ label: 'Status', value: status, onChange: (v) => ls.set({ status: v }), options: [{ value: 'alle', label: 'Alle', count: found.length }, ...Object.entries(STATUS).filter(([k]) => found.some((r) => r.status === k)).map(([value, s]) => ({ value, label: s.label, count: found.filter((r) => r.status === value).length }))] }}
+          count={{ n: rows.length, one: 'Pressemitteilung', many: 'Pressemitteilungen' }}
+          onReset={() => ls.reset()}
+        />
+      )}
+      {q.data && !q.data.length && (
+        <EmptyState
+          icon="Newspaper"
+          title="Noch keine Pressemitteilung."
+          text="Frei schreiben oder aus einem Beitrag übernehmen."
+          action={can('press.release') && <Button icon="Plus" onClick={() => setEdit(null)}>Neue Pressemitteilung</Button>}
+        />
+      )}
+      {!!q.data?.length && !rows.length && <FilterEmpty onReset={() => ls.reset()} />}
+      {rows.length > 0 && (
         <Card>
           <ul className="m-0 p-0 list-none flex flex-col divide-y divide-line">
-            {q.data.map((r) => (
+            {rows.map((r) => (
               <li key={r.id} className="py-3 flex flex-wrap items-center gap-3">
                 <div className="min-w-0 flex-1">
-                  <button type="button" className="font-medium text-left hover:underline" onClick={() => setParams({ id: r.id })}>
+                  <button type="button" className="font-medium text-left hover:underline max-md:min-h-10" onClick={() => openProtocol(r.id)}>
                     {r.subject}
                   </button>
                   <div className="text-meta text-fg-muted">
@@ -262,7 +297,7 @@ export default function Releases() {
                     />
                   </>
                 )}
-                <Button size="sm" onClick={() => setParams({ id: r.id })}>
+                <Button size="sm" onClick={() => openProtocol(r.id)}>
                   {r.status === 'draft' ? 'Prüfen und senden' : 'Versandprotokoll'}
                 </Button>
               </li>
@@ -280,7 +315,7 @@ export default function Releases() {
           }}
         />
       )}
-      {openId && <Protocol id={openId} onClose={() => setParams({})} onChange={refresh} />}
+      {openId && <Protocol id={openId} onClose={closeProtocol} onChange={refresh} />}
     </div>
   );
 }

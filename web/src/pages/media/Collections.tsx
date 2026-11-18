@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { get, post, qs } from '../../api/client';
-import { Button, Card, EmptyState, ErrorBox, FieldWrap, Input, PageHeader, SegmentedControl, SkeletonRows, Switch, Textarea } from '../../components/ui/core';
+import { Button, Card, EmptyState, ErrorBox, FieldWrap, Input, PageHeader, SkeletonRows, Switch, Textarea } from '../../components/ui/core';
 import { MediaNav } from './MediaNav';
 import { Pager } from './gallery';
 import { Icon } from '../../components/ui/Icon';
@@ -10,7 +10,8 @@ import { Dialog, useErrorToast } from '../../components/ui/overlays';
 import { useAuth } from '../../lib/auth';
 import { fmtDate, fmtRelative } from '../../lib/format';
 import { DEFAULT_VALIDITY, ValidityPicker, validityPayload, type Validity } from './UploadLinks';
-import { useSucheParam } from '../../lib/urlParams';
+import { useListState } from '../../lib/listState';
+import { FilterEmpty, ListToolbar } from '../../components/ui/list';
 
 /** Neue Sammlung (mit Upload-Link). Vom Dashboard aus heißt der Dialog wie die Aktion: „Fotos sammeln“ (#257). */
 export function NewCollectionDialog({ open, onClose, postId, defaultTitle, title: dialogTitle }: { open: boolean; onClose: () => void; postId?: string; defaultTitle?: string; title?: string }) {
@@ -78,21 +79,25 @@ export function NewCollectionDialog({ open, onClose, postId, defaultTitle, title
 
 export default function Collections() {
   const { can } = useAuth();
-  const [status, setStatus] = useState<'active' | 'archived' | 'all'>('active');
-  const [search, setSearch] = useState('');
-  const [term, setTerm] = useState('');
-  useSucheParam(setSearch);
-  const [page, setPage] = useState(1);
+  // Suche, Status, Sichtung und Seite in der Adresse (#260): Zurück aus einer Sammlung zeigt dieselbe Auswahl
+  const ls = useListState({ suche: '', status: 'active', sichtung: '', seite: '1' }, { tabKeys: ['status', 'seite'] });
+  const status = (['active', 'archived', 'all'] as const).find((s) => s === ls.values.status) ?? 'active';
+  const search = ls.values.suche;
+  const page = Math.max(1, Number(ls.values.seite) || 1);
+  const setPage = (p: number) => ls.set({ seite: String(p) });
+  const [term, setTerm] = useState(search.trim());
   const [create, setCreate] = useState(false);
   useEffect(() => {
-    const t = setTimeout(() => (setTerm(search.trim()), setPage(1)), 300);
+    const t = setTimeout(() => setTerm(search.trim()), 300);
     return () => clearTimeout(t);
   }, [search]);
+  const pending = ls.values.sichtung === 'offen';
   const q = useQuery({
-    queryKey: ['collections', 'paged', status, term, page],
-    queryFn: () => get<{ items: any[]; total: number; page: number; pages: number }>(`/collections${qs({ paged: 1, status, q: term, page, perPage: 24 })}`),
+    queryKey: ['collections', 'paged', status, term, page, pending],
+    queryFn: () => get<{ items: any[]; total: number; page: number; pages: number }>(`/collections${qs({ paged: 1, status, q: term, page, perPage: 24, pending: pending ? 1 : undefined })}`),
     placeholderData: keepPreviousData,
   });
+  const narrowed = !!term || pending || status !== 'active';
   const list = q.data?.items;
   return (
     <div className="flex flex-col gap-5">
@@ -107,30 +112,35 @@ export default function Collections() {
         }
       />
       <MediaNav />
-      <div className="flex flex-wrap items-center gap-3">
-        <Input type="search" aria-label="Sammlungen durchsuchen" placeholder="Sammlungen durchsuchen" value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-[320px]" />
-        <SegmentedControl
-          label="Status"
-          size="sm"
-          value={status}
-          onChange={(v) => (setStatus(v), setPage(1))}
-          options={[
+      <ListToolbar<'active' | 'archived' | 'all'>
+        search={{ value: search, onChange: (s) => ls.set({ suche: s, seite: '1' }), placeholder: 'Suchen in Sammlungen', label: 'Sammlungen durchsuchen (Titel, Zweck, Notiz)' }}
+        tabs={{
+          label: 'Status',
+          value: status,
+          onChange: (v) => ls.set({ status: v, seite: '1' }),
+          options: [
             { value: 'active', label: 'Aktiv' },
             { value: 'archived', label: 'Archiviert' },
             { value: 'all', label: 'Alle' },
-          ]}
-        />
-      </div>
+          ],
+        }}
+        filters={[{ key: 'sichtung', label: 'Sichtung', value: ls.values.sichtung, onChange: (v) => ls.set({ sichtung: v, seite: '1' }), options: [{ value: 'offen', label: 'Mit offenen Dateien' }] }]}
+        count={q.data ? { n: q.data.total, one: 'Sammlung', many: 'Sammlungen' } : undefined}
+        onReset={() => ls.reset(['status'])}
+      />
       {q.isLoading && <SkeletonRows rows={4} />}
       {q.error && <ErrorBox title="Sammlungen konnten nicht geladen werden">{(q.error as Error).message}</ErrorBox>}
-      {list && list.length === 0 && (
-        <EmptyState
-          icon="Images"
-          title={term || status !== 'active' ? 'Keine passende Sammlung' : 'Noch keine Sammlung'}
-          text={term || status !== 'active' ? 'Suche oder Filter anpassen.' : 'Lege eine Sammlung an oder nutze im Beitrag „Fotos sammeln“.'}
-          action={!term && status === 'active' && can('media.collections') && <Button variant="primary" icon="Plus" onClick={() => setCreate(true)}>Neue Sammlung</Button>}
-        />
-      )}
+      {list && list.length === 0 &&
+        (narrowed ? (
+          <FilterEmpty onReset={() => ls.reset()} />
+        ) : (
+          <EmptyState
+            icon="Images"
+            title="Noch keine Sammlung."
+            text={can('media.collections') ? 'Lege eine Sammlung an oder nutze im Beitrag „Fotos sammeln“.' : 'Sammlungen legt die Redaktion an.'}
+            action={can('media.collections') && <Button icon="Plus" onClick={() => setCreate(true)}>Neue Sammlung</Button>}
+          />
+        ))}
       {list && list.length > 0 && (
         <ul className="m-0 p-0 list-none grid gap-4 grid-cols-1 sm:grid-cols-2 xl:grid-cols-3">
           {list.map((c) => (

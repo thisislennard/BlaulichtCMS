@@ -1,5 +1,5 @@
-import { useMemo } from "react";
-import { Link, useSearchParams } from "react-router";
+import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { get, qs } from "../api/client";
 import {
@@ -9,9 +9,10 @@ import {
   cx,
   EmptyState,
   PageHeader,
-  Select,
   SkeletonRows,
 } from "../components/ui/core";
+import { FilterEmpty, ListToolbar } from "../components/ui/list";
+import { useListState } from "../lib/listState";
 import { Icon } from "../components/ui/Icon";
 import { t } from "../i18n";
 import { fmtDate, fmtDateTime, fmtTime, getTimeZone } from "../lib/format";
@@ -70,31 +71,32 @@ function dayLabel(iso: string) {
 }
 
 export default function Activities() {
-  // Bereich in der Adresse (?bereich=press …), damit sich ein gefilterter Stand verlinken lässt
-  const [params, setParams] = useSearchParams();
-  const fromUrl = params.get("bereich") as Area | null;
-  const area: Area = fromUrl && AREAS.includes(fromUrl) ? fromUrl : "all";
-  const setArea = (a: Area) => {
-    const next = new URLSearchParams(params);
-    if (a === "all") next.delete("bereich");
-    else next.set("bereich", a);
-    setParams(next, { replace: true });
-  };
+  // Suche, Bereich und Ergebnis in der Adresse (?bereich=press&suche=… #258, #260), damit sich ein gefilterter Stand
+  // verlinken lässt und Zurück ihn wiederherstellt
+  const ls = useListState({ suche: "", bereich: "", ergebnis: "" });
+  const area: Area = AREAS.includes(ls.values.bereich as Area) ? (ls.values.bereich as Area) : "all";
+  const setArea = (a: Area) => ls.set({ bereich: a === "all" ? "" : a });
+  const result = ["failed", "denied"].includes(ls.values.ergebnis) ? ls.values.ergebnis : "";
+  const [term, setTerm] = useState(ls.values.suche.trim());
+  useEffect(() => {
+    const h = setTimeout(() => setTerm(ls.values.suche.trim()), 300);
+    return () => clearTimeout(h);
+  }, [ls.values.suche]);
   const q = useInfiniteQuery({
-    queryKey: ["audit", "feed", area],
+    queryKey: ["audit", "feed", area, term, result],
     initialPageParam: undefined as number | undefined,
     queryFn: ({ pageParam }) =>
       get<{ events: AuditEvent[]; nextBefore: number | null }>(
-        `/audit${qs({ area: area === "all" ? undefined : area, before: pageParam, limit: 100 })}`,
+        `/audit${qs({ area: area === "all" ? undefined : area, q: term || undefined, result: result || undefined, before: pageParam, limit: 100 })}`,
       ),
     getNextPageParam: (last) => last.nextBefore ?? undefined,
   });
   const events = useMemo(
     () =>
       (q.data?.pages.flatMap((p) => p.events) ?? []).filter(
-        (e) => area !== "all" || !NOISE.has(e.action),
+        (e) => area !== "all" || !!term || !NOISE.has(e.action),
       ),
-    [q.data, area],
+    [q.data, area, term],
   );
   const groups = useMemo(() => {
     const out: { key: string; label: string; items: AuditEvent[] }[] = [];
@@ -112,28 +114,16 @@ export default function Activities() {
       <PageHeader
         subtitle={t("activity.subtitle")}
       />
-      <div className="flex flex-col items-start gap-1.5">
-        <div className="flex items-center gap-2 w-full sm:w-auto">
-          <label
-            htmlFor="activity-area"
-            className="text-sm font-medium shrink-0"
-          >
-            {t("activity.areaLabel")}
-          </label>
-          <Select
-            id="activity-area"
-            value={area}
-            onChange={(e) => setArea(e.target.value as Area)}
-            className="sm:w-[260px]"
-          >
-            {AREAS.map((a) => (
-              <option key={a} value={a}>
-                {t(`activity.areas.${a}`)}
-              </option>
-            ))}
-          </Select>
-        </div>
-        {area === "all" && (
+      <div className="flex flex-col gap-1.5">
+        <ListToolbar
+          search={{ value: ls.values.suche, onChange: (v) => ls.set({ suche: v }), placeholder: "Suchen in Aktivitäten", label: "Aktivitäten durchsuchen (Person, Objekt, Aktion)" }}
+          filters={[
+            { key: "bereich", label: t("activity.areaLabel"), value: area === "all" ? "" : area, onChange: (v) => setArea((v || "all") as Area), allLabel: t("activity.areas.all"), options: AREAS.filter((a) => a !== "all").map((a) => ({ value: a, label: t(`activity.areas.${a}`) })) },
+            { key: "ergebnis", label: "Ergebnis", value: result, onChange: (v) => ls.set({ ergebnis: v }), allLabel: "Alle Ergebnisse", options: [{ value: "failed", label: t("activity.failed") }, { value: "denied", label: t("activity.denied") }] },
+          ]}
+          onReset={() => ls.reset()}
+        />
+        {area === "all" && !term && (
           <p className="m-0 text-meta text-fg-muted">
             {t("activity.hideLogins")}
           </p>
@@ -150,9 +140,11 @@ export default function Activities() {
         <div className="bg-card border border-line rounded-card p-4">
           <SkeletonRows rows={7} />
         </div>
+      ) : groups.length === 0 && (term || result) && !q.hasNextPage ? (
+        <FilterEmpty onReset={() => ls.reset()} />
       ) : groups.length === 0 ? (
         <div className="bg-card border border-line rounded-card">
-          {area === "all" ? (
+          {area === "all" && !term && !result ? (
             <EmptyState
               icon="Activity"
               title={t("activity.empty")}

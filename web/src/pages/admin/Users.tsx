@@ -20,11 +20,12 @@ import {
   PageHeader,
   SegmentedControl,
   SkeletonRows,
-  Table,
   Tabs,
-  Td,
-  Th,
 } from "../../components/ui/core";
+import { FilterEmpty, ListToolbar, ResponsiveTable } from "../../components/ui/list";
+import { useListState } from "../../lib/listState";
+import { useIsPhone } from "../../lib/media";
+import { rank, searchTerms } from "../../lib/searchText";
 import {
   CopyButton,
   DeleteDialog,
@@ -554,6 +555,18 @@ function UserTable({
     (u) => u.status === "active" && u.roles.includes("platform_admin"),
   ).length;
   const refresh = () => qc.invalidateQueries({ queryKey: ["users"] });
+  const phone = useIsPhone();
+  // Suche, Reiter und Rolle in der Adresse (#260)
+  const ls = useListState({ suche: "", status: "alle", rolle: "" }, { tabKeys: ["status"] });
+  const terms = searchTerms(ls.values.suche);
+  const stateOf = (u: UserRow) => (u.locked_until ? "gesperrt" : u.status === "active" ? "aktiv" : u.status === "disabled" ? "deaktiviert" : "eingeladen");
+  const matchesUser = (u: UserRow) => (!terms.length || rank(terms, u.name, u.email) !== null) && (!ls.values.rolle || u.roles.includes(ls.values.rolle));
+  const found = data.users.filter(matchesUser);
+  const status = ["alle", "aktiv", "eingeladen", "gesperrt", "deaktiviert"].includes(ls.values.status) ? ls.values.status : "alle";
+  const users = found.filter((u) => status === "alle" || stateOf(u) === status);
+  const services = status === "alle" || status === "aktiv" ? data.serviceAccounts.filter((k) => (!terms.length || rank(terms, k.name) !== null) && (!ls.values.rolle || k.roles.includes(ls.values.rolle))) : [];
+  const rows: ({ type: "user"; id: string; u: UserRow } | { type: "service"; id: string; k: ServiceAccount })[] = [...users.map((u) => ({ type: "user" as const, id: u.id, u })), ...services.map((k) => ({ type: "service" as const, id: `k-${k.id}`, k }))];
+  const filtered = ls.activeCount > 0 || status !== "alle";
 
   const setStatus = async (
     u: UserRow,
@@ -666,42 +679,62 @@ function UserTable({
           onClose={() => setLinkInfo(null)}
         />
       )}
+      <ListToolbar
+        search={{ value: ls.values.suche, onChange: (v) => ls.set({ suche: v }), placeholder: "Suchen in Personen", label: "Personen durchsuchen (Name, E-Mail)" }}
+        tabs={{
+          label: "Status",
+          value: status,
+          onChange: (v) => ls.set({ status: v }),
+          options: [
+            { value: "alle", label: "Alle", count: found.length },
+            { value: "aktiv", label: t("admin.users.status.active"), count: found.filter((u) => stateOf(u) === "aktiv").length },
+            { value: "eingeladen", label: t("admin.users.status.invited"), count: found.filter((u) => stateOf(u) === "eingeladen").length },
+            { value: "gesperrt", label: "Gesperrt", count: found.filter((u) => stateOf(u) === "gesperrt").length },
+            { value: "deaktiviert", label: t("admin.users.status.disabled"), count: found.filter((u) => stateOf(u) === "deaktiviert").length },
+          ],
+        }}
+        filters={[{ key: "rolle", label: "Rolle", value: ls.values.rolle, onChange: (v) => ls.set({ rolle: v }), options: roles.map((r) => ({ value: r.id, label: r.label })) }]}
+        count={{ n: rows.length, one: "Konto", many: "Konten" }}
+        onReset={() => ls.reset()}
+      />
       <section
         aria-label={t("admin.users.tabs.users")}
-        className="bg-card border border-line rounded-card min-w-0"
+        className={cx("min-w-0", !phone && "bg-card border border-line rounded-card")}
       >
-        <Table className="relative">
-          <thead>
-            <tr>
-              <Th className="pl-4 min-w-[240px]">
-                {t("admin.users.col.name")}
-              </Th>
-              <Th>{t("admin.users.col.roles")}</Th>
-              <Th>{t("admin.users.col.status")}</Th>
-              <Th>{t("admin.users.col.last")}</Th>
-              <Th>{t("admin.users.col.mfa")}</Th>
-              <Th className="w-12">
-                <span className="sr-only">{t("admin.common.open")}</span>
-              </Th>
-            </tr>
-          </thead>
-          <tbody>
-            {data.users.map((u) => {
-              const isMe = u.id === meId;
-              const expired =
-                u.status === "invited" &&
-                (!u.invite_expires_at ||
-                  new Date(u.invite_expires_at).getTime() < Date.now());
-              const last = u.last_active_at ?? u.last_login_at;
-              return (
-                <tr
-                  key={u.id}
-                  className={cx(
-                    "hover:bg-raised transition-colors duration-fast",
-                    u.status === "disabled" && "opacity-60",
-                  )}
-                >
-                  <Td className="pl-4">
+        <ResponsiveTable
+          label={t("admin.users.tabs.users")}
+          rows={rows}
+          rowKey={(r) => r.id}
+          rowClassName={(r) => cx(!phone && "hover:bg-raised transition-colors duration-fast", r.type === "user" && r.u.status === "disabled" && "opacity-60")}
+          columns={[
+            {
+              key: "name",
+              header: t("admin.users.col.name"),
+              className: "pl-4 min-w-[240px]",
+              card: "title",
+              cell: (r) => {
+                if (r.type === "service") {
+                  const k = r.k;
+                  return (
+                  <span className="flex items-center gap-3 min-w-0">
+                    <span
+                      aria-hidden="true"
+                      className="w-8 h-8 rounded-full bg-raised text-fg-muted inline-flex items-center justify-center shrink-0"
+                    >
+                      <Icon name="KeyRound" size={15} />
+                    </span>
+                    <span className="flex flex-col min-w-0">
+                      <span className="font-medium truncate">{k.name}</span>
+                      <span className="text-meta text-fg-muted truncate">
+                        {t("admin.users.service")}
+                      </span>
+                    </span>
+                  </span>
+                  );
+                }
+                const u = r.u;
+                const isMe = u.id === meId;
+                return (
                     <span className="flex items-center gap-3 min-w-0">
                       <Avatar
                         name={u.name}
@@ -721,8 +754,24 @@ function UserTable({
                         </span>
                       </span>
                     </span>
-                  </Td>
-                  <Td>
+                );
+              },
+            },
+            {
+              key: "roles",
+              header: t("admin.users.col.roles"),
+              cell: (r) => {
+                if (r.type === "service") {
+                  const k = r.k;
+                  return (
+                  <span className="text-meta">
+                    {k.roles.map(roleLabel).join(", ") || "–"}
+                  </span>
+                  );
+                }
+                const u = r.u;
+                const isMe = u.id === meId;
+                return (
                     <RoleButton
                       user={u}
                       roles={roles}
@@ -732,8 +781,22 @@ function UserTable({
                       activeAdmins={activeAdmins}
                       onSaved={refresh}
                     />
-                  </Td>
-                  <Td>
+                );
+              },
+            },
+            {
+              key: "status",
+              header: t("admin.users.col.status"),
+              card: "status",
+              cell: (r) => {
+                if (r.type === "service") return <Badge tone="success">{t("admin.users.status.active")}</Badge>;
+                const u = r.u;
+                const expired =
+                  u.status === "invited" &&
+                  (!u.invite_expires_at ||
+                    new Date(u.invite_expires_at).getTime() < Date.now());
+                return (
+                  <>
                     {u.locked_until ? (
                       <span className="flex flex-col items-start gap-0.5">
                         <Badge tone="error" title={`${u.failed_logins} Passwort- und ${u.mfa_failed} Code-Fehlversuche`}>Gesperrt</Badge>
@@ -763,20 +826,42 @@ function UserTable({
                         </span>
                       </span>
                     )}
-                  </Td>
-                  <Td className="text-meta text-fg-muted whitespace-nowrap">
+                  </>
+                );
+              },
+            },
+            {
+              key: "last",
+              header: t("admin.users.col.last"),
+              className: "text-meta text-fg-muted whitespace-nowrap",
+              cell: (r) => {
+                if (r.type === "service") {
+                  const k = r.k;
+                  return (
+                    <>
+                  {k.last_used_at
+                    ? fmtRelative(k.last_used_at)
+                    : t("admin.users.never")}
+                    </>
+                  );
+                }
+                const last = r.u.last_active_at ?? r.u.last_login_at;
+                return (
                     <span title={last ? fmtDateTime(last) : undefined}>
                       {last ? fmtRelative(last) : t("admin.users.never")}
                     </span>
-                  </Td>
-                  <Td
-                    className={cx(
-                      "text-meta whitespace-nowrap",
-                      u.totp_enabled || u.status !== "active"
-                        ? "text-fg-muted"
-                        : "text-warn",
-                    )}
-                  >
+                );
+              },
+            },
+            {
+              key: "mfa",
+              header: t("admin.users.col.mfa"),
+              className: "text-meta whitespace-nowrap",
+              cell: (r) => {
+                if (r.type === "service") return <span className="text-fg-muted">{t("admin.users.token")}</span>;
+                const u = r.u;
+                return (
+                  <span className={u.totp_enabled || u.status !== "active" ? "text-fg-muted" : "text-warn"}>
                     {u.totp_enabled || u.status !== "active" ? (
                       u.totp_enabled ? (
                         t("admin.users.mfaOn")
@@ -791,8 +876,34 @@ function UserTable({
                         {t("admin.users.mfaOff")}
                       </span>
                     )}
-                  </Td>
-                  <Td align="right">
+                  </span>
+                );
+              },
+            },
+            {
+              key: "actions",
+              header: <span className="sr-only">{t("admin.common.open")}</span>,
+              align: "right",
+              className: "w-12",
+              card: "footer",
+              cell: (r) => {
+                if (r.type === "service") {
+                  const k = r.k;
+                  return (
+                  <Link
+                    to="/einstellungen"
+                    aria-label={`${t("admin.users.serviceManage")}: ${k.name}`}
+                    title={t("admin.users.serviceManage")}
+                    className="inline-flex w-8 h-8 items-center justify-center rounded-control border border-line text-fg-muted hover:bg-raised hover:text-fg"
+                  >
+                    <Icon name="ExternalLink" size={14} />
+                  </Link>
+                  );
+                }
+                const u = r.u;
+                const isMe = u.id === meId;
+                return (
+                  <>
                     {(() => {
                       const items = [
                           can("user.invite") && !above(u) && u.status !== "disabled" && {
@@ -861,62 +972,14 @@ function UserTable({
                       // Ohne erlaubte Aktion kein Menü
                       return items.some(Boolean) ? <Menu size="sm" label={t("admin.users.actionsFor", { name: u.name })} items={items as any} /> : null;
                     })()}
-                  </Td>
-                </tr>
-              );
-            })}
-            {data.serviceAccounts.map((k) => (
-              <tr
-                key={k.id}
-                className="hover:bg-raised transition-colors duration-fast"
-              >
-                <Td className="pl-4">
-                  <span className="flex items-center gap-3 min-w-0">
-                    <span
-                      aria-hidden="true"
-                      className="w-8 h-8 rounded-full bg-raised text-fg-muted inline-flex items-center justify-center shrink-0"
-                    >
-                      <Icon name="KeyRound" size={15} />
-                    </span>
-                    <span className="flex flex-col min-w-0">
-                      <span className="font-medium truncate">{k.name}</span>
-                      <span className="text-meta text-fg-muted truncate">
-                        {t("admin.users.service")}
-                      </span>
-                    </span>
-                  </span>
-                </Td>
-                <Td>
-                  <span className="text-meta">
-                    {k.roles.map(roleLabel).join(", ") || "–"}
-                  </span>
-                </Td>
-                <Td>
-                  <Badge tone="success">{t("admin.users.status.active")}</Badge>
-                </Td>
-                <Td className="text-meta text-fg-muted whitespace-nowrap">
-                  {k.last_used_at
-                    ? fmtRelative(k.last_used_at)
-                    : t("admin.users.never")}
-                </Td>
-                <Td className="text-meta text-fg-muted">
-                  {t("admin.users.token")}
-                </Td>
-                <Td align="right">
-                  <Link
-                    to="/einstellungen"
-                    aria-label={`${t("admin.users.serviceManage")}: ${k.name}`}
-                    title={t("admin.users.serviceManage")}
-                    className="inline-flex w-8 h-8 items-center justify-center rounded-control border border-line text-fg-muted hover:bg-raised hover:text-fg"
-                  >
-                    <Icon name="ExternalLink" size={14} />
-                  </Link>
-                </Td>
-              </tr>
-            ))}
-          </tbody>
-        </Table>
-        {data.users.length <= 1 && !data.serviceAccounts.length && (
+                  </>
+                );
+              },
+            },
+          ]}
+        />
+        {rows.length === 0 && filtered && <div className="px-4"><FilterEmpty onReset={() => ls.reset()} /></div>}
+        {!filtered && data.users.length <= 1 && !data.serviceAccounts.length && (
           <EmptyState
             icon="Users"
             title={t("admin.users.empty")}

@@ -82,7 +82,7 @@ const fmtDate = (v: Date | string, tz: string) => new Date(v).toLocaleDateString
 const enc = encodeURIComponent;
 
 const SOURCES: Source[] = [
-  { type: 'post', group: 'Beiträge', perm: 'post.view', from: `SELECT id, title, 'Beitrag' AS subtitle, updated_at AS at FROM posts`, where: 'archived_at IS NULL', fields: ['title'], href: (r) => `/beitraege/${r.id}` },
+  { type: 'post', group: 'Beiträge', perm: 'post.view', from: `SELECT id, title, 'Beitrag' AS subtitle, updated_at AS at FROM posts`, where: 'archived_at IS NULL', fields: ['title'], href: (r) => `/beitraege/${r.id}`, all: (q) => `/beitraege?suche=${enc(q)}` },
   {
     type: 'press',
     group: 'Presse',
@@ -118,16 +118,17 @@ const SOURCES: Source[] = [
     where: 'w.archived_at IS NULL',
     fields: [`r.data->>'headline'`, 'w.case_no', `r.keyword->>'code'`, `r.keyword->>'label'`],
     href: (r) => `/warnungen/${r.id}`,
+    all: (q) => `/warnungen?suche=${enc(q)}`,
   },
   { type: 'collection', group: 'Medien', perm: 'media.view', from: `SELECT id, title, 'Sammlung' AS subtitle, created_at AS at FROM collections`, where: 'archived_at IS NULL', fields: ['title', 'purpose'], href: (r) => `/medien/${r.id}`, all: (q) => `/medien?suche=${enc(q)}` },
   { type: 'design', group: 'Designvorlagen', perm: 'templates.view', from: `SELECT id, title, CASE WHEN kind = 'image' THEN 'Bildvorlage' ELSE 'Designvorlage' END AS subtitle, updated_at AS at FROM design_templates`, fields: ['title', 'description', `array_to_string(tags, ' ')`], href: (r) => `/designvorlagen/${r.id}`, all: (q) => `/designvorlagen?suche=${enc(q)}` },
-  { type: 'banner', group: 'Banner', perm: 'banner.view', from: `SELECT id, title, 'Banner' AS subtitle, updated_at AS at FROM banners`, fields: ['title', 'text'], href: () => '/banner' },
-  { type: 'automation', group: 'Workflows', perm: 'automation.read', from: `SELECT id, name AS title, 'Workflow' AS subtitle, updated_at AS at FROM automations`, where: 'deleted_at IS NULL', fields: ['name', 'description'], href: (r) => `/workflows/${r.id}` },
-  { type: 'connection', group: 'Verbindungen', perm: 'connection.configure', from: `SELECT id, name AS title, kind AS subtitle, updated_at AS at FROM connections`, where: `deleted_at IS NULL AND status <> 'revoked'`, fields: ['name', 'kind'], href: (r) => `/verbindungen/${r.id}` },
+  { type: 'banner', group: 'Banner', perm: 'banner.view', from: `SELECT id, title, 'Banner' AS subtitle, updated_at AS at FROM banners`, fields: ['title', 'text'], href: (r) => `/banner?banner=${r.id}`, all: (q) => `/banner?suche=${enc(q)}` },
+  { type: 'automation', group: 'Workflows', perm: 'automation.read', from: `SELECT id, name AS title, 'Workflow' AS subtitle, updated_at AS at FROM automations`, where: 'deleted_at IS NULL', fields: ['name', 'description'], href: (r) => `/workflows/${r.id}`, all: (q) => `/workflows?suche=${enc(q)}` },
+  { type: 'connection', group: 'Verbindungen', perm: 'connection.configure', from: `SELECT id, name AS title, kind AS subtitle, updated_at AS at FROM connections`, where: `deleted_at IS NULL AND status <> 'revoked'`, fields: ['name', 'kind'], href: (r) => `/verbindungen/${r.id}`, all: (q) => `/verbindungen?suche=${enc(q)}` },
   { type: 'site', group: 'Websites', perm: 'channel.view', from: `SELECT id, name AS title, 'Website' AS subtitle, created_at AS at FROM wp_sites`, where: `status <> 'revoked'`, fields: ['name'], href: () => '/websites' },
   { type: 'template', group: 'Beitragsvorlagen', perm: 'post.templates', from: `SELECT id, name AS title, 'Beitragsvorlage' AS subtitle, created_at AS at FROM post_templates`, where: 'archived_at IS NULL', fields: ['name', 'title'], href: () => '/beitragsvorlagen' },
-  { type: 'release', group: 'Pressemitteilungen', perm: 'press.release', from: `SELECT id, subject AS title, 'Pressemitteilung' AS subtitle, updated_at AS at FROM press_releases`, fields: ['subject'], href: () => '/presse/mitteilungen' },
-  { type: 'user', group: 'Personen', perm: 'user.view', from: `SELECT id, name AS title, email AS subtitle, created_at AS at FROM users`, fields: ['name', 'email'], href: () => '/benutzer' },
+  { type: 'release', group: 'Pressemitteilungen', perm: 'press.release', from: `SELECT id, subject AS title, 'Pressemitteilung' AS subtitle, updated_at AS at FROM press_releases`, fields: ['subject'], href: (r) => `/presse/mitteilungen?id=${r.id}`, all: (q) => `/presse/mitteilungen?suche=${enc(q)}` },
+  { type: 'user', group: 'Personen', perm: 'user.view', from: `SELECT id, name AS title, email AS subtitle, created_at AS at FROM users`, fields: ['name', 'email'], href: (r) => `/benutzer?suche=${enc(r.subtitle || r.title)}`, all: (q) => `/benutzer?suche=${enc(q)}` },
 ];
 
 /** Höchstens so viele Treffer je Bereich; einer mehr zeigt „Alle Treffer in …“ an. */
