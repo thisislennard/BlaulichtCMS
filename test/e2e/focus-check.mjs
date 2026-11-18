@@ -714,7 +714,7 @@ try {
       failures.push({ where: `${route} › Listenansicht`, field: '-', problem: String(e.message).split('\n')[0] });
     }
     for (const [r, name] of [['/workflows/ausloeser', 'Neuer Auslöser'], ['/workflows/aktionen', 'Neue Aktion']]) {
-      const kinds = r.endsWith('eingaenge') ? ['FE2-Alarm', 'Amtliche Warnung', 'RSS-Eintrag', 'Neue Uploads', 'Zeitplan', 'Manueller Start'] : ['Banner', 'Beitrag', 'E-Mail', 'App-Benachrichtigung', 'Warnentwurf vorbereiten'];
+      const kinds = r.endsWith('ausloeser') ? ['FE2-Alarm', 'Amtliche Warnung', 'RSS-Eintrag', 'Neue Uploads', 'Zeitplan', 'Manueller Start'] : ['Banner', 'Beitrag', 'E-Mail', 'App-Benachrichtigung', 'Warnentwurf vorbereiten'];
       for (const k of kinds) {
         await gotoRoute(page, r);
         try {
