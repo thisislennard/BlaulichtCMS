@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { Link } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import { get } from '../../api/client';
-import { Card, cx, EmptyState, Rev, StatusBadge } from '../../components/ui/core';
+import { Card, cx, EmptyAction, EmptyLine, Rev, StatusBadge } from '../../components/ui/core';
 import { Icon } from '../../components/ui/Icon';
 import { useAuth } from '../../lib/auth';
 import { fmtDateTime, fmtRelative, fmtTime, getTimeZone, plural } from '../../lib/format';
@@ -32,12 +32,14 @@ const WARN_KIND: Record<string, string> = { initial: 'Erstmeldung', update: 'Akt
 
 /** Inhalt eines Widgets – rein darstellend, Daten kommen vom bestätigten Stand des Servers. */
 export function WidgetBody({ id, d }: { id: string; d: any }) {
+  // Leere Kacheln: eine leise Zeile statt eines großen Leerblocks, Aktion nur mit Recht (#266, Design §6)
+  const { can } = useAuth();
   switch (id) {
     case 'media':
       return <FlowBoard d={d} />;
     case 'approvals':
       return !d.pendingApprovals?.length ? (
-        <EmptyState icon="CheckCircle2" title="Nichts offen" />
+        <EmptyLine>Keine offenen Freigaben.</EmptyLine>
       ) : (
         <List>
           {d.pendingApprovals.map((p: any) => (
@@ -58,7 +60,7 @@ export function WidgetBody({ id, d }: { id: string; d: any }) {
       );
     case 'ready':
       return !d.readyToPublish?.length ? (
-        <EmptyState icon="Globe" title="Nichts wartet" />
+        <EmptyLine>Nichts wartet auf die Veröffentlichung.</EmptyLine>
       ) : (
         <List>
           {d.readyToPublish.map((p: any) => (
@@ -73,7 +75,7 @@ export function WidgetBody({ id, d }: { id: string; d: any }) {
       );
     case 'publications':
       return !d.publications?.length ? (
-        <EmptyState icon="Globe" title="Noch keine Veröffentlichung" />
+        <EmptyLine>Noch keine Veröffentlichung.</EmptyLine>
       ) : (
         <List>
           {d.publications.map((p: any) => (
@@ -100,7 +102,7 @@ export function WidgetBody({ id, d }: { id: string; d: any }) {
       );
     case 'uploads':
       return !d.recentCollections?.length ? (
-        <EmptyState icon="Images" title="Keine neuen Uploads" />
+        <EmptyLine>Keine neuen Uploads in den letzten 7 Tagen.</EmptyLine>
       ) : (
         <List>
           {d.recentCollections.map((c: any) => (
@@ -118,7 +120,7 @@ export function WidgetBody({ id, d }: { id: string; d: any }) {
       );
     case 'sites':
       return !d.sites?.length ? (
-        <EmptyState icon="Globe" title="Keine Website gekoppelt" text="Der interne Ablauf funktioniert auch ohne Website." />
+        <EmptyLine action={can('channel.sites') ? <EmptyAction to="/websites">Website koppeln</EmptyAction> : undefined}>Noch keine Website gekoppelt – der interne Ablauf funktioniert auch ohne.</EmptyLine>
       ) : (
         <ul className="m-0 p-0 list-none flex flex-col gap-2 text-sm">
           {d.sites.map((s: any) => (
@@ -132,7 +134,7 @@ export function WidgetBody({ id, d }: { id: string; d: any }) {
       );
     case 'banners':
       return !d.banners?.length ? (
-        <EmptyState icon="Megaphone" title="Kein Banner aktiv" />
+        <EmptyLine>Kein Banner aktiv.</EmptyLine>
       ) : (
         <List>
           {d.banners.map((b: any) => (
@@ -148,7 +150,7 @@ export function WidgetBody({ id, d }: { id: string; d: any }) {
       );
     case 'press':
       return !d.press?.open?.length ? (
-        <EmptyState icon="MessageSquareQuote" title="Keine offene Presseanfrage" />
+        <EmptyLine>Keine offene Presseanfrage.</EmptyLine>
       ) : (
         <List>
           {d.press.open.map((r: any) => (
@@ -168,7 +170,7 @@ export function WidgetBody({ id, d }: { id: string; d: any }) {
       );
     case 'insights':
       return !d.insights?.publications ? (
-        <EmptyState icon="ChartColumn" title="Keine Social-Posts in den letzten 7 Tagen" />
+        <EmptyLine>Keine Social-Posts in den letzten 7 Tagen.</EmptyLine>
       ) : (
         <div className="flex flex-col gap-3 text-sm">
           <div className="grid grid-cols-3 gap-2">
@@ -199,7 +201,7 @@ export function WidgetBody({ id, d }: { id: string; d: any }) {
       );
     case 'my_drafts':
       return !d.myDrafts?.length ? (
-        <EmptyState icon="FileText" title="Keine offenen Entwürfe" />
+        <EmptyLine>Keine offenen Entwürfe.</EmptyLine>
       ) : (
         <List>
           {d.myDrafts.map((p: any) => (
@@ -219,7 +221,7 @@ export function WidgetBody({ id, d }: { id: string; d: any }) {
       );
     case 'calendar_upcoming':
       return !d.calendar?.upcoming?.length ? (
-        <EmptyState icon="CalendarDays" title="Keine Termine in den nächsten 7 Tagen" />
+        <EmptyLine>Keine Termine in den nächsten 7 Tagen.</EmptyLine>
       ) : (
         <List>
           {d.calendar.upcoming.map((e: any) => (
@@ -246,7 +248,7 @@ export function WidgetBody({ id, d }: { id: string; d: any }) {
       return (
         <div className="flex flex-col gap-2">
           {!d.myPress?.length ? (
-            <EmptyState icon="MessageSquareQuote" title="Dir ist keine offene Presseanfrage zugewiesen" />
+            <EmptyLine>Dir ist keine offene Presseanfrage zugewiesen.</EmptyLine>
           ) : (
             <List>
               {d.myPress.map((r: any) => (
@@ -276,7 +278,7 @@ export function WidgetBody({ id, d }: { id: string; d: any }) {
       const cases: any[] = w.cases ?? [];
       const official: any[] = w.official ?? [];
       if (!cases.length && !official.length)
-        return <EmptyState icon="Siren" title={w.cases && w.official ? 'Kein offener Warnentwurf, keine gültige amtliche Warnung' : w.cases ? 'Kein offener Warnentwurf' : 'Keine gültige amtliche Warnung'} />;
+        return <EmptyLine>{w.cases && w.official ? 'Kein offener Warnentwurf, keine gültige amtliche Warnung.' : w.cases ? 'Kein offener Warnentwurf.' : 'Keine gültige amtliche Warnung.'}</EmptyLine>;
       return (
         <div className="flex flex-col gap-2">
           {w.cases && (
@@ -329,7 +331,7 @@ export function WidgetBody({ id, d }: { id: string; d: any }) {
     }
     case 'incidents':
       return !d.incidents?.items?.length ? (
-        <EmptyState icon="ListOrdered" title="Nichts wartet" text="Keine Einträge zur Freigabe, nichts freigegeben und offen, kein Übertragungsfehler." />
+        <EmptyLine>Nichts zur Freigabe, nichts freigegeben und offen, kein Übertragungsfehler.</EmptyLine>
       ) : (
         <List>
           {d.incidents.items.map((e: any) => (
@@ -352,7 +354,7 @@ export function WidgetBody({ id, d }: { id: string; d: any }) {
         <div className="flex flex-col gap-2">
           {d.automations && !d.automations.enabled && <p className="m-0 text-meta text-err flex items-center gap-1.5"><Icon name="AlertTriangle" size={13} /> Workflows sind unter Einstellungen ausgeschaltet – es starten keine Läufe.</p>}
           {!d.automations?.failed?.length ? (
-            <EmptyState icon="Workflow" title="Keine fehlgeschlagenen Läufe in den letzten 7 Tagen" />
+            <EmptyLine>Keine fehlgeschlagenen Läufe in den letzten 7 Tagen.</EmptyLine>
           ) : (
             <List>
               {d.automations.failed.map((a: any) => (
@@ -375,7 +377,7 @@ export function WidgetBody({ id, d }: { id: string; d: any }) {
       );
     case 'rss':
       return !d.rss?.length ? (
-        <EmptyState icon="Newspaper" title="Keine Einträge" text="Quellen lassen sich unter „Quellen“ hinzufügen." />
+        <EmptyLine action={can('source.manage') ? <EmptyAction to="/quellen">Quelle hinzufügen</EmptyAction> : undefined}>Keine Meldungen aus Quellen.</EmptyLine>
       ) : (
         <List>
           {d.rss.map((i: any) => (
