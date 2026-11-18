@@ -271,9 +271,12 @@ flowchart LR
   kein zusätzlicher Anbieter); E-Mail über SMTP oder Microsoft 365 (Microsoft Graph als Anwendung, aktivierbar erst nach
   bestandener Testmail). Push und E-Mail tragen standardmäßig nur die Art der Benachrichtigung und einen Link –
   Stichwort, Ort oder Betreff bleiben in BlaulichtCMS, Einzelheiten lassen sich je Zustellweg (Push, E-Mail) zuschalten.
-- **App für Handy und Computer:** installierbar (PWA) auf Android, iPhone/iPad und am Computer (Chrome, Edge, Safari am Mac – „Zum Dock hinzufügen“), mit eigenem Fenster, Push-Mitteilungen des Betriebssystems, Zähler ungelesener Benachrichtigungen am App-Symbol und Schnellzugriffen auf Neuer Beitrag, Medien sammeln und Freigaben; „App installieren“ im Benutzermenü.
-- **Schnell bedienbar:** Suche und Schnellaktionen mit `Strg` + `K`, vollständig per Tastatur nutzbar, heller und
-  dunkler Modus, Design „Leitstand“ für draußen und nachts.
+- **App für Handy und Computer:** installierbar (PWA) auf Android, iPhone/iPad und am Computer (Chrome, Edge, Safari am Mac – „Zum Dock hinzufügen“), mit eigenem Fenster, Push-Mitteilungen des Betriebssystems, Zähler ungelesener Benachrichtigungen am App-Symbol und Schnellzugriffen auf Neuer Beitrag, Fotos sammeln und Freigaben; „App installieren“ im Benutzermenü.
+- **Schnell bedienbar:** Suche mit `Strg` + `K` über Seiten, Schnellaktionen, Inhalte aller Bereiche mit Leserecht,
+  Einstellungen und Hilfe (Vorgangsnummern wie `P-2026-0001` springen direkt zum Vorgang); „?“ an jedem Seitentitel
+  und in der Kopfzeile führt zum passenden Hilfe-Kapitel; Navigation nach Aufgaben (Übersicht, Redaktion, Presse,
+  Warnungen, Einrichtung, Verwaltung); vollständig per Tastatur nutzbar, heller und dunkler Modus, Design „Leitstand“
+  für draußen und nachts.
 - **Eine Zeitzone für alles:** Anzeigen und Eingaben (Listen, Verläufe, Fristen, Ablauf von Upload-Links, geplante
   Veröffentlichung, Kalender, Begrüßung, Platzhalter `{datum}`, Zeitpläne) folgen der Zeitzone unter *Einstellungen →
   Allgemein* (Standard Europe/Berlin), nicht der des Geräts; Sommer-/Winterzeit automatisch.

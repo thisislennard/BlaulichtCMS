@@ -40,6 +40,12 @@ export default function CalendarPage() {
   const qc = useQueryClient();
   const [view, setViewState] = useState<View>(initialView);
   const [anchor, setAnchor] = useState(today());
+  // ?datum=JJJJ-MM-TT (Treffer der Suche Strg K, #259) öffnet den Kalender an diesem Tag
+  const [params] = useSearchParams();
+  const datum = params.get('datum');
+  useEffect(() => {
+    if (datum && /^\d{4}-\d{2}-\d{2}$/.test(datum)) setAnchor(datum);
+  }, [datum]);
   const [cats, setCats] = useState<string[]>([]);
   const [source, setSource] = useState('');
   const [open, setOpen] = useState<CalendarEntry | null>(null);

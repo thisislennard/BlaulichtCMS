@@ -460,27 +460,5 @@ export async function systemRoutes(app: FastifyInstance) {
     return { ok: true };
   });
 
-  /* Globale Suche (Strg K) */
-  app.get('/search', { preHandler: requireAuth() }, async (req) => {
-    const { q } = z.object({ q: z.string().trim().min(1).max(100) }).parse(req.query);
-    const perms = req.auth!.permissions;
-    const like = `%${q}%`;
-    const out: { type: string; id: string; title: string; subtitle: string; href: string }[] = [];
-    if (perms.has('post.view')) {
-      for (const p of await many<any>(`SELECT id, title FROM posts WHERE title ILIKE $1 AND archived_at IS NULL ORDER BY updated_at DESC LIMIT 8`, [like])) {
-        out.push({ type: 'post', id: p.id, title: p.title, subtitle: 'Beitrag', href: `/beitraege/${p.id}` });
-      }
-    }
-    if (perms.has('media.view')) {
-      for (const c of await many<any>(`SELECT id, title FROM collections WHERE title ILIKE $1 AND archived_at IS NULL ORDER BY created_at DESC LIMIT 6`, [like])) {
-        out.push({ type: 'collection', id: c.id, title: c.title, subtitle: 'Sammlung', href: `/medien/${c.id}` });
-      }
-    }
-    if (perms.has('user.view')) {
-      for (const u of await many<any>(`SELECT id, name, email FROM users WHERE name ILIKE $1 OR email ILIKE $1 ORDER BY name LIMIT 5`, [like])) {
-        out.push({ type: 'user', id: u.id, title: u.name, subtitle: u.email, href: `/benutzer` });
-      }
-    }
-    return { results: out };
-  });
+  /* Globale Suche (Strg K): routes/search.ts */
 }

@@ -144,6 +144,10 @@ mit passenden Rechten sichtbar. Höchstens **6 Bereiche** mit je höchstens **7 
   Badge am Bereich. Rechts Suche (`Strg K`), **Hilfe** (`?`, öffnet das Kapitel der aktuellen Seite), Farbmodus,
   Benachrichtigungen, Konto.
 - **Unternavigation:** die Seiten des aktiven Bereichs als Pillen; aktiv = `bg-raised` + rotes Symbol.
+- **Suche (`Strg K`, `CommandPalette`):** Seiten und Aktionen (aus der Navigation), Inhalte vom Server (`GET /search`,
+  `server/src/routes/search.ts`: je Bereich nur mit Leserecht, höchstens fünf, „Alle Treffer in …“ über `?suche=` der
+  Liste), Einstellungen (`config/settingsIndex.ts`) und Hilfe (Volltext, erst beim Suchen geladen). Neue Module mit
+  Inhalten tragen sich in `SOURCES` ein, neue Einstellungen in den Index.
 - **Statuszeile:** Brotkrumen als reine Navigation (`<ol>`, letzter Eintrag `aria-current="page"`) links,
   Betriebszustand rechts.
 - **Seitenkopf (`PageHeader`):** die einzige `<h1>` der Seite, rechts daneben das „?“ mit Kurzbeschreibung und Link ins

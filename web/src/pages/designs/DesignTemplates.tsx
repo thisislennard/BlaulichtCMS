@@ -8,6 +8,7 @@ import { Icon } from '../../components/ui/Icon';
 import { Dialog, useConfirm, useErrorToast, useToast } from '../../components/ui/overlays';
 import { useAuth } from '../../lib/auth';
 import { fmtRelative } from '../../lib/format';
+import { useSucheParam } from '../../lib/urlParams';
 
 export interface TemplateListItem {
   id: string;
@@ -319,6 +320,7 @@ export default function DesignTemplates() {
   const nav = useNavigate();
   const [search, setSearch] = useState('');
   const [term, setTerm] = useState('');
+  useSucheParam(setSearch);
   const [category, setCategory] = useState('');
   const [format, setFormat] = useState('');
   const [kind, setKind] = useState('');

@@ -14,6 +14,7 @@ import { fmtDate, fmtDateTime, fmtTime, fromLocalInput, toLocalInput, plural } f
 import { MediaPicker } from '../posts/PostEditor';
 import { PRIVACY_CHECKS, PrivacyCheckList } from '../posts/DecisionDialog';
 import { SENSITIVE_LABELS } from '../media/PrivacyDialog';
+import { useSucheParam } from '../../lib/urlParams';
 
 /** Einsatzliste der Website (#213): Einträge vorschlagen, bearbeiten, freigeben, veröffentlichen und zurückziehen. */
 
@@ -518,6 +519,7 @@ export default function IncidentList() {
   const [year, setYear] = useState<string>(() => (new URLSearchParams(window.location.search).has('eintrag') ? 'alle' : ''));
   const [filter, setFilter] = useState<Filter>('all');
   const [search, setSearch] = useState('');
+  useSucheParam(setSearch);
   const [sel, setSel] = useState<Set<string>>(new Set());
   const [edit, setEdit] = useState<Entry | null | undefined>(undefined);
   const [importing, setImporting] = useState(false);

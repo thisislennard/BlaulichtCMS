@@ -10,6 +10,7 @@ import { Dialog, useErrorToast } from '../../components/ui/overlays';
 import { useAuth } from '../../lib/auth';
 import { fmtDate, fmtRelative } from '../../lib/format';
 import { DEFAULT_VALIDITY, ValidityPicker, validityPayload, type Validity } from './UploadLinks';
+import { useSucheParam } from '../../lib/urlParams';
 
 /** Neue Sammlung (mit Upload-Link). Vom Dashboard aus heißt der Dialog wie die Aktion: „Fotos sammeln“ (#257). */
 export function NewCollectionDialog({ open, onClose, postId, defaultTitle, title: dialogTitle }: { open: boolean; onClose: () => void; postId?: string; defaultTitle?: string; title?: string }) {
@@ -80,6 +81,7 @@ export default function Collections() {
   const [status, setStatus] = useState<'active' | 'archived' | 'all'>('active');
   const [search, setSearch] = useState('');
   const [term, setTerm] = useState('');
+  useSucheParam(setSearch);
   const [page, setPage] = useState(1);
   const [create, setCreate] = useState(false);
   useEffect(() => {

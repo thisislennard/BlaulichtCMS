@@ -6,6 +6,7 @@ import { Button, cx, EmptyState, ErrorBox, Input, PageHeader, SegmentedControl, 
 import { useAuth } from '../../lib/auth';
 import { fmtDateTime, fmtRelative } from '../../lib/format';
 import { CHANNEL_LABEL, PressStatusBadge, RequestDialog, type PressRequestRow } from './shared';
+import { useSucheParam } from '../../lib/urlParams';
 
 type Filter = 'open' | 'overdue' | 'mine' | 'answered' | 'done' | 'expiring' | 'all';
 const FILTERS: Filter[] = ['open', 'overdue', 'mine', 'answered', 'done', 'expiring', 'all'];
@@ -19,6 +20,8 @@ export default function PressRequests() {
   // Benachrichtigung „… werden gelöscht“ verlinkt /presse?filter=expiring
   const [filter, setFilter] = useState<Filter>(() => (FILTERS.includes(params.get('filter') as Filter) ? (params.get('filter') as Filter) : 'open'));
   const [q, setQ] = useState('');
+  // Aus der Suche (Strg K): alle Anfragen mit diesem Suchbegriff
+  useSucheParam((s) => (setQ(s), setFilter('all')));
   const [creating, setCreating] = useState(false);
   const list = useQuery({ queryKey: ['press-requests', filter, q], queryFn: () => get<{ requests: PressRequestRow[]; counts: Record<string, number> }>(`/press/requests${qs({ filter, q: q.trim() || undefined })}`), refetchInterval: 30_000 });
   const c = list.data?.counts;

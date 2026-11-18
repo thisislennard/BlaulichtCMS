@@ -59,6 +59,7 @@ import { userRoutes } from './routes/users.js';
 import { roleRoutes } from './routes/roles.js';
 import { collectRouteAccess, type RouteEntry } from './auth/route-access.js';
 import { systemRoutes } from './routes/system.js';
+import { searchRoutes } from './routes/search.js';
 import { dashboardRoutes } from './routes/dashboard.js';
 import { mediaRoutes } from './routes/media.js';
 import { mediaOrganizeRoutes } from './routes/media-organize.js';
@@ -252,6 +253,7 @@ export async function buildApp(): Promise<FastifyInstance> {
       await api.register(userRoutes);
       await api.register(roleRoutes);
       await api.register(systemRoutes);
+      await api.register(searchRoutes);
       await api.register(dashboardRoutes);
       await api.register(mediaRoutes);
       await api.register(mediaOrganizeRoutes);
