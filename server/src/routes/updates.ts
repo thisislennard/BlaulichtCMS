@@ -21,7 +21,7 @@ const INSTALL_RATE = process.env.NODE_ENV === 'test' ? 100 : 5;
 const SETTINGS_OWNER = '00000000-0000-0000-0000-000000000002';
 
 /**
- * In-App-Updates (Einstellungen → Updates). Lesen: „System lesen“; Einstellungen, Prüfen und Installieren:
+ * In-App-Updates (Einstellungen → Updates & Wartung). Lesen: „System lesen“; Einstellungen, Prüfen und Installieren:
  * „System verwalten“, Ändern und Installieren zusätzlich mit frischer Passwortbestätigung. Der Token verlässt den
  * Server nie – die Oberfläche erfährt nur, ob einer gespeichert ist.
  */
@@ -107,7 +107,7 @@ export async function updateRoutes(app: FastifyInstance) {
     await securityAlert('update_settings', {
       title: `Update-Einstellungen geändert von ${req.auth!.actor.name}`,
       body: [...Object.entries(changes).map(([k, c]) => `${k}: ${JSON.stringify(c.vorher)} → ${JSON.stringify(c.nachher)}`), ...(tokenChange ? [`Token: ${tokenChange}`] : [])].join('\n').slice(0, 900),
-      link: '/einstellungen#updates',
+      link: '/einstellungen/updates',
       kind: 'info',
     });
     return { ok: true, tokenSet: !!patch['updates.token_secret_id'] || (!!oldToken && !dropToken), tokenCleared: dropToken && !b.token };
@@ -136,7 +136,7 @@ export async function updateRoutes(app: FastifyInstance) {
         kind: 'info',
         title: `Image-Update auf Version ${r.version} angestoßen von ${req.auth!.actor.name}`,
         body: `Laufende Version ${config.version} (Image ${image.version}). Der Update-Helfer am Host prüft das signierte Release, baut das Image und wechselt mit Sicherung und automatischem Rückweg.`,
-        link: '/einstellungen#updates',
+        link: '/einstellungen/updates',
       });
       return reply.status(202).send({ requested: true, id: r.id, version: r.version });
     } catch (e) {
@@ -158,7 +158,7 @@ export async function updateRoutes(app: FastifyInstance) {
     try {
       const r = await startInstall(req.auth!.actor, { userId: req.auth!.user?.id ?? null, expectVersion: b.version });
       await audit(req.auth!.actor, 'update.install', { type: 'update', label: r.version }, { von: config.version, schritt: 'gestartet' });
-      await securityAlert('update_install', { kind: 'info', title: `Update auf Version ${r.version} gestartet von ${req.auth!.actor.name}`, body: `Laufende Version ${config.version}. Wartungsmodus und Datenbanksicherung folgen, danach Neustart.`, link: '/einstellungen#updates' });
+      await securityAlert('update_install', { kind: 'info', title: `Update auf Version ${r.version} gestartet von ${req.auth!.actor.name}`, body: `Laufende Version ${config.version}. Wartungsmodus und Datenbanksicherung folgen, danach Neustart.`, link: '/einstellungen/updates' });
       return reply.status(202).send({ started: true, version: r.version, from: config.version });
     } catch (e) {
       if (e instanceof AppError) throw e;

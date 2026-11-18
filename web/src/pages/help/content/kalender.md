@@ -55,7 +55,7 @@ Ein Klick auf einen Termin einer Serie bietet:
 
 ## Zeitzone
 
-Alle Zeiten gelten in der Zeitzone der Instanz (**Einstellungen → Allgemein → Zeitzone**, Standard Europe/Berlin), inklusive Sommer- und Winterzeit.
+Alle Zeiten gelten in der Zeitzone der Instanz (**Einstellungen → Organisation → Zeitzone**, Standard Europe/Berlin), inklusive Sommer- und Winterzeit.
 
 ## Geplante Beiträge
 

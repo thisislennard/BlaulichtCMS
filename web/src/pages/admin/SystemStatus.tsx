@@ -30,7 +30,8 @@ import {
 } from "../../lib/format";
 import { LoadError, StateBadge } from "./shared";
 import { useAuth } from "../../lib/auth";
-import { UpdateAvailableNotice } from "./Updates";
+import { UpdateAvailableNotice } from "./settings/Updates";
+import { useHashScroll } from "../../lib/useHashScroll";
 import { plural } from '../../lib/format';
 
 export interface SystemStatusData {
@@ -195,6 +196,7 @@ function MaintenanceCard({ data }: { data: SystemStatusData | undefined }) {
   };
   return (
     <Card
+      id="wartungsmodus"
       title="Wartungsmodus"
       action={<Badge tone={m ? "warning" : "neutral"}>{m ? "aktiv" : "Normalbetrieb"}</Badge>}
     >
@@ -233,6 +235,7 @@ function MaintenanceCard({ data }: { data: SystemStatusData | undefined }) {
 export default function SystemStatus() {
   const { can, canAny } = useAuth();
   const q = useSystemStatus();
+  useHashScroll(!!q.data);
   const d = q.data;
   return (
     <div className="flex flex-col gap-5">
@@ -316,7 +319,7 @@ export default function SystemStatus() {
                     ? "ok"
                     : "muted"
               }
-              href="/einstellungen#sicherung"
+              href="/einstellungen/sicherung"
             />
             <KpiCard
               label={t("admin.system.version")}

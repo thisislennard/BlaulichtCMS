@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { config } from '../config.js';
 import { many, one, pool, tx, type Queryable } from '../db/pool.js';
@@ -9,14 +9,13 @@ import { alsoAny, requireAuth } from '../auth/context.js';
 import { audit, settingsDiff } from '../lib/audit.js';
 import { AppError, badRequest, conflict, forbidden, notFound } from '../lib/errors.js';
 import { notify } from '../lib/notify.js';
-import { revokeSecret, storeSecret } from '../lib/secrets.js';
 import { getSettings, setSettings } from '../lib/settings.js';
 import { enqueue } from '../jobs/queue.js';
 import { evaluate, activeQuestions, type Suggestion } from '../warnings/levels.js';
 import { KIND_LABEL, renderWarningPdf } from '../warnings/pdf.js';
-import { m365Fingerprint, storedM365Settings } from '../lib/mail.js';
+import { m365ConfigProblem, m365Fingerprint, m365Send, storedM365Settings } from '../lib/mail.js';
 import { parseMailbox } from '../lib/mail-address.js';
-import { SMTP_VERIFY_MAX_AGE_MS, smtpConfigProblem, smtpFingerprint, smtpTransport, storedSmtpSettings, type SmtpSettings } from '../warnings/mail.js';
+import { replaceSmtpPassword, SMTP_VERIFY_MAX_AGE_MS, smtpCandidate, smtpConfigProblem, smtpFingerprint, smtpFormChanged, smtpTransport, smtpVerified, storedSmtpSettings, type SmtpForm } from '../warnings/mail.js';
 import { sendFileResponse } from './files.js';
 import { deleteWarnings, removeWarningFiles } from '../lib/retention.js';
 import { normalizeCode, resolveKeyword } from '../keywords/catalog.js';
@@ -26,7 +25,6 @@ import { invalidateKeywords } from '../keywords/store.js';
  * Warnentwürfe (MoWaS-Übergabe). BlaulichtCMS bereitet vor und übergibt per E-Mail an die zuständige Stelle;
  * die amtliche Auslösung erfolgt dort. Entwurf, Warnstufe, Freigabe und Versand sind getrennte Rechte.
  */
-const SMTP_SECRET_OWNER = '00000000-0000-0000-0000-00000000534d';
 const pdfDir = (id: string) => path.join(config.dataDir, 'warnings', id);
 
 export function warningHash(r: { template_id: string; kind: string; data: any; responsibility_ids: string[]; keyword: any; answers: any; level_decision: any }) {
@@ -740,83 +738,69 @@ export async function warningRoutes(app: FastifyInstance) {
   });
 
   /**
-   * Kandidat für den Versand aus Formularwerten. Das gespeicherte Passwort wird nur für denselben Server weiterverwendet –
-   * sonst könnte man es durch Ändern des Servers an einen fremden Rechner schicken. Bei anderem Server mit Anmeldung muss
-   * das Passwort neu eingegeben werden.
+   * Testmodus und Testempfänger des Warnversands (warning.settings). Der Mailserver selbst wird seit #256 unter
+   * Einstellungen → E-Mail & Push eingerichtet (settings.mail, PUT /notify/settings). Ältere Aufrufer dürfen die
+   * SMTP-Angaben hier weiter mitschicken; eine Änderung daran verlangt dann zusätzlich „E-Mail-Versand und Push einstellen“.
    */
-  const candidate = (b: { host: string; port: number; security: string; user: string; from: string; password?: string }, stored: SmtpSettings): SmtpSettings => {
-    const sameHost = b.host.trim().toLowerCase() === stored.host.trim().toLowerCase();
-    if (!b.password && !sameHost && b.user.trim() && b.security !== 'none' && stored.password) throw badRequest('Der Server wurde geändert: Bitte das Passwort für den neuen Server erneut eingeben.');
-    // Absender: Adresse, optional mit Anzeigenamen – alle Stellen lesen ihn über parseMailbox (#230)
-    if (b.from.trim() && !parseMailbox(b.from)) throw badRequest('Absender: bitte eine E-Mail-Adresse eintragen, optional mit Namen – z. B. „presse@example.org“ oder „Feuerwehr Musterstadt <presse@example.org>“.');
-    return { host: b.host.trim(), port: b.port, security: b.security, user: b.user, from: b.from.trim(), password: b.password || (sameHost ? stored.password : '') };
-  };
-
-  /** Versandeinstellungen und Testmodus (Administration). */
   app.put('/warning-settings', { preHandler: requireAuth('warning.settings') }, async (req) => {
     const b = z
       .object({
-        host: z.string().trim().max(200),
-        port: z.number().int().min(1).max(65535),
-        security: z.enum(['starttls', 'tls', 'none']),
+        host: z.string().trim().max(200).optional(),
+        port: z.number().int().min(1).max(65535).optional(),
+        security: z.enum(['starttls', 'tls', 'none']).optional(),
         user: z.string().max(200).default(''),
-        from: z.string().max(200),
+        from: z.string().max(200).optional(),
         password: z.string().max(500).optional(),
         testMode: z.boolean(),
         testRecipient: z.union([z.email(), z.literal('')]),
       })
       .parse(req.body);
-    // Echtbetrieb braucht einen Versandweg: SMTP-Server oder – wenn gewählt – Microsoft 365 (Einstellungen → Benachrichtigungen und E-Mail)
-    if (!b.testMode && !b.host && (await getSettings(true))['mail.transport'] !== 'm365') throw badRequest('Für den Echtbetrieb muss ein SMTP-Server eingetragen sein.');
-    const problem = smtpConfigProblem({ security: b.security, user: b.user, password: b.password });
-    if (problem) throw badRequest(problem);
     const before = await getSettings(true);
     const stored = await storedSmtpSettings();
-    const next = candidate(b, stored);
+    const withSmtp = b.host !== undefined;
+    const form: SmtpForm = withSmtp ? { host: b.host!, port: b.port ?? stored.port, security: b.security ?? stored.security, user: b.user, from: b.from ?? '', password: b.password } : { ...stored, password: undefined };
+    if (withSmtp) {
+      const problem = smtpConfigProblem({ security: form.security, user: form.user, password: form.password });
+      if (problem) throw badRequest(problem);
+    }
+    const next = withSmtp ? smtpCandidate(form, stored) : stored;
+    const smtpChanged = withSmtp && smtpFormChanged(form, stored, next);
+    if (smtpChanged && !req.auth!.permissions.has('settings.mail')) throw forbidden('Der Mailserver wird unter Einstellungen → E-Mail & Push eingerichtet (Recht „E-Mail-Versand und Push einstellen“).');
+    // Echtbetrieb braucht einen Versandweg: SMTP-Server oder – wenn gewählt – Microsoft 365 (Einstellungen → E-Mail & Push)
+    if (!b.testMode && !next.host && before['mail.transport'] !== 'm365') throw badRequest('Für den Echtbetrieb muss ein Versandweg eingerichtet sein: SMTP-Server oder Microsoft 365 unter Einstellungen → E-Mail & Push.');
     // Echtbetrieb nur mit nachweislich funktionierenden Einstellungen: Testmodus ausschalten oder Versandeinstellungen im
     // Echtbetrieb ändern verlangt eine erfolgreiche Testmail mit genau diesen Werten (höchstens 60 Minuten alt).
-    const smtpChanged = !!b.password || (['host', 'port', 'security', 'user', 'from'] as const).some((k) => String((stored as any)[k] ?? '').trim() !== String((next as any)[k] ?? '').trim());
     if (!b.testMode && before['mail.transport'] === 'm365') {
       // Versand über Microsoft 365: Nachweis ist eine frische Testmail mit den gespeicherten Microsoft-365-Angaben
       if (before['warnings.test_mode']) {
         const v = before['m365.verified'];
         const fresh = !!v && Date.now() - Date.parse(v.at) <= SMTP_VERIFY_MAX_AGE_MS;
         if (!fresh || v!.fp !== m365Fingerprint(await storedM365Settings(before))) {
-          throw conflict('Der Testmodus lässt sich erst ausschalten, nachdem über Microsoft 365 eine Testmail erfolgreich versendet wurde (höchstens 60 Minuten alt). Bitte unter Einstellungen → Benachrichtigungen und E-Mail „Testmail senden“.');
+          throw conflict('Der Testmodus lässt sich erst ausschalten, nachdem über Microsoft 365 eine Testmail erfolgreich versendet wurde (höchstens 60 Minuten alt). Bitte zuerst „Testmail senden“.');
         }
       }
-    } else if (!b.testMode && (before['warnings.test_mode'] || smtpChanged)) {
-      const v = before['smtp.verified'];
-      const fresh = !!v && Date.now() - Date.parse(v.at) <= SMTP_VERIFY_MAX_AGE_MS;
-      if (!fresh || v!.fp !== smtpFingerprint(next)) {
-        throw conflict(
-          before['warnings.test_mode']
-            ? 'Der Testmodus lässt sich erst ausschalten, nachdem mit genau diesen Einstellungen eine Testmail erfolgreich versendet wurde (höchstens 60 Minuten alt). Bitte zuerst „Testmail senden“.'
-            : 'Im Echtbetrieb lassen sich die Versandeinstellungen nur nach einer erfolgreichen Testmail mit genau diesen Einstellungen ändern (höchstens 60 Minuten alt). Bitte zuerst „Testmail senden“ – oder vorher den Testmodus einschalten.',
-        );
-      }
+    } else if (!b.testMode && (before['warnings.test_mode'] || smtpChanged) && !smtpVerified(before['smtp.verified'], next)) {
+      throw conflict(
+        before['warnings.test_mode']
+          ? 'Der Testmodus lässt sich erst ausschalten, nachdem mit genau diesen Einstellungen eine Testmail erfolgreich versendet wurde (höchstens 60 Minuten alt). Bitte zuerst „Testmail senden“.'
+          : 'Im Echtbetrieb lassen sich die Versandeinstellungen nur nach einer erfolgreichen Testmail mit genau diesen Einstellungen ändern (höchstens 60 Minuten alt). Bitte zuerst „Testmail senden“ – oder vorher den Testmodus einschalten.',
+      );
     }
-    const patch: any = { 'smtp.host': b.host, 'smtp.port': b.port, 'smtp.security': b.security, 'smtp.user': b.user, 'smtp.from': b.from, 'warnings.test_mode': b.testMode, 'warnings.test_recipient': b.testRecipient };
+    const patch: any = { 'warnings.test_mode': b.testMode, 'warnings.test_recipient': b.testRecipient };
+    if (withSmtp) Object.assign(patch, { 'smtp.host': next.host, 'smtp.port': next.port, 'smtp.security': next.security, 'smtp.user': next.user, 'smtp.from': next.from });
     await tx(async (db) => {
-      if (b.password) {
-        // Neues Passwort: neue Version anlegen und die bisherige im selben Schritt widerrufen (#172); widerrufene
-        // Setting-Geheimnisse löscht der Worker nach 30 Tagen endgültig.
-        const prev = await one<{ value: unknown }>(`SELECT value FROM settings WHERE key = 'smtp.password_secret_id' FOR UPDATE`, [], db);
-        const sec = await storeSecret('setting', SMTP_SECRET_OWNER, b.password, req.auth!.user?.id ?? null, db);
-        patch['smtp.password_secret_id'] = sec.id;
-        if (typeof prev?.value === 'string' && prev.value && prev.value !== sec.id) await revokeSecret(prev.value, db);
-      }
+      if (withSmtp && b.password) patch['smtp.password_secret_id'] = await replaceSmtpPassword(b.password, req.auth!.user?.id ?? null, db);
       await setSettings(patch, req.auth!.user?.id ?? null, db);
     });
     const { 'smtp.password_secret_id': _pw, ...visible } = patch;
     const changes = settingsDiff(before as any, visible);
-    await audit(req.auth!.actor, 'warning.settings_changed', { type: 'settings', label: 'Warnversand' }, { testmodus: b.testMode, server: b.host, passwort_geaendert: !!b.password, aenderungen: Object.keys(changes).length ? changes : undefined });
+    await audit(req.auth!.actor, 'warning.settings_changed', { type: 'settings', label: 'Warnversand' }, { testmodus: b.testMode, server: withSmtp ? next.host : undefined, passwort_geaendert: !!b.password || undefined, aenderungen: Object.keys(changes).length ? changes : undefined });
     return { ok: true };
   });
   /**
-   * Testmail – mit den gespeicherten Einstellungen oder (empfohlen) mit den Werten aus dem Formular, noch bevor sie
-   * gespeichert sind (Passwort leer = gespeichertes Passwort, nur für denselben Server). Eine erfolgreiche Testmail
-   * hinterlegt den Prüfwert genau dieser Einstellungen; erst damit lässt sich der Testmodus ausschalten.
+   * Testmail für den Warnversand. Ohne Formularwerte über den eingestellten Versandweg (SMTP bzw. Microsoft 365) mit den
+   * gespeicherten Angaben – eine erfolgreiche Testmail hinterlegt den Prüfwert, erst damit lässt sich der Testmodus
+   * ausschalten. Mit SMTP-Formularwerten (ältere Aufrufer) zusätzlich nur mit „E-Mail-Versand und Push einstellen“.
    */
   app.post('/warning-settings/test-mail', { preHandler: requireAuth('warning.settings'), config: { rateLimit: { max: 5, timeWindow: '1 minute' } } }, async (req) => {
     const b = z
@@ -830,21 +814,48 @@ export async function warningRoutes(app: FastifyInstance) {
         password: z.string().max(500).optional(),
       })
       .parse(req.body);
-    const stored = await storedSmtpSettings();
-    const cand = b.host === undefined ? stored : candidate({ host: b.host, port: b.port ?? stored.port, security: b.security ?? stored.security, user: b.user ?? '', from: b.from ?? '', password: b.password }, stored);
-    const problem = smtpConfigProblem({ security: cand.security, user: cand.user, password: b.password });
-    if (problem) throw badRequest(problem);
-    if (!cand.host || !cand.from) throw badRequest('Bitte Server und Absender eintragen.');
-    try {
-      const { transport, from } = await smtpTransport(cand);
-      const info = await transport.sendMail({ from, to: b.to, subject: 'BlaulichtCMS: Testmail', text: 'Diese Testmail bestätigt, dass BlaulichtCMS E-Mails über den eingetragenen Server versenden kann.' });
-      const at = new Date().toISOString();
-      await setSettings({ 'smtp.verified': { fp: smtpFingerprint(cand), at } }, req.auth!.user?.id ?? null);
-      await audit(req.auth!.actor, 'warning.test_mail', { type: 'settings', label: 'Warnversand' }, { an: b.to, server: cand.host, port: cand.port, formularwerte: b.host !== undefined || undefined });
-      return { ok: true, response: info.response, verified_at: at };
-    } catch (e) {
-      await audit(req.auth!.actor, 'warning.test_mail', { type: 'settings', label: 'Warnversand' }, { an: b.to, server: cand.host, fehler: (e as Error).message.slice(0, 200) }, 'failed').catch(() => {});
-      throw new AppError(502, 'smtp_failed', `Testmail fehlgeschlagen: ${(e as Error).message}`);
+    const s = await getSettings(true);
+    if (b.host === undefined && s['mail.transport'] === 'm365') {
+      // Eingestellter Versandweg Microsoft 365: Testmail mit den gespeicherten Angaben
+      const m = await storedM365Settings(s);
+      const problem = m365ConfigProblem(m);
+      if (problem) throw badRequest(`Microsoft 365 ist nicht vollständig eingerichtet (Einstellungen → E-Mail & Push): ${problem}`);
+      try {
+        const info = await m365Send(m, { to: b.to, subject: 'BlaulichtCMS: Testmail für den Warnversand', text: 'Diese Testmail bestätigt, dass BlaulichtCMS Warnentwürfe über Microsoft 365 versenden kann.' });
+        const at = new Date().toISOString();
+        await setSettings({ 'm365.verified': { fp: m365Fingerprint(m), at } }, req.auth!.user?.id ?? null);
+        await audit(req.auth!.actor, 'warning.test_mail', { type: 'settings', label: 'Warnversand' }, { an: b.to, weg: 'Microsoft 365' });
+        return { ok: true, response: info.response, verified_at: at };
+      } catch (e) {
+        await audit(req.auth!.actor, 'warning.test_mail', { type: 'settings', label: 'Warnversand' }, { an: b.to, weg: 'Microsoft 365', fehler: (e as Error).message.slice(0, 200) }, 'failed').catch(() => {});
+        throw new AppError(502, 'mail_failed', `Testmail fehlgeschlagen: ${(e as Error).message}`);
+      }
     }
+    if (b.host !== undefined && !req.auth!.permissions.has('settings.mail')) throw forbidden('Testmails mit anderen Server-Angaben gibt es unter Einstellungen → E-Mail & Push (Recht „E-Mail-Versand und Push einstellen“).');
+    return smtpTestMail(req, b);
   });
+}
+
+/**
+ * SMTP-Testmail mit den gespeicherten Einstellungen oder (empfohlen) mit den Werten aus dem Formular, noch bevor sie
+ * gespeichert sind (Passwort leer = gespeichertes Passwort, nur für denselben Server). Eine erfolgreiche Testmail
+ * hinterlegt den Prüfwert genau dieser Einstellungen (Einstellungen → E-Mail & Push und Warnversand).
+ */
+export async function smtpTestMail(req: FastifyRequest, b: { to: string; host?: string; port?: number; security?: string; user?: string; from?: string; password?: string }) {
+  const stored = await storedSmtpSettings();
+  const cand = b.host === undefined ? stored : smtpCandidate({ host: b.host, port: b.port ?? stored.port, security: b.security ?? stored.security, user: b.user ?? '', from: b.from ?? '', password: b.password }, stored);
+  const problem = smtpConfigProblem({ security: cand.security, user: cand.user, password: b.password });
+  if (problem) throw badRequest(problem);
+  if (!cand.host || !cand.from) throw badRequest('Bitte Server und Absender eintragen.');
+  try {
+    const { transport, from } = await smtpTransport(cand);
+    const info = await transport.sendMail({ from, to: b.to, subject: 'BlaulichtCMS: Testmail', text: 'Diese Testmail bestätigt, dass BlaulichtCMS E-Mails über den eingetragenen Server versenden kann.' });
+    const at = new Date().toISOString();
+    await setSettings({ 'smtp.verified': { fp: smtpFingerprint(cand), at } }, req.auth!.user?.id ?? null);
+    await audit(req.auth!.actor, 'warning.test_mail', { type: 'settings', label: 'SMTP' }, { an: b.to, server: cand.host, port: cand.port, formularwerte: b.host !== undefined || undefined });
+    return { ok: true, response: info.response, verified_at: at };
+  } catch (e) {
+    await audit(req.auth!.actor, 'warning.test_mail', { type: 'settings', label: 'SMTP' }, { an: b.to, server: cand.host, fehler: (e as Error).message.slice(0, 200) }, 'failed').catch(() => {});
+    throw new AppError(502, 'smtp_failed', `Testmail fehlgeschlagen: ${(e as Error).message}`);
+  }
 }

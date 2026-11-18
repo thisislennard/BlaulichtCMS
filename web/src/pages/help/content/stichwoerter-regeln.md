@@ -2,7 +2,7 @@ Unter [Einrichtung → Stichwörter & Regeln](/stichwoerter-regeln) werden die G
 
 ## Stichwortverzeichnis der Länder
 
-Unter [Einstellungen → Allgemein](/einstellungen#allgemein) wird das **Bundesland** gewählt (Recht „Allgemeine Einstellungen ändern“). Für Länder mit öffentlichem, amtlichem Verzeichnis übernimmt BlaulichtCMS dessen Einsatzstichworte in die Stichwortliste. Das Verzeichnis ist **wortgetreu** aus der Quelle abgeschrieben; nichts wird ergänzt.
+Unter [Einstellungen → Organisation](/einstellungen/organisation) wird das **Bundesland** gewählt (Recht „Allgemeine Einstellungen ändern“). Für Länder mit öffentlichem, amtlichem Verzeichnis übernimmt BlaulichtCMS dessen Einsatzstichworte in die Stichwortliste. Das Verzeichnis ist **wortgetreu** aus der Quelle abgeschrieben; nichts wird ergänzt.
 
 | Land | Quelle | Übernommen |
 |---|---|---|
@@ -66,67 +66,13 @@ Empfänger der Übergabe-Mail (eine oder mehrere Adressen je Stelle). Im Wizard 
 
 Die Vorlage legt Felder, Stufenbezeichnungen, PDF-Titel und -Fußzeile sowie Betreff und Mailtext fest. Jede Änderung erzeugt eine **neue Version**; laufende Vorgänge behalten ihre Version und bleiben reproduzierbar.
 
-## E-Mail-Versand
+## Testmail und Testmodus
 
-Unter **E-Mail-Versand** (nur Administration) stehen SMTP-Server, Absender und Zugangsdaten; das Passwort wird verschlüsselt gespeichert und nie wieder angezeigt. Darüber gehen die Übergabe-Mails der Warnentwürfe und – falls eingeschaltet – Sicherheitsmeldungen.
+Der Versandweg für alle E-Mails – SMTP-Server oder Microsoft 365, jeweils mit Zugangsdaten und Testmail – wird an einer Stelle eingerichtet: [Einstellungen → E-Mail & Push](/einstellungen/e-mail) (siehe [E-Mail und Push einrichten](/hilfe/benachrichtigungen#e-mail-und-push-einrichten)). Darüber gehen auch die Übergabe-Mails der Warnentwürfe.
 
-### Woher die Zugangsdaten kommen
+Hier im Reiter **Testmodus** (Recht „Versand einstellen“) bleibt, was nur den Warnversand betrifft:
 
-Die Werte stellt die eigene **IT** bzw. der **E-Mail-Anbieter** der Organisation bereit. Am besten ein eigenes Postfach nur für BlaulichtCMS anlegen lassen (z. B. `warnung@…`) und erfragen:
+- **Testmodus** – ab Werk aktiv: Alle Warnmails gehen ausschließlich an das **Testpostfach** (Betreff mit [TEST]). Nicht die Adresse der zuständigen Stelle als Testpostfach eintragen.
+- **Testmail senden** – über den eingestellten Versandweg mit den gespeicherten Angaben. Ankunft im Postfach prüfen (auch im Spam-Ordner).
 
-| Feld | Bedeutung |
-|---|---|
-| Server | Postausgangsserver (SMTP), z. B. `smtp.example.org` |
-| Port und Verschlüsselung | meist 587 mit STARTTLS oder 465 mit TLS (siehe unten) |
-| Benutzer | Anmeldename des Postfachs, meist die vollständige E-Mail-Adresse |
-| Passwort | Passwort des Postfachs bzw. ein App-Passwort |
-| Absender | Adresse, die als Absender erscheint, optional mit Namen (`Feuerwehr Musterstadt <presse@example.org>`) – muss zum Postfach passen bzw. für das Postfach freigegeben sein. Antworten auf Presseanfragen und Pressemitteilungen verwenden dieselbe Adresse; der Name kommt von hier, sonst aus *Einstellungen → Allgemein → Absendername* |
-| Testpostfach | eigenes Postfach, an das im Testmodus alles geht |
-
-### Port und Verschlüsselung
-
-| Einstellung | Port | Ablauf |
-|---|---|---|
-| STARTTLS | 587 | Verbindung beginnt unverschlüsselt und wird vor der Anmeldung verschlüsselt. BlaulichtCMS verlangt die Verschlüsselung – ohne sie wird nicht gesendet. |
-| TLS | 465 | Verbindung ist von Anfang an verschlüsselt. |
-| keine | z. B. 25 | nur für Testserver ohne Anmeldung. Mit Benutzer oder Passwort lehnt BlaulichtCMS das Speichern ab, damit Zugangsdaten nie unverschlüsselt übertragen werden. |
-
-### Werte bekannter Anbieter
-
-Stand der Angaben: November 2026, jeweils aus der Hilfe des Anbieters. Im Zweifel gilt die Auskunft des Anbieters.
-
-| Anbieter | Server | Port / Verschlüsselung | Hinweis |
-|---|---|---|---|
-| Microsoft 365 | `smtp.office365.com` | 587 / STARTTLS | „Authentifiziertes SMTP“ muss für das Postfach eingeschaltet sein; Microsoft schränkt die Anmeldung mit Passwort (Basic Auth) ab Ende 2026 ein ([Einrichtung](https://learn.microsoft.com/de-de/exchange/mail-flow-best-practices/how-to-set-up-a-multifunction-device-or-application-to-send-email-using-microsoft-365-or-office-365), [SMTP AUTH einschalten](https://learn.microsoft.com/de-de/exchange/clients-and-mobile-in-exchange-online/authenticated-client-smtp-submission), [Zeitplan](https://techcommunity.microsoft.com/blog/exchange/updated-exchange-online-smtp-auth-basic-authentication-deprecation-timeline/4489835)) |
-| IONOS | `smtp.ionos.de` | 587 / STARTTLS oder 465 / TLS | [IONOS-Hilfe](https://www.ionos.de/hilfe/e-mail/problemloesungen-mail-basicmail-business/die-einrichtung-des-e-mail-programms-schlaegt-fehl/) |
-| STRATO | `smtp.strato.de` | 465 / TLS | Benutzer = vollständige E-Mail-Adresse ([STRATO-FAQ](https://www.strato.de/faq/mail/e-mailserver-adressen-ports-ssl-tls/)) |
-| GMX | `mail.gmx.net` | 587 / STARTTLS | POP3/IMAP-Zugriff muss im Postfach eingeschaltet sein ([Serverdaten](https://hilfe.gmx.net/pop-imap/pop3/serverdaten.html), [einschalten](https://hilfe.gmx.net/pop-imap/einschalten.html)) |
-| WEB.DE | `smtp.web.de` | 587 / STARTTLS | POP3/IMAP ist ab Werk aus ([Serverdaten](https://hilfe.web.de/pop-imap/imap/outlook.html), [einschalten](https://hilfe.web.de/pop-imap/einschalten.html)) |
-| Google Workspace / Gmail | `smtp.gmail.com` | 587 / STARTTLS oder 465 / TLS | nur mit App-Passwort, das die Bestätigung in zwei Schritten voraussetzt ([Google-Hilfe](https://knowledge.workspace.google.com/admin/gmail/send-email-from-a-printer-scanner-or-app?hl=de), [App-Passwörter](https://support.google.com/accounts/answer/185833?hl=de)) |
-
-### Testmail und Testmodus
-
-1. Felder ausfüllen (noch nicht speichern nötig), unter **Testmail an** eine eigene Adresse eintragen und **Testmail senden**. Gesendet wird mit den Werten im Formular; ein leeres Passwortfeld nutzt das gespeicherte Passwort – aber nur für denselben Server. Bei einem anderen Server das Passwort neu eingeben.
-2. Ankunft im Postfach prüfen (auch im Spam-Ordner).
-3. **Speichern.**
-
-Der **Testmodus** ist ab Werk aktiv und schickt alle Warnmails ausschließlich an das Testpostfach. **Ausschalten lässt er sich erst nach einer erfolgreichen Testmail mit genau den Einstellungen, die gespeichert werden** (Server, Port, Verschlüsselung, Benutzer, Absender, Passwort; höchstens 60 Minuten alt). Dasselbe gilt im Echtbetrieb für jede Änderung dieser Felder. Den Testmodus wieder einschalten geht jederzeit. Vor dem Echtbetrieb das Verfahren mit der zuständigen Stelle abstimmen.
-
-### SPF, DKIM und DMARC
-
-Damit Warnmails nicht im Spam landen, muss der Mailserver für die Absenderdomain berechtigt sein:
-
-- **SPF** – im DNS der Domain steht, welche Server Mails für sie versenden dürfen.
-- **DKIM** – der Mailserver signiert jede Mail; der Empfänger prüft die Signatur über einen Schlüssel im DNS.
-- **DMARC** – legt fest, wie Empfänger mit Mails umgehen, die SPF/DKIM nicht bestehen.
-
-Bei einem Postfach beim eigenen Anbieter richtet das in der Regel der Anbieter bzw. die IT ein. Eine kurze Erklärung gibt das BSI unter [Technischer Hintergrund E-Mail-Sicherheit](https://www.bsi.bund.de/DE/Themen/Verbraucherinnen-und-Verbraucher/Informationen-und-Empfehlungen/Onlinekommunikation/E-Mail-Sicherheit/technischer-Hintergrund-E-Mail-Sicherheit/technischer-Hintergrund-E-Mail-Sicherheit_node.html).
-
-### Typische Fehler (E-Mail)
-
-| Meldung | Ursache |
-|---|---|
-| „Invalid login“, „Authentication failed“ (535) | Benutzer oder Passwort falsch; bei Microsoft 365 „Authentifiziertes SMTP“ aus; bei Google kein App-Passwort; bei GMX/WEB.DE Zugriff nicht eingeschaltet. |
-| „Greeting never received“, Zeitüberschreitung | falscher Port oder Verschlüsselung (465 braucht TLS, 587 STARTTLS) oder Port durch eine Firewall gesperrt. |
-| „Sender address rejected“ / „Send as denied“ | Absender passt nicht zum Postfach. |
-| Testmail kommt nicht an, aber „angenommen“ | Spam-Ordner prüfen; SPF/DKIM der Absenderdomain mit der IT klären. |
+**Ausschalten lässt sich der Testmodus erst nach einer erfolgreichen Testmail** über den eingestellten Versandweg mit genau den gespeicherten Angaben (höchstens 60 Minuten alt) – hier oder unter Einstellungen → E-Mail & Push. Im Echtbetrieb verlangt dort auch jede Änderung der SMTP-Angaben bzw. der Wechsel auf SMTP eine frische Testmail mit genau diesen Werten. Den Testmodus wieder einschalten geht jederzeit. Vor dem Echtbetrieb das Verfahren mit der zuständigen Stelle abstimmen.

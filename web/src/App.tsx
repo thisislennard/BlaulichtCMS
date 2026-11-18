@@ -218,6 +218,7 @@ const router = createBrowserRouter(withErrors([
       { path: 'protokolle', element: <Page perm={['system.logs', 'audit.view']}><Logs /></Page> },
       { path: 'datenschutz-anfragen', element: <Page perm={['privacy.manage']}><PrivacyRequests /></Page> },
       { path: 'einstellungen', element: <Page perm={['settings.view']}><Settings /></Page> },
+      { path: 'einstellungen/:bereich', element: <Page perm={['settings.view']}><Settings /></Page> },
       { path: 'profil', element: <Page><Profile /></Page> },
       { path: 'hilfe', element: <Page><Help /></Page> },
       { path: 'hilfe/:chapter', element: <Page><Help /></Page> },

@@ -172,8 +172,8 @@ export async function checkForUpdate(): Promise<CheckResult> {
         title: `Update verfügbar: Version ${latest!.version}`,
         body: image
           ? `BlaulichtCMS ${latest!.version} steht bereit (installiert: ${config.version}) und braucht ein neues Docker-Image (mindestens ${image.minImageVersion}, laufend ${image.imageVersion}). ${IMAGE_UPDATE_HINT}`
-          : `BlaulichtCMS ${latest!.version} steht bereit (installiert: ${config.version}). Installation unter Einstellungen → Updates.`,
-        link: '/einstellungen#updates',
+          : `BlaulichtCMS ${latest!.version} steht bereit (installiert: ${config.version}). Installation unter Einstellungen → Updates & Wartung.`,
+        link: '/einstellungen/updates',
         permission: 'update.install',
       });
       log('info', 'updates', `Update verfügbar: ${config.version} → ${latest!.version}`);

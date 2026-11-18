@@ -19,7 +19,7 @@ Die Aktivitäten sind die lesbare Fassung des Audit-Protokolls (Recht „Audit-P
 - **Systemprotokoll** (Recht „Systemprotokoll ansehen“): technische Meldungen von Server und Worker mit Stufe (Info, Warnung, Fehler), Quelle und Korrelations-ID. Die Korrelations-ID verbindet eine Fehlermeldung in der Oberfläche mit dem passenden Eintrag.
 - **Audit-Protokoll** (Recht „Audit-Protokoll ansehen“): jede Änderung mit Person, Zeitpunkt, Ergebnis (erfolgreich, fehlgeschlagen, verweigert) und IP-Adresse; geänderte Einstellungen mit altem und neuem Wert unter „Details“. Filter nach Aktion, Objekt, Person und Ergebnis.
 
-Wie lange beide aufbewahrt werden, steht unter Einstellungen → Redaktion. Das Audit-Protokoll ist verkettet und versiegelt; mehr dazu unter [Sicherheit](/hilfe/sicherheit).
+Wie lange beide aufbewahrt werden, steht unter [Einstellungen → Löschfristen](/einstellungen/loeschfristen). Das Audit-Protokoll ist verkettet und versiegelt; mehr dazu unter [Sicherheit](/hilfe/sicherheit).
 
 ## Systemstatus
 

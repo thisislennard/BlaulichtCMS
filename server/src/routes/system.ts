@@ -86,7 +86,7 @@ export function backupServices(b: Awaited<ReturnType<typeof backupHealth>>) {
       id: 'offsite-leftovers',
       name: 'Frühere Sicherungsziele',
       state: 'warning',
-      detail: `Auf ${left.length === 1 ? `dem früheren Ziel ${host(left[0].url)}` : `${left.length} früheren Zielen (${left.map((l) => host(l.url)).join(', ')})`} liegen noch Sicherungen ohne Aufbewahrung – unter Einstellungen → Sicherung außer Haus löschen bzw. den Hinweis entfernen.`,
+      detail: `Auf ${left.length === 1 ? `dem früheren Ziel ${host(left[0].url)}` : `${left.length} früheren Zielen (${left.map((l) => host(l.url)).join(', ')})`} liegen noch Sicherungen ohne Aufbewahrung – unter Einstellungen → Sicherung löschen bzw. den Hinweis entfernen.`,
       ms: null,
     });
   }
@@ -98,7 +98,7 @@ export function backupServices(b: Awaited<ReturnType<typeof backupHealth>>) {
       name: 'Probe-Wiederherstellung',
       state: !d ? 'warning' : d.status === 'failed' ? 'error' : ['queued', 'running'].includes(d.status) ? 'ok' : b.drill_interval !== 'off' && ageH(d.finished_at) > limit ? 'warning' : 'ok',
       detail: !d
-        ? 'noch keine Probe – unter Einstellungen → Sicherung außer Haus starten'
+        ? 'noch keine Probe – unter Einstellungen → Sicherung starten'
         : d.status === 'failed'
           ? `Fehlgeschlagen: ${String(d.error ?? '').slice(0, 160)}`
           : ['queued', 'running'].includes(d.status)
@@ -267,7 +267,7 @@ export async function systemRoutes(app: FastifyInstance) {
     for (const [k, v] of Object.entries(body)) {
       if (!(k in DEFAULT_SETTINGS) || INTERNAL_KEYS.has(k as SettingKey)) throw badRequest(`Unbekannte Einstellung „${k}“.`);
       if (!req.auth!.permissions.has(settingPermission(k))) throw forbidden(`Für „${k}“ fehlt das Recht „${permissionDef(settingPermission(k))?.label}“.`);
-      if (DEDICATED_KEYS.has(k)) throw badRequest(`„${k}“ wird unter Warnentwurf → Einstellungen (E-Mail-Versand) geändert.`);
+      if (DEDICATED_KEYS.has(k)) throw badRequest(k.startsWith('smtp.') ? `„${k}“ wird unter Einstellungen → E-Mail & Push geändert.` : `„${k}“ wird unter Einrichtung → Stichwörter & Regeln (Testmodus) geändert.`);
       const def = (DEFAULT_SETTINGS as any)[k];
       if (typeof def === 'number') {
         const n = Number(v);

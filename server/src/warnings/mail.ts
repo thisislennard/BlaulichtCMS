@@ -1,10 +1,12 @@
 import fs from 'node:fs';
 import crypto from 'node:crypto';
 import nodemailer from 'nodemailer';
-import { one, pool } from '../db/pool.js';
+import { one, pool, type Queryable } from '../db/pool.js';
 import { log } from '../lib/log.js';
 import { notify } from '../lib/notify.js';
-import { readSecret } from '../lib/secrets.js';
+import { readSecret, revokeSecret, storeSecret } from '../lib/secrets.js';
+import { badRequest } from '../lib/errors.js';
+import { parseMailbox } from '../lib/mail-address.js';
 import { deriveKey } from '../lib/crypto.js';
 import { getSettings } from '../lib/settings.js';
 import { m365ConfigProblem, m365Transport, storedM365Settings } from '../lib/mail.js';
@@ -64,6 +66,53 @@ export function smtpFingerprint(c: SmtpSettings): string {
 /** So lange gilt eine erfolgreiche Testmail als Nachweis für das Ausschalten des Testmodus bzw. Änderungen im Echtbetrieb. */
 export const SMTP_VERIFY_MAX_AGE_MS = 60 * 60_000;
 
+/** Eigentümer des verschlüsselten SMTP-Passworts in `secrets`. */
+export const SMTP_SECRET_OWNER = '00000000-0000-0000-0000-00000000534d';
+
+/** SMTP-Angaben aus einem Formular (Einstellungen → E-Mail & Push, #256); Passwort leer = gespeichertes behalten. */
+export interface SmtpForm {
+  host: string;
+  port: number;
+  security: string;
+  user: string;
+  from: string;
+  password?: string;
+}
+
+/**
+ * Kandidat für den Versand aus Formularwerten. Das gespeicherte Passwort wird nur für denselben Server weiterverwendet –
+ * sonst könnte man es durch Ändern des Servers an einen fremden Rechner schicken. Bei anderem Server mit Anmeldung muss
+ * das Passwort neu eingegeben werden.
+ */
+export function smtpCandidate(b: SmtpForm, stored: SmtpSettings): SmtpSettings {
+  const sameHost = b.host.trim().toLowerCase() === stored.host.trim().toLowerCase();
+  if (!b.password && !sameHost && b.user.trim() && b.security !== 'none' && stored.password) throw badRequest('Der Server wurde geändert: Bitte das Passwort für den neuen Server erneut eingeben.');
+  // Absender: Adresse, optional mit Anzeigenamen – alle Stellen lesen ihn über parseMailbox (#230)
+  if (b.from.trim() && !parseMailbox(b.from)) throw badRequest('Absender: bitte eine E-Mail-Adresse eintragen, optional mit Namen – z. B. „presse@example.org“ oder „Feuerwehr Musterstadt <presse@example.org>“.');
+  return { host: b.host.trim(), port: b.port, security: b.security, user: b.user, from: b.from.trim(), password: b.password || (sameHost ? stored.password : '') };
+}
+
+/** Weichen die Formularwerte von den gespeicherten Einstellungen ab (neues Passwort zählt immer)? */
+export function smtpFormChanged(b: SmtpForm, stored: SmtpSettings, next: SmtpSettings): boolean {
+  return !!b.password || (['host', 'port', 'security', 'user', 'from'] as const).some((k) => String(stored[k] ?? '').trim() !== String(next[k] ?? '').trim());
+}
+
+/** Liegt eine frische, erfolgreiche Testmail genau dieser Einstellungen vor (höchstens 60 Minuten alt)? */
+export function smtpVerified(verified: { fp: string; at: string } | null | undefined, c: SmtpSettings): boolean {
+  return !!verified && Date.now() - Date.parse(verified.at) <= SMTP_VERIFY_MAX_AGE_MS && verified.fp === smtpFingerprint(c);
+}
+
+/**
+ * Neues SMTP-Passwort verschlüsselt ablegen und die bisherige Version im selben Schritt widerrufen (#172); widerrufene
+ * Setting-Geheimnisse löscht der Worker nach 30 Tagen endgültig. Muss in einer Transaktion laufen.
+ */
+export async function replaceSmtpPassword(password: string, userId: string | null, db: Queryable): Promise<string> {
+  const prev = await one<{ value: unknown }>(`SELECT value FROM settings WHERE key = 'smtp.password_secret_id' FOR UPDATE`, [], db);
+  const sec = await storeSecret('setting', SMTP_SECRET_OWNER, password, userId, db);
+  if (typeof prev?.value === 'string' && prev.value && prev.value !== sec.id) await revokeSecret(prev.value, db);
+  return sec.id;
+}
+
 /** Gemeinsame Form der Transporte (Nodemailer bzw. Microsoft Graph, lib/mail.ts). */
 export interface MailTransport {
   sendMail(m: Record<string, any>): Promise<{ messageId?: string; response?: string }>;
@@ -80,12 +129,12 @@ export async function smtpTransport(override?: SmtpSettings): Promise<{ from: st
     if (s['mail.transport'] === 'm365') {
       const m = await storedM365Settings(s);
       const problem = m365ConfigProblem(m);
-      if (problem) throw new Error(`Microsoft 365 ist nicht vollständig eingerichtet (Einstellungen → Benachrichtigungen und E-Mail): ${problem}`);
+      if (problem) throw new Error(`Microsoft 365 ist nicht vollständig eingerichtet (Einstellungen → E-Mail & Push): ${problem}`);
       return { from: m.sender, transport: m365Transport(m) };
     }
   }
   const c = override ?? (await storedSmtpSettings());
-  if (!c.host || !c.from) throw new Error('SMTP ist nicht eingerichtet (Einstellungen → E-Mail-Versand).');
+  if (!c.host || !c.from) throw new Error('SMTP ist nicht eingerichtet (Einstellungen → E-Mail & Push).');
   // Auch hier prüfen – z. B. Altbestand aus der Zeit vor der Prüfung (#100)
   const problem = smtpConfigProblem({ security: c.security, user: c.user });
   if (problem) throw new Error(problem);

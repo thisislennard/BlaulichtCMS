@@ -327,7 +327,7 @@ export default function Distribution() {
           />
           {toReview > 0 && listFilter !== 'review' && (
             <Notice tone="warning" title={`${plural(toReview, 'Kontakt', 'Kontakte')} zu prüfen`}>
-              Ohne vermerkte Rechtsgrundlage oder lange ohne Pressemitteilung und Änderung (Einstellungen → Datenschutz → Wiedervorlage). Prüfen, ob die Adresse noch stimmt und gebraucht wird – dann ergänzen bzw. „Geprüft“, sonst löschen. Automatisch gelöscht wird nichts.{' '}
+              Ohne vermerkte Rechtsgrundlage oder lange ohne Pressemitteilung und Änderung (Einstellungen → Löschfristen → Wiedervorlage). Prüfen, ob die Adresse noch stimmt und gebraucht wird – dann ergänzen bzw. „Geprüft“, sonst löschen. Automatisch gelöscht wird nichts.{' '}
               <Button size="sm" variant="ghost" onClick={() => setListFilter('review')}>
                 Anzeigen
               </Button>

@@ -49,7 +49,7 @@ Reihenfolge beim Stopp (`docker compose stop`): Worker (laufende Aufträge max. 
 | `database` | PostgreSQL antwortet |
 | `schema` | alle Migrationen angewendet |
 | `worker` | ein Worker hat sich in den letzten 45 s gemeldet |
-| `storage` | mehr freier Speicher als „Mindestens frei halten“ (Einstellungen → Medien) |
+| `storage` | mehr freier Speicher als „Mindestens frei halten“ (Einstellungen → Medien & Upload) |
 
 Sonst **503** mit den Einzelergebnissen. Der Docker-Healthcheck nutzt diesen Endpunkt.
 
@@ -166,11 +166,11 @@ Standardwerte und der Lasttest unten. Abweichungen hier eintragen, damit Betrieb
 | Thema | Vorschlag | Einstellung / Ort | Begründung |
 |---|---|---|---|
 | Speicher für `/data` | mind. **200 GB** SSD, Warnung bei < 20 % frei | Host | ca. 2 000 Fotos à 8 MB plus Vorschauen ≈ 25 GB/Jahr; Videos deutlich mehr |
-| Mindestens frei halten | **10 GB** (Standard 2 GB) | *Einstellungen → Medien* `media.min_free_gb` | Uploads stoppen rechtzeitig vor vollem Datenträger, Datenbank bleibt schreibfähig |
+| Mindestens frei halten | **10 GB** (Standard 2 GB) | *Einstellungen → Medien & Upload* `media.min_free_gb` | Uploads stoppen rechtzeitig vor vollem Datenträger, Datenbank bleibt schreibfähig |
 | Größe je Datei / Sammlung | 2 GB / 10 GB (Standard) | `media.max_file_mb`, `media.collection_max_gb` | Video-Einsätze; größere Sammlungen bewusst freigeben |
 | Speicherwarnung | Benachrichtigung an „Medien administrieren“ unter **10 GB** frei | `media.storage_warn_gb` (0 = aus) | Übersicht unter *Verwaltung → Medienverwaltung → Speicher* (je Sammlung, Ordner, Art, Papierkorb, Quarantäne, ZIP) |
 | ZIP-Downloads | **24 Stunden** verfügbar, höchstens **20 GB** | `media.export_hours`, `media.export_max_gb` | große Auswahl in mehreren ZIPs anfordern |
-| Aufbewahrung Medien | abgeschlossene Sammlungen (archiviert oder ohne aktiven Link) **365 Tage** nach der letzten Aktivität löschen, samt Originalen, Fassungen, Sammeldownloads und Links; Dateien in laufenden Beiträgen bleiben; fehlen einem später wieder aufgenommenen Beitrag dadurch Dateien, ist seine Freigabe nicht mehr auslieferbar (Hinweis „Dateien fehlen“, neue Fassung nötig) | `privacy.collection_retention_days` (Einstellungen → Datenschutz, 0 = nie) | Datenschutz: Zweckbindung der Uploads (Art. 5 Abs. 1 lit. e DSGVO); Probelauf „Was würde gelöscht?“ |
+| Aufbewahrung Medien | abgeschlossene Sammlungen (archiviert oder ohne aktiven Link) **365 Tage** nach der letzten Aktivität löschen, samt Originalen, Fassungen, Sammeldownloads und Links; Dateien in laufenden Beiträgen bleiben; fehlen einem später wieder aufgenommenen Beitrag dadurch Dateien, ist seine Freigabe nicht mehr auslieferbar (Hinweis „Dateien fehlen“, neue Fassung nötig) | `privacy.collection_retention_days` (Einstellungen → Löschfristen, 0 = nie) | Datenschutz: Zweckbindung der Uploads (Art. 5 Abs. 1 lit. e DSGVO); Probelauf „Was würde gelöscht?“ |
 | Papierkorb und abgewiesene Dateien | Dateien, Ordner und Sammlungen im Papierkorb samt Datensatz **30 Tage** nach dem Löschen endgültig entfernen; Datensätze abgewiesener Dateien ebenso | `privacy.deleted_media_days` | Papierkorb wie in LiFeOS: bis dahin wiederherstellbar; „Medien administrieren“ kann früher endgültig löschen; abgewiesene Dateien sind sofort weg |
 | Gesperrte Dateien | Dateien mit Prüfbefund samt Datensatz **30 Tage** nach der Prüfung löschen | `media.blocked_days` (0 = nie) | bis dahin erneut prüfbar |
 | Sicherheitsereignisse der Upload-Seiten | **365 Tage** | `media.security_log_days` (0 = unbegrenzt) | Ereignis, Link, Zeit, gekürzter IP-Hash (keine Klar-IP) |
@@ -446,7 +446,7 @@ das prüft auch, ob Schlüssel und Ablauf im Ernstfall greifbar sind.
 
 ### Sicherung außer Haus (WebDAV)
 
-*Einstellungen → Sicherung außer Haus* (Recht „Sicherungen erstellen“; Ziel ändern mit Passwortbestätigung) legt jede
+*Einstellungen → Sicherung → Sicherung außer Haus* (Recht „Sicherungen erstellen“; Ziel ändern mit Passwortbestätigung) legt jede
 Datenbanksicherung zusätzlich auf einem WebDAV-Ziel ab (z. B. Synology „WebDAV Server“, HTTPS-Port 5006). Umsetzung:
 `server/src/ops/offsite.ts`, Auftrag `backup.offsite` im Worker (4 Versuche mit Wartezeit, Meldung beim letzten).
 
@@ -495,18 +495,18 @@ Gelöschte Daten (Medien, Konten, abgelaufene Inhalte) leben in Sicherungen weit
 | Sicherung vor Updates (`vor-update/`) | letzte **3**, höchstens **90 Tage** alt | `BLAULICHTCMS_KEEP_PRE_UPDATE`, `BLAULICHTCMS_PRE_UPDATE_MAX_DAYS` (in `/etc/cron.d/blaulichtcms` bzw. beim Aufruf von `install.sh`) |
 | Datenbanksicherung im Volume | 14 Stände | *Einstellungen → Sicherung* |
 | Kopie außer Haus (Vorschlag) | monatlich, höchstens **3 Monate** aufbewahren, dann vernichten bzw. überschreiben | Betrieb |
-| Sicherung außer Haus (WebDAV) | je Tag/Woche/Monat die neueste, Standard 7 Tage, 4 Wochen, **3 Monate** (höchstens 90 Tage, 52 Wochen, 24 Monate; mehr als rund 4 Monate nur mit Bestätigung); nach Ausschalten oder Zielwechsel alte Dateien löschen (Abschnitt oben) | *Einstellungen → Sicherung außer Haus* |
+| Sicherung außer Haus (WebDAV) | je Tag/Woche/Monat die neueste, Standard 7 Tage, 4 Wochen, **3 Monate** (höchstens 90 Tage, 52 Wochen, 24 Monate; mehr als rund 4 Monate nur mit Bestätigung); nach Ausschalten oder Zielwechsel alte Dateien löschen (Abschnitt oben) | *Einstellungen → Sicherung → Sicherung außer Haus* |
 
 Damit sind gelöschte Daten mit den Standardwerten spätestens nach rund **4 Monaten** aus allen Sicherungen verschwunden
 (2 Monate wöchentliche Stände, 3 Monate außer Haus bzw. 3 Monate Kopie außer Haus plus ein Monat Kopierabstand). Wer
 außer Haus länger aufbewahrt, trägt die längere Frist ein (die Oberfläche nennt sie). Diese Frist gehört ins Verzeichnis der
 Verarbeitungstätigkeiten bzw. in die Auskunft nach Art. 15/17 DSGVO (Vorlage: [datenschutz.md](datenschutz.md)).
-Das gilt auch für Löschungen nach den Löschfristen (*Einstellungen → Datenschutz*), für „Sammlung löschen“ und für
+Das gilt auch für Löschungen nach den Löschfristen (*Einstellungen → Löschfristen*), für „Sammlung löschen“ und für
 Löschungen über *Verwaltung → Datenschutzanfragen*.
 
 **Nach einer Wiederherstellung** sind Löschungen seit dem Sicherungszeitpunkt wieder rückgängig gemacht:
 
-1. Automatische Löschfristen (Einstellungen → Datenschutz, `lib/retention.ts`) greifen beim nächsten Lauf des
+1. Automatische Löschfristen (Einstellungen → Löschfristen, `lib/retention.ts`) greifen beim nächsten Lauf des
    Workers von selbst wieder (stündlich; „Was würde gelöscht?“ zeigt vorab, was fällig ist).
 2. Von Hand gelöschte Inhalte im **Audit** ab dem Sicherungszeitpunkt suchen (z. B. `media.deleted`, `collection.deleted`, `user.deleted`)
    und die Löschung erneut ausführen; Löschungen aufgrund von Betroffenenanfragen (Art. 17) gezielt nachholen.
@@ -535,7 +535,7 @@ packt es in das leere Volume aus. Fehlt die `.sha256`-Datei, bricht es ab (bewus
 Ältere, unverschlüsselte `.tar.gz` lassen sich weiterhin einspielen.
 
 **Nur die Datenbank zurückspielen** (Datenbanksicherung `.bcbk`, z. B. vom Ziel außer Haus geholt unter
-*Einstellungen → Sicherung außer Haus → Sicherungen auf dem Ziel*, oder von Hand nach `/data/backups` kopiert; in einer
+*Einstellungen → Sicherung → Sicherung außer Haus → Sicherungen auf dem Ziel*, oder von Hand nach `/data/backups` kopiert; in einer
 neuen Instanz vorher den Master-Schlüssel aus dem Tresor als `/data/secrets/master.key` hinterlegen):
 
 ```bash
@@ -657,12 +657,12 @@ Datenvolume existiert und ein anderes Image eingetragen ist: Sicherung mit dem b
 Rückweg wie oben – nur Wartungsmodus und Vorabprüfung entfallen (ohne laufenden Container gibt es keine laufenden
 Vorgänge).
 
-Die Vorabprüfung gibt es auch in der Oberfläche (Einstellungen → Sicherung → „Update vorbereiten“) und auf der
+Die Vorabprüfung gibt es auch in der Oberfläche (Einstellungen → Updates & Wartung → „Update vorbereiten“; den Wartungsmodus schaltet man unter Verwaltung → Systemstatus) und auf der
 Kommandozeile: `docker compose exec blaulichtcms node server/dist/cli.js preflight`.
 
-### In-App-Update (Einstellungen → Updates)
+### In-App-Update (Einstellungen → Updates & Wartung)
 
-Für normale Releases muss niemand an den Host. Unter **Einstellungen → Updates** stehen:
+Für normale Releases muss niemand an den Host. Unter **Einstellungen → Updates & Wartung** stehen:
 
 - **Quelle:** GitHub-Repository `besitzer/name` (Standard `thisislennard/BlaulichtCMS`), API-Adresse (Standard
   `https://api.github.com`, nur HTTPS), **Token optional** – ein öffentliches Repository braucht keine Anmeldung. Ein
@@ -674,7 +674,7 @@ Für normale Releases muss niemand an den Host. Unter **Einstellungen → Update
   „Update verfügbar: Version X“. Installiert wird **nie automatisch**. Die Prüfung sendet außer der Versionsangabe im
   User-Agent keine Daten; wer keinen Abruf nach außen möchte, schaltet „Automatisch prüfen“ aus.
 - **Neues Image nötig?** Die Versionshinweise jedes Releases enden mit „Neue Image-Basis nötig ab Mindestversion X“
-  (`scripts/build-release.mjs`). Ist X neuer als das laufende Image, zeigen Einstellungen → Updates, Systemstatus und
+  (`scripts/build-release.mjs`). Ist X neuer als das laufende Image, zeigen Einstellungen → Updates & Wartung, Systemstatus und
   Benachrichtigung das schon bei der Prüfung an: Karte **„Neues Docker-Image nötig“** mit den Schritten am Host statt
   der Schaltfläche „Installieren“ (siehe [Neues Image für eine bestehende Installation](#neues-image-für-eine-bestehende-installation)).
   Maßgeblich bleibt die Prüfung des signierten Pakets (Schritte 3 und 4).
@@ -727,7 +727,7 @@ Setzt ein Release `MIN_IMAGE_VERSION` auf seine eigene Version (geänderte Laufz
 `Dockerfile`, Supervisor, Compose oder Skripte), kommt es nur über `install.sh` am Docker-Host an – auch wenn die
 Installation bisher über die Oberfläche aktualisiert wurde:
 
-1. **Oberfläche:** Einstellungen → Updates zeigt beim verfügbaren Release die Karte „Neues Docker-Image nötig“
+1. **Oberfläche:** Einstellungen → Updates & Wartung zeigt beim verfügbaren Release die Karte „Neues Docker-Image nötig“
    (mindestens nötige und laufende Image-Version, Befehl zum Kopieren) statt „Installieren“; Systemstatus und
    Benachrichtigung sagen dasselbe. Ein über die API trotzdem gestarteter Versuch bricht nach Download und
    Signaturprüfung ohne jede Änderung ab („Dieses Update braucht ein neueres Docker-Image …“ bzw. „Image-Update
@@ -744,12 +744,12 @@ Installation bisher über die Oberfläche aktualisiert wurde:
    Release wird nicht mehr verwendet – das neue Image ist mindestens so neu, der Supervisor entfernt den Zeiger und
    startet den Code des Images. Die Release-Ordner in `/data/releases` begrenzt das nächste In-App-Update wieder auf
    die drei neuesten.
-5. **Danach:** Einstellungen → Updates zeigt „Laufende Version X (aus dem Image)“. Folgende Releases ohne neues Image
+5. **Danach:** Einstellungen → Updates & Wartung zeigt „Laufende Version X (aus dem Image)“. Folgende Releases ohne neues Image
    lassen sich wieder in der Oberfläche installieren.
 
 ### Image-Updates aus der App (Update-Helfer)
 
-Mit dem **Update-Helfer** lassen sich auch Releases, die ein neues Image brauchen, unter *Einstellungen → Updates*
+Mit dem **Update-Helfer** lassen sich auch Releases, die ein neues Image brauchen, unter *Einstellungen → Updates & Wartung*
 anstoßen – ohne dem Container Zugriff auf Docker (`docker.sock`) oder andere Rechte am Host zu geben (#226).
 
 **Einrichten:** `install.sh` fragt nach dem Update (Standard: einrichten); ohne Rückfrage mit `--with-helper` bzw.

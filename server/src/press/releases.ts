@@ -78,8 +78,8 @@ export async function recipientsFor(listIds: string[], db: Queryable = pool) {
 /** Versand starten (Entwurf → Empfänger anlegen) bzw. verbliebene Empfänger nachholen. Gibt die Zahl offener Empfänger zurück. */
 export async function startRelease(id: string, actor: Actor, userId: string | null): Promise<number> {
   const base = await publicBase();
-  if (!/^https?:\/\//.test(base)) throw badRequest('Für den Abmeldelink braucht BlaulichtCMS seine öffentliche Adresse (Einstellungen → Allgemein → Öffentliche Adresse).');
-  if (!(await pressSender()).address) throw badRequest('Der E-Mail-Versand ist nicht eingerichtet (Einstellungen → Benachrichtigungen und E-Mail).');
+  if (!/^https?:\/\//.test(base)) throw badRequest('Für den Abmeldelink braucht BlaulichtCMS seine öffentliche Adresse (Einstellungen → Organisation → Öffentliche Adresse).');
+  if (!(await pressSender()).address) throw badRequest('Der E-Mail-Versand ist nicht eingerichtet (Einstellungen → E-Mail & Push).');
   return tx(async (db) => {
     const r = await one<any>(`SELECT * FROM press_releases WHERE id = $1 FOR UPDATE`, [id], db);
     if (!r) throw notFound('Pressemitteilung nicht gefunden.');

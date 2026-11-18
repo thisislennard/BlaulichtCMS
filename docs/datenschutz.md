@@ -45,7 +45,7 @@ GitHub (Update-Prüfung, Updates) ◀──Abruf──────────�
   **keine** Gesichtsmerkmale, keine Landmarken, kein Abgleich mit anderen Bildern, keine Identifizierung. Damit
   entstehen keine biometrischen Daten zur eindeutigen Identifizierung (Art. 4 Nr. 14, Art. 9 Abs. 1 DSGVO); die
   Verarbeitung dient dem Schutz der Abgebildeten. Unkenntlich wird nur, was ein Mensch übernimmt; offene Vorschläge
-  verlangen bei der Freigabe die Datenschutz-Prüfung. Abschaltbar unter *Einstellungen → Medien*
+  verlangen bei der Freigabe die Datenschutz-Prüfung. Abschaltbar unter *Einstellungen → Medien & Upload*
   (`media.face_detect`).
 - **Warnentwurf:** Rückrufkontakt (Name, Telefon), bestätigende/freigebende Personen, Empfängeradressen, PDF.
 - **Warnvorgang löschen:** von Hand vor Ablauf der Frist möglich (Rechte nach Stand, versandte Vorgänge nur durch
@@ -80,7 +80,7 @@ GitHub (Update-Prüfung, Updates) ◀──Abruf──────────�
 - **Benachrichtigungen:** In der Glocke steht die ganze Benachrichtigung, je nach Art z. B. **Stichwort und
   Gemeinde/Ortsteil** eines Einsatzes, der **Betreff** einer Mail an das Presse-Postfach, der Titel eines Beitrags oder
   der Text eines Workflows (bis 1 000 Zeichen). Per Push und E-Mail (Wahl jeder Person) gehen **standardmäßig nur die
-  Art der Benachrichtigung und ein Link** hinaus (#247). Mit *Einstellungen → Benachrichtigungen und E-Mail →
+  Art der Benachrichtigung und ein Link** hinaus (#247). Mit *Einstellungen → E-Mail & Push →
   „Einzelheiten in Push-Mitteilungen“* bzw. *„… in E-Mail-Benachrichtigungen“* (`notify.push_details`,
   `notify.mail_details`) tragen sie Titel und Text. Push ist auf dem Weg über den Push-Dienst Ende-zu-Ende-verschlüsselt
   (RFC 8291), erscheint aber auf dem Gerät (ggf. Sperrbildschirm); die **E-Mail ist nicht Ende-zu-Ende-verschlüsselt** und
@@ -132,8 +132,8 @@ GitHub (Update-Prüfung, Updates) ◀──Abruf──────────�
 | Benachrichtigungen (`notifications`, `notification_reads`) | Konten mit dem passenden Recht; im Text genannte Personen | Titel und Text (je nach Art Stichwort und Gemeinde/Ortsteil eines Einsatzes, Betreff einer Presse-Mail, Titel eines Beitrags, Text eines Workflows), Link, Lesestatus; Kopie per Push bzw. E-Mail nach Wahl der Person – standardmäßig nur Art und Link | **60 Tage**; zugestellte Push-Mitteilungen und Mails liegen danach auf den Geräten bzw. in den Postfächern | `notify.push_details`, `notify.mail_details` |
 | Update-Verlauf (`update_history`) | Administration | Versionen, Zeitpunkt, Ergebnis, handelnde Person | keine automatische Löschung | – |
 | Push-Geräte (`push_subscriptions`, Wahl je Art in `users.preferences`) | Konten mit eingeschaltetem Push | Adresse beim Push-Dienst des Browsers, öffentliche Geräteschlüssel, Gerätebezeichnung (Browser/Betriebssystem), Zeitpunkte und letzter Fehler der Zustellung | bis zum Entfernen durch die Person, bei erloschenem Abo (404/410) bzw. nach 10 Fehlschlägen in Folge sofort; mit dem Konto | *Mein Konto → Benachrichtigungen* |
-| Sicherung außer Haus und Probe-Wiederherstellung (`backup_offsite`, `restore_drills`, Probedatenbanken `blaulichtcms_probe_*`) | alle (Kopie) | Ziel, Benutzername (Passwort verschlüsselt), Stand der Übertragungen; Ergebnis der Proben mit Zählern; die Probedatenbank ist während der Probe eine vollständige Kopie einer Sicherung | Probedatenbank nach der Probe gelöscht (Reste nach einem Abbruch räumt der Worker auf); Aufbewahrung auf dem Ziel siehe nächste Zeile | *Einstellungen → Sicherung außer Haus* |
-| Sicherungen (Volume, Datenbank), auch auf dem Ziel außer Haus | alle | Kopie aller Daten | rund **4 Monate** mit den Standardwerten (siehe [Löschung und Sicherungen](betrieb.md#löschung-und-sicherungen)); Sicherung außer Haus Standard 7 Tage/4 Wochen/3 Monate, höchstens 90 Tage/52 Wochen/24 Monate – längere Aufbewahrung als 4 Monate nur mit Bestätigung, dann hier und im VVT anpassen | Host-Cron, *Einstellungen → Sicherung*, *Einstellungen → Sicherung außer Haus* |
+| Sicherung außer Haus und Probe-Wiederherstellung (`backup_offsite`, `restore_drills`, Probedatenbanken `blaulichtcms_probe_*`) | alle (Kopie) | Ziel, Benutzername (Passwort verschlüsselt), Stand der Übertragungen; Ergebnis der Proben mit Zählern; die Probedatenbank ist während der Probe eine vollständige Kopie einer Sicherung | Probedatenbank nach der Probe gelöscht (Reste nach einem Abbruch räumt der Worker auf); Aufbewahrung auf dem Ziel siehe nächste Zeile | *Einstellungen → Sicherung → Sicherung außer Haus* |
+| Sicherungen (Volume, Datenbank), auch auf dem Ziel außer Haus | alle | Kopie aller Daten | rund **4 Monate** mit den Standardwerten (siehe [Löschung und Sicherungen](betrieb.md#löschung-und-sicherungen)); Sicherung außer Haus Standard 7 Tage/4 Wochen/3 Monate, höchstens 90 Tage/52 Wochen/24 Monate – längere Aufbewahrung als 4 Monate nur mit Bestätigung, dann hier und im VVT anpassen | Host-Cron, *Einstellungen → Sicherung*, *Einstellungen → Sicherung → Sicherung außer Haus* |
 | Zugriffsprotokoll des Proxys | alle Aufrufenden | IP, Adresse (ggf. Token), Browser | abschalten bzw. **7 Tage** | am Proxy |
 
 **Cookies** (nur technisch notwendig, keine Einwilligung nötig, aber in der Datenschutzerklärung zu nennen):
@@ -164,7 +164,7 @@ E-Mail-Adressen; Einsatzbezug nur über die Allowlist) und verschwinden mit `pri
 ein Workflow anlegt (Beiträge, Banner, Warnentwürfe), gehören danach zum jeweiligen Bereich und folgen dessen
 Fristen.
 
-Die Löschfristen wendet der Worker stündlich an; *Einstellungen → Datenschutz → „Was würde gelöscht?“* zeigt vorab,
+Die Löschfristen wendet der Worker stündlich an; *Einstellungen → Löschfristen → „Was würde gelöscht?“* zeigt vorab,
 was fällig ist. Jeder Lauf steht im Audit (`retention.run`).
 
 ## Empfänger
@@ -225,7 +225,7 @@ Länder gelten deren Gesetze.
 | Presseverteiler und Pressemitteilungen | öffentliche Redaktionsadressen: Art. 6 Abs. 1 lit. e DSGVO i. V. m. *[Landesrecht]* (Beispiel Hessen: § 3 Abs. 1 HDSIG); persönliche Adressen: Einwilligung (Art. 6 Abs. 1 lit. a, Datum je Kontakt); Information nach Art. 14 spätestens mit der ersten Mitteilung (Fußzeile jeder Mitteilung und Datenschutzerklärung), Widerspruch/Abmeldung jederzeit (Art. 21) über den Link in jeder Mail – *[festlegen]* |
 | Konten, Benachrichtigungen per Push/E-Mail, Kalender-Abo von Beschäftigten und Ehrenamtlichen | Art. 6 Abs. 1 lit. c/e DSGVO i. V. m. dem Beschäftigtendatenschutz des Landes. Beispiel Hessen: § 23 Abs. 1 HDSIG für Beschäftigte – nach dem Urteil des EuGH vom 30.03.2023 (C-34/21) ist die Anwendbarkeit strittig ([Handreichung des HBDI](https://datenschutz.hessen.de/sites/datenschutz.hessen.de/files/2023-05/handreichung_beschaeftigtendatenschutz_eugh-urteil.pdf)); Ehrenamtliche nennt die Begriffsbestimmung in § 23 Abs. 8 HDSIG nicht ausdrücklich, für Angehörige der Feuerwehr regelt § 55 Abs. 2 HBKG die Verarbeitung für Einsätze sowie Aus- und Fortbildung (mit abschließender Liste der Daten) **[DSB prüfen]**. Push und E-Mail-Benachrichtigungen wählt jede Person selbst |
 | Kalender (eigene und eingelesene Termine) | Art. 6 Abs. 1 lit. e DSGVO (Organisation von Dienstbetrieb und Öffentlichkeitsarbeit) i. V. m. *[Landesrecht]*; Personen in Terminen nur soweit erforderlich |
-| Hochladen durch Bürgerinnen und Bürger | freiwillig; Einwilligung (Art. 6 Abs. 1 lit. a) bzw. lit. e – *[festlegen]*; die Upload-Seite informiert nach Art. 13 (*Einstellungen → Datenschutz*) |
+| Hochladen durch Bürgerinnen und Bürger | freiwillig; Einwilligung (Art. 6 Abs. 1 lit. a) bzw. lit. e – *[festlegen]*; die Upload-Seite informiert nach Art. 13 (*Einstellungen → Datenschutz & Recht*) |
 | Veröffentlichung von Fotos mit erkennbaren Personen | Einwilligung bzw. [§§ 22, 23 KunstUrhG](https://www.gesetze-im-internet.de/kunsturhg/) (Ausnahmen z. B. für Bildnisse aus dem Bereich der Zeitgeschichte und Bilder von Versammlungen – nicht bei entgegenstehendem berechtigtem Interesse der Abgebildeten)/Art. 85 DSGVO i. V. m. *[Landespresse-/Datenschutzgesetz]*; bei Verletzten (Gesundheitsdaten, Art. 9) nur mit ausdrücklicher Einwilligung |
 | Warnentwurf an zuständige Stellen | Art. 6 Abs. 1 lit. c/e i. V. m. *[Fachrecht]* |
 | Konten, Audit, Sicherheit, Update-Prüfung, Sicherungen | Art. 6 Abs. 1 lit. c/e (Art. 32 DSGVO), Beschäftigtendaten nach *[Landes-/Bundesrecht]* (siehe oben) |
@@ -236,11 +236,11 @@ auch als [Ausgabe des HBDI](https://datenschutz.hessen.de/sites/datenschutz.hess
 ## Betroffenenrechte
 
 - **Information (Art. 13):** Abschnitt „Datenschutz“ auf der Upload-Seite, Zeile auf dem Aushang; Angaben unter
-  *Einstellungen → Datenschutz*. Die Datenschutzerklärung der Website muss Upload, Veröffentlichung (Website,
+  *Einstellungen → Datenschutz & Recht*. Die Datenschutzerklärung der Website muss Upload, Veröffentlichung (Website,
   Einsatzliste, soziale Netzwerke wie Meta, X, Mastodon, Bluesky), Presseanfragen, Presseverteiler (Art. 13/14, Abmeldung)
   und Cookies abdecken. Beschäftigte und Ehrenamtliche gesondert informieren (Konten, Protokolle, Benachrichtigungen per
   Push über die Push-Dienste der Browserhersteller und per E-Mail, Kalender-Abo). Alternativ lassen sich Datenschutzerklärung und Impressum direkt in BlaulichtCMS hinterlegen
-  (*Einstellungen → Datenschutz*, öffentlich unter `/datenschutz` und `/impressum`); ohne eigene Adresse verlinken
+  (*Einstellungen → Datenschutz & Recht*, öffentlich unter `/datenschutz` und `/impressum`); ohne eigene Adresse verlinken
   Upload-Seite und Aushang dann die Seite `/datenschutz`. Die eingebaute Vorlage ist nur eine Gliederung mit
   Platzhaltern (Upload-Seite, Website und Einsatzliste, soziale Netzwerke, Presseanfragen, Presseverteiler, Anmeldung,
   Empfänger und Drittländer) und ersetzt keine rechtliche Prüfung.

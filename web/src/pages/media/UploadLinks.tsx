@@ -286,7 +286,7 @@ export function UploadLinksCard({ collection, links, folders = [], onChanged }: 
     >
       {me?.instance.privacy?.incomplete && (
         <Notice tone="warning" className="mb-2" title="Datenschutzangaben fehlen">
-          Die Upload-Seite nennt noch keine verantwortliche Stelle bzw. keine Datenschutzerklärung (Art. 13 DSGVO). Bitte unter {can('settings.view') ? <Link to="/einstellungen#datenschutz">Einstellungen → Datenschutz</Link> : 'Einstellungen → Datenschutz'} eintragen.
+          Die Upload-Seite nennt noch keine verantwortliche Stelle bzw. keine Datenschutzerklärung (Art. 13 DSGVO). Bitte unter {can('settings.view') ? <Link to="/einstellungen/datenschutz">Einstellungen → Datenschutz &amp; Recht</Link> : 'Einstellungen → Datenschutz & Recht'} eintragen.
         </Notice>
       )}
       {links.length === 0 && <p className="m-0 text-sm text-fg-muted">Noch kein Upload-Link.</p>}

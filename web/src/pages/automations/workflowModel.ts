@@ -181,7 +181,7 @@ export function activationChecklist(x: ChecklistInput): ChecklistItem[] {
   } else {
     items.push({ id: 'direct', label: 'Ergebnisse gehen zur Freigabe', state: 'info', hint: 'Kein Direktversand: Banner und Beiträge veröffentlicht erst ein Mensch.' });
   }
-  if (!x.enabled) items.push({ id: 'enabled', label: 'Workflows global eingeschaltet', state: 'todo', hint: 'Einstellungen → Redaktion → „Workflows ausführen“.' });
+  if (!x.enabled) items.push({ id: 'enabled', label: 'Workflows global eingeschaltet', state: 'todo', hint: 'Einstellungen → Workflows → „Workflows ausführen“.' });
   return items;
 }
 

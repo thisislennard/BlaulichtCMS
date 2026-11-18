@@ -79,6 +79,7 @@ export default function Profile() {
           </SectionCard>
           <PasswordCard />
           <SectionCard
+            id="darstellung"
             title={t("profile.look")}
             description={t("profile.lookDesc")}
           >

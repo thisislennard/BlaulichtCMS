@@ -3,7 +3,7 @@ import { navGroupOf, navItem } from './navigation';
 
 /**
  * Menüpfad als Text für Hinweise („Einrichtung → Stichwörter & Regeln“), optional mit Reiter oder Abschnitt
- * („Einstellungen → Datenschutz“). Hinweise verwenden diese Funktion statt fest geschriebener Bezeichnungen, damit
+ * („Einstellungen → Löschfristen“). Hinweise verwenden diese Funktion statt fest geschriebener Bezeichnungen, damit
  * sie bei einer Umbenennung im Menü mitgehen (#257).
  */
 export function navTrail(id: string, ...more: string[]): string {

@@ -397,14 +397,14 @@ export function auditHref(
     case "role":
       return "/benutzer?tab=rollen";
     case "backup":
-      return "/einstellungen#sicherung";
+      return "/einstellungen/sicherung";
     case "update":
-      return "/einstellungen#updates";
+      return "/einstellungen/updates";
     case "settings":
       if (a.startsWith("warning.")) return "/stichwoerter-regeln";
       if (a.startsWith("press.mailbox")) return "/presse-postfach";
-      if (a.startsWith("notify.")) return "/einstellungen#benachrichtigungen";
-      if (a.startsWith("updates.")) return "/einstellungen#updates";
+      if (a.startsWith("notify.")) return "/einstellungen/e-mail";
+      if (a.startsWith("updates.")) return "/einstellungen/updates";
       if (a.startsWith("dashboard.")) return "/";
       return "/einstellungen";
     case "privacy":

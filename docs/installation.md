@@ -65,7 +65,7 @@ Das Skript lässt sich jederzeit erneut starten – bei einer bestehenden Instal
 ### Schritt 3: Ersteinrichtung im Browser
 
 Die angezeigte Adresse `…/einrichtung` öffnen, Einrichtungsschlüssel, Organisation und Zeitzone eingeben und das erste
-Konto mit Zwei-Faktor-Anmeldung anlegen. Danach unter *Einstellungen → Datenschutz* Verantwortlichen und
+Konto mit Zwei-Faktor-Anmeldung anlegen. Danach unter *Einstellungen → Datenschutz & Recht* Verantwortlichen und
 Datenschutzerklärung eintragen und unter *Verwaltung → Benutzer und Rollen* die Redaktion einladen.
 
 Werte für den Reverse Proxy zum Nachschlagen (Nginx Proxy Manager: Ziel `http` / `blaulichtcms` / `7310`, Advanced-Block)
@@ -116,9 +116,9 @@ Beispiel ohne Rückfragen:
 
 | Aufgabe | Befehl | Hinweis |
 |---|---|---|
-| **Update in der Oberfläche** | *Einstellungen → Updates* | normale Releases aus GitHub (Standard: dieses Repository, öffentlich – ohne Anmeldung, Token nur für private Repositories). Nur mit gültiger Signatur, mit Wartungsmodus, Datenbanksicherung und automatischem Rückweg; siehe [docs/betrieb.md](betrieb.md#in-app-update-einstellungen--updates) |
-| **Update am Host** | `sudo bash /opt/apps/blaulichtcms/install.sh` | holt den neuen Stand, baut das Image, sichert, wechselt, prüft. Bei einem Fehler wird automatisch der vorherige Stand mit den vorherigen Daten wiederhergestellt. Nötig, wenn ein Release ein neues Image braucht – *Einstellungen → Updates* zeigt dann „Neues Docker-Image nötig“ (siehe [docs/betrieb.md](betrieb.md#neues-image-für-eine-bestehende-installation)) |
-| **Image-Update aus der App** | *Einstellungen → Updates* → „Image-Update anstoßen“ | mit dem **Update-Helfer** (systemd-Dienst, richtet `install.sh` auf Rückfrage ein): Die App legt nur eine Anfrage-Datei ab, der Helfer prüft das signierte Release und führt den Ablauf von `install.sh` nicht-interaktiv aus – der Container erhält keinen Zugriff auf Docker. Abschalten: `sudo bash /opt/apps/blaulichtcms/install.sh --remove-helper`; siehe [docs/betrieb.md](betrieb.md#image-updates-aus-der-app-update-helfer) |
+| **Update in der Oberfläche** | *Einstellungen → Updates & Wartung* | normale Releases aus GitHub (Standard: dieses Repository, öffentlich – ohne Anmeldung, Token nur für private Repositories). Nur mit gültiger Signatur, mit Wartungsmodus, Datenbanksicherung und automatischem Rückweg; siehe [docs/betrieb.md](betrieb.md#in-app-update-einstellungen--updates) |
+| **Update am Host** | `sudo bash /opt/apps/blaulichtcms/install.sh` | holt den neuen Stand, baut das Image, sichert, wechselt, prüft. Bei einem Fehler wird automatisch der vorherige Stand mit den vorherigen Daten wiederhergestellt. Nötig, wenn ein Release ein neues Image braucht – *Einstellungen → Updates & Wartung* zeigt dann „Neues Docker-Image nötig“ (siehe [docs/betrieb.md](betrieb.md#neues-image-für-eine-bestehende-installation)) |
+| **Image-Update aus der App** | *Einstellungen → Updates & Wartung* → „Image-Update anstoßen“ | mit dem **Update-Helfer** (systemd-Dienst, richtet `install.sh` auf Rückfrage ein): Die App legt nur eine Anfrage-Datei ab, der Helfer prüft das signierte Release und führt den Ablauf von `install.sh` nicht-interaktiv aus – der Container erhält keinen Zugriff auf Docker. Abschalten: `sudo bash /opt/apps/blaulichtcms/install.sh --remove-helper`; siehe [docs/betrieb.md](betrieb.md#image-updates-aus-der-app-update-helfer) |
 | Freigabe | Release-Tag `v<version>` (signiert) | Updates folgen dem neuesten Tag; Signaturprüfung mit `/etc/blaulichtcms/allowed_signers`, siehe [docs/betrieb.md](betrieb.md#freigabe-von-updates-release-tags-und-signatur) |
 | Basis-Images erneuern | `sudo bash /opt/apps/blaulichtcms/install.sh --rebuild` | monatlich: baut das Image ohne Codeänderung mit aktuellen Basis-Images (Sicherheitsupdates von Debian, Node.js, PostgreSQL) neu und wechselt mit Sicherung und Rückweg |
 | Sicherung jetzt | `cd /opt/apps/blaulichtcms && scripts/backup-volume.sh /pfad/zum/ziel` | vollständig (Datenbank, Medien, Schlüssel), verschlüsselt, mit Prüfsumme; der Container hält dafür wenige Sekunden an |

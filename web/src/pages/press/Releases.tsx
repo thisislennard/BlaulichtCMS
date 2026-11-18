@@ -158,7 +158,7 @@ function Protocol({ id, onClose, onChange }: { id: string; onClose: () => void; 
           </div>
           {r.status === 'draft' && !q.data.footerComplete && (
             <Notice tone="warning" title="Verantwortliche Stelle oder Datenschutzerklärung fehlt">
-              Bei Adressen aus anderen Quellen (Import, Visitenkarte, Redaktionsliste) verlangt Art. 14 DSGVO spätestens mit der ersten Mitteilung Angaben zur verantwortlichen Stelle und einen Datenschutzhinweis. Bitte unter Einstellungen → Datenschutz eintragen – die Fußzeile übernimmt sie dann.
+              Bei Adressen aus anderen Quellen (Import, Visitenkarte, Redaktionsliste) verlangt Art. 14 DSGVO spätestens mit der ersten Mitteilung Angaben zur verantwortlichen Stelle und einen Datenschutzhinweis. Bitte unter Einstellungen → Datenschutz & Recht eintragen – die Fußzeile übernimmt sie dann.
             </Notice>
           )}
           {r.status === 'draft' && q.data.missingBasis > 0 && (
@@ -168,7 +168,7 @@ function Protocol({ id, onClose, onChange }: { id: string; onClose: () => void; 
           )}
           {r.log_purged_at && (
             <Notice title={`Versandprotokoll nach der Löschfrist entfernt (${fmtDateTime(r.log_purged_at)})`}>
-              {r.recipients_sent ?? 0} von {r.recipients_total ?? 0} Empfängern erreicht{r.recipients_failed ? `, ${r.recipients_failed} nicht erreicht` : ''}. Adressen und Fehlermeldungen sind gelöscht (Einstellungen → Datenschutz → Versandprotokolle).
+              {r.recipients_sent ?? 0} von {r.recipients_total ?? 0} Empfängern erreicht{r.recipients_failed ? `, ${r.recipients_failed} nicht erreicht` : ''}. Adressen und Fehlermeldungen sind gelöscht (Einstellungen → Löschfristen → Versandprotokolle).
             </Notice>
           )}
           {(r.status === 'draft' || (r.status === 'partial' && !r.log_purged_at && q.data.recipients.some((x: any) => x.status === 'queued'))) && (

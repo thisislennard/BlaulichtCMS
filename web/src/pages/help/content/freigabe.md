@@ -54,13 +54,15 @@ Die Bestätigung steht im Audit-Protokoll. Ohne Markierungen zeigt der Dialog di
 
 Dieselbe Prüfung gilt für Bilder der [Einsatzliste](/hilfe/einsatzliste#freigabe-und-veroeffentlichung). Bilder, die aus einer [Bildvorlage](/hilfe/designvorlagen#befuellbare-bildvorlagen) erzeugt werden, übernehmen die Markierungen ihrer Quellbilder – ein Sharepic aus einem markierten Foto verlangt also ebenfalls die Datenschutz-Prüfung.
 
-Mit eingeschaltetem **Vier-Augen-Prinzip** (Einstellungen → Redaktion) darf niemand die eigene Fassung freigeben: Wer am Beitrag geschrieben hat (Text, Texte je Netzwerk, Bilder und Videos – auch in einer früheren Fassung) oder die Fassung eingereicht hat, kann sie nicht freigeben. Nur den Termin oder den Website zu ändern zählt nicht als Schreiben. Bei Bannern sind die anlegende, die zuletzt ändernde und die einreichende Person ausgeschlossen, bei Warnentwürfen alle, die am Entwurf geschrieben oder ihn eingereicht haben. Die Bestätigung der Warnstufe darf die freigebende Person selbst vornehmen – sie gehört zu ihrer fachlichen Prüfung.
+## Vier-Augen-Prinzip
+
+Mit eingeschaltetem **Vier-Augen-Prinzip** ([Einstellungen → Redaktion & Freigabe](/einstellungen/redaktion)) darf niemand die eigene Fassung freigeben: Wer am Beitrag geschrieben hat (Text, Texte je Netzwerk, Bilder und Videos – auch in einer früheren Fassung) oder die Fassung eingereicht hat, kann sie nicht freigeben. Nur den Termin oder den Website zu ändern zählt nicht als Schreiben. Bei Bannern sind die anlegende, die zuletzt ändernde und die einreichende Person ausgeschlossen, bei Warnentwürfen alle, die am Entwurf geschrieben oder ihn eingereicht haben. Die Bestätigung der Warnstufe darf die freigebende Person selbst vornehmen – sie gehört zu ihrer fachlichen Prüfung.
 
 **Freigabe zurückziehen** bricht noch nicht abgeholte Aufträge ab. Hat die Website den Auftrag schon abgeholt, lehnt BlaulichtCMS den Widerruf ab, bis das Ergebnis vorliegt – danach den Beitrag bei Bedarf zurückziehen. Widerruf und Abholung laufen nie gleichzeitig. Meldet eine Website trotzdem eine Veröffentlichung zu einer widerrufenen Freigabe, beauftragt BlaulichtCMS sofort den Rückzug und meldet das.
 
 ## Alternativtext und Barrierefreiheit
 
-Hat ein Bild der Fassung keinen Alternativtext und geht der Beitrag an die Website oder ein soziales Netzwerk, der ihn übernimmt, zeigt der Freigabe-Dialog eine Warnung. Mit **Einstellungen → Redaktion → Alternativtext ist Pflicht** ist die Freigabe dann gesperrt, bis die Texte ergänzt sind (neue Fassung). Zurückweisen geht immer. Mehr: [Alternativtext](/hilfe/beitraege#alternativtext).
+Hat ein Bild der Fassung keinen Alternativtext und geht der Beitrag an die Website oder ein soziales Netzwerk, der ihn übernimmt, zeigt der Freigabe-Dialog eine Warnung. Mit **Einstellungen → Redaktion & Freigabe → Alternativtext ist Pflicht** ist die Freigabe dann gesperrt, bis die Texte ergänzt sind (neue Fassung). Zurückweisen geht immer. Mehr: [Alternativtext](/hilfe/beitraege#alternativtext).
 
 ## Status
 

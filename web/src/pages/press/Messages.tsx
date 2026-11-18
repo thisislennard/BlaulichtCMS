@@ -324,7 +324,7 @@ function ReplyEditor({ request, approval, onDone }: { request: PressRequest; app
       <FieldWrap label="Text" required htmlFor="rp-body">
         <Textarea id="rp-body" rows={10} value={body} maxLength={50000} onChange={(e) => setBody(e.target.value)} />
       </FieldWrap>
-      {approval && <Notice>Antworten werden vor dem Versand von einer zweiten Person freigegeben (Einstellungen → Redaktion).</Notice>}
+      {approval && <Notice>Antworten werden vor dem Versand von einer zweiten Person freigegeben (Einstellungen → Redaktion & Freigabe).</Notice>}
       <div className="flex flex-wrap gap-2">
         <Button variant="primary" icon="Send" loading={busy} disabled={!list(to).length || subject.trim().length < 2 || !body.trim()} onClick={send}>
           {approval ? 'Zur Freigabe einreichen' : 'Senden'}

@@ -120,7 +120,7 @@ export function KeywordCatalogInfo() {
         {!d.state && (
           <Notice>
             Noch kein Bundesland gewählt.{' '}
-            {can('settings.general') ? <Link to="/einstellungen#allgemein">In den Einstellungen wählen</Link> : 'Die Administration wählt es unter Einstellungen → Allgemein.'}
+            {can('settings.general') ? <Link to="/einstellungen/organisation#s-general-state">In den Einstellungen wählen</Link> : 'Die Administration wählt es unter Einstellungen → Organisation.'}
           </Notice>
         )}
         {c && (
@@ -128,7 +128,7 @@ export function KeywordCatalogInfo() {
             <p className="m-0 flex items-center gap-2 flex-wrap">
               <HelpLink href={c.quelle}>{c.titel}</HelpLink>
               <HelpTip title="Stichwortverzeichnis" more="/hilfe/stichwoerter-regeln#stichwortverzeichnis-der-laender">
-                <p className="m-0">Das Bundesland wird unter Einstellungen → Allgemein gewählt. Mitgelieferte Verzeichnisse sind wortgetreu aus der amtlichen Quelle übernommen.</p>
+                <p className="m-0">Das Bundesland wird unter Einstellungen → Organisation gewählt. Mitgelieferte Verzeichnisse sind wortgetreu aus der amtlichen Quelle übernommen.</p>
                 <p className="m-0 text-fg-muted">Eigene Einträge haben Vorrang vor dem Landesverzeichnis.</p>
               </HelpTip>
             </p>

@@ -259,16 +259,16 @@ export async function recordHostResult(dataDir = config.dataDir): Promise<{ stat
     );
     await audit(actor, `update.host_${st.state}`, { type: 'update', label: to }, { von: from, ergebnis: st.state, meldung: st.message.slice(0, 500), anfrage: st.requestId, sicherung: st.backupFile || null }, st.state === 'success' ? 'ok' : 'failed');
     if (st.state === 'success') {
-      await notify({ kind: 'success', title: `Image-Update auf Version ${to} abgeschlossen`, body: `Vorher: ${from}. ${st.message}`.trim().slice(0, 900), link: '/einstellungen#updates', permission: 'update.install' });
+      await notify({ kind: 'success', title: `Image-Update auf Version ${to} abgeschlossen`, body: `Vorher: ${from}. ${st.message}`.trim().slice(0, 900), link: '/einstellungen/updates', permission: 'update.install' });
     } else if (st.state === 'rolled_back' || st.state === 'failed') {
       await securityAlert('update_rolled_back', {
         kind: 'error',
         title: st.state === 'rolled_back' ? `Image-Update auf Version ${to} zurückgenommen` : `Image-Update auf Version ${to} fehlgeschlagen`,
         body: st.message.slice(0, 900),
-        link: '/einstellungen#updates',
+        link: '/einstellungen/updates',
       });
     } else {
-      await notify({ kind: 'warning', title: st.state === 'rejected' ? 'Image-Update vom Update-Helfer abgelehnt' : `Image-Update auf Version ${to} abgebrochen`, body: st.message.slice(0, 900), link: '/einstellungen#updates', permission: 'update.install' });
+      await notify({ kind: 'warning', title: st.state === 'rejected' ? 'Image-Update vom Update-Helfer abgelehnt' : `Image-Update auf Version ${to} abgebrochen`, body: st.message.slice(0, 900), link: '/einstellungen/updates', permission: 'update.install' });
     }
     log(st.state === 'success' ? 'info' : 'warn', 'updates', `Update-Helfer: ${st.state} (${from} → ${to}) ${st.message}`);
   } catch (e) {

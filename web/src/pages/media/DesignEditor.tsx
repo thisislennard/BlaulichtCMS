@@ -331,7 +331,7 @@ export default function DesignEditor() {
               {previewDesign && <DesignedPage info={info} design={previewDesign} token="vorschau" preview />}
             </div>
           </div>
-          <p className="m-0 text-meta text-fg-muted">Die Vorschau nutzt Beispieldaten; Datenschutzangaben kommen auf der echten Seite aus Einstellungen → Datenschutz.</p>
+          <p className="m-0 text-meta text-fg-muted">Die Vorschau nutzt Beispieldaten; Datenschutzangaben kommen auf der echten Seite aus Einstellungen → Datenschutz & Recht.</p>
         </div>
       </div>
     </div>

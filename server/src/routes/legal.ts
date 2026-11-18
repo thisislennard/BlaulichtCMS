@@ -4,7 +4,7 @@ import { getSettings } from '../lib/settings.js';
 
 /*
  * Datenschutzerklärung und Impressum (#187): öffentlich, ohne Anmeldung (Einträge in auth/route-access.ts). Gepflegt
- * unter Einstellungen → Datenschutz (Recht settings.privacy). Der Text ist Markdown; die Oberfläche stellt ihn ohne
+ * unter Einstellungen → Datenschutz & Recht (Recht settings.privacy). Der Text ist Markdown; die Oberfläche stellt ihn ohne
  * HTML dar (react-markdown ohne rehype-raw, keine javascript:-Links).
  */
 

@@ -64,7 +64,7 @@ export function StorageCard() {
                 {low ? <Badge tone="warning">unter der Warnschwelle ({d.warn_gb} GB)</Badge> : <Badge tone="success">ausreichend</Badge>}
               </div>
               <Bar value={d.disk.total - d.disk.free} max={d.disk.total} />
-              <span className="text-meta text-fg-muted">Uploads werden unter {d.min_free_gb} GB frei gesperrt; Warnung unter {d.warn_gb || '–'} GB (Einstellungen → Medien).</span>
+              <span className="text-meta text-fg-muted">Uploads werden unter {d.min_free_gb} GB frei gesperrt; Warnung unter {d.warn_gb || '–'} GB (Einstellungen → Medien & Upload).</span>
             </div>
           )}
           {low && <Notice tone="warning">Platz schaffen: Papierkorb leeren, gesperrte Dateien löschen oder alte Sammlungen in den Papierkorb legen.</Notice>}

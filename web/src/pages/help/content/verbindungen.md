@@ -43,7 +43,7 @@ Bei **amtlichen Warnungen**, **FE2** und **Feuersoftware Connect** zeigt die Ver
 - *Feuersoftware übernimmt den eigenen Einsatz nicht:* „RIC nicht in der Liste“ nennt die RIC, wie Connect sie liefert – genau diese Schreibweise unter **RICs** eintragen (siehe [Feuersoftware: Filter](#feuersoftware-filter)).
 - *FE2 meldet „Keine Einsatz-ID gefunden“:* in den Rohdaten die Feldnamen der Meldung ablesen und die [Feldzuordnung](#feldzuordnung) anpassen. Fehlversuche mit falschem Schlüssel stehen ebenfalls im Protokoll (ohne Inhalt, höchstens einer je Minute).
 
-Das Protokoll hält die Einträge der letzten **7 Tage** (*Einstellungen → Datenschutz*, 1–30 Tage), höchstens 500 je Verbindung; sehr große Rohdaten werden gekürzt gespeichert.
+Das Protokoll hält die Einträge der letzten **7 Tage** (*Einstellungen → Löschfristen*, 1–30 Tage), höchstens 500 je Verbindung; sehr große Rohdaten werden gekürzt gespeichert.
 
 ## Widerrufen und löschen
 
@@ -63,7 +63,7 @@ Facebook-Seite und Instagram-Konto sind **zwei getrennte Verbindungen** mit eige
 
 - Eine **Facebook-Seite**, auf der das eigene Facebook-Konto die Seite verwalten darf, bzw. ein **professionelles Instagram-Konto** (Unternehmen oder Creator) – private Konten können nicht über die Schnittstelle veröffentlichen.
 - Ein **Meta-Entwicklerkonto** unter [developers.facebook.com](https://developers.facebook.com/) mit dem Konto, das die Seite verwaltet.
-- BlaulichtCMS unter einer **öffentlichen HTTPS-Adresse** (Einstellungen → Allgemein → Öffentliche Adresse). Meta leitet nach der Anmeldung dorthin zurück; Instagram lädt Bilder und Videos selbst von dort ab.
+- BlaulichtCMS unter einer **öffentlichen HTTPS-Adresse** (Einstellungen → Organisation → Öffentliche Adresse). Meta leitet nach der Anmeldung dorthin zurück; Instagram lädt Bilder und Videos selbst von dort ab.
 
 ### Meta-App anlegen
 
@@ -174,7 +174,7 @@ Die folgenden Punkte sind Hinweise zur Orientierung, keine Rechtsberatung. Die B
 - **Empfänger:** Mit dem Veröffentlichen gehen Text, Bilder und Videos an **Meta Platforms** (Vertragspartner in der EU ist Meta Platforms Ireland; verarbeitet wird auch in den USA). Für Instagram ruft Meta die Dateien selbst über eine befristete Adresse bei BlaulichtCMS ab. Was auf abgebildeten Personen zu sehen ist, wird damit öffentlich und liegt auch bei Meta.
 - **Drittland:** Für die Übermittlung in die USA ist die Grundlage zu prüfen, z. B. die Zertifizierung von Meta nach dem EU-US Data Privacy Framework (Liste unter dataprivacyframework.gov). Ändert sich diese Grundlage, die Nutzung neu bewerten.
 - **Gemeinsame Verantwortung:** Für eine Facebook-Seite (Seiten-Insights) besteht nach der Rechtsprechung des EuGH eine gemeinsame Verantwortlichkeit mit Meta (Art. 26 DSGVO). Meta stellt dafür die *Seiten-Insights-Ergänzung bezüglich des Verantwortlichen* bereit; sie sollte geprüft und dokumentiert sein. Für Instagram-Konten gilt Entsprechendes.
-- **Datenschutzerklärung:** Die Präsenz auf Facebook bzw. Instagram, die Übermittlung an Meta und die gemeinsame Verantwortung gehören in die Datenschutzerklärung der Website bzw. der Seite. Auf der Upload-Seite weist BlaulichtCMS auf die mögliche Veröffentlichung in sozialen Medien hin (*Einstellungen → Datenschutz*).
+- **Datenschutzerklärung:** Die Präsenz auf Facebook bzw. Instagram, die Übermittlung an Meta und die gemeinsame Verantwortung gehören in die Datenschutzerklärung der Website bzw. der Seite. Auf der Upload-Seite weist BlaulichtCMS auf die mögliche Veröffentlichung in sozialen Medien hin (*Einstellungen → Datenschutz & Recht*).
 - **Löschen:** Nach einem Widerspruch den Beitrag über **Von sozialen Netzwerken entfernen** zurückziehen (siehe oben): Facebook-Beiträge löscht BlaulichtCMS, Instagram-Beiträge müssen in Instagram gelöscht werden. Kopien bei Dritten (geteilte Beiträge, Screenshots) sind damit nicht erreicht.
 - **BlaulichtCMS selbst** gibt an Meta nur die freigegebenen Inhalte und die neutral benannten Dateien weiter, keine Hinweise der hochladenden Personen und keine Originale.
 
@@ -408,7 +408,7 @@ Die letzte Störung steht in der Verbindung und in der Übersicht. Nach **drei F
 
 ### Datenschutz bei Feuersoftware Connect
 
-Übernommen werden nur Stichwort, Einsatzart, Ort bzw. Ort mit Ortsteil, Alarmzeit und Ende. Straße, Hausnummer, Koordinaten, Sachverhalt, Einsatznummer, meldende Person, Telefonnummern und Lagemeldungen werden nie gespeichert oder protokolliert; die Vorschau zeigt keine Adresse. Gespeicherte Einsatzmeldungen fallen unter dieselbe Löschfrist wie FE2-Meldungen (*Einstellungen → Datenschutz*, Standard 90 Tage) und unter die Datenschutzsuche. Damit gelöschte Einsätze nicht erneut angelegt werden, bleibt 30 Tage lang nur eine Prüfsumme der Einsatz-ID.
+Übernommen werden nur Stichwort, Einsatzart, Ort bzw. Ort mit Ortsteil, Alarmzeit und Ende. Straße, Hausnummer, Koordinaten, Sachverhalt, Einsatznummer, meldende Person, Telefonnummern und Lagemeldungen werden nie gespeichert oder protokolliert; die Vorschau zeigt keine Adresse. Gespeicherte Einsatzmeldungen fallen unter dieselbe Löschfrist wie FE2-Meldungen (*Einstellungen → Löschfristen*, Standard 90 Tage) und unter die Datenschutzsuche. Damit gelöschte Einsätze nicht erneut angelegt werden, bleibt 30 Tage lang nur eine Prüfsumme der Einsatz-ID.
 
 ## Amtliche Warnungen
 
@@ -463,7 +463,7 @@ Amtliche Warnungen lassen sich nicht löschen, aber **ausblenden** (Knopf an der
 
 ### Datenschutz bei FE2 und amtlichen Warnungen
 
-FE2 liefert Einsatzdaten (Stichwort, Ort, Zeit, Einheiten). BlaulichtCMS übernimmt nur die Felder der Allowlist, Alarmtexte und Personendaten werden verworfen. Gespeicherte Einsatzmeldungen löscht der Worker nach der Frist unter *Einstellungen → Datenschutz* (Standard 90 Tage). Amtliche Warnungen enthalten keine personenbezogenen Daten; sie werden nach Ablauf ebenfalls gelöscht.
+FE2 liefert Einsatzdaten (Stichwort, Ort, Zeit, Einheiten). BlaulichtCMS übernimmt nur die Felder der Allowlist, Alarmtexte und Personendaten werden verworfen. Gespeicherte Einsatzmeldungen löscht der Worker nach der Frist unter *Einstellungen → Löschfristen* (Standard 90 Tage). Amtliche Warnungen enthalten keine personenbezogenen Daten; sie werden nach Ablauf ebenfalls gelöscht.
 
 ## Interne Ziele
 

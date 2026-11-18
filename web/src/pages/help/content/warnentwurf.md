@@ -35,7 +35,7 @@ Die Stufe bestätigt eine Person mit dem Recht **„Warnstufe bestätigen“** a
 
 Freigegeben wird genau **eine Fassung**. Dabei erzeugt BlaulichtCMS die endgültige PDF und speichert sie mit **Prüfsumme (SHA-256)**. Jede spätere Änderung erzeugt eine neue Fassung, die erneut freigegeben werden muss. Die PDF enthält Vorgangs-ID, Art, Fassung und Zeitstand, Vorlagenversion, Stichwort, die **bestätigte Warnstufe** und die Freigabe.
 
-Mit eingeschaltetem **Vier-Augen-Prinzip** (Einstellungen → Redaktion) kann nur freigeben, wer am Entwurf nicht geschrieben und ihn nicht eingereicht hat. Die Warnstufe darf die freigebende Person selbst bestätigen.
+Mit eingeschaltetem **Vier-Augen-Prinzip** (Einstellungen → Redaktion & Freigabe) kann nur freigeben, wer am Entwurf nicht geschrieben und ihn nicht eingereicht hat. Die Warnstufe darf die freigebende Person selbst bestätigen.
 
 ## Versand
 
@@ -48,7 +48,7 @@ Mit eingeschaltetem **Vier-Augen-Prinzip** (Einstellungen → Redaktion) kann nu
 
 Bei **unklarem Ergebnis** versendet BlaulichtCMS nie automatisch erneut. Erst nach der Prüfung („ist angekommen“ / „ist nicht angekommen“) ist ein neuer Versand möglich.
 
-**Testmodus:** Solange er aktiv ist (Standard), gehen alle Warnmails ausschließlich an das hinterlegte **Testpostfach**; Betreff mit `[TEST]`, die vorgesehenen Empfänger stehen nur im Mailtext. Ausschalten lässt er sich erst nach einer erfolgreichen Testmail mit den gespeicherten Einstellungen – Einrichtung und Werte bekannter Anbieter unter [E-Mail-Versand](/hilfe/stichwoerter-regeln#e-mail-versand).
+**Testmodus:** Solange er aktiv ist (Standard), gehen alle Warnmails ausschließlich an das hinterlegte **Testpostfach**; Betreff mit `[TEST]`, die vorgesehenen Empfänger stehen nur im Mailtext. Ausschalten lässt er sich erst nach einer erfolgreichen Testmail über den eingestellten Versandweg ([Testmail und Testmodus](/hilfe/stichwoerter-regeln#testmail-und-testmodus)); den Versandweg selbst samt Werten bekannter Anbieter beschreibt [SMTP einrichten](/hilfe/benachrichtigungen#smtp-einrichten).
 
 ## Vorgang löschen
 
@@ -71,7 +71,7 @@ Oben im Vorgang steht **Löschen**. Der Dialog nennt vorher, welche Vorgänge be
 
 ## Datenschutz
 
-Warnvorgänge enthalten personenbezogene Daten: den **Rückrufkontakt** (Name, Telefonnummer), die Namen der bestätigenden und freigebenden Personen und die Empfängeradressen. Abgeschlossene Vorgänge samt PDF und Versandnachweisen löscht der Worker nach der Frist unter *Einstellungen → Datenschutz* (Standard 365 Tage nach dem Abschluss).
+Warnvorgänge enthalten personenbezogene Daten: den **Rückrufkontakt** (Name, Telefonnummer), die Namen der bestätigenden und freigebenden Personen und die Empfängeradressen. Abgeschlossene Vorgänge samt PDF und Versandnachweisen löscht der Worker nach der Frist unter *Einstellungen → Löschfristen* (Standard 365 Tage nach dem Abschluss).
 
 Der Versand läuft über den eingetragenen **Mailserver**. Betreibt ihn ein Dienstleister, verarbeitet dieser die Warnmails im Auftrag – dafür ist ein Vertrag zur Auftragsverarbeitung (Art. 28 DSGVO) nötig. Hinweis zur Orientierung, keine Rechtsberatung.
 

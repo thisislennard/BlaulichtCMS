@@ -310,7 +310,7 @@ export async function runDrill(drillId: string) {
     const result = (e as { result?: DrillResult }).result ?? { durationMs: Date.now() - started, checks: [...checks, { step: 'Abbruch', ok: false, detail: msg.slice(0, 300) }] };
     await pool.query(`UPDATE restore_drills SET status = 'failed', finished_at = now(), result = $2, error = $3 WHERE id = $1`, [d.id, JSON.stringify(result), msg]);
     log('error', 'backup', `Probe-Wiederherstellung fehlgeschlagen (${d.file_name}): ${msg}`);
-    await notify({ kind: 'error', title: 'Probe-Wiederherstellung fehlgeschlagen', body: msg.slice(0, 300), link: '/einstellungen#sicherung-ausser-haus', permission: 'backup.manage' });
+    await notify({ kind: 'error', title: 'Probe-Wiederherstellung fehlgeschlagen', body: msg.slice(0, 300), link: '/einstellungen/sicherung#ausser-haus', permission: 'backup.manage' });
   } finally {
     await probe?.end().catch(() => {});
     if (created) {

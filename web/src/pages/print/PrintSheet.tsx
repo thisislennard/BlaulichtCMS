@@ -54,7 +54,7 @@ export default function PrintSheet() {
       )}
       {privacy?.incomplete && (
         <p className="no-print warn-external">
-          Hinweis: Verantwortliche Stelle bzw. Datenschutzerklärung sind noch nicht eingetragen (Einstellungen → Datenschutz). Upload-Seite und Aushang brauchen diese Angaben.
+          Hinweis: Verantwortliche Stelle bzw. Datenschutzerklärung sind noch nicht eingetragen (Einstellungen → Datenschutz & Recht). Upload-Seite und Aushang brauchen diese Angaben.
         </p>
       )}
       {external && (

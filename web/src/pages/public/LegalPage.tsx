@@ -34,7 +34,7 @@ export default function LegalPage({ kind }: { kind: 'datenschutz' | 'impressum' 
             <Icon name="FileText" size={22} className="text-fg-muted" />
             <p className="m-0 font-medium">Noch kein Text hinterlegt.</p>
             <p className="m-0 text-sm text-fg-muted">
-              {kind === 'datenschutz' ? 'Die Datenschutzerklärung' : 'Das Impressum'} wird von der Verwaltung unter Einstellungen → Datenschutz eingetragen.
+              {kind === 'datenschutz' ? 'Die Datenschutzerklärung' : 'Das Impressum'} wird von der Verwaltung unter Einstellungen → Datenschutz & Recht eingetragen.
             </p>
             <Link to="/login" className="text-sm">
               Zur Anmeldung

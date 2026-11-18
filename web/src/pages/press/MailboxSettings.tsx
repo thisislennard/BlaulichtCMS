@@ -126,7 +126,7 @@ export function MailboxSettings() {
             <div className="flex flex-col gap-4">
               {!q.data!.m365Ready && (
                 <Notice tone="warning">
-                  Microsoft 365 ist noch nicht eingerichtet. Zuerst unter <Link to="/einstellungen#benachrichtigungen">Einstellungen → Benachrichtigungen und E-Mail</Link> die App-Registrierung eintragen.
+                  Microsoft 365 ist noch nicht eingerichtet. Zuerst unter <Link to="/einstellungen/e-mail">Einstellungen → E-Mail &amp; Push</Link> die App-Registrierung eintragen.
                 </Notice>
               )}
               <FieldWrap label="Adresse des Presse-Postfachs" required htmlFor="mb-box" help="Dieselbe App-Registrierung wie der Mailversand; zusätzlich braucht sie die Anwendungsberechtigung „Mail.Read“ (Hilfe → Presseanfragen).">
@@ -178,7 +178,7 @@ export function MailboxSettings() {
           />
         </div>
       </Card>
-      <Card title="Empfangsprotokoll" subtitle={`Jede abgerufene Mail mit Entscheidung – ${q.data!.retentionDays} Tage aufbewahrt (Einstellungen → Datenschutz → Empfangsprotokoll).`}>
+      <Card title="Empfangsprotokoll" subtitle={`Jede abgerufene Mail mit Entscheidung – ${q.data!.retentionDays} Tage aufbewahrt (Einstellungen → Löschfristen → Empfangsprotokoll).`}>
         {logs.data && !logs.data.length ? (
           <EmptyState icon="Inbox" title="Noch nichts abgerufen" />
         ) : (

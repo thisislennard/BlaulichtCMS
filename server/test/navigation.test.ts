@@ -76,6 +76,41 @@ describe('Navigation (#250)', () => {
   });
 });
 
+describe('Einstellungen auf Unterseiten (#256)', async () => {
+  const { SETTINGS_PAGES, LEGACY_SETTINGS_ANCHORS } = await import('../../web/src/config/settingsPages.js');
+  const settingsSrc = read('pages/admin/Settings.tsx');
+
+  it('jede Unterseite hat eine Route, Inhalt, ein Hilfe-Kapitel und ein Recht zum Ändern aus dem Katalog', async () => {
+    const { PERMISSION_IDS } = await import('../src/auth/permissions.js');
+    expect(isRoute('/einstellungen/organisation')).toBe(true);
+    expect(activeNavId('/einstellungen/e-mail')).toBe('settings');
+    expect(new Set(SETTINGS_PAGES.map((p: { id: string }) => p.id)).size).toBe(SETTINGS_PAGES.length);
+    for (const p of SETTINGS_PAGES) {
+      // Eintrag in CONTENT (Settings.tsx): organisation: () => … bzw. 'e-mail': () => …
+      expect(settingsSrc, p.id).toMatch(new RegExp(`(^|\\s)'?${p.id}'?: \\(\\) =>`, 'm'));
+      const [slug, anchor] = p.help.split('#');
+      expect(chapterFiles, `${p.id}: Kapitel ${slug}`).toContain(slug);
+      if (anchor) expect([...anchors(slug)], `${p.id}: ${p.help}`).toContain(anchor);
+      for (const perm of [...p.edit, ...(p.view ?? [])]) expect(PERMISSION_IDS, `${p.id}: ${perm}`).toContain(perm);
+    }
+  });
+
+  it('frühere Anker der einen Einstellungsseite leiten auf bestehende Seiten weiter', () => {
+    for (const a of ['allgemein', 'darstellung', 'redaktion', 'datenschutz', 'medien', 'betrieb', 'sicherheit', 'benachrichtigungen', 'sicherung', 'sicherung-ausser-haus', 'updates', 'ueber']) {
+      const to = LEGACY_SETTINGS_ANCHORS[a];
+      expect(to, a).toBeTruthy();
+      expect(isRoute(to), `${a} → ${to}`).toBe(true);
+    }
+    expect(settingsSrc).toContain('LEGACY_SETTINGS_ANCHORS');
+  });
+
+  it('keine persönliche Einstellung mehr unter den Instanz-Einstellungen', () => {
+    const dir = path.join(WEB, 'pages/admin/settings');
+    const all = [settingsSrc, ...fs.readdirSync(dir).map((f) => fs.readFileSync(path.join(dir, f), 'utf8'))].join('\n');
+    expect(all).not.toContain('AppearanceFields');
+  });
+});
+
 describe('Hilfe je Seite (#265)', () => {
   it('jeder Menüpunkt nennt ein vorhandenes Kapitel (und ggf. einen vorhandenen Abschnitt)', () => {
     for (const it of [...navigation.flatMap((g) => g.items), ...Object.entries(PAGE_HELP).map(([p, h]) => ({ id: p, help: h }))]) {

@@ -96,7 +96,7 @@ export async function pressReplyRoutes(app: FastifyInstance) {
     if (!r) throw notFound('Presseanfrage nicht gefunden.');
     const s = await getSettings(true);
     const sender = await pressSender();
-    if (!sender.address) throw badRequest('Der E-Mail-Versand ist nicht eingerichtet (Einstellungen → Benachrichtigungen und E-Mail bzw. Warnentwurf → Einstellungen).');
+    if (!sender.address) throw badRequest('Der E-Mail-Versand ist nicht eingerichtet (Einstellungen → E-Mail & Push).');
     const approval = !!s['press.reply_approval'];
     // Verlauf: auf die letzte eingegangene Mail der Empfängerin bzw. des Empfängers antworten, sonst auf die letzte überhaupt
     const last = await one<any>(

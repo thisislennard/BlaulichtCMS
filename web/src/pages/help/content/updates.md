@@ -1,11 +1,11 @@
 Es gibt zwei Wege. Der Ablauf lautet bei beiden: **Sichern → Wechseln → Prüfen → Wiederherstellen** (nur im Fehlerfall).
 
-- **In der Oberfläche** unter [Einstellungen → Updates](/einstellungen#updates): normale neue Versionen aus GitHub-Releases.
+- **In der Oberfläche** unter [Einstellungen → Updates & Wartung](/einstellungen/updates): normale neue Versionen aus GitHub-Releases.
 - **Am Docker-Host** mit dem Installationsskript: neue Basis-Images (Betriebssystem, Node.js, PostgreSQL, ffmpeg), geänderte Abhängigkeiten und Änderungen am Container selbst.
 
 ## Update in der Oberfläche
 
-Unter [Einstellungen → Updates](/einstellungen#updates) stehen Quelle und Prüfung:
+Unter [Einstellungen → Updates & Wartung](/einstellungen/updates) stehen Quelle und Prüfung:
 
 - **GitHub-Repository** im Format `besitzer/name` und **API-Adresse** (Standard `https://api.github.com`).
 - **Zugriffstoken (optional):** nur für private Repositories. Ein öffentliches Repository braucht keine Anmeldung. Ein gespeicherter Token wird nie wieder angezeigt; wird die API-Adresse auf einen anderen Server geändert, muss er neu eingegeben werden.
@@ -21,7 +21,7 @@ Ein Token ist **nur** nötig, wenn das Repository privat ist. So entsteht ein To
 2. Name und Ablaufdatum festlegen (z. B. 1 Jahr, Erinnerung im Kalender eintragen).
 3. Unter **Repository access** „Only select repositories“ und nur das BlaulichtCMS-Repository wählen.
 4. Unter **Permissions → Repository permissions** nur **Contents: Read-only** setzen – das genügt für Releases und ihre Dateien ([benötigte Rechte](https://docs.github.com/en/rest/authentication/permissions-required-for-fine-grained-personal-access-tokens)).
-5. Token erzeugen, sofort kopieren und unter Einstellungen → Updates eintragen. GitHub zeigt ihn nur einmal.
+5. Token erzeugen, sofort kopieren und unter Einstellungen → Updates & Wartung eintragen. GitHub zeigt ihn nur einmal.
 
 Läuft der Token ab, meldet „Jetzt prüfen“ einen Anmeldefehler – dann einen neuen erzeugen und eintragen.
 
@@ -34,13 +34,13 @@ Läuft der Token ab, meldet „Jetzt prüfen“ einen Anmeldefehler – dann ein
 3. schaltet den **Wartungsmodus** ein, wartet auf die Vorabprüfung und erstellt eine **Datenbanksicherung**;
 4. startet mit der neuen Version neu (etwa eine Minute nicht erreichbar). Die Fortschrittsanzeige wartet auf den Neustart.
 
-Startet die neue Version nicht oder schlägt eine Datenbankmigration fehl, schaltet BlaulichtCMS **automatisch zurück**: Die Datenbank wird – falls schon verändert – aus der Sicherung von eben zurückgespielt, die vorige Version läuft weiter. Ergebnis und Grund stehen im **Update-Protokoll** unter Einstellungen → Updates. Nach einer erfolgreichen Umschaltung die Seite neu laden.
+Startet die neue Version nicht oder schlägt eine Datenbankmigration fehl, schaltet BlaulichtCMS **automatisch zurück**: Die Datenbank wird – falls schon verändert – aus der Sicherung von eben zurückgespielt, die vorige Version läuft weiter. Ergebnis und Grund stehen im **Update-Protokoll** unter Einstellungen → Updates & Wartung. Nach einer erfolgreichen Umschaltung die Seite neu laden.
 
 Wird später am Host ein Image derselben oder einer neueren Version installiert, läuft wieder der Code des Images.
 
 ## Vorabprüfung und Wartungsmodus
 
-Unter [Einstellungen → Sicherung](/einstellungen#sicherung) zeigt **„Update vorbereiten“** die Vorabprüfung:
+Unter [Einstellungen → Updates & Wartung](/einstellungen/updates#vorbereiten) zeigt **„Update vorbereiten“** die Vorabprüfung (Recht „Updates installieren“):
 
 - Wartungsmodus aktiv (keine neuen schreibenden Vorgänge, keine neuen Aufträge)
 - keine laufenden Hintergrundaufträge, kein Versand und keine Veröffentlichung in der Schwebe
@@ -48,7 +48,7 @@ Unter [Einstellungen → Sicherung](/einstellungen#sicherung) zeigt **„Update 
 - genug freier Speicher, aktuelle Datenbanksicherung (Hinweis)
 - Schema passt zum laufenden Programm
 
-Im **Wartungsmodus** bleibt Lesen möglich. Websites erhalten keine neuen Aufträge; bereits angezeigte Banner bleiben unverändert.
+Ein- und ausgeschaltet wird der Wartungsmodus an einer Stelle: unter [Verwaltung → Systemstatus](/system#wartungsmodus) (Recht „Wartungsmodus schalten“); „Update vorbereiten“ zeigt seinen Zustand und verlinkt dorthin. Im **Wartungsmodus** bleibt Lesen möglich. Websites erhalten keine neuen Aufträge; bereits angezeigte Banner bleiben unverändert.
 
 Ein- und ausschalten lässt sich der Wartungsmodus außerdem im [Systemstatus](/system) (Karte **Wartungsmodus**) – dafür genügt das Recht „Wartungsmodus schalten“, „Updates installieren“ ist nicht nötig.
 
@@ -62,12 +62,12 @@ Das Installationsskript holt den neuen Stand, baut das Image und ruft damit `scr
 
 ### Wenn ein Update ein neues Image braucht
 
-Manche Versionen bringen geänderte Abhängigkeiten oder Änderungen am Container mit. Die kommen nur mit einem neu gebauten Image an, deshalb lässt sich so ein Update nicht in der Oberfläche installieren. Unter [Einstellungen → Updates](/einstellungen#updates) steht dann „Neues Docker-Image nötig“ mit der nötigen und der laufenden Image-Version. So geht es:
+Manche Versionen bringen geänderte Abhängigkeiten oder Änderungen am Container mit. Die kommen nur mit einem neu gebauten Image an, deshalb lässt sich so ein Update nicht in der Oberfläche installieren. Unter [Einstellungen → Updates & Wartung](/einstellungen/updates) steht dann „Neues Docker-Image nötig“ mit der nötigen und der laufenden Image-Version. So geht es:
 
 1. Am Docker-Host anmelden (z. B. per SSH).
 2. `sudo bash /opt/apps/blaulichtcms/install.sh` ausführen (bei einem anderen Installationsordner dessen `install.sh`). `--rebuild` ist dafür nicht nötig.
 3. Das Skript holt die neue Version, baut das Image (einige Minuten), schaltet den Wartungsmodus ein, sichert alles und wechselt – bei einem Fehler automatisch zurück. Daten, Einstellungen und `.env` bleiben erhalten; beim Wechsel ist BlaulichtCMS etwa eine Minute nicht erreichbar.
-4. Danach die Seite neu laden: Unter Einstellungen → Updates steht die neue Version „aus dem Image“. Folgende Versionen ohne neues Image lassen sich wieder in der Oberfläche installieren.
+4. Danach die Seite neu laden: Unter Einstellungen → Updates & Wartung steht die neue Version „aus dem Image“. Folgende Versionen ohne neues Image lassen sich wieder in der Oberfläche installieren.
 
 ### Image-Update über den Update-Helfer
 

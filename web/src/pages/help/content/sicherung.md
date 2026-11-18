@@ -22,7 +22,7 @@ Die Sicherung läuft ab der eingestellten Uhrzeit einmal am Tag. Fällt die Stun
 
 ## Sicherung außer Haus
 
-Unter **Einstellungen → Sicherung außer Haus** legt BlaulichtCMS jede Datenbanksicherung zusätzlich auf einem Ziel
+Unter **Einstellungen → Sicherung → Sicherung außer Haus** legt BlaulichtCMS jede Datenbanksicherung zusätzlich auf einem Ziel
 außerhalb des Servers ab – zum Beispiel auf einem NAS im eigenen Netz. Übertragen wird per **WebDAV** über HTTPS: Das
 braucht auf dem Server kein Zusatzprogramm und funktioniert mit Synology, QNAP, Nextcloud und vielen anderen Geräten.
 
@@ -65,7 +65,7 @@ Aufbewahrung.
    Adresse des BlaulichtCMS-Servers beschränken.
 4. Optional: Papierkorb des freigegebenen Ordners einschalten und Snapshots (Btrfs) aktivieren – so übersteht eine
    Sicherung auch ein versehentliches Löschen.
-5. In BlaulichtCMS unter **Einstellungen → Sicherung außer Haus** eintragen:
+5. In BlaulichtCMS unter **Einstellungen → Sicherung → Sicherung außer Haus** eintragen:
    Adresse `https://<nas-adresse>:5006/sicherung/blaulichtcms/`, Benutzer und Passwort.
 6. **Verbindung testen.** Hat das NAS ein selbst signiertes Zertifikat, zeigt der Test dessen Fingerabdruck. Am NAS
    unter *Systemsteuerung → Sicherheit → Zertifikat* vergleichen und erst bei Übereinstimmung **Fingerabdruck
@@ -78,7 +78,7 @@ HTTPS deckt denselben Zweck ab und ist durchgehend verschlüsselt.
 
 ## Wiederherstellung üben
 
-Eine Sicherung ist erst dann eine, wenn sie sich zurückspielen lässt. Unter **Einstellungen → Sicherung außer Haus →
+Eine Sicherung ist erst dann eine, wenn sie sich zurückspielen lässt. Unter **Einstellungen → Sicherung → Sicherung außer Haus →
 Probe-Wiederherstellung** spielt BlaulichtCMS eine Sicherung in eine **Wegwerf-Datenbank** auf demselben Server ein –
 der laufende Betrieb bleibt unberührt – und prüft:
 
@@ -100,7 +100,7 @@ der Hintergrunddienst die Wegwerf-Datenbank innerhalb einer Stunde – auch wenn
 
 **Der Server läuft, aber der Datenbestand ist beschädigt oder falsch** (z. B. versehentlich gelöscht):
 
-1. Unter **Einstellungen → Sicherung außer Haus → Sicherungen auf dem Ziel** die gewünschte Sicherung **holen**. Sie
+1. Unter **Einstellungen → Sicherung → Sicherung außer Haus → Sicherungen auf dem Ziel** die gewünschte Sicherung **holen**. Sie
    wird geprüft und erscheint in der Liste der Sicherungen. (Liegt sie noch lokal, entfällt dieser Schritt.)
 2. Optional: mit **Probe-Wiederherstellung** prüfen, ob sie den erwarteten Stand enthält.
 3. Am Docker-Host zurückspielen – das ersetzt den gesamten Datenbestand durch den Stand der Sicherung:

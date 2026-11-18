@@ -39,7 +39,7 @@ export function DesignedPage({ info, design, token, preview }: { info: LinkInfo;
       )}
       {info.setup_hint && (
         <Notice tone="warning" title="Hinweis für die Verwaltung">
-          Verantwortliche Stelle bzw. Datenschutzerklärung sind noch nicht eingetragen (Einstellungen → Datenschutz). Diesen Hinweis sehen nur angemeldete Personen mit Verwaltungsrechten.
+          Verantwortliche Stelle bzw. Datenschutzerklärung sind noch nicht eingetragen (Einstellungen → Datenschutz & Recht). Diesen Hinweis sehen nur angemeldete Personen mit Verwaltungsrechten.
         </Notice>
       )}
       {design.blocks.map((b, i) => {

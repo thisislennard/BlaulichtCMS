@@ -212,7 +212,7 @@ export default function Automations() {
       <WorkflowTabs />
       {cat.data && !cat.data.enabled && (
         <Notice tone="warning" title="Workflows sind global abgeschaltet">
-          Ereignisse und Zeitpläne starten keine Läufe. Einschalten unter <Link to="/einstellungen#redaktion">Einstellungen → Redaktion</Link>.
+          Ereignisse und Zeitpläne starten keine Läufe. Einschalten unter <Link to="/einstellungen/workflows">Einstellungen → Workflows</Link>.
         </Notice>
       )}
       {(can('approval.automation') || manage) && <AutomationApprovals compact />}

@@ -370,6 +370,96 @@ describe('E-Mail über Microsoft 365', () => {
   });
 });
 
+describe('SMTP an einer Stelle: Einstellungen → E-Mail & Push (#256)', () => {
+  it('SMTP-Server samt Testmail unter settings.mail; der Warnversand behält nur den Testmodus', async () => {
+    const { SMTPServer } = await import('smtp-server');
+    const { invalidateRoles } = await import('../src/auth/roles.js');
+    const received: string[] = [];
+    const smtp = new SMTPServer({
+      authOptional: true,
+      disabledCommands: ['STARTTLS'],
+      disableReverseLookup: true,
+      logger: false,
+      onData(stream: any, session: any, cb: any) {
+        stream.on('data', () => {});
+        stream.on('end', () => (received.push(session.envelope.rcptTo.map((r: any) => r.address).join(',')), cb()));
+      },
+    } as any);
+    await new Promise<void>((r) => smtp.listen(0, '127.0.0.1', r));
+    const port = (smtp.server.address() as any).port;
+    const keep = await getSettings(true);
+    try {
+      // Eigene Rolle nur mit „Versand einstellen“ (Warnversand), ohne „E-Mail-Versand und Push einstellen“
+      await pool.query(`INSERT INTO roles (id, label, permissions) VALUES ('warnversand_test', 'Versandtest eigene Rolle', ARRAY['warning.view','warning.settings']) ON CONFLICT (id) DO NOTHING`);
+      invalidateRoles();
+      const { client: wv } = await acceptInvite('warnversand@example.org', ['warnversand_test'], 'Wera');
+      const smtpForm = { host: '127.0.0.1', port, security: 'none', user: '', from: 'blaulichtcms@example.org' };
+      const body = { pushEnabled: true, mailEnabled: true, tenantId: TENANT, clientId: CLIENT, sender: 'funktion@example.org', saveSent: true };
+
+      // Testmodus an (Warnversand) – geht mit warning.settings allein
+      expect((await wv.put('/warning-settings', { testMode: true, testRecipient: 'test@example.org' })).status).toBe(200);
+      // SMTP-Angaben ändern bzw. mit Formularwerten testen: nur mit settings.mail
+      expect((await wv.put('/warning-settings', { ...smtpForm, testMode: true, testRecipient: 'test@example.org' })).status).toBe(403);
+      expect((await wv.post('/warning-settings/test-mail', { to: 'pruefung@example.org', ...smtpForm })).status).toBe(403);
+      expect((await wv.put('/notify/settings', { transport: 'smtp', ...body, smtp: smtpForm })).status).toBe(403);
+      expect((await wv.post('/notify/settings/smtp-test', { to: 'pruefung@example.org', ...smtpForm })).status).toBe(403);
+
+      // Administration: Wechsel auf SMTP samt Server in einem Speichervorgang (Testmodus an → ohne Testmail)
+      await freshReauth();
+      expect((await admin.put('/notify/settings', { transport: 'smtp', ...body, smtp: { ...smtpForm, from: '' } })).status).toBe(400);
+      const sw = await admin.put('/notify/settings', { transport: 'smtp', ...body, smtp: smtpForm });
+      expect(sw.status, JSON.stringify(sw.json)).toBe(200);
+      let s = await getSettings(true);
+      expect([s['mail.transport'], s['smtp.host'], s['smtp.port'], s['smtp.from']]).toEqual(['smtp', '127.0.0.1', port, 'blaulichtcms@example.org']);
+      const view = await admin.get('/notify/settings');
+      expect(view.json.smtp).toMatchObject({ host: '127.0.0.1', port, security: 'none', from: 'blaulichtcms@example.org', password_set: false, configured: true });
+      expect(view.json.warnings_test_mode).toBe(true);
+
+      // Testmail mit Formularwerten unter E-Mail & Push hinterlegt den Nachweis; der Warnversand darf dann in den Echtbetrieb
+      const t = await admin.post('/notify/settings/smtp-test', { to: 'pruefung@example.org', ...smtpForm });
+      expect(t.status, JSON.stringify(t.json)).toBe(200);
+      expect(received).toContain('pruefung@example.org');
+      expect((await wv.put('/warning-settings', { testMode: false, testRecipient: 'test@example.org' })).status).toBe(200);
+      expect((await getSettings(true))['warnings.test_mode']).toBe(false);
+
+      // Echtbetrieb: geänderte SMTP-Angaben erst nach einer Testmail mit genau diesen Werten
+      await freshReauth();
+      const changed = { ...smtpForm, from: 'warnung@example.org' };
+      const blocked = await admin.put('/notify/settings', { transport: 'smtp', ...body, smtp: changed });
+      expect(blocked.status).toBe(409);
+      expect(blocked.json.message).toContain('Testmail');
+      expect((await admin.post('/notify/settings/smtp-test', { to: 'pruefung@example.org', ...changed })).status).toBe(200);
+      expect((await admin.put('/notify/settings', { transport: 'smtp', ...body, smtp: changed })).status).toBe(200);
+      expect((await getSettings(true))['smtp.from']).toBe('warnung@example.org');
+
+      // Warnversand-Testmail ohne Formularwerte: über den eingestellten Weg mit den gespeicherten Angaben
+      received.length = 0;
+      const wt = await wv.post('/warning-settings/test-mail', { to: 'warnpruefung@example.org' });
+      expect(wt.status, JSON.stringify(wt.json)).toBe(200);
+      expect(received).toContain('warnpruefung@example.org');
+
+      // Passwort: verschlüsselt, nie in Antworten; Änderung am Mailweg nur mit frischer Bestätigung
+      expect((await wv.put('/warning-settings', { testMode: true, testRecipient: 'test@example.org' })).status).toBe(200);
+      await pool.query(`UPDATE sessions SET reauth_at = now() - interval '1 hour'`);
+      const withPw = { ...smtpForm, host: 'smtp.example.org', port: 587, security: 'starttls', user: 'postfach', from: 'warnung@example.org', password: 'Smtp-Passwort-2026' };
+      expect((await admin.put('/notify/settings', { transport: 'smtp', ...body, smtp: withPw })).json.error).toBe('reauth_required');
+      await freshReauth();
+      expect((await admin.put('/notify/settings', { transport: 'smtp', ...body, smtp: withPw })).status).toBe(200);
+      s = await getSettings(true);
+      expect(s['smtp.password_secret_id']).toMatch(/^[0-9a-f-]{36}$/);
+      expect(JSON.stringify(await many(`SELECT key, value FROM settings`))).not.toContain('Smtp-Passwort-2026');
+      const v2 = await admin.get('/notify/settings');
+      expect(v2.body).not.toContain('Smtp-Passwort-2026');
+      expect(v2.json.smtp.password_set).toBe(true);
+      // Anderer Server ohne neues Passwort: das gespeicherte geht nicht an einen fremden Rechner
+      expect((await admin.post('/notify/settings/smtp-test', { to: 'x@example.org', ...withPw, host: 'anderer.example.org', password: undefined })).status).toBe(400);
+    } finally {
+      smtp.close();
+      await setSettings({ 'mail.transport': keep['mail.transport'], 'smtp.host': keep['smtp.host'], 'smtp.port': keep['smtp.port'], 'smtp.security': keep['smtp.security'], 'smtp.user': keep['smtp.user'], 'smtp.from': keep['smtp.from'], 'warnings.test_mode': keep['warnings.test_mode'] } as any);
+    }
+  });
+});
+
 describe('Zugangsdaten nie im Klartext (#190)', () => {
   it('der Datenbestand nach Push und Microsoft 365 enthält keine Klartext-Zugangsdaten', async () => {
     expect(await findPlaintextSecrets()).toEqual([]);

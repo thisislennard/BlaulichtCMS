@@ -116,7 +116,7 @@ export function InputDialog({ input, kind, cat, onClose, preset }: { input: Inpu
               <NumberField id="in-minutes" label="Abstand" unit="Minuten" min={cat.limits.minIntervalMinutes} max={1440} value={c.minutes} onChange={(v) => set({ minutes: v })} help={`Mindestens ${cat.limits.minIntervalMinutes} Minuten (Schutz vor Fluten).`} />
             ) : (
               <>
-                <FieldWrap label="Uhrzeit" htmlFor="in-time" help="Zeitzone der Instanz (Einstellungen → Allgemein).">
+                <FieldWrap label="Uhrzeit" htmlFor="in-time" help="Zeitzone der Instanz (Einstellungen → Organisation).">
                   <Input id="in-time" type="time" value={c.time} onChange={(e) => set({ time: e.target.value })} className="max-w-[160px]" />
                 </FieldWrap>
                 <CheckList legend="Nur an diesen Tagen (leer = jeden Tag)" columns={7} options={['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'].map((l, i) => ({ value: i + 1, label: l }))} value={c.weekdays ?? []} onChange={(v) => set({ weekdays: [...v].sort() })} />
@@ -225,7 +225,7 @@ export default function Inputs() {
         actions={manage && <Button variant="primary" icon="Plus" disabled={!cat.data} onClick={() => setChoose(true)}>Neuer Auslöser</Button>}
       />
       <WorkflowTabs />
-      {cat.data && !cat.data.enabled && <Notice tone="warning" title="Workflows sind abgeschaltet">Unter Einstellungen → Redaktion lassen sie sich wieder einschalten.</Notice>}
+      {cat.data && !cat.data.enabled && <Notice tone="warning" title="Workflows sind abgeschaltet">Unter Einstellungen → Workflows lassen sie sich wieder einschalten.</Notice>}
       {(q.isLoading || cat.isLoading) && <SkeletonRows rows={4} />}
       {q.error && <ErrorBox title="Auslöser konnten nicht geladen werden">{(q.error as Error).message}</ErrorBox>}
       {q.data && q.data.length === 0 && <EmptyState icon="Zap" title="Noch keine Auslöser" text="Ein Auslöser legt fest, welches Ereignis einen Workflow startet." />}

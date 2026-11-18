@@ -68,7 +68,7 @@ export async function pressRequestRetention(dryRun: boolean, s: Settings): Promi
         await notify({
           kind: 'warning',
           title: noticed.length === 1 ? `Presseanfrage ${nos[0]} wird in ${PRESS_NOTICE_DAYS} Tagen gelöscht` : `${noticed.length} Presseanfragen werden in ${PRESS_NOTICE_DAYS} Tagen gelöscht`,
-          body: `Nicht erledigt und seit ${openMonths} Monaten ohne Aktivität (Löschfrist, Einstellungen → Datenschutz): ${nos.slice(0, 15).join(', ')}${nos.length > 15 ? ' …' : ''}. Eine Änderung, Notiz oder Mail setzt die Frist zurück.`,
+          body: `Nicht erledigt und seit ${openMonths} Monaten ohne Aktivität (Löschfrist, Einstellungen → Löschfristen): ${nos.slice(0, 15).join(', ')}${nos.length > 15 ? ' …' : ''}. Eine Änderung, Notiz oder Mail setzt die Frist zurück.`,
           link: noticed.length === 1 ? `/presse/${noticed[0].id}` : '/presse?filter=expiring',
           permission: 'press.manage',
           category: 'press',

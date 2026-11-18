@@ -93,7 +93,7 @@ export function DecisionDialog({ decision, revision, hash, postId, flagged, face
         {decision === 'approved' && altMissing > 0 && (
           <Notice tone={altRequired ? 'error' : 'warning'} title="Barrierefreiheit">
             {altMissing === 1 ? 'Ein Bild hat' : `${altMissing} Bilder haben`} keinen Alternativtext. Menschen mit Screenreader erfahren dann nicht, was zu sehen ist.{' '}
-            {altRequired ? 'Alternativtexte sind Pflicht (Einstellungen → Redaktion): bitte zurückweisen oder ergänzen lassen.' : 'Freigeben ist trotzdem möglich.'}
+            {altRequired ? 'Alternativtexte sind Pflicht (Einstellungen → Redaktion & Freigabe): bitte zurückweisen oder ergänzen lassen.' : 'Freigeben ist trotzdem möglich.'}
           </Notice>
         )}
         {decision === 'approved' && facesRunning.length > 0 && (

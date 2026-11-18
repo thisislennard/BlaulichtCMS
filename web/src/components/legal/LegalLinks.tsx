@@ -3,7 +3,7 @@ import { Link } from 'react-router';
 import { get } from '../../api/client';
 import { cx } from '../ui/core';
 
-/* Datenschutzerklärung und Impressum (#187): Links nur, wenn unter Einstellungen → Datenschutz ein Text hinterlegt ist. */
+/* Datenschutzerklärung und Impressum (#187): Links nur, wenn unter Einstellungen → Datenschutz & Recht ein Text hinterlegt ist. */
 
 export interface LegalState {
   privacy: boolean;

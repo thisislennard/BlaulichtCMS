@@ -35,7 +35,7 @@ Neue Dateien über Upload-Links werden gebündelt: höchstens eine Push-Nachrich
 
 In der Glocke steht die ganze Benachrichtigung – je nach Art z. B. **Stichwort und Ort** eines Einsatzes („Neuer Einsatzentwurf aus FE2: B3 in Musterdorf – Ortsteil“), der **Betreff** einer Mail an das Presse-Postfach oder der Text eines Workflows. **Push-Mitteilungen und E-Mails tragen standardmäßig nur die Art** und einen Link, z. B. „Neuer Einsatz-Eingang – Einzelheiten nach der Anmeldung in BlaulichtCMS“. So erscheinen keine Einsatz- oder Personendaten auf Sperrbildschirmen und in Postfächern außerhalb der Organisation.
 
-Die Administration kann unter [Einstellungen → Benachrichtigungen und E-Mail](/einstellungen#benachrichtigungen) getrennt einschalten:
+Die Administration kann unter [Einstellungen → E-Mail & Push](/einstellungen/e-mail) getrennt einschalten:
 
 - **Einzelheiten in Push-Mitteilungen:** Titel und Text wie in der Glocke. Der Inhalt ist auf dem Weg über den Push-Dienst des Browsers (Google, Mozilla, Apple, Microsoft) Ende-zu-Ende-verschlüsselt, erscheint aber auf dem Gerät – je nach Einstellung des Geräts auch auf dem Sperrbildschirm.
 - **Einzelheiten in E-Mail-Benachrichtigungen:** Titel im Betreff, Text in der Mail. E-Mails sind nicht Ende-zu-Ende-verschlüsselt; nur einschalten, wenn die Konten **dienstliche Adressen** haben (nicht die privaten Postfächer Ehrenamtlicher).
@@ -62,14 +62,74 @@ Push funktioniert auch am Computer – im Browser (Chrome, Edge, Firefox, Safari
 - **Gerät entfernt:** Meldet der Push-Dienst ein Abo als erloschen (z. B. Browserdaten gelöscht), entfernt BlaulichtCMS das Gerät automatisch – Push dann neu einschalten.
 - Push braucht eine Adresse mit **HTTPS**.
 
-## Einstellungen für die Administration
+## E-Mail und Push einrichten
 
-Unter [Einstellungen → Benachrichtigungen und E-Mail](/einstellungen#benachrichtigungen) (Recht „E-Mail-Versand und Push einstellen“):
+Unter [Einstellungen → E-Mail & Push](/einstellungen/e-mail) (Recht „E-Mail-Versand und Push einstellen“) – eine Seite, eine Speichern-Leiste:
 
+- **Versandweg für alle E-Mails:** [SMTP-Server](#smtp-einrichten) oder [Microsoft 365](#microsoft-365) – beide samt Zugangsdaten und **Testmail** an dieser Stelle. Er gilt für Einladungen, Benachrichtigungen, Sicherheitsmeldungen, Pressemitteilungen, Presseantworten, Workflows und den Warnversand. Den **Testmodus** des Warnversands gibt es weiter unter [Einrichtung → Stichwörter & Regeln](/stichwoerter-regeln) (Reiter *Testmodus*).
 - **Push- und E-Mail-Benachrichtigungen** global ein- oder ausschalten.
 - **Inhalt außerhalb von BlaulichtCMS:** ob Push-Mitteilungen bzw. E-Mails Einzelheiten tragen oder nur die Art (Standard), siehe [Inhalt von Push und E-Mail](#inhalt-von-push-und-e-mail).
-- **Versandweg für alle E-Mails:** SMTP oder Microsoft 365. Er gilt für Warnversand, Sicherheitsmeldungen, Workflows und Benachrichtigungen. Die SMTP-Angaben stehen unter [Einrichtung → Stichwörter & Regeln](/stichwoerter-regeln) im Reiter *E-Mail-Versand*.
 - **Push-Schlüssel:** BlaulichtCMS erzeugt das Schlüsselpaar für Web Push (VAPID) selbst; der private Schlüssel liegt verschlüsselt auf dem Server. „Schlüssel erneuern“ macht alle Push-Abos ungültig – alle Geräte müssen Push neu einschalten.
+
+Geänderter Server, Benutzer, Absender, ein neues Passwort bzw. Geheimnis und der Wechsel des Versandwegs verlangen eine Bestätigung mit dem eigenen Passwort, stehen im Audit-Protokoll und lösen eine Sicherheitsmeldung aus.
+
+## SMTP einrichten
+
+Server, Port, Verschlüsselung, Benutzer, Passwort und Absender des Postausgangsservers. Das Passwort wird verschlüsselt gespeichert und nie wieder angezeigt; ein leeres Feld behält das gespeicherte Passwort – aber nur für denselben Server.
+
+**Testmail:** Felder ausfüllen (Speichern noch nicht nötig), unter **Testmail an** eine eigene Adresse eintragen und **Testmail senden** – gesendet wird mit den Werten im Formular. Ist der Warnversand im Echtbetrieb (Testmodus aus), lassen sich geänderte SMTP-Angaben bzw. der Wechsel auf SMTP erst nach einer erfolgreichen Testmail mit genau diesen Werten speichern (höchstens 60 Minuten alt).
+
+### Woher die Zugangsdaten kommen
+
+Die Werte stellt die eigene **IT** bzw. der **E-Mail-Anbieter** der Organisation bereit. Am besten ein eigenes Postfach nur für BlaulichtCMS anlegen lassen (z. B. `warnung@…`) und erfragen:
+
+| Feld | Bedeutung |
+|---|---|
+| Server | Postausgangsserver (SMTP), z. B. `smtp.example.org` |
+| Port und Verschlüsselung | meist 587 mit STARTTLS oder 465 mit TLS (siehe unten) |
+| Benutzer | Anmeldename des Postfachs, meist die vollständige E-Mail-Adresse |
+| Passwort | Passwort des Postfachs bzw. ein App-Passwort |
+| Absender | Adresse, die als Absender erscheint, optional mit Namen (`Feuerwehr Musterstadt <presse@example.org>`) – muss zum Postfach passen bzw. für das Postfach freigegeben sein. Antworten auf Presseanfragen und Pressemitteilungen verwenden dieselbe Adresse; der Name kommt von hier, sonst aus *Einstellungen → Organisation → Absendername* |
+
+### Port und Verschlüsselung
+
+| Einstellung | Port | Ablauf |
+|---|---|---|
+| STARTTLS | 587 | Verbindung beginnt unverschlüsselt und wird vor der Anmeldung verschlüsselt. BlaulichtCMS verlangt die Verschlüsselung – ohne sie wird nicht gesendet. |
+| TLS | 465 | Verbindung ist von Anfang an verschlüsselt. |
+| keine | z. B. 25 | nur für Testserver ohne Anmeldung. Mit Benutzer oder Passwort lehnt BlaulichtCMS das Speichern ab, damit Zugangsdaten nie unverschlüsselt übertragen werden. |
+
+### Werte bekannter Anbieter
+
+Stand der Angaben: November 2026, jeweils aus der Hilfe des Anbieters. Im Zweifel gilt die Auskunft des Anbieters.
+
+| Anbieter | Server | Port / Verschlüsselung | Hinweis |
+|---|---|---|---|
+| Microsoft 365 | `smtp.office365.com` | 587 / STARTTLS | „Authentifiziertes SMTP“ muss für das Postfach eingeschaltet sein; Microsoft schränkt die Anmeldung mit Passwort (Basic Auth) ab Ende 2026 ein ([Einrichtung](https://learn.microsoft.com/de-de/exchange/mail-flow-best-practices/how-to-set-up-a-multifunction-device-or-application-to-send-email-using-microsoft-365-or-office-365), [SMTP AUTH einschalten](https://learn.microsoft.com/de-de/exchange/clients-and-mobile-in-exchange-online/authenticated-client-smtp-submission), [Zeitplan](https://techcommunity.microsoft.com/blog/exchange/updated-exchange-online-smtp-auth-basic-authentication-deprecation-timeline/4489835)) |
+| IONOS | `smtp.ionos.de` | 587 / STARTTLS oder 465 / TLS | [IONOS-Hilfe](https://www.ionos.de/hilfe/e-mail/problemloesungen-mail-basicmail-business/die-einrichtung-des-e-mail-programms-schlaegt-fehl/) |
+| STRATO | `smtp.strato.de` | 465 / TLS | Benutzer = vollständige E-Mail-Adresse ([STRATO-FAQ](https://www.strato.de/faq/mail/e-mailserver-adressen-ports-ssl-tls/)) |
+| GMX | `mail.gmx.net` | 587 / STARTTLS | POP3/IMAP-Zugriff muss im Postfach eingeschaltet sein ([Serverdaten](https://hilfe.gmx.net/pop-imap/pop3/serverdaten.html), [einschalten](https://hilfe.gmx.net/pop-imap/einschalten.html)) |
+| WEB.DE | `smtp.web.de` | 587 / STARTTLS | POP3/IMAP ist ab Werk aus ([Serverdaten](https://hilfe.web.de/pop-imap/imap/outlook.html), [einschalten](https://hilfe.web.de/pop-imap/einschalten.html)) |
+| Google Workspace / Gmail | `smtp.gmail.com` | 587 / STARTTLS oder 465 / TLS | nur mit App-Passwort, das die Bestätigung in zwei Schritten voraussetzt ([Google-Hilfe](https://knowledge.workspace.google.com/admin/gmail/send-email-from-a-printer-scanner-or-app?hl=de), [App-Passwörter](https://support.google.com/accounts/answer/185833?hl=de)) |
+
+### SPF, DKIM und DMARC
+
+Damit Warnmails nicht im Spam landen, muss der Mailserver für die Absenderdomain berechtigt sein:
+
+- **SPF** – im DNS der Domain steht, welche Server Mails für sie versenden dürfen.
+- **DKIM** – der Mailserver signiert jede Mail; der Empfänger prüft die Signatur über einen Schlüssel im DNS.
+- **DMARC** – legt fest, wie Empfänger mit Mails umgehen, die SPF/DKIM nicht bestehen.
+
+Bei einem Postfach beim eigenen Anbieter richtet das in der Regel der Anbieter bzw. die IT ein. Eine kurze Erklärung gibt das BSI unter [Technischer Hintergrund E-Mail-Sicherheit](https://www.bsi.bund.de/DE/Themen/Verbraucherinnen-und-Verbraucher/Informationen-und-Empfehlungen/Onlinekommunikation/E-Mail-Sicherheit/technischer-Hintergrund-E-Mail-Sicherheit/technischer-Hintergrund-E-Mail-Sicherheit_node.html).
+
+### Typische Fehler (E-Mail)
+
+| Meldung | Ursache |
+|---|---|
+| „Invalid login“, „Authentication failed“ (535) | Benutzer oder Passwort falsch; bei Microsoft 365 „Authentifiziertes SMTP“ aus; bei Google kein App-Passwort; bei GMX/WEB.DE Zugriff nicht eingeschaltet. |
+| „Greeting never received“, Zeitüberschreitung | falscher Port oder Verschlüsselung (465 braucht TLS, 587 STARTTLS) oder Port durch eine Firewall gesperrt. |
+| „Sender address rejected“ / „Send as denied“ | Absender passt nicht zum Postfach. |
+| Testmail kommt nicht an, aber „angenommen“ | Spam-Ordner prüfen; SPF/DKIM der Absenderdomain mit der IT klären. |
 
 ## Microsoft 365
 
@@ -77,7 +137,7 @@ Mit Microsoft 365 meldet sich BlaulichtCMS **als Anwendung** bei Microsoft an un
 
 **Erst testen, dann aktivieren:** Wie bei den Verbindungen lässt sich Microsoft 365 erst speichern, nachdem mit genau diesen Angaben eine **Testmail** erfolgreich versendet wurde (gilt 60 Minuten). Das Client-Geheimnis wird verschlüsselt gespeichert und nie wieder angezeigt; ein leeres Feld behält das gespeicherte Geheimnis, solange Verzeichnis und Anwendung gleich bleiben. Umschalten des Versandwegs und ein neues Geheimnis verlangen eine Bestätigung mit dem Passwort, stehen im Audit-Protokoll und lösen eine Sicherheitsmeldung aus.
 
-Ist der Warnversand im Echtbetrieb, gilt die Testmail über Microsoft 365 als Nachweis für das Ausschalten des Testmodus; zurück auf SMTP geht es dann nur mit einer frischen SMTP-Testmail.
+Ist der Warnversand im Echtbetrieb, gilt die Testmail über Microsoft 365 als Nachweis für das Ausschalten des Testmodus; zurück auf SMTP geht es dann nur mit einer frischen SMTP-Testmail genau der eingetragenen Angaben.
 
 ### App-Registrierung in Microsoft Entra
 

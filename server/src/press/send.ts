@@ -30,7 +30,7 @@ export function pressMessageId(from: string, prefix = 'press'): string {
 
 /**
  * Absender des eingestellten Mailwegs (#230): nackte Adresse; Anzeigename aus „Name <adresse>“ im Absenderfeld, sonst
- * der Absendername bzw. die Organisation aus Einstellungen → Allgemein.
+ * der Absendername bzw. die Organisation aus Einstellungen → Organisation.
  */
 export async function pressSender(): Promise<{ address: string; name: string }> {
   const s = await getSettings(true);

@@ -73,27 +73,42 @@ describe('Suche: Vereinheitlichung (Server und Oberfläche gleich)', () => {
 });
 
 describe('Suche: Seiten, Einstellungen und Hilfe (Oberfläche)', () => {
-  const settingsSrc = ['pages/admin/Settings.tsx', 'pages/admin/NotifySettings.tsx', 'pages/admin/OffsiteBackup.tsx', 'pages/admin/Updates.tsx', 'pages/NotifyPrefs.tsx']
-    .map((f) => fs.readFileSync(path.join(__dirname, '../../web/src', f), 'utf8'))
+  // Einstellungen seit #256 auf Unterseiten (pages/admin/settings/*) – Ziele sind Unterseiten bzw. Felder darauf
+  const WEB = path.join(__dirname, '../../web/src');
+  const settingsDir = path.join(WEB, 'pages/admin/settings');
+  const settingsSrc = [...fs.readdirSync(settingsDir).map((f) => path.join(settingsDir, f)), ...['pages/admin/Settings.tsx', 'pages/NotifyPrefs.tsx', 'pages/Profile.tsx', 'pages/admin/SystemStatus.tsx', 'pages/warnings/WarningConfig.tsx'].map((f) => path.join(WEB, f))]
+    .map((f) => fs.readFileSync(f, 'utf8'))
     .join('\n');
   const find = (q: string) =>
     SETTINGS_INDEX.map((s) => ({ s, r: web.rank(web.searchTerms(q), s.title, `${s.keywords} ${s.where}`) }))
       .filter((x) => x.r !== null)
       .map((x) => x.s.title);
 
-  it('jedes Ziel des Einstellungs-Index existiert (Abschnittsanker bzw. Seite)', () => {
+  it('jedes Ziel des Einstellungs-Index existiert (Unterseite, Feld bzw. Abschnittsanker)', async () => {
+    const { SETTINGS_PAGES } = await import('../../web/src/config/settingsPages.js');
+    const { DEFAULT_SETTINGS } = await import('../src/lib/settings.js');
+    const pages = SETTINGS_PAGES.map((p: { id: string }) => `/einstellungen/${p.id}`);
     for (const s of SETTINGS_INDEX) {
-      const [p, anchor] = s.href.split('#');
-      expect(['/einstellungen', '/profil', '/stichwoerter-regeln'], s.title).toContain(p);
-      if (anchor) expect(settingsSrc, `${s.title}: #${anchor}`).toMatch(new RegExp(`["']${anchor}["']`));
+      const [beforeHash, anchor] = s.href.split('#');
+      expect([...pages, '/profil', '/stichwoerter-regeln', '/system'], s.title).toContain(beforeHash.split('?')[0]);
+      if (!anchor) continue;
+      if (anchor.startsWith('s-')) {
+        // Feld einer Einstellung: id s-<bereich>-<name> ← Schlüssel <bereich>.<name>, auf der Seite mit k="…" angelegt
+        const key = anchor.slice(2).replace('-', '.');
+        expect(key in DEFAULT_SETTINGS, `${s.title}: ${key}`).toBe(true);
+        expect(settingsSrc, `${s.title}: ${key}`).toMatch(new RegExp(`["']${key.replace('.', '\\.')}["']`));
+      } else expect(settingsSrc, `${s.title}: #${anchor}`).toMatch(new RegExp(`["']${anchor}["']`));
     }
   });
 
-  it('Beispiele aus #259: SMTP, Mail, Sicherung, Zeitzone finden die Einstellung', () => {
-    expect(find('SMTP')).toEqual(expect.arrayContaining(['Benachrichtigungen und E-Mail', 'SMTP-Server und Testmail']));
-    expect(find('Mail')).toEqual(expect.arrayContaining(['Benachrichtigungen und E-Mail', 'SMTP-Server und Testmail']));
+  it('Beispiele aus #259/#256: SMTP, Mail, Sicherung, Zeitzone, Papierkorb finden die Einstellung', () => {
+    expect(find('SMTP')).toEqual(expect.arrayContaining(['E-Mail & Push', 'SMTP-Server und Testmail']));
+    expect(find('Mail')).toEqual(expect.arrayContaining(['E-Mail & Push', 'SMTP-Server und Testmail']));
     expect(find('Sicherung')).toEqual(expect.arrayContaining(['Sicherung', 'Sicherung außer Haus']));
-    expect(find('Zeitzone')).toEqual(['Allgemein']);
+    expect(find('Zeitzone')).toEqual(expect.arrayContaining(['Zeitzone', 'Organisation']));
+    expect(find('Papierkorb')).toEqual(expect.arrayContaining(['Löschfristen', 'Papierkorb leeren nach']));
+    // Zeitzone führt direkt zum Feld auf der Unterseite Organisation
+    expect(SETTINGS_INDEX.find((s) => s.title === 'Zeitzone')!.href).toBe('/einstellungen/organisation#s-general-timezone');
   });
 
   it('„Stichwort“ findet den Menüpunkt „Stichwörter & Regeln“ (Umlaut)', () => {

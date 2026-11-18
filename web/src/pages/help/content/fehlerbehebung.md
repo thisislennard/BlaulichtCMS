@@ -3,7 +3,7 @@
 | Problem | Ursache und Lösung |
 |---|---|
 | „Link nicht mehr gültig“ | Abgelaufen oder widerrufen. In der Sammlung einen neuen Link erzeugen. |
-| „Datei ist größer als …“ | Grenze je Datei. Video kürzen oder Grenze unter Einstellungen → Medien anheben. |
+| „Datei ist größer als …“ | Grenze je Datei. Video kürzen oder Grenze unter Einstellungen → Medien & Upload anheben. |
 | Datei „gesperrt“ | Kein erlaubtes Foto/Video, beschädigt oder zu groß/lang. Der Grund steht unter „In Prüfung / gesperrt“; „Medien administrieren“ kann erneut prüfen, bei Videos mit reinem Dekodierbefund trotzdem freigeben oder endgültig löschen. |
 | „Wird geprüft“ bleibt stehen | Worker läuft nicht. Systemstatus prüfen, ggf. Container neu starten. |
 | Uploads gesperrt, „Speicher fast voll“ | Freien Speicher schaffen oder Mindestspeicher anpassen. |

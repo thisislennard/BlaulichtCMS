@@ -114,13 +114,13 @@ Vergleiche ignorieren Groß- und Kleinschreibung. Nach einem Zusammenführen ste
 1. **Speichern** – der Entwurf ist gespeichert, auch mit Fehlern.
 2. **Testlauf** – führt den Entwurf mit Beispieldaten aus (änderbar). Aktionen beschreiben nur, was sie tun würden: **nichts wird angelegt, veröffentlicht oder gesendet**. Das Ergebnis steht Schritt für Schritt im Protokoll und an den Knoten.
 3. **Aktivieren** – nur der zuletzt erfolgreich getestete Stand. Jede Änderung am Ablauf **oder** an einem verwendeten Auslöser oder einer verwendeten Aktion verlangt einen neuen Test. Die Aktivierung speichert eine **Version** (Ablauf samt Auslösern und Aktionen); die aktive Version läuft weiter, während der Entwurf bearbeitet wird.
-4. **Deaktivieren** – Notbremse: neue Ereignisse starten nichts mehr, wartende Läufe und offene Freigaben werden abgebrochen. Für alle Workflows gibt es den Schalter **Workflows ausführen** unter [Einstellungen → Redaktion](/einstellungen#redaktion).
+4. **Deaktivieren** – Notbremse: neue Ereignisse starten nichts mehr, wartende Läufe und offene Freigaben werden abgebrochen. Für alle Workflows gibt es den Schalter **Workflows ausführen** unter [Einstellungen → Workflows](/einstellungen/workflows).
 
 **Grenzen gegen Fluten:** Je Workflow höchstens 20 Läufe pro Minute (einstellbar); darüber werden Ereignisse verworfen und die Verwaltung benachrichtigt. Jedes Ereignis startet je Workflow genau einen Lauf; ein Lauf legt nie denselben Entwurf zweimal an – auch nicht nach einem Neustart. Vorübergehende Fehler (z. B. Mailserver nicht erreichbar) werden wiederholt; bei einem abgebrochenen Mailversand mit unklarem Ergebnis wird nie automatisch erneut gesendet.
 
 ## Läufe und Protokoll
 
-Unter **Läufe** steht jeder Live- und Testlauf mit Auslöser, Status und Dauer. **Protokoll** zeigt je Schritt Ergebnis, gewählten Weg, Hinweise (z. B. leere Felder) und die Daten. E-Mail-Adressen erscheinen gekürzt (`m…@example.org`). Protokolle werden nach der Frist unter [Einstellungen → Datenschutz](/einstellungen#datenschutz) gelöscht (Standard 30 Tage). Fehlgeschlagene Läufe melden sich als Benachrichtigung bei der Verwaltung.
+Unter **Läufe** steht jeder Live- und Testlauf mit Auslöser, Status und Dauer. **Protokoll** zeigt je Schritt Ergebnis, gewählten Weg, Hinweise (z. B. leere Felder) und die Daten. E-Mail-Adressen erscheinen gekürzt (`m…@example.org`). Protokolle werden nach der Frist unter [Einstellungen → Löschfristen](/einstellungen/loeschfristen) gelöscht (Standard 30 Tage). Fehlgeschlagene Läufe melden sich als Benachrichtigung bei der Verwaltung.
 
 ## Direktversand je Workflow
 

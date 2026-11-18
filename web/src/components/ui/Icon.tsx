@@ -7,6 +7,7 @@ import {
   Bell,
   BookOpen,
   Box,
+  Building2,
   Braces,
   CalendarClock,
   CalendarDays,
@@ -167,7 +168,7 @@ import {
 } from 'lucide-react';
 
 const MAP: Record<string, LucideIcon> = {
-  Activity, AlertTriangle, ArrowLeft, ArrowRight, ArrowRightLeft, Bell, BookOpen, Box, Braces, CalendarClock, CalendarDays, Check, CheckCircle2,
+  Activity, AlertTriangle, ArrowLeft, ArrowRight, ArrowRightLeft, Bell, BookOpen, Box, Building2, Braces, CalendarClock, CalendarDays, Check, CheckCircle2,
   ChevronDown, ChevronLeft, ChevronRight, CircleStop, Clock, Copy, Database, Download, ExternalLink, FileClock, FileText, Filter, FolderOpen,
   GitBranch, Globe, HardDrive, Hourglass, Inbox, Info, KeyRound, LayoutDashboard, LayoutTemplate, LifeBuoy, Link2, ListChecks, ListOrdered, Lock, LockOpen, LogOut,
   Mail, MailCheck, Megaphone, MegaphoneOff, Menu, MessagesSquare, Minus, MonitorCog, MoreHorizontal, MousePointerClick, Newspaper, NotebookPen,

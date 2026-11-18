@@ -1,1671 +1,192 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Link, useLocation } from "react-router";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ApiError, download, get, patch, post } from "../../api/client";
-import {
-  Badge,
-  Button,
-  cx,
-  ErrorBox,
-  FieldWrap,
-  Input,
-  LinkButton,
-  Notice,
-  PageHeader,
-  Select,
-  Skeleton,
-  SkeletonRows,
-  Switch,
-  Table,
-  Td,
-  Textarea,
-  Th,
-} from "../../components/ui/core";
-import { CopyButton, UnsavedChangesGuard, useToast, useConfirm } from "../../components/ui/overlays";
-import { Icon } from "../../components/ui/Icon";
-import { LegalMarkdown } from "../../components/legal/LegalMarkdown";
-import { t } from "../../i18n";
-import { useAuth } from "../../lib/auth";
-import { STATE_OPTIONS, STATES_WITH_CATALOG } from "../../lib/keywords";
-import {
-  fmtBytes,
-  fmtDateTime,
-  fmtNumber,
-  fmtRelative,
-} from "../../lib/format";
-import { AppearanceFields, FieldGrid, LoadError, SectionCard } from "./shared";
-import { fmtUptime, useSystemStatus } from "./SystemStatus";
-import { UpdatesSection } from "./Updates";
-import { NotifySettingsSection } from "./NotifySettings";
-import { OffsiteBackupSection } from "./OffsiteBackup";
-import { plural } from '../../lib/format';
+import { useMemo, useState, type ReactNode } from 'react';
+import { Link, Navigate, NavLink, useLocation, useParams } from 'react-router';
+import { cx, Input, Notice, PageHeader } from '../../components/ui/core';
+import { SaveScope } from '../../components/ui/form';
+import { Icon } from '../../components/ui/Icon';
+import { usePageMeta } from '../../components/layout/AppShell';
+import { useAuth } from '../../lib/auth';
+import { rank, searchTerms } from '../../lib/searchText';
+import { useHashScroll } from '../../lib/useHashScroll';
+import { LEGACY_SETTINGS_ANCHORS, SETTINGS_PAGES, settingsPage, type SettingsPageDef } from '../../config/settingsPages';
+import { SETTINGS_INDEX } from '../../config/settingsIndex';
+import { useSettingsQuery } from './settings/model';
+import { EditorialPage, MediaPage, OrganisationPage, SecurityPage, SystemPage, WorkflowsPage } from './settings/pages';
+import { PrivacyPage, RetentionPage } from './settings/Privacy';
+import { MailPage } from './settings/Mail';
+import { BackupPage } from './settings/Backup';
+import { UpdatesPage } from './settings/Updates';
 
-type Values = Record<string, any>;
-interface SettingsResponse {
-  settings: Values;
-  env: {
-    publicUrl: string | null;
-    cookieSecure: boolean;
-    trustedProxies: string[];
-    dataDir: string;
-  };
-}
-interface Backup {
-  id: string;
-  file_name: string;
-  size_bytes: number | null;
-  status: "running" | "ok" | "failed";
-  started_at: string;
-  finished_at: string | null;
-  error: string | null;
-  trigger: string;
-  created_by_name: string | null;
-  /** Sicherung außer Haus (#212) */
-  offsite_status?: "pending" | "ok" | "failed" | null;
-  offsite_error?: string | null;
-}
+/*
+ * Verwaltung → Einstellungen (#256): Übersicht unter /einstellungen, je Bereich eine Unterseite /einstellungen/<bereich>
+ * mit genau einer Speichern-Leiste (SaveScope) und Warnung beim Verlassen. Frühere Anker (/einstellungen#datenschutz …)
+ * leiten auf die Unterseite weiter. Persönliche Darstellung steht unter Mein Konto.
+ */
 
-const SECTIONS = [
-  "allgemein",
-  "darstellung",
-  "redaktion",
-  "datenschutz",
-  "medien",
-  "betrieb",
-  "sicherheit",
-  "benachrichtigungen",
-  "sicherung",
-  "sicherung-ausser-haus",
-  "updates",
-  "ueber",
-] as const;
-/** Erlaubte Bereiche (Spiegel von SETTING_RANGES im Server, Gleichstand prüft units.test.ts) – Speichern erst, wenn alle Zahlen passen. */
-const RANGES: Record<string, [number, number]> = {
-  'security.session_idle_minutes': [5, 1440],
-  'security.session_max_hours': [1, 720],
-  'security.remember_days': [1, 180],
-  'security.mfa_remember_days': [1, 90],
-  'security.lockout_attempts': [3, 20],
-  'security.lockout_minutes': [1, 1440],
-  'security.password_min_length': [10, 128],
-  'invites.valid_hours': [1, 720],
-  'jobs.concurrency': [1, 32],
-  'retention.log_days': [1, 3650],
-  'security.alert_failed_logins': [0, 10000],
-  'security.alert_downloads': [0, 100000],
-  'retention.audit_days': [30, 3650],
-  'privacy.upload_ip_retention_days': [1, 365],
-  'privacy.collection_retention_days': [0, 3650],
-  'privacy.deleted_media_days': [0, 3650],
-  'privacy.fe2_event_days': [0, 3650],
-  'privacy.warning_days': [0, 3650],
-  'privacy.official_warning_days': [0, 3650],
-  'privacy.upload_link_days': [0, 3650],
-  'privacy.receipt_days': [1, 30],
-  'privacy.uploader_months': [0, 120],
-  'privacy.press_request_months': [0, 120],
-  'privacy.press_open_months': [0, 120],
-  'privacy.press_release_log_months': [0, 120],
-  'privacy.press_contact_review_months': [0, 120],
-  'press.reminder_hours': [0, 72],
-  'privacy.automation_run_days': [1, 3650],
-  'automations.max_runs_per_minute': [1, 600],
-  'media.blocked_days': [0, 3650],
-  'media.export_hours': [1, 336],
-  'media.export_max_gb': [1, 500],
-  'media.security_log_days': [0, 3650],
-  'media.max_file_mb': [1, 20000],
-  'media.link_max_files': [1, 1000],
-  'media.link_default_days': [1, 90],
-  'media.link_max_days': [1, 365],
-  'media.storage_warn_gb': [0, 100000],
-  'media.collection_max_files': [1, 100000],
-  'media.collection_max_gb': [1, 10000],
-  'media.min_free_gb': [1, 10000],
-  'media.max_video_minutes': [1, 600],
-  'media.max_image_mp': [1, 500],
-  'media.max_video_edge': [320, 8192],
-  'media.full_decode_seconds': [10, 36000],
-  'media.check_timeout_s': [60, 14400],
-  'media.face_threshold': [30, 95],
-  'smtp.port': [1, 65535],
-  'backup.hour': [0, 23],
-  'backup.keep': [1, 365],
-  'updates.check_hours': [1, 168],
+const CONTENT: Record<string, () => ReactNode> = {
+  organisation: () => <OrganisationPage />,
+  datenschutz: () => <PrivacyPage />,
+  loeschfristen: () => <RetentionPage />,
+  medien: () => <MediaPage />,
+  redaktion: () => <EditorialPage />,
+  'e-mail': () => <MailPage />,
+  sicherheit: () => <SecurityPage />,
+  sicherung: () => <BackupPage />,
+  updates: () => <UpdatesPage />,
+  workflows: () => <WorkflowsPage />,
+  system: () => <SystemPage />,
 };
 
-/** Recht je Einstellung, abgeleitet aus dem Schlüssel – Spiegel von settingPermission() im Server. */
-function settingPermission(key: string): string {
-  switch (key.split(".")[0]) {
-    case "general":
-      return "settings.general";
-    case "privacy":
-    case "retention":
-    case "legal":
-      return "settings.privacy";
-    case "media":
-      return "settings.media";
-    case "editorial":
-      return "settings.editorial";
-    case "jobs":
-    case "automations":
-      return "settings.system";
-    case "backup":
-      return "backup.manage";
-    default:
-      return "settings.security";
-  }
-}
-
-function same(a: unknown, b: unknown) {
-  return JSON.stringify(a) === JSON.stringify(b);
+function useVisiblePages() {
+  const { canAny } = useAuth();
+  return SETTINGS_PAGES.filter((p) => !p.view || canAny(...p.view));
 }
 
 export default function Settings() {
-  const { can, canAny } = useAuth();
-  const canChange = canAny("settings.general", "settings.security", "settings.privacy", "settings.media", "settings.editorial", "settings.system", "backup.manage");
-  // Abschnitte, deren Inhalt ein eigenes Leserecht braucht, erscheinen nur mit diesem Recht
-  const sections = SECTIONS.filter((s) => (s === "betrieb" ? can("system.status") : s === "updates" ? can("update.view") : s === "sicherung-ausser-haus" ? can("backup.manage") : true));
-  const qc = useQueryClient();
-  const toast = useToast();
-  const q = useQuery({
-    queryKey: ["settings"],
-    queryFn: () => get<SettingsResponse>("/settings"),
-  });
-  const [draft, setDraft] = useState<Values | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (q.data && !draft) setDraft({ ...q.data.settings });
-  }, [q.data, draft]);
-
-  const server = q.data?.settings;
-  const changed = useMemo(
-    () =>
-      server && draft
-        ? Object.keys(draft).filter((k) => !same(draft[k], server[k]))
-        : [],
-    [server, draft],
-  );
-  const dirty = changed.length > 0;
-
-  const set = (k: string, v: unknown) =>
-    setDraft((d) => (d ? { ...d, [k]: v } : d));
-  const invalidNumbers =
-    !!draft &&
-    Object.entries(draft).some(
-      ([k, x]) =>
-        typeof server?.[k] === "number" &&
-        (x === "" ||
-          !Number.isInteger(Number(x)) ||
-          (RANGES[k] && (Number(x) < RANGES[k][0] || Number(x) > RANGES[k][1]))),
-    );
-  const emptyName = !!draft && typeof draft["general.instance_name"] === "string" && !String(draft["general.instance_name"]).trim();
-
-  const save = async () => {
-    if (!draft || !server) return;
-    setSaving(true);
-    setSaveError(null);
-    try {
-      const body = Object.fromEntries(changed.map((k) => [k, draft[k]]));
-      await patch("/settings", body);
-      const fresh = await qc.fetchQuery({
-        queryKey: ["settings"],
-        queryFn: () => get<SettingsResponse>("/settings"),
-      });
-      setDraft({ ...fresh.settings });
-      qc.invalidateQueries({ queryKey: ["me"] });
-      qc.invalidateQueries({ queryKey: ["keywords"] });
-      qc.invalidateQueries({ queryKey: ["warning-config"] });
-      toast({ tone: "success", title: t("admin.settings.saveOk") });
-    } catch (e) {
-      setSaveError((e as Error).message);
-    } finally {
-      setSaving(false);
-    }
-  };
-  const discard = () => {
-    if (server) setDraft({ ...server });
-    setSaveError(null);
-  };
-
-  /* Abschnittsnavigation: aktiver Abschnitt + Anker aus der URL */
+  const { bereich } = useParams();
   const loc = useLocation();
-  const [active, setActive] = useState<string>(SECTIONS[0]);
-  const ready = !!draft;
-  useEffect(() => {
-    if (!ready) return;
-    const id = decodeURIComponent(loc.hash.replace("#", ""));
-    if (id)
-      requestAnimationFrame(() =>
-        document.getElementById(id)?.scrollIntoView({ block: "start" }),
-      );
-  }, [ready, loc.hash]);
-  useEffect(() => {
-    if (!ready) return;
-    const els = SECTIONS.map((s) => document.getElementById(s)).filter(
-      Boolean,
-    ) as HTMLElement[];
-    const obs = new IntersectionObserver(
-      (entries) => {
-        const vis = entries
-          .filter((e) => e.isIntersecting)
-          .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
-        if (vis[0]) setActive(vis[0].target.id);
-      },
-      { rootMargin: "-10% 0px -70% 0px" },
-    );
-    els.forEach((e) => obs.observe(e));
-    return () => obs.disconnect();
-  }, [ready]);
+  const { canAny } = useAuth();
+  const pages = useVisiblePages();
+  const page = settingsPage(bereich);
+  const visible = !!page && pages.includes(page);
+  usePageMeta(visible ? { title: page.label, help: page.help } : {});
+  const q = useSettingsQuery();
+  useHashScroll(!!q.data);
 
-  const v = draft ?? {};
-  // Jedes Feld ist nur mit dem Recht für genau diese Einstellung änderbar
-  const ro = (k: string) => !can(settingPermission(k));
+  // Frühere Anker der einen Einstellungsseite (Lesezeichen, alte Benachrichtigungen, Hilfe-Links)
+  const legacy = !bereich && loc.hash ? LEGACY_SETTINGS_ANCHORS[decodeURIComponent(loc.hash.slice(1))] : undefined;
+  if (legacy) return <Navigate replace to={legacy} />;
+  if (bereich && !visible) return <Navigate replace to="/einstellungen" />;
 
+  const canChange = page ? canAny(...page.edit) : true;
   return (
     <div className="flex flex-col gap-5">
-      <UnsavedChangesGuard when={dirty} text="Es gibt ungespeicherte Einstellungen. Beim Verlassen gehen sie verloren." />
-      <PageHeader
-        subtitle={t("admin.settings.subtitle")}
-      />
-      {q.isError && <LoadError error={q.error} onRetry={() => q.refetch()} />}
-      <div className="flex gap-7 flex-col xl:flex-row xl:items-start">
-        <nav
-          aria-label={t("admin.settings.nav")}
-          className="xl:sticky xl:top-4 xl:w-[220px] shrink-0 flex xl:flex-col gap-0.5 overflow-x-auto -mx-1 px-1 pb-1 xl:pb-0"
+      <PageHeader subtitle={page ? page.description : 'Gilt für die ganze BlaulichtCMS-Instanz – je Bereich eine eigene Seite.'} />
+      {!page ? (
+        <Overview pages={pages} />
+      ) : (
+        <div className="flex gap-7 flex-col xl:flex-row xl:items-start">
+          <aside className="hidden xl:flex xl:sticky xl:top-4 xl:w-[230px] shrink-0 flex-col gap-3">
+            <SettingsFinder compact />
+            <SettingsNav pages={pages} />
+          </aside>
+          <div className="flex-1 min-w-0 max-w-[860px] flex flex-col gap-[18px]">
+            <Link to="/einstellungen" className="xl:hidden inline-flex items-center gap-1 text-sm self-start">
+              <Icon name="ArrowLeft" size={14} /> Alle Einstellungen
+            </Link>
+            {!canChange && <Notice icon="Lock">Nur lesen: Für diesen Bereich fehlt das Recht zum Ändern.</Notice>}
+            <SaveScope key={page.id} guardText={`In „${page.label}“ gibt es ungespeicherte Änderungen. Beim Verlassen gehen sie verloren.`}>
+              {CONTENT[page.id]()}
+            </SaveScope>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Linke Navigation der Unterseiten (aktiv: bg-raised + fett + rotes Symbol, Design §6). */
+function SettingsNav({ pages }: { pages: SettingsPageDef[] }) {
+  return (
+    <nav aria-label="Einstellungsbereiche" className="flex flex-col gap-0.5">
+      {pages.map((p) => (
+        <NavLink
+          key={p.id}
+          to={`/einstellungen/${p.id}`}
+          className={({ isActive }) => cx('flex items-center gap-2 h-[34px] px-2.5 rounded-control text-sm whitespace-nowrap no-underline transition-colors duration-fast', isActive ? 'bg-raised !text-fg font-semibold' : 'font-medium !text-fg-muted hover:bg-raised hover:!text-fg')}
         >
-          {sections.map((s) => (
-            <a
-              key={s}
-              href={`#${s}`}
-              aria-current={active === s ? "location" : undefined}
-              onClick={(e) => {
-                e.preventDefault();
-                document
-                  .getElementById(s)
-                  ?.scrollIntoView({
-                    behavior:
-                      document.documentElement.dataset.reducedMotion === "true"
-                        ? "auto"
-                        : "smooth",
-                    block: "start",
-                  });
-                history.replaceState(null, "", `#${s}`);
-                setActive(s);
-              }}
-              className={cx(
-                "flex items-center h-[34px] px-2.5 rounded-control text-sm font-medium whitespace-nowrap no-underline transition-colors duration-fast",
-                active === s
-                  ? "bg-raised !text-fg font-semibold"
-                  : "!text-fg-muted hover:bg-raised hover:!text-fg",
-              )}
-            >
-              {t(`admin.settings.sections.${s}`)}
-            </a>
-          ))}
-        </nav>
-
-        <div className="flex-1 min-w-0 max-w-[860px] flex flex-col gap-[18px]">
-          {!canChange && (
-            <Notice icon="Lock">
-              {t("admin.common.readOnly")}
-            </Notice>
-          )}
-          {!draft ? (
-            !q.isError &&
-            Array.from({ length: 4 }, (_, i) => (
-              <Skeleton key={i} className="h-[220px] rounded-card" />
-            ))
-          ) : (
+          {({ isActive }) => (
             <>
-              {/* Allgemein */}
-              <SectionCard
-                id="allgemein"
-                title={t("admin.settings.sections.allgemein")}
-                description={t("admin.settings.generalDesc")}
-              >
-                <FieldGrid>
-                  <TextField
-                    k="general.instance_name"
-                    label={t("admin.settings.instanceName")}
-                    v={v}
-                    set={set}
-                    ro={ro("general.instance_name")}
-                  />
-                  <TextField
-                    k="general.organization"
-                    label="Organisation"
-                    help="Erscheint auf Upload-Seiten, Aushängen und in der Seitenleiste."
-                    v={v}
-                    set={set}
-                    ro={ro("general.organization")}
-                  />
-                  <FieldWrap
-                    label="Bundesland"
-                    htmlFor="s-state"
-                    help={
-                      <>
-                        Legt das Stichwortverzeichnis fest (Einrichtung → Stichwörter &amp; Regeln). Mitgeliefert für {STATE_OPTIONS.filter((x) => STATES_WITH_CATALOG.includes(x.id)).map((x) => x.name).join(" und ")}; für andere Länder eine eigene Liste importieren.{" "}
-                        <Link to="/hilfe/stichwoerter-regeln#stichwortverzeichnis-der-laender">Mehr dazu</Link>
-                      </>
-                    }
-                  >
-                    <Select
-                      id="s-state"
-                      disabled={ro("general.state")}
-                      value={v["general.state"] ?? ""}
-                      onChange={(e) => set("general.state", e.target.value)}
-                    >
-                      <option value="">Nicht gewählt</option>
-                      {STATE_OPTIONS.map((x) => (
-                        <option key={x.id} value={x.id}>
-                          {x.name}
-                          {STATES_WITH_CATALOG.includes(x.id) ? " (Verzeichnis mitgeliefert)" : ""}
-                        </option>
-                      ))}
-                      <option value="eigen">Eigene Liste (ohne Landesverzeichnis)</option>
-                    </Select>
-                  </FieldWrap>
-                  <TextField
-                    k="general.sender_name"
-                    label="Absendername"
-                    help="Für E-Mails und Veröffentlichungen."
-                    v={v}
-                    set={set}
-                    ro={ro("general.sender_name")}
-                  />
-                  <TextField
-                    k="general.public_url"
-                    label={t("admin.settings.publicUrl")}
-                    help={`Steht in Einladungen, Upload-Links und QR-Codes. Bereits gedruckte Codes zeigen weiter auf die alte Adresse.${q.data?.env.publicUrl ? ` Umgebung: ${q.data.env.publicUrl}` : ""}`}
-                    v={v}
-                    set={set}
-                    ro={ro("general.public_url")}
-                  />
-                  <FieldWrap
-                    label={t("admin.settings.timezone")}
-                    htmlFor="s-tz"
-                    help="Gilt für alle Zeitangaben: Anzeige und Eingabe von Datum und Uhrzeit, Verläufe, Kalender, Benachrichtigungen, Vorgangsnummern und zeitgesteuerte Abläufe. Gespeichert wird zeitzonenneutral, ein Wechsel stellt auch ältere Einträge um."
-                  >
-                    <Select
-                      id="s-tz"
-                      disabled={ro("general.timezone")}
-                      value={v["general.timezone"]}
-                      onChange={(e) => set("general.timezone", e.target.value)}
-                    >
-                      {timeZones(v["general.timezone"]).map((z) => (
-                        <option key={z} value={z}>
-                          {z}
-                        </option>
-                      ))}
-                    </Select>
-                  </FieldWrap>
-                  <FieldWrap
-                    label={t("admin.settings.language")}
-                    htmlFor="s-lang"
-                  >
-                    <Select
-                      id="s-lang"
-                      disabled={ro("general.language")}
-                      value={v["general.language"]}
-                      onChange={(e) => set("general.language", e.target.value)}
-                    >
-                      <option value="de">
-                        {t("admin.settings.languages.de")}
-                      </option>
-                      <option value="en">
-                        {t("admin.settings.languages.en")}
-                      </option>
-                    </Select>
-                  </FieldWrap>
-                </FieldGrid>
-              </SectionCard>
-
-              {/* Darstellung (persönlich, sofort wirksam) */}
-              <SectionCard
-                id="darstellung"
-                title={t("admin.settings.sections.darstellung")}
-                description={t("admin.settings.lookDesc")}
-              >
-                <AppearanceFields />
-              </SectionCard>
-
-              {/* Redaktion */}
-              <SectionCard
-                id="redaktion"
-                title={t("admin.settings.sections.redaktion")}
-                description="Freigaben, Einladungen und Aufbewahrung."
-                bodyClassName="flex flex-col gap-5"
-              >
-                <Switch
-                  checked={!!v["editorial.four_eyes"]}
-                  disabled={ro("editorial.four_eyes")}
-                  onChange={(x) => set("editorial.four_eyes", x)}
-                  label="Vier-Augen-Prinzip"
-                  description="Wer am Inhalt geschrieben oder die Fassung eingereicht hat, darf sie nicht selbst freigeben. Gilt für Beiträge, Banner und Warnentwürfe."
-                />
-                <Switch
-                  checked={!!v["editorial.alt_text_required"]}
-                  disabled={ro("editorial.alt_text_required")}
-                  onChange={(x) => set("editorial.alt_text_required", x)}
-                  label="Alternativtext ist Pflicht"
-                  description="An: Ohne Alternativtext je Bild lässt sich ein Beitrag für Website oder soziale Netzwerke nicht freigeben. Aus: Die Freigabe zeigt nur eine Warnung."
-                />
-                <Switch
-                  checked={!!v["press.reply_approval"]}
-                  disabled={ro("press.reply_approval")}
-                  onChange={(x) => set("press.reply_approval", x)}
-                  label="Antworten an die Presse freigeben lassen"
-                  description="Antworten auf Presseanfragen gehen erst raus, wenn eine zweite Person mit „Antworten an die Presse freigeben“ zugestimmt hat."
-                />
-                <FieldGrid>
-                  <NumField k="invites.valid_hours" label="Einladungen gültig" unit="Std." min={1} max={720} v={v} set={set} ro={ro("invites.valid_hours")} />
-                  <NumField k="press.reminder_hours" label="Erinnerung vor Frist (Presseanfragen)" help="An die zuständige Person, sonst an alle mit „Presseanfragen bearbeiten“. 0 = nur bei Überschreitung." unit="Std." min={0} max={72} v={v} set={set} ro={ro("press.reminder_hours")} />
-                  <NumField k="jobs.concurrency" label="Parallele Hintergrundaufträge" help="1 bis 32 (Medienprüfung, Exporte, Versand). Ein Viertel (mindestens einer) bleibt immer frei für Warnversand, Benachrichtigungen und Medienprüfung – Social-Posts, Workflows, Presseversand und Sicherung außer Haus belegen höchstens den Rest." min={1} max={32} v={v} set={set} ro={ro("jobs.concurrency")} />
-                  <NumField k="retention.log_days" label={t("admin.settings.retLogs")} unit={t("admin.common.days")} min={1} v={v} set={set} ro={ro("retention.log_days")} />
-                  <NumField k="retention.audit_days" label={t("admin.settings.retAudit")} unit={t("admin.common.days")} min={30} v={v} set={set} ro={ro("retention.audit_days")} />
-                  <NumField k="privacy.upload_ip_retention_days" label="IP-Adressen ohne Konto" help="Öffentliche Uploads und Anmeldeversuche unbekannter Konten: IP danach im Audit entfernt (1 bis 365 Tage)." unit={t("admin.common.days")} v={v} set={set} ro={ro("privacy.upload_ip_retention_days")} />
-                </FieldGrid>
-                <Switch
-                  checked={!!v["automations.enabled"]}
-                  disabled={ro("automations.enabled")}
-                  onChange={(x) => set("automations.enabled", x)}
-                  label="Workflows ausführen"
-                  description="Globaler Schalter für alle Workflows. Aus: Ereignisse und Zeitpläne starten keine Läufe mehr, offene Läufe werden abgebrochen. Die Abläufe selbst bleiben erhalten."
-                />
-                <FieldGrid>
-                  <NumField k="automations.max_runs_per_minute" label="Läufe je Workflow und Minute höchstens" help="Schutz gegen Schleifen und Fluten: darüber werden Ereignisse verworfen und die Verwaltung benachrichtigt (1 bis 600)." min={1} max={600} v={v} set={set} ro={ro("automations.max_runs_per_minute")} />
-                </FieldGrid>
-              </SectionCard>
-
-              {/* Datenschutz (#96 Informationspflichten) */}
-              <SectionCard
-                id="datenschutz"
-                title={t("admin.settings.sections.datenschutz")}
-                description="Angaben nach Art. 13 DSGVO für Upload-Seite und Aushang sowie Löschfristen."
-                bodyClassName="flex flex-col gap-5"
-              >
-                {(!String(v["privacy.controller"] ?? "").trim() || (!String(v["privacy.policy_url"] ?? "").trim() && !String(v["legal.privacy_text"] ?? "").trim())) && (
-                  <Notice tone="warning" title="Pflichtangaben fehlen">
-                    Ohne verantwortliche Stelle und Datenschutzerklärung zeigt die Upload-Seite nur den allgemeinen Hinweis; angemeldete Verwaltung sieht dort eine Erinnerung.
-                  </Notice>
-                )}
-                <FieldGrid>
-                  <TextField k="privacy.controller" label="Verantwortliche Stelle" help="Name und Anschrift, z. B. „Gemeinde Musterstadt, Hauptstraße 1, 12345 Musterstadt“." max={400} v={v} set={set} ro={ro("privacy.controller")} />
-                  <TextField k="privacy.dpo_contact" label="Datenschutzbeauftragte/r (Kontakt)" help="E-Mail-Adresse oder Anschrift; leer lassen, wenn keine Benennung besteht." max={300} v={v} set={set} ro={ro("privacy.dpo_contact")} />
-                  <TextField k="privacy.policy_url" label="Datenschutzerklärung (Adresse)" help="Vollständige Adresse mit https://. Wird auf Upload-Seite und Aushang verlinkt. Leer lassen, um die eigene Seite /datenschutz (unten) zu verlinken." max={500} v={v} set={set} ro={ro("privacy.policy_url")} />
-                </FieldGrid>
-                <FieldGrid>
-                  <NumField k="privacy.collection_retention_days" label="Abgeschlossene Sammlungen löschen nach" help="Archivierte Sammlungen bzw. Sammlungen ohne aktiven Link, gerechnet ab der letzten Aktivität. Dateien in laufenden Beiträgen bleiben. 0 = nie." unit={t("admin.common.days")} v={v} set={set} ro={ro("privacy.collection_retention_days")} />
-                  <NumField k="privacy.deleted_media_days" label="Papierkorb leeren nach" help="Gelöschte Dateien, Ordner und Sammlungen bleiben so lange im Papierkorb wiederherstellbar; danach werden Dateien und Datensätze endgültig entfernt. Gilt auch für Datensätze abgewiesener Dateien. 0 = nie automatisch." unit={t("admin.common.days")} v={v} set={set} ro={ro("privacy.deleted_media_days")} />
-                  <NumField k="privacy.upload_link_days" label="Abgelaufene Upload-Links" help="Abgelaufene oder widerrufene Links (Token, Bezeichnung) und Weiterleitungen aus dem Import. 0 = nie." unit={t("admin.common.days")} v={v} set={set} ro={ro("privacy.upload_link_days")} />
-                  <NumField k="media.blocked_days" label="Gesperrte Dateien löschen nach" help="Dateien mit Prüfbefund liegen so lange in der Quarantäne (erneut prüfen oder trotzdem freigeben möglich), danach werden sie samt Datensatz gelöscht. 0 = nie." unit={t("admin.common.days")} min={0} max={3650} v={v} set={set} ro={ro("media.blocked_days")} />
-                  <NumField k="media.security_log_days" label="Sicherheitsereignisse der Upload-Seiten" help="Gekürzter IP-Hash, Link, Ereignis. 0 = unbegrenzt." unit={t("admin.common.days")} min={0} max={3650} v={v} set={set} ro={ro("media.security_log_days")} />
-                  <NumField k="privacy.uploader_months" label="Angaben der Hochladenden" help="Name, E-Mail-Adresse, Aufnahmeort und -datum (je Upload-Link abfragbar) danach entfernen; die Dateien bleiben. 0 = nie." unit="Monate" min={0} max={120} v={v} set={set} ro={ro("privacy.uploader_months")} />
-                  <NumField k="privacy.press_request_months" label="Erledigte Presseanfragen" help="Anfrage samt Kontaktdaten, Verlauf, Mails und Anhängen so viele Monate nach der Erledigung löschen. 0 = nie." unit="Monate" min={0} max={120} v={v} set={set} ro={ro("privacy.press_request_months")} />
-                  <NumField k="privacy.press_open_months" label="Nicht erledigte Presseanfragen" help="Neu, in Bearbeitung oder beantwortet (z. B. nie auf „erledigt“ gesetzt, fehlgeleitete Mails aus dem Presse-Postfach): so viele Monate nach der letzten Aktivität löschen. 30 Tage vorher kommt eine Benachrichtigung an „Presseanfragen bearbeiten“; jede Änderung, Notiz oder Mail setzt die Frist zurück. 0 = nie." unit="Monate" min={0} max={120} v={v} set={set} ro={ro("privacy.press_open_months")} />
-                  <NumField k="privacy.press_release_log_months" label="Versandprotokolle der Pressemitteilungen" help="Empfängeradressen, Stand und Fehlermeldungen je Pressemitteilung so viele Monate nach dem Versand löschen; die Zahl der gesendeten und nicht erreichten Empfänger bleibt. 0 = nie." unit="Monate" min={0} max={120} v={v} set={set} ro={ro("privacy.press_release_log_months")} />
-                  <NumField k="privacy.press_contact_review_months" label="Presseverteiler: Wiedervorlage nach" help="Kontakte ohne Pressemitteilung, Änderung oder „Geprüft“ seit so vielen Monaten erscheinen im Presseverteiler als „zu prüfen“ – gelöscht wird nichts automatisch. 0 = aus." unit="Monate" min={0} max={120} v={v} set={set} ro={ro("privacy.press_contact_review_months")} />
-                  <NumField k="privacy.warning_days" label="Warnvorgänge" help="Nach dem letzten Bearbeitungsschritt des Vorgangs samt Aktualisierungen: Fassungen mit Rückrufkontakt, PDF, Versandnachweise. 0 = nie." unit={t("admin.common.days")} v={v} set={set} ro={ro("privacy.warning_days")} />
-                  <NumField k="privacy.fe2_event_days" label="Einsatzmeldungen (FE2, Feuersoftware Connect)" help="Stichwort, Einsatzart, Ort, Zeit, Einheiten. Beiträge und Warnvorgänge daraus bleiben. 0 = nie." unit={t("admin.common.days")} v={v} set={set} ro={ro("privacy.fe2_event_days")} />
-                  <NumField k="privacy.automation_run_days" label="Laufprotokolle der Workflows" help="Eingangsdaten, Schritte und Freigaben abgeschlossener Läufe (1 bis 3650 Tage)." unit={t("admin.common.days")} min={1} max={3650} v={v} set={set} ro={ro("privacy.automation_run_days")} />
-                  <NumField k="privacy.official_warning_days" label="Amtliche Warnungen" help="Gerechnet ab dem Ablauf der Warnung, frühestens ab dem letzten Abruf, in dem die Quelle sie noch geliefert hat. 0 = nie." unit={t("admin.common.days")} v={v} set={set} ro={ro("privacy.official_warning_days")} />
-                  <NumField k="privacy.receipt_days" label="Empfangsprotokoll der Verbindungen" help="Abrufe und eingehende Meldungen von amtlichen Warnungen, FE2 und Feuersoftware Connect samt Entscheidung und Rohdaten (Einsatzdaten nur geschwärzt). Höchstens 500 Einträge je Verbindung. 1–30 Tage." unit={t("admin.common.days")} min={1} max={30} v={v} set={set} ro={ro("privacy.receipt_days")} />
-                </FieldGrid>
-                <RetentionPreview manage={can("system.retention")} dirty={dirty} />
-                <FieldWrap label="Eigener Hinweis (optional)" htmlFor="s-privacy-upload_notice" help="Erscheint zusätzlich im Abschnitt „Datenschutz“ der Upload-Seite, z. B. Rechtsgrundlage oder Ansprechperson. Höchstens 2000 Zeichen.">
-                  <Textarea id="s-privacy-upload_notice" rows={4} maxLength={2000} disabled={ro("privacy.upload_notice")} value={v["privacy.upload_notice"] ?? ""} onChange={(e) => set("privacy.upload_notice", e.target.value)} />
-                </FieldWrap>
-                <p className="m-0 text-sm text-fg-muted">
-                  Die Upload-Seite nennt immer: Zweck, mögliche Veröffentlichung auf Website und in sozialen Medien (Meta, auch USA), was erfasst wird (Dateien, Hinweis, Dateiname, IP-Adresse zur Missbrauchsabwehr), die Speicherdauer und die Rechte der Betroffenen. Hinweise und Vorlagen: Hilfe → Sicherheit bzw. <code>docs/datenschutz.md</code>.
-                </p>
-                <LegalTextField k="legal.privacy_text" path="/datenschutz" label="Datenschutzerklärung" max={50000} controller={v["privacy.controller"] ?? ""} v={v} set={set} ro={ro("legal.privacy_text")} />
-                <LegalTextField k="legal.imprint_text" path="/impressum" label="Impressum" max={20000} controller={v["privacy.controller"] ?? ""} v={v} set={set} ro={ro("legal.imprint_text")} />
-              </SectionCard>
-
-              {/* Medien */}
-              <SectionCard
-                id="medien"
-                title={t("admin.settings.sections.medien")}
-                description="Grenzen für Uploads. Neue Dateien landen immer zuerst in der Prüfung."
-                bodyClassName="flex flex-col gap-5"
-              >
-                <FieldGrid>
-                  <NumField k="media.max_file_mb" label="Maximale Dateigröße" unit="MB" min={1} max={20000} v={v} set={set} ro={ro("media.max_file_mb")} />
-                  <NumField k="media.link_max_files" label="Dateien je Upload-Link" min={1} max={1000} v={v} set={set} ro={ro("media.link_max_files")} />
-                  <NumField k="media.link_default_days" label="Upload-Link gültig (Standard)" unit={t("admin.common.days")} min={1} max={90} v={v} set={set} ro={ro("media.link_default_days")} />
-                  <NumField k="media.link_max_days" label="Upload-Link höchstens gültig" help="Gilt auch für „Verlängern“ und „Bis Termin“." unit={t("admin.common.days")} min={1} max={365} v={v} set={set} ro={ro("media.link_max_days")} />
-                  <NumField k="media.collection_max_files" label="Dateien je Sammlung" min={1} max={100000} v={v} set={set} ro={ro("media.collection_max_files")} />
-                  <NumField k="media.collection_max_gb" label="Speicher je Sammlung" unit="GB" min={1} max={10000} v={v} set={set} ro={ro("media.collection_max_gb")} />
-                  <NumField k="media.min_free_gb" label="Mindestens frei halten" help="Darunter werden Uploads gesperrt und der Healthcheck meldet einen Fehler." unit="GB" min={1} max={10000} v={v} set={set} ro={ro("media.min_free_gb")} />
-                  <NumField k="media.export_hours" label="ZIP-Downloads verfügbar" help="Danach wird das ZIP gelöscht." unit="Stunden" min={1} max={336} v={v} set={set} ro={ro("media.export_hours")} />
-                  <NumField k="media.export_max_gb" label="Max. Größe eines ZIP" unit="GB" min={1} max={500} v={v} set={set} ro={ro("media.export_max_gb")} />
-                  <NumField k="media.storage_warn_gb" label="Speicherwarnung unter" help="Benachrichtigung an „Medien administrieren“ (höchstens alle 12 Stunden). 0 = aus." unit="GB" min={0} max={100000} v={v} set={set} ro={ro("media.storage_warn_gb")} />
-                </FieldGrid>
-                <Switch
-                  checked={!!v["media.strip_location"]}
-                  disabled={ro("media.strip_location")}
-                  onChange={(x) => set("media.strip_location", x)}
-                  label="Standortdaten auch aus Originalen entfernen"
-                  description="Nach der Prüfung werden GPS-Angaben, Seriennummern, Personen- und XMP/IPTC-Angaben verlustfrei aus dem Original entfernt (Bilddaten bleiben unverändert, Videos werden ohne Metadaten und Datenspuren umverpackt). Ältere Originale bereinigt der Hintergrunddienst nach und nach. Entfernte Angaben lassen sich nicht wiederherstellen."
-                />
-                <AllowedTypesField value={v["media.allowed_types"]} ro={ro("media.allowed_types")} onChange={(x) => set("media.allowed_types", x)} />
-                <div className="flex flex-col gap-3">
-                  <span className="text-sm font-medium">Inhaltsprüfung</span>
-                  <FieldGrid>
-                    <NumField k="media.max_image_mp" label="Max. Bildauflösung" help="Größere Bilder werden gesperrt (Schutz vor Dekompressionsbomben)." unit="Megapixel" min={1} max={500} v={v} set={set} ro={ro("media.max_image_mp")} />
-                    <NumField k="media.max_video_minutes" label="Max. Videodauer" unit="Minuten" min={1} max={600} v={v} set={set} ro={ro("media.max_video_minutes")} />
-                    <NumField k="media.max_video_edge" label="Max. Videoauflösung (längere Kante)" unit="Pixel" min={320} max={8192} v={v} set={set} ro={ro("media.max_video_edge")} />
-                    <NumField k="media.full_decode_seconds" label="Videos Bild für Bild prüfen bis" help="Längere Videos: dieser Anfang Bild für Bild, danach alle Schlüsselbilder." unit="Sekunden" min={10} max={36000} v={v} set={set} ro={ro("media.full_decode_seconds")} />
-                    <NumField k="media.check_timeout_s" label="Zeitlimit je Prüfung/Umwandlung" unit="Sekunden" min={60} max={14400} v={v} set={set} ro={ro("media.check_timeout_s")} />
-                  </FieldGrid>
-                  <Switch
-                    checked={!!v["media.video_full_decode"]}
-                    disabled={ro("media.video_full_decode")}
-                    onChange={(x) => set("media.video_full_decode", x)}
-                    label="Videos zur Prüfung dekodieren (empfohlen)"
-                    description="Findet beschädigte oder manipulierte Videos, bevor jemand sie öffnet. Fällt ein Video nur hier auf, kann „Medien administrieren“ es nach eigener Prüfung trotzdem freigeben."
-                  />
-                  <Switch
-                    checked={!!v["media.allow_animated"]}
-                    disabled={ro("media.allow_animated")}
-                    onChange={(x) => set("media.allow_animated", x)}
-                    label="Animierte Bilder (GIF, WebP, PNG, AVIF) zulassen"
-                    description="Vorschau und öffentliche Fassung zeigen das erste Bild. Aus: animierte Bilder werden gesperrt."
-                  />
-                </div>
-                <div className="flex flex-col gap-3">
-                  <span className="text-sm font-medium">Gesichtsvorschläge</span>
-                  <Switch
-                    checked={!!v["media.face_detect"]}
-                    disabled={ro("media.face_detect")}
-                    onChange={(x) => set("media.face_detect", x)}
-                    label="Gesichter automatisch vorschlagen"
-                    description="Nach der Prüfung sucht BlaulichtCMS in Bildern nach Gesichtern (lokal im Container, nichts verlässt den Server) und schlägt sie unter „Datenschutz und Unkenntlichmachen“ vor. Unkenntlich wird nur, was jemand übernimmt; offene Vorschläge verlangen bei der Freigabe die Datenschutz-Prüfung. Gespeichert werden nur Rechtecke – keine Wiedererkennung. Videos und Kennzeichen bleiben Handarbeit."
-                  />
-                  <FieldGrid>
-                    <NumField k="media.face_threshold" label="Mindestsicherheit der Vorschläge" help="Niedriger: mehr Vorschläge, auch Fehltreffer. Höher: weniger Fehltreffer, aber mehr übersehene Gesichter. Standard 60 %." unit="%" min={30} max={95} v={v} set={set} ro={ro("media.face_threshold")} />
-                  </FieldGrid>
-                </div>
-                <Switch
-                  checked={!!v["media.notices"]}
-                  disabled={ro("media.notices")}
-                  onChange={(x) => set("media.notices", x)}
-                  label="Benachrichtigungen zu Medien"
-                  description="Neue Dateien über Upload-Links (gebündelt je Sammlung), Link läuft bald ab, Kontingent erreicht, Speicher knapp. Jede Person kann einzelne Arten unter „Mein Konto“ abschalten."
-                />
-                <Switch
-                  checked={!!v["media.camera_buttons"]}
-                  disabled={ro("media.camera_buttons")}
-                  onChange={(x) => set("media.camera_buttons", x)}
-                  label="Knöpfe „Foto aufnehmen“ und „Video aufnehmen“ auf dem Handy anzeigen"
-                  description="Auf Touch-Geräten öffnen sie direkt die Kamera. Der große Knopf „Bilder oder Videos auswählen“ (Galerie) ist immer da."
-                />
-                <Switch
-                  checked={!!v["media.link_show_once"]}
-                  disabled={ro("media.link_show_once")}
-                  onChange={(x) => set("media.link_show_once", x)}
-                  label="Upload-Links nur einmal anzeigen"
-                  description="Neue Links und QR-Codes erscheinen nur direkt nach dem Anlegen bzw. „Neu erzeugen“; gespeichert wird nur eine Prüfsumme. Aus: Link, QR-Code und Aushang lassen sich jederzeit erneut abrufen (verschlüsselt gespeichert). Gilt für neu angelegte und neu erzeugte Links."
-                />
-                <FieldWrap label="Text nach erfolgreichem Upload (optional)" htmlFor="s-media-done_text" help="Leer = „Die Dateien sind angekommen und werden geprüft, bevor sie verwendet werden.“ Die Vorgangsnummer erscheint immer darunter.">
-                  <Textarea id="s-media-done_text" rows={2} maxLength={1000} disabled={ro("media.done_text")} value={v["media.done_text"] ?? ""} onChange={(e) => set("media.done_text", e.target.value)} />
-                </FieldWrap>
-                <div className="flex items-start gap-2.5 p-3 rounded-node bg-raised text-sm">
-                  <Icon name="ShieldCheck" size={16} className="mt-0.5 text-fg-muted shrink-0" />
-                  <span>Öffentliche Fassungen enthalten keine Standort- und Kameradaten. Originale bleiben privat und sind nur mit Recht abrufbar.</span>
-                </div>
-              </SectionCard>
-
-              {can("system.status") && <OpsSection />}
-
-              {/* Sicherheit */}
-              <SectionCard
-                id="sicherheit"
-                title={t("admin.settings.sections.sicherheit")}
-                description={t("admin.settings.secDesc")}
-                bodyClassName="flex flex-col gap-5"
-              >
-                <div className="flex flex-col gap-2">
-                  <Switch
-                    checked={!!v["security.require_2fa_admins"]}
-                    disabled={ro("security.require_2fa_admins") || !!v["security.require_2fa_all"]}
-                    onChange={(x) => set("security.require_2fa_admins", x)}
-                    label={t("admin.settings.req2faAdmins")}
-                    description={t("admin.settings.req2faAdminsDesc")}
-                  />
-                  <Switch
-                    checked={!!v["security.require_2fa_media"]}
-                    disabled={ro("security.require_2fa_media") || !!v["security.require_2fa_all"]}
-                    onChange={(x) => set("security.require_2fa_media", x)}
-                    label={t("admin.settings.req2faMedia")}
-                    description={t("admin.settings.req2faMediaDesc")}
-                  />
-                  <Switch
-                    checked={!!v["security.require_2fa_all"]}
-                    disabled={ro("security.require_2fa_all")}
-                    onChange={(x) => set("security.require_2fa_all", x)}
-                    label={t("admin.settings.req2faAll")}
-                    description={t("admin.settings.req2faAllDesc")}
-                  />
-                </div>
-                <FieldGrid className="grid-cols-[repeat(auto-fit,minmax(min(200px,100%),1fr))]">
-                  <NumField
-                    k="security.session_idle_minutes"
-                    label={t("admin.settings.idle")}
-                    help={t("admin.settings.idleHelp")}
-                    unit={t("admin.common.minutes")}
-                    min={5}
-                    v={v}
-                    set={set}
-                    ro={ro("security.session_idle_minutes")}
-                  />
-                  <NumField
-                    k="security.session_max_hours"
-                    label={t("admin.settings.maxSession")}
-                    unit={t("admin.common.hours")}
-                    min={1}
-                    v={v}
-                    set={set}
-                    ro={ro("security.session_max_hours")}
-                  />
-                  <NumField
-                    k="security.lockout_attempts"
-                    label={t("admin.settings.lockAttempts")}
-                    unit={t("admin.settings.attempts")}
-                    min={1}
-                    v={v}
-                    set={set}
-                    ro={ro("security.lockout_attempts")}
-                  />
-                  <NumField
-                    k="security.lockout_minutes"
-                    label={t("admin.settings.lockMinutes")}
-                    unit={t("admin.common.minutes")}
-                    min={1}
-                    v={v}
-                    set={set}
-                    ro={ro("security.lockout_minutes")}
-                  />
-                  <NumField
-                    k="security.password_min_length"
-                    label={t("admin.settings.pwLen")}
-                    help={t("admin.settings.pwLenHelp")}
-                    unit={t("admin.settings.chars")}
-                    min={10}
-                    max={128}
-                    v={v}
-                    set={set}
-                    ro={ro("security.password_min_length")}
-                  />
-                </FieldGrid>
-                <FieldWrap
-                  label="Interne Ziele freigeben"
-                  htmlFor="s-private-hosts"
-                  help="Ein Host je Zeile, z. B. mail.intern.example, *.intern.example oder eine IP-Adresse. Abrufe aus BlaulichtCMS (Feeds, Kalender-Abos, Update-Prüfung, IMAP des Presse-Postfachs) gehen sonst nur an öffentliche Adressen; der IMAP-Abruf darf zu diesen Hosts auch andere Ports als 993/143 nutzen. Nur eintragen, was wirklich intern erreichbar sein muss."
-                >
-                  <Textarea
-                    id="s-private-hosts"
-                    rows={3}
-                    spellCheck={false}
-                    autoComplete="off"
-                    disabled={ro("security.allowed_private_hosts")}
-                    value={((v["security.allowed_private_hosts"] as string[] | undefined) ?? []).join("\n")}
-                    onChange={(e) => set("security.allowed_private_hosts", e.target.value.split("\n"))}
-                  />
-                </FieldWrap>
-                <div className="flex flex-col gap-2">
-                  <h3 className="m-0 text-sm font-semibold">Angemeldet bleiben und gemerkte Geräte</h3>
-                  <p className="m-0 text-sm text-fg-muted">
-                    Gilt für alle Rollen. Gemerkte Sitzungen und Geräte sind an das Geräte-Cookie des Browsers gebunden;
-                    kritische Aktionen verlangen weiterhin Passwort und Code. Abschalten beendet bestehende gemerkte
-                    Sitzungen bzw. entfernt alle gemerkten Geräte sofort.
-                  </p>
-                  <Switch
-                    checked={!!v["security.remember_enabled"]}
-                    disabled={ro("security.remember_enabled")}
-                    onChange={(x) => set("security.remember_enabled", x)}
-                    label="„Angemeldet bleiben“ erlauben"
-                    description="Ankreuzfeld auf der Anmeldeseite (in der installierten App vorbelegt). Keine Abmeldung bei Leerlauf; die Sitzung endet erst nach der unten eingestellten Zeit ohne Nutzung."
-                  />
-                  <Switch
-                    checked={!!v["security.mfa_remember_enabled"]}
-                    disabled={ro("security.mfa_remember_enabled")}
-                    onChange={(x) => set("security.mfa_remember_enabled", x)}
-                    label="Zwei-Faktor auf einem Gerät merken erlauben"
-                    description="Nach einem Code aus der Authenticator-App fragt die Anmeldung auf diesem Gerät eine Zeit lang nur das Passwort ab. Wiederherstellungscodes merken kein Gerät."
-                  />
-                </div>
-                <FieldGrid className="grid-cols-[repeat(auto-fit,minmax(min(200px,100%),1fr))]">
-                  <NumField
-                    k="security.remember_days"
-                    label="Angemeldet bleiben: Ablauf ohne Nutzung"
-                    help="1 bis 180 Tage seit der letzten Nutzung."
-                    unit={t("admin.common.days")}
-                    v={v}
-                    set={set}
-                    ro={ro("security.remember_days") || !v["security.remember_enabled"]}
-                  />
-                  <NumField
-                    k="security.mfa_remember_days"
-                    label="Gerät für Zwei-Faktor merken"
-                    help="1 bis 90 Tage ab der Code-Eingabe."
-                    unit={t("admin.common.days")}
-                    v={v}
-                    set={set}
-                    ro={ro("security.mfa_remember_days") || !v["security.mfa_remember_enabled"]}
-                  />
-                </FieldGrid>
-                <div className="flex flex-col gap-2">
-                  <h3 className="m-0 text-sm font-semibold">Sicherheitsmeldungen</h3>
-                  <p className="m-0 text-sm text-fg-muted">
-                    Bei Kontosperren, benutzten Wiederherstellungscodes, vergebenen oder entzogenen Admin-Rechten,
-                    zurückgesetzter oder abgeschalteter Zwei-Faktor-Anmeldung, geänderten Sicherheitseinstellungen,
-                    falschen Website-, FE2- oder API-Schlüsseln, neuen Website-Kopplungen und auffälligen Mengen.
-                  </p>
-                  <Switch
-                    checked={!!v["security.alert_inapp"]}
-                    disabled={ro("security.alert_inapp")}
-                    onChange={(x) => set("security.alert_inapp", x)}
-                    label="Benachrichtigung an die Administration"
-                    description="In BlaulichtCMS an alle mit „Sicherheitseinstellungen ändern“ (Konten- und Rechteereignisse an die Rechte der Benutzerverwaltung)."
-                  />
-                  <Switch
-                    checked={!!v["security.alert_mail_admins"]}
-                    disabled={ro("security.alert_mail_admins")}
-                    onChange={(x) => set("security.alert_mail_admins", x)}
-                    label="Zusätzlich per E-Mail an die Administration"
-                    description="Nur wenn der E-Mail-Versand eingerichtet ist."
-                  />
-                  <Switch
-                    checked={!!v["security.alert_mail_user"]}
-                    disabled={ro("security.alert_mail_user")}
-                    onChange={(x) => set("security.alert_mail_user", x)}
-                    label="Betroffene Person per E-Mail informieren"
-                    description="Bei Passwortänderung, Zwei-Faktor-Änderungen, Wiederherstellungscode und Sperre (in BlaulichtCMS immer). Nur mit eingerichtetem E-Mail-Versand."
-                  />
-                </div>
-                <FieldGrid className="grid-cols-[repeat(auto-fit,minmax(min(200px,100%),1fr))]">
-                  <NumField k="security.alert_failed_logins" label="Meldung ab Fehlversuchen" help="Über alle Konten in 15 Minuten; 0 = aus." unit="in 15 Min." v={v} set={set} ro={ro("security.alert_failed_logins")} />
-                  <NumField k="security.alert_downloads" label="Meldung ab Downloads" help="Originale oder Exportdateien einer Person pro Stunde; 0 = aus." unit="pro Std." v={v} set={set} ro={ro("security.alert_downloads")} />
-                </FieldGrid>
-              </SectionCard>
-
-              {/* Benachrichtigungen und E-Mail (#191) */}
-              <NotifySettingsSection manage={can("settings.mail")} />
-
-              {/* Sicherung */}
-              <SectionCard
-                id="sicherung"
-                title={t("admin.settings.sections.sicherung")}
-                description={t("admin.settings.backupDesc")}
-                bodyClassName="flex flex-col gap-5"
-              >
-                <Switch
-                  checked={!!v["backup.enabled"]}
-                  disabled={ro("backup.enabled")}
-                  onChange={(x) => set("backup.enabled", x)}
-                  label={t("admin.settings.backupAuto")}
-                  description={t("admin.settings.backupAutoDesc")}
-                />
-                <FieldGrid className="grid-cols-[repeat(auto-fit,minmax(min(200px,100%),1fr))]">
-                  <FieldWrap
-                    label={t("admin.settings.backupHour")}
-                    htmlFor="s-bhour"
-                  >
-                    <Select
-                      id="s-bhour"
-                      disabled={ro("backup.hour") || !v["backup.enabled"]}
-                      value={String(v["backup.hour"])}
-                      onChange={(e) =>
-                        set("backup.hour", Number(e.target.value))
-                      }
-                    >
-                      {Array.from({ length: 24 }, (_, h) => (
-                        <option key={h} value={h}>
-                          {String(h).padStart(2, "0")}:00
-                        </option>
-                      ))}
-                    </Select>
-                  </FieldWrap>
-                  <NumField
-                    k="backup.keep"
-                    label={t("admin.settings.backupKeep")}
-                    help={t("admin.settings.backupKeepHelp")}
-                    min={1}
-                    max={365}
-                    v={v}
-                    set={set}
-                    ro={ro("backup.keep")}
-                  />
-                </FieldGrid>
-                <Notice
-                  tone="warning"
-                  icon="KeyRound"
-                  title={t("admin.settings.masterKey")}
-                >
-                  <p className="m-0">{t("admin.settings.masterKeyText")}</p>
-                  <Link
-                    to="/hilfe/sicherung"
-                    className="inline-flex items-center gap-1 mt-1.5"
-                  >
-                    <Icon name="BookOpen" size={13} />
-                    {t("admin.settings.restoreHelp")}
-                  </Link>
-                </Notice>
-                {can("update.install") && <UpdatePreflight />}
-                {can("backup.manage") ? (
-                  <BackupList />
-                ) : (
-                  <p className="m-0 text-sm text-fg-muted">
-                    {t("admin.settings.noManage")}
-                  </p>
-                )}
-              </SectionCard>
-
-              {/* Sicherung außer Haus und Probe-Wiederherstellung (#212) */}
-              {can("backup.manage") && <OffsiteBackupSection />}
-
-              {can("update.view") && <UpdatesSection manage={can("update.install")} />}
-
-              <AboutSection dataDir={q.data?.env.dataDir} trustedProxies={q.data?.env.trustedProxies} />
+              <Icon name={p.icon} size={15} className={isActive ? 'text-primary-solid' : 'text-fg-muted'} />
+              {p.label}
             </>
           )}
+        </NavLink>
+      ))}
+    </nav>
+  );
+}
 
-          {dirty && (
-            <div
-              role="status"
-              className="sticky bottom-[calc(var(--bc-bottom-bar)+16px)] z-20 flex items-center gap-3 flex-wrap px-4 py-3 rounded-card border border-line bg-raised shadow-float"
-            >
-              <span
-                className="w-2 h-2 rounded-full bg-warn shrink-0"
-                aria-hidden="true"
-              />
-              <span className="text-sm font-medium flex-1 min-w-[160px]">
-                {t("admin.common.unsaved")}{" "}
-                <span className="text-fg-muted font-normal">
-                  · {changed.length}
-                </span>
+/** Einstieg: alle Bereiche mit einer Zeile Beschreibung (am Handy die Liste), darüber „Einstellung finden“. */
+function Overview({ pages }: { pages: SettingsPageDef[] }) {
+  const { canAny } = useAuth();
+  return (
+    <div className="flex flex-col gap-5 max-w-[1100px]">
+      <SettingsFinder />
+      <ul className="m-0 p-0 list-none grid gap-3 grid-cols-[repeat(auto-fill,minmax(min(300px,100%),1fr))]" aria-label="Einstellungsbereiche">
+        {pages.map((p) => (
+          <li key={p.id}>
+            <Link to={`/einstellungen/${p.id}`} className="group h-full flex items-start gap-3 p-4 rounded-card border border-line bg-card no-underline !text-fg hover:bg-raised transition-colors duration-fast">
+              <span className="w-9 h-9 rounded-node bg-raised group-hover:bg-card flex items-center justify-center shrink-0 text-fg-muted">
+                <Icon name={p.icon} size={17} />
               </span>
-              {saveError && (
-                <span className="text-meta text-err basis-full sm:basis-auto order-last sm:order-none">
-                  {saveError}
-                </span>
-              )}
-              <Button variant="ghost" onClick={discard} disabled={saving}>
-                {t("admin.common.discard")}
-              </Button>
-              <Button
-                variant="primary"
-                icon="Save"
-                loading={saving}
-                disabled={invalidNumbers || emptyName}
-                onClick={save}
-              >
-                {t("admin.common.save")}
-              </Button>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function timeZones(current: string): string[] {
-  let list: string[] = [];
-  try {
-    list = (Intl as any).supportedValuesOf?.("timeZone") ?? [];
-  } catch {
-    list = [];
-  }
-  if (!list.length)
-    list = ["Europe/Berlin", "Europe/Vienna", "Europe/Zurich", "UTC"];
-  return list.includes(current) || !current ? list : [current, ...list];
-}
-
-const TYPE_OPTIONS: [string, string][] = [
-  ["jpeg", "JPEG"],
-  ["png", "PNG"],
-  ["webp", "WebP"],
-  ["heic", "HEIC/HEIF"],
-  ["avif", "AVIF"],
-  ["gif", "GIF"],
-  ["mp4", "MP4"],
-  ["mov", "MOV"],
-  ["webm", "WebM"],
-  ["3gp", "3GP"],
-];
-
-/** Global erlaubte Dateitypen (je Upload-Link weiter einschränkbar). */
-function AllowedTypesField({ value, onChange, ro }: { value: unknown; onChange: (v: string[]) => void; ro: boolean }) {
-  const list = Array.isArray(value) ? (value as string[]) : [];
-  return (
-    <fieldset className="m-0 p-0 border-0 flex flex-col gap-2">
-      <legend className="text-sm font-medium mb-1">Erlaubte Dateitypen</legend>
-      <div className="flex flex-wrap gap-x-4 gap-y-2">
-        {TYPE_OPTIONS.map(([k, label]) => (
-          <label key={k} className="inline-flex items-center gap-2 text-sm cursor-pointer">
-            <input
-              type="checkbox"
-              className="w-4 h-4 accent-[var(--bc-primary-solid)]"
-              disabled={ro || (list.length === 1 && list.includes(k))}
-              checked={list.includes(k)}
-              onChange={(e) => onChange(e.target.checked ? [...list, k] : list.filter((x) => x !== k))}
-            />
-            {label}
-          </label>
-        ))}
-      </div>
-      <p className="m-0 text-meta text-fg-muted">Geprüft wird der Dateiinhalt. Je Upload-Link lässt sich die Auswahl weiter einschränken.</p>
-    </fieldset>
-  );
-}
-
-/* Datenschutzerklärung und Impressum (#187): Markdown mit Vorschau, öffentlich unter /datenschutz bzw. /impressum. */
-const TEMPLATE_MARK = "Vorlage – bitte vollständig prüfen und anpassen";
-function legalTemplate(kind: "legal.privacy_text" | "legal.imprint_text", controller: string): string {
-  const head = `> **${TEMPLATE_MARK}.** Diese Gliederung ist nur ein Ausgangspunkt und ersetzt keine rechtliche Prüfung. Alle Angaben in [eckigen Klammern] ersetzen, nicht zutreffende Abschnitte entfernen und diesen Hinweis zum Schluss löschen.
-
-`;
-  const who = controller.trim() || "[Name der Organisation]  \n[Anschrift]";
-  if (kind === "legal.imprint_text") {
-    return `${head}# Impressum
-
-${who}
-
-**Vertreten durch:** [Name, Funktion]
-
-**Kontakt:** [Telefon] · [E-Mail-Adresse]
-
-**Verantwortlich für den Inhalt:** [Name, Anschrift]
-
-[Weitere Angaben, z. B. Aufsichtsbehörde oder Register]
-`;
-  }
-  return `${head}# Datenschutzerklärung
-
-## Verantwortliche Stelle
-
-${who}
-
-[E-Mail-Adresse, Telefon]
-
-## Datenschutzbeauftragte/r
-
-[Kontakt oder Hinweis, dass keine Benennung besteht]
-
-## Welche Daten verarbeitet werden
-
-### Upload-Links (Upload-Seite)
-
-[Hochgeladene Dateien, abgefragte Angaben, IP-Adresse zur Missbrauchsabwehr]
-
-### Veröffentlichungen auf der Website und Einsatzliste
-
-[Beiträge, Banner und Einträge der Einsatzliste (Alarmzeit, Stichwort, Ort nur als Ortsteil bzw. Gemeinde, Kurzbericht, Fotos) nach Freigabe auf der Website; ggf. Name der Autorin bzw. des Autors; Umgang mit Abgebildeten, Widerspruch und Zurückziehen]
-
-### Soziale Netzwerke
-
-[Nur die tatsächlich genutzten Netzwerke nennen, z. B. Facebook/Instagram (Meta), X, Mastodon (Instanz und Betreiber), Bluesky: welche Inhalte dort veröffentlicht werden, eigene Verantwortung der Betreiber, Drittland (USA), gemeinsame Verantwortung für Seiten-Statistiken bei Meta, Link zur Datenschutzerklärung der Präsenz]
-
-### Anmeldung in BlaulichtCMS
-
-[Konten der Mitarbeitenden, Anmelde- und Aktivitätsprotokoll; Beschäftigte und Ehrenamtliche ggf. gesondert informieren: Push-Benachrichtigungen über die Push-Dienste der Browserhersteller, E-Mail-Benachrichtigungen, Kalender-Abo]
-
-### Presseanfragen
-
-[Anfragen von Journalistinnen und Journalisten per Telefon, E-Mail oder über das Presse-Postfach: Name, Medium, Kontaktdaten, Anfrage, Mails an das Presse-Postfach samt Anhängen; Zweck: Beantwortung (Auskunftsanspruch der Presse nach Landespressegesetz); Löschung nach der Erledigung bzw. nach der letzten Aktivität, siehe Speicherdauer]
-
-### Presseverteiler und Pressemitteilungen
-
-[Name, Medium, berufliche Kontaktdaten von Redaktionen; Herkunft der Adresse (z. B. öffentliche Redaktionsadresse, Visitenkarte, eigene Anfrage); Rechtsgrundlage (z. B. Art. 6 Abs. 1 lit. e DSGVO i. V. m. Landesrecht oder Einwilligung nach Art. 6 Abs. 1 lit. a); Widerspruch bzw. Abmeldung jederzeit über den Link in jeder Mail – danach bleibt nur ein Sperrvermerk (Adresse); Versandprotokolle werden nach einer Frist gelöscht]
-
-## Zwecke und Rechtsgrundlagen
-
-[Zweck je Verarbeitung und Rechtsgrundlage – z. B. Öffentlichkeitsarbeit als öffentliche Aufgabe (Art. 6 Abs. 1 lit. e DSGVO i. V. m. Landesrecht), Auskünfte an die Presse (Art. 6 Abs. 1 lit. c DSGVO i. V. m. Landespressegesetz), Einwilligung]
-
-## Empfänger und Übermittlung in Drittländer
-
-[z. B. Öffentlichkeit (Website), Hoster der Website, Betreiber der sozialen Netzwerke (Meta, X, Bluesky – USA; Mastodon-Instanz je nach Standort), Redaktionen als Empfänger von Pressemitteilungen, Mail- bzw. Microsoft-365-Dienstleister, Hosting- und Sicherungsdienstleister; Grundlage einer Übermittlung in die USA, z. B. EU-US Data Privacy Framework]
-
-## Speicherdauer
-
-[Fristen, siehe Einstellungen → Datenschutz]
-
-## Ihre Rechte
-
-[Auskunft, Berichtigung, Löschung, Einschränkung, Widerspruch (z. B. gegen Veröffentlichung oder Aufnahme in den Presseverteiler), Beschwerde bei der zuständigen Aufsichtsbehörde (Landesbeauftragte bzw. Landesbeauftragter für den Datenschutz)]
-
-## Stand
-
-[Datum]
-`;
-}
-
-function LegalTextField({ k, path, label, max, controller, v, set, ro }: { k: "legal.privacy_text" | "legal.imprint_text"; path: string; label: string; max: number; controller: string; v: Values; set: (k: string, x: unknown) => void; ro: boolean }) {
-  const ask = useConfirm();
-  const [preview, setPreview] = useState(false);
-  const id = `s-${k.replace(/\W/g, "-")}`;
-  const text = String(v[k] ?? "");
-  const insert = async () => {
-    if (text.trim() && !(await ask({ title: "Mustertext einfügen?", text: "Der bisherige Text wird durch den Mustertext ersetzt.", confirmLabel: "Ersetzen" }))) return;
-    set(k, legalTemplate(k, controller));
-    setPreview(false);
-  };
-  return (
-    <FieldWrap
-      label={label}
-      htmlFor={id}
-      help={`Markdown (# Überschrift, **fett**, - Liste, [Link](https://…)); HTML wird nicht übernommen. Öffentlich ohne Anmeldung unter ${path}; leer = Seite und Links ausgeblendet. ${text.length.toLocaleString("de-DE")} / ${max.toLocaleString("de-DE")} Zeichen.`}
-      labelAction={
-        <div className="flex flex-wrap items-center gap-1.5">
-          {!ro && (
-            <Button size="sm" icon="FileText" onClick={insert}>
-              Mustertext einfügen
-            </Button>
-          )}
-          <Button size="sm" icon={preview ? "Pencil" : "Eye"} onClick={() => setPreview((p) => !p)} aria-pressed={preview}>
-            {preview ? "Bearbeiten" : "Vorschau"}
-          </Button>
-        </div>
-      }
-    >
-      {text.includes(TEMPLATE_MARK) && (
-        <Notice tone="warning">Der Text enthält noch den Vorlagenhinweis. Bitte alle Angaben prüfen, ergänzen und den Hinweis entfernen.</Notice>
-      )}
-      {preview ? (
-        <div className="border border-line rounded-control p-4 bg-bg min-h-[120px] max-h-[480px] overflow-y-auto">
-          {text.trim() ? <LegalMarkdown text={text} /> : <p className="m-0 text-sm text-fg-muted">Noch kein Text hinterlegt.</p>}
-        </div>
-      ) : (
-        <Textarea id={id} rows={10} maxLength={max} disabled={ro} value={text} onChange={(e) => set(k, e.target.value)} />
-      )}
-      {text.trim() && (
-        <a href={path} target="_blank" rel="noopener" className="text-meta self-start">
-          Gespeicherte Seite öffnen
-        </a>
-      )}
-    </FieldWrap>
-  );
-}
-
-function TextField({
-  k,
-  label,
-  help,
-  max = 200,
-  v,
-  set,
-  ro,
-}: {
-  k: string;
-  label: string;
-  help?: string;
-  max?: number;
-  v: Values;
-  set: (k: string, x: unknown) => void;
-  ro: boolean;
-}) {
-  const id = `s-${k.replace(/\W/g, "-")}`;
-  return (
-    <FieldWrap label={label} htmlFor={id} help={help}>
-      <Input
-        id={id}
-        disabled={ro}
-        value={v[k] ?? ""}
-        maxLength={max}
-        onChange={(e) => set(k, e.target.value)}
-      />
-    </FieldWrap>
-  );
-}
-
-function NumField({
-  k,
-  label,
-  help,
-  unit,
-  min,
-  max,
-  v,
-  set,
-  ro,
-}: {
-  k: string;
-  label: string;
-  help?: string;
-  unit?: string;
-  min?: number;
-  max?: number;
-  v: Values;
-  set: (k: string, x: unknown) => void;
-  ro: boolean;
-}) {
-  const id = `s-${k.replace(/\W/g, "-")}`;
-  const val = v[k];
-  const n = Number(val);
-  const lo = min ?? RANGES[k]?.[0];
-  const hi = max ?? RANGES[k]?.[1];
-  const err =
-    val === "" || !Number.isInteger(n)
-      ? t("admin.settings.numInvalid")
-      : lo != null && n < lo
-        ? t("admin.settings.numMin", { min: lo })
-        : hi != null && n > hi
-          ? t("admin.settings.numMax", { max: hi })
-          : null;
-  return (
-    <FieldWrap label={label} htmlFor={id} help={help} error={err}>
-      <div className="relative">
-        <Input
-          id={id}
-          type="number"
-          inputMode="numeric"
-          disabled={ro}
-          min={lo}
-          max={hi}
-          step={1}
-          invalid={!!err}
-          value={val ?? ""}
-          onChange={(e) =>
-            set(k, e.target.value === "" ? "" : Number(e.target.value))
-          }
-          className={cx("tabular", unit && "pr-14")}
-        />
-        {unit && (
-          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-fg-muted pointer-events-none">
-            {unit}
-          </span>
-        )}
-      </div>
-    </FieldWrap>
-  );
-}
-
-interface RetentionReport {
-  dry_run: boolean;
-  categories: { key: string; label: string; days: number; count: number; detail?: string; note?: string }[];
-  collections: { id: string; title: string; last_activity: string; archived: boolean; media: number; kept: number; used_in: string[] }[];
-}
-
-/** Probelauf der Löschfristen (#97): „Was würde gelöscht?“ und sofort anwenden. */
-function RetentionPreview({ manage, dirty }: { manage: boolean; dirty: boolean }) {
-  const ask = useConfirm();
-  const toast = useToast();
-  const [report, setReport] = useState<RetentionReport | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const { can } = useAuth();
-  const load = async () => {
-    setBusy(true);
-    setError(null);
-    try {
-      setReport(await get<RetentionReport>("/system/retention"));
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  };
-  const run = async () => {
-    if (!(await ask({ title: "Löschfristen jetzt anwenden?", text: "Alles, was der Probelauf zeigt, wird endgültig gelöscht. Der Worker macht das sonst stündlich von selbst.", confirmLabel: "Jetzt löschen" }))) return;
-    setBusy(true);
-    try {
-      const r = await post<RetentionReport>("/system/retention/run");
-      const n = r.categories.reduce((a, c) => a + c.count, 0);
-      toast({ tone: "success", title: "Löschfristen angewendet", text: `${plural(n, 'Eintrag', 'Einträge')} gelöscht.` });
-      setReport(await get<RetentionReport>("/system/retention"));
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  };
-  const total = report?.categories.reduce((a, c) => a + c.count, 0) ?? 0;
-  return (
-    <div className="flex flex-col gap-3">
-      <div className="flex flex-wrap gap-2 items-center">
-        <Button size="sm" icon="Search" loading={busy && !report} onClick={load} disabled={busy}>
-          Was würde gelöscht?
-        </Button>
-        {report && manage && total > 0 && (
-          <Button size="sm" variant="danger" icon="Trash2" onClick={run} disabled={busy || dirty}>
-            Jetzt anwenden
-          </Button>
-        )}
-        {dirty && report && <span className="text-sm text-fg-muted">Geänderte Fristen erst speichern – der Probelauf nutzt die gespeicherten Werte.</span>}
-      </div>
-      {error && <ErrorBox title="Probelauf fehlgeschlagen">{error}</ErrorBox>}
-      {report && (
-        <>
-          <Table>
-            <thead>
-              <tr>
-                <Th>Daten</Th>
-                <Th align="right">Frist</Th>
-                <Th align="right">Würde gelöscht</Th>
-              </tr>
-            </thead>
-            <tbody>
-              {report.categories.map((c) => (
-                <tr key={c.key}>
-                  <Td>{c.label}</Td>
-                  <Td align="right">{c.days ? `${fmtNumber(c.days)} Tage` : "nie"}</Td>
-                  <Td align="right">
-                    {fmtNumber(c.count)}
-                    {c.detail && c.count ? <span className="text-fg-muted"> ({c.detail})</span> : null}
-                    {c.note ? <span className="block text-meta text-fg-muted">{c.note}</span> : null}
-                  </Td>
-                </tr>
-              ))}
-            </tbody>
-          </Table>
-          {report.collections.length > 0 && (
-            <ul className="m-0 pl-5 text-sm flex flex-col gap-1">
-              {report.collections.map((c) => (
-                <li key={c.id}>
-                  {can("media.view") ? <Link to={`/medien/${c.id}`}>{c.title}</Link> : c.title} – letzte Aktivität {fmtDateTime(c.last_activity)}, {plural(Number(c.media), 'Datei', 'Dateien')}
-                  {c.kept > 0 && <span className="text-fg-muted">; {fmtNumber(c.kept)} bleiben (verwendet in {c.used_in.map((x) => `„${x}“`).join(", ")})</span>}
-                </li>
-              ))}
-            </ul>
-          )}
-          {total === 0 && <p className="m-0 text-sm text-fg-muted">Derzeit ist nichts fällig.</p>}
-        </>
-      )}
-    </div>
-  );
-}
-
-function OpsSection() {
-  const q = useSystemStatus(30_000);
-  const d = q.data;
-  const db = d?.services.find((s) => s.id === "db");
-  const worker = d?.services.find((s) => s.id === "worker");
-  const queueSvc = d?.services.find((s) => s.id === "queue");
-  const live = d
-    ? d.workers.filter(
-        (w) => Date.now() - new Date(w.last_seen_at).getTime() < 45_000,
-      ).length
-    : 0;
-  const tiles: { k: string; v: ReactNode; sub: ReactNode; state: string }[] = d
-    ? [
-        {
-          k: t("admin.settings.uptime"),
-          v: fmtUptime(d.uptimeSec),
-          sub: `v${d.version} · Node ${d.node.replace(/^v/, "")}`,
-          state: "ok",
-        },
-        {
-          k: t("admin.settings.database"),
-          v: db?.detail.replace(/^PostgreSQL/, "PostgreSQL") ?? "–",
-          sub: `${fmtBytes(d.dbSize)} · ${t(`admin.common.state.${db?.state ?? "warning"}`)}`,
-          state: db?.state ?? "warning",
-        },
-        {
-          k: t("admin.settings.queue"),
-          v: t("admin.settings.queueVal", {
-            n: fmtNumber(d.queue.ready + d.queue.scheduled + d.queue.running),
-          }),
-          sub: t("admin.settings.queueSub", { workers: live }),
-          state:
-            worker?.state === "error" ? "error" : (queueSvc?.state ?? "ok"),
-        },
-        {
-          k: t("admin.settings.lastBackup"),
-          v: d.lastBackup
-            ? fmtRelative(d.lastBackup.started_at)
-            : t("admin.system.noBackup"),
-          sub: d.lastBackup
-            ? `${t(`admin.settings.backupStatus.${d.lastBackup.status}`)}${d.lastBackup.size_bytes ? " · " + fmtBytes(d.lastBackup.size_bytes) : ""}`
-            : "–",
-          state: !d.lastBackup
-            ? "warning"
-            : d.lastBackup.status === "failed"
-              ? "error"
-              : d.lastBackup.status === "ok"
-                ? "ok"
-                : "warning",
-        },
-      ]
-    : [];
-  const dot: Record<string, string> = {
-    ok: "bg-ok",
-    warning: "bg-warn",
-    error: "bg-err",
-  };
-  return (
-    <SectionCard
-      id="betrieb"
-      title={t("admin.settings.sections.betrieb")}
-      description={t("admin.settings.opsDesc")}
-      action={
-        <LinkButton to="/system" size="sm" variant="ghost" icon="Activity">
-          {t("admin.settings.statusPage")}
-        </LinkButton>
-      }
-    >
-      {q.isError ? (
-        <LoadError error={q.error} onRetry={() => q.refetch()} />
-      ) : !d ? (
-        <div className="grid gap-3 grid-cols-[repeat(auto-fit,minmax(min(170px,100%),1fr))]">
-          {Array.from({ length: 4 }, (_, i) => (
-            <Skeleton key={i} className="h-[84px] rounded-node" />
-          ))}
-        </div>
-      ) : (
-        <dl className="m-0 grid gap-3 grid-cols-[repeat(auto-fit,minmax(min(170px,100%),1fr))]">
-          {tiles.map((x) => (
-            <div
-              key={String(x.k)}
-              className="bg-raised rounded-node px-3.5 py-3 flex flex-col gap-1 min-w-0"
-            >
-              <dt className="text-meta text-fg-muted">{x.k}</dt>
-              <dd className="m-0 flex items-center gap-2 font-semibold text-base min-w-0">
-                <span
-                  aria-hidden="true"
-                  className={cx(
-                    "w-2 h-2 rounded-full shrink-0",
-                    dot[x.state] ?? "bg-fg-muted",
+              <span className="flex flex-col gap-0.5 min-w-0">
+                <span className="text-sm font-semibold flex items-center gap-2 flex-wrap">
+                  {p.label}
+                  {!canAny(...p.edit) && (
+                    <span className="inline-flex items-center gap-1 text-meta font-normal text-fg-muted">
+                      <Icon name="Lock" size={12} /> nur lesen
+                    </span>
                   )}
-                />
-                <span className="truncate">{x.v}</span>
-                <span className="sr-only">
-                  ({t(`admin.common.state.${x.state}`)})
                 </span>
-              </dd>
-              <dd className="m-0 text-meta text-fg-muted truncate">{x.sub}</dd>
-            </div>
-          ))}
-        </dl>
-      )}
-    </SectionCard>
-  );
-}
-
-/** Update vorbereiten: Vorabprüfung und Wartungsmodus. Der Imagewechsel selbst passiert am Docker-Host. */
-function UpdatePreflight() {
-  const ask = useConfirm();
-  const mayMaintenance = useAuth().can("system.maintenance");
-  const qc = useQueryClient();
-  const q = useQuery({ queryKey: ["update-preflight"], queryFn: () => get<any>("/system/update-preflight"), refetchInterval: 10_000 });
-  const toast = useToast();
-  const d = q.data;
-  const toggle = async (enabled: boolean) => {
-    try {
-      await post("/system/maintenance", { enabled, reason: enabled ? "Update wird vorbereitet" : "" });
-      toast({ tone: "success", title: enabled ? "Wartungsmodus aktiv" : "Wartungsmodus beendet" });
-      q.refetch();
-      qc.invalidateQueries({ queryKey: ["system-status"] });
-    } catch (e) {
-      toast({ tone: "error", title: (e as Error).message });
-    }
-  };
-  if (!d) return null;
-  const on = d.checks.find((c: any) => c.id === "maintenance")?.ok;
-  return (
-    <div className="border border-line rounded-card p-4 flex flex-col gap-3">
-      <div className="flex flex-wrap items-center gap-2">
-        <strong>Update vorbereiten</strong>
-        <Badge tone={d.ready ? "success" : on ? "warning" : "neutral"}>{d.ready ? "bereit für das Update" : on ? "wartet auf laufende Vorgänge" : "Normalbetrieb"}</Badge>
-        <span className="text-meta text-fg-muted">BlaulichtCMS {d.version} · PostgreSQL {d.postgres} · {d.migrations} Migrationen</span>
-      </div>
-      <ul className="m-0 p-0 list-none flex flex-col gap-1 text-sm">
-        {d.checks.map((c: any) => (
-          <li key={c.id} className="flex gap-2 items-start">
-            <Icon name={c.ok ? "CheckCircle2" : c.blocking ? "XCircle" : "AlertTriangle"} size={15} className={c.ok ? "text-ok mt-0.5" : c.blocking ? "text-err mt-0.5" : "text-warn mt-0.5"} />
-            <span>
-              {c.label} <span className="text-fg-muted">– {c.detail}</span>
-            </span>
+                <span className="text-meta text-fg-muted">{p.description}</span>
+              </span>
+              <Icon name="ChevronRight" size={16} className="ml-auto mt-2 shrink-0 text-fg-muted" />
+            </Link>
           </li>
         ))}
       </ul>
-      <div className="flex flex-wrap gap-2">
-        {!mayMaintenance ? null : on ? (
-          <Button onClick={() => toggle(false)}>Wartungsmodus beenden</Button>
-        ) : (
-          <Button icon="Hourglass" onClick={async () => (await ask({ title: "Wartungsmodus einschalten?", text: "Schreibende Vorgänge und neue Aufträge pausieren, bis der Wartungsmodus wieder aus ist.", confirmLabel: "Einschalten" })) && toggle(true)}>
-            Wartungsmodus einschalten
-          </Button>
-        )}
-        <Link to="/hilfe/updates" className="inline-flex items-center gap-1 text-sm">
-          <Icon name="BookOpen" size={13} /> Ablauf: Sichern → Wechseln → Prüfen → Wiederherstellen
-        </Link>
-      </div>
+      <p className="m-0 text-sm text-fg-muted flex items-center gap-1.5 flex-wrap">
+        <Icon name="User" size={14} />
+        Persönliche Darstellung (Farbschema, Animationen, kompakte Tabellen) und eigene Benachrichtigungen stehen unter <Link to="/profil#darstellung">Mein Konto</Link>.
+      </p>
     </div>
   );
 }
 
-function BackupList() {
-  const mayDownload = useAuth().can("backup.download");
-  const qc = useQueryClient();
-  const toast = useToast();
-  const q = useQuery({
-    queryKey: ["backups"],
-    queryFn: () => get<Backup[]>("/backups"),
-    refetchInterval: (query) =>
-      (query.state.data as Backup[] | undefined)?.some(
-        (b) =>
-          b.status === "running" &&
-          Date.now() - new Date(b.started_at).getTime() < 600_000,
-      )
-        ? 3000
-        : false,
-  });
-  const [busy, setBusy] = useState(false);
-  const [lastError, setLastError] = useState<{
-    msg: string;
-    tech: string;
-  } | null>(null);
-  const run = async () => {
-    setBusy(true);
-    setLastError(null);
-    try {
-      const r = await post<{ fileName?: string; file_name?: string }>(
-        "/backups",
-      );
-      toast({
-        tone: "success",
-        title: t("admin.settings.backupDone"),
-        text: r.fileName ?? r.file_name,
-      });
-    } catch (e) {
-      const err = e as ApiError;
-      setLastError({
-        msg: err.message,
-        tech: `${err.status ?? ""} ${err.code ?? ""} ${err.message}`.trim(),
-      });
-    } finally {
-      setBusy(false);
-      qc.invalidateQueries({ queryKey: ["backups"] });
-      qc.invalidateQueries({ queryKey: ["system-status"] });
-    }
-  };
-  const rows = q.data ?? [];
-  const errRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (lastError) errRef.current?.focus();
-  }, [lastError]);
+/** „Einstellung finden“ (#256): filtert Bereiche und Feldbeschriftungen aus dem Einstellungs-Index (wie Strg K). */
+function SettingsFinder({ compact }: { compact?: boolean }) {
+  const { canAny } = useAuth();
+  const [query, setQuery] = useState('');
+  const hits = useMemo(() => {
+    const terms = searchTerms(query);
+    if (!terms.length) return [];
+    return SETTINGS_INDEX.filter((s) => !s.perm.length || canAny(...s.perm))
+      .map((s) => ({ s, r: rank(terms, s.title, `${s.keywords} ${s.where}`) }))
+      .filter((x) => x.r !== null)
+      .sort((a, b) => a.r! - b.r!)
+      .slice(0, compact ? 6 : 10)
+      .map((x) => x.s);
+  }, [query, canAny, compact]);
   return (
-    <div className="flex flex-col gap-3">
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <h3 className="m-0 text-sm font-semibold">
-          {t("admin.settings.backupList")}
-        </h3>
-        <Button icon="HardDrive" loading={busy} onClick={run}>
-          {t("admin.settings.backupNow")}
-        </Button>
+    <div role="search" className={cx('flex flex-col gap-2', !compact && 'max-w-[520px]')}>
+      <label htmlFor={compact ? 'settings-find-side' : 'settings-find'} className={compact ? 'sr-only' : 'text-sm font-medium'}>
+        Einstellung finden
+      </label>
+      <div className="relative">
+        <Icon name="Search" size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-fg-muted pointer-events-none" />
+        <Input id={compact ? 'settings-find-side' : 'settings-find'} type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder={compact ? 'Einstellung finden' : 'z. B. Zeitzone, SMTP, Papierkorb'} className="pl-9" autoComplete="off" aria-describedby={compact ? undefined : 'settings-find-hint'} />
       </div>
-      {lastError && (
-        <div ref={errRef} tabIndex={-1} className="outline-none">
-          <ErrorBox
-            title={t("admin.settings.backupFailed")}
-            actions={
-              <CopyButton
-                size="sm"
-                value={lastError.tech}
-                label={t("admin.common.copyDetails")}
-              />
-            }
-          >
-            <p className="m-0">
-              {/^Fehler \d+$/.test(lastError.msg)
-                ? t("admin.settings.backupNoAnswer")
-                : lastError.msg
-                    .replace(/^Sicherung fehlgeschlagen:\s*/, "")
-                    .slice(0, 300)}
-            </p>
-            <p className="m-0 mt-1">{t("admin.settings.backupFailedWhy")}</p>
-          </ErrorBox>
-        </div>
-      )}
-      {q.isError ? (
-        <LoadError error={q.error} onRetry={() => q.refetch()} />
-      ) : q.isLoading ? (
-        <SkeletonRows rows={2} />
-      ) : rows.length === 0 ? (
-        <p className="m-0 text-sm text-fg-muted">
-          {t("admin.settings.backupEmpty")}
+      {!compact && !query && (
+        <p id="settings-find-hint" className="m-0 text-meta text-fg-muted">
+          Durchsucht Bereiche und Feldbeschriftungen; ein Treffer öffnet die Unterseite direkt am Feld.
         </p>
-      ) : (
-        <div className="border border-line rounded-node overflow-hidden">
-          <Table className="relative">
-            <thead>
-              <tr>
-                <Th>{t("admin.settings.backupWhen")}</Th>
-                <Th>{t("admin.settings.backupFile")}</Th>
-                <Th align="right">{t("admin.settings.backupSize")}</Th>
-                <Th>{t("admin.users.col.status")}</Th>
-                <Th>{t("admin.settings.backupBy")}</Th>
-                <Th className="w-12">
-                  <span className="sr-only">
-                    {t("admin.settings.download")}
-                  </span>
-                </Th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((b) => (
-                <tr
-                  key={b.id}
-                  className="hover:bg-raised transition-colors duration-fast"
-                >
-                  <Td className="text-meta whitespace-nowrap">
-                    {fmtDateTime(b.started_at)}
-                  </Td>
-                  <Td mono className="max-w-[240px] truncate">
-                    {b.file_name}
-                  </Td>
-                  <Td align="right" mono>
-                    {fmtBytes(b.size_bytes)}
-                  </Td>
-                  <Td>
-                    <Badge
-                      tone={
-                        b.status === "ok"
-                          ? "success"
-                          : b.status === "failed"
-                            ? "error"
-                            : "primary"
-                      }
-                      pulse={b.status === "running"}
-                      title={b.error ?? undefined}
-                    >
-                      {t(`admin.settings.backupStatus.${b.status}`)}
-                    </Badge>
-                    {b.error && (
-                      <span
-                        className="block text-[11px] text-fg-muted max-w-[260px] truncate mt-0.5"
-                        title={b.error}
-                      >
-                        {b.error}
-                      </span>
-                    )}
-                    {b.offsite_status && (
-                      <span
-                        className={`block text-[11px] mt-0.5 ${b.offsite_status === "failed" ? "text-err" : "text-fg-muted"}`}
-                        title={b.offsite_error ?? undefined}
-                      >
-                        {b.offsite_status === "ok"
-                          ? "außer Haus abgelegt"
-                          : b.offsite_status === "pending"
-                            ? "außer Haus: wird übertragen"
-                            : "außer Haus fehlgeschlagen"}
-                      </span>
-                    )}
-                  </Td>
-                  <Td className="text-meta text-fg-muted whitespace-nowrap">
-                    {b.trigger === "manual"
-                      ? (b.created_by_name ??
-                        t("admin.settings.backupTrigger.manual"))
-                      : b.trigger === "offsite"
-                        ? "vom Ziel außer Haus geholt"
-                        : t("admin.settings.backupTrigger.schedule")}
-                  </Td>
-                  <Td align="right">
-                    {b.status === "ok" && mayDownload && (
-                      <Button
-                        size="sm"
-                        iconOnly
-                        icon="Download"
-                        aria-label={t("admin.settings.downloadOf", {
-                          name: b.file_name,
-                        })}
-                        onClick={() => download(`/backups/${b.id}/download`)}
-                      />
-                    )}
-                  </Td>
-                </tr>
-              ))}
-            </tbody>
-          </Table>
-        </div>
+      )}
+      {query.trim() && (
+        <ul className="m-0 p-0 list-none flex flex-col gap-0.5 border border-line rounded-node bg-card p-1" aria-live="polite">
+          {hits.length === 0 ? (
+            <li className="px-2.5 py-2 text-sm text-fg-muted">Keine Einstellung gefunden.</li>
+          ) : (
+            hits.map((s) => (
+              <li key={`${s.href}-${s.title}`}>
+                <Link to={s.href} onClick={() => setQuery('')} className="flex flex-col px-2.5 py-1.5 rounded-control no-underline !text-fg hover:bg-raised">
+                  <span className="text-sm font-medium">{s.title}</span>
+                  <span className="text-meta text-fg-muted">{s.where}</span>
+                </Link>
+              </li>
+            ))
+          )}
+        </ul>
       )}
     </div>
-  );
-}
-
-function AboutSection({ dataDir, trustedProxies }: { dataDir?: string; trustedProxies?: string[] }) {
-  const { me, can } = useAuth();
-  const status = useSystemStatus(false, can("system.status"));
-  return (
-    <SectionCard
-      id="ueber"
-      title={t("admin.settings.sections.ueber")}
-      description={t("admin.settings.aboutDesc")}
-      bodyClassName="flex flex-col gap-4"
-    >
-      <dl className="m-0 grid gap-x-6 gap-y-2 grid-cols-[max-content_1fr] text-sm">
-        <dt className="text-fg-muted">{t("admin.settings.version")}</dt>
-        <dd className="m-0 font-mono">{me?.version ?? "–"}</dd>
-        <dt className="text-fg-muted">{t("admin.settings.node")}</dt>
-        <dd className="m-0 font-mono">{status.data?.node ?? "–"}</dd>
-        {dataDir && (
-          <>
-            <dt className="text-fg-muted">{t("admin.settings.dataDir")}</dt>
-            <dd className="m-0 font-mono text-meta break-all">{dataDir}</dd>
-          </>
-        )}
-        {trustedProxies && (
-          <>
-            <dt className="text-fg-muted">{t("admin.settings.trustedProxies")}</dt>
-            <dd className="m-0 font-mono text-meta break-all">{trustedProxies.length ? trustedProxies.join(", ") : t("admin.settings.trustedProxiesNone")}</dd>
-          </>
-        )}
-      </dl>
-      <div className="flex gap-2 flex-wrap">
-        <LinkButton to="/hilfe" icon="BookOpen">
-          {t("admin.settings.openHelp")}
-        </LinkButton>
-        {can("update.view") && (
-          <LinkButton to="/hilfe/updates" icon="Download">
-            {t("admin.settings.openUpdates")}
-          </LinkButton>
-        )}
-      </div>
-    </SectionCard>
   );
 }

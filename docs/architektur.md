@@ -122,7 +122,7 @@ damit Hochladende eine verständliche Meldung erhalten.
 
 ### E9 – Updates: Image am Docker-Host und signierte In-App-Updates (geändert)
 
-Ursprünglich waren Updates nur Image-Wechsel am Host. Auf Wunsch des Betriebs gibt es zusätzlich In-App-Updates – wie in LiFeOS über Einstellungen → Updates aus GitHub-Releases, aber ohne dessen
+Ursprünglich waren Updates nur Image-Wechsel am Host. Auf Wunsch des Betriebs gibt es zusätzlich In-App-Updates – wie in LiFeOS über Einstellungen → Updates & Wartung aus GitHub-Releases, aber ohne dessen
 Schwächen (Überschreiben am Ort, keine Sicherung, kein Rückweg, erneute Installation derselben Version, übersprungene
 Migrationen, Token-Pflicht). Ablauf und Bedienung: `docs/betrieb.md`, „In-App-Update“.
 

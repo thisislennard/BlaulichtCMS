@@ -82,7 +82,7 @@ export default function PressRequestPage() {
       />
       {q.data!.deletion && (
         <Notice tone="warning" title={`Löschung angekündigt: frühestens am ${fmtDate(q.data!.deletion.at)}`}>
-          Diese Anfrage ist nicht erledigt und hatte lange keine Aktivität. Nach der Löschfrist (Einstellungen → Datenschutz) wird sie samt Kontaktdaten, Mails und Anhängen gelöscht. Eine Änderung, Notiz oder Mail setzt die Frist zurück; „Erledigt“ startet die Frist für erledigte Anfragen.
+          Diese Anfrage ist nicht erledigt und hatte lange keine Aktivität. Nach der Löschfrist (Einstellungen → Löschfristen) wird sie samt Kontaktdaten, Mails und Anhängen gelöscht. Eine Änderung, Notiz oder Mail setzt die Frist zurück; „Erledigt“ startet die Frist für erledigte Anfragen.
         </Notice>
       )}
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_340px] items-start">

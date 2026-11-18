@@ -58,7 +58,7 @@ Nach der Prüfung eines Bildes sucht BlaulichtCMS im Hintergrund nach Gesichtern
 - **Freigabe:** Bilder mit offenen Vorschlägen verlangen im Freigabe-Dialog die Datenschutz-Prüfung mit dem Hinweis **„Gesichtsvorschläge offen“** – wie markierte Dateien.
 - **Grenzen:** Die Suche ist eine Hilfe, keine Garantie. Seitlich oder von hinten aufgenommene, verdeckte (Helm, Maske, Hand), unscharfe, sehr kleine Gesichter (weniger als etwa 1 % der Bildbreite) und Spiegelungen findet sie oft nicht; manchmal hält sie ein Muster für ein Gesicht. **Kennzeichen, Schilder und Bildschirme sucht sie nicht** (Kennzeichen von Hand mit *Kennzeichen anklicken*), **Videos** gar nicht. Das ganze Bild bleibt selbst zu prüfen; fehlende Bereiche wie gewohnt von Hand ziehen.
 - **Datenschutz:** Gespeichert werden nur Rechteck und Sicherheit je Vorschlag – keine Merkmale, keine Wiedererkennung von Personen. Die Vorschläge gehören zur Datei und werden mit ihr gelöscht.
-- **Einstellungen → Medien → Gesichtsvorschläge:** automatische Suche ein/aus (Standard: ein) und **Mindestsicherheit** (Standard 60 %; niedriger findet mehr, auch Fehltreffer). Ist die Suche aus, geht **Gesichter suchen** im Dialog weiterhin von Hand.
+- **Einstellungen → Medien & Upload → Gesichtsvorschläge:** automatische Suche ein/aus (Standard: ein) und **Mindestsicherheit** (Standard 60 %; niedriger findet mehr, auch Fehltreffer). Ist die Suche aus, geht **Gesichter suchen** im Dialog weiterhin von Hand.
 
 ## Herunterladen
 
@@ -68,7 +68,7 @@ Nach der Prüfung eines Bildes sucht BlaulichtCMS im Hintergrund nach Gesichtern
 
 ## Standortdaten im Original
 
-Mit der Einstellung **Standortdaten auch aus Originalen entfernen** (Verwaltung → Einstellungen → Medien, Standard: an) bereinigt BlaulichtCMS nach der Prüfung auch das Original – erst nachdem Vorschau und öffentliche Fassung erzeugt sind:
+Mit der Einstellung **Standortdaten auch aus Originalen entfernen** (Verwaltung → Einstellungen → Medien & Upload, Standard: an) bereinigt BlaulichtCMS nach der Prüfung auch das Original – erst nachdem Vorschau und öffentliche Fassung erzeugt sind:
 
 - **Entfernt:** GPS-Angaben, Seriennummern von Kamera und Objektiv, Name der Besitzerin bzw. des Besitzers, Autorfelder, eindeutige Bild-ID, Kommentare, herstellerspezifische Zusatzdaten (MakerNotes), XMP- und IPTC-Angaben (können Orte und Namen enthalten). Bei Videos alle Metadaten, Kapitel sowie Daten- und Untertitelspuren (z. B. GPS-Aufzeichnung von Action-Kameras).
 - **Bleibt erhalten:** die Bild- bzw. Video- und Tondaten selbst (verlustfrei, nicht neu kodiert), Kamerahersteller und -modell, Aufnahmezeit, Belichtungsdaten, Ausrichtung, Copyright-Vermerk und das kleine EXIF-Vorschaubild.

@@ -17,7 +17,7 @@ Die **BlaulichtCMS Bridge** ist ein WordPress-Plugin. Sie holt freigegebene Beit
 
 - Der Code entsteht in BlaulichtCMS beim Koppeln, ist **einmalig** und **30 Minuten** gültig. Er wird nur im Kopplungsdialog angezeigt.
 - Abgelaufen oder verloren? Auf der Website-Karte **Neuen Kopplungscode** wählen.
-- Die **BlaulichtCMS-Adresse** steht im Kopplungsdialog (Kopierknopf); sie ist die öffentliche Adresse aus *Einstellungen → Allgemein*.
+- Die **BlaulichtCMS-Adresse** steht im Kopplungsdialog (Kopierknopf); sie ist die öffentliche Adresse aus *Einstellungen → Organisation*.
 - Der entstehende Schlüssel gilt nur für diese eine Website. „Widerrufen“ in BlaulichtCMS sperrt ihn sofort.
 
 ### Kopplung prüfen

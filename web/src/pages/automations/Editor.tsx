@@ -813,7 +813,7 @@ function EditorInner({ a, cat, inputs, outputs }: { a: AutomationDetail; cat: Ca
           )}
         </PageHeader>
 
-        {!cat.enabled && <Notice tone="warning" title="Workflows sind global abgeschaltet">Läufe starten erst wieder, wenn der Schalter unter Einstellungen → Redaktion an ist.</Notice>}
+        {!cat.enabled && <Notice tone="warning" title="Workflows sind global abgeschaltet">Läufe starten erst wieder, wenn der Schalter unter Einstellungen → Workflows an ist.</Notice>}
 
         <div className="flex items-center gap-3 flex-wrap">
           <SegmentedControl

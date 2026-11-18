@@ -83,7 +83,7 @@ export async function pressMailboxRoutes(app: FastifyInstance) {
     if (next.mode === 'imap' && !password) throw badRequest('Bitte das Passwort eintragen.');
     if (next.mode === 'm365') {
       const s = await getSettings();
-      if (!(s['m365.tenant_id'] && s['m365.client_id'] && s['m365.secret_id'])) throw badRequest('Microsoft 365 ist noch nicht eingerichtet (Einstellungen → Benachrichtigungen und E-Mail).');
+      if (!(s['m365.tenant_id'] && s['m365.client_id'] && s['m365.secret_id'])) throw badRequest('Microsoft 365 ist noch nicht eingerichtet (Einstellungen → E-Mail & Push).');
     }
     try {
       const info = await testMailbox(next, password);

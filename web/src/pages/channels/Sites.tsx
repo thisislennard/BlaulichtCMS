@@ -72,7 +72,7 @@ function PairingDialog({ pairing, onClose }: { pairing: Pairing; onClose: () => 
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-fg-muted w-28 inline-flex items-center gap-1">BlaulichtCMS-Adresse
                 <HelpTip title="BlaulichtCMS-Adresse" more="/hilfe/wordpress#voraussetzungen">
-                  <p className="m-0">Die öffentliche Adresse aus Einstellungen → Allgemein. Die Website muss sie per HTTPS erreichen können; einen Eingang in WordPress braucht es nicht.</p>
+                  <p className="m-0">Die öffentliche Adresse aus Einstellungen → Organisation. Die Website muss sie per HTTPS erreichen können; einen Eingang in WordPress braucht es nicht.</p>
                 </HelpTip>
               </span>
               <code className="bg-raised rounded-control px-2 py-1">{pairing.blaulichtcmsUrl}</code>

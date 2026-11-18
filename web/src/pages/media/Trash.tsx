@@ -99,7 +99,7 @@ export default function Trash() {
       <MediaNav />
       {d && (
         <Notice>
-          {d.days > 0 ? `Einträge werden ${d.days} Tage nach dem Löschen automatisch endgültig entfernt (Einstellungen → Datenschutz).` : 'Automatisches Leeren ist ausgeschaltet (Einstellungen → Datenschutz).'}
+          {d.days > 0 ? `Einträge werden ${d.days} Tage nach dem Löschen automatisch endgültig entfernt (Einstellungen → Löschfristen).` : 'Automatisches Leeren ist ausgeschaltet (Einstellungen → Löschfristen).'}
           {!admin && ' Endgültig löschen kann, wer „Medien administrieren“ hat.'}
         </Notice>
       )}

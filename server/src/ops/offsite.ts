@@ -489,7 +489,7 @@ export async function uploadBackup(backupId: string, attempt: { final: boolean }
       await pool.query(`UPDATE backups SET offsite_status = 'failed', offsite_error = $2 WHERE id = $1`, [backupId, msg]);
       await pool.query(`UPDATE backup_offsite SET last_error = $1, last_error_at = now() WHERE id = 1`, [msg]);
       log('error', 'backup', `Sicherung außer Haus fehlgeschlagen: ${msg}`);
-      await notify({ kind: 'error', title: 'Sicherung außer Haus fehlgeschlagen', body: msg.slice(0, 300), link: '/einstellungen#sicherung-ausser-haus', permission: 'backup.manage' });
+      await notify({ kind: 'error', title: 'Sicherung außer Haus fehlgeschlagen', body: msg.slice(0, 300), link: '/einstellungen/sicherung#ausser-haus', permission: 'backup.manage' });
     }
     throw e;
   }
@@ -600,7 +600,7 @@ export async function uploadVolumeStream(name: string, size: number, sha256: str
     const msg = (e as Error).message.slice(0, 1000);
     await pool.query(`UPDATE backup_offsite SET last_error = $1, last_error_at = now() WHERE id = 1`, [`Volume-Sicherung: ${msg}`]);
     log('error', 'backup', `Volume-Sicherung außer Haus fehlgeschlagen: ${msg}`);
-    await notify({ kind: 'error', title: 'Volume-Sicherung außer Haus fehlgeschlagen', body: msg.slice(0, 300), link: '/einstellungen#sicherung-ausser-haus', permission: 'backup.manage' });
+    await notify({ kind: 'error', title: 'Volume-Sicherung außer Haus fehlgeschlagen', body: msg.slice(0, 300), link: '/einstellungen/sicherung#ausser-haus', permission: 'backup.manage' });
     throw e;
   }
 }

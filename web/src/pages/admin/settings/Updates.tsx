@@ -1,16 +1,17 @@
 import { useEffect, useRef, useState } from "react";
-import { HelpLink, HelpTip } from "../../components/ui/HelpTip";
+import { useSaveSource, type SaveProblem } from "../../../components/ui/form";
+import { HelpLink, HelpTip } from "../../../components/ui/HelpTip";
 import { Link } from "react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { del, get, post, put } from "../../api/client";
-import { Badge, Button, ErrorBox, FieldWrap, Input, Notice, Switch, Table, Td, Th, cx } from "../../components/ui/core";
-import { CopyButton, useConfirm, useToast } from "../../components/ui/overlays";
-import { Icon } from "../../components/ui/Icon";
-import { useAuth } from "../../lib/auth";
-import { fmtDateTime, fmtRelative } from "../../lib/format";
-import { Markdown } from "../help/Markdown";
-import { FieldGrid, LoadError, SectionCard } from "./shared";
-import { plural } from '../../lib/format';
+import { del, get, post, put } from "../../../api/client";
+import { Badge, Button, ErrorBox, FieldWrap, Input, Notice, Switch, Table, Td, Th, cx } from "../../../components/ui/core";
+import { CopyButton, useConfirm, useToast } from "../../../components/ui/overlays";
+import { Icon } from "../../../components/ui/Icon";
+import { useAuth } from "../../../lib/auth";
+import { fmtDateTime, fmtRelative } from "../../../lib/format";
+import { Markdown } from "../../help/Markdown";
+import { FieldGrid, LoadError, SectionCard } from "../shared";
+import { plural } from '../../../lib/format';
 
 type Phase = "idle" | "download" | "verify" | "preflight" | "backup" | "extract" | "dependencies" | "selfcheck" | "activating" | "failed";
 interface InstallState {
@@ -127,13 +128,13 @@ export function UpdateAvailableNotice() {
   return (
     <Notice tone="info" icon="Download" title={`Update verfügbar: Version ${d.latest.version}`}>
       <p className="m-0">
-        Installiert ist {d.current}.{d.imageUpdate && (d.hostHelper?.installed ? " Braucht ein neues Docker-Image – über den Update-Helfer in den Updates anstoßen." : " Braucht ein neues Docker-Image – Installation am Docker-Host.")} {can("settings.view") && <Link to="/einstellungen#updates">Zu den Updates</Link>}
+        Installiert ist {d.current}.{d.imageUpdate && (d.hostHelper?.installed ? " Braucht ein neues Docker-Image – über den Update-Helfer in den Updates anstoßen." : " Braucht ein neues Docker-Image – Installation am Docker-Host.")} {can("settings.view") && <Link to="/einstellungen/updates">Zu den Updates</Link>}
       </p>
     </Notice>
   );
 }
 
-/** Einstellungen → Updates: Quelle, Prüfung, Installation, Protokoll. */
+/** Einstellungen → Updates & Wartung: Quelle, Prüfung, Installation, Protokoll. */
 export function UpdatesSection({ manage }: { manage: boolean }) {
   const q = useUpdatesInfo();
   const qc = useQueryClient();
@@ -154,29 +155,38 @@ export function UpdatesSection({ manage }: { manage: boolean }) {
     if (d?.state.busy && !progress && d.state.version) setProgress({ version: d.state.version, from: d.state.from, historyId: d.history[0]?.id ?? 0 });
   }, [d, progress]);
 
+  const dirty = !!(d && form) && (form.enabled !== d.settings.enabled || form.repo !== d.settings.repo || form.apiUrl !== d.settings.apiUrl || form.checkHours !== d.settings.checkHours || !!form.token);
+  const hoursInvalid = !!form && (form.checkHours === "" || !Number.isInteger(form.checkHours) || form.checkHours < 1 || form.checkHours > 168);
+  const repoInvalid = !!form && !/^[A-Za-z0-9_.-]{1,100}\/[A-Za-z0-9_.-]{1,100}$/.test(form.repo.trim());
+  // Speichern über die Leiste der Seite (#256)
+  const saveRef = useRef<() => Promise<void>>(async () => {});
+  const problems: SaveProblem[] = [...(repoInvalid ? [{ id: "u-repo", message: "GitHub-Repository: Format besitzer/name." }] : []), ...(hoursInvalid ? [{ id: "u-hours", message: "Prüfabstand: 1 bis 168 Stunden." }] : [])];
+  useSaveSource({ dirty: manage && dirty, problems, save: () => saveRef.current(), discard: () => d && setForm({ ...d.settings, token: "" }) });
+
   // Mit vorhandenen Daten (z. B. Neustart während eines Image-Updates) weiter anzeigen statt nur den Fehler
   if (q.isError && !d) return <SectionCard id="updates" title="Updates"><LoadError error={q.error} onRetry={() => q.refetch()} /></SectionCard>;
   if (!d || !form) return <SectionCard id="updates" title="Updates"><p className="m-0 text-sm text-fg-muted">Wird geladen …</p></SectionCard>;
 
-  const dirty = form.enabled !== d.settings.enabled || form.repo !== d.settings.repo || form.apiUrl !== d.settings.apiUrl || form.checkHours !== d.settings.checkHours || !!form.token;
-  const hoursInvalid = form.checkHours === "" || !Number.isInteger(form.checkHours) || form.checkHours < 1 || form.checkHours > 168;
-  const repoInvalid = !/^[A-Za-z0-9_.-]{1,100}\/[A-Za-z0-9_.-]{1,100}$/.test(form.repo.trim());
-
-  const save = async (clearToken = false) => {
+  /** Speichern (über die Leiste); `clearToken` nur über „Token entfernen“ – Fehler gehen dann in die Seite. */
+  const persist = async (clearToken: boolean) => {
+    const r = await put<{ tokenCleared: boolean }>("/updates/settings", {
+      enabled: form.enabled,
+      repo: form.repo.trim(),
+      apiUrl: form.apiUrl.trim(),
+      checkHours: Number(form.checkHours),
+      ...(form.token.trim() ? { token: form.token.trim() } : {}),
+      ...(clearToken ? { clearToken: true } : {}),
+    });
+    const fresh = await qc.fetchQuery({ queryKey: ["updates"], queryFn: () => get<UpdatesInfo>("/updates"), staleTime: 0 });
+    setForm({ ...fresh.settings, token: "" });
+    toast({ tone: "success", title: "Update-Einstellungen gespeichert", text: r.tokenCleared ? "Der bisherige Token wurde entfernt." : undefined });
+  };
+  saveRef.current = () => persist(false);
+  const removeToken = async () => {
     setSaving(true);
     setError(null);
     try {
-      const r = await put<{ tokenCleared: boolean }>("/updates/settings", {
-        enabled: form.enabled,
-        repo: form.repo.trim(),
-        apiUrl: form.apiUrl.trim(),
-        checkHours: Number(form.checkHours),
-        ...(form.token.trim() ? { token: form.token.trim() } : {}),
-        ...(clearToken ? { clearToken: true } : {}),
-      });
-      const fresh = await qc.fetchQuery({ queryKey: ["updates"], queryFn: () => get<UpdatesInfo>("/updates") });
-      setForm({ ...fresh.settings, token: "" });
-      toast({ tone: "success", title: "Update-Einstellungen gespeichert", text: r.tokenCleared ? "Der bisherige Token wurde entfernt." : undefined });
+      await persist(true);
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -316,18 +326,19 @@ export function UpdatesSection({ manage }: { manage: boolean }) {
         </FieldGrid>
         {manage && (
           <div className="flex flex-wrap gap-2">
-            <Button variant="primary" icon="Save" loading={saving} disabled={!dirty || hoursInvalid || repoInvalid} onClick={() => save()}>
-              Speichern
-            </Button>
             {d.settings.tokenSet && (
-              <Button icon="Trash2" disabled={saving} onClick={() => save(true)}>
+              <Button icon="Trash2" loading={saving} disabled={dirty} aria-describedby={dirty ? "u-check-why" : undefined} onClick={removeToken}>
                 Token entfernen
               </Button>
             )}
-            <Button icon="RefreshCw" loading={checking} disabled={dirty} onClick={check}>
+            <Button icon="RefreshCw" loading={checking} disabled={dirty} aria-describedby={dirty ? "u-check-why" : undefined} onClick={check}>
               Jetzt prüfen
             </Button>
-            {dirty && <span className="text-sm text-fg-muted self-center">Erst speichern, dann prüfen.</span>}
+            {dirty && (
+              <span id="u-check-why" className="text-sm text-fg-muted self-center">
+                Erst die Änderungen speichern (Leiste unten).
+              </span>
+            )}
           </div>
         )}
       </div>
@@ -699,5 +710,65 @@ function UpdateProgress({ target, onClose }: { target: { version: string; from: 
         </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * Update vorbereiten: Vorabprüfung und Zustand des Wartungsmodus. Geschaltet wird der Wartungsmodus an genau einer
+ * Stelle – im Systemstatus (Recht „Wartungsmodus schalten“ setzt nur „Systemzustand ansehen“ voraus, #256).
+ */
+function UpdatePreflight() {
+  const { can } = useAuth();
+  const q = useQuery({ queryKey: ["update-preflight"], queryFn: () => get<any>("/system/update-preflight"), refetchInterval: 10_000 });
+  const d = q.data;
+  if (q.isError) return <SectionCard id="vorbereiten" title="Update vorbereiten"><LoadError error={q.error} onRetry={() => q.refetch()} /></SectionCard>;
+  if (!d) return null;
+  const on = d.checks.find((c: any) => c.id === "maintenance")?.ok;
+  return (
+    <SectionCard
+      id="vorbereiten"
+      title="Update vorbereiten"
+      description="Vorabprüfung für Updates am Docker-Host: Wartungsmodus an, laufende Vorgänge abgeschlossen, Sicherung aktuell."
+      action={<Badge tone={d.ready ? "success" : on ? "warning" : "neutral"}>{d.ready ? "bereit für das Update" : on ? "wartet auf laufende Vorgänge" : "Normalbetrieb"}</Badge>}
+      bodyClassName="flex flex-col gap-3"
+    >
+      <p className="m-0 text-meta text-fg-muted">BlaulichtCMS {d.version} · PostgreSQL {d.postgres} · {d.migrations} Migrationen</p>
+      <ul className="m-0 p-0 list-none flex flex-col gap-1 text-sm">
+        {d.checks.map((c: any) => (
+          <li key={c.id} className="flex gap-2 items-start">
+            <Icon name={c.ok ? "CheckCircle2" : c.blocking ? "XCircle" : "AlertTriangle"} size={15} className={c.ok ? "text-ok mt-0.5" : c.blocking ? "text-err mt-0.5" : "text-warn mt-0.5"} />
+            <span>
+              {c.label} <span className="text-fg-muted">– {c.detail}</span>
+            </span>
+          </li>
+        ))}
+      </ul>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
+        <span className="inline-flex items-center gap-1.5">
+          <Icon name="Hourglass" size={14} className="text-fg-muted" />
+          Wartungsmodus: <strong>{on ? "aktiv" : "aus"}</strong>
+          {can("system.maintenance") && can("system.status") && (
+            <>
+              {" – "}
+              <Link to="/system#wartungsmodus">{on ? "im Systemstatus beenden" : "im Systemstatus einschalten"}</Link>
+            </>
+          )}
+        </span>
+        <Link to="/hilfe/updates" className="inline-flex items-center gap-1">
+          <Icon name="BookOpen" size={13} /> Ablauf: Sichern → Wechseln → Prüfen → Wiederherstellen
+        </Link>
+      </div>
+    </SectionCard>
+  );
+}
+
+/** Einstellungen → Updates & Wartung (#256): Updates, Vorabprüfung, Zustand des Wartungsmodus. */
+export function UpdatesPage() {
+  const { can } = useAuth();
+  return (
+    <>
+      <UpdatesSection manage={can("update.install")} />
+      {can("update.install") && <UpdatePreflight />}
+    </>
   );
 }

@@ -93,7 +93,7 @@ export async function runBackup(trigger: 'schedule' | 'manual', userId: string |
     const msg = (e as Error).message;
     await pool.query(`UPDATE backups SET status = 'failed', finished_at = now(), error = $2 WHERE id = $1`, [row!.id, msg.slice(0, 1000)]);
     log('error', 'backup', `Sicherung fehlgeschlagen: ${msg}`);
-    await notify({ kind: 'error', title: 'Sicherung fehlgeschlagen', body: msg.slice(0, 300), link: '/einstellungen#sicherung', permission: 'backup.manage' });
+    await notify({ kind: 'error', title: 'Sicherung fehlgeschlagen', body: msg.slice(0, 300), link: '/einstellungen/sicherung', permission: 'backup.manage' });
     throw e;
   }
 }

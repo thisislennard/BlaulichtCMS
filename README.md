@@ -281,7 +281,11 @@ flowchart LR
   für draußen und nachts.
 - **Eine Zeitzone für alles:** Anzeigen und Eingaben (Listen, Verläufe, Fristen, Ablauf von Upload-Links, geplante
   Veröffentlichung, Kalender, Begrüßung, Platzhalter `{datum}`, Zeitpläne) folgen der Zeitzone unter *Einstellungen →
-  Allgemein* (Standard Europe/Berlin), nicht der des Geräts; Sommer-/Winterzeit automatisch.
+  Organisation* (Standard Europe/Berlin), nicht der des Geräts; Sommer-/Winterzeit automatisch.
+- **Einstellungen nach Bereichen:** je Bereich eine eigene Seite (Organisation, Datenschutz & Recht, Löschfristen,
+  Medien & Upload, Redaktion & Freigabe, E-Mail & Push, Sicherheit, Sicherung, Updates & Wartung, Workflows, System)
+  mit einer Speichern-Leiste und Rückfrage beim Verlassen; „Einstellung finden“ springt direkt zum Feld. Alle
+  Löschfristen samt Probelauf auf einer Seite, SMTP und Microsoft 365 samt Testmail an einer Stelle.
 - **Hilfe-Center:** 32 Kapitel mit Volltextsuche direkt in der App.
 
 ### Benutzer und Sicherheit
@@ -315,7 +319,7 @@ flowchart LR
 ### Betrieb
 
 - **Ein Container, ein Skript:** Das Installationsskript führt durch die Einrichtung und prüft am Ende die Adresse.
-- **Updates aus der App:** neue Versionen unter *Einstellungen → Updates*, nur mit gültiger Signatur, mit Sicherung
+- **Updates aus der App:** neue Versionen unter *Einstellungen → Updates & Wartung*, nur mit gültiger Signatur, mit Sicherung
   vorab und automatischem Rückweg. Braucht eine Version ein neues Docker-Image, zeigt die Seite das schon bei der
   Prüfung – mit eingerichtetem **Update-Helfer** lässt sich auch dieses Update in der App anstoßen (prüft das signierte
   Release, baut, sichert, wechselt, bei Fehler zurück; Fortschritt und Protokollauszug in der App), ohne dem Container

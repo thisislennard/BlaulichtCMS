@@ -899,14 +899,16 @@ describe('Einstellungskatalog ohne Drift (#175)', () => {
     .filter((f) => !/server[\/]src[\/](lib[\/]settings|routes[\/]system)\.ts$/.test(f))
     .map((f) => fs.readFileSync(f, 'utf8'))
     .join('\n');
-  const ui = fs.readFileSync(path.join(root, 'web', 'src', 'pages', 'admin', 'Settings.tsx'), 'utf8');
+  // Einstellungen seit #256 auf Unterseiten: Shell + alle Dateien unter pages/admin/settings
+  const settingsDir = path.join(root, 'web', 'src', 'pages', 'admin', 'settings');
+  const ui = [path.join(root, 'web', 'src', 'pages', 'admin', 'Settings.tsx'), ...fs.readdirSync(settingsDir).map((f) => path.join(settingsDir, f))].map((f) => fs.readFileSync(f, 'utf8')).join('\n');
 
   it('jeder Schlüssel wird außerhalb von Katalog und Validierung gelesen', () => {
     const dead = Object.keys(DEFAULT_SETTINGS).filter((k) => !sources.includes(`'${k}'`) && !sources.includes(`"${k}"`));
     expect(dead).toEqual([]);
   });
   it('die Oberfläche kennt nur Schlüssel aus dem Katalog', () => {
-    const used = [...ui.matchAll(/(?:k=|v\[|draft\??\.?\[)"([a-z0-9_]+\.[a-z0-9_]+)"/g)].map((m) => m[1]);
+    const used = [...ui.matchAll(/(?:k=|v\[|draft\??\.?\[|ro\(|set\()["']([a-z0-9_]+\.[a-z0-9_]+)["']/g)].map((m) => m[1]);
     expect(used.length).toBeGreaterThan(10);
     expect(used.filter((k) => !(k in DEFAULT_SETTINGS))).toEqual([]);
   });

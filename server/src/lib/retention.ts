@@ -185,7 +185,7 @@ const DEAD_MEDIA_WHERE = `((deleted_at IS NOT NULL AND deleted_at < now() - make
 
 /**
  * Wendet alle Löschfristen an (bzw. zeigt im Probelauf, was gelöscht würde).
- * Wird stündlich vom Worker aufgerufen; Probelauf unter Einstellungen → Datenschutz.
+ * Wird stündlich vom Worker aufgerufen; Probelauf unter Einstellungen → Löschfristen.
  */
 export async function runRetention(opts: { dryRun: boolean; actor?: Actor; settings?: Settings }): Promise<RetentionReport> {
   const s = opts.settings ?? (await getSettings(true));

@@ -114,7 +114,7 @@ export function LinkOptionsFields({ value, onChange, idPrefix, hasPassword }: { 
                 </label>
               ))}
             </div>
-            <p className="m-0 text-meta text-fg-muted">Zur Auswahl stehen die unter Einstellungen → Medien global erlaubten Typen. Geprüft wird immer der Dateiinhalt.</p>
+            <p className="m-0 text-meta text-fg-muted">Zur Auswahl stehen die unter Einstellungen → Medien & Upload global erlaubten Typen. Geprüft wird immer der Dateiinhalt.</p>
           </fieldset>
           <fieldset className="m-0 p-0 border-0 flex flex-col gap-2">
             <legend className="text-label uppercase text-fg-muted mb-1">Abgefragte Angaben</legend>
@@ -129,7 +129,7 @@ export function LinkOptionsFields({ value, onChange, idPrefix, hasPassword }: { 
                 </FieldWrap>
               ))}
             </div>
-            <p className="m-0 text-meta text-fg-muted">Name, E-Mail, Ort und Datum sind personenbezogen: Die Upload-Seite nennt sie im Datenschutzhinweis, sie werden nach der Frist unter Einstellungen → Datenschutz entfernt und sind Teil der Datenschutzsuche. Nur abfragen, was wirklich gebraucht wird.</p>
+            <p className="m-0 text-meta text-fg-muted">Name, E-Mail, Ort und Datum sind personenbezogen: Die Upload-Seite nennt sie im Datenschutzhinweis, sie werden nach der Frist unter Einstellungen → Löschfristen entfernt und sind Teil der Datenschutzsuche. Nur abfragen, was wirklich gebraucht wird.</p>
           </fieldset>
           <fieldset className="m-0 p-0 border-0 flex flex-col gap-2">
             <legend className="text-label uppercase text-fg-muted mb-1">Bestätigung vor dem Upload</legend>

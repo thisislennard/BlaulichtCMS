@@ -219,7 +219,7 @@ async function executeLocked(runId: string, job?: { attempts: number; max_attemp
   const settings = await getSettings();
   const test = run.mode === 'test';
   if (!test) {
-    if (!settings['automations.enabled']) return cancelRun(run, 'Workflows sind unter Einstellungen → Redaktion abgeschaltet.');
+    if (!settings['automations.enabled']) return cancelRun(run, 'Workflows sind unter Einstellungen → Workflows abgeschaltet.');
     if (run.automation_status !== 'active' || run.automation_deleted) return cancelRun(run, 'Der Workflow wurde deaktiviert.');
   }
   await pool.query(`UPDATE automation_runs SET status = 'running', started_at = COALESCE(started_at, now()), resume_at = NULL WHERE id = $1`, [runId]);

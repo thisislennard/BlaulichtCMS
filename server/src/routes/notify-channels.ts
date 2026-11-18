@@ -12,12 +12,14 @@ import { revokeSecret, storeSecret } from '../lib/secrets.js';
 import { getSettings, setSettings, type Settings } from '../lib/settings.js';
 import { checkPushEndpoint } from '../lib/webpush.js';
 import { securityAlert } from '../lib/security-alerts.js';
+import { replaceSmtpPassword, smtpCandidate, smtpConfigProblem, smtpFormChanged, smtpVerified, storedSmtpSettings, type SmtpForm } from '../warnings/mail.js';
+import { smtpTestMail } from './warnings.js';
 
 /**
  * Benachrichtigungen per Push und E-Mail (#191):
  *  - „Mein Konto → Benachrichtigungen“: Kanäle je Art, Push-Abos dieses und weiterer Geräte, Testnachricht.
- *  - „Einstellungen → Benachrichtigungen und E-Mail“ (Recht settings.mail): Versandweg SMTP oder Microsoft 365,
- *    Microsoft-365-Zugang mit Verbindungstest, Kanäle global, Push-Schlüssel erneuern.
+ *  - „Einstellungen → E-Mail & Push“ (Recht settings.mail, #256): Versandweg SMTP oder Microsoft 365 – beide mit
+ *    Zugang und Testmail an dieser einen Stelle –, Kanäle global, Push-Schlüssel erneuern.
  */
 export const M365_SECRET_OWNER = '00000000-0000-0000-0000-00000000a365';
 const VERIFY_MAX_AGE_MS = 60 * 60_000;
@@ -115,7 +117,18 @@ export async function notifyChannelRoutes(app: FastifyInstance) {
     transport: s['mail.transport'],
     route: mailRouteLabel(s),
     ready: mailReady(s),
-    smtp: { host: s['smtp.host'], from: s['smtp.from'], configured: !!(s['smtp.host'] && s['smtp.from']) },
+    smtp: {
+      host: s['smtp.host'],
+      port: s['smtp.port'],
+      security: s['smtp.security'],
+      user: s['smtp.user'],
+      from: s['smtp.from'],
+      password_set: !!s['smtp.password_secret_id'],
+      verified_at: s['smtp.verified']?.at ?? null,
+      configured: !!(s['smtp.host'] && s['smtp.from']),
+    },
+    // Warnversand im Testmodus: Änderungen am SMTP-Server brauchen dann keine Testmail (Echtbetrieb: siehe PUT)
+    warnings_test_mode: !!s['warnings.test_mode'],
     m365: {
       tenant_id: s['m365.tenant_id'],
       client_id: s['m365.client_id'],
@@ -152,10 +165,27 @@ export async function notifyChannelRoutes(app: FastifyInstance) {
     saveSent: z.boolean().default(true),
   };
 
+  const smtpBody = z.object({
+    host: z.string().trim().max(200),
+    port: z.number().int().min(1).max(65535),
+    security: z.enum(['starttls', 'tls', 'none']),
+    user: z.string().max(200).default(''),
+    from: z.string().max(200).default(''),
+    password: z.string().max(500).optional(),
+  });
+
   app.put('/notify/settings', { preHandler: requireAuth('settings.mail') }, async (req) => {
-    const b = z.object({ transport: z.enum(['smtp', 'm365']), pushEnabled: z.boolean(), mailEnabled: z.boolean(), pushDetails: z.boolean().optional(), mailDetails: z.boolean().optional(), ...m365Body }).parse(req.body);
+    const b = z.object({ transport: z.enum(['smtp', 'm365']), pushEnabled: z.boolean(), mailEnabled: z.boolean(), pushDetails: z.boolean().optional(), mailDetails: z.boolean().optional(), smtp: smtpBody.optional(), ...m365Body }).parse(req.body);
     const before = await getSettings(true);
     const stored = await storedM365Settings(before);
+    // SMTP-Server (#256: hier statt unter Stichwörter & Regeln): optional im selben Speichervorgang
+    const smtpStored = await storedSmtpSettings();
+    if (b.smtp) {
+      const problem = smtpConfigProblem({ security: b.smtp.security, user: b.smtp.user, password: b.smtp.password });
+      if (problem) throw badRequest(problem);
+    }
+    const smtpNext = b.smtp ? smtpCandidate(b.smtp as SmtpForm, smtpStored) : smtpStored;
+    const smtpChanged = !!b.smtp && smtpFormChanged(b.smtp as SmtpForm, smtpStored, smtpNext);
     const touched = !!(b.tenantId || b.clientId || b.sender || b.clientSecret);
     if (b.transport === 'm365' || touched) {
       const problem = m365ConfigProblem({ ...b, clientSecret: b.clientSecret || stored.clientSecret }, b.transport === 'm365');
@@ -172,16 +202,12 @@ export async function notifyChannelRoutes(app: FastifyInstance) {
         throw conflict('Microsoft 365 lässt sich erst verwenden, nachdem mit genau diesen Angaben eine Testmail erfolgreich versendet wurde (höchstens 60 Minuten alt). Bitte zuerst „Testmail senden“.');
       }
     }
-    if (b.transport === 'smtp' && before['mail.transport'] !== 'smtp' && !(before['smtp.host'] && before['smtp.from'])) {
-      throw badRequest('Es ist kein SMTP-Server eingerichtet (Einrichtung → Stichwörter & Regeln → E-Mail-Versand). Bitte zuerst SMTP einrichten oder bei Microsoft 365 bleiben.');
+    if (b.transport === 'smtp' && (before['mail.transport'] !== 'smtp' || smtpChanged) && !(smtpNext.host && smtpNext.from)) {
+      throw badRequest('Für den Versand über SMTP bitte Server und Absender eintragen – oder Microsoft 365 wählen.');
     }
-    // Warnversand im Echtbetrieb: zurück auf SMTP nur mit frischer SMTP-Testmail der gespeicherten Einstellungen
-    if (b.transport === 'smtp' && before['mail.transport'] !== 'smtp' && !before['warnings.test_mode']) {
-      const { smtpFingerprint, storedSmtpSettings } = await import('../warnings/mail.js');
-      const v = before['smtp.verified'];
-      if (!v || Date.now() - Date.parse(v.at) > VERIFY_MAX_AGE_MS || v.fp !== smtpFingerprint(await storedSmtpSettings())) {
-        throw conflict('Der Warnversand ist im Echtbetrieb: Zurück auf SMTP erst nach einer erfolgreichen SMTP-Testmail (Einrichtung → Stichwörter & Regeln → E-Mail-Versand, höchstens 60 Minuten alt).');
-      }
+    // Warnversand im Echtbetrieb: Wechsel auf SMTP bzw. geänderte SMTP-Angaben nur mit frischer Testmail genau dieser Werte
+    if (b.transport === 'smtp' && (before['mail.transport'] !== 'smtp' || smtpChanged) && !before['warnings.test_mode'] && !smtpVerified(before['smtp.verified'], smtpNext)) {
+      throw conflict('Der Warnversand ist im Echtbetrieb: SMTP lässt sich erst nach einer erfolgreichen Testmail mit genau diesen Angaben verwenden bzw. ändern (höchstens 60 Minuten alt). Bitte zuerst „Testmail senden“.');
     }
     const patch: Record<string, unknown> = {
       'mail.transport': b.transport,
@@ -195,10 +221,13 @@ export async function notifyChannelRoutes(app: FastifyInstance) {
       'notify.push_details': b.pushDetails ?? before['notify.push_details'],
       'notify.mail_details': b.mailDetails ?? before['notify.mail_details'],
     };
+    if (b.smtp) Object.assign(patch, { 'smtp.host': smtpNext.host, 'smtp.port': smtpNext.port, 'smtp.security': smtpNext.security, 'smtp.user': smtpNext.user, 'smtp.from': smtpNext.from });
     const changes = settingsDiff(before as any, patch);
     const secretChange = !!b.clientSecret && b.clientSecret !== stored.clientSecret;
-    if (!Object.keys(changes).length && !secretChange) return { ok: true };
-    if (secretChange || changes['mail.transport'] || changes['m365.tenant_id'] || changes['m365.client_id'] || changes['m365.sender']) assertRecentAuth(req);
+    const smtpPassword = !!b.smtp?.password;
+    if (!Object.keys(changes).length && !secretChange && !smtpPassword) return { ok: true };
+    // Wer den Weg der Mails ändert (Server, Zugang, Absender), bestätigt mit dem Passwort
+    if (secretChange || smtpPassword || changes['mail.transport'] || changes['m365.tenant_id'] || changes['m365.client_id'] || changes['m365.sender'] || changes['smtp.host'] || changes['smtp.user'] || changes['smtp.from']) assertRecentAuth(req);
     await tx(async (db) => {
       if (secretChange) {
         // Neues Geheimnis: neue Version anlegen und die bisherige im selben Schritt widerrufen (#172)
@@ -207,15 +236,16 @@ export async function notifyChannelRoutes(app: FastifyInstance) {
         patch['m365.secret_id'] = sec.id;
         if (typeof prev?.value === 'string' && prev.value && prev.value !== sec.id) await revokeSecret(prev.value, db);
       }
+      if (smtpPassword) patch['smtp.password_secret_id'] = await replaceSmtpPassword(b.smtp!.password!, req.auth!.user?.id ?? null, db);
       await setSettings(patch as any, req.auth!.user?.id ?? null, db);
     });
     resetM365TokenCache();
-    await audit(req.auth!.actor, 'notify.settings_changed', { type: 'settings', label: 'Benachrichtigungen und E-Mail' }, { aenderungen: Object.keys(changes).length ? changes : undefined, geheimnis_geaendert: secretChange || undefined });
-    if (changes['mail.transport'] || secretChange) {
+    await audit(req.auth!.actor, 'notify.settings_changed', { type: 'settings', label: 'E-Mail & Push' }, { aenderungen: Object.keys(changes).length ? changes : undefined, geheimnis_geaendert: secretChange || undefined, smtp_passwort_geaendert: smtpPassword || undefined });
+    if (changes['mail.transport'] || secretChange || smtpPassword || changes['smtp.host']) {
       await securityAlert('security_settings', {
         title: `E-Mail-Versand geändert von ${req.auth!.actor.name}`,
-        body: `Versandweg: ${b.transport === 'm365' ? `Microsoft 365 (${next.sender})` : 'SMTP'}${secretChange ? '; Client-Geheimnis ersetzt' : ''}.`,
-        link: '/einstellungen#benachrichtigungen',
+        body: `Versandweg: ${b.transport === 'm365' ? `Microsoft 365 (${next.sender})` : `SMTP (${smtpNext.host})`}${secretChange ? '; Client-Geheimnis ersetzt' : ''}${smtpPassword ? '; SMTP-Passwort ersetzt' : ''}.`,
+        link: '/einstellungen/e-mail',
         kind: 'info',
       });
     }
@@ -239,6 +269,12 @@ export async function notifyChannelRoutes(app: FastifyInstance) {
       await audit(req.auth!.actor, 'notify.test_mail', { type: 'settings', label: 'Microsoft 365' }, { an: b.to, absender: cand.sender, fehler: (e as Error).message.slice(0, 200) }, 'failed').catch(() => {});
       throw new AppError(502, 'mail_failed', `Testmail fehlgeschlagen: ${(e as Error).message}`);
     }
+  });
+
+  /** SMTP-Testmail mit den Formularwerten (auch ungespeichert); hinterlegt den Prüfwert für den Echtbetrieb (#256). */
+  app.post('/notify/settings/smtp-test', { preHandler: requireAuth('settings.mail'), config: { rateLimit: { max: 5, timeWindow: '1 minute' } } }, async (req) => {
+    const b = z.object({ to: z.email(), host: z.string().trim().max(200), port: z.number().int().min(1).max(65535), security: z.enum(['starttls', 'tls', 'none']), user: z.string().max(200).default(''), from: z.string().max(200).default(''), password: z.string().max(500).optional() }).parse(req.body);
+    return smtpTestMail(req, b);
   });
 
   /** Neues Push-Schlüsselpaar (z. B. nach Verdacht auf Offenlegung): alle Geräte müssen Push neu einschalten. */

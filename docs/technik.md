@@ -380,7 +380,7 @@ Ergebnisse je Verbindung: [docs/integrationen.md](integrationen.md).
   Geräten (Android, iPhone, Windows, macOS) noch ansehen.
 - Gesichtsvorschläge (#214): Erkennungsrate und Rechenzeit auf echten Einsatzfotos und auf der Zielhardware (2 Kerne)
   messen; geprüft ist das Modell bisher auf gemeinfreien Testfotos und einem Entwicklungsrechner.
-- Datenschutz: Angaben unter *Einstellungen → Datenschutz* ausfüllen, Verarbeitungsverzeichnis und DSFA mit den
+- Datenschutz: Angaben unter *Einstellungen → Datenschutz & Recht* ausfüllen, Verarbeitungsverzeichnis und DSFA mit den
   Vorlagen in [docs/datenschutz.md](datenschutz.md) erstellen.
 
 ---
@@ -398,7 +398,7 @@ npm run dev:server & npm run dev:worker & npm run dev:web                     # 
 **Release erstellen:** `VERSION` sowie `server/package.json` und `web/package.json` erhöhen (bei Änderungen am Image
 auch `MIN_IMAGE_VERSION`), Versionshinweise in `release-notes/v<version>.md` schreiben, committen, CI abwarten und den
 Tag `v<version>` pushen. Der Workflow *Release* baut das Paket, signiert es in einem getrennten Job (Secret
-`BLAULICHTCMS_UPDATE_SIGNING_KEY`) und legt das GitHub-Release an; Installationen sehen es unter *Einstellungen → Updates*.
+`BLAULICHTCMS_UPDATE_SIGNING_KEY`) und legt das GitHub-Release an; Installationen sehen es unter *Einstellungen → Updates & Wartung*.
 
 Die Abnahmetests (`test/e2e/`) brauchen Docker, Playwright und ein Test-WordPress. Lokale Umgebung, auch ohne Docker
 unter Windows: [docs/entwicklung.md](entwicklung.md). Beiträge sind willkommen: [CONTRIBUTING.md](../CONTRIBUTING.md).

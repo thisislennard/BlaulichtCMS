@@ -1,12 +1,14 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ApiError, get, post, put } from '../../api/client';
-import { Badge, Button, FieldWrap, Input, Notice, Select, Switch, Table, Td, Th } from '../../components/ui/core';
-import { Icon } from '../../components/ui/Icon';
-import { Dialog, SecretField, useConfirm, useToast } from '../../components/ui/overlays';
-import { HelpTip } from '../../components/ui/HelpTip';
-import { fmtBytes, fmtDate, fmtDateTime, fmtDuration, fmtNumber, fmtRelative, plural } from '../../lib/format';
-import { FieldGrid, LoadError, SectionCard } from './shared';
+import { ApiError, get, post, put } from '../../../api/client';
+import { Badge, Button, FieldWrap, Input, Notice, Select, Switch, Table, Td, Th } from '../../../components/ui/core';
+import { useSaveSource, type SaveProblem } from '../../../components/ui/form';
+import { Icon } from '../../../components/ui/Icon';
+import { Dialog, SecretField, useConfirm, useToast } from '../../../components/ui/overlays';
+import { HelpTip } from '../../../components/ui/HelpTip';
+import { fmtBytes, fmtDate, fmtDateTime, fmtDuration, fmtNumber, fmtRelative, plural } from '../../../lib/format';
+import { LoadError, SectionCard } from '../shared';
+import { FieldGrid } from './model';
 
 interface OffsiteConfig {
   enabled: boolean;
@@ -107,7 +109,7 @@ function Steps({ steps }: { steps: { step: string; ok: boolean; detail?: string 
 }
 
 /**
- * Einstellungen → Sicherung außer Haus (#212): Ziel per WebDAV (z. B. NAS), Verbindungstest vor dem Einschalten,
+ * Einstellungen → Sicherung → Sicherung außer Haus (#212): Ziel per WebDAV (z. B. NAS), Verbindungstest vor dem Einschalten,
  * Aufbewahrung auf dem Ziel, Sicherungen auf dem Ziel (zurückholen) und Probe-Wiederherstellung.
  */
 export function OffsiteBackupSection() {
@@ -126,12 +128,32 @@ export function OffsiteBackupSection() {
   useEffect(() => {
     if (c && !form) setForm(fromConfig(c));
   }, [c, form]);
+  // Speichern über die Leiste der Seite (#256): Ziel, Aufbewahrung und Probe zusammen mit der lokalen Sicherung
+  const saveRef = useRef<() => Promise<boolean | void>>(async () => {});
+  const keepProblems: SaveProblem[] = form
+    ? ([
+        ['os-kd', 'Tage', form.keepDaily, KEEP.daily],
+        ['os-kw', 'Wochen', form.keepWeekly, KEEP.weekly],
+        ['os-km', 'Monate', form.keepMonthly, KEEP.monthly],
+      ] as const)
+        .filter(([, , val, [lo, hi]]) => intIn(val, lo, hi) === null)
+        .map(([id, label, , [lo, hi]]) => ({ id, message: `Aufbewahrung auf dem Ziel (${label}): ${lo} bis ${hi}.` }))
+    : [];
+  useSaveSource({
+    dirty: !!(c && form) && (JSON.stringify({ ...form, password: '' }) !== JSON.stringify(fromConfig(c)) || !!form.password),
+    problems: keepProblems,
+    save: () => saveRef.current(),
+    discard: () => {
+      if (c) setForm(fromConfig(c));
+      setEditingPassword(false);
+      setError(null);
+    },
+  });
 
-  if (q.isError) return <SectionCard id="sicherung-ausser-haus" title="Sicherung außer Haus"><LoadError error={q.error} onRetry={() => q.refetch()} /></SectionCard>;
-  if (!c || !form) return <SectionCard id="sicherung-ausser-haus" title="Sicherung außer Haus"><p className="m-0 text-sm text-fg-muted">Wird geladen …</p></SectionCard>;
+  if (q.isError) return <SectionCard id="ausser-haus" title="Sicherung außer Haus"><LoadError error={q.error} onRetry={() => q.refetch()} /></SectionCard>;
+  if (!c || !form) return <SectionCard id="ausser-haus" title="Sicherung außer Haus"><p className="m-0 text-sm text-fg-muted">Wird geladen …</p></SectionCard>;
 
   const set = (p: Partial<Form>) => setForm({ ...form, ...p });
-  const dirty = JSON.stringify({ ...form, password: '' }) !== JSON.stringify(fromConfig(c)) || !!form.password;
   const target = { url: form.url.trim(), username: form.username.trim(), fingerprint: form.fingerprint.trim(), ...(form.password ? { password: form.password } : {}) };
   const keepVals = { daily: intIn(form.keepDaily, ...KEEP.daily), weekly: intIn(form.keepWeekly, ...KEEP.weekly), monthly: intIn(form.keepMonthly, ...KEEP.monthly) };
   const keepInvalid = keepVals.daily === null || keepVals.weekly === null || keepVals.monthly === null;
@@ -162,7 +184,7 @@ export function OffsiteBackupSection() {
         confirmLabel: 'Bestätigen und speichern',
         danger: false,
       });
-      if (!ok) return;
+      if (!ok) return false;
     }
     // Ausschalten oder anderes Ziel: Was passiert mit den Sicherungen auf dem bisherigen Ziel?
     const disabling = c.enabled && !form.enabled;
@@ -170,28 +192,30 @@ export function OffsiteBackupSection() {
     if (c.url && c.last_ok_at && (disabling || !sameUrl(form.url, c.url))) {
       const choice = await new Promise<'keep' | 'delete' | null>((resolve) => setLeaveAsk({ host: hostOf(c.url), disabling, resolve }));
       setLeaveAsk(null);
-      if (!choice) return;
+      if (!choice) return false;
       oldTarget = choice;
     }
     setBusy('save');
     try {
       const r = await put<{ config: OffsiteConfig }>('/backups/offsite', { ...target, enabled: form.enabled, keepDaily: keepVals.daily, keepWeekly: keepVals.weekly, keepMonthly: keepVals.monthly, drillInterval: form.drillInterval, ...(keepChanged && tooLong ? { acknowledgeRetention: true } : {}), ...(oldTarget ? { oldTarget } : {}) });
-      toast({ tone: 'success', title: 'Gespeichert', text: r.config.enabled ? 'Neue Sicherungen gehen ab jetzt zusätzlich außer Haus.' : oldTarget === 'delete' ? 'Die Sicherungen auf dem bisherigen Ziel wurden gelöscht.' : undefined });
+      toast({ tone: 'success', title: 'Sicherung außer Haus gespeichert', text: r.config.enabled ? 'Neue Sicherungen gehen ab jetzt zusätzlich außer Haus.' : oldTarget === 'delete' ? 'Die Sicherungen auf dem bisherigen Ziel wurden gelöscht.' : undefined });
       setForm(fromConfig(r.config));
       setEditingPassword(false);
       qc.setQueryData(['backup-offsite'], (old: any) => (old ? { ...old, config: r.config } : old));
       qc.invalidateQueries({ queryKey: ['system-status'] });
     } catch (e) {
+      // Fehler erscheinen in der Speichern-Leiste; das Testergebnis (Schritte) zusätzlich hier im Abschnitt
       if (e instanceof ApiError && e.code === 'offsite_test_failed' && e.details?.test) setTest(e.details.test);
-      setError((e as Error).message);
+      throw e;
     } finally {
       setBusy(null);
     }
   };
+  saveRef.current = save;
 
   return (
     <SectionCard
-      id="sicherung-ausser-haus"
+      id="ausser-haus"
       title="Sicherung außer Haus"
       description="Jede Datenbanksicherung zusätzlich verschlüsselt auf ein Ziel außerhalb dieses Servers ablegen, z. B. ein NAS per WebDAV – mit Aufbewahrung auf dem Ziel und Probe-Wiederherstellung."
       action={c.enabled ? <Badge tone={failedLater ? 'error' : 'success'}>{failedLater ? 'Fehler' : 'eingeschaltet'}</Badge> : <Badge>aus</Badge>}
@@ -319,13 +343,15 @@ export function OffsiteBackupSection() {
           )}
         </div>
       )}
-      <div className="flex flex-wrap gap-2">
-        <Button icon="Plug" loading={busy === 'test'} disabled={!form.url.trim() || !!busy} onClick={runTest}>
+      <div className="flex flex-wrap items-center gap-2">
+        <Button icon="Plug" loading={busy === 'test'} disabled={!form.url.trim() || !!busy} aria-describedby={!form.url.trim() ? 'os-test-why' : undefined} onClick={runTest}>
           Verbindung testen
         </Button>
-        <Button variant="primary" icon="Save" loading={busy === 'save'} disabled={!dirty || !!busy || keepInvalid} onClick={save}>
-          Speichern
-        </Button>
+        {!form.url.trim() && (
+          <span id="os-test-why" className="text-meta text-fg-muted">
+            Erst die WebDAV-Adresse eintragen.
+          </span>
+        )}
       </div>
 
       {c.url && <RemoteFiles />}

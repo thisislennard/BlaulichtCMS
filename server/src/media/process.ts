@@ -151,7 +151,7 @@ async function processImage(id: string, file: string, mime: string) {
   }
   if (!meta.width || !meta.height) throw new Rejected('Bildgröße konnte nicht gelesen werden.');
   // Animierte Bilder (GIF, WebP, PNG, AVIF mit mehreren Bildern) nur mit Einstellung; verarbeitet wird das erste Bild
-  if ((meta.pages ?? 1) > 1 && !s['media.allow_animated']) throw new Rejected('Animierte Bilder sind nicht erlaubt (Einstellungen → Medien).', 'type');
+  if ((meta.pages ?? 1) > 1 && !s['media.allow_animated']) throw new Rejected('Animierte Bilder sind nicht erlaubt (Einstellungen → Medien & Upload).', 'type');
   try {
     // Einmal dekodieren, zwei Ausgaben: Vorschau (WebP) und öffentliche Fassung (JPEG ohne EXIF/XMP/IPTC)
     const base = sharp(file, { limitInputPixels: limit, failOn: 'error', sequentialRead: true }).rotate();

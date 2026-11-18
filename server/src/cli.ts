@@ -200,7 +200,7 @@ async function main() {
       const { uploadVolumeStream } = await import('./ops/offsite.js');
       const r = await uploadVolumeStream(name, Number(size), sha, process.stdin);
       if (!r) {
-        console.log('Keine Sicherung außer Haus eingeschaltet (Einstellungen → Sicherung außer Haus).');
+        console.log('Keine Sicherung außer Haus eingeschaltet (Einstellungen → Sicherung).');
         process.exitCode = 3;
         break;
       }
@@ -221,7 +221,7 @@ async function main() {
       ]);
       if (status === 'fehler') {
         const { notify } = await import('./lib/notify.js');
-        await notify({ kind: 'error', title: 'Volume-Sicherung fehlgeschlagen', body: text, link: '/einstellungen#sicherung', permission: 'backup.manage' });
+        await notify({ kind: 'error', title: 'Volume-Sicherung fehlgeschlagen', body: text, link: '/einstellungen/sicherung', permission: 'backup.manage' });
       }
       console.log('Gemeldet.');
       break;

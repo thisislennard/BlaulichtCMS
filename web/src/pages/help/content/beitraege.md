@@ -39,7 +39,7 @@ Jedes Bild braucht einen **Alternativtext**: eine kurze Beschreibung für Mensch
 
 - Im Beitrag unter **Medien** steht unter jedem Bild das Feld **Alternativtext**. Der Text ist **Teil der Fassung** – eine Änderung braucht eine neue Freigabe.
 - In der **Medienverwaltung** (Details einer Datei) lässt sich ein Alternativtext hinterlegen; der Beitrag schlägt ihn vor. Steht dort noch keiner, übernimmt die Medienverwaltung beim Speichern den Text aus dem Beitrag – so lässt er sich wiederverwenden.
-- Fehlt ein Alternativtext, warnt die **Freigabe**. Unter **Einstellungen → Redaktion → Alternativtext ist Pflicht** lässt sich die Freigabe dann ganz sperren. Die Formatprüfung der sozialen Netzwerke nennt fehlende Texte ebenfalls.
+- Fehlt ein Alternativtext, warnt die **Freigabe**. Unter **Einstellungen → Redaktion & Freigabe → Alternativtext ist Pflicht** lässt sich die Freigabe dann ganz sperren. Die Formatprüfung der sozialen Netzwerke nennt fehlende Texte ebenfalls.
 
 **So gelingt ein guter Alternativtext**
 

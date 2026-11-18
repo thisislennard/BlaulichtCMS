@@ -31,7 +31,7 @@ import {
 import { plural } from '../lib/text.js';
 
 /**
- * Sicherung außer Haus und Probe-Wiederherstellung (#212) – Einstellungen → Sicherung außer Haus.
+ * Sicherung außer Haus und Probe-Wiederherstellung (#212) – Einstellungen → Sicherung.
  * Alles unter dem Recht „Sicherungen erstellen“ (backup.manage); das Ziel ändern verlangt zusätzlich eine frische
  * Passwortbestätigung, weil dorthin der gesamte (verschlüsselte) Datenbestand geht.
  */
