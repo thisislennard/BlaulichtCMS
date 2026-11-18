@@ -106,7 +106,8 @@ try {
   await go('/');
   await page.keyboard.press('Control+k');
   await sleep(400);
-  const palette = await page.locator('[role=dialog]').first().innerText().catch(() => '');
+  // Nur die Trefferliste – die Fußzeile beschreibt den Umfang der Suche („… Einstellungen und Hilfe“)
+  const palette = await page.locator('#cmd-list').innerText().catch(() => '');
   check(!/Neuer Beitrag|Fotos sammeln|Website koppeln|Einstellungen|Benutzer/.test(palette), 'Befehlspalette ohne verbotene Aktionen und Seiten');
   await page.keyboard.press('Escape');
 
