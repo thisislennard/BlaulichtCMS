@@ -854,9 +854,11 @@ Meldet der Start danach „Datenstand neuer als dieses Programm“, die Sicherun
 
 ### Release erstellen (Entwicklung)
 
-1. `VERSION`, `server/package.json` und `web/package.json` erhöhen. Ändert sich etwas, das nur mit dem Image ankommt
-   (`Dockerfile`, `compose.yaml`, `install.sh`, `scripts/update.sh`, `server/src/main.ts`,
-   `server/src/updates/releases.ts`, Laufzeit-Abhängigkeiten), `MIN_IMAGE_VERSION` auf die neue Version setzen –
+1. `VERSION`, `server/package.json` und `web/package.json` erhöhen. Ändert sich etwas, das nur mit dem Image bzw. über
+   `install.sh` ankommt (`Dockerfile`, `.dockerignore`, `compose.yaml`, `install.sh`, die Host-Skripte unter `scripts/`
+   – `update.sh`, `image-selftest.sh`, Sicherung, Wiederherstellung, Prüfung, Update-Helfer, `volume-crypt.mjs` –,
+   `server/src/main.ts`, `server/src/updates/releases.ts`, Laufzeit-Abhängigkeiten), `MIN_IMAGE_VERSION` auf die neue
+   Version setzen –
    `scripts/build-release.mjs` prüft das für die genannten Dateien und die Laufzeit-Abhängigkeiten des Servers
    (`package-lock.json`) seit dem letzten Tag. In den Versionshinweisen dann die Schritte für bestehende Installationen
    nennen (siehe [Neues Image für eine bestehende Installation](#neues-image-für-eine-bestehende-installation)).

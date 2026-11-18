@@ -54,8 +54,12 @@ for (const f of ['server/package.json', 'web/package.json']) {
   if (JSON.parse(read(f)).version !== version) die(`${f}: version passt nicht zu VERSION ${version}.`);
 }
 
-/* Image-relevante Änderungen seit dem letzten Tag verlangen eine neue Mindestversion des Images */
-const IMAGE_FILES = ['Dockerfile', 'compose.yaml', 'install.sh', 'scripts/update.sh', 'server/src/main.ts', 'server/src/updates/releases.ts'];
+/* Image-relevante Änderungen seit dem letzten Tag verlangen eine neue Mindestversion des Images. Dazu gehören auch die
+ * Skripte, die am Host aus dem Installationsordner laufen (#275): Sie kommen nur mit install.sh an – ein In-App-Update
+ * ändert den Stand am Host nicht, eine Korrektur z. B. an restore-volume.sh bliebe dort sonst aus. */
+const IMAGE_FILES = ['Dockerfile', '.dockerignore', 'compose.yaml', 'install.sh', 'scripts/update.sh', 'scripts/image-selftest.sh',
+  'scripts/backup-volume.sh', 'scripts/restore-volume.sh', 'scripts/verify-backup.sh', 'scripts/backup-cron.sh', 'scripts/volume-crypt.mjs',
+  'scripts/host-update-helper.sh', 'scripts/host-update-verify.mjs', 'server/src/main.ts', 'server/src/updates/releases.ts'];
 const prevTag = git('describe', '--tags', '--abbrev=0', '--match', 'v*', 'HEAD^');
 if (prevTag) {
   const changed = (git('diff', '--name-only', prevTag, 'HEAD', '--', ...IMAGE_FILES) ?? '').split('\n').filter(Boolean);
@@ -65,7 +69,7 @@ if (prevTag) {
   const deps = prevLock ? compareRuntimeDependencies(JSON.parse(prevLock), JSON.parse(read('package-lock.json'))).diff : [];
   if (deps.length) changed.push(`Laufzeit-Abhängigkeiten des Servers (${deps.slice(0, 8).join(', ')}${deps.length > 8 ? ', …' : ''})`);
   if (changed.length && minImageVersion !== version) {
-    die(`Seit ${prevTag} geändert: ${changed.join(', ')}. Das kommt nur mit einem neuen Image an – MIN_IMAGE_VERSION auf ${version} setzen.`);
+    die(`Seit ${prevTag} geändert: ${changed.join(', ')}. Das kommt nur mit einem neuen Image bzw. über install.sh am Host an – MIN_IMAGE_VERSION auf ${version} setzen.`);
   }
 }
 
