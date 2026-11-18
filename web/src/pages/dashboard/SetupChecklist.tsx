@@ -88,7 +88,7 @@ export function useChecklistChange() {
 export function SetupTile() {
   const q = useSetupChecklist();
   return (
-    <Card title="BlaulichtCMS startklar" subtitle={q.data ? `${q.data.done} von ${q.data.total} erledigt` : undefined} action={<Link to="/hilfe/dashboard#blaulichtcms-startklar" className="text-sm !text-fg-muted hover:!text-fg">Hilfe →</Link>}>
+    <Card title="BlaulichtCMS startklar" subtitle={q.data ? `${q.data.done} von ${q.data.total} erledigt` : undefined} action={<Link to="/hilfe/dashboard#blaulichtcms-startklar" className="bc-tap-y inline-flex justify-end max-md:min-w-tap text-sm !text-fg-muted hover:!text-fg">Hilfe →</Link>}>
       {q.isError ? <p className="m-0 text-sm text-err">Die Checkliste konnte nicht geladen werden.</p> : <SetupChecklist data={q.data} />}
     </Card>
   );
@@ -122,12 +122,12 @@ export function SetupChecklist({ data }: { data: Checklist | undefined }) {
               </div>
               <span className="text-meta text-fg-muted">{i.detail}</span>
               {!i.done && (
-                <Link to={i.href} className="text-sm self-start">
+                <Link to={i.href} className="bc-tap-y text-sm self-start">
                   {whereOf(i.href)} →
                 </Link>
               )}
             </div>
-            {!i.done && <Button iconOnly size="sm" icon="X" className="!w-10 !h-10 shrink-0" aria-label={`„${i.title}“ ausblenden`} title="Punkt ausblenden" disabled={busy} onClick={() => change({ hide: [i.id] })} />}
+            {!i.done && <Button iconOnly size="sm" icon="X" className="!w-tap !h-tap shrink-0" aria-label={`„${i.title}“ ausblenden`} title="Punkt ausblenden" disabled={busy} onClick={() => change({ hide: [i.id] })} />}
           </li>
         ))}
       </ul>

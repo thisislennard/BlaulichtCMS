@@ -59,7 +59,7 @@ function ApprovalsPanel({ d }: { d: any }) {
         {pending.slice(0, 20).map((i) => (
           <li key={`${i.kind}:${i.id}`} className="py-2.5 flex items-center gap-3">
             <div className="min-w-0 flex-1">
-              <Link to={i.link} className={cx('font-medium truncate block', i.blocked && '!text-fg-muted')}>
+              <Link to={i.link} className={cx('bc-tap-y font-medium truncate block', i.blocked && '!text-fg-muted')}>
                 {i.title}
               </Link>
               <div className="text-meta text-fg-muted">
@@ -560,7 +560,7 @@ function FlowBoard({ d }: { d: any }) {
               />
             ))}
             <More to="/freigaben" n={av.pending.length - MAX} />
-            {!av.pending.length && <p className="m-0 px-0.5 text-meta text-fg-muted">Nichts offen.</p>}
+            {!av.pending.length && <p className="m-0 px-0.5 text-meta text-fg-muted">Keine offenen Freigaben.</p>}
           </FlowColumn>
         ) : d.pendingApprovals && (
           <FlowColumn title="Freigabe" count={approvals.length} hot>
@@ -585,7 +585,7 @@ function FlowBoard({ d }: { d: any }) {
               <FlowCard key={`${r.kind}:${r.id}`} to={r.link} title={r.title} meta={`${KIND_LABEL[r.kind]} · freigegeben`} sub={r.approved_by_name ? `von ${r.approved_by_name}` : undefined} />
             ))}
             <More to="/freigaben" n={av.ready.length - MAX} />
-            {!av.ready.length && <p className="m-0 px-0.5 text-meta text-fg-muted">Nichts wartet.</p>}
+            {!av.ready.length && <p className="m-0 px-0.5 text-meta text-fg-muted">Nichts wartet auf die Veröffentlichung.</p>}
           </FlowColumn>
         ) : d.readyToPublish && (
           <FlowColumn title="Bereit" count={ready.length}>

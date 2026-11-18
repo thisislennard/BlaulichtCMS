@@ -97,7 +97,7 @@ function Handle({ sortable, label }: { sortable: ReturnType<typeof useSortable>;
       aria-label={label}
       title={label}
       data-dash-handle=""
-      className="inline-flex items-center justify-center shrink-0 w-10 h-10 rounded-control text-fg-muted bg-transparent border border-transparent hover:bg-raised hover:text-fg cursor-grab active:cursor-grabbing touch-none select-none"
+      className="inline-flex items-center justify-center shrink-0 w-tap h-tap rounded-control text-fg-muted bg-transparent border border-transparent hover:bg-raised hover:text-fg cursor-grab active:cursor-grabbing touch-none select-none"
     >
       <Icon name="GripVertical" size={18} />
     </button>
@@ -116,7 +116,7 @@ function SortableBadge({ id, d, onHide }: { id: string; d: any; onHide: () => vo
       </div>
       <BadgeTile id={id} d={d} className="flex-1 !border-transparent !px-2 !py-1.5" />
       <div className="flex items-center">
-        <Button variant="ghost" iconOnly icon="EyeOff" className="!w-10 !h-10" aria-label={`Kennzahl „${title}“ ausblenden`} title="Ausblenden" onClick={onHide} />
+        <Button variant="ghost" iconOnly icon="EyeOff" className="!w-tap !h-tap" aria-label={`Kennzahl „${title}“ ausblenden`} title="Ausblenden" onClick={onHide} />
       </div>
     </div>
   );
@@ -130,7 +130,7 @@ function SortablePanel({ id, column, d, onHide }: { id: string; column: string; 
       <div className="flex items-center gap-1 px-1 py-1">
         <Handle sortable={s} label={`Kachel „${title}“ verschieben`} />
         <span className="flex-1 min-w-0 truncate font-mono text-[12px] font-medium uppercase tracking-[0.08em] text-fg-muted">{title}</span>
-        <Button variant="ghost" iconOnly icon="EyeOff" className="!w-10 !h-10" aria-label={`Kachel „${title}“ ausblenden`} title="Ausblenden" onClick={onHide} />
+        <Button variant="ghost" iconOnly icon="EyeOff" className="!w-tap !h-tap" aria-label={`Kachel „${title}“ ausblenden`} title="Ausblenden" onClick={onHide} />
       </div>
       <div className="p-2 pt-0">
         <PanelTile id={id} d={d} />
@@ -150,14 +150,14 @@ function SortableColumn({ col, index, count, d, available, onWeight, onDelete, o
       <div className="flex items-center gap-1.5 flex-wrap">
         <Handle sortable={s} label={`Spalte ${n} verschieben`} />
         <span className="font-mono text-[12px] font-medium uppercase tracking-[0.08em] text-fg-muted mr-auto">Spalte {n}</span>
-        <Select value={col.weight} onChange={(e) => onWeight(Number(e.target.value) as ColumnWeight)} aria-label={`Breite von Spalte ${n}`} className="!w-[112px] !h-10 !bg-card">
+        <Select value={col.weight} onChange={(e) => onWeight(Number(e.target.value) as ColumnWeight)} aria-label={`Breite von Spalte ${n}`} className="!w-[112px] !h-tap !bg-card">
           {WEIGHTS.map((w) => (
             <option key={w.value} value={w.value}>
               {w.label}
             </option>
           ))}
         </Select>
-        <Button iconOnly icon="Trash2" className="!w-10 !h-10" aria-label={`Spalte ${n} löschen`} title={deletable ? 'Leere Spalte löschen' : count <= 1 ? 'Die letzte Spalte bleibt' : 'Nur leere Spalten lassen sich löschen'} disabled={!deletable} onClick={onDelete} />
+        <Button iconOnly icon="Trash2" className="!w-tap !h-tap" aria-label={`Spalte ${n} löschen`} title={deletable ? 'Leere Spalte löschen' : count <= 1 ? 'Die letzte Spalte bleibt' : 'Nur leere Spalten lassen sich löschen'} disabled={!deletable} onClick={onDelete} />
       </div>
       <SortableContext items={widgets} strategy={verticalListSortingStrategy}>
         <div ref={slot.setNodeRef} data-dash-slot={col.key} className={cx('flex flex-col gap-3 flex-1 min-h-[112px] rounded-node', slot.isOver && widgets.length === 0 && 'shadow-ring')}>
@@ -279,12 +279,12 @@ export default function DashboardEditor({ draft, onChange, available, d, templat
             ) : (
               <div className="flex flex-wrap gap-2 items-center">
                 {hiddenBadges.map((id) => (
-                  <Button key={id} size="sm" icon="Plus" className="!h-10" aria-label={`Kennzahl „${BADGE_TITLES[id]}“ hinzufügen`} onClick={() => onChange((l) => addWidget(l, id))}>
+                  <Button key={id} size="sm" icon="Plus" className="!h-tap" aria-label={`Kennzahl „${BADGE_TITLES[id]}“ hinzufügen`} onClick={() => onChange((l) => addWidget(l, id))}>
                     Kennzahl: {BADGE_TITLES[id]}
                   </Button>
                 ))}
                 {hiddenPanels.map((id) => (
-                  <Button key={id} size="sm" icon="Plus" className="!h-10" aria-label={`Kachel „${PANEL_TITLES[id]}“ hinzufügen`} onClick={() => onChange((l) => addWidget(l, id))}>
+                  <Button key={id} size="sm" icon="Plus" className="!h-tap" aria-label={`Kachel „${PANEL_TITLES[id]}“ hinzufügen`} onClick={() => onChange((l) => addWidget(l, id))}>
                     {PANEL_TITLES[id]}
                   </Button>
                 ))}
@@ -299,9 +299,9 @@ export default function DashboardEditor({ draft, onChange, available, d, templat
                   <li key={id} className="flex items-center gap-1.5">
                     <span className="font-mono text-meta text-fg-muted w-5 text-right tabular">{i + 1}</span>
                     <span className="flex-1 min-w-0 truncate">{PANEL_TITLES[id]}</span>
-                    <Button iconOnly icon="ArrowUp" className="!w-10 !h-10" aria-label={`${PANEL_TITLES[id]} auf dem Handy nach oben`} disabled={i === 0} onClick={() => swapMobile(i, i - 1)} />
-                    <Button iconOnly icon="ArrowDown" className="!w-10 !h-10" aria-label={`${PANEL_TITLES[id]} auf dem Handy nach unten`} disabled={i === mobile.length - 1} onClick={() => swapMobile(i, i + 1)} />
-                    <Button iconOnly icon="X" className="!w-10 !h-10" aria-label={`${PANEL_TITLES[id]} auf dem Handy nicht zeigen`} onClick={() => onChange((l) => ({ ...l, mobile: l.mobile.filter((w) => w !== id) }))} />
+                    <Button iconOnly icon="ArrowUp" className="!w-tap !h-tap" aria-label={`${PANEL_TITLES[id]} auf dem Handy nach oben`} disabled={i === 0} onClick={() => swapMobile(i, i - 1)} />
+                    <Button iconOnly icon="ArrowDown" className="!w-tap !h-tap" aria-label={`${PANEL_TITLES[id]} auf dem Handy nach unten`} disabled={i === mobile.length - 1} onClick={() => swapMobile(i, i + 1)} />
+                    <Button iconOnly icon="X" className="!w-tap !h-tap" aria-label={`${PANEL_TITLES[id]} auf dem Handy nicht zeigen`} onClick={() => onChange((l) => ({ ...l, mobile: l.mobile.filter((w) => w !== id) }))} />
                   </li>
                 ))}
               </ol>
@@ -309,7 +309,7 @@ export default function DashboardEditor({ draft, onChange, available, d, templat
             {mobileRest.length > 0 && (
               <div className="flex flex-wrap gap-2 items-center">
                 {mobileRest.map((id) => (
-                  <Button key={id} size="sm" icon="Smartphone" className="!h-10" aria-label={`${PANEL_TITLES[id]} auf dem Handy zeigen`} onClick={() => onChange((l) => ({ ...l, mobile: [...l.mobile, id] }))}>
+                  <Button key={id} size="sm" icon="Smartphone" className="!h-tap" aria-label={`${PANEL_TITLES[id]} auf dem Handy zeigen`} onClick={() => onChange((l) => ({ ...l, mobile: [...l.mobile, id] }))}>
                     {PANEL_TITLES[id]}
                   </Button>
                 ))}
@@ -322,7 +322,7 @@ export default function DashboardEditor({ draft, onChange, available, d, templat
                 <label htmlFor="dash-template-target" className="text-fg-muted">
                   Als Dashboard-Vorlage speichern für
                 </label>
-                <Select id="dash-template-target" value={target} onChange={(e) => setTarget(e.target.value)} className="!w-[220px] !h-10">
+                <Select id="dash-template-target" value={target} onChange={(e) => setTarget(e.target.value)} className="!w-[220px] !h-tap">
                   <option value="">– wählen –</option>
                   <option value="*">alle{templates.existing.includes('*') ? ' (Dashboard-Vorlage vorhanden)' : ''}</option>
                   {templates.roles.map((r) => (
@@ -332,11 +332,11 @@ export default function DashboardEditor({ draft, onChange, available, d, templat
                     </option>
                   ))}
                 </Select>
-                <Button className="!h-10" icon="LayoutTemplate" disabled={!target || templates.busy} onClick={() => templates.onSave(target)}>
+                <Button className="!h-tap" icon="LayoutTemplate" disabled={!target || templates.busy} onClick={() => templates.onSave(target)}>
                   Als Dashboard-Vorlage speichern
                 </Button>
                 {target && templates.existing.includes(target) && (
-                  <Button className="!h-10" variant="ghost" icon="Trash2" disabled={templates.busy} onClick={() => templates.onRemove(target)}>
+                  <Button className="!h-tap" variant="ghost" icon="Trash2" disabled={templates.busy} onClick={() => templates.onRemove(target)}>
                     Dashboard-Vorlage entfernen
                   </Button>
                 )}
@@ -387,7 +387,7 @@ export default function DashboardEditor({ draft, onChange, available, d, templat
             </div>
           </SortableContext>
           <div className="flex items-center gap-3 flex-wrap">
-            <Button icon="Plus" className="!h-10" disabled={draft.columns.length >= MAX_COLUMNS} onClick={() => onChange(addColumn)}>
+            <Button icon="Plus" className="!h-tap" disabled={draft.columns.length >= MAX_COLUMNS} onClick={() => onChange(addColumn)}>
               Spalte hinzufügen
             </Button>
             <span className="text-meta text-fg-muted">
