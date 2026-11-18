@@ -88,7 +88,7 @@ function ApprovalsPanel({ d }: { d: any }) {
       {d.pendingApprovals.map((p: any) => (
         <li key={p.id} className="py-2.5 flex items-center gap-3">
           <div className="min-w-0 flex-1">
-            <Link to={`/beitraege/${p.id}`} className="font-medium truncate block">
+            <Link to={`/beitraege/${p.id}`} className="bc-tap-y font-medium truncate block">
               {p.title}
             </Link>
             <div className="text-meta text-fg-muted">
@@ -113,7 +113,7 @@ function ReadyPanel({ d }: { d: any }) {
       <List>
         {ready.slice(0, 20).map((r) => (
           <li key={`${r.kind}:${r.id}`} className="py-2.5 flex items-center gap-2">
-            <Link to={r.link} className="font-medium flex-1 truncate">
+            <Link to={r.link} className="bc-tap-y font-medium flex-1 truncate">
               {r.title}
             </Link>
             <span className="text-meta text-fg-muted whitespace-nowrap">{KIND_LABEL[r.kind]}</span>
@@ -128,7 +128,7 @@ function ReadyPanel({ d }: { d: any }) {
     <List>
       {d.readyToPublish.map((p: any) => (
         <li key={p.id} className="py-2.5 flex items-center gap-2">
-          <Link to={`/beitraege/${p.id}`} className="font-medium flex-1 truncate">
+          <Link to={`/beitraege/${p.id}`} className="bc-tap-y font-medium flex-1 truncate">
             {p.title}
           </Link>
           <span className="text-meta text-fg-muted">{p.site_id ? 'mit Website' : 'intern'}</span>
@@ -151,14 +151,14 @@ export function WidgetBody({ id, d }: { id: string; d: any }) {
       return <ReadyPanel d={d} />;
     case 'publications':
       return !d.publications?.length ? (
-        <EmptyLine>Noch keine Veröffentlichung.</EmptyLine>
+        <EmptyLine action={can('channel.sites') && !d.sites?.length ? <EmptyAction to="/websites">Website koppeln</EmptyAction> : undefined}>Noch keine Veröffentlichung.</EmptyLine>
       ) : (
         <List>
           {d.publications.map((p: any) => (
             <li key={p.id} className="py-2.5 flex flex-col gap-1">
               <div className="flex items-center gap-2 flex-wrap">
                 <StatusBadge status={p.status} labels={p.action === 'unpublish' ? { published: 'Zurückgezogen' } : undefined} />
-                <Link to={`/beitraege/${p.post_id}`} className="font-medium">
+                <Link to={`/beitraege/${p.post_id}`} className="bc-tap-y font-medium">
                   {p.title}
                 </Link>
                 <span className="text-meta text-fg-muted">
@@ -178,13 +178,13 @@ export function WidgetBody({ id, d }: { id: string; d: any }) {
       );
     case 'uploads':
       return !d.recentCollections?.length ? (
-        <EmptyLine>Keine neuen Uploads in den letzten 7 Tagen.</EmptyLine>
+        <EmptyLine action={can('media.collections') ? <EmptyAction to="/?aktion=medien">Fotos sammeln</EmptyAction> : undefined}>Keine neuen Uploads in den letzten 7 Tagen.</EmptyLine>
       ) : (
         <List>
           {d.recentCollections.map((c: any) => (
             <li key={c.id} className="py-2.5 flex items-center gap-3">
               <Icon name="Images" size={16} className="text-fg-muted" />
-              <Link to={`/medien/${c.id}`} className="font-medium flex-1 truncate">
+              <Link to={`/medien/${c.id}`} className="bc-tap-y font-medium flex-1 truncate">
                 {c.title}
               </Link>
               <span className="text-meta text-fg-muted">
@@ -210,13 +210,13 @@ export function WidgetBody({ id, d }: { id: string; d: any }) {
       );
     case 'banners':
       return !d.banners?.length ? (
-        <EmptyLine>Kein Banner aktiv.</EmptyLine>
+        <EmptyLine action={can('banner.edit') ? <EmptyAction to="/banner">Banner anlegen</EmptyAction> : undefined}>Kein Banner aktiv.</EmptyLine>
       ) : (
         <List>
           {d.banners.map((b: any) => (
             <li key={b.id} className="py-2.5 flex items-center gap-2">
               <span className={cx('w-2 h-2 rounded-full shrink-0', b.tone === 'danger' ? 'bg-err' : b.tone === 'warning' ? 'bg-warn' : 'bg-fg-muted')} aria-hidden="true" />
-              <Link to="/banner" className="font-medium flex-1 truncate">
+              <Link to="/banner" className="bc-tap-y font-medium flex-1 truncate">
                 {b.title}
               </Link>
               <span className="text-meta text-fg-muted">bis {fmtTime(b.ends_at)}</span>
@@ -231,7 +231,7 @@ export function WidgetBody({ id, d }: { id: string; d: any }) {
         <List>
           {d.press.open.map((r: any) => (
             <li key={r.id} className="py-2.5 flex flex-col">
-              <Link to={`/presse/${r.id}`} className="font-medium truncate">
+              <Link to={`/presse/${r.id}`} className="bc-tap-y font-medium truncate">
                 {r.topic}
               </Link>
               <span className={cx('text-meta', r.overdue ? 'text-err' : 'text-fg-muted')}>
@@ -265,7 +265,7 @@ export function WidgetBody({ id, d }: { id: string; d: any }) {
             <List>
               {d.insights.top.map((t: any) => (
                 <li key={t.post_id} className="py-2 flex items-baseline gap-2">
-                  <Link to={`/beitraege/${t.post_id}`} className="font-medium flex-1 truncate">
+                  <Link to={`/beitraege/${t.post_id}`} className="bc-tap-y font-medium flex-1 truncate">
                     {t.title}
                   </Link>
                   <span className="text-meta text-fg-muted font-mono tabular">{new Intl.NumberFormat('de-DE').format(t.interactions)} Interaktionen</span>
@@ -283,7 +283,7 @@ export function WidgetBody({ id, d }: { id: string; d: any }) {
           {d.myDrafts.map((p: any) => (
             <li key={p.id} className="py-2.5 flex items-center gap-3">
               <div className="min-w-0 flex-1">
-                <Link to={`/beitraege/${p.id}`} className="font-medium truncate block">
+                <Link to={`/beitraege/${p.id}`} className="bc-tap-y font-medium truncate block">
                   {p.title}
                 </Link>
                 <div className="text-meta text-fg-muted">
@@ -305,7 +305,7 @@ export function WidgetBody({ id, d }: { id: string; d: any }) {
               <Icon name={CAL_ICON[e.kind] ?? 'CalendarDays'} size={16} className={cx('mt-0.5 shrink-0', e.overdue ? 'text-err' : 'text-fg-muted')} />
               <div className="min-w-0 flex-1">
                 {e.link ? (
-                  <Link to={e.link} className="font-medium truncate block">
+                  <Link to={e.link} className="bc-tap-y font-medium truncate block">
                     {e.title}
                   </Link>
                 ) : (
@@ -329,7 +329,7 @@ export function WidgetBody({ id, d }: { id: string; d: any }) {
             <List>
               {d.myPress.map((r: any) => (
                 <li key={r.id} className="py-2.5 flex flex-col">
-                  <Link to={`/presse/${r.id}`} className="font-medium truncate">
+                  <Link to={`/presse/${r.id}`} className="bc-tap-y font-medium truncate">
                     {r.topic}
                   </Link>
                   <span className={cx('text-meta flex items-center gap-1.5 flex-wrap', r.overdue ? 'text-err' : 'text-fg-muted')}>
@@ -365,7 +365,7 @@ export function WidgetBody({ id, d }: { id: string; d: any }) {
                   {cases.map((c) => (
                     <li key={c.id} className="py-2.5 flex items-center gap-3">
                       <div className="min-w-0 flex-1">
-                        <Link to={`/warnungen/${c.id}`} className="font-medium truncate block">
+                        <Link to={`/warnungen/${c.id}`} className="bc-tap-y font-medium truncate block">
                           {c.headline || WARN_KIND[c.kind] || c.case_no}
                         </Link>
                         <span className="text-meta text-fg-muted">
@@ -388,7 +388,7 @@ export function WidgetBody({ id, d }: { id: string; d: any }) {
                 <List>
                   {official.map((o) => (
                     <li key={o.id} className="py-2.5 flex flex-col">
-                      <Link to="/amtliche-warnungen" className="font-medium truncate">
+                      <Link to="/amtliche-warnungen" className="bc-tap-y font-medium truncate">
                         {o.headline || o.event}
                       </Link>
                       <span className="text-meta text-fg-muted">
@@ -413,7 +413,7 @@ export function WidgetBody({ id, d }: { id: string; d: any }) {
           {d.incidents.items.map((e: any) => (
             <li key={e.id} className="py-2.5 flex items-center gap-3">
               <div className="min-w-0 flex-1">
-                <Link to={`/einsatzliste?eintrag=${e.id}`} className="font-medium truncate block">
+                <Link to={`/einsatzliste?eintrag=${e.id}`} className="bc-tap-y font-medium truncate block">
                   {e.title}
                 </Link>
                 <span className={cx('text-meta truncate block', e.error ? 'text-err' : 'text-fg-muted')}>
@@ -435,7 +435,7 @@ export function WidgetBody({ id, d }: { id: string; d: any }) {
             <List>
               {d.automations.failed.map((a: any) => (
                 <li key={a.id} className="py-2.5 flex flex-col">
-                  <Link to={`/workflows/${a.id}`} className="font-medium truncate">
+                  <Link to={`/workflows/${a.id}`} className="bc-tap-y font-medium truncate">
                     {a.name}
                   </Link>
                   <span className="text-meta text-err flex items-center gap-1.5 min-w-0">
@@ -458,7 +458,7 @@ export function WidgetBody({ id, d }: { id: string; d: any }) {
         <List>
           {d.rss.map((i: any) => (
             <li key={i.id} className="py-2 flex flex-col">
-              <a href={safeHref(i.link)} target="_blank" rel="noopener noreferrer" className="font-medium">
+              <a href={safeHref(i.link)} target="_blank" rel="noopener noreferrer" className="bc-tap-y font-medium">
                 {i.starred_at && <Icon name="Sparkles" size={12} className="inline mr-1 text-warn" />}
                 {i.title}
               </a>
@@ -542,7 +542,7 @@ function FlowBoard({ d }: { d: any }) {
             {d.media.unreviewed > 0 ? (
               <FlowCard to="/medien" title={`${plural(d.media.unreviewed, 'Datei', 'Dateien')} offen`} meta={d.media.quarantine ? `${d.media.quarantine} in Prüfung` : 'geprüft, ohne Standort'} hot={can('media.review')} cta={can('media.review') ? 'Sichten' : undefined} />
             ) : (
-              <p className="m-0 px-0.5 text-meta text-fg-muted">Alles gesichtet.</p>
+              <p className="m-0 px-0.5 text-meta text-fg-muted">Nichts zu sichten.</p>
             )}
           </FlowColumn>
         )}
@@ -576,7 +576,7 @@ function FlowBoard({ d }: { d: any }) {
               />
             ))}
             <More to="/freigaben" n={approvals.length - MAX} />
-            {!approvals.length && <p className="m-0 px-0.5 text-meta text-fg-muted">Nichts offen.</p>}
+            {!approvals.length && <p className="m-0 px-0.5 text-meta text-fg-muted">Keine offenen Freigaben.</p>}
           </FlowColumn>
         )}
         {av.ready ? (
@@ -593,7 +593,7 @@ function FlowBoard({ d }: { d: any }) {
               <FlowCard key={p.id} to={`/beitraege/${p.id}`} title={p.title} meta="freigegeben" sub={p.site_id ? 'mit Website' : 'intern'} />
             ))}
             <More to="/freigaben" n={ready.length - MAX} />
-            {!ready.length && <p className="m-0 px-0.5 text-meta text-fg-muted">Nichts wartet.</p>}
+            {!ready.length && <p className="m-0 px-0.5 text-meta text-fg-muted">Nichts wartet auf die Veröffentlichung.</p>}
           </FlowColumn>
         )}
         {d.publications && (
@@ -695,7 +695,7 @@ export function PanelTile({ id, d }: { id: string; d: any }) {
   }
   const link = LINKS[id];
   return (
-    <Card title={PANEL_TITLES[id]} subtitle={subtitleOf(id, d, av)} action={link ? <Link to={link[0]} className="text-sm !text-fg-muted hover:!text-fg">{link[1]} →</Link> : undefined}>
+    <Card title={PANEL_TITLES[id]} subtitle={subtitleOf(id, d, av)} action={link ? <Link to={link[0]} className="bc-tap-y inline-flex justify-end max-md:min-w-tap text-sm !text-fg-muted hover:!text-fg">{link[1]} →</Link> : undefined}>
       <WidgetBody id={id} d={d} />
     </Card>
   );
