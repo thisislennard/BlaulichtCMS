@@ -341,7 +341,7 @@ nicht archivierten Beiträge (bei 4 800 Beiträgen ohne Freigaben 46 ms) – Bei
 
 ## Teststand und Grenzen
 
-**Automatisiert (bei jedem Push in der CI):** Typprüfung, rund 780 Server-Tests gegen echtes PostgreSQL (inklusive
+**Automatisiert (bei jedem Push in der CI):** Typprüfung, rund 800 Server-Tests gegen echtes PostgreSQL (inklusive
 Video-Verarbeitung mit ffmpeg), Build, PHP-Lint des Plugins, Probelauf mit Docker Compose (Rollen, Schlüsselwechsel,
 Audit-Kette; Image aus einer Arbeitskopie mit Dateirechten 0600/0700), Update-Wege mit echtem Docker
 (`test/docker/update-wege.sh`, #275: Image-Update von 0.7.0 über den Update-Helfer unter systemd, `install.sh` 0.7.0
@@ -393,7 +393,8 @@ Ergebnisse je Verbindung: [docs/integrationen.md](integrationen.md).
   Helfers bei der App geprüft (0.6.1). Das erste Image-Update aus der App (0.6.1 → 0.7.0) scheiterte dort an
   Dateirechten aus der umask des Dienstes, der Rückweg an einem Prüfschritt ohne root-Rechte (#275, behoben in 0.7.1).
   Seitdem läuft der vollständige Weg (Helfer unter systemd → `install.sh` → Build, Selbsttest, Sicherung, Wechsel,
-  Rückweg) in der CI mit echtem Docker; ein Image-Update aus der App auf dem echten Host steht mit 0.7.1 aus.
+  Rückweg) in der CI mit echtem Docker. Ein Image-Update aus der App auf dem echten Host steht noch aus; für 0.7.1 ist
+  der Weg von Hand mit `install.sh` empfohlen, der auch den neuen Helfer mitbringt.
 - Sicherung außer Haus und Probe-Wiederherstellung (#212): gegen einen WebDAV-Stellvertreter mit echtem TLS getestet;
   mit dem echten NAS (z. B. Synology „WebDAV Server“) und die zeitgesteuerte Probe auf dem Zielhost noch prüfen.
 - Freigabe aus der Push-Mitteilung (#216): Ob ein Gerät Aktionsknöpfe zeigt, entscheidet der Browser; auf echten

@@ -9,7 +9,7 @@ Fotos per Link vom Handy sammeln · sichten · Beiträge schreiben · Fassung fr
 [![CI](https://github.com/thisislennard/BlaulichtCMS/actions/workflows/ci.yml/badge.svg)](https://github.com/thisislennard/BlaulichtCMS/actions/workflows/ci.yml)
 [![Sicherheitsprüfung](https://github.com/thisislennard/BlaulichtCMS/actions/workflows/security.yml/badge.svg)](https://github.com/thisislennard/BlaulichtCMS/actions/workflows/security.yml)
 [![Lizenz: GPL-3.0](https://img.shields.io/badge/Lizenz-GPL--3.0--or--later-blue)](LICENSE)
-![Version](https://img.shields.io/badge/Version-0.7.0-D21F3C)
+![Version](https://img.shields.io/badge/Version-0.7.1-D21F3C)
 ![TypeScript](https://img.shields.io/badge/TypeScript-7-3178C6?logo=typescript&logoColor=white)
 ![Node.js](https://img.shields.io/badge/Node.js-26-5FA04E?logo=nodedotjs&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-18-4169E1?logo=postgresql&logoColor=white)
@@ -22,7 +22,7 @@ Fotos per Link vom Handy sammeln · sichten · Beiträge schreiben · Fassung fr
 ![Dashboard von BlaulichtCMS (Rolle Redaktion)](docs/bilder/dashboard.webp)
 
 > [!NOTE]
-> **Version 0.7.0 – noch vor dem ersten Produktivbetrieb.** Der Funktionsumfang ist vollständig und automatisiert
+> **Version 0.7.1 – noch vor dem ersten Produktivbetrieb.** Der Funktionsumfang ist vollständig und automatisiert
 > getestet; was mit echten Fremdsystemen geprüft ist und was noch nicht, steht unter
 > [Teststand und Grenzen](docs/technik.md#teststand-und-grenzen). Alle Screenshots stammen aus einer Testinstanz mit fiktiven Daten.
 
@@ -372,11 +372,15 @@ flowchart LR
   Prüfung – mit eingerichtetem **Update-Helfer** lässt sich auch dieses Update in der App anstoßen (prüft das signierte
   Release, baut, sichert, wechselt, bei Fehler zurück; Fortschritt und Protokollauszug in der App), ohne dem Container
   Zugriff auf Docker zu geben. Ohne Helfer nennt die Seite die Schritte am Host (ein Aufruf des Installationsskripts).
-- **Sicherung:** täglich, verschlüsselt, auf Wunsch zusätzlich **außer Haus** auf ein NAS (WebDAV, mit Prüfsummenkontrolle und Aufbewahrung je Tag/Woche/Monat, Standard 7/4/3; Hinweis auf frühere Ziele, auf denen noch Sicherungen liegen); **Probe-Wiederherstellung** in eine Wegwerf-Datenbank auf Knopfdruck und nach Zeitplan, mit Ergebnisprotokoll im Systemstatus.
+- **Sichere Image-Updates:** Jedes neue Image besteht vor dem Wechsel einen Selbsttest ohne Netz und ohne Daten
+  (Programmdateien lesbar, Programm lädt), Dateirechte im Image hängen nicht vom Host ab. Der automatische Rückweg ersetzt
+  die Daten erst, wenn die Sicherung geprüft ist, und hält das Protokoll des gescheiterten Containers fest.
+- **Sicherung:** täglich, verschlüsselt, jede Sicherung gleich danach geprüft (Prüfsumme, Entschlüsseln, Inhalt), auf Wunsch zusätzlich **außer Haus** auf ein NAS (WebDAV, mit Prüfsummenkontrolle und Aufbewahrung je Tag/Woche/Monat, Standard 7/4/3; Hinweis auf frühere Ziele, auf denen noch Sicherungen liegen); **Probe-Wiederherstellung** in eine Wegwerf-Datenbank auf Knopfdruck und nach Zeitplan, mit Ergebnisprotokoll im Systemstatus.
 - **Systemstatus:** Dienste, Speicher, Sicherungen, Probe-Wiederherstellung, Audit-Integrität, Wartungsmodus und
   Vorabprüfung vor Updates.
 - **Geprüft bei jeder Änderung:** Server-Tests gegen echtes PostgreSQL, Browsertests der Kernabläufe (Einrichtung,
-  Anmeldung mit Zwei-Faktor, Beitrag bis zur Freigabe, Workflow aus Vorlage), Image-Bau und Sicherheitsprüfung;
+  Anmeldung mit Zwei-Faktor, Beitrag bis zur Freigabe, Workflow aus Vorlage), Image-Bau, Image-Updates mit echtem
+  Docker (über den Update-Helfer, von Hand, Rückweg) und Sicherheitsprüfung;
   wöchentlich eine Versionsprüfung aller Abhängigkeiten.
 
 ---
@@ -415,6 +419,9 @@ flowchart LR
   <tr>
     <td colspan="2"><b>Workflows</b><br/>geführt in drei Schritten: Wenn – Nur wenn – Dann<br/><br/><img src="docs/bilder/workflow.webp" alt="Workflow in der geführten Ansicht"/></td>
     <td><b>Kalender</b><br/>Termine, Serien, geplante Beiträge und Fristen<br/><br/><img src="docs/bilder/kalender.webp" alt="Kalender in der Monatsansicht"/></td>
+  </tr>
+  <tr>
+    <td colspan="3"><b>Banner aus Workflows</b><br/>folgen der amtlichen Warnung bis zur Entwarnung, Aktualisierungen gehen zur Freigabe<br/><br/><img src="docs/bilder/banner.webp" alt="Bannerliste mit Bannern aus einem Workflow, die einer Warnung folgen"/></td>
   </tr>
   <tr>
     <td><b>Presseanfragen</b><br/>Status, Zuständigkeit, Frist und Verlauf<br/><br/><img src="docs/bilder/presse.webp" alt="Liste der Presseanfragen"/></td>
