@@ -1,12 +1,13 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { get, qs } from '../../api/client';
-import { Button, cx, ErrorBox, PageHeader, SegmentedControl, Select, SkeletonRows } from '../../components/ui/core';
+import { Button, cx, ErrorBox, Notice, PageHeader, SegmentedControl, Select, SkeletonRows } from '../../components/ui/core';
 import { useAuth } from '../../lib/auth';
 import { fromLocalInput } from '../../lib/format';
 import { CategoriesDialog, EntryDialog, EventDialog, type EditTarget } from './dialogs';
 import { SourcesDialog, SubscribeDialog } from './ical';
-import { dayStart, shift, today, viewRange, type CalendarCategory, type CalendarEntry, type View } from './model';
+import { dayKey, dayStart, shift, today, viewRange, type CalendarCategory, type CalendarEntry, type EventDetail, type View } from './model';
 import { ListView, MonthView, WeekView } from './views';
 import { RescheduleForm, usePlanning, useReschedule } from './planning';
 import { DndContext } from '@dnd-kit/core';
@@ -63,6 +64,31 @@ export default function CalendarPage() {
   });
   const refresh = () => qc.invalidateQueries({ queryKey: ['calendar'] });
   const entries = q.data?.entries ?? [];
+
+  // Verweis aus den Aktivitäten (/kalender?termin=<id>, #258): zum Termin springen und ihn öffnen. Serien zeigen den
+  // Termin in der aktuellen Ansicht, sonst den ersten Termin der Serie.
+  const [params, setParams] = useSearchParams();
+  const termin = params.get('termin');
+  const linked = useQuery({ queryKey: ['calendar', 'event', termin], queryFn: () => get<EventDetail>(`/calendar/events/${termin}`), enabled: !!termin, retry: false });
+  const [jumped, setJumped] = useState<string | null>(null);
+  const clearTermin = () => {
+    const next = new URLSearchParams(params);
+    next.delete('termin');
+    setParams(next, { replace: true });
+  };
+  useEffect(() => {
+    if (!termin || !linked.data || jumped === termin) return;
+    setJumped(termin);
+    if (!linked.data.rrule) setAnchor(dayKey(linked.data.start));
+  }, [termin, linked.data, jumped]);
+  useEffect(() => {
+    if (!termin || jumped !== termin || !q.data || q.isPlaceholderData) return;
+    const hit = q.data.entries.find((e) => e.kind === 'event' && (e.id === termin || e.seriesId === termin));
+    if (hit) {
+      setOpen(hit);
+      clearTermin();
+    } else if (linked.data && anchor !== dayKey(linked.data.start)) setAnchor(dayKey(linked.data.start));
+  }, [termin, jumped, q.data, q.isPlaceholderData]); // eslint-disable-line react-hooks/exhaustive-deps
   const month = view === 'month' ? Number(anchor.slice(5, 7)) - 1 : undefined;
 
   const newAt = (day: string) => {
@@ -158,6 +184,16 @@ export default function CalendarPage() {
         </div>
       </div>
 
+      {termin && linked.isError && (
+        <Notice tone="warning" title="Termin nicht gefunden">
+          <div className="flex flex-col items-start gap-2">
+            Den verlinkten Termin gibt es nicht mehr.
+            <Button size="sm" onClick={clearTermin}>
+              Hinweis schließen
+            </Button>
+          </div>
+        </Notice>
+      )}
       {q.error ? (
         <ErrorBox title="Kalender konnte nicht geladen werden">{(q.error as Error).message}</ErrorBox>
       ) : !q.data ? (

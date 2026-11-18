@@ -1936,3 +1936,188 @@ describe('Kennzeichen von Hand anklicken (#223)', async () => {
     expect(plateBox({ x: 0.5, y: 0.5 }, NaN, 's').h).toBeGreaterThan(0);
   });
 });
+
+describe('Aktivitäten: jede Audit-Aktion lesbar und einem Bereich zugeordnet (#258)', () => {
+  const root = path.resolve(__dirname, '..', '..');
+  const files = (dir: string): string[] => fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? files(path.join(dir, e.name)) : e.name.endsWith('.ts') ? [path.join(dir, e.name)] : []));
+  const QUOTES = `'"\``;
+  // Zeichenkette überspringen (Vorlagen mit ${…} rekursiv); liefert den Index nach dem schließenden Zeichen
+  const skipString = (src: string, i: number): number => {
+    const q = src[i];
+    let j = i + 1;
+    while (j < src.length) {
+      if (src[j] === '\\') j += 2;
+      else if (q === '`' && src[j] === '$' && src[j + 1] === '{') j = skipBalanced(src, j + 1);
+      else if (src[j] === q) return j + 1;
+      else j++;
+    }
+    return j;
+  };
+  const skipBalanced = (src: string, i: number): number => {
+    let depth = 0;
+    let j = i;
+    while (j < src.length) {
+      const c = src[j];
+      if (QUOTES.includes(c)) {
+        j = skipString(src, j);
+        continue;
+      }
+      if ('([{'.includes(c)) depth++;
+      else if (')]}'.includes(c) && --depth === 0) return j + 1;
+      j++;
+    }
+    return j;
+  };
+  const splitArgs = (src: string, open: number): string[] => {
+    const inner = src.slice(open + 1, skipBalanced(src, open) - 1);
+    const args: string[] = [];
+    let depth = 0;
+    let start = 0;
+    for (let j = 0; j < inner.length; j++) {
+      const c = inner[j];
+      if (QUOTES.includes(c)) {
+        j = skipString(inner, j) - 1;
+        continue;
+      }
+      if ('([{'.includes(c)) depth++;
+      else if (')]}'.includes(c)) depth--;
+      else if (c === ',' && depth === 0) {
+        args.push(inner.slice(start, j).trim());
+        start = j + 1;
+      }
+    }
+    args.push(inner.slice(start).trim());
+    return args;
+  };
+  /** Index des obersten Zeichens `ch` (außerhalb von Klammern und Zeichenketten; `?.` und `??` zählen nicht). */
+  const topLevel = (e: string, from: number, pick: (c: string, j: number, depth: number) => boolean): number => {
+    let depth = 0;
+    for (let j = from; j < e.length; j++) {
+      const c = e[j];
+      if (QUOTES.includes(c)) {
+        j = skipString(e, j) - 1;
+        continue;
+      }
+      if ('([{'.includes(c)) depth++;
+      else if (')]}'.includes(c)) depth--;
+      else if (depth === 0 && pick(c, j, depth)) return j;
+    }
+    return -1;
+  };
+  const isQuestion = (e: string, j: number) => e[j] === '?' && e[j + 1] !== '.' && e[j + 1] !== '?' && e[j - 1] !== '?';
+  /** Mögliche Werte eines Ausdrucks aus Zeichenketten und Bedingungen (a ? 'x' : 'y'); null = nicht statisch bestimmbar. */
+  const leaves = (expr: string): string[] | null => {
+    let e = expr.trim();
+    while (e.startsWith('(') && skipBalanced(e, 0) === e.length) e = e.slice(1, -1).trim();
+    if (/^'[^'\\]*'$|^"[^"\\]*"$|^`[^`$\\]*`$/.test(e)) return [e.slice(1, -1)];
+    const q = topLevel(e, 0, (_c, j) => isQuestion(e, j));
+    if (q < 0) return null;
+    let nest = 0;
+    const colon = topLevel(e, q + 1, (c, j) => {
+      if (isQuestion(e, j)) nest++;
+      else if (c === ':') {
+        if (nest === 0) return true;
+        nest--;
+      }
+      return false;
+    });
+    if (colon < 0) return null;
+    const a = leaves(e.slice(q + 1, colon));
+    const b = leaves(e.slice(colon + 1));
+    return a && b ? [...a, ...b] : null;
+  };
+
+  /** Aktionen, die zur Laufzeit zusammengesetzt werden – je Ausdruck alle möglichen Werte. */
+  const dynamicActions = async (): Promise<Record<string, string[]>> => {
+    const { SOURCE_LABEL } = await import('../src/connections/fe2.js');
+    const { HOST_STATES } = await import('../src/updates/host-helper.js');
+    return {
+      '`${source}.draft_created`': Object.keys(SOURCE_LABEL).map((s) => `${s}.draft_created`),
+      '`update.host_${st.state}`': HOST_STATES.map((s) => `update.host_${s}`),
+    };
+  };
+
+  const collect = async () => {
+    const dynamic = await dynamicActions();
+    const found = new Map<string, string>();
+    const unresolved: string[] = [];
+    for (const f of files(path.join(root, 'server', 'src'))) {
+      const src = fs.readFileSync(f, 'utf8');
+      for (const m of src.matchAll(/(?<![\w.$`])(audit|auditThrottled)\s*\(/g)) {
+        const lineStart = src.lastIndexOf('\n', m.index) + 1;
+        const prefix = src.slice(lineStart, m.index);
+        // Kommentare und die Definitionen in lib/audit.ts überspringen
+        if (/^\s*(\*|\/\/|\/\*)/.test(prefix) || /function\s+$/.test(prefix)) continue;
+        const args = splitArgs(src, m.index! + m[0].length - 1);
+        const arg = args[m[1] === 'audit' ? 1 : 3] ?? '';
+        const where = `${path.relative(root, f)}:${src.slice(0, m.index).split('\n').length}`;
+        if (/lib[\\/]audit\.ts$/.test(f) && arg === 'action') continue; // auditThrottled reicht nur durch
+        const values = leaves(arg) ?? dynamic[arg.replace(/\s+/g, ' ')];
+        if (!values) unresolved.push(`${where} ${arg}`);
+        else for (const v of values) found.set(v, where);
+      }
+    }
+    return { found, unresolved };
+  };
+  const dict = JSON.parse(fs.readFileSync(path.join(root, 'web', 'src', 'i18n', 'de', 'activity.json'), 'utf8'));
+  const lookup = (tree: any, action: string) => action.split('.').reduce((o, k) => (o == null ? undefined : o[k]), tree);
+
+  it('findet die Aufrufe und kann jede Aktion statisch bestimmen', async () => {
+    const { found, unresolved } = await collect();
+    // Aktion im Aufruf als Zeichenkette oder Bedingung angeben – sonst in dynamicActions() ergänzen
+    expect(unresolved).toEqual([]);
+    expect(found.size).toBeGreaterThan(300);
+    for (const a of ['post.approved', 'incident.created', 'press.request_created', 'folder.renamed', 'fe2.draft_created', 'update.host_success', 'access.denied']) expect(found.has(a), a).toBe(true);
+  });
+
+  it('hat für jede Aktion einen Satz (Aktivitäten) und ein Label (Audit-Protokoll)', async () => {
+    const { found } = await collect();
+    const missing = [...found.keys()].filter((a) => typeof lookup(dict.sentences, a) !== 'string' || typeof lookup(dict.actions, a) !== 'string');
+    // Neue Audit-Aktion? Satz und Label in web/src/i18n/de/activity.json ergänzen
+    expect(missing.map((a) => `${a} (${found.get(a)})`)).toEqual([]);
+    for (const a of found.keys()) expect(lookup(dict.sentences, a), a).not.toMatch(/^hat „\{action\}“/);
+  });
+
+  it('ordnet jede Aktion ausdrücklich einem Bereich zu und benennt jeden Bereich', async () => {
+    const { AUDIT_AREAS, auditArea, explicitAuditArea } = await import('../src/lib/audit-view.js');
+    const { found } = await collect();
+    // Neue Aktion mit neuem Präfix? In server/src/lib/audit-view.ts einem Bereich zuordnen
+    expect([...found.keys()].filter((a) => !explicitAuditArea(a))).toEqual([]);
+    for (const a of ['all', ...AUDIT_AREAS]) expect(typeof dict.areas[a], a).toBe('string');
+    expect(Object.keys(dict.areas).sort()).toEqual(['all', ...AUDIT_AREAS].sort());
+    // Module stehen in ihrem Bereich, nicht unter „System“
+    expect(auditArea('press.request_created')).toBe('press');
+    expect(auditArea('incident.created')).toBe('incidents');
+    expect(auditArea('calendar.event_created')).toBe('calendar');
+    expect(auditArea('design_template.layout_saved')).toBe('designs');
+    expect(auditArea('automation.started')).toBe('automations');
+    expect(auditArea('keywords.state_changed')).toBe('warnings');
+    expect(auditArea('role.updated')).toBe('user');
+    expect(auditArea('notify.push_subscribed')).toBe('user');
+    expect(auditArea('notify.settings_changed')).toBe('system');
+    expect(auditArea('frueher.unbekannt')).toBe('system');
+    const web = fs.readFileSync(path.join(root, 'web', 'src', 'pages', 'Activities.tsx'), 'utf8');
+    const listed = web.slice(web.indexOf('const AREAS'), web.indexOf('] as const', web.indexOf('const AREAS')));
+    expect([...listed.matchAll(/"([a-z]+)"/g)].map((m) => m[1])).toEqual(['all', ...AUDIT_AREAS]);
+  });
+
+  it('SQL-Filter je Bereich entspricht der Zuordnung', async () => {
+    const { AUDIT_AREAS, auditArea, auditAreaCondition } = await import('../src/lib/audit-view.js');
+    const { found } = await collect();
+    // Bedingung mit den Parametern nachbilden (split_part = Präfix)
+    const evaluate = (cond: string, p: unknown[], action: string): boolean => {
+      const js = cond
+        .replace(/split_part\(action, '\.', 1\) = ANY\(\$(\d+)::text\[\]\)/g, (_m, i) => String((p[Number(i) - 1] as string[]).includes(action.split('.')[0])))
+        .replace(/action = ANY\(\$(\d+)::text\[\]\)/g, (_m, i) => String((p[Number(i) - 1] as string[]).includes(action)))
+        .replace(/\bNOT\b/g, '!')
+        .replace(/\bAND\b/g, '&&')
+        .replace(/\bOR\b/g, '||');
+      return Function(`return (${js});`)();
+    };
+    for (const area of AUDIT_AREAS) {
+      const p: unknown[] = [];
+      const cond = auditAreaCondition(area, p);
+      for (const a of [...found.keys(), 'notify.push_subscribed', 'frueher.unbekannt']) expect(evaluate(cond, p, a), `${area} ${a}`).toBe(auditArea(a) === area);
+    }
+  });
+});

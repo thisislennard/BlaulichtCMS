@@ -190,6 +190,9 @@ export async function withKeywordMeaning(keyword: string, label: string, categor
  * Eintrag aus bereits geprüften Werten anlegen (Alarm, Workflow, Import). Der Ort wird grob gemacht (nie eine Adresse).
  * Gibt null zurück, wenn es zu dieser Herkunft schon einen Eintrag gibt (Entprellen über source_ref).
  */
+/** Link auf die Einsatzliste mit diesem Eintrag hervorgehoben (#258). */
+export const incidentLink = (id: string) => `/einsatzliste?eintrag=${encodeURIComponent(id)}`;
+
 export async function createEntry(db: Queryable, n: NewEntry, actor: Actor, userId: string | null, cfg?: IncidentConfig): Promise<{ entry: any; locationRemoved: boolean } | null> {
   const conf = cfg ?? (await loadConfig(db));
   const keyword = clean(n.keyword, LIMITS.keyword);

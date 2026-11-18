@@ -9,7 +9,7 @@ import { getSettings, type Settings } from '../lib/settings.js';
 import { bannerHash, bannerLink, enqueueBannerJob } from '../routes/banners.js';
 import { revisionHash } from '../routes/posts.js';
 import { warningHash } from '../routes/warnings.js';
-import { createEntry, parseLocalDate } from '../incidents/list.js';
+import { createEntry, incidentLink, parseLocalDate } from '../incidents/list.js';
 import { pressReleaseFromWorkflow } from '../press/releases.js';
 import { classifySmtpError, smtpTransport } from '../warnings/mail.js';
 import { OUTPUT_KINDS, type NodeType } from './catalog.js';
@@ -701,7 +701,8 @@ async function runOutput(ctx: Ctx, node: GraphNode, data: Data, prev: StepRow | 
         return done({ ports: ['out'], produced: { einsatzliste_link: '/einsatzliste' }, info: `Einsatz „${created.entry.title}“ für die Einsatzliste ${c.submit === false ? 'angelegt' : 'angelegt und zur Freigabe eingereicht'}${created.locationRemoved ? ' (Ortsangabe entfernt: keine erlaubte Ortsangabe)' : ''}.`, log: { ...desc, eintrag: created.entry.id } }, db);
       });
       if (res.log && (res.log as any).eintrag) {
-        await notify(c.submit === false ? { kind: 'info', title: `Neuer Eintrag für die Einsatzliste: ${title || keyword}`.slice(0, 200), body: `Aus dem Workflow „${ctx.run.automation_name}“.`, link: '/einsatzliste', permission: 'incident.edit' } : { kind: 'info', title: `Einsatzliste: Freigabe erbeten – ${title || keyword}`.slice(0, 200), body: `Aus dem Workflow „${ctx.run.automation_name}“.`, link: '/einsatzliste', permission: 'approval.incident' });
+        const link = incidentLink(String((res.log as any).eintrag));
+        await notify(c.submit === false ? { kind: 'info', title: `Neuer Eintrag für die Einsatzliste: ${title || keyword}`.slice(0, 200), body: `Aus dem Workflow „${ctx.run.automation_name}“.`, link, permission: 'incident.edit' } : { kind: 'info', title: `Einsatzliste: Freigabe erbeten – ${title || keyword}`.slice(0, 200), body: `Aus dem Workflow „${ctx.run.automation_name}“.`, link, permission: 'approval.incident' });
       }
       return res;
     }

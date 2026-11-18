@@ -166,6 +166,8 @@ describe('Einsatzliste: Freigabe, Veröffentlichung, Zurückziehen', () => {
     expect((await approver.post(`/incidents/${id}/approve`, { contentHash: c.json.content_hash })).status).toBe(200);
     expect((await entry(editor, id)).state).toBe('approved');
     expect(await one(`SELECT 1 FROM notifications WHERE permission = 'approval.incident'`)).not.toBeNull();
+    // Link hebt den Eintrag hervor (#258)
+    expect(await one(`SELECT 1 FROM notifications WHERE permission = 'approval.incident' AND link = $1`, [`/einsatzliste?eintrag=${id}`])).not.toBeNull();
   });
 
   it('Vier-Augen-Prinzip: wer angelegt oder eingereicht hat, gibt nicht selbst frei', async () => {
@@ -489,5 +491,52 @@ describe('Einsatzliste: Datenschutz-Prüfung für Bilder (#241) und Aufträge oh
     expect((await entry(editor, laterEntry)).state).toBe('failed');
     expect((await publisher.post(`/incidents/${laterEntry}/withdraw`)).status).toBe(200);
     expect((await bridgeJobs()).filter((j: any) => j.type === 'incident.delete' && j.incident.id === laterEntry)).toHaveLength(1);
+  });
+});
+
+describe('Aktivitäten: Bereich Einsatzliste und Link nur auf vorhandene Einträge (#258)', () => {
+  it('filtert serverseitig nach Bereich und meldet, ob der Eintrag noch existiert', async () => {
+    const r = await approver.get('/audit?area=incidents&limit=500');
+    expect(r.status).toBe(200);
+    const evs: any[] = r.json.events;
+    expect(evs.length).toBeGreaterThan(5);
+    expect(evs.every((e) => e.area === 'incidents' && e.action.startsWith('incident.'))).toBe(true);
+    for (const a of ['incident.created', 'incident.submitted', 'incident.approved', 'incident.published', 'incident.withdrawn', 'incident.deleted', 'incident.imported']) expect(evs.some((e) => e.action === a), a).toBe(true);
+    // Gelöschter Eintrag: kein Link mehr – auch nicht bei seinen früheren Ereignissen
+    const gone = evs.find((e) => e.action === 'incident.deleted');
+    expect(evs.filter((e) => e.object_id === gone.object_id).every((e) => e.object_exists === false)).toBe(true);
+    const live = (await one<{ id: string }>(`SELECT id FROM incident_entries ORDER BY created_at LIMIT 1`))!.id;
+    const liveEvents = evs.filter((e) => e.object_id === live);
+    expect(liveEvents.length).toBeGreaterThan(0);
+    expect(liveEvents.every((e) => e.object_exists === true)).toBe(true);
+    // Ohne Objekt-ID (CSV-Import) ist nichts zu prüfen
+    expect(evs.find((e) => e.action === 'incident.imported').object_exists).toBeNull();
+    // Workflow-Ergebnisse stehen beim Workflow, Module nie unter „System“
+    const all: any[] = (await approver.get('/audit?limit=500')).json.events;
+    expect(all.find((e) => e.action === 'automation.incident_entry_created')?.area).toBe('automations');
+    const sys: any[] = (await approver.get('/audit?area=system&limit=500')).json.events;
+    expect(sys.length).toBeGreaterThan(0);
+    expect(sys.filter((e) => /^(incident|press|calendar|design_template|automation|keywords|banner|post)\./.test(e.action))).toEqual([]);
+    expect(sys.every((e) => e.area === 'system')).toBe(true);
+    // Bereiche zusammen ergeben genau alle Einträge
+    const { AUDIT_AREAS } = await import('../src/lib/audit-view.js');
+    let sum = 0;
+    for (const area of AUDIT_AREAS) sum += (await approver.get(`/audit?area=${area}&limit=500`)).json.events.length;
+    expect(sum).toBe(all.length);
+    expect((await approver.get('/audit?area=unsinn')).status).toBe(400);
+    expect((await editor.get('/audit?area=incidents')).status).toBe(403);
+  });
+
+  it('prüft jede verlinkbare Objektart gegen ihre Tabelle', async () => {
+    const { auditViewFields, LINKED_OBJECT_TYPES } = await import('../src/lib/audit-view.js');
+    expect(LINKED_OBJECT_TYPES.length).toBeGreaterThan(10);
+    const rows = LINKED_OBJECT_TYPES.map((t) => ({ action: 'probe.x', object_type: t, object_id: crypto.randomUUID() }));
+    const out = await auditViewFields([...rows, { action: 'probe.x', object_type: 'incident', object_id: 'keine-uuid' }, { action: 'probe.x', object_type: 'site', object_id: crypto.randomUUID() }]);
+    expect(out.slice(0, rows.length).every((r) => r.object_exists === false && r.object_parent === null)).toBe(true);
+    expect(out[rows.length].object_exists).toBe(false);
+    expect(out[rows.length + 1].object_exists).toBeNull();
+    const media = await one<{ id: string; collection_id: string }>(`SELECT id, collection_id FROM media WHERE deleted_at IS NULL LIMIT 1`);
+    const [m] = await auditViewFields([{ action: 'media.updated', object_type: 'media', object_id: media!.id }]);
+    expect(m).toMatchObject({ object_exists: true, object_parent: media!.collection_id, area: 'media' });
   });
 });

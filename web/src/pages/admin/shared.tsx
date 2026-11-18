@@ -280,6 +280,12 @@ export interface AuditEvent {
   details: Record<string, unknown>;
   ip: string | null;
   correlation_id: string | null;
+  /** Bereich für den Filter der Aktivitäten (server/src/lib/audit-view.ts, #258) */
+  area?: string;
+  /** Gibt es das Objekt noch? null = Objektart ohne eigene Seite */
+  object_exists?: boolean | null;
+  /** Sammlung bei Dateien, Ordnern und Upload-Links */
+  object_parent?: string | null;
 }
 
 function dictLookup(path: string): string | null {
@@ -309,67 +315,104 @@ export function auditSentence(
   return tpl.split("{o}").join(ev.object_label);
 }
 
-/** Link zum Objekt eines Audit-Ereignisses, wo sinnvoll. */
+/**
+ * Link zum Objekt eines Audit-Ereignisses (#258): direkt auf den Eintrag, solange es ihn gibt (`object_exists` vom
+ * Server); ist er gelöscht, gibt es keinen Link. Objektarten ohne eigene Seite verweisen auf ihre Übersicht.
+ */
 export function auditHref(
-  ev: Pick<AuditEvent, "object_type" | "object_id" | "action" | "details">,
+  ev: Pick<AuditEvent, "object_type" | "object_id" | "action"> &
+    Partial<Pick<AuditEvent, "object_exists" | "object_parent">>,
 ): string | null {
-  const id = ev.object_id;
-  const deleted = ev.action.endsWith(".deleted");
+  if (ev.object_exists === false) return null;
+  const id = ev.object_id ? encodeURIComponent(ev.object_id) : null;
+  const parent = ev.object_parent ? encodeURIComponent(ev.object_parent) : null;
+  const a = ev.action;
   switch (ev.object_type) {
     case "post":
-      return id && !deleted ? `/beitraege/${id}` : "/beitraege";
+      return id ? `/beitraege/${id}` : "/beitraege";
     case "collection":
-      return id && !deleted ? `/medien/${id}` : "/medien";
-    case "site":
-      return "/websites";
-    case "user":
-      return "/benutzer";
-    case "backup":
-      return "/einstellungen#sicherung";
-    case "settings":
-      return ev.action.startsWith("warning.") ? "/stichwoerter-regeln" : "/einstellungen";
+      return id ? `/medien/${id}` : "/medien";
+    case "media":
+      return id ? `/medien/dateien?datei=${id}` : "/medien/dateien";
+    case "folder":
+      return parent ? `/medien/${parent}?ordner=${id}` : "/medien";
+    case "upload_link":
+      return parent ? `/medien/${parent}` : "/medien";
+    case "trash":
+      return "/medien/papierkorb";
+    case "design":
+    case "design_image":
+      return "/upload-seite";
+    case "job":
+      return "/medienverwaltung";
+    case "calendar_event":
+      return id ? `/kalender?termin=${id}` : "/kalender";
+    case "calendar_category":
+    case "calendar_source":
+    case "calendar_feed":
+      return "/kalender";
+    case "incident":
+      return id ? `/einsatzliste?eintrag=${id}` : "/einsatzliste";
+    case "banner":
+      return id ? `/banner?banner=${id}` : "/banner";
+    case "design_template":
+      return id ? `/designvorlagen/${id}` : "/designvorlagen";
+    case "template_category":
+    case "design_font":
+      return "/designvorlagen";
+    case "press_request":
+      return id ? `/presse/${id}` : "/presse";
+    case "press_release":
+      return id ? `/presse/mitteilungen?id=${id}` : "/presse/mitteilungen";
+    case "press_contact":
+    case "press_list":
+      return "/presse/verteiler";
+    case "press_snippet":
+      return "/presse/textbausteine";
     case "warning":
-      return id && !deleted ? `/warnungen/${id}` : "/warnungen";
+      return id ? `/warnungen/${id}` : "/warnungen";
     case "keyword":
     case "rule":
     case "responsibility":
       return "/stichwoerter-regeln";
+    case "official_warning":
+      return "/amtliche-warnungen";
     case "template":
-      return ev.action.startsWith("warning.") ? "/stichwoerter-regeln" : "/beitragsvorlagen";
-    case "design_template":
-      return id && !deleted ? `/designvorlagen/${id}` : "/designvorlagen";
-    case "template_category":
-      return "/designvorlagen";
-    case "banner":
-      return "/banner";
-    case "connection":
-      return id && !deleted ? `/verbindungen/${id}` : "/verbindungen";
-    case "rss_feed":
-      return "/quellen";
+      return a.startsWith("warning.") ? "/stichwoerter-regeln" : "/beitragsvorlagen";
+    case "site":
     case "plugin":
       return "/websites";
+    case "connection":
+      return id ? `/verbindungen/${id}` : "/verbindungen";
+    case "rss_feed":
+      return "/quellen";
     case "automation":
-      return id && !deleted ? `/workflows/${id}` : "/workflows";
+      return id ? `/workflows/${id}` : "/workflows";
     case "automation_input":
       return "/workflows/ausloeser";
     case "automation_output":
       return "/workflows/aktionen";
+    case "user":
+      return a.startsWith("notify.push_") ? "/profil" : "/benutzer";
+    case "role":
+      return "/benutzer?tab=rollen";
+    case "backup":
+      return "/einstellungen#sicherung";
+    case "update":
+      return "/einstellungen#updates";
+    case "settings":
+      if (a.startsWith("warning.")) return "/stichwoerter-regeln";
+      if (a.startsWith("press.mailbox")) return "/presse-postfach";
+      if (a.startsWith("notify.")) return "/einstellungen#benachrichtigungen";
+      if (a.startsWith("updates.")) return "/einstellungen#updates";
+      if (a.startsWith("dashboard.")) return "/";
+      return "/einstellungen";
+    case "privacy":
+    case "press_recipient":
+      return "/datenschutz-anfragen";
     default:
       return null;
   }
-}
-
-/** Bereich (für Filter in Aktivitäten) */
-export function auditArea(
-  ev: Pick<AuditEvent, "action" | "object_type">,
-): string {
-  const p = ev.action.split(".")[0];
-  if (["post", "publication", "template", "rss", "design_template", "calendar"].includes(p)) return "editorial";
-  if (["collection", "upload_link", "media"].includes(p)) return "media";
-  if (["site", "bridge", "banner", "connection", "social", "automation"].includes(p)) return "channels";
-  if (p === "warning") return "warnings";
-  if (["user", "auth", "setup"].includes(p)) return "user";
-  return "system";
 }
 
 export function actorDisplay(

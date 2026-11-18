@@ -290,7 +290,8 @@ flowchart LR
 - **Anmeldung:** Einladung per Link, Zwei-Faktor-Anmeldung mit Wiederherstellungscodes, erneute Bestätigung für
   kritische Aktionen, Schutz vor gezieltem Aussperren.
 - **Nachvollziehbar:** Aktivitätsprotokoll mit Hash-Kette gegen nachträgliche Änderungen, optional an Syslog;
-  Alarmierung bei auffälligen Ereignissen.
+  Aktivitäten als lesbare Sätze, nach Modul filterbar, mit Link zum betroffenen Objekt; Alarmierung bei
+  auffälligen Ereignissen.
 
 ### Datenschutz
 

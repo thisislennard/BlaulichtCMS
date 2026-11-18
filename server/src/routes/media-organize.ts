@@ -125,8 +125,13 @@ export async function mediaOrganizeRoutes(app: FastifyInstance) {
         WHERE id = $1 RETURNING *`,
       [id, name, body.parentId !== undefined, body.parentId ?? null, body.archived ?? null],
     );
-    const action = body.parentId !== undefined ? 'folder.moved' : body.archived !== undefined ? (body.archived ? 'folder.archived' : 'folder.restored') : 'folder.renamed';
-    await audit(req.auth!.actor, action, { type: 'folder', id, label: f.name }, { sammlung: f.collection_id, ...(name && name !== cur.name ? { vorher: cur.name } : {}) });
+    // Aktion direkt im Aufruf – der Unit-Test findet so jede Audit-Aktion für die lesbaren Aktivitäten (#258)
+    await audit(
+      req.auth!.actor,
+      body.parentId !== undefined ? 'folder.moved' : body.archived !== undefined ? (body.archived ? 'folder.archived' : 'folder.restored') : 'folder.renamed',
+      { type: 'folder', id, label: f.name },
+      { sammlung: f.collection_id, ...(name && name !== cur.name ? { vorher: cur.name } : {}) },
+    );
     return f;
   });
 

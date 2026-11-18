@@ -4,10 +4,16 @@
   "areaLabel": "Bereich",
   "areas": {
     "all": "Alle",
-    "editorial": "Redaktion & Freigaben",
+    "editorial": "Beiträge & Quellen",
+    "calendar": "Kalender",
     "media": "Medien",
+    "incidents": "Einsatzliste",
+    "banners": "Banner",
+    "designs": "Designvorlagen",
+    "press": "Presse",
+    "warnings": "Warnungen",
     "channels": "Websites & Verbindungen",
-    "warnings": "Warnentwürfe",
+    "automations": "Workflows",
     "user": "Benutzer & Anmeldung",
     "system": "System"
   },
@@ -25,6 +31,7 @@
   "system": "System",
   "apiKey": "API-Schlüssel",
   "open": "Öffnen",
+  "gone": "nicht mehr vorhanden",
   "fallback": "hat „{action}“ ausgeführt",
   "actions": {
     "auth": {
@@ -73,7 +80,9 @@
       "offsite_tested": "Sicherungsziel getestet",
       "offsite_fetched": "Sicherung vom Ziel geholt",
       "offsite_requested": "Übertragung außer Haus angestoßen",
-      "drill_started": "Probe-Wiederherstellung gestartet"
+      "drill_started": "Probe-Wiederherstellung gestartet",
+      "offsite_purged": "Sicherungen auf dem Ziel gelöscht",
+      "offsite_leftover_dismissed": "Hinweis auf früheres Sicherungsziel entfernt"
     },
     "post": {
       "created": "Beitrag angelegt",
@@ -96,18 +105,30 @@
       "failed": "Veröffentlichung fehlgeschlagen",
       "canceled": "Auftrag abgebrochen",
       "retried": "Erneut beauftragt",
-      "unpublish_requested": "Rücknahme beauftragt"
+      "unpublish_requested": "Rücknahme beauftragt",
+      "resolved": "Unklare Veröffentlichung geklärt",
+      "unpublished": "Von der Website zurückgezogen"
     },
     "collection": {
       "created": "Sammlung angelegt",
       "updated": "Sammlung geändert",
       "assigned": "Sammlung zugeordnet",
       "deleted": "Sammlung gelöscht",
-      "purged": "Sammlung bereinigt (Löschfrist)"
+      "purged": "Sammlung bereinigt (Löschfrist)",
+      "trashed": "Sammlung in den Papierkorb",
+      "restored": "Sammlung wiederhergestellt"
     },
     "upload_link": {
       "created": "Upload-Link erstellt",
-      "revoked": "Upload-Link widerrufen"
+      "revoked": "Upload-Link widerrufen",
+      "updated": "Upload-Link geändert",
+      "paused": "Upload-Link pausiert",
+      "resumed": "Upload-Link fortgesetzt",
+      "extended": "Upload-Link verlängert",
+      "regenerated": "Upload-Link neu erzeugt",
+      "uploader_cleared": "Angaben der Einsendenden gelöscht",
+      "design": "Upload-Seite eines Upload-Links gestaltet",
+      "password_failed": "Falsches Passwort am Upload-Link"
     },
     "media": {
       "uploaded": "Datei hochgeladen",
@@ -117,7 +138,16 @@
       "export_requested": "Export angefordert",
       "export_downloaded": "Export heruntergeladen",
       "privacy": "Datenschutz der Datei geändert",
-      "faces_requested": "Gesichtssuche angestoßen"
+      "faces_requested": "Gesichtssuche angestoßen",
+      "updated": "Angaben zur Datei geändert",
+      "tagged": "Schlagworte geändert",
+      "moved": "Datei verschoben",
+      "copied": "Datei kopiert",
+      "restored": "Datei wiederhergestellt",
+      "purged": "Datei endgültig gelöscht",
+      "rechecked": "Datei erneut geprüft",
+      "force_released": "Gesperrte Datei freigegeben",
+      "malware_found": "Schadsoftware gefunden"
     },
     "site": {
       "created": "Website angelegt",
@@ -126,7 +156,9 @@
       "paired": "Website gekoppelt",
       "revoked": "Kopplung widerrufen",
       "plugin_downloaded": "Bridge heruntergeladen",
-      "update_channel": "Update-Stufe geändert"
+      "update_channel": "Update-Stufe geändert",
+      "options": "Einstellungen der Website geändert",
+      "unpaired_by_bridge": "Kopplung in WordPress beendet"
     },
     "banner": {
       "created": "Banner angelegt",
@@ -135,7 +167,11 @@
       "approved": "Banner freigegeben",
       "published": "Banner veröffentlicht",
       "ended": "Banner beendet",
-      "from_official_warning": "Banner aus amtlicher Warnung"
+      "from_official_warning": "Banner aus amtlicher Warnung",
+      "auto_published": "Banner automatisch veröffentlicht",
+      "auto_ended": "Banner automatisch beendet",
+      "synced": "Banner von der Website übernommen",
+      "sync_failed": "Banner nicht übertragen"
     },
     "bridge": {
       "released": "Bridge-Version freigegeben",
@@ -154,7 +190,11 @@
       "revoked": "Verbindung widerrufen",
       "private_target_approved": "Internes Ziel freigegeben",
       "reviewed": "Verbindung geprüft",
-      "retest_required": "Neuer Test nötig"
+      "retest_required": "Neuer Test nötig",
+      "deleted": "Verbindung gelöscht",
+      "polled": "Verbindung abgefragt",
+      "app_registered": "App beim Dienst registriert",
+      "auto_banner_disabled": "Automatische Banner abgeschaltet"
     },
     "design_template": {
       "created": "Designvorlage angelegt",
@@ -168,7 +208,12 @@
       "malware_found": "Schadsoftware in einer Vorlagen-Datei",
       "category_created": "Vorlagen-Kategorie angelegt",
       "category_updated": "Vorlagen-Kategorie geändert",
-      "category_deleted": "Vorlagen-Kategorie gelöscht"
+      "category_deleted": "Vorlagen-Kategorie gelöscht",
+      "layout_saved": "Layout gespeichert",
+      "asset_uploaded": "Bild zur Designvorlage hochgeladen",
+      "image_generated": "Bild aus Designvorlage erzeugt",
+      "font_uploaded": "Schrift hochgeladen",
+      "font_deleted": "Schrift gelöscht"
     },
     "dashboard": {
       "shared_saved": "Gemeinsames Dashboard gespeichert"
@@ -201,7 +246,8 @@
       "banner_created": "Banner-Entwurf angelegt",
       "banner_published": "Banner direkt veröffentlicht",
       "warning_prepared": "Warnentwurf vorbereitet",
-      "mail_sent": "E-Mail versendet"
+      "mail_sent": "E-Mail versendet",
+      "incident_entry_created": "Eintrag für die Einsatzliste angelegt"
     },
     "import": {
       "committed": "Import übernommen"
@@ -215,7 +261,14 @@
     "social": {
       "requested": "Soziale Veröffentlichung beauftragt",
       "retry": "Soziale Veröffentlichung wiederholt",
-      "exported": "Für soziale Netzwerke exportiert"
+      "exported": "Für soziale Netzwerke exportiert",
+      "published": "In sozialem Netzwerk veröffentlicht",
+      "share_prepared": "Zum Teilen vorbereitet",
+      "shared_manually": "Von Hand geteilt",
+      "canceled": "Soziale Veröffentlichung abgebrochen",
+      "removed": "Aus sozialem Netzwerk gelöscht",
+      "removal_manual": "Löschen von Hand nötig",
+      "removal_confirmed": "Löschen bestätigt"
     },
     "template": {
       "created": "Vorlage angelegt",
@@ -240,13 +293,19 @@
       "responsibility_created": "Zuständigkeit angelegt",
       "responsibility_updated": "Zuständigkeit geändert",
       "settings_changed": "Warnversand eingestellt",
-      "test_mail": "Testmail gesendet"
+      "test_mail": "Testmail gesendet",
+      "approved": "Warnentwurf freigegeben",
+      "rejected": "Warnentwurf zurückgewiesen",
+      "deleted": "Warnentwurf gelöscht",
+      "level_confirmed": "Warnstufe bestätigt",
+      "level_changed": "Warnstufe abweichend festgelegt"
     },
     "access": {
       "denied": "Zugriff verweigert"
     },
     "fe2": {
-      "auth": "FE2-Anmeldung"
+      "auth": "FE2-Anmeldung",
+      "draft_created": "Einsatzentwurf aus FE2 angelegt"
     },
     "audit": {
       "verified": "Audit-Kette geprüft"
@@ -264,7 +323,15 @@
       "install": "Update-Installation",
       "activation_requested": "Update-Umschaltung beauftragt",
       "activated": "Update aktiviert",
-      "rolled_back": "Update zurückgerollt"
+      "rolled_back": "Update zurückgerollt",
+      "host_requested": "Image-Update angefordert",
+      "host_request_cancelled": "Image-Update-Anfrage zurückgezogen",
+      "host_running": "Image-Update läuft",
+      "host_success": "Image-Update abgeschlossen",
+      "host_failed": "Image-Update fehlgeschlagen",
+      "host_rolled_back": "Image-Update zurückgerollt",
+      "host_aborted": "Image-Update abgebrochen",
+      "host_rejected": "Image-Update abgelehnt"
     },
     "updates": {
       "settings_changed": "Update-Einstellungen geändert",
@@ -284,6 +351,107 @@
       "feed_renewed": "Kalender-Abo erneuert",
       "feed_updated": "Kalender-Abo geändert",
       "feed_revoked": "Kalender-Abo widerrufen"
+    },
+    "folder": {
+      "created": "Ordner angelegt",
+      "renamed": "Ordner umbenannt",
+      "moved": "Ordner verschoben",
+      "archived": "Ordner archiviert",
+      "restored": "Ordner wiederhergestellt",
+      "deleted": "Ordner in den Papierkorb",
+      "purged": "Ordner endgültig gelöscht"
+    },
+    "trash": {
+      "emptied": "Papierkorb geleert"
+    },
+    "job": {
+      "retried": "Verarbeitung erneut gestartet"
+    },
+    "design": {
+      "updated": "Upload-Seite gestaltet",
+      "image_uploaded": "Bild für die Upload-Seite hochgeladen"
+    },
+    "feuersoftware": {
+      "draft_created": "Einsatzentwurf aus Feuersoftware Connect angelegt"
+    },
+    "incident": {
+      "created": "Eintrag angelegt",
+      "revised": "Eintrag geändert",
+      "submitted": "Eintrag zur Freigabe eingereicht",
+      "approved": "Eintrag freigegeben",
+      "rejected": "Eintrag zurückgewiesen",
+      "published": "Eintrag veröffentlicht",
+      "withdrawn": "Eintrag von der Website zurückgezogen",
+      "deleted": "Eintrag gelöscht",
+      "imported": "Einträge importiert",
+      "config": "Einsatzliste eingestellt",
+      "synced": "Eintrag von der Website übernommen",
+      "sync_failed": "Eintrag nicht übertragen",
+      "removed_from_site": "Eintrag auf der Website entfernt"
+    },
+    "keywords": {
+      "state_changed": "Bundesland der Stichwörter gewechselt",
+      "catalog_synced": "Stichwortverzeichnis abgeglichen",
+      "imported": "Stichwörter importiert"
+    },
+    "official_warning": {
+      "dismissed": "Amtliche Warnung ausgeblendet"
+    },
+    "notify": {
+      "settings_changed": "Benachrichtigungen eingestellt",
+      "test_mail": "Testmail gesendet",
+      "push_keys_rotated": "Push-Schlüssel erneuert",
+      "push_subscribed": "Push auf einem Gerät eingeschaltet",
+      "push_unsubscribed": "Push auf einem Gerät abgeschaltet"
+    },
+    "press": {
+      "request_created": "Presseanfrage angelegt",
+      "request_updated": "Presseanfrage geändert",
+      "request_deleted": "Presseanfrage gelöscht",
+      "note_added": "Notiz zur Presseanfrage",
+      "reply_submitted": "Antwort zur Freigabe eingereicht",
+      "reply_queued": "Antwort zum Versand gegeben",
+      "reply_approved": "Antwort freigegeben",
+      "reply_rejected": "Antwort zurückgewiesen",
+      "reply_sent": "Antwort versendet",
+      "reply_failed": "Antwort nicht zugestellt",
+      "reply_retry": "Antwort erneut gesendet",
+      "reply_resolved": "Unklaren Versand geklärt",
+      "reply_discarded": "Antwort verworfen",
+      "snippet_created": "Textbaustein angelegt",
+      "snippet_updated": "Textbaustein geändert",
+      "snippet_deleted": "Textbaustein gelöscht",
+      "mailbox_saved": "Presse-Postfach eingestellt",
+      "mailbox_tested": "Presse-Postfach getestet",
+      "mailbox_polled": "Presse-Postfach abgerufen",
+      "contact_created": "Kontakt im Presseverteiler angelegt",
+      "contact_updated": "Kontakt im Presseverteiler geändert",
+      "contact_resubscribed": "Kontakt wieder aufgenommen",
+      "contact_reviewed": "Kontakt geprüft",
+      "contact_deleted": "Kontakt im Presseverteiler gelöscht",
+      "contact_unsubscribed": "Kontakt abgemeldet",
+      "contacts_exported": "Presseverteiler exportiert",
+      "contacts_imported": "Kontakte importiert",
+      "list_created": "Verteilerliste angelegt",
+      "list_updated": "Verteilerliste geändert",
+      "list_deleted": "Verteilerliste gelöscht",
+      "release_created": "Pressemitteilung angelegt",
+      "release_deleted": "Pressemitteilung gelöscht",
+      "release_sent": "Pressemitteilung versendet",
+      "release_resumed": "Versand fortgesetzt",
+      "release_done": "Versand abgeschlossen",
+      "answer_recorded": "Mündliche Antwort festgehalten"
+    },
+    "role": {
+      "created": "Rolle angelegt",
+      "updated": "Rolle geändert",
+      "reset": "Rolle zurückgesetzt",
+      "deleted": "Rolle gelöscht"
+    },
+    "system": {
+      "maintenance_on": "Wartungsmodus eingeschaltet",
+      "maintenance_off": "Wartungsmodus beendet",
+      "master_key_rotated": "Master-Schlüssel erneuert"
     }
   },
   "sentences": {
@@ -333,7 +501,9 @@
       "offsite_tested": "hat das Sicherungsziel „{o}“ getestet",
       "offsite_fetched": "hat die Sicherung „{o}“ vom Ziel außer Haus geholt",
       "offsite_requested": "hat die Übertragung von „{o}“ außer Haus angestoßen",
-      "drill_started": "hat eine Probe-Wiederherstellung von „{o}“ gestartet"
+      "drill_started": "hat eine Probe-Wiederherstellung von „{o}“ gestartet",
+      "offsite_purged": "hat die Sicherungen auf dem Ziel „{o}“ gelöscht",
+      "offsite_leftover_dismissed": "hat den Hinweis auf das frühere Sicherungsziel „{o}“ entfernt"
     },
     "post": {
       "created": "hat den Beitrag „{o}“ angelegt",
@@ -356,18 +526,30 @@
       "failed": "meldet: Veröffentlichung von „{o}“ fehlgeschlagen",
       "canceled": "hat einen Auftrag abgebrochen",
       "retried": "hat einen Auftrag erneut gestartet",
-      "unpublish_requested": "hat die Rücknahme von „{o}“ beauftragt"
+      "unpublish_requested": "hat die Rücknahme von „{o}“ beauftragt",
+      "resolved": "hat den unklaren Stand der Veröffentlichung von „{o}“ geklärt",
+      "unpublished": "hat „{o}“ von der Website zurückgezogen"
     },
     "collection": {
       "created": "hat die Sammlung „{o}“ angelegt",
       "updated": "hat die Sammlung „{o}“ geändert",
       "assigned": "hat die Sammlung „{o}“ einem Beitrag zugeordnet",
       "deleted": "hat die Sammlung „{o}“ endgültig gelöscht",
-      "purged": "hat nicht verwendete Dateien der Sammlung „{o}“ gelöscht"
+      "purged": "hat nicht verwendete Dateien der Sammlung „{o}“ gelöscht",
+      "trashed": "hat die Sammlung „{o}“ in den Papierkorb verschoben",
+      "restored": "hat die Sammlung „{o}“ aus dem Papierkorb wiederhergestellt"
     },
     "upload_link": {
       "created": "hat einen Upload-Link erstellt",
-      "revoked": "hat einen Upload-Link widerrufen"
+      "revoked": "hat einen Upload-Link widerrufen",
+      "updated": "hat den Upload-Link „{o}“ geändert",
+      "paused": "hat den Upload-Link „{o}“ pausiert",
+      "resumed": "hat den Upload-Link „{o}“ fortgesetzt",
+      "extended": "hat den Upload-Link „{o}“ verlängert",
+      "regenerated": "hat für „{o}“ einen neuen Link erzeugt – der bisherige gilt nicht mehr",
+      "uploader_cleared": "hat die Angaben der Einsendenden beim Upload-Link „{o}“ gelöscht",
+      "design": "hat die Upload-Seite des Upload-Links „{o}“ gestaltet",
+      "password_failed": "meldet: falsches Passwort für den Upload-Link „{o}“"
     },
     "media": {
       "uploaded": "hat „{o}“ hochgeladen",
@@ -377,7 +559,16 @@
       "export_requested": "hat einen Export angefordert",
       "export_downloaded": "hat einen Export heruntergeladen",
       "privacy": "hat Datenschutz und Unkenntlichmachung von „{o}“ geändert",
-      "faces_requested": "hat die Gesichtssuche für „{o}“ angestoßen"
+      "faces_requested": "hat die Gesichtssuche für „{o}“ angestoßen",
+      "updated": "hat die Angaben zu „{o}“ geändert",
+      "tagged": "hat die Schlagworte von „{o}“ geändert",
+      "moved": "hat „{o}“ verschoben",
+      "copied": "hat „{o}“ in eine andere Sammlung kopiert",
+      "restored": "hat „{o}“ aus dem Papierkorb wiederhergestellt",
+      "purged": "hat „{o}“ endgültig gelöscht",
+      "rechecked": "hat „{o}“ erneut prüfen lassen",
+      "force_released": "hat die gesperrte Datei „{o}“ trotzdem freigegeben",
+      "malware_found": "hat in „{o}“ Schadsoftware gefunden und die Datei gesperrt"
     },
     "site": {
       "created": "hat die Website „{o}“ angelegt",
@@ -386,7 +577,9 @@
       "paired": "hat die Website „{o}“ gekoppelt",
       "revoked": "hat die Kopplung von „{o}“ widerrufen",
       "plugin_downloaded": "hat die BlaulichtCMS Bridge heruntergeladen",
-      "update_channel": "hat die Update-Stufe von „{o}“ geändert"
+      "update_channel": "hat die Update-Stufe von „{o}“ geändert",
+      "options": "hat die Einstellungen der Website „{o}“ geändert",
+      "unpaired_by_bridge": "hat die Kopplung von „{o}“ in WordPress beendet"
     },
     "banner": {
       "created": "hat das Banner „{o}“ angelegt",
@@ -395,7 +588,11 @@
       "approved": "hat das Banner „{o}“ freigegeben",
       "published": "hat das Banner „{o}“ veröffentlicht",
       "ended": "hat das Banner „{o}“ beendet",
-      "from_official_warning": "hat aus einer amtlichen Warnung den Banner-Entwurf „{o}“ erstellt"
+      "from_official_warning": "hat aus einer amtlichen Warnung den Banner-Entwurf „{o}“ erstellt",
+      "auto_published": "hat das Banner „{o}“ automatisch veröffentlicht",
+      "auto_ended": "hat das Banner „{o}“ automatisch beendet",
+      "synced": "hat das Banner „{o}“ auf der Website übernommen",
+      "sync_failed": "meldet: Banner „{o}“ ließ sich nicht auf die Website übertragen"
     },
     "bridge": {
       "released": "hat „{o}“ für alle Websites freigegeben",
@@ -414,7 +611,11 @@
       "revoked": "hat die Verbindung „{o}“ widerrufen",
       "private_target_approved": "hat ein internes Ziel für die Verbindung „{o}“ freigegeben",
       "reviewed": "hat die Verbindung „{o}“ als geprüft markiert",
-      "retest_required": "hat die Verbindung „{o}“ geändert – sie muss neu getestet werden"
+      "retest_required": "hat die Verbindung „{o}“ geändert – sie muss neu getestet werden",
+      "deleted": "hat die Verbindung „{o}“ gelöscht",
+      "polled": "hat die Verbindung „{o}“ von Hand abgefragt",
+      "app_registered": "hat BlaulichtCMS für die Verbindung „{o}“ als App beim Dienst registriert",
+      "auto_banner_disabled": "hat die automatischen Banner der Verbindung „{o}“ abgeschaltet"
     },
     "design_template": {
       "created": "hat die Designvorlage „{o}“ angelegt",
@@ -428,7 +629,12 @@
       "malware_found": "hat eine Datei mit Schadsoftware hochzuladen versucht ({o})",
       "category_created": "hat die Vorlagen-Kategorie „{o}“ angelegt",
       "category_updated": "hat die Vorlagen-Kategorie „{o}“ geändert",
-      "category_deleted": "hat die Vorlagen-Kategorie „{o}“ gelöscht"
+      "category_deleted": "hat die Vorlagen-Kategorie „{o}“ gelöscht",
+      "layout_saved": "hat das Layout der Designvorlage „{o}“ gespeichert",
+      "asset_uploaded": "hat ein Bild zur Designvorlage „{o}“ hochgeladen",
+      "image_generated": "hat aus der Designvorlage „{o}“ ein Bild erzeugt",
+      "font_uploaded": "hat die Schrift „{o}“ hochgeladen",
+      "font_deleted": "hat die Schrift „{o}“ gelöscht"
     },
     "dashboard": {
       "shared_saved": "hat das gemeinsame Dashboard gespeichert"
@@ -461,7 +667,8 @@
       "banner_created": "hat den Banner-Entwurf „{o}“ angelegt",
       "banner_published": "hat das Banner „{o}“ direkt veröffentlicht",
       "warning_prepared": "hat den Warnentwurf „{o}“ vorbereitet",
-      "mail_sent": "hat die E-Mail „{o}“ versendet"
+      "mail_sent": "hat die E-Mail „{o}“ versendet",
+      "incident_entry_created": "hat in der Einsatzliste „{o}“ angelegt"
     },
     "import": {
       "committed": "hat den Import aus „{o}“ übernommen"
@@ -475,7 +682,14 @@
     "social": {
       "requested": "hat „{o}“ für ein soziales Netzwerk beauftragt",
       "retry": "hat eine soziale Veröffentlichung erneut gestartet",
-      "exported": "hat „{o}“ für soziale Netzwerke exportiert"
+      "exported": "hat „{o}“ für soziale Netzwerke exportiert",
+      "published": "hat „{o}“ in einem sozialen Netzwerk veröffentlicht",
+      "share_prepared": "hat „{o}“ zum Teilen von Hand vorbereitet",
+      "shared_manually": "hat bestätigt, dass „{o}“ von Hand geteilt wurde",
+      "canceled": "hat die Veröffentlichung von „{o}“ in einem sozialen Netzwerk abgebrochen",
+      "removed": "hat „{o}“ aus einem sozialen Netzwerk gelöscht",
+      "removal_manual": "hat „{o}“ zum Löschen von Hand in einem sozialen Netzwerk vorgemerkt",
+      "removal_confirmed": "hat bestätigt, dass „{o}“ im sozialen Netzwerk gelöscht ist"
     },
     "template": {
       "created": "hat die Vorlage „{o}“ angelegt",
@@ -488,7 +702,7 @@
       "submitted": "hat „{o}“ zur Freigabe eingereicht",
       "send_requested": "hat den Versand von „{o}“ beauftragt",
       "send_resolved": "hat einen unklaren Versand geklärt",
-      "acknowledged": "hat den Auslöser eines Warnentwurfs bestätigt",
+      "acknowledged": "hat den Eingang eines Warnentwurfs bestätigt",
       "keyword_created": "hat das Stichwort „{o}“ angelegt",
       "keyword_updated": "hat das Stichwort „{o}“ geändert",
       "question_created": "hat die Lagefrage „{o}“ angelegt",
@@ -500,13 +714,19 @@
       "responsibility_created": "hat die Zuständigkeit „{o}“ angelegt",
       "responsibility_updated": "hat die Zuständigkeit „{o}“ geändert",
       "settings_changed": "hat die Einstellungen für den Warnversand geändert",
-      "test_mail": "hat eine Testmail für den Warnversand gesendet"
+      "test_mail": "hat eine Testmail für den Warnversand gesendet",
+      "approved": "hat den Warnentwurf „{o}“ freigegeben",
+      "rejected": "hat den Warnentwurf „{o}“ zurückgewiesen",
+      "deleted": "hat den Warnentwurf „{o}“ gelöscht",
+      "level_confirmed": "hat die vorgeschlagene Warnstufe für „{o}“ bestätigt",
+      "level_changed": "hat für „{o}“ eine andere Warnstufe als vorgeschlagen festgelegt"
     },
     "access": {
       "denied": "hatte keine Berechtigung für „{o}“"
     },
     "fe2": {
-      "auth": "hat FE2-Daten mit falschem Zugangsschlüssel gesendet"
+      "auth": "hat FE2-Daten mit falschem Zugangsschlüssel gesendet",
+      "draft_created": "hat den Einsatzentwurf „{o}“ angelegt"
     },
     "audit": {
       "verified": "hat die Audit-Kette geprüft"
@@ -524,7 +744,15 @@
       "install": "hat die Installation von Version „{o}“ angestoßen",
       "activation_requested": "hat die Umschaltung auf Version „{o}“ beauftragt",
       "activated": "hat Version „{o}“ aktiviert",
-      "rolled_back": "hat das Update auf Version „{o}“ zurückgerollt"
+      "rolled_back": "hat das Update auf Version „{o}“ zurückgerollt",
+      "host_requested": "hat das Image-Update auf Version „{o}“ beim Update-Helfer angefordert",
+      "host_request_cancelled": "hat die Anfrage für das Image-Update auf Version „{o}“ zurückgezogen",
+      "host_running": "hat mit dem Image-Update auf Version „{o}“ begonnen",
+      "host_success": "hat das Image-Update auf Version „{o}“ abgeschlossen",
+      "host_failed": "meldet: Image-Update auf Version „{o}“ fehlgeschlagen",
+      "host_rolled_back": "hat das Image-Update auf Version „{o}“ zurückgerollt",
+      "host_aborted": "hat das Image-Update auf Version „{o}“ abgebrochen",
+      "host_rejected": "hat das Image-Update auf Version „{o}“ abgelehnt"
     },
     "updates": {
       "settings_changed": "hat die Update-Einstellungen geändert",
@@ -544,6 +772,107 @@
       "feed_renewed": "hat den Abo-Link für den Kalender erneuert",
       "feed_updated": "hat das Kalender-Abo geändert",
       "feed_revoked": "hat den Abo-Link für den Kalender widerrufen"
+    },
+    "folder": {
+      "created": "hat den Ordner „{o}“ angelegt",
+      "renamed": "hat den Ordner „{o}“ umbenannt",
+      "moved": "hat den Ordner „{o}“ verschoben",
+      "archived": "hat den Ordner „{o}“ archiviert",
+      "restored": "hat den Ordner „{o}“ wiederhergestellt",
+      "deleted": "hat den Ordner „{o}“ in den Papierkorb verschoben",
+      "purged": "hat den Ordner „{o}“ endgültig gelöscht"
+    },
+    "trash": {
+      "emptied": "hat den Papierkorb geleert"
+    },
+    "job": {
+      "retried": "hat einen Verarbeitungsauftrag für Medien erneut gestartet"
+    },
+    "design": {
+      "updated": "hat die Standard-Upload-Seite gestaltet",
+      "image_uploaded": "hat ein Bild für die Upload-Seite hochgeladen"
+    },
+    "feuersoftware": {
+      "draft_created": "hat den Einsatzentwurf „{o}“ angelegt"
+    },
+    "incident": {
+      "created": "hat in der Einsatzliste „{o}“ angelegt",
+      "revised": "hat in der Einsatzliste eine neue Fassung von „{o}“ gespeichert",
+      "submitted": "hat in der Einsatzliste „{o}“ zur Freigabe eingereicht",
+      "approved": "hat in der Einsatzliste „{o}“ freigegeben",
+      "rejected": "hat in der Einsatzliste „{o}“ zurückgewiesen",
+      "published": "hat „{o}“ in der Einsatzliste der Website veröffentlicht",
+      "withdrawn": "hat „{o}“ aus der Einsatzliste der Website zurückgezogen",
+      "deleted": "hat „{o}“ aus der Einsatzliste gelöscht",
+      "imported": "hat Einträge aus einer CSV-Datei in die Einsatzliste importiert",
+      "config": "hat die Einstellungen der Einsatzliste geändert",
+      "synced": "hat „{o}“ in die Einsatzliste der Website übernommen",
+      "sync_failed": "meldet: „{o}“ ließ sich nicht in die Einsatzliste der Website übertragen",
+      "removed_from_site": "hat „{o}“ aus der Einsatzliste der Website entfernt"
+    },
+    "keywords": {
+      "state_changed": "hat das Stichwortverzeichnis auf „{o}“ umgestellt",
+      "catalog_synced": "hat das Stichwortverzeichnis für „{o}“ abgeglichen",
+      "imported": "hat „{o}“ in die Stichwörter importiert"
+    },
+    "official_warning": {
+      "dismissed": "hat die amtliche Warnung „{o}“ ausgeblendet"
+    },
+    "notify": {
+      "settings_changed": "hat die Einstellungen für Benachrichtigungen und E-Mail geändert",
+      "test_mail": "hat eine Testmail über „{o}“ gesendet",
+      "push_keys_rotated": "hat die Schlüssel für Push-Mitteilungen erneuert",
+      "push_subscribed": "hat Push-Mitteilungen auf dem Gerät „{o}“ eingeschaltet",
+      "push_unsubscribed": "hat Push-Mitteilungen auf dem Gerät „{o}“ abgeschaltet"
+    },
+    "press": {
+      "request_created": "hat die Presseanfrage „{o}“ angelegt",
+      "request_updated": "hat die Presseanfrage „{o}“ geändert",
+      "request_deleted": "hat die Presseanfrage „{o}“ gelöscht",
+      "note_added": "hat eine Notiz zur Presseanfrage „{o}“ hinzugefügt",
+      "reply_submitted": "hat eine Antwort auf die Presseanfrage „{o}“ zur Freigabe eingereicht",
+      "reply_queued": "hat eine Antwort auf die Presseanfrage „{o}“ zum Versand gegeben",
+      "reply_approved": "hat die Antwort auf die Presseanfrage „{o}“ freigegeben",
+      "reply_rejected": "hat die Antwort auf die Presseanfrage „{o}“ zurückgewiesen",
+      "reply_sent": "hat die Antwort auf die Presseanfrage „{o}“ versendet",
+      "reply_failed": "meldet: Antwort auf die Presseanfrage „{o}“ nicht zugestellt",
+      "reply_retry": "hat den Versand einer Antwort auf die Presseanfrage „{o}“ erneut gestartet",
+      "reply_resolved": "hat den unklaren Versand einer Antwort auf die Presseanfrage „{o}“ geklärt",
+      "reply_discarded": "hat eine Antwort auf die Presseanfrage „{o}“ verworfen",
+      "snippet_created": "hat den Textbaustein „{o}“ angelegt",
+      "snippet_updated": "hat den Textbaustein „{o}“ geändert",
+      "snippet_deleted": "hat den Textbaustein „{o}“ gelöscht",
+      "mailbox_saved": "hat die Einstellungen des Presse-Postfachs geändert",
+      "mailbox_tested": "hat das Presse-Postfach getestet",
+      "mailbox_polled": "hat das Presse-Postfach von Hand abgerufen",
+      "contact_created": "hat im Presseverteiler den Kontakt „{o}“ angelegt",
+      "contact_updated": "hat im Presseverteiler den Kontakt „{o}“ geändert",
+      "contact_resubscribed": "hat den Kontakt „{o}“ wieder in den Presseverteiler aufgenommen",
+      "contact_reviewed": "hat den Kontakt „{o}“ im Presseverteiler als geprüft markiert",
+      "contact_deleted": "hat im Presseverteiler den Kontakt „{o}“ gelöscht",
+      "contact_unsubscribed": "hat einen Kontakt vom Presseverteiler abgemeldet",
+      "contacts_exported": "hat den Presseverteiler exportiert",
+      "contacts_imported": "hat Kontakte in den Presseverteiler importiert",
+      "list_created": "hat die Verteilerliste „{o}“ angelegt",
+      "list_updated": "hat die Verteilerliste „{o}“ geändert",
+      "list_deleted": "hat die Verteilerliste „{o}“ gelöscht",
+      "release_created": "hat die Pressemitteilung „{o}“ angelegt",
+      "release_deleted": "hat die Pressemitteilung „{o}“ gelöscht",
+      "release_sent": "hat den Versand der Pressemitteilung „{o}“ gestartet",
+      "release_resumed": "hat den Versand der Pressemitteilung „{o}“ fortgesetzt",
+      "release_done": "hat den Versand der Pressemitteilung „{o}“ abgeschlossen",
+      "answer_recorded": "hat die mündliche Antwort auf die Presseanfrage „{o}“ festgehalten"
+    },
+    "role": {
+      "created": "hat die Rolle „{o}“ angelegt",
+      "updated": "hat die Rolle „{o}“ geändert",
+      "reset": "hat die Rolle „{o}“ auf die Standardrechte zurückgesetzt",
+      "deleted": "hat die Rolle „{o}“ gelöscht"
+    },
+    "system": {
+      "maintenance_on": "hat den Wartungsmodus eingeschaltet",
+      "maintenance_off": "hat den Wartungsmodus beendet",
+      "master_key_rotated": "hat den Master-Schlüssel erneuert"
     }
   },
   "notifications": {

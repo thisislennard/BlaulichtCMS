@@ -3,12 +3,13 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router';
 import { get, post, put, del } from '../../api/client';
 import type { MediaItem } from '../../api/types';
-import { Badge, Button, Card, Chip, EmptyState, ErrorBox, FieldWrap, FilePickButton, Input, Notice, PageHeader, SegmentedControl, Select, SkeletonRows, StatusBadge, Switch, Table, Td, Textarea, Th } from '../../components/ui/core';
+import { Badge, Button, Card, Chip, cx, EmptyState, ErrorBox, FieldWrap, FilePickButton, Input, Notice, PageHeader, SegmentedControl, Select, SkeletonRows, StatusBadge, Switch, Table, Td, Textarea, Th } from '../../components/ui/core';
 import { Icon } from '../../components/ui/Icon';
 import { HelpTip } from '../../components/ui/HelpTip';
 import { Dialog, Menu, useConfirm, useErrorToast, useToast } from '../../components/ui/overlays';
 import { KeywordMeaning } from '../../components/KeywordMeaning';
 import { useAuth } from '../../lib/auth';
+import { useLinkedItem } from '../../lib/linked-item';
 import { fmtDate, fmtDateTime, fmtTime, fromLocalInput, toLocalInput, plural } from '../../lib/format';
 import { MediaPicker } from '../posts/PostEditor';
 import { PRIVACY_CHECKS, PrivacyCheckList } from '../posts/DecisionDialog';
@@ -513,7 +514,8 @@ export default function IncidentList() {
   const ask = useConfirm();
   const toast = useToast();
   const toastError = useErrorToast();
-  const [year, setYear] = useState<string>('');
+  // Verweis aus Aktivitäten oder Benachrichtigung (/einsatzliste?eintrag=<id>, #258): alle Jahre laden, Eintrag hervorheben
+  const [year, setYear] = useState<string>(() => (new URLSearchParams(window.location.search).has('eintrag') ? 'alle' : ''));
   const [filter, setFilter] = useState<Filter>('all');
   const [search, setSearch] = useState('');
   const [sel, setSel] = useState<Set<string>>(new Set());
@@ -541,6 +543,8 @@ export default function IncidentList() {
     () => (q.data?.entries ?? []).filter((e) => matches(e, filter) && (!needle || [e.title, e.keyword, e.keyword_label, e.location, e.category].some((x) => x.toLowerCase().includes(needle)))),
     [q.data, filter, needle],
   );
+  const linked = useLinkedItem('eintrag', !!q.data, 'incident');
+  const linkedMissing = !!linked.id && !!q.data && q.data.year === 'alle' && !q.data.entries.some((e) => e.id === linked.id);
   const chosen = list.filter((e) => sel.has(e.id));
   const toggle = (id: string) => setSel((s) => (s.has(id) ? new Set([...s].filter((x) => x !== id)) : new Set([...s, id])));
   const bulk = async (what: 'submit' | 'approve' | 'publish') => {
@@ -644,6 +648,16 @@ export default function IncidentList() {
           <Button size="sm" variant="ghost" onClick={() => setSel(new Set())}>Auswahl aufheben</Button>
         </div>
       )}
+      {linkedMissing && (
+        <Notice tone="warning" title="Eintrag nicht gefunden">
+          <div className="flex flex-col items-start gap-2">
+            Den verlinkten Eintrag gibt es nicht mehr in der Einsatzliste.
+            <Button size="sm" onClick={linked.clear}>
+              Hinweis schließen
+            </Button>
+          </div>
+        </Notice>
+      )}
       {q.isLoading && <SkeletonRows rows={6} />}
       {q.error && <ErrorBox title="Einsatzliste konnte nicht geladen werden">{(q.error as Error).message}</ErrorBox>}
       {q.data && list.length === 0 && <EmptyState icon="ListOrdered" title="Keine Einträge" text={q.data.entries.length ? 'Kein Eintrag passt zum Filter.' : 'Einträge entstehen aus Einsatzmeldungen, per Workflow, von Hand oder per Import.'} />}
@@ -668,7 +682,7 @@ export default function IncidentList() {
             </thead>
             <tbody>
               {list.map((e) => (
-                <tr key={e.id} className="hover:bg-raised">
+                <tr key={e.id} id={`incident-${e.id}`} className={cx(linked.id === e.id ? 'bg-primary-soft' : 'hover:bg-raised')}>
                   <Td>
                     <input type="checkbox" aria-label={`${e.title} auswählen`} checked={sel.has(e.id)} onChange={() => toggle(e.id)} />
                   </Td>

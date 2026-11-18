@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { Link } from "react-router";
+import { useMemo } from "react";
+import { Link, useSearchParams } from "react-router";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { get, qs } from "../api/client";
 import {
@@ -9,7 +9,7 @@ import {
   cx,
   EmptyState,
   PageHeader,
-  SegmentedControl,
+  Select,
   SkeletonRows,
 } from "../components/ui/core";
 import { Icon } from "../components/ui/Icon";
@@ -17,28 +17,34 @@ import { t } from "../i18n";
 import { fmtDate, fmtDateTime, fmtTime, getTimeZone } from "../lib/format";
 import {
   actorDisplay,
-  auditArea,
   auditHref,
   auditSentence,
   LoadError,
   type AuditEvent,
 } from "./admin/shared";
 
+/**
+ * Bereiche wie die Module der Navigation (#258); die Zuordnung der Aktionen und der Filter liegen beim Server
+ * (server/src/lib/audit-view.ts), damit „Ältere laden“ im Bereich vollständig ist.
+ */
 const AREAS = [
   "all",
   "editorial",
+  "calendar",
   "media",
-  "channels",
+  "incidents",
+  "banners",
+  "designs",
+  "press",
   "warnings",
+  "channels",
+  "automations",
   "user",
   "system",
 ] as const;
 type Area = (typeof AREAS)[number];
 /** Routine-Anmeldungen nur im Bereich „Benutzer & Anmeldung“, sonst überdecken sie die Änderungen. */
 const NOISE = new Set(["auth.login", "auth.logout", "auth.mfa"]);
-
-/** Serverseitiger Suchbegriff je Bereich (ILIKE auf action/objekt/person) – Feinfilter danach im Client. */
-const AREA_QUERY: Partial<Record<Area, string>> = {};
 
 function dayKey(iso: string) {
   return new Intl.DateTimeFormat("en-CA", {
@@ -64,20 +70,29 @@ function dayLabel(iso: string) {
 }
 
 export default function Activities() {
-  const [area, setArea] = useState<Area>("all");
+  // Bereich in der Adresse (?bereich=press …), damit sich ein gefilterter Stand verlinken lässt
+  const [params, setParams] = useSearchParams();
+  const fromUrl = params.get("bereich") as Area | null;
+  const area: Area = fromUrl && AREAS.includes(fromUrl) ? fromUrl : "all";
+  const setArea = (a: Area) => {
+    const next = new URLSearchParams(params);
+    if (a === "all") next.delete("bereich");
+    else next.set("bereich", a);
+    setParams(next, { replace: true });
+  };
   const q = useInfiniteQuery({
     queryKey: ["audit", "feed", area],
     initialPageParam: undefined as number | undefined,
     queryFn: ({ pageParam }) =>
       get<{ events: AuditEvent[]; nextBefore: number | null }>(
-        `/audit${qs({ q: AREA_QUERY[area], before: pageParam, limit: 100 })}`,
+        `/audit${qs({ area: area === "all" ? undefined : area, before: pageParam, limit: 100 })}`,
       ),
     getNextPageParam: (last) => last.nextBefore ?? undefined,
   });
   const events = useMemo(
     () =>
-      (q.data?.pages.flatMap((p) => p.events) ?? []).filter((e) =>
-        area === "all" ? !NOISE.has(e.action) : auditArea(e) === area,
+      (q.data?.pages.flatMap((p) => p.events) ?? []).filter(
+        (e) => area !== "all" || !NOISE.has(e.action),
       ),
     [q.data, area],
   );
@@ -98,15 +113,26 @@ export default function Activities() {
         subtitle={t("activity.subtitle")}
       />
       <div className="flex flex-col items-start gap-1.5">
-        <SegmentedControl
-          label={t("activity.areaLabel")}
-          value={area}
-          onChange={setArea}
-          options={AREAS.map((a) => ({
-            value: a,
-            label: t(`activity.areas.${a}`),
-          }))}
-        />
+        <div className="flex items-center gap-2 w-full sm:w-auto">
+          <label
+            htmlFor="activity-area"
+            className="text-sm font-medium shrink-0"
+          >
+            {t("activity.areaLabel")}
+          </label>
+          <Select
+            id="activity-area"
+            value={area}
+            onChange={(e) => setArea(e.target.value as Area)}
+            className="sm:w-[260px]"
+          >
+            {AREAS.map((a) => (
+              <option key={a} value={a}>
+                {t(`activity.areas.${a}`)}
+              </option>
+            ))}
+          </Select>
+        </div>
         {area === "all" && (
           <p className="m-0 text-meta text-fg-muted">
             {t("activity.hideLogins")}
@@ -250,6 +276,11 @@ function FeedItem({ ev }: { ev: AuditEvent }) {
           <span className="sr-only"> · {fmtDate(ev.at)}</span>
         </span>
       </div>
+      {!href && ev.object_exists === false && (
+        <span className="shrink-0 text-meta text-fg-muted h-7 inline-flex items-center px-2">
+          {t("activity.gone")}
+        </span>
+      )}
       {href && (
         <Link
           to={href}

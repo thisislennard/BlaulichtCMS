@@ -38,7 +38,7 @@ const VERSION_RE = /^\d{1,4}\.\d{1,4}\.\d{1,6}$/;
 
 export type HostState = 'running' | 'success' | 'failed' | 'rolled_back' | 'aborted' | 'rejected';
 export type HostPhase = 'verify' | 'prepare' | 'build' | 'backup' | 'switch' | 'check' | 'rollback' | 'finish' | 'done';
-const STATES: HostState[] = ['running', 'success', 'failed', 'rolled_back', 'aborted', 'rejected'];
+export const HOST_STATES: HostState[] = ['running', 'success', 'failed', 'rolled_back', 'aborted', 'rejected'];
 const PHASES: HostPhase[] = ['verify', 'prepare', 'build', 'backup', 'switch', 'check', 'rollback', 'finish', 'done'];
 
 export interface HostHelperInfo {
@@ -112,7 +112,7 @@ export function parseHostStatus(text: string | null): HostStatus | null {
   } catch {
     return null;
   }
-  if (!j || typeof j !== 'object' || j.v !== 1 || !STATES.includes(j.state) || !PHASES.includes(j.phase)) return null;
+  if (!j || typeof j !== 'object' || j.v !== 1 || !HOST_STATES.includes(j.state) || !PHASES.includes(j.phase)) return null;
   return {
     requestId: typeof j.requestId === 'string' && UUID_RE.test(j.requestId) ? j.requestId : null,
     userId: typeof j.userId === 'string' && UUID_RE.test(j.userId) ? j.userId : null,

@@ -17,6 +17,7 @@ import {
   entryState,
   fieldsFromEvent,
   importRef,
+  incidentLink,
   isOnWebsite,
   liveSite,
   loadConfig,
@@ -432,7 +433,8 @@ export async function incidentRoutes(app: FastifyInstance) {
     const e = await one<any>(`UPDATE incident_entries SET submitted_at = now(), submitted_by = $2, rejected_note = NULL WHERE id = $1 RETURNING *`, [id, uid(req)]);
     if (!e) throw notFound('Eintrag nicht gefunden.');
     await audit(req.auth!.actor, 'incident.submitted', { type: 'incident', id, label: e.title }, { fassung: e.revision });
-    await notify({ kind: 'info', title: `Einsatzliste: Freigabe erbeten – ${e.title}`.slice(0, 200), body: `Fassung ${e.revision}`, link: '/einsatzliste', permission: 'approval.incident' });
+    // Link hebt den Eintrag in der Liste hervor (#258)
+    await notify({ kind: 'info', title: `Einsatzliste: Freigabe erbeten – ${e.title}`.slice(0, 200), body: `Fassung ${e.revision}`, link: incidentLink(id), permission: 'approval.incident' });
     return { ok: true };
   });
 
@@ -460,7 +462,7 @@ export async function incidentRoutes(app: FastifyInstance) {
     if (!e) throw conflict('Der Eintrag liegt nicht (mehr) zur Freigabe vor.');
     await audit(req.auth!.actor, 'incident.rejected', { type: 'incident', id, label: e.title }, { fassung: e.revision });
     const to = e.submitted_by ?? e.updated_by ?? e.created_by;
-    if (to) await notify({ kind: 'warning', title: `Einsatzliste: zurückgewiesen – ${e.title}`.slice(0, 200), body: note, link: '/einsatzliste', userId: to, category: 'decision' });
+    if (to) await notify({ kind: 'warning', title: `Einsatzliste: zurückgewiesen – ${e.title}`.slice(0, 200), body: note, link: incidentLink(id), userId: to, category: 'decision' });
     return { ok: true };
   });
 

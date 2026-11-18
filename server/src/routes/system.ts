@@ -8,6 +8,7 @@ import { proxyService } from '../lib/proxy-check.js';
 import { many, one, pool } from '../db/pool.js';
 import { assertRecentAuth, mustUse2fa, requireAnyAuth, requireAuth } from '../auth/context.js';
 import { audit, settingsDiff } from '../lib/audit.js';
+import { AUDIT_AREAS, auditAreaCondition, auditViewFields } from '../lib/audit-view.js';
 import { runRetention } from '../lib/retention.js';
 import { securityAlert } from '../lib/security-alerts.js';
 import { badRequest, forbidden } from '../lib/errors.js';
@@ -212,10 +213,12 @@ export async function systemRoutes(app: FastifyInstance) {
 
   app.get('/audit', { preHandler: requireAuth('audit.view') }, async (req) => {
     const q = z
-      .object({ q: z.string().max(100).optional(), actor: z.string().max(100).optional(), objectType: z.string().max(40).optional(), result: z.enum(['all', 'ok', 'failed', 'denied']).default('all'), before: z.coerce.number().optional(), limit: z.coerce.number().min(1).max(500).default(100) })
+      .object({ q: z.string().max(100).optional(), actor: z.string().max(100).optional(), objectType: z.string().max(40).optional(), area: z.enum(AUDIT_AREAS).optional(), result: z.enum(['all', 'ok', 'failed', 'denied']).default('all'), before: z.coerce.number().optional(), limit: z.coerce.number().min(1).max(500).default(100) })
       .parse(req.query);
     const p: unknown[] = [];
     const w: string[] = [];
+    // Bereich der Aktivitäten (#258) serverseitig – sonst fänden „Presse“ oder „Einsatzliste“ ältere Einträge nicht
+    if (q.area) w.push(auditAreaCondition(q.area, p));
     if (q.q) {
       p.push(`%${q.q}%`);
       w.push(`(action ILIKE $${p.length} OR object_label ILIKE $${p.length} OR actor_name ILIKE $${p.length})`);
@@ -238,7 +241,8 @@ export async function systemRoutes(app: FastifyInstance) {
     }
     p.push(q.limit);
     const rows = await many<any>(`SELECT * FROM audit_events ${w.length ? 'WHERE ' + w.join(' AND ') : ''} ORDER BY id DESC LIMIT $${p.length}`, p);
-    return { events: rows, nextBefore: rows.length === q.limit ? rows[rows.length - 1].id : null };
+    // Bereich je Eintrag und ob das betroffene Objekt noch existiert (Link „Öffnen“ nur dann, #258)
+    return { events: await auditViewFields(rows), nextBefore: rows.length === q.limit ? rows[rows.length - 1].id : null };
   });
 
   /** Hash-Kette des Audits prüfen (#112): vorher offene Einträge versiegeln, dann die ganze Kette nachrechnen. */

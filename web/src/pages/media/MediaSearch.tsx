@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router';
+import { Link, useNavigate, useSearchParams } from 'react-router';
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 import { get, post, qs } from '../../api/client';
 import type { MediaItem } from '../../api/types';
@@ -46,6 +46,17 @@ export default function MediaSearch() {
   const [marked, setMarked] = useState<Set<string>>(new Set());
   const [lightbox, setLightbox] = useState<number | null>(null);
   const [details, setDetails] = useState<string | null>(null);
+  // Verweis aus den Aktivitäten (/medien/dateien?datei=<id>, #258): Details dieser Datei öffnen
+  const [params, setParams] = useSearchParams();
+  const linkedFile = params.get('datei');
+  const shownDetails = details ?? linkedFile;
+  const closeDetails = () => {
+    setDetails(null);
+    if (!linkedFile) return;
+    const next = new URLSearchParams(params);
+    next.delete('datei');
+    setParams(next, { replace: true });
+  };
   const [moveCopy, setMoveCopy] = useState<null | { mode: 'move' | 'copy'; ids: string[] }>(null);
   const [tagging, setTagging] = useState<null | { ids: string[]; current?: string[] }>(null);
   const [zip, setZip] = useState(false);
@@ -241,7 +252,7 @@ export default function MediaSearch() {
         ))}
       <Pager page={page} pages={q.data?.pages ?? 1} total={q.data?.total ?? 0} onPage={setPage} />
       {lightbox !== null && items.length > 0 && <Lightbox items={items} start={lightbox} onClose={() => setLightbox(null)} onDetails={(m) => (setLightbox(null), setDetails(m.id))} />}
-      {details && <MediaDetailsDialog mediaId={details} manage={may.organize} onClose={() => setDetails(null)} onSaved={refresh} />}
+      {shownDetails && <MediaDetailsDialog mediaId={shownDetails} manage={may.organize} onClose={closeDetails} onSaved={refresh} />}
       {moveCopy && <MoveCopyDialog mode={moveCopy.mode} ids={moveCopy.ids} onClose={() => setMoveCopy(null)} onDone={() => (setMoveCopy(null), setMarked(new Set()), refresh())} />}
       {tagging && <TagsDialog ids={tagging.ids} current={tagging.current} onClose={() => setTagging(null)} onDone={() => (setTagging(null), refresh(), qc.invalidateQueries({ queryKey: ['media-tags'] }))} />}
       {zip && <CrossExportDialog ids={[...marked]} originals={may.originals} onClose={() => setZip(false)} />}
