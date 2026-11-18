@@ -357,7 +357,9 @@ describe('Automationen: Ereignisse', () => {
     expect(b!.text).toMatch(/Kreis Test – Quelle: Deutscher Wetterdienst/);
     expect(await one(`SELECT 1 FROM banner_jobs WHERE banner_id = $1`, [b!.id])).toBeNull();
     const n = await one<any>(`SELECT * FROM notifications WHERE user_id = $1 AND title = 'Unwetter: STURMBÖEN'`, [editorId]);
-    expect(n!.link).toBe('/banner');
+    // Eine Website → banner_link zeigt direkt auf das Banner (#252)
+    expect(n!.link).toBe(`/banner?banner=${b!.id}`);
+    expect(await one(`SELECT 1 FROM notifications WHERE permission = 'approval.banner' AND link = $1`, [`/banner?banner=${b!.id}`])).not.toBeNull();
   });
 
   it('RSS: neue Einträge beim regulären Abruf starten je einen Lauf, das erste Einlesen nicht', async () => {
