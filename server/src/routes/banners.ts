@@ -92,9 +92,13 @@ export async function bannerRoutes(app: FastifyInstance) {
   app.get('/banners', { preHandler: requireAuth('banner.view') }, async () => {
     const rows = await many<any>(
       `SELECT b.*, s.name AS site_name, u.name AS approved_by_name,
-              j.status AS job_status, j.revision AS job_revision, j.action AS job_action, j.result_at AS job_result_at, j.error AS job_error
+              j.status AS job_status, j.revision AS job_revision, j.action AS job_action, j.result_at AS job_result_at, j.error AS job_error,
+              a.name AS automation_name, a.deleted_at AS automation_deleted, live.revision AS live_revision
          FROM banners b JOIN wp_sites s ON s.id = b.site_id LEFT JOIN users u ON u.id = b.approved_by
+         LEFT JOIN automations a ON a.id = b.automation_id
          LEFT JOIN LATERAL (SELECT * FROM banner_jobs WHERE banner_id = b.id AND status <> 'canceled' ORDER BY created_at DESC LIMIT 1) j ON true
+         -- zuletzt auf der Website angekommene Fassung (bleibt sichtbar, bis eine neue freigegeben und veröffentlicht ist)
+         LEFT JOIN LATERAL (SELECT revision FROM banner_jobs WHERE banner_id = b.id AND action = 'upsert' AND status = 'done' ORDER BY created_at DESC LIMIT 1) live ON true
         WHERE b.ended_at IS NULL OR b.ended_at > now() - interval '30 days'
         ORDER BY (b.ends_at > now()) DESC, b.priority DESC, b.starts_at DESC LIMIT 200`,
     );
@@ -109,6 +113,15 @@ export async function bannerRoutes(app: FastifyInstance) {
       state: bannerState(b, b.job_status ? { status: b.job_status, revision: b.job_revision, action: b.job_action } : null),
       synced_at: b.job_result_at,
       error: b.job_error,
+      // Herkunft aus einem Workflow und „folgt dem Vorgang“ (#274)
+      automation_id: b.automation_id && !b.automation_deleted ? b.automation_id : null,
+      automation_name: b.automation_id ? (b.automation_name ?? null) : null,
+      follows: !!b.follows,
+      // Art des Vorgangs aus dem Schlüssel (w: amtliche Warnung, e: Einsatz) – siehe automations/follow.ts
+      source_kind: b.source_key?.startsWith('w:') ? 'warnung' : b.source_key?.startsWith('e:') ? 'einsatz' : null,
+      ended_at: b.ended_at,
+      ended_reason: b.ended_reason ?? null,
+      live_revision: b.ended_at || b.job_action === 'delete' ? null : (b.live_revision ?? null),
     }));
   });
 

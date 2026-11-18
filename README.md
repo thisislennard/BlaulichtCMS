@@ -166,7 +166,8 @@ flowchart LR
   laufen auf Wunsch automatisch.
 - **Banner auf der Website:** Hinweise und Gefahrenmeldungen mit Laufzeit, automatisch am Seitenanfang oder per Block
   bzw. Shortcode; abgelaufene Banner verschwinden auch aus zwischengespeicherten Seiten. Farbe und Darstellung je
-  Schweregrad (Banner, barrierearmes Popup beim Aufruf der Seite oder beides) stellt die Website ein.
+  Schweregrad (Banner, barrierearmes Popup beim Aufruf der Seite oder beides) stellt die Website ein. Banner aus
+  Workflows zeigen ihre Herkunft und folgen auf Wunsch der Warnung bzw. dem Einsatz bis zur Entwarnung.
 - **Einsatzliste mit Jahresstatistik** auf der Website: Einsätze aus FE2/Feuersoftware-Alarmen vorschlagen, per Workflow
   „Einsatz in Einsatzliste“ oder von Hand anlegen, CSV-Import (auch aus der Erweiterung „Einsatzverwaltung“), Freigabe
   genau dieser Fassung, Veröffentlichen und Zurückziehen. Ort nur auf Ortsteil-Ebene (Allowlist). In WordPress
@@ -263,6 +264,9 @@ flowchart LR
   Tastatur und Handy.
 - **Auslöser und Aktionen** werden auf eigenen Seiten eingerichtet (z. B. Banner-Stil nach Warnstufe, Beitragsvorlage mit
   Texten je Netzwerk, E-Mail an Rollen oder Zuständigkeiten) und in vielen Abläufen wiederverwendet.
+- **Banner folgt dem Vorgang:** Ein Banner aus einer amtlichen Warnung bzw. einem FE2-/Feuersoftware-Einsatz wird bei
+  einer Aktualisierung geändert statt doppelt angelegt (mit derselben Freigabe-Regel) und endet mit der Entwarnung bzw.
+  „Einsatz beendet“ – auch wenn der Workflow das Ende nicht abonniert hat oder inzwischen deaktiviert ist.
 - **Sicher:** Abläufe sind Daten (keine Formeln, kein Code); Testlauf ohne Wirkung, aktiv nur nach erfolgreichem Test,
   Versionen, Schrittprotokoll, Grenzen je Minute, Notbremse. Aktionen legen Entwürfe an – Direktversand ohne
   Freigabe nur je Workflow mit eigenem Recht, Passwortbestätigung, Audit und Sicherheitsmeldung.

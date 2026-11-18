@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { get, post, put } from '../../api/client';
 import type { BannerDisplay, Site } from '../../api/types';
-import { Button, Card, cx, EmptyAction, EmptyLine, EmptyState, ErrorBox, FieldWrap, Input, Notice, PageHeader, Rev, Select, SkeletonRows, StatusBadge, Textarea } from '../../components/ui/core';
+import { Link } from 'react-router';
+import { Button, Card, cx, EmptyAction, EmptyLine, EmptyState, ErrorBox, FieldWrap, Input, MetaLine, Notice, PageHeader, Rev, Select, SkeletonRows, StatusBadge, Textarea } from '../../components/ui/core';
 import { FilterEmpty, ListToolbar } from '../../components/ui/list';
 import { Dialog, useErrorToast, useToast, useConfirm } from '../../components/ui/overlays';
 import { FormProblems, useFormCheck } from '../../components/ui/form';
@@ -34,6 +35,37 @@ interface Banner {
   state: string;
   synced_at: string | null;
   error: string | null;
+  /** Herkunft aus einem Workflow und „Banner folgt dem Vorgang“ (#274) */
+  automation_id: string | null;
+  automation_name: string | null;
+  follows: boolean;
+  source_kind: 'warnung' | 'einsatz' | null;
+  ended_at: string | null;
+  ended_reason: 'entwarnung' | 'einsatz_beendet' | null;
+  /** Fassung, die gerade auf der Website steht (wenn eine neuere noch nicht veröffentlicht ist) */
+  live_revision: number | null;
+}
+
+const FOLLOWS: Record<string, string> = { warnung: 'folgt der Warnung', einsatz: 'folgt dem Einsatz' };
+const ENDED_REASON: Record<string, string> = { entwarnung: 'Entwarnung', einsatz_beendet: 'Einsatz beendet' };
+
+/** Herkunft und Ende eines Banners aus einem Workflow (#274): „Aus Workflow „X“ · folgt der Warnung“. */
+function BannerOrigin({ b }: { b: Banner }) {
+  const { can } = useAuth();
+  if (!b.automation_name && !b.ended_reason) return null;
+  const name = b.automation_name && (b.automation_id && can('automation.read') ? <Link to={`/workflows/${b.automation_id}`}>{b.automation_name}</Link> : b.automation_name);
+  return (
+    <MetaLine className="text-meta text-fg-muted">
+      {name && <span>Aus Workflow „{name}“</span>}
+      {b.follows && b.source_kind && !b.ended_at && <span>{FOLLOWS[b.source_kind]}</span>}
+      {b.ended_reason && (
+        <span>
+          Beendet: {ENDED_REASON[b.ended_reason]}
+          {b.ended_at ? `, ${fmtDateTime(b.ended_at)}` : ''}
+        </span>
+      )}
+    </MetaLine>
+  );
 }
 
 const TONE: Record<string, { label: string; cls: string }> = {
@@ -131,6 +163,11 @@ function BannerDialog({ banner, sites, onClose }: { banner: Banner | null; sites
     >
       <div className="flex flex-col gap-4">
         <FormProblems check={check} />
+        {banner?.follows && banner.source_kind && (
+          <Notice>
+            Dieses Banner {FOLLOWS[banner.source_kind]}. Wer den Inhalt hier ändert, übernimmt ihn: Spätere Aktualisierungen überschreiben die Änderung nicht. {banner.source_kind === 'warnung' ? 'Die Entwarnung' : 'Das Einsatzende'} beendet das Banner weiterhin.
+          </Notice>
+        )}
         <BannerPreview b={{ tone: v.tone as any, title: v.title, text: v.text, link_url: v.linkUrl || null, link_text: v.linkText || null }} />
         <FieldWrap label="Website" htmlFor="b-site" required error={check.error('b-site')}>
           <Select id="b-site" value={v.siteId} onChange={(e) => setV({ ...v, siteId: e.target.value })}>
@@ -262,14 +299,22 @@ export default function Banners() {
         {rows.map((b) => (
           <Card key={b.id} id={`banner-${b.id}`} className={cx(linked.id === b.id && 'ring-2 ring-primary')}>
             <div className="flex flex-col gap-3">
-              <div className="flex flex-wrap items-center gap-2 text-sm">
-                <StatusBadge status={b.state} labels={LABELS} />
-                <span className="text-fg-muted">
-                  {b.site_name} · Priorität {PRIO[b.priority]}
-                  {effectiveDisplay(b.display ?? 'auto', b.tone, sites.data?.find((s) => s.id === b.site_id)) ? ` · ${effectiveDisplay(b.display ?? 'auto', b.tone, sites.data?.find((s) => s.id === b.site_id))}` : ''} · {fmtDateTime(b.starts_at)} – {fmtDateTime(b.ends_at)} · <Rev n={b.revision} />
+              <MetaLine className="text-sm text-fg-muted" lead={<StatusBadge status={b.state} labels={LABELS} />}>
+                <span>{b.site_name}</span>
+                <span>Priorität {PRIO[b.priority]}</span>
+                {effectiveDisplay(b.display ?? 'auto', b.tone, sites.data?.find((s) => s.id === b.site_id))}
+                <span>
+                  {fmtDateTime(b.starts_at)} – {fmtDateTime(b.ends_at)}
                 </span>
-              </div>
+                <Rev n={b.revision} />
+              </MetaLine>
+              <BannerOrigin b={b} />
               <BannerPreview b={b} />
+              {b.live_revision != null && b.live_revision !== b.revision && ['draft', 'in_review', 'approved'].includes(b.state) && (
+                <div className="text-meta text-fg-muted">
+                  Auf der Website steht noch Fassung {b.live_revision} – bis die neue Fassung freigegeben und veröffentlicht ist.
+                </div>
+              )}
               {b.approved_by_name && <div className="text-meta text-fg-muted">Freigegeben von {b.approved_by_name}, {fmtDateTime(b.approved_at)}</div>}
               {b.error && <div className="text-sm text-err">{b.error}</div>}
               <div className="flex flex-wrap gap-2">

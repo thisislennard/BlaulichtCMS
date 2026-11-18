@@ -171,6 +171,7 @@
       "from_official_warning": "Banner aus amtlicher Warnung",
       "auto_published": "Banner automatisch veröffentlicht",
       "auto_ended": "Banner automatisch beendet",
+      "follow_ended": "Banner mit dem Vorgang beendet",
       "synced": "Banner von der Website übernommen",
       "sync_failed": "Banner nicht übertragen"
     },
@@ -246,6 +247,7 @@
       "post_published": "Beitrag direkt übergeben",
       "banner_created": "Banner-Entwurf angelegt",
       "banner_published": "Banner direkt veröffentlicht",
+      "banner_updated": "Banner aktualisiert (folgt dem Vorgang)",
       "warning_prepared": "Warnentwurf vorbereitet",
       "mail_sent": "E-Mail versendet",
       "incident_entry_created": "Eintrag für die Einsatzliste angelegt"
@@ -593,6 +595,7 @@
       "from_official_warning": "hat aus einer amtlichen Warnung den Banner-Entwurf „{o}“ erstellt",
       "auto_published": "hat das Banner „{o}“ automatisch veröffentlicht",
       "auto_ended": "hat das Banner „{o}“ automatisch beendet",
+      "follow_ended": "hat das Banner „{o}“ mit dem Vorgang beendet (Entwarnung bzw. Einsatzende)",
       "synced": "hat das Banner „{o}“ auf der Website übernommen",
       "sync_failed": "meldet: Banner „{o}“ ließ sich nicht auf die Website übertragen"
     },
@@ -668,6 +671,7 @@
       "post_published": "hat „{o}“ direkt an die Website übergeben",
       "banner_created": "hat den Banner-Entwurf „{o}“ angelegt",
       "banner_published": "hat das Banner „{o}“ direkt veröffentlicht",
+      "banner_updated": "hat das Banner „{o}“ aktualisiert (folgt dem Vorgang)",
       "warning_prepared": "hat den Warnentwurf „{o}“ vorbereitet",
       "mail_sent": "hat die E-Mail „{o}“ versendet",
       "incident_entry_created": "hat in der Einsatzliste „{o}“ angelegt"

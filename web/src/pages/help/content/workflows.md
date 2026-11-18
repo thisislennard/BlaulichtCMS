@@ -68,7 +68,7 @@ Immer verfügbar: `automation` (Name des Workflows), `lauf`, `jetzt`. Bei FE2 un
 
 | Aktion | Wirkung | Direktversand möglich |
 |---|---|---|
-| Banner | Banner-Entwurf je gewählter Website, wahlweise zur Freigabe eingereicht. Stil (Schweregrad) fest oder **nach Warnstufe** (1 Hinweis, 2 Warnung, ab 3 Gefahr), Priorität, **Darstellung** (nach Schweregrad wie auf der Website eingestellt, nur Banner, nur Popup oder beides), Dauer oder Ablauf aus `gueltig_bis`, Link nur https | ja |
+| Banner | Banner-Entwurf je gewählter Website, wahlweise zur Freigabe eingereicht. Stil (Schweregrad) fest oder **nach Warnstufe** (1 Hinweis, 2 Warnung, ab 3 Gefahr), Priorität, **Darstellung** (nach Schweregrad wie auf der Website eingestellt, nur Banner, nur Popup oder beides), Dauer oder Ablauf aus `gueltig_bis`, Link nur https. **Banner folgt dem Vorgang** (Standard an): Aktualisierungen ändern das Banner, Entwarnung bzw. Einsatzende beenden es – siehe [unten](#banner-folgt-dem-vorgang) | ja |
 | Beitrag | Beitragsentwurf (Art, Titel, Text, Kurzfassung, Texte je Netzwerk, optional Website, **WordPress-Kategorie** und vorausgewählte soziale Netzwerke samt Format), wahlweise eingereicht | ja (braucht Website; gilt nur für die Website) |
 | E-Mail | über den eingerichteten Mailserver an **Rollen** (Konten) und/oder **Zuständigkeiten** (externe Adressen) | ja (für Zuständigkeiten) |
 | App-Benachrichtigung | an Rollen oder einzelne Personen, optional mit Link in BlaulichtCMS | – (immer sofort) |
@@ -81,6 +81,17 @@ Immer verfügbar: `automation` (Name des Workflows), `lauf`, `jetzt`. Bei FE2 un
 **Soziale Netzwerke:** Eine Beitrags-Aktion kann Facebook, Instagram, Threads, X, Mastodon, Bluesky und den WhatsApp-Kanal **vorauswählen** – bei Facebook und Instagram auch als **Story** oder **Beitrag und Story**. Der Entwurf trägt diese Auswahl dann schon; veröffentlicht wird erst, wenn eine Person den Beitrag freigegeben und **Auf sozialen Netzwerken veröffentlichen** gewählt hat. Netzwerke ohne Schnittstelle (WhatsApp-Kanal, X im Modus „Teilen von Hand“) erscheinen danach als **Zum Teilen bereit** samt Benachrichtigung an alle, die in sozialen Netzwerken veröffentlichen dürfen ([Teilen von Hand](/hilfe/verbindungen#teilen-von-hand)). Storys brauchen ein Bild oder Video – das ergänzt die Redaktion im Entwurf.
 
 **Webhooks** (Aufrufe fremder Adressen) gibt es bewusst nicht: Sie würden Daten an beliebige Ziele schicken können. Verbindungen nach außen laufen weiter nur über die geprüften [Verbindungen](/hilfe/verbindungen).
+
+### Banner folgt dem Vorgang
+
+Eine amtliche Warnung oder ein Einsatz besteht oft aus mehreren Meldungen: erst die Warnung bzw. der neue Einsatz, dann Aktualisierungen, am Ende die Entwarnung bzw. „Einsatz beendet“. Mit der Option **Banner folgt dem Vorgang** (Banner-Aktion, Standard an – auch für Aktionen, die es schon vorher gab) bleibt es bei **einem** Banner je Website:
+
+- **Aktualisierung:** Erreicht eine Aktualisierung derselben Warnung bzw. desselben Einsatzes die Banner-Aktion, wird das Banner, das diese Aktion schon angelegt hat, aktualisiert (Titel, Text, Stil, Priorität, Ablauf, Link) – kein zweites. Dafür muss am Auslöser der Vorgang **Aktualisierung** angehakt sein. Freigabe wie beim Anlegen: mit Direktversand sofort veröffentlicht; noch nicht freigegeben → liegt mit dem neuen Inhalt weiter zur Freigabe; schon freigegeben oder veröffentlicht → die neue Fassung wird zur Freigabe eingereicht, auf der Website bleibt die bisherige Fassung, bis die neue freigegeben und veröffentlicht ist.
+- **Entwarnung / Einsatz beendet:** Alle noch aktiven Banner, die dem Vorgang folgen, enden beim Eingang der Meldung und verschwinden beim nächsten Abruf der Bridge von der Website. Das wirkt **immer** – auch ohne den Vorgang „Entwarnung“ bzw. „Einsatz beendet“ am Auslöser, wenn der Workflow inzwischen deaktiviert ist oder die Bedingungen nicht mehr zutreffen. Eine Entwarnung legt über diese Aktion nie ein neues Banner an.
+- **Von Hand:** Ein Banner, das jemand mit **Jetzt beenden** beendet hat, entsteht durch eine spätere Aktualisierung nicht neu. Wer den Inhalt von Hand ändert, übernimmt ihn: Aktualisierungen überschreiben die Änderung nicht, die Entwarnung beendet das Banner aber weiterhin.
+- **Kein früheres Banner** (z. B. die Warnung erfüllt die Bedingung erst nach einer Aktualisierung): Das Banner wird wie gewohnt neu angelegt.
+
+Zu einer Warnung gehören alle Meldungen, die über ihre Verweise (CAP `references`) auf dieselbe Erstmeldung zurückgehen; zu einem Einsatz alle Meldungen derselben Verbindung mit derselben Einsatz-ID. Unter [Banner](/banner) steht beim Banner „Aus Workflow … · folgt der Warnung“ bzw. „… dem Einsatz“ und nach dem Ende „Beendet: Entwarnung“ bzw. „Einsatz beendet“; das Laufprotokoll sagt je Schritt, was passiert ist (aktualisiert, übersprungen mit Grund). Ist die Option aus, legt jede Meldung, die durch den Ablauf kommt, ein eigenes Banner an.
 
 Texte der Aktionen enthalten `{{feld}}`-Platzhalter, z. B. `Einsatz {{stichwort}} in {{ort}}`. Beim Lauf wird nur Text eingesetzt – keine Formeln, kein Code. Fehlende Felder bleiben leer und stehen im Laufprotokoll. Ein geänderte Aktion wirkt in aktiven Workflows erst nach neuem Test und neuer Aktivierung.
 

@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 import type pg from 'pg';
-import { many, one, pool } from '../db/pool.js';
+import { many, one, pool, tx } from '../db/pool.js';
 import { log } from '../lib/log.js';
 import { getSettings } from '../lib/settings.js';
 import type { InputKind } from './catalog.js';
@@ -8,6 +8,7 @@ import { createRun, expireApprovals, type Snapshot } from './engine.js';
 import type { InputRef } from './graph.js';
 import { lastDueSlot, type Data, type ScheduleConfig } from './logic.js';
 import { lookupKeyword } from '../keywords/store.js';
+import { afterFollowEnd, chainRootsDb, endFollowedBanners, incidentKey, warningKey, type FollowEnd } from './follow.js';
 
 /*
  * Ereignisse aus den vorhandenen Quellen → Läufe aktiver Automationen. Die Quellen rufen nur eine kleine Funktion auf
@@ -75,14 +76,45 @@ async function safely(what: string, db: pg.PoolClient | undefined, fn: (db: pg.P
 
 const short = (s: string) => crypto.createHash('sha256').update(s).digest('hex').slice(0, 24);
 
+/**
+ * Ende eines Vorgangs (Entwarnung, Einsatz beendet, #274): Banner, die ihm folgen, enden – unabhängig von Auslösern,
+ * Bedingungen, deaktivierten Workflows und dem Schalter „Workflows“ (Entfernen ist immer erlaubt). Wie `safely` unter
+ * einem Savepoint in der Transaktion der Quelle; Fehler stören den Empfang nie. Rückgabe: Anzahl beendeter Banner.
+ */
+async function followEnd(what: string, db: pg.PoolClient | undefined, keys: string[], reason: FollowEnd): Promise<number> {
+  try {
+    if (!db) return await tx((t) => endFollowedBanners(keys, reason, t));
+    await db.query('SAVEPOINT banner_follow_end');
+    try {
+      const n = await endFollowedBanners(keys, reason, db);
+      await db.query('RELEASE SAVEPOINT banner_follow_end');
+      return n;
+    } catch (e) {
+      await db.query('ROLLBACK TO SAVEPOINT banner_follow_end');
+      throw e;
+    }
+  } catch (e) {
+    log('warn', 'automation', `Ende des Vorgangs (${what}) nicht verarbeitet: ${(e as Error).message}`);
+    return 0;
+  }
+}
+
 /* ------------------------------------------------------------------ Einsätze (FE2, Feuersoftware) */
 
+/**
+ * Einsatzereignis → Läufe. Rückgabe: Anzahl der Banner, die mit „Einsatz beendet“ endeten – der Aufrufer gleicht danach
+ * (nach seiner Transaktion) mit `afterFollowEnd` die Freigabe-Benachrichtigung ab.
+ */
 export async function emitIncident(
   c: { id: string; name: string },
   source: 'fe2' | 'feuersoftware',
   ev: { eventId: string; sequence: number; phase: 'neu' | 'aktualisierung' | 'beendet'; fields: Record<string, string | undefined>; postId?: string | null },
   db?: pg.PoolClient,
-) {
+): Promise<number> {
+  // Vorgang (#274): Verbindung + Einsatz-ID, nur als Prüfsumme
+  const key = incidentKey(c.id, ev.eventId);
+  const ended = ev.phase === 'beendet' ? await followEnd(source, db, [key], 'einsatz_beendet') : 0;
+  if (ended && !db) await afterFollowEnd(ended, 'einsatz_beendet');
   await safely(source, db, async (q) => {
     const triggers = (await activeTriggers(source, q)).filter((t) => t.input.config.connectionId === c.id && (t.input.config.phases ?? ['neu']).includes(ev.phase));
     if (!triggers.length) return;
@@ -103,10 +135,12 @@ export async function emitIncident(
       quelle: source === 'fe2' ? 'FE2' : 'Feuersoftware Connect',
       verbindung: c.name,
       entwurf_link: ev.postId ? `/beitraege/${ev.postId}` : '',
+      _vorgang_key: key,
     };
     // Einsatz-ID nur als Prüfsumme im Schlüssel (keine Inhalte)
     for (const t of triggers) await start(t, `inc:${short(`${c.id}:${ev.eventId}`)}:${ev.sequence}`, payload, q);
   });
+  return db ? ended : 0;
 }
 
 /* ------------------------------------------------------------------ Amtliche Warnungen */
@@ -114,8 +148,16 @@ export async function emitIncident(
 const LEVEL: Record<string, string> = { Minor: '1', Moderate: '2', Severe: '3', Extreme: '4' };
 
 export async function emitOfficialWarning(c: { id: string; name: string }, w: any, inArea: boolean, source: string) {
+  const phase = w.msg_type === 'Cancel' ? 'entwarnung' : w.msg_type === 'Update' || (w.references_ids ?? []).length ? 'aktualisierung' : 'neu';
+  // Vorgang (#274): Wurzel der CAP-Kette (beim Empfang gespeichert; ältere Meldungen ohne Wurzel werden nachgeschlagen)
+  const roots = await chainRootsDb(w.identifier, w.references_ids ?? []).catch(() => [w.identifier as string]);
+  const key = warningKey(w.chain_root || roots[0]);
+  if (phase === 'entwarnung') {
+    // Entwarnung beendet alle folgenden Banner der Kette – auch über verzweigte Verweise (jede Wurzel)
+    const ended = await followEnd('warnfeed', undefined, [key, ...roots.map(warningKey)], 'entwarnung');
+    await afterFollowEnd(ended, 'entwarnung');
+  }
   await safely('warnfeed', undefined, async (q) => {
-    const phase = w.msg_type === 'Cancel' ? 'entwarnung' : w.msg_type === 'Update' || (w.references_ids ?? []).length ? 'aktualisierung' : 'neu';
     const triggers = (await activeTriggers('warnfeed', q)).filter((t) => t.input.config.connectionId === c.id && (t.input.config.phases ?? ['neu']).includes(phase) && (inArea || t.input.config.onlyInArea === false));
     if (!triggers.length) return;
     const payload: Data = {
@@ -132,6 +174,7 @@ export async function emitOfficialWarning(c: { id: string; name: string }, w: an
       quelle: source,
       link: w.web_url && /^https:\/\//.test(w.web_url) ? w.web_url : '',
       im_gebiet: inArea ? 'ja' : 'nein',
+      _vorgang_key: key,
     };
     for (const t of triggers) await start(t, `warn:${short(`${c.id}:${w.identifier}`)}`, payload, q);
   });

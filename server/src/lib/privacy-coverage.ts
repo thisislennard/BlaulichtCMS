@@ -190,6 +190,7 @@ const EXCLUDED: Record<string, string> = {
   automation_steps: 'Workflow-Laufprotokolle (je Schritt) – bewusst ausgenommen, siehe automation_runs.',
   automation_approvals: 'Freigaben in Workflow-Läufen – bewusst ausgenommen, siehe automation_runs.',
   automation_dedup: 'Nur Prüfsummen für „Einmal je Vorgang“.',
+  banner_follow_ends: 'Nur Prüfsummen beendeter Vorgänge (Entwarnung, Einsatzende) für „Banner folgt dem Vorgang“; nach 30 Tagen gelöscht.',
   publications: 'Veröffentlichungsstand je Website (Kennungen, Status, Fehlermeldung); Inhalte stehen in der Fassung des Beitrags.',
   social_publications: 'Veröffentlichungsstand je sozialem Netzwerk (Kennungen, Status, Summen der Statistik); Inhalte stehen in der Fassung des Beitrags.',
   social_insights: 'Statistik: nur Summen je eigenem Beitrag, keine Personen.',

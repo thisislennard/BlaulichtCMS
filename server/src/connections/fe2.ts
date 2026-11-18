@@ -6,6 +6,7 @@ import { notify } from '../lib/notify.js';
 import { getSettings } from '../lib/settings.js';
 import { revisionHash } from '../routes/posts.js';
 import { emitIncident } from '../automations/events.js';
+import { afterFollowEnd } from '../automations/follow.js';
 import type { Connection } from './common.js';
 import { redactIncidentPayload, type Receipt, type ReceiptDecision } from './receipts.js';
 import { withKeywordText } from '../keywords/store.js';
@@ -258,7 +259,9 @@ export async function handleIncident(c: Connection, source: IncidentSource, inpu
   // Protokolle nur mit gekürzter Prüfsumme der Einsatz-ID – keine Inhalte
   const ref = seenHash.slice(0, 10);
 
-  return tx(async (db) => {
+  // Banner, die mit „Einsatz beendet“ enden (#274): Freigabe-Benachrichtigung erst nach dem Abschluss abgleichen
+  let endedBanners = 0;
+  const result = await tx(async (db) => {
     const existing = await one<any>(`SELECT * FROM fe2_events WHERE event_key = $1 FOR UPDATE`, [key], db);
     await db.query(`UPDATE connections SET last_event_at = now() WHERE id = $1`, [c.id]);
     if (existing && existing.payload_hash === hash) return { outcome: 'duplicate' as const, fe2EventId: existing.id, postId: existing.post_id, sequence: existing.sequence };
@@ -286,7 +289,7 @@ export async function handleIncident(c: Connection, source: IncidentSource, inpu
         await audit(actor, `${source}.draft_created`, { type: 'post', id: p.id, label: title }, { ref }, 'ok', db);
       }
       await notify({ kind: 'info', title: `Neuer Einsatzentwurf aus ${label}: ${title}`.slice(0, 200), link: postId ? `/beitraege/${postId}` : '/verbindungen', permission: 'post.edit', category: 'incident' });
-      await emitIncident(c, source, { eventId, sequence: 1, phase: closed ? 'beendet' : 'neu', fields, postId }, db);
+      endedBanners += await emitIncident(c, source, { eventId, sequence: 1, phase: closed ? 'beendet' : 'neu', fields, postId }, db);
       log('info', source, `Einsatz angelegt (Ref ${ref})`);
       return { outcome: 'created' as const, fe2EventId: ev.id, postId, sequence: 1 };
     }
@@ -311,8 +314,10 @@ export async function handleIncident(c: Connection, source: IncidentSource, inpu
         await notify({ kind: 'info', title: `${label}-Aktualisierung zu „${existing.title}“${closed ? ' – Einsatz beendet' : ''}`.slice(0, 200), body: 'Der Entwurf wurde bereits bearbeitet und bleibt unverändert.', link: `/beitraege/${existing.post_id}`, permission: 'post.edit', category: 'incident' });
       }
     }
-    await emitIncident(c, source, { eventId, sequence: seq, phase: closed ? 'beendet' : 'aktualisierung', fields, postId: existing.post_id }, db);
+    endedBanners += await emitIncident(c, source, { eventId, sequence: seq, phase: closed ? 'beendet' : 'aktualisierung', fields, postId: existing.post_id }, db);
     log('info', source, `Folgeereignis ${seq} (Ref ${ref})${closed ? ', beendet' : ''}`);
     return { outcome: 'updated' as const, fe2EventId: existing.id, postId: existing.post_id, sequence: seq, draft };
   });
+  await afterFollowEnd(endedBanners, 'einsatz_beendet');
+  return result;
 }

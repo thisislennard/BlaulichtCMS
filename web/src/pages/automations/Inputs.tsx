@@ -101,7 +101,20 @@ export function InputDialog({ input, kind, cat, onClose, preset }: { input: Inpu
               labelAction={<Help title="Verbindung" anchor="ausloeser">Ein Auslöser hört auf eine bestehende Verbindung. Zugangsdaten, Tests und Gebietsfilter bleiben dort; hier wird nur festgelegt, welche Ereignisse einen Workflow starten.</Help>}
             />
             {!conns.length && <Notice tone="warning">Es gibt noch keine passende Verbindung. <Link to="/verbindungen">Verbindungen öffnen →</Link></Notice>}
-            <CheckList legend="Welche Vorgänge starten einen Lauf?" options={(def.phases ?? []).map((p) => ({ value: p.value, label: p.label }))} value={c.phases ?? []} onChange={(v) => set({ phases: v })} />
+            <CheckList
+              legend={
+                <span className="inline-flex items-center gap-1.5">
+                  Welche Vorgänge starten einen Lauf?
+                  <Help title="Vorgänge und Banner" anchor="banner-folgt-dem-vorgang">
+                    <p className="m-0">Jeder angehakte Vorgang startet einen eigenen Lauf; die Bedingungen des Workflows gelten für jeden.</p>
+                    <p className="m-0">Banner, die dem Vorgang folgen (Option der Banner-Aktion), ziehen bei Änderungen nur mit, wenn „Aktualisierung“ angehakt ist. {kind === 'warnfeed' ? 'Die Entwarnung' : 'Das Einsatzende'} beendet sie immer – auch ohne Haken.</p>
+                  </Help>
+                </span>
+              }
+              options={(def.phases ?? []).map((p) => ({ value: p.value, label: p.label }))}
+              value={c.phases ?? []}
+              onChange={(v) => set({ phases: v })}
+            />
             {kind === 'warnfeed' && <Switch checked={c.onlyInArea !== false} onChange={(v) => set({ onlyInArea: v })} label="Nur Warnungen im eigenen Gebiet" description="Gebietsfilter der Verbindung. Aus: auch Warnungen außerhalb (Feld „im_gebiet“ = nein)." />}
           </>
         )}

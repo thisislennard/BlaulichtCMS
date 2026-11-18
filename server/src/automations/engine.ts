@@ -18,6 +18,7 @@ import { ImageStepError, runImageStep, runImages } from '../templates/workflow.j
 import { graphHash, inputFields, topoOrder, type Graph, type GraphNode, type InputRef, type OutputRef } from './graph.js';
 import { dedupKey, evaluateGroup, redactForLog, renderTemplate, valueText, type Data, type Group } from './logic.js';
 import { plural } from '../lib/text.js';
+import { END_LABEL, endedKey, keyKind } from './follow.js';
 
 /*
  * Ausführung von Automationen als Auftrag in der Warteschlange (`automation.run`).
@@ -341,8 +342,8 @@ async function refreshPayload(run: any, snap: Snapshot): Promise<Data> {
 async function runNode(ctx: Ctx, node: GraphNode, data: Data, prev: StepRow | undefined): Promise<Result | Pause> {
   const started = Date.now();
   const runId = ctx.run.id;
-  const done = async (r: Result, db: Queryable = pool) => {
-    await upsertStep(db, runId, node, { status: 'done', ports: r.ports, input: data, output: { produced: r.produced ?? {}, ...(r.log !== undefined ? { log: redactForLog(r.log) } : {}) }, info: r.info ?? null, started, attempt: !prev || prev.status === 'failed' });
+  const done = async (r: Result, db: Queryable = pool, status: 'done' | 'skipped' = 'done') => {
+    await upsertStep(db, runId, node, { status, ports: r.ports, input: data, output: { produced: r.produced ?? {}, ...(r.log !== undefined ? { log: redactForLog(r.log) } : {}) }, info: r.info ?? null, started, attempt: !prev || prev.status === 'failed' });
     return r;
   };
   switch (node.type as NodeType) {
@@ -476,7 +477,47 @@ async function usersWithRoles(roles: string[], db: Queryable = pool) {
   return many<{ id: string; email: string; name: string }>(`SELECT id, email, name FROM users WHERE status = 'active' AND roles && $1::text[]`, [roles], db);
 }
 
-async function runOutput(ctx: Ctx, node: GraphNode, data: Data, prev: StepRow | undefined, done: (r: Result, db?: Queryable) => Promise<Result>): Promise<Result | Pause> {
+type Done = (r: Result, db?: Queryable, status?: 'done' | 'skipped') => Promise<Result>;
+
+/** Ergebnis der Banner-Aktion je Website (#274). */
+type BannerOutcome = 'created' | 'updated_direct' | 'updated_resubmitted' | 'updated_draft_live' | 'updated_pending' | 'updated_draft' | 'unchanged' | 'ended_by_hand' | 'ended_by_event' | 'hand_edited' | 'older';
+const BANNER_SKIPPED: BannerOutcome[] = ['ended_by_hand', 'ended_by_event', 'hand_edited', 'older'];
+
+/** Satzteil für das Laufprotokoll je Ergebnis. */
+function bannerOutcomeText(o: BannerOutcome, direct: boolean, submit: boolean): string {
+  switch (o) {
+    case 'created':
+      return direct ? 'direkt veröffentlicht' : submit ? 'angelegt und zur Freigabe eingereicht' : 'als Entwurf angelegt';
+    case 'updated_direct':
+      return 'aktualisiert und direkt veröffentlicht';
+    case 'updated_resubmitted':
+      return 'aktualisiert – die neue Fassung ist zur Freigabe eingereicht; auf der Website bleibt die bisherige Fassung, bis die neue freigegeben und veröffentlicht ist';
+    case 'updated_draft_live':
+      return 'aktualisiert (Entwurf) – auf der Website bleibt die freigegebene Fassung';
+    case 'updated_pending':
+      return 'aktualisiert – liegt weiter zur Freigabe';
+    case 'updated_draft':
+      return 'aktualisiert (Entwurf)';
+    case 'unchanged':
+      return 'unverändert (gleicher Inhalt)';
+    case 'ended_by_hand':
+      return 'wurde von Hand beendet – nicht neu angelegt';
+    case 'ended_by_event':
+      return 'ist mit dem Vorgang schon beendet – nicht neu angelegt';
+    case 'hand_edited':
+      return 'wurde von Hand geändert – Aktualisierung nicht übernommen';
+    case 'older':
+      return 'zeigt schon einen neueren Stand – ältere Meldung nicht übernommen';
+  }
+}
+
+/** Art des Auslösers dieses Laufs (für Vorgänge: Warnfeed, FE2, Feuersoftware Connect). */
+function runInputKind(ctx: Ctx): string | null {
+  const n = ctx.snap.nodes.find((x) => x.id === ctx.run.input_node);
+  return (n && ctx.snap.refs.inputs[n.data?.inputId]?.kind) || null;
+}
+
+async function runOutput(ctx: Ctx, node: GraphNode, data: Data, prev: StepRow | undefined, done: Done): Promise<Result | Pause> {
   const out = ctx.snap.refs.outputs[node.data.outputId];
   if (!out) throw new PermanentError('Aktion fehlt in der Version.');
   const c = out.config ?? {};
@@ -497,28 +538,107 @@ async function runOutput(ctx: Ctx, node: GraphNode, data: Data, prev: StepRow | 
       const sites = await many<{ id: string; name: string; status: string }>(`SELECT id, name, status FROM wp_sites WHERE id = ANY($1::uuid[])`, [c.siteIds ?? []]);
       const usable = sites.filter((s) => s.status === 'active');
       if (!usable.length) throw new PermanentError('Keine der gewählten Websites ist gekoppelt.');
-      const what = direct ? 'direkt veröffentlichen' : c.submit !== false ? 'als Entwurf anlegen und zur Freigabe einreichen' : 'als Entwurf anlegen';
+      const submit = c.submit !== false;
+      const what = direct ? 'direkt veröffentlichen' : submit ? 'als Entwurf anlegen und zur Freigabe einreichen' : 'als Entwurf anlegen';
       const desc = { titel: title, text, art: tone, prioritaet: c.priority, ende: ends.toISOString(), link: linkUrl, websites: usable.map((s) => s.name) };
-      if (ctx.test) return done({ ports: ['out'], produced: { banner_link: '/banner' }, info: `Testlauf: würde das Banner „${title}“ für ${usable.map((s) => s.name).join(', ')} ${what}.`, log: desc });
+      // Banner folgt dem Vorgang (#274): Standard an, auch für Aktionen von vor dieser Option
+      const follow = c.follow !== false;
+      const payload = (ctx.run.payload ?? {}) as Data;
+      const key = typeof payload._vorgang_key === 'string' && payload._vorgang_key ? payload._vorgang_key : null;
+      const srcKind = runInputKind(ctx);
+      const phase = ['warnfeed', 'fe2', 'feuersoftware'].includes(srcKind ?? '') ? String(payload.vorgang ?? '') : '';
+      const endPhase: 'entwarnung' | 'einsatz_beendet' | null = phase === 'entwarnung' ? 'entwarnung' : phase === 'beendet' ? 'einsatz_beendet' : null;
+      const followText = keyKind(key) === 'warnung' ? 'folgt der Warnung' : keyKind(key) === 'einsatz' ? 'folgt dem Einsatz' : 'folgt dem Vorgang';
+      if (ctx.test) {
+        if (follow && endPhase) return done({ ports: ['out'], produced: { banner_link: '/banner' }, info: `Testlauf: ${END_LABEL[endPhase]} – würde kein neues Banner anlegen (Banner folgt dem Vorgang); aktive Banner dieses Vorgangs enden beim Eingang.`, log: desc });
+        return done({ ports: ['out'], produced: { banner_link: '/banner' }, info: `Testlauf: würde das Banner „${title}“ für ${usable.map((s) => s.name).join(', ')} ${what}.${follow && phase === 'aktualisierung' ? ' Gibt es von dieser Aktion schon ein Banner zum Vorgang, würde es stattdessen aktualisiert.' : ''}`, log: desc });
+      }
+      // Ende des Vorgangs: nie ein neues Banner – beendet werden die folgenden Banner schon beim Eingang (events.ts)
+      if (follow && endPhase) {
+        const n = key ? ((await one<{ n: number }>(`SELECT count(*)::int AS n FROM banners WHERE source_key = $1 AND automation_id = $2 AND automation_output_id = $3 AND ended_reason IS NOT NULL`, [key, ctx.run.automation_id, out.id]))?.n ?? 0) : 0;
+        const info = `${END_LABEL[endPhase]} – kein neues Banner (Banner folgt dem Vorgang). ${n ? `${plural(n, 'Banner', 'Banner')} dieses Vorgangs ${n === 1 ? 'wurde' : 'wurden'} beim Eingang beendet.` : 'Ein aktives Banner dieser Aktion gab es zu diesem Vorgang nicht.'}`;
+        return done({ ports: ['out'], produced: { banner_link: '/banner' }, info, log: { ...desc, vorgang: phase, beendet: n } }, pool, 'skipped');
+      }
+      // Vorgang schon beendet (Ende kam an, bevor dieser Lauf an der Reihe war): kein Banner mehr
+      const endedAlready = follow && key ? await endedKey(key) : null;
+      if (endedAlready) return done({ ports: ['out'], produced: { banner_link: '/banner' }, info: `Der Vorgang ist schon beendet (${END_LABEL[endedAlready]}) – kein Banner angelegt.`, log: desc }, pool, 'skipped');
+      const runAt = new Date(ctx.run.created_at);
       return tx(async (db) => {
-        const ids: string[] = [];
+        // Gleichzeitige Läufe zum selben Vorgang legen kein zweites Banner an
+        if (follow && key) await db.query(`SELECT pg_advisory_xact_lock(74274000, hashtext($1))`, [`${ctx.run.automation_id}|${out.id}|${key}`]);
+        const results: { site: string; outcome: BannerOutcome; id: string }[] = [];
         for (const site of usable) {
           const display = ['banner', 'popup', 'both'].includes(c.display) ? c.display : 'auto';
-          const row = { site_id: site.id, title, text, tone, priority: Number(c.priority) || 2, starts_at: new Date(), ends_at: ends, link_url: linkUrl, link_text: linkText, display };
+          const priority = Number(c.priority) || 2;
+          const existing = follow && key ? await one<any>(`SELECT * FROM banners WHERE source_key = $1 AND automation_id = $2 AND automation_output_id = $3 AND site_id = $4 ORDER BY created_at DESC LIMIT 1 FOR UPDATE`, [key, ctx.run.automation_id, out.id, site.id], db) : null;
+          if (existing) {
+            const skip = (outcome: BannerOutcome) => results.push({ site: site.name, outcome, id: existing.id });
+            if (existing.ended_at) {
+              skip(existing.ended_reason ? 'ended_by_event' : 'ended_by_hand');
+              continue;
+            }
+            if (existing.follow_hash && existing.follow_hash !== existing.content_hash) {
+              skip('hand_edited');
+              continue;
+            }
+            if (existing.follow_event_at && new Date(existing.follow_event_at) > runAt) {
+              skip('older');
+              continue;
+            }
+            // Start bleibt (das Banner läuft schon); alles andere folgt der neuen Meldung
+            const row = { site_id: site.id, title, text, tone, priority, starts_at: existing.starts_at, ends_at: ends, link_url: linkUrl, link_text: linkText, display };
+            const hash = bannerHash(row);
+            if (hash === existing.content_hash) {
+              await db.query(`UPDATE banners SET follows = true, follow_hash = content_hash, follow_event_at = $2 WHERE id = $1`, [existing.id, runAt]);
+              skip('unchanged');
+              continue;
+            }
+            const approvedBefore = !!existing.approved_hash && existing.approved_hash === existing.content_hash;
+            const u = await one<any>(
+              `UPDATE banners SET title = $2, text = $3, tone = $4, priority = $5, ends_at = $6, link_url = $7, link_text = $8, display = $9, content_hash = $10,
+                      revision = revision + 1, submitted_at = CASE WHEN $11 THEN now() END, submitted_by = NULL,
+                      approved_hash = CASE WHEN $12 THEN $10 ELSE approved_hash END, approved_at = CASE WHEN $12 THEN now() ELSE approved_at END,
+                      approved_by = CASE WHEN $12 THEN NULL ELSE approved_by END,
+                      follows = true, follow_hash = $10, follow_event_at = $13, updated_at = now()
+                WHERE id = $1 RETURNING *`,
+              [existing.id, title, text, tone, priority, ends, linkUrl, linkText, display, hash, direct || submit, direct, runAt],
+              db,
+            );
+            if (direct) await enqueueBannerJob(db, u, 'upsert', null);
+            const outcome: BannerOutcome = direct ? 'updated_direct' : approvedBefore ? (submit ? 'updated_resubmitted' : 'updated_draft_live') : submit ? 'updated_pending' : 'updated_draft';
+            results.push({ site: site.name, outcome, id: u.id });
+            await audit(ctx.actor, 'automation.banner_updated', { type: 'banner', id: u.id, label: title }, { ...auditDetails, website: site.name, fassung: u.revision, ergebnis: bannerOutcomeText(outcome, direct, submit) }, 'ok', db);
+            continue;
+          }
+          const row = { site_id: site.id, title, text, tone, priority, starts_at: new Date(), ends_at: ends, link_url: linkUrl, link_text: linkText, display };
           const hash = bannerHash(row);
           const b = await one<any>(
-            `INSERT INTO banners (site_id, title, text, tone, priority, starts_at, ends_at, link_url, link_text, content_hash, submitted_at, approved_hash, approved_at, display)
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10, CASE WHEN $11 THEN now() END, CASE WHEN $12 THEN $10 END, CASE WHEN $12 THEN now() END, $13) RETURNING *`,
-            [site.id, title, text, tone, row.priority, row.starts_at, ends, linkUrl, linkText, hash, c.submit !== false || direct, direct, display],
+            `INSERT INTO banners (site_id, title, text, tone, priority, starts_at, ends_at, link_url, link_text, content_hash, submitted_at, approved_hash, approved_at, display,
+                                  source_key, automation_id, automation_output_id, follows, follow_hash, follow_event_at)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10, CASE WHEN $11 THEN now() END, CASE WHEN $12 THEN $10 END, CASE WHEN $12 THEN now() END, $13, $14, $15, $16, $17, $10, $18) RETURNING *`,
+            [site.id, title, text, tone, priority, row.starts_at, ends, linkUrl, linkText, hash, submit || direct, direct, display, key, ctx.run.automation_id, out.id, follow && !!key, runAt],
             db,
           );
           if (direct) await enqueueBannerJob(db, b, 'upsert', null);
-          ids.push(b.id);
+          results.push({ site: site.name, outcome: 'created', id: b.id });
           await audit(ctx.actor, direct ? 'automation.banner_published' : 'automation.banner_created', { type: 'banner', id: b.id, label: title }, { ...auditDetails, website: site.name }, 'ok', db);
         }
-        return done({ ports: ['out'], produced: { banner_link: ids.length === 1 ? bannerLink(ids[0]) : '/banner' }, info: `Banner „${title}“ ${direct ? 'direkt veröffentlicht' : c.submit !== false ? 'angelegt und zur Freigabe eingereicht' : 'als Entwurf angelegt'} (${usable.length} Website(s)).`, log: { ...desc, banner: ids } }, db);
+        const ids = [...new Set(results.map((x) => x.id))];
+        const outcomes = [...new Set(results.map((x) => x.outcome))];
+        const following = follow && key ? ` Das Banner ${followText}.` : '';
+        const info =
+          outcomes.length === 1 && outcomes[0] === 'created'
+            ? `Banner „${title}“ ${bannerOutcomeText('created', direct, submit)} (${plural(usable.length, 'Website', 'Websites')}).${following}`
+            : results.length === 1
+              ? `Banner „${title}“ ${bannerOutcomeText(results[0].outcome, direct, submit)}.${following}`
+              : `Banner „${title}“: ${results.map((x) => `${x.site} – ${bannerOutcomeText(x.outcome, direct, submit)}`).join('; ')}.${following}`;
+        const skipped = results.every((x) => BANNER_SKIPPED.includes(x.outcome));
+        // Zur Freigabe: neu angelegte und aktualisierte, eingereichte Banner (Benachrichtigung „Freigabe angefordert“)
+        const toReview = direct || !submit ? [] : results.filter((x) => ['created', 'updated_resubmitted', 'updated_pending'].includes(x.outcome)).map((x) => x.id);
+        return done({ ports: ['out'], produced: { banner_link: ids.length === 1 ? bannerLink(ids[0]) : '/banner' }, info, log: { ...desc, banner: ids, ergebnis: results.map((x) => ({ website: x.site, ergebnis: x.outcome })), review: toReview } }, db, skipped ? 'skipped' : 'done');
       }).then(async (res) => {
-        if (!direct && c.submit !== false) await refreshApprovalNotice('banner', { added: ((res.log as any)?.banner ?? []) as string[], body: `Aus dem Workflow „${ctx.run.automation_name}“.` });
+        const review = ((res.log as any)?.review ?? []) as string[];
+        if (review.length) await refreshApprovalNotice('banner', { added: review, body: `Aus dem Workflow „${ctx.run.automation_name}“.` });
         return res;
       });
     }

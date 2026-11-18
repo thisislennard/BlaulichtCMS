@@ -8,6 +8,7 @@ import { stripControlChars } from '../lib/text.js';
 import { bannerHash, enqueueBannerJob } from '../routes/banners.js';
 import { allowedPrivateHosts, type Connection, type TestStep } from './common.js';
 import { emitOfficialWarning } from '../automations/events.js';
+import { chainRootsDb } from '../automations/follow.js';
 import { Receipt, type ReceiptDecision, type ReceiptTrigger } from './receipts.js';
 
 /**
@@ -335,11 +336,13 @@ async function processWarnfeed(c: Connection, rec: Receipt) {
     const area = areaMatch(w, filter);
     const note = (decision: ReceiptDecision, reason: string) => rec.add({ decision, reason, info: { ...warningInfo(w), inArea: area.ok }, raw });
     try {
+      // Wurzel der CAP-Kette (#274): Kennung der Erstmeldung – Aktualisierungen und Entwarnung gehören zum selben Vorgang
+      const root = known.has(w.identifier) ? null : (await chainRootsDb(w.identifier, w.references))[0];
       const row = await one<any>(
-        `INSERT INTO official_warnings (connection_id, identifier, sender, sent_at, msg_type, references_ids, severity, urgency, event, headline, description, instruction, areas, geocodes, effective_at, expires_at, web_url, in_area, cancelled, last_seen_at)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19, now())
+        `INSERT INTO official_warnings (connection_id, identifier, sender, sent_at, msg_type, references_ids, severity, urgency, event, headline, description, instruction, areas, geocodes, effective_at, expires_at, web_url, in_area, cancelled, last_seen_at, chain_root)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19, now(), $20)
          ON CONFLICT (connection_id, identifier) DO NOTHING RETURNING *`,
-        [c.id, w.identifier, w.sender, w.sent, w.msgType, w.references, w.severity, w.urgency, w.event, w.headline, w.description, w.instruction, w.areas, w.geocodes, w.effective, w.expires, w.web, area.ok, w.msgType === 'Cancel'],
+        [c.id, w.identifier, w.sender, w.sent, w.msgType, w.references, w.severity, w.urgency, w.event, w.headline, w.description, w.instruction, w.areas, w.geocodes, w.effective, w.expires, w.web, area.ok, w.msgType === 'Cancel', root],
       );
       if (!row) {
         if (known.get(w.identifier)?.dismissed) note('dismissed', 'Ausgeblendet: Die Meldung wurde unter „Amtliche Warnungen“ ausgeblendet und wird nicht erneut angezeigt.');

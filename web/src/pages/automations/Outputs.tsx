@@ -17,7 +17,7 @@ import { CheckList, Help, NumberField, SelectField, TemplateField, outputSummary
 /** Aktionen: wiederverwendbare Aktionen mit ihrer Gestaltung (Banner-Stil, Beitragsvorlage, E-Mail, Benachrichtigung, Warnentwurf). */
 
 const DEFAULTS: Record<string, Record<string, any>> = {
-  banner: { siteIds: [], title: '', text: '', tone: 'auto', priority: 2, durationHours: 6, endFromField: true, linkUrl: '', linkText: '', display: 'auto', submit: true },
+  banner: { siteIds: [], title: '', text: '', tone: 'auto', priority: 2, durationHours: 6, endFromField: true, linkUrl: '', linkText: '', display: 'auto', submit: true, follow: true },
   post: { kind: 'news', title: '', body: '', excerpt: '', variants: {}, socialTargets: [], siteId: null, submit: false },
   mail: { roles: [], responsibilityIds: [], subject: '', body: '' },
   notify: { roles: [], userIds: [], kind: 'info', title: '', body: '', link: '' },
@@ -120,6 +120,17 @@ export function OutputDialog({ output, kind, cat, onClose, preset }: { output: O
               {T('linkText', 'Linktext', { max: 100 })}
             </div>
             <Switch checked={c.submit !== false} onChange={(v) => set({ submit: v })} label="Zur Freigabe einreichen" description="Sonst bleibt das Banner ein Entwurf. Veröffentlicht wird nur nach Freigabe – außer die Aktion ist im Editor für den Direktversand markiert." />
+            {/* Banner folgt dem Vorgang (#274): fehlt der Wert (ältere Aktionen), gilt „an“ */}
+            <div className="flex items-start gap-2">
+              <div className="flex-1 min-w-0">
+                <Switch checked={c.follow !== false} onChange={(v) => set({ follow: v })} label="Banner folgt dem Vorgang" description="Amtliche Warnungen und Einsätze: Eine Aktualisierung ändert das Banner statt ein neues anzulegen; Entwarnung bzw. Einsatzende beenden es." />
+              </div>
+              <Help title="Banner folgt dem Vorgang" anchor="banner-folgt-dem-vorgang">
+                <p className="m-0">Gilt für Auslöser „Amtliche Warnung“, „FE2-Alarm“ und „Feuersoftware-Einsatz“. Erreicht eine Aktualisierung derselben Warnung bzw. desselben Einsatzes diese Aktion, wird das schon angelegte Banner aktualisiert – mit derselben Freigabe-Regel wie beim Anlegen. Dafür braucht der Auslöser den Vorgang „Aktualisierung“.</p>
+                <p className="m-0">Entwarnung und Einsatzende beenden die Banner immer – auch ohne diesen Vorgang am Auslöser, bei deaktiviertem Workflow oder wenn die Bedingungen nicht mehr zutreffen. Von Hand beendete Banner entstehen nicht neu.</p>
+                <p className="m-0 text-fg-muted">Aus: Jede Meldung, die durch den Ablauf kommt, legt ein eigenes Banner an.</p>
+              </Help>
+            </div>
           </>
         )}
 

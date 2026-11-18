@@ -2216,3 +2216,49 @@ describe('Aktivitäten: jede Audit-Aktion lesbar und einem Bereich zugeordnet (#
     }
   });
 });
+
+describe('Banner folgt dem Vorgang: Vorgang-Schlüssel (#274)', () => {
+  it('Schlüssel sind stabil, je Art unterscheidbar und enthalten keine Inhalte', async () => {
+    const { warningKey, incidentKey, keyKind } = await import('../src/automations/follow.js');
+    expect(warningKey('2.49.0.0.276.0.DWD.PVW.1')).toBe(warningKey('2.49.0.0.276.0.DWD.PVW.1'));
+    expect(warningKey('A1')).not.toBe(warningKey('A2'));
+    expect(warningKey('A1')).toMatch(/^w:[0-9a-f]{24}$/);
+    expect(incidentKey('c1', 'E-1')).toMatch(/^e:[0-9a-f]{24}$/);
+    expect(incidentKey('c1', 'E-1')).not.toBe(incidentKey('c2', 'E-1'));
+    expect(incidentKey('c1', 'E-1')).not.toContain('E-1');
+    expect([keyKind(warningKey('A1')), keyKind(incidentKey('c', 'e')), keyKind(null), keyKind('x:1')]).toEqual(['warnung', 'einsatz', null, null]);
+  });
+
+  it('Wurzel der CAP-Kette: Aktualisierungen und Entwarnung führen auf die Erstmeldung', async () => {
+    const { chainRoots } = await import('../src/automations/follow.js');
+    type Row = { identifier: string; references_ids: string[] | null; chain_root: string | null };
+    const store = new Map<string, Row>();
+    const put = (identifier: string, references_ids: string[], chain_root: string | null) => store.set(identifier, { identifier, references_ids, chain_root });
+    const load = async (ids: string[]) => ids.flatMap((id) => (store.has(id) ? [store.get(id)!] : []));
+    // Erstmeldung ist ihre eigene Wurzel
+    expect(await chainRoots('A', [], load)).toEqual(['A']);
+    // Aktualisierung auf eine gespeicherte Erstmeldung (auch ohne gespeicherte Wurzel, Bestand vor #274)
+    put('A', [], null);
+    expect(await chainRoots('U1', ['A'], load)).toEqual(['A']);
+    // zweite Aktualisierung verweist nur auf die erste: gespeicherte Wurzel …
+    put('U1', ['A'], 'A');
+    expect(await chainRoots('U2', ['U1'], load)).toEqual(['A']);
+    // … oder ohne gespeicherte Wurzel über die Verweise zurück
+    put('U1', ['A'], null);
+    expect(await chainRoots('U2', ['U1'], load)).toEqual(['A']);
+    // Entwarnung nach mehreren Aktualisierungen
+    put('U2', ['U1'], null);
+    expect(await chainRoots('C', ['U2'], load)).toEqual(['A']);
+    // unbekannter Vorgänger gilt als Wurzel (Erstmeldung nie empfangen) – spätere Meldungen erben sie
+    expect(await chainRoots('V1', ['NIE-GESEHEN'], load)).toEqual(['NIE-GESEHEN']);
+    put('V1', ['NIE-GESEHEN'], 'NIE-GESEHEN');
+    expect(await chainRoots('V2', ['V1'], load)).toEqual(['NIE-GESEHEN']);
+    // zwei Ketten zusammengeführt: beide Wurzeln, Reihenfolge der Verweise, ohne Doppel
+    put('B', [], 'B');
+    expect(await chainRoots('M', ['U2', 'B', 'A'], load)).toEqual(['B', 'A']);
+    // Kreis in fehlerhaften Daten bricht ab
+    put('P', ['Q'], null);
+    put('Q', ['P'], null);
+    expect(await chainRoots('P', ['Q'], load)).toEqual(['P']);
+  });
+});

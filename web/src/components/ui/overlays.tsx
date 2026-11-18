@@ -291,8 +291,9 @@ export function Popover({ open, onClose, anchor, children, align = 'end', width 
     if (shown) placeRef.current?.();
   }, [shown]);
   if (!open || !pos) return null;
+  // Über Dialogen (z-[90]), sonst lägen Hilfe-Knöpfe und Menüs in Dialogen hinter dem Abdunkeln (#274); unter der Suche
   return createPortal(
-    <div ref={ref} className={cx('fixed z-[80] bg-card border border-line rounded-card shadow-float overflow-y-auto', className)} style={{ top: pos.top, left: pos.left, width: Math.min(width, window.innerWidth - 16), maxHeight: pos.maxHeight }}>
+    <div ref={ref} className={cx('fixed z-[92] bg-card border border-line rounded-card shadow-float overflow-y-auto', className)} style={{ top: pos.top, left: pos.left, width: Math.min(width, window.innerWidth - 16), maxHeight: pos.maxHeight }}>
       {children}
     </div>,
     document.body,

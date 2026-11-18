@@ -81,6 +81,9 @@ export const OUTPUT_CONFIG: Record<OutputKind, z.ZodType<any>> = {
     // Darstellung auf der Website (#186): auto = nach Schweregrad, wie in der Bridge eingestellt
     display: z.enum(['auto', 'banner', 'popup', 'both']).default('auto'),
     submit: z.boolean().default(true),
+    // Banner folgt dem Vorgang (#274): Aktualisierung desselben Vorgangs aktualisiert das Banner, Entwarnung bzw.
+    // Einsatzende beendet es. Fehlt der Wert (Aktionen von vor dieser Option), gilt „an“.
+    follow: z.boolean().default(true),
   }),
   post: z.object({
     kind: z.enum(['news', 'incident', 'event', 'situation']).default('news'),

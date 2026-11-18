@@ -127,7 +127,8 @@ export const RUN_STATUS: Record<string, { tone: Tone; label: string; pulse?: boo
 };
 export const STEP_STATUS: Record<string, { tone: Tone; label: string }> = {
   done: { tone: 'success', label: 'Erledigt' },
-  skipped: { tone: 'neutral', label: 'Nicht erreicht' },
+  // „Nicht erreicht“ (anderer Zweig) bzw. bewusst übersprungen (z. B. Banner folgt dem Vorgang, #274) – Grund steht im Hinweis
+  skipped: { tone: 'neutral', label: 'Übersprungen' },
   waiting: { tone: 'warning', label: 'Wartet' },
   running: { tone: 'primary', label: 'Läuft' },
   failed: { tone: 'error', label: 'Fehler' },
@@ -206,7 +207,7 @@ export function outputSummary(o: Pick<OutputDef, 'kind' | 'config'>, cat?: Catal
   const roles = (ids: string[] = []) => ids.map((r) => cat?.roles.find((x) => x.id === r)?.label ?? r).join(', ');
   switch (o.kind) {
     case 'banner':
-      return joinMeta([tone[c.tone] ?? c.tone, `Priorität ${c.priority ?? 2}`, (c.siteIds ?? []).map((s: string) => cat?.sites.find((x) => x.id === s)?.name ?? 'Website').join(', ')]);
+      return joinMeta([tone[c.tone] ?? c.tone, `Priorität ${c.priority ?? 2}`, (c.siteIds ?? []).map((s: string) => cat?.sites.find((x) => x.id === s)?.name ?? 'Website').join(', '), c.follow !== false && 'folgt dem Vorgang']);
     case 'post':
       return joinMeta([c.submit ? 'zur Freigabe einreichen' : 'als Entwurf', c.siteId && (cat?.sites.find((x) => x.id === c.siteId)?.name ?? 'Website')]);
     case 'mail':
