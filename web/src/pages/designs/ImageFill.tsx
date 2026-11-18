@@ -239,9 +239,13 @@ export function ImageFillDialog({ templateId: initial, postId, onClose, onDone }
                   <legend className="px-1 text-sm font-medium">
                     {e.label}
                     {e.required && (
-                      <span className="text-err ml-0.5" aria-hidden="true">
-                        *
-                      </span>
+                      <>
+                        <span className="text-err ml-0.5" aria-hidden="true">
+                          *
+                        </span>
+                        {/* Bildauswahl über Knöpfe: Pflicht als Text in der Gruppenbeschriftung */}
+                        <span className="sr-only"> (Pflichtfeld)</span>
+                      </>
                     )}
                   </legend>
                   {c ? (

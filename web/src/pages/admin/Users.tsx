@@ -383,6 +383,8 @@ function InviteForm({
             <span className="text-err ml-0.5" aria-hidden="true">
               *
             </span>
+            {/* Auswahlknopf statt Eingabefeld: Pflicht als Text für Hilfsmittel (aria-required gilt nicht für Knöpfe) */}
+            <span className="sr-only"> (Pflichtfeld)</span>
           </span>
           <button
             ref={rolesBtn}

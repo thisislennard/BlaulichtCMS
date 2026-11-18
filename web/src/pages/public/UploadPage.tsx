@@ -216,9 +216,9 @@ export function UploadArea({ info, token, preview, accent }: { info: LinkInfo; t
     fields[k] !== 'off' && (
       <label key={k} className="flex flex-col gap-1.5 text-sm">
         <span className="font-medium">
-          {label} {fields[k] === 'optional' ? <span className="font-normal text-fg-muted">(freiwillig)</span> : <span className="text-err">*</span>}
+          {label} {fields[k] === 'optional' ? <span className="font-normal text-fg-muted">(freiwillig)</span> : <span className="text-err" aria-hidden="true">*</span>}
         </span>
-        <Input type={type} autoComplete={auto} value={who[k]} maxLength={k === 'email' ? 200 : 120} required={fields[k] === 'required'} onChange={(e) => setWho({ ...who, [k]: e.target.value })} />
+        <Input type={type} autoComplete={auto} value={who[k]} maxLength={k === 'email' ? 200 : 120} required={fields[k] === 'required'} aria-required={fields[k] === 'required' || undefined} onChange={(e) => setWho({ ...who, [k]: e.target.value })} />
       </label>
     );
 
@@ -257,16 +257,16 @@ export function UploadArea({ info, token, preview, accent }: { info: LinkInfo; t
       )}
       {fields.note !== 'off' && (
         <label className="flex flex-col gap-1.5 text-sm">
-          <span className="font-medium">Hinweis {fields.note === 'optional' ? <span className="font-normal text-fg-muted">(optional)</span> : <span className="text-err">*</span>}</span>
-          <Textarea rows={2} maxLength={500} value={note} onChange={(e) => setNote(e.target.value)} placeholder="z. B. Ort oder Zeitpunkt der Aufnahme" />
+          <span className="font-medium">Hinweis {fields.note === 'optional' ? <span className="font-normal text-fg-muted">(optional)</span> : <span className="text-err" aria-hidden="true">*</span>}</span>
+          <Textarea rows={2} maxLength={500} value={note} onChange={(e) => setNote(e.target.value)} placeholder="z. B. Ort oder Zeitpunkt der Aufnahme" aria-required={fields.note === 'required' || undefined} />
           <span className="text-meta text-fg-muted">Bitte keine Namen, Telefonnummern oder anderen Angaben zu anderen Personen eintragen.</span>
         </label>
       )}
       {info.consent_required && (
         <label className="flex items-start gap-2.5 text-sm cursor-pointer">
-          <input type="checkbox" className="w-4 h-4 mt-0.5 accent-[var(--bc-primary-solid)]" checked={consent} onChange={(e) => setConsent(e.target.checked)} />
+          <input type="checkbox" className="w-4 h-4 mt-0.5 accent-[var(--bc-primary-solid)]" checked={consent} onChange={(e) => setConsent(e.target.checked)} aria-required="true" />
           <span className="whitespace-pre-line">
-            {info.consent_text} <span className="text-err">*</span>
+            {info.consent_text} <span className="text-err" aria-hidden="true">*</span>
           </span>
         </label>
       )}

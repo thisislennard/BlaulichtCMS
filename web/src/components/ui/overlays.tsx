@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useBlocker } from 'react-router';
-import { Button, cx, Input } from './core';
+import { Button, cx, Input, RequiredLegend, RequiredScopeProvider, useRegisterRequired } from './core';
 import { Icon } from './Icon';
 import { fmtDate } from '../../lib/format';
 
@@ -86,9 +86,31 @@ export function useErrorToast() {
 
 /* --------------------------------------- Dialog ---------------------------------------- */
 
+/** Zählt Pflichtfelder (`FieldWrap required`) darunter; ab einem Feld erscheint die Legende „* Pflichtfeld“ (#268). */
+export function useRequiredScope() {
+  const [count, setCount] = useState(0);
+  const register = useCallback(() => {
+    setCount((c) => c + 1);
+    return () => setCount((c) => c - 1);
+  }, []);
+  return { count, register };
+}
+
+/** Formular außerhalb eines Dialogs mit Legende „* Pflichtfeld“, sobald es ein Pflichtfeld enthält. */
+export function RequiredScope({ children, className }: { children: ReactNode; className?: string }) {
+  const req = useRequiredScope();
+  return (
+    <RequiredScopeProvider value={req.register}>
+      {children}
+      {req.count > 0 && <RequiredLegend className={cx('block', className)} />}
+    </RequiredScopeProvider>
+  );
+}
+
 export function Dialog({ open, onClose, title, children, footer, width = 520 }: { open: boolean; onClose: () => void; title: ReactNode; children: ReactNode; footer?: ReactNode; width?: number }) {
   const ref = useRef<HTMLDivElement>(null);
   const hid = useId();
+  const req = useRequiredScope();
   // onClose ist bei den Aufrufern meist eine Inline-Funktion (bei jedem Rendern neu). Steckte sie in den
   // Abhängigkeiten des Effekts, liefe dieser bei jedem Tastendruck im Formular erneut: Fokus zurück auf das vorherige
   // Element und dann auf das erste Feld – Tippen in späteren Feldern bräche ab. Deshalb nur `open` als Abhängigkeit.
@@ -137,8 +159,18 @@ export function Dialog({ open, onClose, title, children, footer, width = 520 }: 
             <Icon name="X" size={16} />
           </button>
         </div>
-        <div className="px-5 py-4 overflow-y-auto">{children}</div>
-        {footer && <div className="flex justify-end gap-2 px-5 py-3 border-t border-line flex-wrap">{footer}</div>}
+        <RequiredScopeProvider value={req.register}>
+          <div className="px-5 py-4 overflow-y-auto">
+            {children}
+            {req.count > 0 && !footer && <RequiredLegend className="block mt-3" />}
+          </div>
+        </RequiredScopeProvider>
+        {footer && (
+          <div className="flex justify-end items-center gap-2 px-5 py-3 border-t border-line flex-wrap">
+            {req.count > 0 && <RequiredLegend className="mr-auto" />}
+            {footer}
+          </div>
+        )}
       </div>
     </div>,
     document.body,
@@ -332,6 +364,7 @@ export function SecretField({ label, set, savedAt, onReplace, value, editing, he
   const [replacing, setReplacing] = useState(!set || !!editing);
   const auto = useId();
   const fid = id ?? auto;
+  useRegisterRequired(required && replacing);
   if (!replacing) {
     return (
       <div className="flex flex-col gap-1.5">
@@ -351,10 +384,14 @@ export function SecretField({ label, set, savedAt, onReplace, value, editing, he
     <div className="flex flex-col gap-1.5">
       <label htmlFor={fid} className="text-sm font-medium">
         {label}
-        {required && <span className="text-err ml-0.5">*</span>}
+        {required && (
+          <span className="text-err ml-0.5" aria-hidden="true" data-required-mark="">
+            *
+          </span>
+        )}
       </label>
       <div className="flex gap-2">
-        <Input id={fid} type="password" autoComplete="new-password" mono value={value ?? ''} onChange={(e) => onReplace?.(e.target.value)} placeholder={set ? 'Neuen Wert eingeben' : ''} />
+        <Input id={fid} type="password" autoComplete="new-password" mono value={value ?? ''} onChange={(e) => onReplace?.(e.target.value)} placeholder={set ? 'Neuen Wert eingeben' : ''} aria-required={required || undefined} aria-describedby={`${fid}-note`} />
         {set && (
           <Button
             variant="ghost"
@@ -367,7 +404,7 @@ export function SecretField({ label, set, savedAt, onReplace, value, editing, he
           </Button>
         )}
       </div>
-      <p className="m-0 text-meta text-fg-muted">{help ?? 'Wird verschlüsselt gespeichert und danach nie wieder angezeigt.'}</p>
+      <p id={`${fid}-note`} className="m-0 text-meta text-fg-muted">{help ?? 'Wird verschlüsselt gespeichert und danach nie wieder angezeigt.'}</p>
     </div>
   );
 }

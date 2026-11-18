@@ -1,4 +1,4 @@
-import { forwardRef, useId, useRef, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from 'react';
+import { createContext, forwardRef, useContext, useEffect, useId, useRef, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from 'react';
 import { Link } from 'react-router';
 import { Icon } from './Icon';
 import { usePageInfo } from '../layout/page';
@@ -280,50 +280,105 @@ export function PageHeader({ title, subtitle, actions, children, help }: { title
 
 /* --------------------------------------- Felder ---------------------------------------- */
 
-export function FieldWrap({ label, help, error, required, children, htmlFor, className, labelAction }: { label?: ReactNode; help?: ReactNode; error?: string | null; required?: boolean; children: ReactNode; htmlFor?: string; className?: string; labelAction?: ReactNode }) {
+/**
+ * Feldkontext (#268): `FieldWrap` reicht Pflicht, Fehler und Hilfetext an das Eingabefeld darin weiter – `Input`,
+ * `Textarea` und `Select` setzen daraus `aria-required`, `aria-invalid` und `aria-describedby`. Gilt für das Feld, dessen
+ * `id` dem `htmlFor` entspricht (bzw. für Felder ohne eigene `id`). Eigene Bausteine lesen ihn mit `useFieldA11y`.
+ */
+interface FieldCtx {
+  id?: string;
+  required?: boolean;
+  invalid?: boolean;
+  describedBy?: string;
+}
+const FieldContext = createContext<FieldCtx | null>(null);
+
+/** Zähler der Pflichtfelder im Dialog bzw. Formular – zeigt die Legende „* Pflichtfeld“ (siehe `RequiredScope`). */
+const RequiredContext = createContext<(() => () => void) | null>(null);
+export const RequiredScopeProvider = RequiredContext.Provider;
+/** Meldet ein Pflichtfeld beim umgebenden Dialog bzw. `RequiredScope` an (für Felder ohne `FieldWrap`). */
+export function useRegisterRequired(required?: boolean) {
+  const register = useContext(RequiredContext);
+  useEffect(() => (required && register ? register() : undefined), [required, register]);
+}
+
+/** ARIA-Attribute aus dem umgebenden `FieldWrap` für ein Feld mit dieser `id` (eigene Angaben haben Vorrang). */
+export function useFieldA11y(id: string | undefined, own: { required?: boolean; invalid?: boolean; describedBy?: string } = {}) {
+  const f = useContext(FieldContext);
+  const mine = !!f && (!f.id || !id || f.id === id);
+  const required = own.required ?? (mine && f!.required ? true : undefined);
+  const invalid = own.invalid || (mine && f!.invalid) || undefined;
+  const describedBy = [own.describedBy, mine ? f!.describedBy : undefined].filter(Boolean).join(' ') || undefined;
+  return { 'aria-required': required || undefined, 'aria-invalid': invalid, 'aria-describedby': describedBy } as const;
+}
+
+/** Sichtbare Legende für das Sternchen. Für Hilfsmittel trägt das Feld selbst `aria-required`. */
+export function RequiredLegend({ className }: { className?: string }) {
   return (
-    <div className={cx('flex flex-col gap-1.5 min-w-0', className)}>
-      {label && (
-        // Schmale Bildschirme: Aktionen neben der Beschriftung rutschen in die nächste Zeile statt überzustehen
-        <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5">
-          <label htmlFor={htmlFor} className="text-sm font-medium">
-            {label}
-            {required && (
-              <span className="text-err ml-0.5" aria-hidden="true">
-                *
-              </span>
-            )}
-          </label>
-          {labelAction}
-        </div>
-      )}
-      {children}
-      {error ? (
-        <p className="m-0 text-meta text-err" role="alert">
-          {error}
-        </p>
-      ) : help ? (
-        <p className="m-0 text-meta text-fg-muted">{help}</p>
-      ) : null}
-    </div>
+    <span aria-hidden="true" className={cx('text-meta text-fg-muted', className)}>
+      <span className="text-err">*</span> Pflichtfeld
+    </span>
+  );
+}
+
+export function FieldWrap({ label, help, error, required, children, htmlFor, className, labelAction }: { label?: ReactNode; help?: ReactNode; error?: string | null; required?: boolean; children: ReactNode; htmlFor?: string; className?: string; labelAction?: ReactNode }) {
+  const auto = useId();
+  const noteId = `${htmlFor ?? auto}-note`;
+  useRegisterRequired(required);
+  const note = error ? (
+    <p id={noteId} className="m-0 text-meta text-err" role="alert">
+      {error}
+    </p>
+  ) : help ? (
+    <p id={noteId} className="m-0 text-meta text-fg-muted">
+      {help}
+    </p>
+  ) : null;
+  return (
+    <FieldContext.Provider value={{ id: htmlFor, required, invalid: !!error, describedBy: note ? noteId : undefined }}>
+      <div className={cx('flex flex-col gap-1.5 min-w-0', className)}>
+        {label && (
+          // Schmale Bildschirme: Aktionen neben der Beschriftung rutschen in die nächste Zeile statt überzustehen
+          <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5">
+            <label htmlFor={htmlFor} className="text-sm font-medium">
+              {label}
+              {required && (
+                <span className="text-err ml-0.5" aria-hidden="true" data-required-mark="">
+                  *
+                </span>
+              )}
+            </label>
+            {labelAction}
+          </div>
+        )}
+        {children}
+        {note}
+      </div>
+    </FieldContext.Provider>
   );
 }
 
 const inputBase =
   'w-full bg-bg border border-line rounded-control px-3 text-base text-fg outline-none transition-[border-color,box-shadow] duration-fast focus:border-primary focus:shadow-ring aria-[invalid=true]:border-err disabled:opacity-60';
 
+type A11yOwn = { 'aria-required'?: boolean | 'true' | 'false'; 'aria-describedby'?: string; id?: string };
+const own = (rest: A11yOwn, invalid?: boolean) => ({ required: rest['aria-required'] === undefined ? undefined : rest['aria-required'] === true || rest['aria-required'] === 'true', invalid, describedBy: rest['aria-describedby'] });
+
 export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement> & { invalid?: boolean; mono?: boolean }>(function Input({ className, invalid, mono, ...rest }, ref) {
-  return <input ref={ref} aria-invalid={invalid || undefined} className={cx(inputBase, 'h-field', mono && 'font-mono text-[13px]', className)} {...rest} />;
+  const a11y = useFieldA11y(rest.id, own(rest, invalid));
+  return <input ref={ref} className={cx(inputBase, 'h-field', mono && 'font-mono text-[13px]', className)} {...rest} {...a11y} />;
 });
 
 export const Textarea = forwardRef<HTMLTextAreaElement, TextareaHTMLAttributes<HTMLTextAreaElement> & { invalid?: boolean; mono?: boolean }>(function Textarea({ className, invalid, mono, rows = 4, ...rest }, ref) {
-  return <textarea ref={ref} rows={rows} aria-invalid={invalid || undefined} className={cx(inputBase, 'py-2 leading-relaxed resize-y', mono && 'font-mono text-[13px]', className)} {...rest} />;
+  const a11y = useFieldA11y(rest.id, own(rest, invalid));
+  return <textarea ref={ref} rows={rows} className={cx(inputBase, 'py-2 leading-relaxed resize-y', mono && 'font-mono text-[13px]', className)} {...rest} {...a11y} />;
 });
 
 export const Select = forwardRef<HTMLSelectElement, SelectHTMLAttributes<HTMLSelectElement> & { invalid?: boolean }>(function Select({ className, invalid, children, ...rest }, ref) {
+  const a11y = useFieldA11y(rest.id, own(rest, invalid));
   return (
     <div className="relative">
-      <select ref={ref} aria-invalid={invalid || undefined} className={cx(inputBase, 'h-field appearance-none pr-9', className)} {...rest}>
+      <select ref={ref} className={cx(inputBase, 'h-field appearance-none pr-9', className)} {...rest} {...a11y}>
         {children}
       </select>
       <Icon name="ChevronDown" size={16} className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-fg-muted" />
