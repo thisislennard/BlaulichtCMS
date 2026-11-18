@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate, useParams } from 'react-router';
 import { del, get, patch, post } from '../../api/client';
 import { usePageMeta } from '../../components/layout/AppShell';
-import { Button, Card, cx, ErrorBox, FieldWrap, Input, KeyValue, Notice, PageHeader, Select, SkeletonRows, Textarea } from '../../components/ui/core';
+import { Button, Card, cx, ErrorBox, FieldWrap, Input, KeyValue, MetaLine, Notice, PageHeader, Select, SkeletonRows, Textarea } from '../../components/ui/core';
 import { Icon } from '../../components/ui/Icon';
 import { DeleteDialog, useErrorToast } from '../../components/ui/overlays';
 import { useAuth } from '../../lib/auth';
@@ -58,14 +58,14 @@ export default function PressRequestPage() {
       <PageHeader
         title={r.topic}
         subtitle={
-          <span className="flex flex-wrap items-center gap-2">
-            <PressStatusBadge status={r.status} />
+          <MetaLine lead={<PressStatusBadge status={r.status} />}>
             <span className="font-mono">{r.case_no}</span>
+            <span>{CHANNEL_LABEL[r.channel] ?? r.channel}</span>
             <span>
-              · {CHANNEL_LABEL[r.channel] ?? r.channel} · erfasst {fmtDateTime(r.created_at)}
+              erfasst {fmtDateTime(r.created_at)}
               {r.created_by_name ? ` von ${r.created_by_name}` : ''}
             </span>
-          </span>
+          </MetaLine>
         }
         actions={
           manage && (

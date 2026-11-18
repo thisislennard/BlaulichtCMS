@@ -198,6 +198,7 @@ mit passenden Rechten sichtbar. Höchstens **6 Bereiche** mit je höchstens **7 
 | `Button variant="danger"` | Zart rot mit Rand; nur für Löschen/Widerrufen, immer mit Bestätigung. |
 | `Badge` / `StatusBadge` | Pille mit Punkt + Text. Töne: success, warning, error, neutral, primary. `primary` nur für laufende Vorgänge (wird veröffentlicht, wird versendet, geplant), nicht für Kennzeichnungen wie „Dieses Gerät“. |
 | `Chip mono` | Für IDs und Kürzel (`F-WALD-2`). |
+| `MetaLine` / `joinMeta` | Angaben mit Trennpunkt „·“ im Seiten- und Kartenkopf (#273): `<MetaLine lead={<StatusBadge …/>}>Art<Rev n={2} />Gespeichert 14:32</MetaLine>`. Der Trennpunkt steht vor jeder Angabe und wird am Zeilenanfang abgeschnitten – am Handy beginnt keine Zeile mit „·“. Für reinen Text (`Card subtitle`) `joinMeta([a, b])`: geschütztes Leerzeichen vor „·“. Nie „ · “ als Text in `PageHeader` oder `Card subtitle` (`server/test/navigation.test.ts`). |
 | Auswahl (gewählte Karte, Antwort, Datei) | `bg-primary-soft` + `border-primary` (gern mit `shadow-selected` und Haken) – nie rot gefüllt. |
 | `ToggleButton` | Umschaltknopf an/aus (z. B. Hinweise zur Datei): an = Auswahl-Muster mit Haken, aus = sekundär. |
 | Ansichtsschalter | `SegmentedControl` (aktiv `bg-raised`), auch für reine Symbole (Kacheln/Liste). |

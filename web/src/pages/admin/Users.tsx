@@ -16,6 +16,7 @@ import {
   FieldWrap,
   Input,
   LinkButton,
+  MetaLine,
   Notice,
   PageHeader,
   SegmentedControl,
@@ -116,15 +117,13 @@ export default function Users() {
       <PageHeader
         subtitle={
           users.data && roles.data ? (
-            [
-              t(
+            <MetaLine>
+              {t(
                 count === 1 ? "admin.users.summaryOne" : "admin.users.summary",
                 { users: count, roles: roles.data.roles.length },
-              ),
-              mfaText,
-            ]
-              .filter(Boolean)
-              .join(" · ")
+              )}
+              {mfaText}
+            </MetaLine>
           ) : (
             <span
               aria-hidden="true"

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
 import { del, get, post, put } from '../../api/client';
-import { Badge, Button, Card, cx, ErrorBox, FieldWrap, Input, KeyValue, Notice, PageHeader, Select, SkeletonRows, StatusBadge, Switch, Textarea } from '../../components/ui/core';
+import { Badge, Button, Card, cx, ErrorBox, FieldWrap, Input, joinMeta, KeyValue, Notice, PageHeader, Select, SkeletonRows, StatusBadge, Switch, Textarea } from '../../components/ui/core';
 import { usePageMeta } from '../../components/layout/AppShell';
 import { Icon } from '../../components/ui/Icon';
 import { HelpLink, HelpTip } from '../../components/ui/HelpTip';
@@ -689,7 +689,7 @@ export default function ConnectionDetail() {
             </Card>
           )}
           {c.kind === 'feuersoftware' && c.preview?.operations && (
-            <Card title="Aktuelle Einsätze" subtitle={`${c.preview.matched} von ${c.preview.total} passen zu den Filtern · ohne Adresse`}>
+            <Card title="Aktuelle Einsätze" subtitle={joinMeta([`${c.preview.matched} von ${c.preview.total} passen zu den Filtern`, 'ohne Adresse'])}>
               {c.preview.operations.length ? (
                 <ul className="m-0 p-0 list-none flex flex-col gap-2 text-sm">
                   {c.preview.operations.map((o: any, i: number) => (

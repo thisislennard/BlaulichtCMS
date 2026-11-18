@@ -2,7 +2,7 @@ import { useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, del, get, post } from '../../api/client';
-import { Badge, Button, Card, Chip, ErrorBox, FieldWrap, LinkButton, Notice, PageHeader, SkeletonRows, Table, Td, Textarea, Th } from '../../components/ui/core';
+import { Badge, Button, Card, Chip, ErrorBox, FieldWrap, joinMeta, LinkButton, Notice, PageHeader, SkeletonRows, Table, Td, Textarea, Th } from '../../components/ui/core';
 import { usePageMeta } from '../../components/layout/AppShell';
 import { Icon } from '../../components/ui/Icon';
 import { DeleteDialog, Dialog, Menu, useConfirm, useErrorToast, useToast } from '../../components/ui/overlays';
@@ -337,7 +337,7 @@ export default function DesignTemplateDetail() {
       {current && (t.kind === 'files' || current.files.length > 0 || manage) && (
         <Card
           title={`Aktuelle Version ${current.number}`}
-          subtitle={`${fmtDateTime(current.created_at)}${current.created_by_name ? ` · ${current.created_by_name}` : ''}${current.note ? ` · ${current.note}` : ''}`}
+          subtitle={joinMeta([fmtDateTime(current.created_at), current.created_by_name, current.note])}
           action={manage && <UploadFiles id={t.id} onDone={refresh} />}
         >
           {fileTable(current)}

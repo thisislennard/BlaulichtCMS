@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router';
 import { del, post, put } from '../../api/client';
-import { Button, Card, Chip, EmptyState, ErrorBox, FieldWrap, Input, Notice, PageHeader, Select, SkeletonRows, Switch } from '../../components/ui/core';
+import { Button, Card, Chip, EmptyState, ErrorBox, FieldWrap, Input, joinMeta, Notice, PageHeader, Select, SkeletonRows, Switch } from '../../components/ui/core';
 import { Icon } from '../../components/ui/Icon';
 import { Dialog, useConfirm, useErrorToast, useToast } from '../../components/ui/overlays';
 import { FormProblems, useFormCheck } from '../../components/ui/form';
@@ -268,7 +268,7 @@ export default function Outputs() {
                   {o.name}
                 </span>
               }
-              subtitle={`${kind?.label ?? o.kind} · ${outputSummary(o, cat.data)}`}
+              subtitle={joinMeta([kind?.label ?? o.kind, outputSummary(o, cat.data)])}
               action={
                 manage && (
                   <div className="flex gap-1">

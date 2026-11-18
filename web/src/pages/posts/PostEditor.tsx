@@ -5,7 +5,7 @@ import { ApiError, get, patch, post, put } from '../../api/client';
 import type { MediaItem, Publication, Site } from '../../api/types';
 import { usePageMeta } from '../../components/layout/AppShell';
 import { ShareActions } from '../../components/share';
-import { Badge, Button, Card, cx, ErrorBox, FieldWrap, Input, LinkButton, Notice, PageHeader, Rev, Select, SkeletonRows, StatusBadge, Textarea } from '../../components/ui/core';
+import { Badge, Button, Card, cx, ErrorBox, FieldWrap, Input, LinkButton, MetaLine, Notice, PageHeader, Rev, Select, SkeletonRows, StatusBadge, Textarea } from '../../components/ui/core';
 import { Icon } from '../../components/ui/Icon';
 import { Dialog, useErrorToast, useToast } from '../../components/ui/overlays';
 import { FormProblems, SaveBar, useFormCheck } from '../../components/ui/form';
@@ -369,21 +369,20 @@ function PostEditorInner({ id }: { id: string }) {
       <PageHeader
         title={r.title}
         subtitle={
-          <span className="flex flex-wrap items-center gap-2">
-            <StatusBadge status={d!.state} />
+          <MetaLine lead={<StatusBadge status={d!.state} />}>
             <span>{KIND_LABEL[d!.post.kind]}</span>
-            <span>· <Rev n={r.number} /></span>
+            <Rev n={r.number} />
             {/* Zustand statt rotem Knopf (#262): leise „Gespeichert 14:32“ bzw. „Ungespeicherte Änderungen“ */}
             {editable && dirty ? (
               <span className="inline-flex items-center gap-1.5">
-                · <span className="w-2 h-2 rounded-full bg-warn" aria-hidden="true" /> Ungespeicherte Änderungen
+                <span className="w-2 h-2 rounded-full bg-warn" aria-hidden="true" /> Ungespeicherte Änderungen
               </span>
             ) : (
               <span className="inline-flex items-center gap-1" title={fmtDateTime(r.created_at)}>
-                · <Icon name="CheckCircle2" size={14} className="text-ok" /> Gespeichert {new Date(r.created_at).toDateString() === new Date().toDateString() ? fmtTime(r.created_at) : fmtRelative(r.created_at)}
+                <Icon name="CheckCircle2" size={14} className="text-ok" /> Gespeichert {new Date(r.created_at).toDateString() === new Date().toDateString() ? fmtTime(r.created_at) : fmtRelative(r.created_at)}
               </span>
             )}
-          </span>
+          </MetaLine>
         }
         actions={
           <>

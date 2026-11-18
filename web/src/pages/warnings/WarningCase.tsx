@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
 import { del, get, post, put } from '../../api/client';
-import { Badge, Button, Card, Chip, cx, ErrorBox, FieldWrap, Input, KeyValue, Notice, PageHeader, Rev, Select, SkeletonRows, StatusBadge, Textarea } from '../../components/ui/core';
+import { Badge, Button, Card, Chip, cx, ErrorBox, FieldWrap, Input, KeyValue, MetaLine, Notice, PageHeader, Rev, Select, SkeletonRows, StatusBadge, Textarea } from '../../components/ui/core';
 import { usePageMeta } from '../../components/layout/AppShell';
 import { Icon } from '../../components/ui/Icon';
 import { Dialog, UnsavedChangesGuard, useErrorToast, useToast } from '../../components/ui/overlays';
@@ -332,10 +332,16 @@ function WarningCaseInner({ id }: { id: string }) {
           </span>
         }
         subtitle={
-          <>
-            {KIND[d.warning.kind]}
-            {d.warning.parent_case_no && <> zu <span className="font-mono">{d.warning.parent_case_no}</span></>} · <Rev n={d.revision.number} /> · Vorlage „{d.template.name}“ <span className="font-mono">v{d.template.version}</span>
-          </>
+          <MetaLine>
+            <span>
+              {KIND[d.warning.kind]}
+              {d.warning.parent_case_no && <> zu <span className="font-mono">{d.warning.parent_case_no}</span></>}
+            </span>
+            <Rev n={d.revision.number} />
+            <span>
+              Vorlage „{d.template.name}“ <span className="font-mono">v{d.template.version}</span>
+            </span>
+          </MetaLine>
         }
         actions={
           <div className="flex items-center gap-2 flex-wrap">

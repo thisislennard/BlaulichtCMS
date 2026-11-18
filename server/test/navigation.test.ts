@@ -213,3 +213,60 @@ describe('Begriffe (#257): verbotene Schreibweisen in Oberfläche und Hilfe', ()
     expect(problems).toEqual([]);
   });
 });
+
+describe('Seitenköpfe (#273): Trennpunkt „·“ nie am Zeilenanfang', () => {
+  /** JSX-Element ab `start` („<Name“) bis zum Ende des öffnenden Tags – geschweifte Klammern und Zeichenketten beachtet. */
+  function openingTag(src: string, start: number): string {
+    let depth = 0;
+    let quote: string | null = null;
+    for (let i = start + 1; i < src.length; i++) {
+      const ch = src[i];
+      if (quote) {
+        if (ch === '\\') i++;
+        else if (ch === quote) quote = null;
+        continue;
+      }
+      if (depth > 0 && (ch === '"' || ch === "'" || ch === '`')) quote = ch;
+      else if (ch === '{') depth++;
+      else if (ch === '}') depth--;
+      else if (ch === '>' && depth === 0) return src.slice(start, i + 1);
+    }
+    return src.slice(start);
+  }
+  const files = (dir: string): string[] => fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? files(path.join(dir, e.name)) : e.name.endsWith('.tsx') ? [path.join(dir, e.name)] : []));
+
+  it('Angaben im Seitenkopf (PageHeader) und in Kartenköpfen (Card subtitle) über MetaLine bzw. joinMeta', () => {
+    const problems: string[] = [];
+    for (const file of files(path.join(WEB, 'pages'))) {
+      const src = fs.readFileSync(file, 'utf8');
+      const rel = path.relative(WEB, file).replace(/\\/g, '/');
+      for (const m of src.matchAll(/<(PageHeader|Card)\b/g)) {
+        const tag = openingTag(src, m.index!);
+        let part = tag;
+        if (m[1] === 'Card') {
+          // nur der Wert von subtitle: "…" bzw. {…} mit passender schließender Klammer
+          const at = /\ssubtitle=/.exec(tag);
+          const rest = at ? tag.slice(at.index + at[0].length) : '';
+          if (rest.startsWith('{')) {
+            let depth = 0;
+            let end = rest.length;
+            for (let i = 0; i < rest.length; i++) {
+              if (rest[i] === '{') depth++;
+              else if (rest[i] === '}' && --depth === 0) {
+                end = i + 1;
+                break;
+              }
+            }
+            part = rest.slice(0, end);
+          } else part = rest.split(/["']/)[1] ?? '';
+        }
+        if (m[1] === 'PageHeader' && !tag.endsWith('/>')) {
+          const end = src.indexOf('</PageHeader>', m.index!);
+          if (end > 0) part += src.slice(m.index! + tag.length, end);
+        }
+        if (part.includes('·')) problems.push(`${rel}:${src.slice(0, m.index!).split('\n').length} <${m[1]}> setzt „·“ als Text`);
+      }
+    }
+    expect(problems).toEqual([]);
+  });
+});

@@ -2,7 +2,7 @@ import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { get, put } from '../api/client';
-import { Button, EmptyState, ErrorBox, Notice, PageHeader, SkeletonRows } from '../components/ui/core';
+import { Button, EmptyState, ErrorBox, MetaLine, Notice, PageHeader, SkeletonRows } from '../components/ui/core';
 import { UnsavedChangesGuard, useErrorToast, useToast } from '../components/ui/overlays';
 import { useAuth } from '../lib/auth';
 import { fmtTime, getTimeZone } from '../lib/format';
@@ -169,10 +169,10 @@ export default function Dashboard() {
       <PageHeader
         title={greeting(first)}
         subtitle={
-          <span>
+          <MetaLine>
             {q.data ? summary(d, can) : me?.instance.organization}
-            {d.confirmedAt && <span className="font-mono text-[12px] text-fg-muted"> · Stand {fmtTime(d.confirmedAt, true)}</span>}
-          </span>
+            {d.confirmedAt && <span className="font-mono text-[12px] text-fg-muted">Stand {fmtTime(d.confirmedAt, true)}</span>}
+          </MetaLine>
         }
         actions={
           !editing ? (

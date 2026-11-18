@@ -1,4 +1,4 @@
-import { createContext, forwardRef, useContext, useEffect, useId, useRef, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from 'react';
+import { Children, createContext, forwardRef, useContext, useEffect, useId, useRef, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from 'react';
 import { Link } from 'react-router';
 import { Icon } from './Icon';
 import { usePageInfo } from '../layout/page';
@@ -230,6 +230,47 @@ export function Rev({ n, className }: { n: number | string; className?: string }
 
 export function Chip({ children, className, mono, title }: { children: ReactNode; className?: string; mono?: boolean; title?: string }) {
   return <span title={title} className={cx('inline-flex items-center gap-1 h-[22px] px-2 rounded-chip bg-raised text-meta text-fg-muted whitespace-nowrap', mono && 'font-mono', className)}>{children}</span>;
+}
+
+/* --------------------------------------- MetaLine -------------------------------------- */
+
+/**
+ * Trennpunkt für Angaben in reinem Text (#273): Das geschützte Leerzeichen davor hält „·“ am vorigen Wort – eine Zeile
+ * beginnt nie mit dem Trennpunkt.
+ */
+export const META_SEP = '\u00a0· ';
+/** Angaben als Text mit „·“ verbinden (leere fallen weg), z. B. für `Card subtitle` (#273). */
+export function joinMeta(parts: (string | number | null | undefined | false)[]): string {
+  return parts.filter((p) => p !== null && p !== undefined && p !== false && p !== '').join(META_SEP);
+}
+
+/**
+ * Angaben mit Trennpunkt „·“ im Seiten- oder Kartenkopf (#273). Jede Angabe bleibt beim Umbruch zusammen; der
+ * Trennpunkt steht vor ihr in einem festen Feld, das am Zeilenanfang links abgeschnitten wird – am Handy beginnt so
+ * keine Zeile mit „·“. `lead` (z. B. Status-Badge, Aktenzeichen) steht ohne Trennpunkt davor.
+ */
+export function MetaLine({ lead, children, className }: { lead?: ReactNode; children?: ReactNode; className?: string }) {
+  const leads = Children.toArray(lead);
+  const items = Children.toArray(children);
+  const slot = 'shrink-0 w-[0.9em] text-center';
+  return (
+    <span className={cx('block overflow-x-clip', className)}>
+      <span className="flex flex-wrap items-center gap-y-1 -ml-[0.9em]">
+        {leads.map((c, i) => (
+          <span key={`l${i}`} className="flex items-center min-w-0">
+            <span className={slot} />
+            {c}
+          </span>
+        ))}
+        {items.map((c, i) => (
+          <span key={i} className="flex items-baseline min-w-0">
+            <span className={slot}>{i > 0 ? '·' : ''}</span>
+            <span className="min-w-0 break-words">{c}</span>
+          </span>
+        ))}
+      </span>
+    </span>
+  );
 }
 
 /* ----------------------------------------- Card ---------------------------------------- */

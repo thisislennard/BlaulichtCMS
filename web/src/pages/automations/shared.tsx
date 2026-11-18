@@ -1,7 +1,7 @@
 import { useRef, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { get } from '../../api/client';
-import { Badge, Chip, cx, FieldWrap, Input, Select, Textarea, type Tone } from '../../components/ui/core';
+import { Badge, Chip, cx, FieldWrap, Input, joinMeta, META_SEP, Select, Textarea, type Tone } from '../../components/ui/core';
 import { HelpTip } from '../../components/ui/HelpTip';
 import { plural } from '../../lib/format';
 
@@ -175,11 +175,11 @@ export function inputSummary(i: Pick<InputDef, 'kind' | 'config'>, cat?: Catalog
     case 'fe2':
     case 'feuersoftware':
     case 'warnfeed':
-      return `${cat?.connections.find((x) => x.id === c.connectionId)?.name ?? 'Verbindung'} · ${phases}${i.kind === 'warnfeed' && c.onlyInArea !== false ? ' · nur eigenes Gebiet' : ''}`;
+      return joinMeta([cat?.connections.find((x) => x.id === c.connectionId)?.name ?? 'Verbindung', phases, i.kind === 'warnfeed' && c.onlyInArea !== false && 'nur eigenes Gebiet']);
     case 'rss':
       return c.feedId ? (cat?.feeds.find((f) => f.id === c.feedId)?.title ?? 'Quelle') : 'Alle Quellen';
     case 'upload':
-      return `${c.collectionId ? (cat?.collections.find((x) => x.id === c.collectionId)?.title ?? 'Sammlung') : 'Alle Sammlungen'} · gebündelt je ${c.windowMinutes ?? 30} min`;
+      return joinMeta([c.collectionId ? (cat?.collections.find((x) => x.id === c.collectionId)?.title ?? 'Sammlung') : 'Alle Sammlungen', `gebündelt je ${c.windowMinutes ?? 30} min`]);
     case 'schedule':
       return c.mode === 'interval' ? `alle ${c.minutes} Minuten` : `täglich ${c.time} Uhr${c.weekdays?.length ? ` (${c.weekdays.map((d: number) => WEEKDAYS[d - 1]).join(', ')})` : ''}`;
     case 'press': {
@@ -191,7 +191,7 @@ export function inputSummary(i: Pick<InputDef, 'kind' | 'config'>, cat?: Catalog
       const when = c.timing === 'end' ? 'zum Ende' : c.timing === 'before' ? `${c.beforeValue} ${units[c.beforeUnit] ?? 'Min.'} vorher` : 'zu Beginn';
       const cats = (c.categoryIds ?? []).map((id: string) => cat?.calendarCategories?.find((x) => x.id === id)?.name ?? 'Kategorie');
       const srcs = (c.sources ?? []).map((id: string) => (id === 'own' ? 'eigene Termine' : (cat?.calendarSources?.find((x) => x.id === id)?.name ?? 'iCal')));
-      return [when, cats.length ? `Kategorie: ${cats.join(', ')}` : 'alle Kategorien', c.tags?.length ? `Schlagwort: ${c.tags.join(', ')}` : '', srcs.length ? `Quelle: ${srcs.join(', ')}` : '', c.textContains ? `Text enthält „${c.textContains}“` : ''].filter(Boolean).join(' · ');
+      return [when, cats.length ? `Kategorie: ${cats.join(', ')}` : 'alle Kategorien', c.tags?.length ? `Schlagwort: ${c.tags.join(', ')}` : '', srcs.length ? `Quelle: ${srcs.join(', ')}` : '', c.textContains ? `Text enthält „${c.textContains}“` : ''].filter(Boolean).join(META_SEP);
     }
     case 'manual':
       return c.fields?.length ? `Felder: ${c.fields.map((f: any) => f.label).join(', ')}` : 'ohne eigene Felder';
@@ -206,19 +206,19 @@ export function outputSummary(o: Pick<OutputDef, 'kind' | 'config'>, cat?: Catal
   const roles = (ids: string[] = []) => ids.map((r) => cat?.roles.find((x) => x.id === r)?.label ?? r).join(', ');
   switch (o.kind) {
     case 'banner':
-      return `${tone[c.tone] ?? c.tone} · Priorität ${c.priority ?? 2} · ${(c.siteIds ?? []).map((s: string) => cat?.sites.find((x) => x.id === s)?.name ?? 'Website').join(', ')}`;
+      return joinMeta([tone[c.tone] ?? c.tone, `Priorität ${c.priority ?? 2}`, (c.siteIds ?? []).map((s: string) => cat?.sites.find((x) => x.id === s)?.name ?? 'Website').join(', ')]);
     case 'post':
-      return `${c.submit ? 'zur Freigabe einreichen' : 'als Entwurf'}${c.siteId ? ` · ${cat?.sites.find((x) => x.id === c.siteId)?.name ?? 'Website'}` : ''}`;
+      return joinMeta([c.submit ? 'zur Freigabe einreichen' : 'als Entwurf', c.siteId && (cat?.sites.find((x) => x.id === c.siteId)?.name ?? 'Website')]);
     case 'mail':
-      return [roles(c.roles), (c.responsibilityIds ?? []).map((r: string) => cat?.responsibilities.find((x) => x.id === r)?.name ?? 'Zuständigkeit').join(', ')].filter(Boolean).join(' · ');
+      return [roles(c.roles), (c.responsibilityIds ?? []).map((r: string) => cat?.responsibilities.find((x) => x.id === r)?.name ?? 'Zuständigkeit').join(', ')].filter(Boolean).join(META_SEP);
     case 'notify':
-      return [roles(c.roles), c.userIds?.length ? `${plural(c.userIds.length, 'Person', 'Personen')}` : ''].filter(Boolean).join(' · ');
+      return [roles(c.roles), c.userIds?.length ? `${plural(c.userIds.length, 'Person', 'Personen')}` : ''].filter(Boolean).join(META_SEP);
     case 'warning_draft':
       return `${Object.keys(c.data ?? {}).length} vorausgefüllte Felder`;
     case 'press_release':
-      return `${(c.listIds ?? []).map((id: string) => cat?.pressLists?.find((l) => l.id === id)?.name ?? 'Liste').join(', ')} · Entwurf, Versand von Hand`;
+      return joinMeta([(c.listIds ?? []).map((id: string) => cat?.pressLists?.find((l) => l.id === id)?.name ?? 'Liste').join(', '), 'Entwurf, Versand von Hand']);
     case 'incident_entry':
-      return `${c.submit === false ? 'als Entwurf' : 'zur Freigabe einreichen'}${c.siteId ? ` · ${cat?.sites.find((x) => x.id === c.siteId)?.name ?? 'Website'}` : ''}`;
+      return joinMeta([c.submit === false ? 'als Entwurf' : 'zur Freigabe einreichen', c.siteId && (cat?.sites.find((x) => x.id === c.siteId)?.name ?? 'Website')]);
     default:
       return '';
   }

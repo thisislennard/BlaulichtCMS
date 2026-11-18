@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, get, put } from '../../api/client';
-import { Button, Card, cx, ErrorBox, FieldWrap, FilePickButton, Input, Notice, PageHeader, SegmentedControl, Select, SkeletonRows, Switch, Textarea } from '../../components/ui/core';
+import { Button, Card, cx, ErrorBox, FieldWrap, FilePickButton, Input, MetaLine, Notice, PageHeader, SegmentedControl, Select, SkeletonRows, Switch, Textarea } from '../../components/ui/core';
 import { Icon } from '../../components/ui/Icon';
 import { useConfirm, useErrorToast, useToast } from '../../components/ui/overlays';
 import { SaveBar } from '../../components/ui/form';
@@ -231,7 +231,7 @@ export default function DesignEditor() {
   return (
     <div className="flex flex-col gap-5">
       <PageHeader
-        subtitle={linkId ? `${q.data.link.title}${q.data.link.label ? ` · ${q.data.link.label}` : ''}` : 'Standard für alle Upload-Links ohne eigene Gestaltung.'}
+        subtitle={linkId ? <MetaLine>{q.data.link.title}{q.data.link.label}</MetaLine> : 'Standard für alle Upload-Links ohne eigene Gestaltung.'}
         actions={
           canSave && (
             <>

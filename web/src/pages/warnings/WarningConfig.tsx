@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { get, post, put } from '../../api/client';
-import { Badge, Button, Card, Chip, ErrorBox, FieldWrap, Input, Notice, PageHeader, Select, SkeletonRows, StatusBadge, Switch, Tabs, Textarea } from '../../components/ui/core';
+import { Badge, Button, Card, Chip, ErrorBox, FieldWrap, Input, joinMeta, Notice, PageHeader, Select, SkeletonRows, StatusBadge, Switch, Tabs, Textarea } from '../../components/ui/core';
 import { Dialog, useErrorToast, useToast, useConfirm } from '../../components/ui/overlays';
 import { FormProblems, useFormCheck } from '../../components/ui/form';
 import { HelpLink, HelpTip } from '../../components/ui/HelpTip';
@@ -217,7 +217,7 @@ export default function WarningConfig() {
         <div className="flex flex-col gap-4">
           <Notice>Eine Änderung erzeugt eine neue Vorlagenversion. Bestehende Vorgänge behalten ihre Version und bleiben reproduzierbar.</Notice>
           {c.templates.map((t: any) => (
-            <Card key={t.id} title={`${t.name} – Version ${t.version}`} subtitle={`${t.family} · ${t.status === 'active' ? 'aktiv' : 'außer Kraft'}`}
+            <Card key={t.id} title={`${t.name} – Version ${t.version}`} subtitle={joinMeta([t.family, t.status === 'active' ? 'aktiv' : 'außer Kraft'])}
               action={t.status === 'active' && mayRules && <Button size="sm" icon="Pencil" onClick={() => setTpl({ family: t.family, name: t.name, fields: JSON.stringify(t.fields, null, 2), levelLabels: t.level_labels, pdfTitle: t.pdf_title, pdfFooter: t.pdf_footer, mailSubject: t.mail_subject, mailBody: t.mail_body, note: t.note })}>Neue Version</Button>}>
               <p className="text-sm">{t.fields.length} Felder: {t.fields.map((f: any) => f.label).join(', ')}</p>
               {t.note && <p className="text-meta text-fg-muted mt-1">{t.note}</p>}
