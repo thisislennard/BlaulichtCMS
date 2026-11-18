@@ -230,6 +230,9 @@ flowchart LR
 
 ### Verbindungen
 
+- **Nach Richtung geordnet:** „Eingehend“ (FE2, Feuersoftware Connect, amtliche Warnungen) und „Veröffentlichen“
+  (Websites und soziale Netzwerke) – in der Liste wie im Dialog „Neue Verbindung“, ohne Vorauswahl und mit
+  vorgeschlagenem Namen; gekoppelte Websites stehen mit Verweis auf ihre Seite dabei.
 - **FE2 und Feuersoftware Connect:** Einsätze erzeugen je Einsatz einen internen Beitragsentwurf (nur freigegebene
   Felder, keine Adressen). FE2 meldet per HTTP-Aufruf, Feuersoftware Connect wird regelmäßig abgefragt (Filter nach
   RIC und Stichwort, Rücksicht auf das Abfragelimit).
@@ -313,6 +316,9 @@ flowchart LR
   Medien & Upload, Redaktion & Freigabe, E-Mail & Push, Sicherheit, Sicherung, Updates & Wartung, Workflows, System)
   mit einer Speichern-Leiste und Rückfrage beim Verlassen; „Einstellung finden“ springt direkt zum Feld. Alle
   Löschfristen samt Probelauf auf einer Seite, SMTP und Microsoft 365 samt Testmail an einer Stelle.
+- **Formulare für alle:** Pflichtfelder auch für Screenreader gekennzeichnet; „Speichern“ und „Anlegen“ bleiben
+  bedienbar und nennen fehlende Angaben direkt am Feld; lange Formulare (Einstellungen, Beitrag, Workflow,
+  Bildvorlage, Upload-Seite, Presse-Postfach) mit einer gemeinsamen Speichern-Leiste und Rückfrage beim Verlassen.
 - **Hilfe-Center:** 32 Kapitel mit Volltextsuche direkt in der App.
 
 ### Benutzer und Sicherheit

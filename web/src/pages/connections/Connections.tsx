@@ -1,11 +1,13 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useNavigate } from 'react-router';
 import { get, post } from '../../api/client';
+import { Link, useNavigate } from 'react-router';
+import type { Site } from '../../api/types';
 import { Badge, Button, Card, EmptyState, ErrorBox, FieldWrap, Input, LinkButton, Notice, PageHeader, Select, SkeletonRows, StatusBadge, Switch } from '../../components/ui/core';
 import { useAuth } from '../../lib/auth';
 import { Icon } from '../../components/ui/Icon';
 import { Dialog, OneTimeSecret, useConfirm, useErrorToast, useToast } from '../../components/ui/overlays';
+import { FormProblems, useFormCheck } from '../../components/ui/form';
 import { fmtRelative } from '../../lib/format';
 import { safeHref } from '../../lib/url';
 import { FilterEmpty, ListToolbar } from '../../components/ui/list';
@@ -13,23 +15,33 @@ import { useListState } from '../../lib/listState';
 import { rank, searchTerms } from '../../lib/searchText';
 
 export const CONN_STATE: Record<string, string> = { draft: 'Eingerichtet – Test ausstehend', tested: 'Getestet – bereit zum Aktivieren', active: 'Aktiv', disabled: 'Angehalten', revoked: 'Widerrufen' };
+/**
+ * Arten von Verbindungen, nach Richtung (#271): eingehend (Einsätze und Warnungen kommen an) oder zum Veröffentlichen
+ * (Beiträge gehen hinaus). `name` ist der Vorschlag für den Namen („Facebook-Seite Musterwehr“).
+ */
 export const KINDS = [
-  { id: 'fe2', label: 'FE2 – Einsatzentwürfe', icon: 'Siren', text: 'Eingehende Einsätze als interne Beitragsentwürfe. Die Alarmierung bleibt unabhängig.' },
-  { id: 'feuersoftware', label: 'Feuersoftware Connect', icon: 'RadioTower', text: 'Einsätze aus Feuersoftware Connect regelmäßig abrufen und als interne Beitragsentwürfe anlegen – wie bei FE2.' },
-  { id: 'facebook', label: 'Facebook-Seite', icon: 'Share2', text: 'Freigegebene Beiträge und Storys auf einer Facebook-Seite veröffentlichen.' },
-  { id: 'instagram', label: 'Instagram-Konto', icon: 'Camera', text: 'Freigegebene Beiträge und Storys mit Bild oder Video auf einem professionellen Instagram-Konto.' },
-  { id: 'threads', label: 'Threads-Profil', icon: 'AtSign', text: 'Freigegebene Beiträge mit Text, Bild oder Link über die offizielle Threads-Schnittstelle.' },
-  { id: 'x', label: 'X-Konto', icon: 'MessagesSquare', text: 'Teilen von Hand mit vorbereitetem Text oder – mit eigenem, kostenpflichtigem API-Zugang – direkt posten.' },
-  { id: 'mastodon', label: 'Mastodon-Konto', icon: 'AtSign', text: 'Freigegebene Beiträge mit Text, Bildern samt Alternativtext und Link auf einer frei wählbaren Mastodon-Instanz (z. B. social.bund.de).' },
-  { id: 'bluesky', label: 'Bluesky-Konto', icon: 'Cloud', text: 'Freigegebene Beiträge mit Text, bis zu 4 Bildern samt Alternativtext und Link-Vorschaukarte – mit App-Passwort.' },
-  { id: 'whatsapp', label: 'WhatsApp-Kanal', icon: 'MessageCircle', text: 'Teilen von Hand: Text, Link und Bilder vorbereitet, geteilt wird in WhatsApp.' },
-  { id: 'warnfeed', label: 'Amtliche Warnungen', icon: 'AlertTriangle', text: 'Warnungen für das eigene Gebiet anzeigen – getrennt vom eigenen Warnentwurf.' },
+  { id: 'fe2', dir: 'in', label: 'FE2 – Einsatzentwürfe', name: 'FE2', icon: 'Siren', text: 'Eingehende Einsätze als interne Beitragsentwürfe. Die Alarmierung bleibt unabhängig.' },
+  { id: 'feuersoftware', dir: 'in', label: 'Feuersoftware Connect', name: 'Feuersoftware Connect', icon: 'RadioTower', text: 'Einsätze aus Feuersoftware Connect regelmäßig abrufen und als interne Beitragsentwürfe anlegen – wie bei FE2.' },
+  { id: 'warnfeed', dir: 'in', label: 'Amtliche Warnungen', name: 'Amtliche Warnungen', icon: 'AlertTriangle', text: 'Warnungen für das eigene Gebiet anzeigen – getrennt vom eigenen Warnentwurf.' },
+  { id: 'facebook', dir: 'out', label: 'Facebook-Seite', name: 'Facebook-Seite', icon: 'Share2', text: 'Freigegebene Beiträge und Storys auf einer Facebook-Seite veröffentlichen.' },
+  { id: 'instagram', dir: 'out', label: 'Instagram-Konto', name: 'Instagram', icon: 'Camera', text: 'Freigegebene Beiträge und Storys mit Bild oder Video auf einem professionellen Instagram-Konto.' },
+  { id: 'threads', dir: 'out', label: 'Threads-Profil', name: 'Threads', icon: 'AtSign', text: 'Freigegebene Beiträge mit Text, Bild oder Link über die offizielle Threads-Schnittstelle.' },
+  { id: 'x', dir: 'out', label: 'X-Konto', name: 'X', icon: 'MessagesSquare', text: 'Teilen von Hand mit vorbereitetem Text oder – mit eigenem, kostenpflichtigem API-Zugang – direkt posten.' },
+  { id: 'mastodon', dir: 'out', label: 'Mastodon-Konto', name: 'Mastodon', icon: 'AtSign', text: 'Freigegebene Beiträge mit Text, Bildern samt Alternativtext und Link auf einer frei wählbaren Mastodon-Instanz (z. B. social.bund.de).' },
+  { id: 'bluesky', dir: 'out', label: 'Bluesky-Konto', name: 'Bluesky', icon: 'Cloud', text: 'Freigegebene Beiträge mit Text, bis zu 4 Bildern samt Alternativtext und Link-Vorschaukarte – mit App-Passwort.' },
+  { id: 'whatsapp', dir: 'out', label: 'WhatsApp-Kanal', name: 'WhatsApp-Kanal', icon: 'MessageCircle', text: 'Teilen von Hand: Text, Link und Bilder vorbereitet, geteilt wird in WhatsApp.' },
 ] as const;
+const DIRS = [
+  { id: 'in', title: 'Eingehend', subtitle: 'Einsätze und Warnungen, die BlaulichtCMS empfängt' },
+  { id: 'out', title: 'Veröffentlichen', subtitle: 'Websites und soziale Netzwerke, an die BlaulichtCMS freigegebene Beiträge sendet' },
+] as const;
+const dirOf = (kind: string) => KINDS.find((k) => k.id === kind)?.dir ?? 'out';
+const SITE_STATE: Record<Site['status'], { status: string; label: string }> = { active: { status: 'active', label: 'Gekoppelt' }, pending: { status: 'pending', label: 'Kopplung offen' }, revoked: { status: 'revoked', label: 'Getrennt' } };
 
 export default function Connections() {
   const nav = useNavigate();
   const toastError = useErrorToast();
-  const { can } = useAuth();
+  const { can, me } = useAuth();
   const configure = can('connection.configure');
   // Suche, Art, Status und „Gelöschte anzeigen“ in der Adresse (#260)
   const ls = useListState({ suche: '', art: '', status: '', geloeschte: '' });
@@ -40,11 +52,24 @@ export default function Connections() {
   const all = q.data ?? [];
   const rows = all.filter((c) => (!terms.length || rank(terms, c.name, `${c.kind_label} ${c.account?.name ?? ''} ${c.account?.username ?? ''}`) !== null) && (!ls.values.art || c.kind === ls.values.art) && (!ls.values.status || c.status === ls.values.status));
   const kinds = [...new Map(all.map((c) => [c.kind, c.kind_label] as [string, string])).entries()];
-  const [create, setCreate] = useState<{ kind: string; name: string } | null>(null);
+  // Websites sind Veröffentlichungsziele mit eigener Seite (#271): hier mit Verweis aufgelistet
+  const sitesQ = useQuery({ queryKey: ['sites'], queryFn: () => get<Site[]>('/sites'), enabled: can('channel.view') });
+  const sites = (sitesQ.data ?? []).filter((s) => s.status !== 'revoked' && (!terms.length || rank(terms, s.name, 'Website WordPress') !== null) && !ls.values.art && !ls.values.status);
+  // Nichts vorausgewählt; Name aus Art und Organisation vorgeschlagen, solange nichts Eigenes eingetragen ist
+  const [create, setCreate] = useState<{ kind: string; name: string; touched: boolean } | null>(null);
+  const org = me?.instance.organization || me?.instance.name || '';
+  const suggest = (kind: string) => {
+    const k = KINDS.find((x) => x.id === kind);
+    return k ? `${k.name}${org ? ` ${org}` : ''}`.slice(0, 100) : '';
+  };
+  const check = useFormCheck({
+    'c-kind': !!create && !create.kind && 'Bitte eine Art wählen.',
+    'c-name': !!create && create.name.trim().length < 2 && 'Bitte einen Namen angeben (mindestens 2 Zeichen).',
+  });
   const [token, setToken] = useState<{ id: string; token: string } | null>(null);
   const submit = async () => {
     try {
-      const r = await post<{ id: string; token: string | null }>('/connections', create);
+      const r = await post<{ id: string; token: string | null }>('/connections', { kind: create!.kind, name: create!.name.trim() });
       setCreate(null);
       if (r.token) setToken({ id: r.id, token: r.token });
       else nav(`/verbindungen/${r.id}`);
@@ -58,7 +83,7 @@ export default function Connections() {
         subtitle="Optional: Jede Verbindung durchläuft Verbinden → Testen → Vorschau → Aktivieren. BlaulichtCMS funktioniert auch ganz ohne."
         actions={
           configure && (
-            <Button variant="primary" icon="Plus" onClick={() => setCreate({ kind: 'fe2', name: '' })}>
+            <Button variant="primary" icon="Plus" onClick={() => (check.reset(), setCreate({ kind: '', name: '', touched: false }))}>
               Neue Verbindung
             </Button>
           )
@@ -83,12 +108,46 @@ export default function Connections() {
           icon="Plug"
           title="Noch keine Verbindung."
           text={configure ? 'Facebook, Instagram, Threads, X, WhatsApp-Kanal, FE2, Feuersoftware Connect oder amtliche Warnungen lassen sich hier anbinden.' : 'Verbindungen richtet ein, wer Verbindungen verwalten darf.'}
-          action={configure && <Button icon="Plus" onClick={() => setCreate({ kind: 'fe2', name: '' })}>Neue Verbindung</Button>}
+          action={configure && <Button icon="Plus" onClick={() => (check.reset(), setCreate({ kind: '', name: '', touched: false }))}>Neue Verbindung</Button>}
         />
       )}
       {all.length > 0 && !rows.length && <FilterEmpty onReset={() => ls.reset(['geloeschte'])} />}
-      <div className="grid gap-3 md:grid-cols-2">
-        {rows.map((c) => {
+      {DIRS.map((dir) => {
+        const list = rows.filter((c) => dirOf(c.kind) === dir.id);
+        const withSites = dir.id === 'out' && can('channel.view');
+        if (!list.length && !(withSites && sites.length)) return null;
+        return (
+          <section key={dir.id} aria-labelledby={`dir-${dir.id}`} className="flex flex-col gap-3">
+            <div className="flex items-end justify-between gap-3 flex-wrap">
+              <div className="min-w-0">
+                <h2 id={`dir-${dir.id}`} className="m-0 text-section font-semibold">
+                  {dir.title}
+                </h2>
+                <p className="m-0 text-meta text-fg-muted">{dir.subtitle}</p>
+              </div>
+              {withSites && <LinkButton to="/websites" size="sm" variant="ghost" icon="Globe">Websites verwalten</LinkButton>}
+            </div>
+            <div className="grid gap-3 md:grid-cols-2">
+              {withSites &&
+                sites.map((s) => (
+                  <Card key={`site-${s.id}`}>
+                    <Link to="/websites" className="w-full flex flex-col gap-2 no-underline !text-fg">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <Icon name="Globe" size={16} />
+                        <strong>{s.name}</strong>
+                        <Badge dot={false}>Website (WordPress)</Badge>
+                      </div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <StatusBadge status={SITE_STATE[s.status].status} labels={{ [SITE_STATE[s.status].status]: SITE_STATE[s.status].label }} />
+                        {s.last_seen_at && <span className="text-meta text-fg-muted">zuletzt gemeldet {fmtRelative(s.last_seen_at)}</span>}
+                      </div>
+                      <span className="text-sm text-fg-muted inline-flex items-center gap-1">
+                        Eingerichtet unter Websites <Icon name="ArrowRight" size={13} />
+                      </span>
+                    </Link>
+                  </Card>
+                ))}
+        {list.map((c) => {
           const body = (
             <>
               <div className="flex items-center gap-2 flex-wrap">
@@ -118,7 +177,10 @@ export default function Connections() {
             </Card>
           );
         })}
-      </div>
+            </div>
+          </section>
+        );
+      })}
 
       {create && (
         <Dialog
@@ -129,25 +191,51 @@ export default function Connections() {
           footer={
             <>
               <Button onClick={() => setCreate(null)}>Abbrechen</Button>
-              <Button variant="primary" disabled={create.name.trim().length < 2} onClick={submit}>
+              <Button variant="primary" onClick={() => check.submit(submit)}>
                 Weiter
               </Button>
             </>
           }
         >
           <div className="flex flex-col gap-4">
-            <div role="radiogroup" aria-label="Art" className="grid gap-2 sm:grid-cols-2">
-              {KINDS.map((k) => (
-                <button key={k.id} type="button" role="radio" aria-checked={create.kind === k.id} onClick={() => setCreate({ ...create, kind: k.id })} className={`text-left p-3 rounded-node border-2 ${create.kind === k.id ? 'border-primary bg-primary-soft' : 'border-line bg-card hover:bg-raised'}`}>
-                  <div className="flex items-center gap-2 font-semibold">
-                    <Icon name={k.icon} size={16} /> {k.label}
+            <FormProblems check={check} />
+            <div id="c-kind" tabIndex={-1} className="flex flex-col gap-4 outline-none" aria-invalid={!!check.error('c-kind') || undefined}>
+              {check.error('c-kind') && (
+                <p className="m-0 text-meta text-err" role="alert">
+                  {check.error('c-kind')}
+                </p>
+              )}
+              {DIRS.map((dir) => (
+                <div key={dir.id} className="flex flex-col gap-2">
+                  <div>
+                    <h3 id={`new-${dir.id}`} className="m-0 text-sm font-semibold">
+                      {dir.title}
+                    </h3>
+                    <p className="m-0 text-meta text-fg-muted">{dir.subtitle}{dir.id === 'out' ? ' – Websites koppelt man unter Websites.' : ''}</p>
                   </div>
-                  <div className="text-meta text-fg-muted mt-1">{k.text}</div>
-                </button>
+                  <div role="radiogroup" aria-labelledby={`new-${dir.id}`} aria-required="true" className="grid gap-2 sm:grid-cols-2">
+                    {KINDS.filter((k) => k.dir === dir.id).map((k) => (
+                      <button
+                        key={k.id}
+                        type="button"
+                        role="radio"
+                        aria-checked={create.kind === k.id}
+                        onClick={() => setCreate({ ...create, kind: k.id, name: create.touched && create.name.trim() ? create.name : suggest(k.id) })}
+                        className={`text-left p-3 rounded-node border ${create.kind === k.id ? 'border-primary bg-primary-soft shadow-selected' : 'border-line bg-card hover:bg-raised'}`}
+                      >
+                        <div className="flex items-center gap-2 font-semibold">
+                          <Icon name={k.icon} size={16} /> {k.label}
+                          {create.kind === k.id && <Icon name="Check" size={15} className="ml-auto" />}
+                        </div>
+                        <div className="text-meta text-fg-muted mt-1">{k.text}</div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
               ))}
             </div>
-            <FieldWrap label="Name" htmlFor="c-name" help="Wie die Verbindung in BlaulichtCMS heißen soll.">
-              <Input id="c-name" value={create.name} onChange={(e) => setCreate({ ...create, name: e.target.value })} maxLength={100} />
+            <FieldWrap label="Name" htmlFor="c-name" required error={check.error('c-name')} help="Vorschlag aus Art und Organisation – frei änderbar. Das verbundene Konto erscheint später in der Liste darunter.">
+              <Input id="c-name" value={create.name} onChange={(e) => setCreate({ ...create, name: e.target.value, touched: true })} maxLength={100} />
             </FieldWrap>
           </div>
         </Dialog>

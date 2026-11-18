@@ -368,7 +368,7 @@ Dokumentation halten sich daran; für Nutzende steht dieselbe Liste in der Hilfe
 | **Website** | über die BlaulichtCMS Bridge gekoppelte WordPress-Website; im Beitrag das Ziel „Veröffentlichen auf“ | Kanal, Zielkanal |
 | **Soziale Netzwerke** | Facebook, Instagram, Threads, X, Mastodon, Bluesky, WhatsApp-Kanal (Eigenname des Dienstes) | soziale Kanäle |
 | **Veröffentlichungsziele** | Website und soziale Netzwerke zusammen | Kanäle, Zielkanäle |
-| **Verbindung** | Kopplung mit einem externen Dienst – eingehend (FE2, Feuersoftware Connect, amtliche Warnungen) oder zum Veröffentlichen (soziale Netzwerke). Websites haben ihre eigene Seite. | Kanal |
+| **Verbindung** | Kopplung mit einem externen Dienst – eingehend (FE2, Feuersoftware Connect, amtliche Warnungen) oder zum Veröffentlichen (soziale Netzwerke); die Seite „Verbindungen“ gruppiert nach diesen Richtungen (#271). Websites haben ihre eigene Seite und stehen unter „Veröffentlichen“ mit Verweis dorthin. | Kanal |
 | **Update-Stufe** | „Test“ oder „Stabil“ je Website für Bridge-Updates | Update-Kanal |
 | **Auslöser** | Workflow-Baustein, der einen Lauf startet (Alarm, Warnung, Termin, Zeitplan, Start von Hand …) | Eingang |
 | **Aktion** | Workflow-Baustein, der etwas tut (Banner, Beitrag, E-Mail, Benachrichtigung …) | Ausgang |

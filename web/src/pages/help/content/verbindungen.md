@@ -5,6 +5,15 @@ Verbindungen sind **optional**. BlaulichtCMS funktioniert vollständig ohne. Jed
 3. **Vorschau** – welche Funktionen das Konto tatsächlich bietet und wie Daten ankommen würden.
 4. **Aktivieren** – erst nach bestandenem Test. Anhalten, Widerrufen und Löschen sind jederzeit möglich.
 
+## Eingehend und Veröffentlichen
+
+Die Seite trennt nach Richtung – wichtig auch für den Datenschutz (was kommt an, was geht an wen hinaus, z. B. an Dienste in Drittländern):
+
+- **Eingehend – Einsätze und Warnungen:** FE2, Feuersoftware Connect und amtliche Warnungen. BlaulichtCMS empfängt Daten und legt daraus interne Entwürfe bzw. Hinweise an.
+- **Veröffentlichen – Websites und soziale Netzwerke:** Facebook, Instagram, Threads, X, Mastodon, Bluesky und WhatsApp-Kanal. Dazu stehen hier auch die gekoppelten **Websites** (WordPress) – eingerichtet werden sie unter [Einrichtung → Websites](/websites).
+
+**Neue Verbindung:** Der Dialog zeigt dieselben zwei Abschnitte; vorausgewählt ist nichts. Der Name wird aus Art und Organisation vorgeschlagen (z. B. „Facebook-Seite Musterwehr“) und lässt sich ändern; das später verbundene Konto erscheint in der Liste unter dem Namen.
+
 ## Test und Aktivierung
 
 Eine Verbindung lässt sich nur mit einem **bestandenen Test der aktuellen Einstellungen** aktivieren.
