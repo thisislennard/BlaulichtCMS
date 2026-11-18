@@ -245,7 +245,7 @@ jobs:
         run: |
           sudo tail -n 200 /var/log/blaulichtcms-update.log || true
           sudo journalctl -u blaulichtcms-update --no-pager -n 100 || true
-          cd /opt/apps/blaulichtcms && sudo docker compose logs --tail 100 blaulichtcms || true
+          cd /srv/apps/blaulichtcms && sudo docker compose logs --tail 100 blaulichtcms || true
 
   # Weg von Hand (#275): install.sh 0.7.0 als root mit umask 077 auf den Folge-Release; ein fehlerhaftes Image mit dem
   # Ziel-Namen existiert schon (wie nach dem fehlgeschlagenen Update auf 0.7.0) und wird neu gebaut
@@ -266,4 +266,4 @@ jobs:
         run: bash test/docker/update-wege.sh handweg
       - name: Protokolle bei Fehler
         if: failure()
-        run: cd /opt/apps/blaulichtcms && sudo docker compose logs --tail 100 blaulichtcms || true
+        run: cd /srv/apps/blaulichtcms && sudo docker compose logs --tail 100 blaulichtcms || true

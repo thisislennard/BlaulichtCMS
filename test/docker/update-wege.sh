@@ -3,7 +3,7 @@
 #  Update-Wege mit echtem Docker (#275) – für die CI (.github/workflows/ci.yml, Jobs „update-helfer“ und
 #  „update-handweg“) auf einem Wegwerf-Host mit systemd, Docker und sudo.
 #
-#  ACHTUNG: verändert /opt/apps/blaulichtcms, /opt/apps/blaulichtcms-sicherungen, /etc/blaulichtcms, systemd-Units und
+#  ACHTUNG: verändert /srv/apps/blaulichtcms, /srv/apps/blaulichtcms-sicherungen, /etc/blaulichtcms, systemd-Units und
 #  Docker-Volumes – nie auf einem Host mit echten Daten ausführen.
 #
 #    test/docker/update-wege.sh <schritt>
@@ -29,9 +29,12 @@ STEP="${1:?Aufruf: test/docker/update-wege.sh <schritt>}"
 WS="$(cd "$(dirname "$0")/../.." && pwd)"
 TMP="${RUNNER_TEMP:-/tmp}/update-wege"
 mkdir -p "$TMP"
-APP=/opt/apps/blaulichtcms
+# Nicht unter /opt: dort erben neue Dateien im Runner Rechte, die die umask übergehen (0666/0777 trotz umask 077) –
+# der Fehler aus dem Vorfall (0600 nach Checkout mit umask 077) ließe sich so nicht nachstellen. vorbereiten prüft das.
+APPS=/srv/apps
+APP=$APPS/blaulichtcms
 UP=/srv/blaulichtcms-upstream
-SICH=/opt/apps/blaulichtcms-sicherungen
+SICH=$APPS/blaulichtcms-sicherungen
 KEY=/etc/blaulichtcms/backup.key
 BASE=v0.7.0
 REL=0.7.99
@@ -120,14 +123,22 @@ case "$STEP" in
     sudo git -C "$UP" config user.name "BlaulichtCMS CI"
     sudo git -C "$UP" config user.email ci@example.invalid
     sudo git -C "$UP" log -1 --format='citest: %h %s' citest
-    sudo git -C "$UP" log -1 --format='ci-head: %h %s' ci-head ;;
+    sudo git -C "$UP" log -1 --format='ci-head: %h %s' ci-head
+    # Voraussetzung: Die umask wirkt im Installationsordner (keine vererbten Standard-ACLs o. Ä.)
+    sudo mkdir -p "$APPS"
+    getfacl -p /opt "$APPS" 2>/dev/null || true
+    m="$(sudo bash -c 'umask 077; d="$(mktemp -d "$1/umask-probe.XXXX")"; touch "$d/f"; mkdir "$d/o"; stat -c "%a" "$d/f" "$d/o" | tr "\n" " "; rm -rf "$d"' _ "$APPS")"
+    echo "umask 077 in $APPS ergibt: $m"
+    [ "$m" = "600 700 " ] || fail "In $APPS wirkt die umask nicht (erwartet 600 700, erhalten $m) – Testumgebung ungeeignet"
+    m="$(sudo bash -c 'umask 022; d="$(mktemp -d "$1/umask-probe.XXXX")"; touch "$d/f"; stat -c "%a" "$d/f"; rm -rf "$d"' _ "$APPS")"
+    [ "$m" = 644 ] || fail "umask 022 in $APPS ergibt $m statt 644" ;;
 
   install-070)
     say "Erstinstallation $BASE mit install.sh $BASE (wie von Hand: sudo, umask 022) samt Update-Helfer"
     sudo git -C "$UP" show "$BASE:install.sh" > "$TMP/install-070.sh"
     # umask 022 ausdrücklich wie bei „sudo bash install.sh“ auf einem üblichen Host (unter sudo im Runner gilt sonst 000)
-    sudo env BLAULICHTCMS_REPO="$UP" BLAULICHTCMS_BRANCH=citest BLAULICHTCMS_PUBLIC_URL=http://localhost \
-      BLAULICHTCMS_PROXY_MODE=2 bash -c 'umask 022; exec bash "$1" --yes --no-cron --with-helper' _ "$TMP/install-070.sh"
+    sudo env BLAULICHTCMS_DIR="$APP" BLAULICHTCMS_BACKUP_DIR="$SICH" BLAULICHTCMS_REPO="$UP" BLAULICHTCMS_BRANCH=citest \
+      BLAULICHTCMS_PUBLIC_URL=http://localhost BLAULICHTCMS_PROXY_MODE=2 bash -c 'umask 022; exec bash "$1" --yes --no-cron --with-helper' _ "$TMP/install-070.sh"
     echo "Rechte nach der Erstinstallation (Auswahl): $(cd "$APP" && sudo stat -c '%a %n' server/package.json install.sh server | tr '\n' ' ')"
     wait_healthy || fail "$BASE startet nicht"
     systemctl is-enabled blaulichtcms-update.path
@@ -268,7 +279,8 @@ PY
     derived_image "$target" $'USER root\nRUN chmod 600 /app/server/package.json\nUSER blaulichtcms'
     rc=0
     # Zweig der Testquelle (am Produktivhost main, Standard)
-    sudo env BLAULICHTCMS_BRANCH=citest bash -c 'umask 077; cd /; bash "$1/install.sh" --yes --no-cron' _ "$APP" >"$TMP/handweg.log" 2>&1 || rc=$?
+    sudo env BLAULICHTCMS_DIR="$APP" BLAULICHTCMS_BACKUP_DIR="$SICH" BLAULICHTCMS_BRANCH=citest \
+      bash -c 'umask 077; cd /; bash "$1/install.sh" --yes --no-cron' _ "$APP" >"$TMP/handweg.log" 2>&1 || rc=$?
     cat "$TMP/handweg.log"
     [ "$rc" = 0 ] || fail "install.sh endete mit $rc"
     grep -q 'install.sh wurde aktualisiert – weiter mit der neuen Fassung' "$TMP/handweg.log" || fail "kein Neustart mit dem neuen install.sh"
