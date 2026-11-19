@@ -152,7 +152,7 @@ Ausführlich im Hilfe-Center der App (`/hilfe`). Derselbe Ablauf läuft automati
 
 ## WordPress verbinden
 
-1. In BlaulichtCMS *Einrichtung → Websites → Bridge herunterladen* (ZIP, aktuell Version 0.9.1).
+1. In BlaulichtCMS *Einrichtung → Verbindungen → Websites → Bridge herunterladen* (ZIP, aktuell Version 0.9.2).
 2. In WordPress *Plugins → Installieren → Plugin hochladen*, dann aktivieren.
 3. In BlaulichtCMS *Website koppeln*, den einmaligen **Kopplungscode** notieren (30 Minuten gültig).
 4. In WordPress *Einstellungen → BlaulichtCMS Bridge* die BlaulichtCMS-Adresse (`https://…`) und den Code eintragen, dann **Koppeln**.

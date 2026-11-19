@@ -4,7 +4,7 @@ Tags: blaulichtcms, redaktion, veröffentlichung
 Requires at least: 6.4
 Tested up to: 6.9
 Requires PHP: 8.1
-Stable tag: 0.9.1
+Stable tag: 0.9.2
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -25,9 +25,9 @@ BlaulichtCMS ist ein eigenständiges CMS für Öffentlichkeitsarbeit und Krisenk
 
 == Installation ==
 
-1. In BlaulichtCMS unter **Kanäle → Websites** die ZIP-Datei „BlaulichtCMS Bridge“ herunterladen.
+1. In BlaulichtCMS unter **Einrichtung → Verbindungen → Websites** die ZIP-Datei „BlaulichtCMS Bridge“ herunterladen.
 2. In WordPress **Plugins → Installieren → Plugin hochladen**, Datei auswählen, installieren und aktivieren.
-3. In BlaulichtCMS **Website koppeln** wählen und den Kopplungscode notieren.
+3. In BlaulichtCMS **Neue Verbindung → Website (WordPress)** bzw. **Website koppeln** wählen und den Kopplungscode notieren.
 4. In WordPress **Einstellungen → BlaulichtCMS Bridge** die BlaulichtCMS-Adresse und den Code eintragen und **Koppeln** klicken.
 
 Ein Host-Cron ist nicht nötig. Die Bridge ruft über WP-Cron ab; ist WP-Cron abgeschaltet (`DISABLE_WP_CRON`), stößt sie den Abruf bei jedem Seitenaufruf selbst an (höchstens einmal je Minute). Optional bei sehr wenig Besucherverkehr oder einem Seitencache, der PHP umgeht:
@@ -54,9 +54,14 @@ Nur im Testbetrieb: `define( 'BLAULICHTCMS_BRIDGE_ALLOW_HTTP', true );` in der w
 
 == Updates ==
 
-Neue Versionen bietet die gekoppelte BlaulichtCMS-Instanz über den normalen WordPress-Updateweg an (Dashboard → Aktualisierungen bzw. `wp plugin update blaulichtcms-bridge`). In der Plugin-Liste lässt sich „Automatische Updates aktivieren“ einschalten; WordPress installiert freigegebene Versionen dann selbst (mit derselben Prüfung von Prüfsumme und Signatur). Ist WP-Cron abgeschaltet, holt die Bridge ihr automatisches Update selbst nach. Websites im Update-Kanal „Test“ erhalten eine neue Version zuerst; alle anderen erst, nachdem sie in BlaulichtCMS freigegeben wurde. Vor der Installation prüft die Bridge das Paket gegen die SHA-256-Prüfsumme aus BlaulichtCMS. Ist in der Bridge ein Signaturschlüssel hinterlegt (includes/signing-keys.php), installiert sie zusätzlich nur Pakete mit gültiger Ed25519-Signatur des Betreibers; der private Schlüssel liegt nicht auf dem BlaulichtCMS-Server. Die Kopplung bleibt beim Update erhalten.
+Neue Versionen bietet die gekoppelte BlaulichtCMS-Instanz über den normalen WordPress-Updateweg an (Dashboard → Aktualisierungen bzw. `wp plugin update blaulichtcms-bridge`). In der Plugin-Liste lässt sich „Automatische Updates aktivieren“ einschalten; WordPress installiert neue Versionen dann selbst (mit derselben Prüfung von Prüfsumme und Signatur). Ist WP-Cron abgeschaltet, holt die Bridge ihr automatisches Update selbst nach. Jedes Update von BlaulichtCMS bringt die passende Bridge mit; die Bridge fragt höchstens alle sechs Stunden nach. Vor der Installation prüft die Bridge das Paket gegen die SHA-256-Prüfsumme aus BlaulichtCMS. Ist in der Bridge ein Signaturschlüssel hinterlegt (includes/signing-keys.php), installiert sie zusätzlich nur Pakete mit gültiger Ed25519-Signatur des Betreibers; der private Schlüssel liegt nicht auf dem BlaulichtCMS-Server. Die Kopplung bleibt beim Update erhalten.
 
 == Changelog ==
+
+= 0.9.2 =
+* Plugin-Details: Das Fenster „Details ansehen“ zeigt Titelbild, Beschreibung, Installation, häufige Fragen und die Änderungen der letzten Versionen. Bei einem angebotenen Update beschreibt es die neue Version.
+* Symbol der Bridge in der Plugin-Liste und unter „Aktualisierungen“.
+* Updates ohne Freigabe: Jede gekoppelte Website erhält die Bridge, die im laufenden BlaulichtCMS steckt (ab BlaulichtCMS 0.8.1).
 
 = 0.9.1 =
 * Shortcode-Hilfe (#227): Neuer Reiter „Shortcodes“ unter „Einstellungen → BlaulichtCMS Einsatzliste“ mit allen Shortcodes der Bridge, allen Attributen samt erlaubten Werten, Vorgaben (mit aktuell gespeicherter Einstellung) und Wirkung, den vier Teilen der Einsatzstatistik (`ansicht="summe"`, `"monate"`, `"kategorien"`, `"jahre"`) und fertigen Beispielen mit Kopieren-Knopf. Hinweis auf die Blöcke als Alternative und zur Jahresauswahl (`auswahl`).

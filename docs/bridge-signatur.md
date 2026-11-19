@@ -21,7 +21,7 @@ dem Server abgeleitet ist. Die Prüfsumme schützt also gegen Übertragungsfehle
   aus WordPress): Signatur gültig, jede Datei passt, keine zusätzliche oder fehlende Datei, Version im Plugin-Kopf
   gleich der signierten und neuer als die installierte (kein Zurückspielen alter, verwundbarer Versionen). Sonst bricht
   WordPress das Update mit einer Meldung ab. Die Prüfsummenkontrolle bleibt zusätzlich bestehen.
-- **Prüfung in BlaulichtCMS:** Unter *Einrichtung → Websites → Bridge-Updates* zeigt BlaulichtCMS, ob das Paket im Image gültig signiert ist.
+- **Prüfung in BlaulichtCMS:** Unter *Einrichtung → Verbindungen → Websites → Bridge-Updates* zeigt BlaulichtCMS, ob das Paket im Image gültig signiert ist.
   Ein unsigniertes oder falsch signiertes Paket wird den Websites nicht angeboten. Das ist nur eine Hilfe gegen
   Versehen – maßgeblich ist die Prüfung in der Bridge.
 - **Server-Test:** `server/test/units.test.ts` schlägt fehl, wenn Schlüssel hinterlegt sind, die Bridge aber nach dem
@@ -79,7 +79,7 @@ Schlüssel per Hand auf allen Websites installieren.
 - **Übergang:** Websites mit einer Bridge ohne Schlüssel (0.6.0 und älter) nehmen die erste Version mit Schlüssel noch
   ohne Signaturprüfung an (nur Prüfsumme). Wer genau in diesem Zeitfenster den BlaulichtCMS-Server kontrolliert, könnte
   stattdessen eigenen Code ausliefern. Abhilfe: die erste Version mit Schlüssel per Hand installieren (ZIP aus
-  *Einrichtung → Websites → Bridge herunterladen* nach Prüfung von `node scripts/bridge-signing.mjs verify`) oder den Übergang zügig
+  *Einrichtung → Verbindungen → Websites → Bridge herunterladen* nach Prüfung von `node scripts/bridge-signing.mjs verify`) oder den Übergang zügig
   nach der Einrichtung durchführen.
 - **Schlüssel im Plugin-Verzeichnis:** Wer bereits Schreibzugriff auf die WordPress-Dateien hat, kann
   `signing-keys.php` ändern – er kann dann aber ohnehin beliebigen Code ausführen. Die Signatur schützt den Updateweg,

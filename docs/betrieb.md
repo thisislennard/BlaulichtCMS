@@ -309,7 +309,7 @@ setzen den eingerichteten E-Mail-Versand voraus.
 |---|---|
 | Konto übernommen oder Gerät verloren | Benutzer → *Auf allen Geräten abmelden* (beendet alle Sitzungen, auch „Angemeldet bleiben“, und entfernt gemerkte Geräte der Zwei-Faktor-Anmeldung) oder Konto deaktivieren (zusätzlich offene Links), Zwei-Faktor zurücksetzen, Passwort-Link neu erzeugen; die Person kann sich unter *Profil → Auf allen Geräten abmelden* auch selbst überall abmelden |
 | Admin-Konto betroffen | wie oben, zusätzlich Rollen und Einstellungen im Audit (Details: vorher/nachher) prüfen und ggf. zurücksetzen; im Notfall `cli.js password-link` / `cli.js reset-mfa` |
-| Bridge-Schlüssel einer Website abgeflossen | Einrichtung → Websites → Kopplung widerrufen (sofort wirksam, offene Aufträge werden abgebrochen), danach neu koppeln |
+| Bridge-Schlüssel einer Website abgeflossen | Einrichtung → Verbindungen → Websites → Kopplung widerrufen (sofort wirksam, offene Aufträge werden abgebrochen), danach neu koppeln |
 | FE2-Zugangsschlüssel abgeflossen | Verbindungen → FE2 → „Neuen Zugangsschlüssel erzeugen“ und in FE2 eintragen |
 | Zugangsdaten sozialer Netzwerke oder SMTP | Verbindung widerrufen bzw. Zugangsdaten neu setzen; das Passwort bzw. Token beim Anbieter ändern |
 | API-Schlüssel abgeflossen | API-Schlüssel widerrufen und neu erzeugen |

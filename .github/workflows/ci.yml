@@ -64,6 +64,8 @@ jobs:
           ffmpeg -version | head -1
       - name: PHP-Syntax des WordPress-Plugins
         run: find wordpress-plugin -name '*.php' -print0 | xargs -0 -n1 php -l
+      - name: Plugin-Details der Bridge (readme.txt → Reiter)
+        run: php test/wordpress/readme-sections.php
       - run: npm ci
       - run: npm run typecheck
       - run: npm test -w server

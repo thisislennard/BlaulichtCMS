@@ -271,7 +271,7 @@ export default function Banners() {
         subtitle="Zeitgesteuerte Hinweise auf der Website – mehrere gleichzeitig, sortiert nach Priorität."
         actions={can('banner.edit') && can('channel.view') && <Button variant="primary" icon="Plus" disabled={!activeSites.length} aria-describedby={!activeSites.length ? 'banner-no-site' : undefined} onClick={() => setEdit(null)}>Neues Banner</Button>}
       />
-      {!activeSites.length && sites.data && <Notice><span id="banner-no-site">Für Banner muss zuerst eine Website gekoppelt sein (Einrichtung → Websites).</span></Notice>}
+      {!activeSites.length && sites.data && <Notice><span id="banner-no-site">Für Banner muss zuerst eine Website gekoppelt sein (Einrichtung → Verbindungen → Websites).</span></Notice>}
       {q.isLoading && <SkeletonRows rows={4} />}
       {q.error && <ErrorBox title="Banner konnten nicht geladen werden">{(q.error as Error).message}</ErrorBox>}
       {linkedMissing && (

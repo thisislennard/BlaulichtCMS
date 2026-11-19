@@ -707,7 +707,7 @@ export default function IncidentList() {
       />
       {noBridge && (
         <Notice tone="warning" title={`BlaulichtCMS Bridge ${c!.min_bridge} nötig`}>
-          Die gekoppelten Websites verwenden eine ältere Bridge. Veröffentlichte Einträge warten, bis die Bridge aktualisiert ist (Einrichtung → Websites).
+          Die gekoppelten Websites verwenden eine ältere Bridge. Veröffentlichte Einträge warten, bis die Bridge aktualisiert ist (Einrichtung → Verbindungen → Websites).
         </Notice>
       )}
       {c && !c.locations.length && can('incident.settings') && (

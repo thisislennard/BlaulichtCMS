@@ -56,7 +56,7 @@ BlaulichtCMS hinter einem TLS-Proxy mit eigener Test-CA.
 | Einsatzübersicht (Shortcode `[blaulichtcms_einsaetze]` und Block) | ✅ zeigt den veröffentlichten Einsatzbericht |
 
 Offen bleibt nur, was eine fremde Umgebung braucht: die eigene Testwebsite (Theme, dort eingesetztes Cache-Plugin,
-Hosting-Cron) und die produktive BlaulichtCMS-Adresse mit echtem Zertifikat. Ablauf dafür: *Einrichtung → Websites → Website
+Hosting-Cron) und die produktive BlaulichtCMS-Adresse mit echtem Zertifikat. Ablauf dafür: *Einrichtung → Verbindungen → Websites → Website
 koppeln*, Bridge-ZIP auf der Testwebsite installieren, Code eingeben, einen internen Testbeitrag veröffentlichen,
 Banner mit kurzer Laufzeit anlegen und nach Ablauf die Startseite (auch ausgeloggt) prüfen.
 

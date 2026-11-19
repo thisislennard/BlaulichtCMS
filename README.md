@@ -180,7 +180,7 @@ sich als ein Satz:
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-18-4169E1?logo=postgresql&logoColor=white)
 ![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)
 ![Docker](https://img.shields.io/badge/Docker-ein_Container-2496ED?logo=docker&logoColor=white)
-![WordPress](https://img.shields.io/badge/BlaulichtCMS_Bridge-0.9.1-21759B?logo=wordpress&logoColor=white)
+![WordPress](https://img.shields.io/badge/BlaulichtCMS_Bridge-0.9.2-21759B?logo=wordpress&logoColor=white)
 
 | Baustein | Technik |
 |---|---|

@@ -91,7 +91,7 @@ export function OutputDialog({ output, kind, cat, onClose, preset }: { output: O
           <>
             <BannerPreview b={{ tone: previewTone, title: strip(c.title) || 'Titel', text: strip(c.text), link_url: c.linkUrl || null, link_text: strip(c.linkText) || null }} />
             <CheckList legend="Websites (je Website ein Banner)" options={sites.map((s) => ({ value: s.id, label: s.name }))} value={c.siteIds ?? []} onChange={(v) => set({ siteIds: v })} />
-            {!sites.length && <Notice tone="warning">Zuerst unter Einrichtung → Websites eine Website koppeln.</Notice>}
+            {!sites.length && <Notice tone="warning">Zuerst unter Einrichtung → Verbindungen → Websites eine Website koppeln.</Notice>}
             {T('title', 'Titel', { max: 300, required: true, help: 'Höchstens 120 Zeichen nach dem Einsetzen.' })}
             {T('text', 'Text', { rows: 3, max: 1000, help: 'Höchstens 500 Zeichen nach dem Einsetzen.' })}
             <div className="grid sm:grid-cols-2 gap-4">

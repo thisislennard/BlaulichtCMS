@@ -27,6 +27,7 @@ let pkgCache: {
   mtime: number;
   zip: Buffer;
   version: string;
+  readme: string;
   sha256: string;
   requires: string;
   requiresPhp: string;
@@ -56,6 +57,8 @@ export function bridgePackage() {
     requires: /Requires at least:\s*([0-9.]+)/.exec(header)?.[1] ?? '',
     requiresPhp: /Requires PHP:\s*([0-9.]+)/.exec(header)?.[1] ?? '',
     tested: /Tested up to:\s*([0-9.]+)/i.exec(readme)?.[1] ?? '',
+    // Für das Fenster „Details ansehen“ in WordPress: beschreibt die angebotene Version samt Changelog
+    readme: readme.slice(0, 65536),
     signature: (() => {
       const v = verifyBridgeSignature(dir);
       return { state: v.state, reason: v.reason ?? null, key: v.key ?? null };
@@ -466,6 +469,7 @@ export async function bridgeRoutes(app: FastifyInstance) {
       requires: pkg.requires,
       requires_php: pkg.requiresPhp,
       tested: pkg.tested,
+      readme: pkg.readme,
     };
   });
 

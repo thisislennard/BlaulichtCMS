@@ -2,10 +2,12 @@
 /**
  * Plugin Name:       BlaulichtCMS Bridge
  * Description:       Verbindet diese Website mit BlaulichtCMS: holt freigegebene Beiträge und Hinweis-Banner per HTTPS ab, veröffentlicht sie und meldet WordPress-ID und Adresse zurück. Shortcodes [blaulichtcms_banner], [blaulichtcms_einsaetze], [blaulichtcms_einsatzliste] und [blaulichtcms_einsatzstatistik].
- * Version:           0.9.1
+ * Version:           0.9.2
  * Requires at least: 6.4
  * Requires PHP:      8.1
+ * Plugin URI:        https://github.com/thisislennard/BlaulichtCMS
  * Author:            BlaulichtCMS
+ * Author URI:        https://github.com/thisislennard/BlaulichtCMS
  * License:           GPL-2.0-or-later
  * License URI:       https://www.gnu.org/licenses/gpl-2.0.html
  * Text Domain:       blaulichtcms-bridge
@@ -18,7 +20,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'BLAULICHTCMS_BRIDGE_VERSION', '0.9.1' );
+define( 'BLAULICHTCMS_BRIDGE_VERSION', '0.9.2' );
 define( 'BLAULICHTCMS_BRIDGE_FILE', __FILE__ );
 define( 'BLAULICHTCMS_BRIDGE_DIR', plugin_dir_path( __FILE__ ) );
 
@@ -42,6 +44,7 @@ require_once BLAULICHTCMS_BRIDGE_DIR . 'includes/class-incidents-admin.php';
 require_once BLAULICHTCMS_BRIDGE_DIR . 'includes/class-shortcodes-help.php';
 require_once BLAULICHTCMS_BRIDGE_DIR . 'includes/class-sync.php';
 require_once BLAULICHTCMS_BRIDGE_DIR . 'includes/class-admin.php';
+require_once BLAULICHTCMS_BRIDGE_DIR . 'includes/class-readme.php';
 require_once BLAULICHTCMS_BRIDGE_DIR . 'includes/class-updater.php';
 require_once BLAULICHTCMS_BRIDGE_DIR . 'includes/class-signature.php';
 

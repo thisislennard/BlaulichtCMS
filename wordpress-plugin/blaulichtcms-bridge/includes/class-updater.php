@@ -2,7 +2,8 @@
 /**
  * Updates der Bridge über den normalen WordPress-Updateweg.
  *
- * - BlaulichtCMS bietet nur freigegebene Versionen an (Testwebsites erhalten neue Versionen zuerst).
+ * - BlaulichtCMS bietet jeder gekoppelten Website die Bridge-Version an, die im laufenden BlaulichtCMS steckt.
+ * - Das Fenster „Details ansehen“ beschreibt bei einem Angebot die neue Version (readme.txt aus dem Angebot).
  * - Das Paket wird vor der Installation gegen die von BlaulichtCMS gemeldete SHA-256-Prüfsumme geprüft und – sobald in der
  *   Bridge ein Signaturschlüssel hinterlegt ist – zusätzlich gegen die Ed25519-Signatur (BlaulichtCMS_Bridge_Signature, #107).
  * - Die Kopplung (Optionen in der Datenbank) bleibt beim Update unverändert erhalten.
@@ -100,6 +101,8 @@ final class BlaulichtCMS_Bridge_Updater {
 			'requires'     => (string) ( $r['requires'] ?? '' ),
 			'requires_php' => (string) ( $r['requires_php'] ?? '' ),
 			'tested'       => (string) ( $r['tested'] ?? '' ),
+			// readme.txt der angebotenen Version für das Details-Fenster (ab BlaulichtCMS 0.8.2)
+			'readme'       => substr( (string) ( $r['readme'] ?? '' ), 0, 65536 ),
 		);
 		// Paket nur von der gekoppelten Instanz annehmen
 		if ( $offer['available'] && 0 !== strpos( $offer['package'], BlaulichtCMS_Bridge_Client::base_url() . self::PACKAGE_PATH ) ) {
@@ -131,6 +134,8 @@ final class BlaulichtCMS_Bridge_Updater {
 				'requires'     => $offer['requires'],
 				'requires_php' => $offer['requires_php'],
 				'tested'       => $offer['tested'],
+				'icons'        => BlaulichtCMS_Bridge_Readme::icons(),
+				'banners'      => BlaulichtCMS_Bridge_Readme::banners(),
 			);
 			if ( isset( $transient->no_update ) && is_array( $transient->no_update ) ) {
 				unset( $transient->no_update[ self::plugin_file() ] );
@@ -150,25 +155,39 @@ final class BlaulichtCMS_Bridge_Updater {
 				'new_version' => BLAULICHTCMS_BRIDGE_VERSION,
 				'url'         => '',
 				'package'     => '',
+				'icons'       => BlaulichtCMS_Bridge_Readme::icons(),
+				'banners'     => BlaulichtCMS_Bridge_Readme::banners(),
 			);
 		}
 		return $transient;
 	}
 
+	/**
+	 * Fenster „Details ansehen“: Bei einem angebotenen Update beschreibt es die neue Version (readme.txt aus
+	 * BlaulichtCMS, mit deren Changelog), sonst die installierte.
+	 */
 	public static function info( $result, $action, $args ) {
 		if ( 'plugin_information' !== $action || empty( $args->slug ) || self::SLUG !== $args->slug ) {
 			return $result;
 		}
-		$offer = self::any_offer();
+		$offer  = self::any_offer();
+		$newer  = $offer && version_compare( $offer['version'], BLAULICHTCMS_BRIDGE_VERSION, '>' );
+		$readme = $newer && '' !== ( $offer['readme'] ?? '' ) ? $offer['readme'] : BlaulichtCMS_Bridge_Readme::local();
+		$tested = $newer ? ( $offer['tested'] ?? '' ) : ( preg_match( '/^Tested up to:\s*([0-9.]+)/mi', $readme, $m ) ? $m[1] : '' );
+		$link   = 'https://github.com/thisislennard/BlaulichtCMS';
 		return (object) array(
 			'name'          => 'BlaulichtCMS Bridge',
 			'slug'          => self::SLUG,
-			'version'       => $offer['version'] ?? BLAULICHTCMS_BRIDGE_VERSION,
-			'requires'      => $offer['requires'] ?? '',
-			'requires_php'  => $offer['requires_php'] ?? '',
-			'tested'        => $offer['tested'] ?? '',
-			'download_link' => $offer['package'] ?? '',
-			'sections'      => array( 'description' => 'Verbindet diese Website mit BlaulichtCMS. Updates werden von der gekoppelten BlaulichtCMS-Instanz freigegeben und vor der Installation per Prüfsumme und – sofern eingerichtet – per Signatur geprüft.' ),
+			'version'       => $newer ? $offer['version'] : BLAULICHTCMS_BRIDGE_VERSION,
+			'author'        => '<a href="' . esc_url( $link ) . '">BlaulichtCMS</a>',
+			'homepage'      => $link,
+			'requires'      => $newer ? ( $offer['requires'] ?? '' ) : '6.4',
+			'requires_php'  => $newer ? ( $offer['requires_php'] ?? '' ) : '8.1',
+			'tested'        => $tested,
+			'download_link' => $newer ? ( $offer['package'] ?? '' ) : '',
+			'banners'       => BlaulichtCMS_Bridge_Readme::banners(),
+			'icons'         => BlaulichtCMS_Bridge_Readme::icons(),
+			'sections'      => BlaulichtCMS_Bridge_Readme::sections( $readme ),
 		);
 	}
 

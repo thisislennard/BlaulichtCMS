@@ -2151,6 +2151,9 @@ describe('Bridge-Updates über den WordPress-Updateweg (M4)', () => {
     expect(o.available).toBe(true);
     expect(o.version).toBe(st.bundled.version);
     expect(o.signed).toBe(st.bundled.signature.state === 'valid');
+    // readme.txt der angebotenen Version für „Details ansehen“ in WordPress
+    expect(o.readme).toContain(`Stable tag: ${o.version}`);
+    expect(o.readme).toContain('== Changelog ==');
     expect(o.package).toMatch(/^https:\/\/blaulichtcms\.example\.org\/api\/v1\/bridge\/update\/package\?/);
     const path = new URL(o.package).pathname + new URL(o.package).search;
     const dl = await anonymous.raw('GET', path);

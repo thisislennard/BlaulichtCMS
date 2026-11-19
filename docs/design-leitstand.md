@@ -146,7 +146,7 @@ mit passenden Rechten sichtbar. Höchstens **6 Bereiche** mit je höchstens **7 
 - **Adressen sprechen** und bleiben gültig: frühere Adressen stehen in `LEGACY_PATHS` (`navigation.ts`) und leiten samt
   Unterpfad, Suche und Anker weiter (z. B. `/kanaele` und `/websites` → `/verbindungen/websites`, `/warnungen/pflege` → `/stichwoerter-regeln`).
   `/einrichtung` bleibt die Ersteinrichtung.
-- **Hinweise auf Menüpfade** („unter Einrichtung → Websites“) nutzen `navTrail(id)` aus `config/navText.ts` bzw. in der
+- **Hinweise auf Menüpfade** („unter Einrichtung → Verbindungen“) nutzen `navTrail(id)` aus `config/navText.ts` bzw. in der
   Hilfe die tatsächlichen Bezeichnungen; `server/test/navigation.test.ts` prüft die Hilfe-Links.
 
 ### Bestandteile
@@ -398,7 +398,7 @@ Weitere Regeln:
 
 - **Mengen** mit `plural(n, 'Datei', 'Dateien')` (`web/src/lib/format.ts`, `server/src/lib/text.ts`) – keine
   Behelfsplurale wie „Datei(en)“ oder „1 Uploads“.
-- **Menüpfade in Hinweisen** („unter Einrichtung → Websites“) mit `navTrail(id)` bzw. in der Hilfe mit den tatsächlichen
+- **Menüpfade in Hinweisen** („unter Einrichtung → Verbindungen“) mit `navTrail(id)` bzw. in der Hilfe mit den tatsächlichen
   Menübezeichnungen (siehe §5).
 - **„Kanal“** nur im Eigennamen „WhatsApp-Kanal“ und in WhatsApp-eigenen Bezeichnungen (Kanaladresse); im
   Betriebshandbuch außerdem für die Update-Quelle des Installationsskripts (`BLAULICHTCMS_UPDATE_CHANNEL`).

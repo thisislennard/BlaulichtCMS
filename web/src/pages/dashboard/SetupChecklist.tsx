@@ -36,7 +36,7 @@ export interface Checklist {
 const LEVEL: Record<ChecklistItem['level'], string> = { required: 'Pflicht', recommended: 'empfohlen', optional: 'optional' };
 
 /**
- * Wo der Link hinführt, in Menübezeichnungen („Einstellungen → Datenschutz“, „Einrichtung → Websites“) – aus denselben
+ * Wo der Link hinführt, in Menübezeichnungen („Einstellungen → Datenschutz“, „Einrichtung → Verbindungen → Websites“) – aus denselben
  * Quellen wie Menü und Suche, damit Umbenennungen mitgehen (#257).
  */
 export function whereOf(href: string): string {
