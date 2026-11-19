@@ -457,14 +457,38 @@ const HOST_RESULT: Record<Exclude<HostState, "running">, { tone: "success" | "wa
   failed: { tone: "error", title: (v) => `Image-Update auf Version ${v} fehlgeschlagen – Handeln am Host nötig` },
 };
 
+/** Ausgeblendetes Ergebnis des Update-Helfers (je Gerät; das Update-Protokoll behält alles). */
+const HOST_RESULT_SEEN = "bc-host-update-seen";
+const hostResultKey = (st: HostStatus) => st.requestId ?? st.finishedAt ?? "";
+const seenStore = {
+  get(): string | null {
+    try {
+      return localStorage.getItem(HOST_RESULT_SEEN);
+    } catch {
+      return null;
+    }
+  },
+  set(v: string) {
+    try {
+      localStorage.setItem(HOST_RESULT_SEEN, v);
+    } catch {
+      /* privat/gesperrt */
+    }
+  },
+};
+
 /** Fortschritt und Ergebnis eines Image-Updates über den Update-Helfer (Statusdatei des Helfers, #226). */
 function HostUpdateProgress({ helper, current, offline, manage, onChanged }: { helper: HostHelper; current: string; offline: boolean; manage: boolean; onChanged: () => void }) {
   const [cancelling, setCancelling] = useState(false);
+  // Version, mit der diese Oberfläche geladen wurde: Nur wenn der Server inzwischen eine andere meldet, hilft Neuladen
+  const [loadedVersion] = useState(current);
+  const [seen, setSeen] = useState(seenStore.get);
   const st = helper.status;
   const req = helper.request;
-  // Ergebnisse bleiben einen Tag sichtbar (danach steht es im Update-Protokoll)
+  // Ergebnisse bleiben einen Tag sichtbar (danach steht es im Update-Protokoll), bis sie ausgeblendet werden
   const recent = st && st.state !== "running" && st.finishedAt && Date.now() - Date.parse(st.finishedAt) < 24 * 3600_000;
-  const showStatus = st && (st.state === "running" || recent) && !(req && st.requestId !== req.id);
+  const dismissed = st && st.state !== "running" && st.state !== "failed" && seen === hostResultKey(st);
+  const showStatus = st && (st.state === "running" || (recent && !dismissed)) && !(req && st.requestId !== req.id);
   if (!req && !showStatus) return null;
   const cancel = async () => {
     setCancelling(true);
@@ -506,6 +530,12 @@ function HostUpdateProgress({ helper, current, offline, manage, onChanged }: { h
   const target = st.targetVersion ?? "?";
   if (st.state !== "running") {
     const r = HOST_RESULT[st.state];
+    const hide = () => {
+      seenStore.set(hostResultKey(st));
+      setSeen(hostResultKey(st));
+    };
+    // Neuladen nur anbieten, solange diese Oberfläche noch von der alten Version stammt
+    const reload = st.state === "success" && loadedVersion !== target;
     const body = (
       <>
         <p className="m-0">{st.message}</p>
@@ -522,13 +552,24 @@ function HostUpdateProgress({ helper, current, offline, manage, onChanged }: { h
     ) : (
       <Notice tone={r.tone} title={r.title(target)}>
         {body}
-        {st.state === "success" && (
-          <div className="mt-2">
-            <Button size="sm" icon="RefreshCw" onClick={() => location.reload()}>
+        <div className="mt-2 flex flex-wrap gap-2">
+          {reload ? (
+            <Button
+              size="sm"
+              icon="RefreshCw"
+              onClick={() => {
+                hide();
+                location.reload();
+              }}
+            >
               Seite neu laden
             </Button>
-          </div>
-        )}
+          ) : (
+            <Button size="sm" icon="X" onClick={hide}>
+              Ausblenden
+            </Button>
+          )}
+        </div>
       </Notice>
     );
   }
