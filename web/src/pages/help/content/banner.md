@@ -44,7 +44,7 @@ Mehrere Banner können gleichzeitig aktiv sein. Oben steht die höchste Priorit�
 
 Die Website blendet ein Banner zum Ablaufzeitpunkt **selbst** aus, auch wenn BlaulichtCMS gerade nicht erreichbar ist. Bei einem Seitencache sorgt ein kleines Skript dafür, dass ein bereits zwischengespeichertes Banner im Browser verschwindet; zusätzlich leert die Bridge gängige Caches zu Start und Ende.
 
-**Jetzt beenden** nimmt ein Banner sofort von der Website – dafür ist keine Freigabe nötig.
+**Jetzt beenden** nimmt ein Banner sofort von der Website – dafür ist keine Freigabe nötig. In der Liste steht danach statt des geplanten Endes der Zeitpunkt des Endes („… – beendet 18.11.2026, 12:46“) und darunter, wer es beendet hat („Beendet von Hand (Name)“) bzw. warum („Beendet: Entwarnung“).
 
 Wird die Kopplung gelöst (in WordPress „Kopplung lösen“) oder der Schlüssel in BlaulichtCMS widerrufen, entfernt die Bridge alle Banner von der Website. Ohne Kopplung kämen Beenden oder Entwarnung dort nicht mehr an.
 

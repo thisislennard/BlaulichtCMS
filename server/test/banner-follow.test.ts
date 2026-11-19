@@ -330,6 +330,11 @@ describe('Banner folgt dem Vorgang: amtliche Warnungen (#274)', () => {
     expect(bs.length).toBe(1);
     expect(bs[0].title).toBe('Nebel');
     expect(bs[0].ended_reason).toBeNull();
+    // Bannerliste: tatsächliches Ende und wer beendet hat (#276)
+    const listed = (await admin.get('/banners')).json.find((x: any) => x.id === b.id);
+    expect(listed.state).toBe('ended');
+    expect(listed.ended_at).toBeTruthy();
+    expect(listed.ended_by_name).toBeTruthy();
     let steps = await stepsOf(g.automationId);
     expect(steps.at(-1)).toMatchObject({ status: 'skipped' });
     expect(steps.at(-1)!.info).toMatch(/wurde von Hand beendet – nicht neu angelegt/);

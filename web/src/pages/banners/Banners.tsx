@@ -43,6 +43,8 @@ interface Banner {
   source_kind: 'warnung' | 'einsatz' | null;
   ended_at: string | null;
   ended_reason: 'entwarnung' | 'einsatz_beendet' | null;
+  /** von Hand beendet („Jetzt beenden“, Warnung ausgeblendet) – sonst null (#276) */
+  ended_by_name: string | null;
   /** Fassung, die gerade auf der Website steht (wenn eine neuere noch nicht veröffentlicht ist) */
   live_revision: number | null;
 }
@@ -50,11 +52,16 @@ interface Banner {
 const FOLLOWS: Record<string, string> = { warnung: 'folgt der Warnung', einsatz: 'folgt dem Einsatz' };
 const ENDED_REASON: Record<string, string> = { entwarnung: 'Entwarnung', einsatz_beendet: 'Einsatz beendet' };
 
-/** Herkunft und Ende eines Banners aus einem Workflow (#274): „Aus Workflow „X“ · folgt der Warnung“. */
+/**
+ * Herkunft und Ende eines Banners (#274, #276): „Aus Workflow „X“ · folgt der Warnung“, „Beendet: Entwarnung, …“
+ * oder „Beendet von Hand (Name), …“.
+ */
 function BannerOrigin({ b }: { b: Banner }) {
   const { can } = useAuth();
-  if (!b.automation_name && !b.ended_reason) return null;
+  const byHand = !!b.ended_at && !b.ended_reason && !!b.ended_by_name;
+  if (!b.automation_name && !b.ended_reason && !byHand) return null;
   const name = b.automation_name && (b.automation_id && can('automation.read') ? <Link to={`/workflows/${b.automation_id}`}>{b.automation_name}</Link> : b.automation_name);
+  const at = b.ended_at ? `, ${fmtDateTime(b.ended_at)}` : '';
   return (
     <MetaLine className="text-meta text-fg-muted">
       {name && <span>Aus Workflow „{name}“</span>}
@@ -62,11 +69,23 @@ function BannerOrigin({ b }: { b: Banner }) {
       {b.ended_reason && (
         <span>
           Beendet: {ENDED_REASON[b.ended_reason]}
-          {b.ended_at ? `, ${fmtDateTime(b.ended_at)}` : ''}
+          {at}
+        </span>
+      )}
+      {byHand && (
+        <span>
+          Beendet von Hand ({b.ended_by_name}){at}
         </span>
       )}
     </MetaLine>
   );
+}
+
+/** Zeitraum im Kartenkopf: geplant – bei beendeten Bannern bis zum tatsächlichen Ende (#276). */
+function bannerPeriod(b: Banner): string {
+  if (!b.ended_at) return `${fmtDateTime(b.starts_at)} – ${fmtDateTime(b.ends_at)}`;
+  if (new Date(b.ended_at) < new Date(b.starts_at)) return `geplant ab ${fmtDateTime(b.starts_at)} – vorher beendet ${fmtDateTime(b.ended_at)}`;
+  return `${fmtDateTime(b.starts_at)} – beendet ${fmtDateTime(b.ended_at)}`;
 }
 
 const TONE: Record<string, { label: string; cls: string }> = {
@@ -296,9 +315,7 @@ export default function Banners() {
                 <span>{b.site_name}</span>
                 <span>Priorität {PRIO[b.priority]}</span>
                 {effectiveDisplay(b.display ?? 'auto', b.tone, sites.data?.find((s) => s.id === b.site_id))}
-                <span>
-                  {fmtDateTime(b.starts_at)} – {fmtDateTime(b.ends_at)}
-                </span>
+                <span>{bannerPeriod(b)}</span>
                 <Rev n={b.revision} />
               </MetaLine>
               <BannerOrigin b={b} />

@@ -91,10 +91,11 @@ export async function enqueueBannerJob(db: any, b: any, action: 'upsert' | 'dele
 export async function bannerRoutes(app: FastifyInstance) {
   app.get('/banners', { preHandler: requireAuth('banner.view') }, async () => {
     const rows = await many<any>(
-      `SELECT b.*, s.name AS site_name, u.name AS approved_by_name,
+      `SELECT b.*, s.name AS site_name, u.name AS approved_by_name, ue.name AS ended_by_name,
               j.status AS job_status, j.revision AS job_revision, j.action AS job_action, j.result_at AS job_result_at, j.error AS job_error,
               a.name AS automation_name, a.deleted_at AS automation_deleted, live.revision AS live_revision
          FROM banners b JOIN wp_sites s ON s.id = b.site_id LEFT JOIN users u ON u.id = b.approved_by
+         LEFT JOIN users ue ON ue.id = b.ended_by
          LEFT JOIN automations a ON a.id = b.automation_id
          LEFT JOIN LATERAL (SELECT * FROM banner_jobs WHERE banner_id = b.id AND status <> 'canceled' ORDER BY created_at DESC LIMIT 1) j ON true
          -- zuletzt auf der Website angekommene Fassung (bleibt sichtbar, bis eine neue freigegeben und veröffentlicht ist)
@@ -121,6 +122,8 @@ export async function bannerRoutes(app: FastifyInstance) {
       source_kind: b.source_key?.startsWith('w:') ? 'warnung' : b.source_key?.startsWith('e:') ? 'einsatz' : null,
       ended_at: b.ended_at,
       ended_reason: b.ended_reason ?? null,
+      // von Hand beendet (#276); automatisch beendete Banner haben keinen Namen
+      ended_by_name: b.ended_by ? (b.ended_by_name ?? null) : null,
       live_revision: b.ended_at || b.job_action === 'delete' ? null : (b.live_revision ?? null),
     }));
   });
@@ -228,7 +231,7 @@ export async function bannerRoutes(app: FastifyInstance) {
   app.post('/banners/:id/end', { preHandler: requireAuth('banner.publish') }, async (req) => {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
     await tx(async (db) => {
-      const b = await one<any>(`UPDATE banners SET ended_at = now() WHERE id = $1 AND ended_at IS NULL RETURNING *`, [id], db);
+      const b = await one<any>(`UPDATE banners SET ended_at = now(), ended_by = $2 WHERE id = $1 AND ended_at IS NULL RETURNING *`, [id, req.auth!.user?.id ?? null], db);
       if (!b) throw notFound('Banner nicht gefunden oder bereits beendet.');
       const published = await one(`SELECT 1 FROM banner_jobs WHERE banner_id = $1 AND action = 'upsert' AND status IN ('sent','done')`, [id], db);
       if (published) await enqueueBannerJob(db, b, 'delete', req.auth!.user?.id ?? null);

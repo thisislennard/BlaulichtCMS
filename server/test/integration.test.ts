@@ -2091,7 +2091,11 @@ describe('Verbindungen (M4): FE2, Facebook, Instagram, amtliche Warnfeeds', () =
     expect(job.action).toBe('upsert');
     capXml = cap('W-4', 'Cancel', 'Entwarnung (Test)', 'W-3');
     await refreshWarnfeed(await conn());
-    expect((await one<any>(`SELECT ended_at FROM banners WHERE id = $1`, [w3.banner_id]))!.ended_at).toBeTruthy();
+    const ended = (await one<any>(`SELECT ended_at, ended_reason, ended_by FROM banners WHERE id = $1`, [w3.banner_id]))!;
+    expect(ended.ended_at).toBeTruthy();
+    // die Bannerliste zeigt „Beendet: Entwarnung“ statt nur des geplanten Zeitraums (#276)
+    expect(ended.ended_reason).toBe('entwarnung');
+    expect(ended.ended_by).toBeNull();
     expect((await one<any>(`SELECT banner_id FROM official_warnings WHERE identifier = 'W-4'`))!.banner_id).toBeNull();
   });
 

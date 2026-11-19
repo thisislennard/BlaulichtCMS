@@ -355,7 +355,7 @@ async function processWarnfeed(c: Connection, rec: Receipt) {
       if (w.references.length) {
         const prev = await many<any>(`UPDATE official_warnings SET superseded_by = $3 WHERE connection_id = $1 AND identifier = ANY($2) AND superseded_by IS NULL RETURNING *`, [c.id, w.references, row.id]);
         replaced = prev.length;
-        for (const p of prev) if (p.banner_id) await endBanner(p.banner_id, w.msgType === 'Cancel' ? 'Entwarnung' : 'Aktualisierung');
+        for (const p of prev) if (p.banner_id) await endBanner(p.banner_id, w.msgType === 'Cancel' ? 'Entwarnung' : 'Aktualisierung', w.msgType === 'Cancel' ? { reason: 'entwarnung' } : {});
       }
       // Kam eine Aktualisierung/Entwarnung schon früher an, ist diese Meldung bereits ersetzt – kein Banner (#63)
       const later = await one<any>(`SELECT id FROM official_warnings WHERE connection_id = $1 AND $2 = ANY(references_ids) AND id <> $3 ORDER BY sent_at DESC NULLS LAST LIMIT 1`, [c.id, w.identifier, row.id]);
@@ -471,9 +471,13 @@ async function createBanner(c: Connection, w: any) {
   log('info', 'warnfeed', `Automatisches Banner für ${w.identifier}`);
 }
 
-export async function endBanner(bannerId: string, why: string) {
+/**
+ * Banner einer amtlichen Warnung beenden. Die Bannerliste zeigt das Ende (#276): `reason` bei der Entwarnung,
+ * `userId`, wenn eine Person es ausgelöst hat (Warnung ausgeblendet).
+ */
+export async function endBanner(bannerId: string, why: string, opts: { reason?: 'entwarnung'; userId?: string | null } = {}) {
   await tx(async (db) => {
-    const b = await one<any>(`UPDATE banners SET ended_at = now() WHERE id = $1 AND ended_at IS NULL RETURNING *`, [bannerId], db);
+    const b = await one<any>(`UPDATE banners SET ended_at = now(), ended_reason = $2, ended_by = $3 WHERE id = $1 AND ended_at IS NULL RETURNING *`, [bannerId, opts.reason ?? null, opts.userId ?? null], db);
     if (!b) return;
     const published = await one(`SELECT 1 FROM banner_jobs WHERE banner_id = $1 AND action = 'upsert' AND status IN ('sent','done')`, [bannerId], db);
     if (published) await enqueueBannerJob(db, b, 'delete', null);

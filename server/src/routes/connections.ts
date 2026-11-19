@@ -934,7 +934,7 @@ export async function connectionRoutes(app: FastifyInstance) {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
     const w = await one<any>(`UPDATE official_warnings SET dismissed_at = now(), dismissed_by = $2 WHERE id = $1 AND dismissed_at IS NULL RETURNING *`, [id, req.auth!.user?.id ?? null]);
     if (!w) throw notFound('Warnung nicht gefunden oder bereits ausgeblendet.');
-    if (w.banner_id) await endBanner(w.banner_id, 'Amtliche Warnung ausgeblendet');
+    if (w.banner_id) await endBanner(w.banner_id, 'Amtliche Warnung ausgeblendet', { userId: req.auth!.user?.id ?? null });
     await audit(req.auth!.actor, 'official_warning.dismissed', { type: 'official_warning', id, label: (w.headline || w.event || w.identifier).slice(0, 200) }, { kennung: w.identifier, banner_beendet: !!w.banner_id || undefined });
     return { ok: true, bannerEnded: !!w.banner_id };
   });
