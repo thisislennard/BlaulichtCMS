@@ -19,6 +19,7 @@ Die **BlaulichtCMS Bridge** ist ein WordPress-Plugin. Sie holt freigegebene Beit
 - Abgelaufen oder verloren? Auf der Website-Karte **Neuen Kopplungscode** wählen.
 - Die **BlaulichtCMS-Adresse** steht im Kopplungsdialog (Kopierknopf); sie ist die öffentliche Adresse aus *Einstellungen → Organisation*.
 - Der entstehende Schlüssel gilt nur für diese eine Website. „Widerrufen“ in BlaulichtCMS sperrt ihn sofort.
+- Widerrufene Websites lassen sich mit **Entfernen** aus der Liste nehmen. Ging an die Website noch nichts, wird sie gelöscht. Sonst behalten Beiträge, Banner und Einträge der Einsatzliste ihren Verlauf mit dem Namen der Website, und „Zurückziehen“ über eine Neu-Kopplung derselben Adresse funktioniert weiter.
 
 ### Kopplung prüfen
 

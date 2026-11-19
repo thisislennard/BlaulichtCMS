@@ -284,9 +284,44 @@ export async function bridgeRoutes(app: FastifyInstance) {
       `SELECT s.*,
               (SELECT count(*)::int FROM publications p WHERE p.site_id = s.id AND p.status IN ('queued','sent','unknown')) AS open_jobs,
               (SELECT count(*)::int FROM publications p WHERE p.site_id = s.id AND p.status = 'published') AS published_count
-         FROM wp_sites s ORDER BY s.status = 'revoked', s.name`,
+         FROM wp_sites s WHERE s.removed_at IS NULL ORDER BY s.status = 'revoked', s.name`,
     );
     return rows.map(sitePayload);
+  });
+
+  /**
+   * Widerrufene Website aus der Liste entfernen. Ohne Verlauf wird sie gelöscht. Hängen Beiträge, Banner oder Einträge
+   * der Einsatzliste an ihr, bleibt nur die Zeile mit Name und Adresse für diesen Verlauf (und für „Zurückziehen“ über
+   * eine Neu-Kopplung derselben Adresse, #183); die letzte Meldung der Bridge wird verworfen.
+   */
+  app.delete('/sites/:id', { preHandler: requireAuth('channel.sites') }, async (req) => {
+    const { id } = z.object({ id: z.uuid() }).parse(req.params);
+    return tx(async (db) => {
+      const s = await one<any>(`SELECT id, name, status FROM wp_sites WHERE id = $1 AND removed_at IS NULL FOR UPDATE`, [id], db);
+      if (!s) throw notFound('Website nicht gefunden.');
+      if (s.status !== 'revoked') throw badRequest('Nur widerrufene Websites lassen sich entfernen. Erst die Kopplung widerrufen.');
+      const used = await one<{ used: boolean }>(
+        `SELECT EXISTS (SELECT 1 FROM publications WHERE site_id = $1)
+             OR EXISTS (SELECT 1 FROM banners WHERE site_id = $1)
+             OR EXISTS (SELECT 1 FROM banner_jobs WHERE site_id = $1)
+             OR EXISTS (SELECT 1 FROM incident_jobs WHERE site_id = $1)
+             OR EXISTS (SELECT 1 FROM incident_entries WHERE site_id = $1)
+             OR EXISTS (SELECT 1 FROM post_revisions WHERE site_id = $1) AS used`,
+        [id],
+        db,
+      );
+      const keep = !!used?.used;
+      if (keep) {
+        await db.query(
+          `UPDATE wp_sites SET removed_at = now(), removed_by = $2, bridge_report = NULL, bridge_report_at = NULL, pairing_code_hash = NULL, key_hash = NULL WHERE id = $1`,
+          [id, req.auth!.user?.id ?? null],
+        );
+      } else {
+        await db.query(`DELETE FROM wp_sites WHERE id = $1`, [id]);
+      }
+      await audit(req.auth!.actor, 'site.removed', { type: 'site', id, label: s.name }, { verlauf_behalten: keep }, 'ok', db);
+      return { ok: true, deleted: !keep };
+    });
   });
 
   app.post('/sites', { preHandler: requireAuth('channel.sites') }, async (req) => {

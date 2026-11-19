@@ -159,7 +159,8 @@
       "plugin_downloaded": "Bridge heruntergeladen",
       "update_channel": "Update-Stufe geändert",
       "options": "Einstellungen der Website geändert",
-      "unpaired_by_bridge": "Kopplung in WordPress beendet"
+      "unpaired_by_bridge": "Kopplung in WordPress beendet",
+      "removed": "Website entfernt"
     },
     "banner": {
       "created": "Banner angelegt",
@@ -583,7 +584,8 @@
       "plugin_downloaded": "hat die BlaulichtCMS Bridge heruntergeladen",
       "update_channel": "hat die Update-Stufe von „{o}“ geändert",
       "options": "hat die Einstellungen der Website „{o}“ geändert",
-      "unpaired_by_bridge": "hat die Kopplung von „{o}“ in WordPress beendet"
+      "unpaired_by_bridge": "hat die Kopplung von „{o}“ in WordPress beendet",
+      "removed": "hat die widerrufene Website „{o}“ entfernt"
     },
     "banner": {
       "created": "hat das Banner „{o}“ angelegt",

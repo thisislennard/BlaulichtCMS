@@ -4209,6 +4209,46 @@ describe('Gelöschte Dateien in freigegebenen Fassungen (#167)', () => {
   });
 });
 
+describe('Widerrufene Websites entfernen', () => {
+  it('löscht ohne Verlauf, blendet mit Verlauf nur aus und lässt Aktive stehen', async () => {
+    const listed = async (id: string) => (await admin.get('/sites')).json.some((x: any) => x.id === id);
+    // Noch nicht widerrufen: abgelehnt
+    const leer = (await admin.post('/sites', { name: 'Nie genutzt' })).json.site.id;
+    expect((await admin.raw('DELETE', `/sites/${leer}`)).status).toBe(400);
+    expect((await editor.raw('DELETE', `/sites/${leer}`)).status).toBe(403);
+    // Widerrufen ohne Verlauf: wirklich gelöscht
+    expect((await admin.post(`/sites/${leer}/revoke`)).json.status).toBe('revoked');
+    expect(await listed(leer)).toBe(true);
+    const r1 = await admin.raw('DELETE', `/sites/${leer}`);
+    expect(r1.status).toBe(200);
+    expect(r1.json.deleted).toBe(true);
+    expect(await one(`SELECT 1 FROM wp_sites WHERE id = $1`, [leer])).toBeNull();
+    expect(await listed(leer)).toBe(false);
+    expect((await admin.raw('DELETE', `/sites/${leer}`)).status).toBe(404);
+
+    // Mit Verlauf (Fassung mit dieser Website als Ziel): Zeile bleibt mit Namen, Liste ohne sie
+    const alt = (await admin.post('/sites', { name: 'Alte Website (fiktiv)' })).json.site.id;
+    await pool.query(`UPDATE wp_sites SET status = 'active', site_url = 'https://alt.example.org', bridge_report = '{"categories":[]}'::jsonb WHERE id = $1`, [alt]);
+    const pid = (await editor.post('/posts', { title: 'Mit alter Website (fiktiv)' })).json.id;
+    const d = (await editor.get(`/posts/${pid}`)).json;
+    expect((await editor.put(`/posts/${pid}/revision`, { baseRevision: d.revision.number, title: 'Mit alter Website (fiktiv)', body: 'Text.', siteId: alt, mediaIds: [], coverId: null })).status).toBe(200);
+    expect((await admin.post(`/sites/${alt}/revoke`)).json.status).toBe('revoked');
+    const r2 = await admin.raw('DELETE', `/sites/${alt}`);
+    expect(r2.status).toBe(200);
+    expect(r2.json.deleted).toBe(false);
+    expect(await listed(alt)).toBe(false);
+    const row = await one<any>(`SELECT name, site_url, removed_at, bridge_report FROM wp_sites WHERE id = $1`, [alt]);
+    expect(row.name).toBe('Alte Website (fiktiv)');
+    expect(row.site_url).toBe('https://alt.example.org');
+    expect(row.removed_at).not.toBeNull();
+    expect(row.bridge_report).toBeNull();
+    expect((await editor.get(`/posts/${pid}`)).status).toBe(200);
+    expect((await admin.raw('DELETE', `/sites/${alt}`)).status).toBe(404);
+    const log = await many<any>(`SELECT details FROM audit_events WHERE action = 'site.removed' ORDER BY id`);
+    expect(log.map((l) => l.details?.verlauf_behalten)).toEqual([false, true]);
+  });
+});
+
 describe('Storys, Threads, X und Teilen von Hand (#188, #189)', () => {
   // Lokaler Ersatz für Graph API (Facebook/Instagram), Threads-API und X-API – es geht nichts an echte Dienste.
   let mock: import('node:http').Server;

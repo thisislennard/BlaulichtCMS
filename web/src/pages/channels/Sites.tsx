@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { download, get, post } from '../../api/client';
+import { del, download, get, post } from '../../api/client';
 import type { Site } from '../../api/types';
 import { Badge, Button, Card, EmptyState, ErrorBox, FieldWrap, Input, Notice, PageHeader, Select, SkeletonRows, StatusBadge, Switch } from '../../components/ui/core';
 import { put } from '../../api/client';
@@ -191,6 +191,21 @@ export default function Sites() {
                     }}
                   >
                     Widerrufen
+                  </Button>
+                </div>
+              )}
+              {manage && s.status === 'revoked' && (
+                <div className="flex gap-2 mt-3 flex-wrap">
+                  <Button
+                    size="sm"
+                    icon="Trash2"
+                    onClick={async () => {
+                      if (!(await ask({ title: 'Website entfernen?', text: `„${s.name}“ verschwindet aus dieser Liste. Beiträge, Banner und Einträge der Einsatzliste, die schon an diese Website gingen, behalten ihren Verlauf mit dem Namen der Website.`, confirmLabel: 'Entfernen' }))) return;
+                      await del(`/sites/${s.id}`).catch(toastError);
+                      refresh();
+                    }}
+                  >
+                    Entfernen
                   </Button>
                 </div>
               )}
