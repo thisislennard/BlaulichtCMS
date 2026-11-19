@@ -379,8 +379,16 @@ describe('Presse-Postfach (#205)', () => {
     expect((await admin.post('/press/mailbox/test', { ...cfg(), password: 'falsch' })).json).toMatchObject({ ok: false, error: expect.stringContaining('Anmeldung abgelehnt') });
     expect((await admin.post('/press/mailbox/test', { ...cfg(), security: 'none' })).status).toBe(400);
     await admin.reauth();
-    // Einschalten ohne erfolgreichen Test: abgelehnt
-    expect((await admin.put('/press/mailbox', { ...cfg(), password: 'Geheim-123', enabled: true })).json.error).toBe('not_verified');
+    // Einschalten ohne erfolgreichen Test: gespeichert, aber der Abruf bleibt aus (Hinweis)
+    const pending = await admin.put('/press/mailbox', { ...cfg(), password: 'Geheim-123', enabled: true });
+    expect(pending.status, JSON.stringify(pending.json)).toBe(200);
+    expect(pending.json.config).toMatchObject({ enabled: false, passwordSet: true });
+    expect(pending.json.notice).toContain('Verbindung testen');
+    // Unvollständig speichern geht auch (Server fehlt) – eingeschaltet wird so nicht
+    const partial = await admin.put('/press/mailbox', { ...cfg(), host: '', password: 'Geheim-123', enabled: true });
+    expect(partial.status, JSON.stringify(partial.json)).toBe(200);
+    expect(partial.json.config).toMatchObject({ enabled: false, host: '' });
+    expect(partial.json.notice).toContain('nicht eingeschaltet');
     const t = await admin.post('/press/mailbox/test', { ...cfg(), password: 'Geheim-123' });
     expect(t.json).toMatchObject({ ok: true, info: expect.stringContaining('0 Nachrichten') });
     const saved = await admin.put('/press/mailbox', { ...cfg(), password: 'Geheim-123', enabled: true });
@@ -390,8 +398,12 @@ describe('Presse-Postfach (#205)', () => {
     expect(JSON.stringify((await admin.get('/settings')).json)).not.toContain('press.mailbox');
     const row = await one<any>(`SELECT value FROM settings WHERE key = 'press.mailbox'`);
     expect(JSON.stringify(row.value)).not.toContain('Geheim-123');
-    // anderes Passwort ⇒ Test gilt nicht mehr
-    expect((await admin.put('/press/mailbox', { ...cfg(), password: 'Anders-456', enabled: true })).json.error).toBe('not_verified');
+    // anderes Passwort ⇒ Test gilt nicht mehr: gespeichert, Abruf aus
+    const other = await admin.put('/press/mailbox', { ...cfg(), password: 'Anders-456', enabled: true });
+    expect(other.json.config).toMatchObject({ enabled: false });
+    expect(other.json.notice).toContain('Verbindung testen');
+    // wieder mit den getesteten Angaben einschalten (Test von eben gilt noch)
+    expect((await admin.put('/press/mailbox', { ...cfg(), password: 'Geheim-123', enabled: true })).json.config).toMatchObject({ enabled: true, passwordSet: true });
   });
 
   it('gespeichertes Passwort nur für denselben Server, Port und Benutzer; IMAP-Ziele wie alle ausgehenden Verbindungen geprüft (#234)', async () => {
@@ -400,12 +412,11 @@ describe('Presse-Postfach (#205)', () => {
     await a2.reauth();
     const other = await fakeImap({ user: 'presse', password: 'Geheim-123' });
     try {
-      // Server, Port oder Benutzer geändert, kein neues Passwort: abgelehnt (Test und Speichern), der andere Server erfährt nichts
+      // Server, Port oder Benutzer geändert, kein neues Passwort: Test abgelehnt, der andere Server erfährt nichts
       for (const change of [{ host: 'localhost' }, { port: other.port }, { user: 'presse2' }]) {
         const t = await a2.post('/press/mailbox/test', { ...cfg(), ...change });
         expect(t.status, JSON.stringify(change)).toBe(400);
         expect(t.json.message).toContain('Passwort neu eingeben');
-        expect((await a2.put('/press/mailbox', { ...cfg(), ...change, enabled: true })).status).toBe(400);
       }
       expect(other.commands).toEqual([]);
       expect((await mailboxConfig()).port).toBe(imap.port);
@@ -416,6 +427,14 @@ describe('Presse-Postfach (#205)', () => {
     } finally {
       await other.close();
     }
+    // Speichern geht trotzdem: das gespeicherte Passwort gehört zum alten Ziel und wird verworfen, der Abruf bleibt aus
+    const dropped = await a2.put('/press/mailbox', { ...cfg(), user: 'presse2', enabled: true });
+    expect(dropped.status, JSON.stringify(dropped.json)).toBe(200);
+    expect(dropped.json.config).toMatchObject({ enabled: false, passwordSet: false, user: 'presse2' });
+    expect(dropped.json.notice).toContain('verworfen');
+    // wieder herstellen: richtige Angaben mit Passwort testen und einschalten
+    expect((await a2.post('/press/mailbox/test', { ...cfg(), password: 'Geheim-123' })).json.ok).toBe(true);
+    expect((await a2.put('/press/mailbox', { ...cfg(), password: 'Geheim-123', enabled: true })).json.config).toMatchObject({ enabled: true, passwordSet: true });
     // Interne Adresse ohne Freigabe gesperrt (wie lib/http.ts); andere Ports als 143/993 nur für freigegebene Hosts.
     // Freigabe unter Einstellungen → Sicherheit: nur Hostnamen, *.domain oder IP-Adressen, bereinigt gespeichert
     expect((await a2.patch('/settings', { 'security.allowed_private_hosts': ['mail intern'] })).status).toBe(400);

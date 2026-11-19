@@ -214,8 +214,11 @@ export function OffsiteBackupSection() {
     }
     setBusy('save');
     try {
-      const r = await put<{ config: OffsiteConfig }>('/backups/offsite', { ...target, enabled: form.enabled, keepDaily: keepVals.daily, keepWeekly: keepVals.weekly, keepMonthly: keepVals.monthly, drillInterval: form.drillInterval, ...(keepChanged && tooLong ? { acknowledgeRetention: true } : {}), ...(oldTarget ? { oldTarget } : {}) });
-      toast({ tone: 'success', title: 'Sicherung außer Haus gespeichert', text: r.config.enabled ? 'Neue Sicherungen gehen ab jetzt zusätzlich außer Haus.' : oldTarget === 'delete' ? 'Die Sicherungen auf dem bisherigen Ziel wurden gelöscht.' : undefined });
+      // Speichern geht immer; eingeschaltet wird nur ein vollständiges, erfolgreich getestetes Ziel (sonst Hinweis)
+      const r = await put<{ config: OffsiteConfig; notice?: string; test?: TestResult }>('/backups/offsite', { ...target, enabled: form.enabled, keepDaily: keepVals.daily, keepWeekly: keepVals.weekly, keepMonthly: keepVals.monthly, drillInterval: form.drillInterval, ...(keepChanged && tooLong ? { acknowledgeRetention: true } : {}), ...(oldTarget ? { oldTarget } : {}) });
+      if (r.notice) toast({ tone: 'warning', title: 'Sicherung außer Haus gespeichert', text: r.notice });
+      else toast({ tone: 'success', title: 'Sicherung außer Haus gespeichert', text: r.config.enabled ? 'Neue Sicherungen gehen ab jetzt zusätzlich außer Haus.' : oldTarget === 'delete' ? 'Die Sicherungen auf dem bisherigen Ziel wurden gelöscht.' : undefined });
+      if (r.test) setTest(r.test);
       setForm(fromConfig(r.config));
       setEditingPassword(false);
       qc.setQueryData(['backup-offsite'], (old: any) => (old ? { ...old, config: r.config } : old));
@@ -256,7 +259,7 @@ export function OffsiteBackupSection() {
         </div>
       )}
 
-      <Switch checked={form.enabled} onChange={(v) => set({ enabled: v })} label="Nach jeder Sicherung außer Haus ablegen" description="Einschalten geht nur nach bestandenem Verbindungstest. Das Ziel ändern verlangt eine erneute Bestätigung mit deinem Passwort." />
+      <Switch checked={form.enabled} onChange={(v) => set({ enabled: v })} label="Nach jeder Sicherung außer Haus ablegen" description="Speichern geht jederzeit, auch unvollständig. Eingeschaltet wird erst nach bestandenem Verbindungstest. Das Ziel ändern verlangt eine erneute Bestätigung mit deinem Passwort." />
 
       <div>
         <SegmentedControl<Form['kind']>

@@ -90,7 +90,9 @@ export function MailPage() {
   const dirty = !!(f && stored) && (JSON.stringify({ ...f, clientSecret: '', password: '' }) !== JSON.stringify(stored) || !!f.clientSecret || !!f.password);
   const smtpChanged = !!(f && stored) && smtpKey(f) !== smtpKey(stored);
   const m365Changed = !!(f && stored) && m365Key(f) !== m365Key(stored);
-  // Microsoft 365 erst nach bestandener Testmail mit genau diesen Angaben (Server prüft dasselbe)
+  // Microsoft 365 wird erst nach bestandener Testmail mit genau diesen Angaben verwendet (Server prüft dasselbe) –
+  // gespeichert werden die Angaben trotzdem
+
   const needsM365Test = !!(f && d) && f.transport === 'm365' && (d.transport !== 'm365' || m365Changed) && verified.m365 !== m365Key(f);
   // SMTP: im Echtbetrieb des Warnversands nur mit frischer Testmail dieser Angaben (Wechsel oder Änderung)
   const needsSmtpTest = !!(f && d) && f.transport === 'smtp' && !d.warnings_test_mode && (d.transport !== 'smtp' || smtpChanged) && verified.smtp !== smtpKey(f);
@@ -101,12 +103,9 @@ export function MailPage() {
       if (!f.from.trim()) problems.push({ id: 'n-from', message: 'Bitte die Absenderadresse eintragen.' });
       if (f.port === '' || !Number.isInteger(Number(f.port)) || Number(f.port) < 1 || Number(f.port) > 65535) problems.push({ id: 'n-port', message: 'Port: 1 bis 65535.' });
     }
-    if (f.transport === 'm365') {
-      if (!f.tenantId.trim()) problems.push({ id: 'n-tenant', message: 'Bitte die Verzeichnis-ID eintragen.' });
-      if (!f.clientId.trim()) problems.push({ id: 'n-client', message: 'Bitte die Anwendungs-ID eintragen.' });
-      if (!f.sender.trim()) problems.push({ id: 'n-sender', message: 'Bitte das Absenderpostfach eintragen.' });
-    }
-    if (needsM365Test || needsSmtpTest) problems.push({ id: 'n-test', message: 'Erst eine Testmail mit genau diesen Angaben senden (gilt 60 Minuten).' });
+    // Microsoft 365: Speichern geht immer, auch unvollständig und ohne Testmail – verwendet wird es erst nach bestandener
+    // Testmail (der Server meldet das als Hinweis). SMTP im Echtbetrieb des Warnversands weiter nur mit Testmail.
+    if (needsSmtpTest) problems.push({ id: 'n-test', message: 'Erst eine Testmail mit genau diesen Angaben senden (gilt 60 Minuten).' });
   }
   const formRef = useRef(f);
   formRef.current = f;
@@ -116,7 +115,7 @@ export function MailPage() {
     problems,
     save: async () => {
       const x = formRef.current!;
-      await put('/notify/settings', {
+      const r = await put<{ ok: boolean; notice?: string }>('/notify/settings', {
         transport: x.transport,
         pushEnabled: x.pushEnabled,
         mailEnabled: x.mailEnabled,
@@ -129,7 +128,7 @@ export function MailPage() {
         ...(x.clientSecret ? { clientSecret: x.clientSecret } : {}),
         ...(smtpChanged ? { smtp: { host: x.host.trim(), port: Number(x.port), security: x.security, user: x.user.trim(), from: x.from.trim(), ...(x.password ? { password: x.password } : {}) } } : {}),
       });
-      toast({ tone: 'success', title: 'E-Mail & Push gespeichert' });
+      toast(r.notice ? { tone: 'warning', title: 'E-Mail & Push gespeichert', text: r.notice } : { tone: 'success', title: 'E-Mail & Push gespeichert' });
       await refresh();
     },
     discard: () => {
@@ -331,7 +330,7 @@ export function MailPage() {
         {(needsM365Test || needsSmtpTest) && (
           <Notice tone="warning">
             {needsM365Test
-              ? 'Microsoft 365 lässt sich erst speichern, nachdem mit genau diesen Angaben eine Testmail erfolgreich versendet wurde (gilt 60 Minuten).'
+              ? 'Speichern geht jederzeit, auch unvollständig. Verwendet wird Microsoft 365 aber erst, nachdem mit genau diesen Angaben eine Testmail erfolgreich versendet wurde (gilt 60 Minuten) – danach erneut speichern.'
               : 'Der Warnversand ist im Echtbetrieb: Geänderte SMTP-Angaben lassen sich erst speichern, nachdem mit genau diesen Angaben eine Testmail erfolgreich versendet wurde (gilt 60 Minuten).'}
           </Notice>
         )}

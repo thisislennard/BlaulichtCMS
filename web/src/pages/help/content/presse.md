@@ -27,7 +27,7 @@ Mails an ein Presse-Postfach (z. B. `presse@…`) werden automatisch zu Anfragen
 
 1. Art wählen: **IMAP** oder **Microsoft 365**, Angaben eintragen (siehe unten).
 2. **Verbindung testen** – meldet sich an und zählt die Nachrichten im Ordner, ändert nichts.
-3. **Abruf eingeschaltet** – geht nur nach einem erfolgreichen Test mit genau diesen Angaben (höchstens eine Stunde her) und mit Passwortbestätigung.
+3. **Abruf eingeschaltet** – geht nur nach einem erfolgreichen Test mit genau diesen Angaben (höchstens eine Stunde her) und mit Passwortbestätigung. Gespeichert werden die Angaben immer, auch unvollständig; ohne bestandenen Test bleibt der Abruf aus und ein Hinweis nennt den Grund.
 
 Der Abruf läuft im eingestellten Abstand (Standard alle 5 Minuten), **Jetzt abrufen** startet ihn sofort. Beim ersten Abruf werden nur Mails der letzten 24 Stunden übernommen. Das Postfach wird **nur gelesen**: nichts wird verschoben, gelöscht oder als gelesen markiert – BlaulichtCMS merkt sich selbst, welche Mails schon da waren.
 

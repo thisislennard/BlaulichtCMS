@@ -17,6 +17,7 @@ import { mailboxConfig, mailboxConfigProblem, mailboxFingerprint, mailboxState, 
 const SECRET_OWNER = '00000000-0000-0000-0000-0000000a0205';
 /** So lange gilt ein erfolgreicher Test als Nachweis für das Einschalten. */
 const VERIFY_MAX_AGE_MS = 60 * 60_000;
+const PASSWORD_AGAIN = 'Für einen anderen Server, Port oder Benutzer bitte das Passwort neu eingeben.';
 
 const input = z.object({
   mode: z.enum(['imap', 'm365']),
@@ -65,13 +66,14 @@ export async function pressMailboxRoutes(app: FastifyInstance) {
    * „Presse-Postfach einrichten“ es an einen eigenen Server schicken lassen, ohne es je zu sehen. Für ein anderes Ziel
    * muss es neu eingegeben werden; ohne IMAP-Ziel (Microsoft 365, Angaben geleert) wird es beim Speichern verworfen.
    */
-  const merge = async (b: z.infer<typeof input>): Promise<{ next: MailboxConfig; password: string; dropSecret: boolean }> => {
+  const merge = async (b: z.infer<typeof input>, opts: { save?: boolean } = {}): Promise<{ next: MailboxConfig; password: string; dropSecret: boolean }> => {
     const cur = await mailboxConfig();
     const next: MailboxConfig = { ...cur, mode: b.mode, host: b.host, port: b.port, security: b.security, user: b.user, folder: b.folder || 'INBOX', mailbox: b.mailbox, intervalMinutes: b.intervalMinutes, maxAttachmentMb: b.maxAttachmentMb };
     if (b.password) return { next, password: b.password, dropSecret: false };
     if (!cur.secretId) return { next, password: '', dropSecret: false };
     if (sameImapTarget(cur, next)) return { next, password: (await readSecret(cur.secretId)) ?? '', dropSecret: false };
-    if (next.mode === 'imap' && next.host.trim()) throw badRequest('Für einen anderen Server, Port oder Benutzer bitte das Passwort neu eingeben.');
+    // Speichern geht trotzdem – das alte Passwort wird dann verworfen (es gehört zum alten Server)
+    if (next.mode === 'imap' && next.host.trim() && !opts.save) throw badRequest(PASSWORD_AGAIN);
     return { next, password: '', dropSecret: true };
   };
 
@@ -101,17 +103,27 @@ export async function pressMailboxRoutes(app: FastifyInstance) {
   app.put('/press/mailbox', { preHandler: perm }, async (req) => {
     const b = input.extend({ enabled: z.boolean() }).parse(req.body);
     const cur = await mailboxConfig();
-    const { next, password, dropSecret } = await merge(b);
+    // Speichern geht immer – auch unvollständig und ohne Test. Eingeschaltet wird der Abruf nur mit vollständigen,
+    // erfolgreich getesteten Angaben; sonst bleibt er aus (Hinweis in `notice`).
+    const { next, password, dropSecret } = await merge(b, { save: true });
     const problem = mailboxConfigProblem(next);
-    if (problem && (b.enabled || b.host || b.mailbox)) throw badRequest(problem);
+    const notices: string[] = [];
+    if (dropSecret && next.mode === 'imap' && next.host.trim()) notices.push(`Das gespeicherte Passwort gehörte zum bisherigen Server und wurde verworfen. ${PASSWORD_AGAIN}`);
     // Zugangsdaten oder Einschalten: frische Passwortbestätigung
     const changedAccess = !!b.password || JSON.stringify([cur.mode, cur.host, cur.port, cur.user, cur.mailbox, cur.security]) !== JSON.stringify([next.mode, next.host, next.port, next.user, next.mailbox, next.security]);
     if (changedAccess || (b.enabled && !cur.enabled)) assertRecentAuth(req);
     const fp = mailboxFingerprint(next, password);
     const unchanged = cur.enabled && fp === mailboxFingerprint(cur, (await readSecret(cur.secretId || null)) ?? '');
-    if (b.enabled && !unchanged) {
+    let enabled = b.enabled;
+    if (enabled && problem) {
+      enabled = false;
+      notices.push(`Gespeichert, aber der Abruf ist nicht eingeschaltet: ${problem}`);
+    } else if (enabled && !unchanged) {
       const v = cur.verified;
-      if (!v || v.fp !== fp || Date.now() - new Date(v.at).getTime() > VERIFY_MAX_AGE_MS) throw new AppError(409, 'not_verified', 'Bitte zuerst mit genau diesen Angaben „Verbindung testen“ (erfolgreich, höchstens eine Stunde her).');
+      if (!v || v.fp !== fp || Date.now() - new Date(v.at).getTime() > VERIFY_MAX_AGE_MS) {
+        enabled = false;
+        notices.push('Gespeichert, aber der Abruf ist nicht eingeschaltet: Bitte zuerst mit genau diesen Angaben „Verbindung testen“ (erfolgreich, höchstens eine Stunde her) und danach einschalten.');
+      }
     }
     if (b.password) {
       const sec = await storeSecret('setting', SECRET_OWNER, b.password, req.auth!.user?.id ?? null);
@@ -122,10 +134,10 @@ export async function pressMailboxRoutes(app: FastifyInstance) {
       await revokeSecret(cur.secretId);
       next.secretId = '';
     }
-    next.enabled = b.enabled;
+    next.enabled = enabled;
     await setSettings({ 'press.mailbox': next } as any, req.auth!.user?.id ?? null);
-    await audit(req.auth!.actor, 'press.mailbox_saved', { type: 'settings', label: 'Presse-Postfach' }, { art: next.mode, aktiv: next.enabled, server: next.mode === 'imap' ? next.host : next.mailbox, passwort_geaendert: !!b.password, ...(dropSecret ? { passwort_verworfen: true } : {}) });
-    return { ok: true, config: publicConfig(next) };
+    await audit(req.auth!.actor, 'press.mailbox_saved', { type: 'settings', label: 'Presse-Postfach' }, { art: next.mode, aktiv: next.enabled, server: next.mode === 'imap' ? next.host : next.mailbox, passwort_geaendert: !!b.password, ...(dropSecret ? { passwort_verworfen: true } : {}), ...(notices.length ? { hinweis: notices.join(' ') } : {}) });
+    return { ok: true, config: publicConfig(next), ...(notices.length ? { notice: notices.join(' ') } : {}) };
   });
 
   app.post('/press/mailbox/poll', { preHandler: perm, config: { rateLimit: { max: 6, timeWindow: '1 minute' } } }, async (req) => {

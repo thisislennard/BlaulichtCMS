@@ -298,9 +298,17 @@ describe('Sicherung außer Haus (WebDAV) und Probe-Wiederherstellung', () => {
     expect(r1.status).toBe(403);
     expect(r1.json.error).toBe('reauth_required');
     await freshReauth();
+    // Test fehlgeschlagen: trotzdem gespeichert, aber nicht eingeschaltet (Hinweis und Testergebnis in der Antwort)
     const r2 = await admin.put('/backups/offsite', cfg({ password: 'falsch' }));
-    expect(r2.status).toBe(400);
-    expect(r2.json.message ?? r2.json.error).toBeTruthy();
+    expect(r2.status, JSON.stringify(r2.json)).toBe(200);
+    expect(r2.json.config).toMatchObject({ enabled: false, url: target(), password_set: true });
+    expect(r2.json.notice).toMatch(/nicht eingeschaltet – Verbindungstest fehlgeschlagen/);
+    expect(r2.json.test.ok).toBe(false);
+    // Unvollständig (ohne Adresse) speichern geht auch – eingeschaltet wird so nicht
+    const partial = await admin.put('/backups/offsite', cfg({ url: '', password: undefined }));
+    expect(partial.status, JSON.stringify(partial.json)).toBe(200);
+    expect(partial.json.config).toMatchObject({ enabled: false, url: '' });
+    expect(partial.json.notice).toMatch(/Es fehlt noch das Ziel/);
     const r3 = await admin.put('/backups/offsite', cfg());
     expect(r3.status, JSON.stringify(r3.json)).toBe(200);
     expect(r3.json.config).toMatchObject({ enabled: true, url: target(), username: DAV_USER, password_set: true });

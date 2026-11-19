@@ -292,7 +292,17 @@ describe('E-Mail über Microsoft 365', () => {
 
   it('Aktivieren nur nach bestandener Testmail mit genau diesen Angaben', async () => {
     await freshReauth();
-    expect((await admin.put('/notify/settings', { transport: 'm365', pushEnabled: true, mailEnabled: true, ...form, clientSecret: SECRET })).status).toBe(409);
+    // Speichern geht auch unvollständig und ohne Testmail – Microsoft 365 wird dann noch nicht verwendet
+    const partial = await admin.put('/notify/settings', { transport: 'm365', pushEnabled: true, mailEnabled: true, tenantId: TENANT, clientId: '', sender: '', saveSent: true });
+    expect(partial.status, JSON.stringify(partial.json)).toBe(200);
+    expect(partial.json).toMatchObject({ transport: 'smtp', notice: expect.stringContaining('noch nicht aktiv') });
+    expect(partial.json.notice).toContain('Anwendungs-ID');
+    expect((await getSettings(true))['m365.tenant_id']).toBe(TENANT);
+    const untested = await admin.put('/notify/settings', { transport: 'm365', pushEnabled: true, mailEnabled: true, ...form, clientSecret: SECRET });
+    expect(untested.status, JSON.stringify(untested.json)).toBe(200);
+    expect(untested.json).toMatchObject({ transport: 'smtp', notice: expect.stringContaining('Testmail senden') });
+    expect((await getSettings(true))['mail.transport']).not.toBe('m365');
+    expect((await getSettings(true))['m365.sender']).toBe('funktion@example.org');
     // Falsches Geheimnis: verständliche Meldung, Geheimnis nie in der Antwort
     const bad = await admin.post('/notify/settings/test-mail', { to: 'pruefung@example.org', ...form, clientSecret: 'falsch-geheim' });
     expect(bad.status).toBe(502);
@@ -318,8 +328,9 @@ describe('E-Mail über Microsoft 365', () => {
     expect(tokenRequests.length).toBe(before + 1);
     expect(graphMails.at(-1)!.auth).not.toBe(`Bearer ${deniedToken}`);
     deniedToken = '';
-    // Andere Absenderadresse als getestet → erneuter Test nötig
-    expect((await admin.put('/notify/settings', { transport: 'm365', pushEnabled: true, mailEnabled: true, ...form, sender: 'anders@example.org', clientSecret: SECRET })).status).toBe(409);
+    // Andere Absenderadresse als getestet → gespeichert, aber erst nach erneutem Test verwendet
+    const otherSender = await admin.put('/notify/settings', { transport: 'm365', pushEnabled: true, mailEnabled: true, ...form, sender: 'anders@example.org', clientSecret: SECRET });
+    expect(otherSender.json).toMatchObject({ transport: 'smtp', notice: expect.stringContaining('noch nicht aktiv') });
     // Ohne frische Bestätigung kein Umschalten
     await pool.query(`UPDATE sessions SET reauth_at = now() - interval '1 hour'`);
     expect((await admin.put('/notify/settings', { transport: 'm365', pushEnabled: true, mailEnabled: true, ...form, clientSecret: SECRET })).json.error).toBe('reauth_required');

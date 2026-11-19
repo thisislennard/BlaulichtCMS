@@ -200,21 +200,28 @@ export async function notifyChannelRoutes(app: FastifyInstance) {
     }
     const smtpNext = b.smtp ? smtpCandidate(b.smtp as SmtpForm, smtpStored) : smtpStored;
     const smtpChanged = !!b.smtp && smtpFormChanged(b.smtp as SmtpForm, smtpStored, smtpNext);
-    const touched = !!(b.tenantId || b.clientId || b.sender || b.clientSecret);
-    if (b.transport === 'm365' || touched) {
-      const problem = m365ConfigProblem({ ...b, clientSecret: b.clientSecret || stored.clientSecret }, b.transport === 'm365');
-      if (problem) throw badRequest(problem);
-    }
-    const next = candidate(b, stored);
+    // Microsoft 365: Speichern geht immer – auch unvollständig und ohne Testmail. Andere Anwendung ohne neues Geheimnis:
+    // das gespeicherte gehört zur bisherigen und wird verworfen statt weitergegeben.
+    const sameApp = b.tenantId.trim().toLowerCase() === stored.tenantId.trim().toLowerCase() && b.clientId.trim().toLowerCase() === stored.clientId.trim().toLowerCase();
+    const dropSecret = !b.clientSecret && !sameApp && !!stored.clientSecret;
+    const next: M365Settings = { tenantId: b.tenantId.trim(), clientId: b.clientId.trim(), sender: b.sender.trim(), saveSent: b.saveSent, clientSecret: b.clientSecret || (sameApp ? stored.clientSecret : '') };
     const fp = m365Fingerprint(next);
     const m365Changed = fp !== m365Fingerprint(stored);
-    // Microsoft 365 erst nach bestandenem Verbindungstest aktiv (wie Verbindungen): Umschalten oder Ändern im Betrieb
-    // nur mit frischer Testmail genau dieser Angaben
-    if (b.transport === 'm365' && (before['mail.transport'] !== 'm365' || m365Changed)) {
-      const v = before['m365.verified'];
-      if (!v || v.fp !== fp || Date.now() - Date.parse(v.at) > VERIFY_MAX_AGE_MS) {
-        throw conflict('Microsoft 365 lässt sich erst verwenden, nachdem mit genau diesen Angaben eine Testmail erfolgreich versendet wurde (höchstens 60 Minuten alt). Bitte zuerst „Testmail senden“.');
-      }
+    const m365Problem = m365ConfigProblem(next, true);
+    const v = before['m365.verified'];
+    const m365Verified = !m365Problem && !!v && v.fp === fp && Date.now() - Date.parse(v.at) <= VERIFY_MAX_AGE_MS;
+    // Verwendet wird Microsoft 365 erst nach bestandener Testmail genau dieser Angaben (wie Verbindungen): Ohne sie
+    // bleibt der bisherige Versandweg aktiv; ist Microsoft 365 schon aktiv, gelten geänderte Angaben sofort (Hinweis).
+    let transport = b.transport;
+    const notices: string[] = [];
+    if (dropSecret) notices.push('Verzeichnis oder Anwendung wurden geändert: Das gespeicherte Client-Geheimnis wurde verworfen – bitte neu eingeben.');
+    if (b.transport === 'm365' && before['mail.transport'] !== 'm365' && !m365Verified) {
+      transport = 'smtp';
+      notices.push(
+        `Microsoft 365 ist gespeichert, aber noch nicht aktiv: ${m365Problem ?? 'Bitte mit genau diesen Angaben „Testmail senden“ und danach erneut speichern.'} ${smtpNext.host && smtpNext.from ? 'Bis dahin läuft der Versand weiter über SMTP.' : 'Bis dahin ist kein E-Mail-Versand eingerichtet.'}`,
+      );
+    } else if (b.transport === 'm365' && m365Changed && !m365Verified) {
+      notices.push(m365Problem ? `Gespeichert – Achtung: ${m365Problem} Solange versendet BlaulichtCMS keine E-Mails.` : 'Gespeichert – Achtung: Microsoft 365 ist mit diesen Angaben noch nicht getestet. Bitte „Testmail senden“.');
     }
     if (b.transport === 'smtp' && (before['mail.transport'] !== 'smtp' || smtpChanged) && !(smtpNext.host && smtpNext.from)) {
       throw badRequest('Für den Versand über SMTP bitte Server und Absender eintragen – oder Microsoft 365 wählen.');
@@ -224,7 +231,7 @@ export async function notifyChannelRoutes(app: FastifyInstance) {
       throw conflict('Der Warnversand ist im Echtbetrieb: SMTP lässt sich erst nach einer erfolgreichen Testmail mit genau diesen Angaben verwenden bzw. ändern (höchstens 60 Minuten alt). Bitte zuerst „Testmail senden“.');
     }
     const patch: Record<string, unknown> = {
-      'mail.transport': b.transport,
+      'mail.transport': transport,
       'm365.tenant_id': next.tenantId,
       'm365.client_id': next.clientId,
       'm365.sender': next.sender,
@@ -239,10 +246,17 @@ export async function notifyChannelRoutes(app: FastifyInstance) {
     const changes = settingsDiff(before as any, patch);
     const secretChange = !!b.clientSecret && b.clientSecret !== stored.clientSecret;
     const smtpPassword = !!b.smtp?.password;
-    if (!Object.keys(changes).length && !secretChange && !smtpPassword) return { ok: true };
+    const result = { ok: true, transport, ...(notices.length ? { notice: notices.join(' ') } : {}) };
+    if (!Object.keys(changes).length && !secretChange && !smtpPassword && !dropSecret) return result;
     // Wer den Weg der Mails ändert (Server, Zugang, Absender), bestätigt mit dem Passwort
-    if (secretChange || smtpPassword || changes['mail.transport'] || changes['m365.tenant_id'] || changes['m365.client_id'] || changes['m365.sender'] || changes['smtp.host'] || changes['smtp.user'] || changes['smtp.from']) assertRecentAuth(req);
+    if (secretChange || dropSecret || smtpPassword || changes['mail.transport'] || changes['m365.tenant_id'] || changes['m365.client_id'] || changes['m365.sender'] || changes['smtp.host'] || changes['smtp.user'] || changes['smtp.from']) assertRecentAuth(req);
     await tx(async (db) => {
+      if (dropSecret && !secretChange) {
+        // Andere Anwendung ohne neues Geheimnis: das bisherige gehört zur alten App und wird nicht weiterverwendet
+        const prev = await one<{ value: unknown }>(`SELECT value FROM settings WHERE key = 'm365.secret_id' FOR UPDATE`, [], db);
+        patch['m365.secret_id'] = '';
+        if (typeof prev?.value === 'string' && prev.value) await revokeSecret(prev.value, db);
+      }
       if (secretChange) {
         // Neues Geheimnis: neue Version anlegen und die bisherige im selben Schritt widerrufen (#172)
         const prev = await one<{ value: unknown }>(`SELECT value FROM settings WHERE key = 'm365.secret_id' FOR UPDATE`, [], db);
@@ -254,16 +268,16 @@ export async function notifyChannelRoutes(app: FastifyInstance) {
       await setSettings(patch as any, req.auth!.user?.id ?? null, db);
     });
     resetM365TokenCache();
-    await audit(req.auth!.actor, 'notify.settings_changed', { type: 'settings', label: 'E-Mail & Push' }, { aenderungen: Object.keys(changes).length ? changes : undefined, geheimnis_geaendert: secretChange || undefined, smtp_passwort_geaendert: smtpPassword || undefined });
+    await audit(req.auth!.actor, 'notify.settings_changed', { type: 'settings', label: 'E-Mail & Push' }, { aenderungen: Object.keys(changes).length ? changes : undefined, geheimnis_geaendert: secretChange || undefined, geheimnis_verworfen: (dropSecret && !secretChange) || undefined, smtp_passwort_geaendert: smtpPassword || undefined, ...(notices.length ? { hinweis: notices.join(' ') } : {}) });
     if (changes['mail.transport'] || secretChange || smtpPassword || changes['smtp.host']) {
       await securityAlert('security_settings', {
         title: `E-Mail-Versand geändert von ${req.auth!.actor.name}`,
-        body: `Versandweg: ${b.transport === 'm365' ? `Microsoft 365 (${next.sender})` : `SMTP (${smtpNext.host})`}${secretChange ? '; Client-Geheimnis ersetzt' : ''}${smtpPassword ? '; SMTP-Passwort ersetzt' : ''}.`,
+        body: `Versandweg: ${transport === 'm365' ? `Microsoft 365 (${next.sender})` : `SMTP (${smtpNext.host})`}${secretChange ? '; Client-Geheimnis ersetzt' : ''}${smtpPassword ? '; SMTP-Passwort ersetzt' : ''}.`,
         link: '/einstellungen/e-mail',
         kind: 'info',
       });
     }
-    return { ok: true };
+    return result;
   });
 
   /** Verbindungstest Microsoft 365: Anmeldung der App und Testmail mit den Formularwerten (auch ungespeichert). */

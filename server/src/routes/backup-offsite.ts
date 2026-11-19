@@ -95,24 +95,46 @@ function cleanFingerprint(v: string): string {
  * es zu kennen.
  */
 async function targetFrom(b: z.infer<typeof targetInput>, c: OffsiteRow): Promise<OffsiteTarget> {
+  const r = await targetForSave(b, c);
+  if (r.problem) throw badRequest(r.problem);
+  if (r.dropSecret) throw badRequest('Für ein anderes Ziel oder einen anderen Benutzer bitte das Passwort neu eingeben.');
+  return r.target;
+}
+
+const PASSWORD_AGAIN = 'Für ein anderes Ziel oder einen anderen Benutzer bitte das Passwort neu eingeben.';
+
+/**
+ * Wie `targetFrom`, aber fürs Speichern: Unvollständige oder ungültige Angaben werden so gespeichert, wie sie
+ * eingegeben wurden (`problem` nennt den Grund – eingeschaltet wird so nicht). Für ein anderes Ziel ohne neues
+ * Passwort wird das gespeicherte verworfen (`dropSecret`) statt weitergegeben.
+ */
+async function targetForSave(b: z.infer<typeof targetInput>, c: OffsiteRow): Promise<{ target: OffsiteTarget; problem: string | null; dropSecret: boolean }> {
+  const domain = b.kind === 'smb' ? b.domain : '';
   let base: { kind: 'smb'; url: string; server: string; share: string; dir: string[] } | { kind: 'webdav'; url: string };
+  let fingerprint = '';
+  let problem: string | null = null;
   try {
     if (b.kind === 'smb') {
       base = { kind: 'smb', ...parseUnc(b.url) };
       checkSmbAccount(b.domain, b.username);
-    } else base = { kind: 'webdav', url: normalizeDavUrl(b.url) };
+    } else {
+      base = { kind: 'webdav', url: normalizeDavUrl(b.url) };
+      fingerprint = cleanFingerprint(b.fingerprint);
+    }
   } catch (e) {
-    throw badRequest((e as Error).message);
+    problem = e instanceof AppError || e instanceof StepError ? e.message : (e as Error).message;
+    base = b.kind === 'smb' ? { kind: 'smb', url: b.url.trim(), server: '', share: '', dir: [] } : { kind: 'webdav', url: b.url.trim() };
+    fingerprint = b.kind === 'webdav' ? b.fingerprint.trim() : '';
   }
-  const domain = b.kind === 'smb' ? b.domain : '';
   let password = b.password ?? '';
-  if (!password) {
+  let dropSecret = false;
+  if (!password && c.secret_id) {
     const sameTarget = !!c.url && c.kind === b.kind && targetHost(c.kind, c.url).toLowerCase() === targetHost(b.kind, base.url).toLowerCase() && c.username === b.username && (c.domain ?? '') === domain;
-    if (c.secret_id && !sameTarget) throw badRequest('Für ein anderes Ziel oder einen anderen Benutzer bitte das Passwort neu eingeben.');
-    password = (await readSecret(c.secret_id)) ?? '';
+    if (sameTarget) password = (await readSecret(c.secret_id)) ?? '';
+    else dropSecret = true;
   }
-  if (base.kind === 'smb') return { ...base, domain, username: b.username, password };
-  return { ...base, username: b.username, password, fingerprint: cleanFingerprint(b.fingerprint) };
+  const target: OffsiteTarget = base.kind === 'smb' ? { ...base, domain, username: b.username, password } : { ...base, username: b.username, password, fingerprint };
+  return { target, problem, dropSecret };
 }
 
 const domainOf = (t: OffsiteTarget) => (t.kind === 'smb' ? t.domain : '');
@@ -135,7 +157,7 @@ function targetChanged(b: z.infer<typeof configInput>, t: OffsiteTarget, c: Offs
 function emptyTarget(b: z.infer<typeof configInput>): OffsiteTarget {
   return b.kind === 'smb'
     ? { kind: 'smb', url: '', server: '', share: '', dir: [], domain: b.domain, username: b.username, password: '' }
-    : { kind: 'webdav', url: '', username: b.username, password: '', fingerprint: cleanFingerprint(b.fingerprint) };
+    : { kind: 'webdav', url: '', username: b.username, password: '', fingerprint: b.fingerprint.trim() };
 }
 
 const stepMessage = (e: unknown) => (e instanceof StepError ? { message: e.message, hint: e.hint } : { message: (e as Error).message });
@@ -159,9 +181,15 @@ export async function backupOffsiteRoutes(app: FastifyInstance) {
   app.put('/backups/offsite', { preHandler: requireAuth('backup.manage') }, async (req) => {
     const b = configInput.parse(req.body);
     const c = await offsiteConfig();
-    if (!b.url && b.enabled) throw badRequest('Bitte zuerst die Adresse des Ziels eintragen.');
-    const t = b.url ? await targetFrom(b, c) : emptyTarget(b);
-    if (targetChanged(b, t, c)) assertRecentAuth(req);
+    // Speichern geht immer – auch unvollständig und ohne bestandenen Test. Eingeschaltet wird nur ein vollständiges,
+    // erfolgreich getestetes Ziel; sonst bleiben die Angaben gespeichert und der Schalter aus (Hinweis in `notice`).
+    const forSave = b.url ? await targetForSave(b, c) : { target: emptyTarget(b), problem: null, dropSecret: !b.password && !!c.secret_id && !!c.url };
+    const t = forSave.target;
+    let enabled = b.enabled;
+    let notice: string | null = null;
+    let failedTest: Awaited<ReturnType<typeof testTarget>> | null = null;
+    if (forSave.dropSecret) notice = `Das gespeicherte Passwort gilt nur für das bisherige Ziel und wurde verworfen. ${PASSWORD_AGAIN}`;
+    if (targetChanged(b, t, c) || forSave.dropSecret) assertRecentAuth(req);
     // Aufbewahrung über der dokumentierten Frist (#246): nur mit ausdrücklicher Bestätigung (Art. 5 Abs. 1 lit. e DSGVO)
     const keep = { daily: b.keepDaily, weekly: b.keepWeekly, monthly: b.keepMonthly };
     const keepChanged = keep.daily !== c.keep_daily || keep.weekly !== c.keep_weekly || keep.monthly !== c.keep_monthly;
@@ -169,16 +197,24 @@ export async function backupOffsiteRoutes(app: FastifyInstance) {
     if (keepChanged && days > DOCUMENTED_RETENTION_DAYS && !b.acknowledgeRetention) {
       throw new AppError(400, 'offsite_retention_confirm', `Mit dieser Aufbewahrung bleiben gelöschte Daten bis zu ${retentionLabel(days)} auf dem Ziel – länger als die in den Datenschutzhinweisen genannten rund 4 Monate. Bitte bestätigen und die Frist im Verzeichnis der Verarbeitungstätigkeiten anpassen.`, { days });
     }
-    // Einschalten bzw. geändertes Ziel nur nach bestandenem Verbindungstest mit genau diesen Angaben
+    // Einschalten bzw. geändertes Ziel im Betrieb nur nach bestandenem Verbindungstest mit genau diesen Angaben – sonst
+    // gespeichert, aber ausgeschaltet
     let tested = false;
-    if (b.enabled && t.url && targetChanged(b, t, c)) {
+    if (enabled && (!t.url || forSave.problem)) {
+      enabled = false;
+      notice = `Gespeichert, aber nicht eingeschaltet: ${forSave.problem ?? 'Es fehlt noch das Ziel.'}`;
+    } else if (enabled && targetChanged(b, t, c)) {
       const r = await testTarget(t);
-      if (!r.ok) throw new AppError(400, 'offsite_test_failed', `Verbindungstest fehlgeschlagen: ${r.error ?? 'unbekannter Fehler'}`, { test: r });
-      tested = true;
+      if (r.ok) tested = true;
+      else {
+        enabled = false;
+        failedTest = r;
+        notice = `Gespeichert, aber nicht eingeschaltet – Verbindungstest fehlgeschlagen: ${r.error ?? 'unbekannter Fehler'}`;
+      }
     }
     // Ausschalten oder anderes Ziel (#246): Sicherungen auf dem bisherigen Ziel löschen (vor dem Speichern, mit den
     // bisherigen Zugangsdaten) oder als „frühere Sicherungen“ vormerken – sonst lägen sie unbegrenzt dort
-    const leaving = !!c.url && (t.kind !== c.kind || t.url !== c.url || (c.enabled && !b.enabled));
+    const leaving = !!c.url && (t.kind !== c.kind || t.url !== c.url || (c.enabled && !enabled));
     let purged: number | null = null;
     if (leaving && b.oldTarget === 'delete') {
       assertRecentAuth(req);
@@ -197,6 +233,10 @@ export async function backupOffsiteRoutes(app: FastifyInstance) {
         const sec = await storeSecret('setting', OFFSITE_SECRET_OWNER, b.password, req.auth!.user?.id ?? null, db);
         if (c.secret_id) await revokeSecret(c.secret_id, db);
         secretId = sec.id;
+      } else if (forSave.dropSecret && c.secret_id) {
+        // Anderes Ziel ohne neues Passwort: das alte gehört zum alten Ziel und wird nicht weitergegeben
+        await revokeSecret(c.secret_id, db);
+        secretId = null;
       }
       await db.query(
         `UPDATE backup_offsite SET enabled = $1, url = $2, username = $3, secret_id = $4, tls_fingerprint = $5, keep_daily = $6, keep_weekly = $7,
@@ -204,7 +244,7 @@ export async function backupOffsiteRoutes(app: FastifyInstance) {
                 last_error = CASE WHEN $11 THEN NULL ELSE last_error END,
                 last_ok_at = CASE WHEN $11 THEN NULL ELSE last_ok_at END, last_ok_file = CASE WHEN $11 THEN NULL ELSE last_ok_file END,
                 updated_at = now(), updated_by = $12, kind = $13, domain = $14 WHERE id = 1`,
-        [b.enabled && !!t.url, t.url, t.username, secretId, fingerprintOf(t), b.keepDaily, b.keepWeekly, b.keepMonthly, b.drillInterval, tested, t.url !== c.url || t.kind !== c.kind, req.auth!.user?.id ?? null, t.kind, domainOf(t)],
+        [enabled && !!t.url, t.url, t.username, secretId, fingerprintOf(t), b.keepDaily, b.keepWeekly, b.keepMonthly, b.drillInterval, tested, t.url !== c.url || t.kind !== c.kind, req.auth!.user?.id ?? null, t.kind, domainOf(t)],
       );
     });
     if (leaving) {
@@ -212,9 +252,11 @@ export async function backupOffsiteRoutes(app: FastifyInstance) {
       else if (c.last_ok_at) await addLeftover(c.url);
     }
     // Wieder auf ein früheres Ziel umgestellt: dort greift die Aufbewahrung wieder
-    if (b.enabled && t.url) await removeLeftover(t.url);
+    if (enabled && t.url) await removeLeftover(t.url);
     const changes: Record<string, unknown> = {};
-    if (b.enabled !== c.enabled) changes.eingeschaltet = b.enabled;
+    if (enabled !== c.enabled) changes.eingeschaltet = enabled;
+    if (b.enabled && !enabled) changes.nicht_eingeschaltet = notice;
+    if (forSave.dropSecret && c.secret_id) changes.passwort = 'verworfen (anderes Ziel)';
     if (t.kind !== c.kind) changes.art = t.kind === 'smb' ? 'SMB-Freigabe' : 'WebDAV';
     if (t.url !== c.url) changes.ziel = { vorher: c.url || null, nachher: t.url || null };
     if (domainOf(t) !== (c.domain ?? '')) changes.domaene = domainOf(t) || null;
@@ -225,7 +267,7 @@ export async function backupOffsiteRoutes(app: FastifyInstance) {
     if (leaving) changes.bisheriges_ziel = purged !== null ? `${purged} Sicherung(en) gelöscht` : c.last_ok_at ? 'Sicherungen behalten (Hinweis im Systemstatus)' : 'nichts übertragen';
     if (b.drillInterval !== c.drill_interval) changes.probe = b.drillInterval;
     await audit(req.auth!.actor, 'backup.offsite_changed', { type: 'backup', label: 'Sicherung außer Haus' }, changes);
-    return { ok: true, config: view(await offsiteConfig()) };
+    return { ok: true, config: view(await offsiteConfig()), ...(notice ? { notice } : {}), ...(failedTest ? { test: failedTest } : {}) };
   });
 
   /**

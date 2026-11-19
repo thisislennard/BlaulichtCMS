@@ -73,7 +73,8 @@ zwischengespeichert – dort muss so viel Platz frei sein, wie sie groß ist.
 5. **Verbindung testen.** Fehlt der letzte Ordner im Pfad, legt der Test ihn an; danach schreibt er eine Probedatei,
    liest sie zurück und löscht sie wieder.
 6. **Nach jeder Sicherung außer Haus ablegen** einschalten und speichern (verlangt die Bestätigung mit dem eigenen
-   Passwort). Gespeichert wird nur nach bestandenem Test.
+   Passwort). Eingeschaltet wird nur nach bestandenem Test – gespeichert werden die Angaben immer, auch unvollständig;
+   ist der Test nicht bestanden, bleibt der Schalter aus und ein Hinweis nennt den Grund.
 
 SMB-Ziele brauchen das BlaulichtCMS-Image mit smbclient. Meldet der Test „smbclient fehlt“, am Docker-Host einmal
 `sudo bash install.sh` ausführen.
@@ -94,7 +95,8 @@ SMB-Ziele brauchen das BlaulichtCMS-Image mit smbclient. Meldet der Test „smbc
    unter *Systemsteuerung → Sicherheit → Zertifikat* vergleichen und erst bei Übereinstimmung **Fingerabdruck
    übernehmen** – BlaulichtCMS nimmt dann genau dieses Zertifikat an, sonst keines.
 7. **Nach jeder Sicherung außer Haus ablegen** einschalten und speichern (verlangt die Bestätigung mit dem eigenen
-   Passwort). Gespeichert wird nur nach bestandenem Test.
+   Passwort). Eingeschaltet wird nur nach bestandenem Test – gespeichert werden die Angaben immer, auch unvollständig;
+   ist der Test nicht bestanden, bleibt der Schalter aus und ein Hinweis nennt den Grund.
 
 ## Wiederherstellung üben
 

@@ -66,10 +66,11 @@ export function MailboxSettings() {
   };
   const save = (enabled: boolean) =>
     run('save', async () => {
-      const r = await put<{ config: MailboxResponse['config'] }>('/press/mailbox', { ...body(), enabled });
+      // Speichern geht immer; eingeschaltet wird nur mit vollständigen, erfolgreich getesteten Angaben (sonst Hinweis)
+      const r = await put<{ config: MailboxResponse['config']; notice?: string }>('/press/mailbox', { ...body(), enabled });
       setV(r.config);
       setPassword('');
-      toast({ tone: 'success', title: enabled ? 'Abruf eingeschaltet' : 'Gespeichert' });
+      toast(r.notice ? { tone: 'warning', title: 'Gespeichert', text: r.notice } : { tone: 'success', title: r.config.enabled && enabled ? 'Abruf eingeschaltet' : 'Gespeichert' });
       setSavedAt(Date.now());
       refresh();
     });
@@ -174,7 +175,7 @@ export function MailboxSettings() {
             checked={v.enabled}
             onChange={(x) => (x ? save(true) : save(false))}
             label="Abruf eingeschaltet"
-            description="Einschalten erst nach erfolgreichem Verbindungstest mit genau diesen Angaben. Beim ersten Abruf werden nur Mails der letzten 24 Stunden übernommen."
+            description="Speichern geht jederzeit, auch unvollständig. Eingeschaltet wird erst nach erfolgreichem Verbindungstest mit genau diesen Angaben. Beim ersten Abruf werden nur Mails der letzten 24 Stunden übernommen."
           />
         </div>
       </Card>
