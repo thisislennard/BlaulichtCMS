@@ -88,6 +88,34 @@ export function textFor(rev: { title: string; body: string; excerpt: string; var
 export type PostState = 'draft' | 'in_review' | 'approved' | 'rejected' | 'scheduled' | 'publishing' | 'published' | 'failed' | 'unknown' | 'deactivated';
 
 /** Status eines Beitrags – immer bezogen auf die aktuelle Fassung. */
+/**
+ * Was von einem Beitrag noch öffentlich ist (vor dem Löschen): je aktiver Website der letzte wirksame Auftrag
+ * (veröffentlicht, unterwegs oder ungeklärt bzw. ein noch nicht bestätigter Rückzug) und Social-Posts, die
+ * veröffentlicht, unterwegs oder ungeklärt und nicht als entfernt bestätigt sind.
+ */
+export async function postLive(postId: string, db: Queryable = pool): Promise<{ kind: 'website' | 'social'; id: string; label: string }[]> {
+  const sites = await many<any>(
+    `SELECT * FROM (
+       SELECT DISTINCT ON (pb.site_id) pb.id, pb.action, pb.status, s.name
+         FROM publications pb JOIN wp_sites s ON s.id = pb.site_id AND s.status = 'active'
+        WHERE pb.post_id = $1 AND pb.status NOT IN ('canceled','failed')
+        ORDER BY pb.site_id, pb.created_at DESC) x
+      WHERE (x.action = 'publish' AND x.status IN ('published','sent','unknown')) OR (x.action = 'unpublish' AND x.status IN ('queued','sent','unknown'))`,
+    [postId],
+    db,
+  );
+  const social = await many<any>(
+    `SELECT sp.id, c.name FROM social_publications sp JOIN connections c ON c.id = sp.connection_id
+      WHERE sp.post_id = $1 AND sp.status IN ('publishing','published','unknown') AND sp.removed_at IS NULL`,
+    [postId],
+    db,
+  );
+  return [
+    ...sites.map((s) => ({ kind: 'website' as const, id: s.id, label: `Website „${s.name}“` })),
+    ...social.map((s) => ({ kind: 'social' as const, id: s.id, label: `„${s.name}“` })),
+  ];
+}
+
 export async function postState(postId: string, db: Queryable = pool) {
   const cur = await one<any>(
     `SELECT r.* FROM post_revisions r JOIN posts p ON p.id = r.post_id AND r.number = p.current_revision WHERE p.id = $1`,
@@ -756,6 +784,60 @@ export async function postRoutes(app: FastifyInstance) {
     if (!t) throw notFound();
     await audit(req.auth!.actor, 'template.archived', { type: 'template', id, label: t.name });
     return { ok: true };
+  });
+
+  /**
+   * Abbrechen vor der Veröffentlichung: Eine eingereichte Fassung zurückziehen bzw. eine noch nicht veröffentlichte
+   * Freigabe zurücknehmen – der Beitrag ist danach wieder ein Entwurf. Wer einreichen darf, darf auch abbrechen; das
+   * nimmt nie eine Veröffentlichung vor, sondern verhindert sie nur.
+   */
+  app.post('/posts/:id/withdraw', { preHandler: requireAuth('post.submit') }, async (req) => {
+    const { id } = z.object({ id: z.uuid() }).parse(req.params);
+    await tx(async (db) => {
+      await db.query('SELECT 1 FROM posts WHERE id = $1 FOR UPDATE', [id]);
+      const st = await postState(id, db);
+      if (!st) throw notFound();
+      if (!['in_review', 'approved'].includes(st.state)) throw badRequest('Abbrechen geht nur, solange die Fassung eingereicht oder freigegeben, aber noch nicht veröffentlicht ist.');
+      if (st.validApproval) {
+        const aid = st.validApproval.id;
+        await db.query(`SELECT id FROM publications WHERE approval_id = $1 FOR UPDATE`, [aid]);
+        await db.query(`SELECT id FROM social_publications WHERE approval_id = $1 FOR UPDATE`, [aid]);
+        const busy = await one<any>(
+          `SELECT 1 FROM publications WHERE approval_id = $1 AND action = 'publish' AND status IN ('queued','sent','unknown','published')
+           UNION ALL SELECT 1 FROM social_publications WHERE approval_id = $1 AND status IN ('queued','publishing','unknown','published') LIMIT 1`,
+          [aid],
+          db,
+        );
+        if (busy) throw badRequest('Für diese Freigabe läuft bereits eine Veröffentlichung. Bitte zuerst den Auftrag abbrechen bzw. zurückziehen.');
+        await db.query('UPDATE approvals SET revoked_at = now(), revoked_by = $2 WHERE id = $1', [aid, req.auth!.user?.id ?? null]);
+        await db.query(`UPDATE social_publications SET status = 'canceled', error = 'Abgebrochen', updated_at = now() WHERE approval_id = $1 AND status IN ('failed','ready')`, [aid]);
+      }
+      await db.query('UPDATE post_revisions SET submitted_at = NULL, submitted_by = NULL WHERE id = $1', [st.current.id]);
+      await audit(req.auth!.actor, 'post.withdrawn', { type: 'post', id, label: st.current.title }, { fassung: st.current.number, freigabe_zurueckgenommen: !!st.validApproval }, 'ok', db);
+    });
+    await refreshApprovalNotice('post', { note: 'zurückgezogen' });
+    return { ok: true };
+  });
+
+  /**
+   * Beitrag löschen (Recht „Beiträge löschen“): endgültig mit allen Fassungen, Freigaben und Aufträgen – aber nur, wenn
+   * nichts mehr öffentlich ist. Noch auf einer (aktiven) Website oder in einem sozialen Netzwerk sichtbare
+   * Veröffentlichungen müssen vorher zurückgezogen bzw. entfernt werden; die Antwort nennt sie. Sammlungen, Medien und
+   * Presseanfragen bleiben erhalten (ohne Bezug zum Beitrag). Das Audit-Protokoll behält Titel und Zeitpunkt.
+   */
+  app.delete('/posts/:id', { preHandler: requireAuth('post.delete') }, async (req) => {
+    const { id } = z.object({ id: z.uuid() }).parse(req.params);
+    const res = await tx(async (db) => {
+      const p = await one<any>(`SELECT p.id, r.title, p.current_revision FROM posts p JOIN post_revisions r ON r.post_id = p.id AND r.number = p.current_revision WHERE p.id = $1 FOR UPDATE OF p`, [id], db);
+      if (!p) throw notFound('Beitrag nicht gefunden.');
+      const live = await postLive(id, db);
+      if (live.length) throw new AppError(409, 'post_live', `Der Beitrag ist noch veröffentlicht: ${live.map((l) => l.label).join(', ')}. Bitte zuerst zurückziehen bzw. entfernen.`, { live });
+      await db.query(`DELETE FROM posts WHERE id = $1`, [id]);
+      await audit(req.auth!.actor, 'post.deleted', { type: 'post', id, label: p.title }, { fassungen: p.current_revision }, 'ok', db);
+      return p;
+    });
+    await refreshApprovalNotice('post', { note: 'gelöscht' });
+    return { ok: true, title: res.title };
   });
 
   app.post('/publications/:id/cancel', { preHandler: requireAuth('publish.website') }, async (req) => {

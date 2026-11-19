@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useParams } from 'react-router';
+import { Link, useNavigate, useParams } from 'react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ApiError, get, patch, post, put } from '../../api/client';
+import { ApiError, del, get, patch, post, put } from '../../api/client';
 import type { MediaItem, Publication, Site } from '../../api/types';
 import { usePageMeta } from '../../components/layout/AppShell';
 import { ShareActions } from '../../components/share';
 import { Badge, Button, Card, cx, ErrorBox, FieldWrap, Input, LinkButton, MetaLine, Notice, PageHeader, Rev, Select, SkeletonRows, StatusBadge, Textarea } from '../../components/ui/core';
 import { Icon } from '../../components/ui/Icon';
-import { Dialog, useErrorToast, useToast } from '../../components/ui/overlays';
+import { Dialog, useConfirm, useErrorToast, useToast } from '../../components/ui/overlays';
 import { FormProblems, SaveBar, useFormCheck } from '../../components/ui/form';
 import { useAuth } from '../../lib/auth';
 import { fmtDateTime, fmtRelative, fmtTime, fromLocalInput, plural, toLocalInput } from '../../lib/format';
@@ -199,6 +199,8 @@ function PostEditorInner({ id }: { id: string }) {
   const { can } = useAuth();
   const qc = useQueryClient();
   const toast = useToast();
+  const ask = useConfirm();
+  const navigate = useNavigate();
   const toastError = useErrorToast();
   const q = useQuery({
     queryKey: ['post', id],
@@ -399,6 +401,31 @@ function PostEditorInner({ id }: { id: string }) {
                 }}
               >
                 Fotos sammeln
+              </Button>
+            )}
+            {can('post.delete') && (
+              <Button
+                icon="Trash2"
+                variant="ghost"
+                onClick={async () => {
+                  if (
+                    !(await ask({
+                      title: 'Beitrag löschen?',
+                      text: `„${r.title}“ wird mit allen Fassungen, Freigaben und Aufträgen endgültig gelöscht. Sammlungen und Medien bleiben erhalten. Ist der Beitrag noch auf einer Website oder in einem sozialen Netzwerk veröffentlicht, muss er vorher zurückgezogen bzw. entfernt werden.`,
+                      confirmLabel: 'Endgültig löschen',
+                    }))
+                  )
+                    return;
+                  try {
+                    await del(`/posts/${id}`);
+                    toast({ tone: 'success', title: 'Beitrag gelöscht' });
+                    navigate('/beitraege');
+                  } catch (e) {
+                    toastError(e);
+                  }
+                }}
+              >
+                Löschen
               </Button>
             )}
           </>
@@ -678,6 +705,11 @@ function PostEditorInner({ id }: { id: string }) {
               {d!.state === 'in_review' && (
                 <>
                   <p className="m-0 text-fg-muted">Eingereicht {fmtRelative(r.submitted_at)}.</p>
+                  {can('post.submit') && !dirty && (
+                    <Button size="sm" variant="ghost" icon="Undo2" onClick={() => act(() => post(`/posts/${id}/withdraw`), 'Einreichung zurückgezogen – wieder Entwurf')}>
+                      Einreichung zurückziehen
+                    </Button>
+                  )}
                   {can('approval.post') && !dirty && (
                     <div className="grid grid-cols-2 gap-2">
                       <Button icon="X" onClick={() => setDecision('rejected')}>
@@ -708,10 +740,23 @@ function PostEditorInner({ id }: { id: string }) {
                 </Button>
               )}
               {d!.state === 'scheduled' && d!.publications[0] && <Notice>Geplant für {fmtDateTime(d!.publications[0].run_at)}. Vorher holt die Website den Auftrag nicht ab.</Notice>}
+              {d!.state === 'scheduled' && can('publish.website') && (() => {
+                const queued = d!.publications.find((p) => p.action === 'publish' && p.status === 'queued');
+                return queued ? (
+                  <Button size="sm" icon="X" onClick={() => act(() => post(`/publications/${queued.id}/cancel`), 'Geplante Veröffentlichung abgebrochen')}>
+                    Geplante Veröffentlichung abbrechen
+                  </Button>
+                ) : null;
+              })()}
               {d!.state === 'deactivated' && <Notice tone="warning">Von der Website zurückgezogen. Für eine erneute Veröffentlichung eine neue Fassung freigeben lassen.</Notice>}
               {['published', 'failed', 'unknown'].includes(d!.state) && can('publish.unpublish') && d!.publications.some((p) => p.action === 'publish' && p.status === 'published') && (
                 <Button size="sm" icon="Ban" onClick={() => setUnpublishing(true)}>
                   Von der Website zurückziehen
+                </Button>
+              )}
+              {d!.state === 'approved' && can('post.submit') && !dirty && (
+                <Button size="sm" variant="ghost" icon="Undo2" onClick={() => act(() => post(`/posts/${id}/withdraw`), 'Abgebrochen – wieder Entwurf')}>
+                  Abbrechen – zurück zum Entwurf
                 </Button>
               )}
               {d!.approval && can('approval.post') && !['publishing', 'published', 'scheduled'].includes(d!.state) && (

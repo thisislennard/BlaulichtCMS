@@ -51,6 +51,19 @@ Hinweise (gelb) blockieren nicht: **Trotzdem einreichen** geht, die Freigabe sie
 
 Die Karte **Vorschau** hat einen Reiter je gewähltem Ziel: **Website** (bzw. „Interne Ansicht“), dann jedes soziale Netzwerk und **Story**, wenn ein Netzwerk als Story gewählt ist. Jeder Reiter zeigt den Text, der **tatsächlich gesendet** wird – den eigenen Text für das Netzwerk oder Titel und Kurzfassung bzw. Text, gekürzt nach denselben Regeln wie beim Senden (Zeichenzählung des Netzwerks, „…“ am Ende, der Link zur Website zählt mit, sobald der Beitrag dort veröffentlicht ist). Darunter: Zeichenzahl, Hinweis auf eine Kürzung und **Eigenen Text … schreiben** (springt zum Feld unter „Soziale Netzwerke“). Die Story zeigt die erste Datei im Hochformat.
 
+## Abbrechen und löschen
+
+Ein Beitrag lässt sich in jedem Schritt anhalten – im Kasten **Freigabe und Veröffentlichung**:
+
+| Schritt | Abbrechen | Recht |
+|---|---|---|
+| Eingereicht | **Einreichung zurückziehen** – die Fassung ist wieder ein Entwurf | Beiträge einreichen |
+| Freigegeben, noch nicht veröffentlicht | **Abbrechen – zurück zum Entwurf** – die Freigabe entfällt | Beiträge einreichen |
+| Geplant | **Geplante Veröffentlichung abbrechen** – danach wie „freigegeben“ | Auf Website veröffentlichen |
+| Veröffentlicht | **Von der Website zurückziehen**, in sozialen Netzwerken **Entfernen** | Von Website zurückziehen, Aus sozialen Netzwerken entfernen |
+
+**Löschen** (oben auf der Seite, Recht „Beiträge löschen“) entfernt den Beitrag endgültig mit allen Fassungen, Freigaben und Aufträgen. Das geht erst, wenn nichts mehr öffentlich ist: Steht der Beitrag noch auf einer Website oder in einem sozialen Netzwerk, nennt BlaulichtCMS die Stellen – erst zurückziehen bzw. entfernen, dann löschen. Sammlungen, Medien und Presseanfragen bleiben erhalten; im Audit-Protokoll bleiben Titel und Zeitpunkt.
+
 ## Fassungen
 
 Jedes Speichern mit geändertem Inhalt erzeugt eine neue, unveränderliche **Fassung** (Fassung 1, 2, 3 …). Eine Fassung umfasst Titel, Text, Kurzfassung, Medien in ihrer Reihenfolge, das Titelbild und den Website. Speichern ohne Änderung erzeugt keine neue Fassung.

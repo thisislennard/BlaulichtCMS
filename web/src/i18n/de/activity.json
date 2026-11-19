@@ -92,7 +92,9 @@
       "submitted": "Zur Freigabe eingereicht",
       "approved": "Fassung freigegeben",
       "rejected": "Fassung zurückgewiesen",
-      "approval_revoked": "Freigabe zurückgezogen"
+      "approval_revoked": "Freigabe zurückgezogen",
+      "withdrawn": "Einreichung abgebrochen",
+      "deleted": "Beitrag gelöscht"
     },
     "settings": {
       "changed": "Einstellungen geändert",
@@ -517,7 +519,9 @@
       "submitted": "hat „{o}“ zur Freigabe eingereicht",
       "approved": "hat „{o}“ freigegeben",
       "rejected": "hat „{o}“ zurückgewiesen",
-      "approval_revoked": "hat die Freigabe von „{o}“ zurückgezogen"
+      "approval_revoked": "hat die Freigabe von „{o}“ zurückgezogen",
+      "withdrawn": "hat die Einreichung von „{o}“ abgebrochen",
+      "deleted": "hat den Beitrag „{o}“ gelöscht"
     },
     "settings": {
       "changed": "hat die Systemeinstellungen geändert",

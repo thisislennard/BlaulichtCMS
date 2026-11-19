@@ -43,7 +43,7 @@ alles, was dazugehört, in einer Anwendung auf dem eigenen Server.
 | **Presse** | Presseanfragen mit Fristen, Presse-Postfach, Antworten mit Textbausteinen, Presseverteiler und Pressemitteilungen |
 | **Warnungen** | Warnentwurf für die MoWaS-Übergabe mit Warnstufen-Assistent, Stichwortverzeichnis je Bundesland, amtliche Warnungen |
 | **Einrichtung** | Verbindungen mit Websites, Workflows, Beitragsvorlagen, Upload-Seite |
-| **Verwaltung** | Benutzer und eigene Rollen mit 101 Rechten, Einstellungen, Sicherung, Updates aus der App, Systemstatus |
+| **Verwaltung** | Benutzer und eigene Rollen mit 102 Rechten, Einstellungen, Sicherung, Updates aus der App, Systemstatus |
 
 Dazu: installierbare App für Handy und Computer, Suche über alle Bereiche mit <kbd>Strg</kbd> + <kbd>K</kbd>,
 Hilfe-Center mit 32 Kapiteln, heller und dunkler Modus, vollständig per Tastatur bedienbar.

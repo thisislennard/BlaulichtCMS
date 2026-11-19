@@ -76,6 +76,7 @@ export const PERMISSIONS: PermissionDef[] = [
   P('post.edit', 'editorial', 'write', 'Beiträge bearbeiten', 'Fassungen schreiben und speichern, Medien übernehmen, Art des Beitrags ändern.', ['post.view']),
   P('post.submit', 'editorial', 'write', 'Beiträge einreichen', 'Eine Fassung zur Freigabe einreichen.', ['post.view']),
   P('post.archive', 'editorial', 'write', 'Beiträge archivieren', 'Beiträge archivieren und aus dem Archiv zurückholen.', ['post.view']),
+  P('post.delete', 'editorial', 'critical', 'Beiträge löschen', 'Beiträge mit allen Fassungen endgültig löschen – nur, wenn nichts mehr auf einer Website oder in sozialen Netzwerken veröffentlicht ist.', ['post.view']),
   P('post.templates', 'editorial', 'write', 'Vorlagen verwalten', 'Textvorlagen anlegen, ändern und löschen.', ['post.view']),
   P('source.view', 'editorial', 'read', 'Quellen ansehen', 'Meldungen aus den abonnierten Quellen (RSS) lesen.'),
   P('source.items', 'editorial', 'write', 'Meldungen aus Quellen bearbeiten', 'Meldungen merken oder ausblenden und als Themenidee (Beitragsentwurf) übernehmen.', ['source.view']),
@@ -276,7 +277,7 @@ export const LEGACY_ROLE_PERMISSIONS: Record<string, string[]> = {
  */
 export const ROLE_DEFAULT_ADDITIONS: Record<string, string[]> = {
   media_manager: ['templates.view', 'templates.use', 'templates.manage', 'calendar.view', 'calendar.subscribe'],
-  editor: ['templates.view', 'templates.use', 'templates.manage', 'calendar.view', 'calendar.manage', 'calendar.sources', 'calendar.subscribe', 'insights.view'],
+  editor: ['templates.view', 'templates.use', 'templates.manage', 'calendar.view', 'calendar.manage', 'calendar.sources', 'calendar.subscribe', 'insights.view', 'post.delete'],
   approver: ['templates.view', 'calendar.view', 'calendar.subscribe', 'insights.view'],
   publisher: ['templates.view', 'calendar.view', 'calendar.subscribe', 'insights.view'],
   viewer: ['templates.view', 'calendar.view', 'calendar.subscribe', 'insights.view'],

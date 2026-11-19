@@ -54,6 +54,7 @@ class Client {
   post = (u: string, b: unknown = {}, headers?: Record<string, string>) => this.raw('POST', u, { body: b, headers });
   put = (u: string, b: unknown = {}) => this.raw('PUT', u, { body: b });
   patch = (u: string, b: unknown = {}) => this.raw('PATCH', u, { body: b });
+  del = (u: string) => this.raw('DELETE', u);
 }
 
 function multipart(file: { name: string; data: Buffer; type: string }, fields: Record<string, string> = {}) {
@@ -904,6 +905,65 @@ describe('Redaktion: Vorlagen, Kanaltexte, Termin, Zurückziehen (M2)', () => {
     const jobs = (await anonymous.get('/bridge/jobs', auth())).json.jobs;
     expect(jobs.find((j: any) => j.id === p!.id)).toBeUndefined();
     expect((await one<any>(`SELECT status FROM publications WHERE id = $1`, [p!.id]))!.status).toBe('failed');
+  });
+
+  it('Abbrechen in jedem Schritt; Löschen erst, wenn nichts mehr öffentlich ist', async () => {
+    const id4 = (await editor.post('/posts', { title: 'Löschtest (fiktiv)' })).json.id;
+    const g = async () => (await editor.get(`/posts/${id4}`)).json;
+    let d = await g();
+    await editor.put(`/posts/${id4}/revision`, { baseRevision: d.revision.number, title: 'Löschtest (fiktiv)', body: 'Text.', siteId: site2 });
+    d = await g();
+    const approve = async () => {
+      d = await g();
+      await editor.post(`/posts/${id4}/submit`, { revision: d.revision.number });
+      await approver.post(`/posts/${id4}/decision`, { revision: d.revision.number, contentHash: d.revision.content_hash, decision: 'approved' });
+      d = await g();
+    };
+    // Entwurf: nichts abzubrechen
+    expect((await editor.post(`/posts/${id4}/withdraw`)).status).toBe(400);
+    // Eingereicht → Einreichung zurückziehen
+    await editor.post(`/posts/${id4}/submit`, { revision: d.revision.number });
+    expect((await g()).state).toBe('in_review');
+    expect((await editor.post(`/posts/${id4}/withdraw`)).status).toBe(200);
+    expect((await g()).state).toBe('draft');
+    // Freigegeben → abbrechen nimmt die Freigabe zurück
+    await approve();
+    expect(d.state).toBe('approved');
+    expect((await editor.post(`/posts/${id4}/withdraw`)).status).toBe(200);
+    expect((await g()).state).toBe('draft');
+    expect((await one<any>(`SELECT count(*)::int AS n FROM approvals WHERE post_id = $1 AND revoked_at IS NULL AND decision = 'approved'`, [id4]))!.n).toBe(0);
+    // Beauftragt → Abbrechen erst nach Abbruch des Auftrags
+    await approve();
+    const pub = await publisher.post(`/posts/${id4}/publish`, { revision: d.revision.number, contentHash: d.revision.content_hash });
+    expect((await editor.post(`/posts/${id4}/withdraw`)).status).toBe(400);
+    expect((await publisher.post(`/publications/${pub.json.id}/cancel`)).status).toBe(200);
+    expect((await g()).state).toBe('approved');
+    expect((await editor.post(`/posts/${id4}/withdraw`)).status).toBe(200);
+    // Veröffentlicht → Löschen gesperrt, mit Nennung der Website
+    await approve();
+    await publisher.post(`/posts/${id4}/publish`, { revision: d.revision.number, contentHash: d.revision.content_hash });
+    const jobs = (await anonymous.get('/bridge/jobs', auth())).json.jobs;
+    expect(jobs).toHaveLength(1);
+    const job = jobs[0];
+    await anonymous.post(`/bridge/jobs/${job.id}/result`, { status: 'published', remote_id: 21, url: 'https://zwei.example.org/loeschtest/' }, auth());
+    expect((await g()).state).toBe('published');
+    expect((await approver.del(`/posts/${id4}`)).status).toBe(403);
+    const blocked = await editor.del(`/posts/${id4}`);
+    expect(blocked.status).toBe(409);
+    expect(blocked.json.message).toContain('Zweite Testwebsite');
+    // Zurückziehen; solange der Rückzug nicht bestätigt ist, bleibt Löschen gesperrt
+    await publisher.post(`/posts/${id4}/unpublish`, { reason: 'Löschtest' });
+    expect((await editor.del(`/posts/${id4}`)).status).toBe(409);
+    const un = (await anonymous.get('/bridge/jobs', auth())).json.jobs.find((j: any) => j.type === 'post.unpublish');
+    await anonymous.post(`/bridge/jobs/${un.id}/result`, { status: 'published', remote_id: 21, remote_status: 'draft' }, auth());
+    // Nichts mehr öffentlich → Löschen mit allem, was am Beitrag hängt; Audit behält den Titel
+    const ok = await editor.del(`/posts/${id4}`);
+    expect(ok.status).toBe(200);
+    expect((await editor.get(`/posts/${id4}`)).status).toBe(404);
+    for (const t of ['post_revisions', 'approvals', 'publications']) {
+      expect((await one<any>(`SELECT count(*)::int AS n FROM ${t} WHERE post_id = $1`, [id4]))!.n).toBe(0);
+    }
+    expect((await one<any>(`SELECT object_label FROM audit_events WHERE action = 'post.deleted' AND object_id = $1`, [id4]))?.object_label).toBe('Löschtest (fiktiv)');
   });
 });
 

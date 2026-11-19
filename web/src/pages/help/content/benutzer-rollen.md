@@ -104,6 +104,7 @@ Alle Rechte, nach Bereichen. Die Tabelle entspricht dem Rollen-Editor; „Setzt 
 | Beiträge bearbeiten | ändern | Fassungen schreiben und speichern, Medien übernehmen, Art des Beitrags ändern. | Beiträge ansehen |
 | Beiträge einreichen | ändern | Eine Fassung zur Freigabe einreichen. | Beiträge ansehen |
 | Beiträge archivieren | ändern | Beiträge archivieren und aus dem Archiv zurückholen. | Beiträge ansehen |
+| Beiträge löschen | kritisch | Beiträge mit allen Fassungen endgültig löschen – nur, wenn nichts mehr auf einer Website oder in sozialen Netzwerken veröffentlicht ist. | Beiträge ansehen |
 | Vorlagen verwalten | ändern | Textvorlagen anlegen, ändern und löschen. | Beiträge ansehen |
 | Quellen ansehen | lesen | Meldungen aus den abonnierten Quellen (RSS) lesen. | – |
 | Meldungen aus Quellen bearbeiten | ändern | Meldungen merken oder ausblenden und als Themenidee (Beitragsentwurf) übernehmen. | Quellen ansehen |
