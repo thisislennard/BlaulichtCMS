@@ -7,7 +7,7 @@
 
 <br/><br/>
 
-[![Version](https://img.shields.io/badge/Version-0.8.0-D21F3C)](https://github.com/thisislennard/BlaulichtCMS/releases/latest)
+[![Version](https://img.shields.io/badge/Version-0.8.1-D21F3C)](https://github.com/thisislennard/BlaulichtCMS/releases/latest)
 [![CI](https://github.com/thisislennard/BlaulichtCMS/actions/workflows/ci.yml/badge.svg)](https://github.com/thisislennard/BlaulichtCMS/actions/workflows/ci.yml)
 [![Lizenz: GPL-3.0](https://img.shields.io/badge/Lizenz-GPL--3.0--or--later-blue)](LICENSE)
 ![DSGVO-konform](https://img.shields.io/badge/DSGVO-konform-1E7443)
@@ -42,7 +42,7 @@ alles, was dazugehört, in einer Anwendung auf dem eigenen Server.
 | **Redaktion** | Fotos sammeln per Upload-Link, Sichtung und Medien, Beiträge mit Fassungen, Kalender, Einsatzliste, Banner, Designvorlagen, Quellen |
 | **Presse** | Presseanfragen mit Fristen, Presse-Postfach, Antworten mit Textbausteinen, Presseverteiler und Pressemitteilungen |
 | **Warnungen** | Warnentwurf für die MoWaS-Übergabe mit Warnstufen-Assistent, Stichwortverzeichnis je Bundesland, amtliche Warnungen |
-| **Einrichtung** | Websites, Verbindungen, Workflows, Beitragsvorlagen, Upload-Seite |
+| **Einrichtung** | Verbindungen mit Websites, Workflows, Beitragsvorlagen, Upload-Seite |
 | **Verwaltung** | Benutzer und eigene Rollen mit 101 Rechten, Einstellungen, Sicherung, Updates aus der App, Systemstatus |
 
 Dazu: installierbare App für Handy und Computer, Suche über alle Bereiche mit <kbd>Strg</kbd> + <kbd>K</kbd>,
