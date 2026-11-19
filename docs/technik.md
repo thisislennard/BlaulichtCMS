@@ -393,8 +393,8 @@ Ergebnisse je Verbindung: [docs/integrationen.md](integrationen.md).
   Helfers bei der App geprüft (0.6.1). Das erste Image-Update aus der App (0.6.1 → 0.7.0) scheiterte dort an
   Dateirechten aus der umask des Dienstes, der Rückweg an einem Prüfschritt ohne root-Rechte (#275, behoben in 0.7.1).
   Seitdem läuft der vollständige Weg (Helfer unter systemd → `install.sh` → Build, Selbsttest, Sicherung, Wechsel,
-  Rückweg) in der CI mit echtem Docker. Ein Image-Update aus der App auf dem echten Host steht noch aus; für 0.7.1 ist
-  der Weg von Hand mit `install.sh` empfohlen, der auch den neuen Helfer mitbringt.
+  Rückweg) in der CI mit echtem Docker. 0.7.1 kam von Hand mit `install.sh` (samt neuem Helfer); das erste Image-Update
+  aus der App mit dem korrigierten Helfer auf dem echten Host ist 0.8.0.
 - Sicherung außer Haus und Probe-Wiederherstellung (#212): gegen einen WebDAV-Stellvertreter mit echtem TLS und (SMB) in der CI gegen einen echten Samba-Server getestet;
   mit einem echten Ziel (Windows-/DFS-Freigabe bzw. Synology „WebDAV Server“) und die zeitgesteuerte Probe auf dem Zielhost noch prüfen.
 - Freigabe aus der Push-Mitteilung (#216): Ob ein Gerät Aktionsknöpfe zeigt, entscheidet der Browser; auf echten

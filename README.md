@@ -7,7 +7,7 @@
 
 <br/><br/>
 
-[![Version](https://img.shields.io/badge/Version-0.7.1-D21F3C)](https://github.com/thisislennard/BlaulichtCMS/releases/latest)
+[![Version](https://img.shields.io/badge/Version-0.8.0-D21F3C)](https://github.com/thisislennard/BlaulichtCMS/releases/latest)
 [![CI](https://github.com/thisislennard/BlaulichtCMS/actions/workflows/ci.yml/badge.svg)](https://github.com/thisislennard/BlaulichtCMS/actions/workflows/ci.yml)
 [![Lizenz: GPL-3.0](https://img.shields.io/badge/Lizenz-GPL--3.0--or--later-blue)](LICENSE)
 ![DSGVO-konform](https://img.shields.io/badge/DSGVO-konform-1E7443)
@@ -18,7 +18,7 @@
 </div>
 
 > [!NOTE]
-> **Funktional vollständig.** Mit Version 0.7.1 ist der geplante Funktionsumfang umgesetzt. Weiterentwickelt werden jetzt
+> **Funktional vollständig.** Mit Version 0.8.0 ist der geplante Funktionsumfang umgesetzt. Weiterentwickelt werden jetzt
 > Feinheiten und bei Bedarf weitere Schnittstellen zu anderen Systemen. Alle Screenshots stammen aus einer Testinstanz
 > mit fiktiven Daten.
 
