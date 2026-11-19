@@ -116,6 +116,9 @@ case "$STEP" in
     git -C "$WS" rev-parse --verify -q "$BASE^{commit}" >/dev/null || fail "Tag $BASE fehlt – Checkout mit fetch-depth: 0"
     rm -rf "$TMP/upstream"
     git clone -q --no-local "$WS" "$TMP/upstream"
+    # Nur Ausgangsstand und Testrelease: echte spätere Tags (z. B. v0.8.0) wählte install.sh sonst als neueste Version –
+    # sie sind nicht mit dem CI-Schlüssel signiert und würden zu Recht abgelehnt
+    git -C "$TMP/upstream" tag -l 'v*' | grep -vxF "$BASE" | xargs -r git -C "$TMP/upstream" tag -d >/dev/null
     git -C "$TMP/upstream" branch -f ci-head "$(git -C "$WS" rev-parse HEAD)"
     git -C "$TMP/upstream" checkout -q -B citest "$BASE"
     sudo rm -rf "$UP"; sudo mkdir -p "$(dirname "$UP")"
