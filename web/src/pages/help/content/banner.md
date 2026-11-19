@@ -24,7 +24,7 @@ Vorgabe: Hinweis und Warnung als Banner, Gefahr als Banner und Popup. „Gefahr�
 
 Das **Popup** ist ein Dialog, der den Rest der Seite abdunkelt. Er lässt sich mit **Verstanden**, dem Schließen-Knopf oder der Esc-Taste schließen; die Tastatur bleibt im Dialog, solange er offen ist. Wer ein Popup geschlossen hat, sieht diesen Hinweis im selben Browser nicht erneut – erst wieder, wenn eine neue Fassung veröffentlicht wird.
 
-Für einen einzelnen Hinweis lässt sich die Darstellung in BlaulichtCMS fest wählen (**Nur Banner**, **Nur Popup**, **Banner und Popup**). Die Vorgabe **Nach Schweregrad** folgt der Einstellung der Website. Welche Darstellung eine Website je Schweregrad eingestellt hat, zeigt der Dialog unter „Darstellung“ und die Website-Karte unter [Websites](/websites) (ab Bridge 0.8.0).
+Für einen einzelnen Hinweis lässt sich die Darstellung in BlaulichtCMS fest wählen (**Nur Banner**, **Nur Popup**, **Banner und Popup**). Die Vorgabe **Nach Schweregrad** folgt der Einstellung der Website. Welche Darstellung eine Website je Schweregrad eingestellt hat, zeigt der Dialog unter „Darstellung“ und die Website-Karte unter [Verbindungen → Websites](/verbindungen/websites) (ab Bridge 0.8.0).
 
 ## Banner aus Workflows
 

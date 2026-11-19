@@ -381,7 +381,7 @@ export function auditHref(
       return a.startsWith("warning.") ? "/stichwoerter-regeln" : "/beitragsvorlagen";
     case "site":
     case "plugin":
-      return "/websites";
+      return "/verbindungen/websites";
     case "connection":
       return id ? `/verbindungen/${id}` : "/verbindungen";
     case "rss_feed":

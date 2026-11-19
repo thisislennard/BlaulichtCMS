@@ -126,7 +126,7 @@ mit passenden Rechten sichtbar. Höchstens **6 Bereiche** mit je höchstens **7 
 | Redaktion | Beiträge, Medien (Reiter Sammlungen · Alle Dateien · Papierkorb), Kalender, Einsatzliste, Banner, Designvorlagen, Quellen | Inhalte erstellen |
 | Presse | Presseanfragen (`/presse`), Pressemitteilungen, Presseverteiler, Textbausteine (`/presse/textbausteine`) | Pressearbeit |
 | Warnungen | Warnentwürfe (`/warnungen`), Amtliche Warnungen | Warnen und Warnlage |
-| Einrichtung | Websites (`/websites`), Verbindungen, Workflows (Reiter Workflows · Auslöser · Aktionen), Beitragsvorlagen (`/beitragsvorlagen`), Stichwörter & Regeln (`/stichwoerter-regeln`), Presse-Postfach (`/presse-postfach`), Upload-Seite (`/upload-seite`) | Einmal einrichten, selten ändern |
+| Einrichtung | Verbindungen (mit Unterseite Websites `/verbindungen/websites`), Workflows (Reiter Workflows · Auslöser · Aktionen), Beitragsvorlagen (`/beitragsvorlagen`), Stichwörter & Regeln (`/stichwoerter-regeln`), Presse-Postfach (`/presse-postfach`), Upload-Seite (`/upload-seite`) | Einmal einrichten, selten ändern |
 | Verwaltung | Benutzer und Rollen, Systemstatus, Medienverwaltung (`/medienverwaltung`), Protokolle, Datenschutzanfragen, Einstellungen | Betrieb, Rechte, Datenschutz |
 
 - **Registry:** Neue Module tragen sich nur in `web/src/config/navigation.ts` ein (Bereich, Adresse, Recht, Symbol,
@@ -144,7 +144,7 @@ mit passenden Rechten sichtbar. Höchstens **6 Bereiche** mit je höchstens **7 
   und Fenstertitel sind gleich. Unter- und Detailseiten setzen ihren Titel mit `usePageMeta({ title })`; Seiten ohne
   Menüpunkt ordnen sich mit `usePageMeta({ navId })` einem Bereich zu (Freigabe-Ansicht → Übersicht/Freigaben).
 - **Adressen sprechen** und bleiben gültig: frühere Adressen stehen in `LEGACY_PATHS` (`navigation.ts`) und leiten samt
-  Unterpfad, Suche und Anker weiter (z. B. `/kanaele` → `/websites`, `/warnungen/pflege` → `/stichwoerter-regeln`).
+  Unterpfad, Suche und Anker weiter (z. B. `/kanaele` und `/websites` → `/verbindungen/websites`, `/warnungen/pflege` → `/stichwoerter-regeln`).
   `/einrichtung` bleibt die Ersteinrichtung.
 - **Hinweise auf Menüpfade** („unter Einrichtung → Websites“) nutzen `navTrail(id)` aus `config/navText.ts` bzw. in der
   Hilfe die tatsächlichen Bezeichnungen; `server/test/navigation.test.ts` prüft die Hilfe-Links.

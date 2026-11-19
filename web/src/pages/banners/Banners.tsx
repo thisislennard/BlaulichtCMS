@@ -12,7 +12,6 @@ import { useAuth } from '../../lib/auth';
 import { useLinkedItem } from '../../lib/linked-item';
 import { useListState } from '../../lib/listState';
 import { rank, searchTerms } from '../../lib/searchText';
-import { navPath } from '../../config/navigation';
 import { fmtDateTime, fromLocalInput, toLocalInput } from '../../lib/format';
 
 interface Banner {
@@ -298,7 +297,7 @@ export default function Banners() {
           icon="Megaphone"
           title="Noch keine Banner."
           text={!can('banner.edit') ? 'Banner legt die Redaktion an.' : activeSites.length ? 'Ein Banner erscheint zeitgesteuert als Hinweis auf der Website.' : 'Für Banner muss zuerst eine Website gekoppelt sein.'}
-          action={can('banner.edit') && can('channel.view') && (activeSites.length ? <Button icon="Plus" onClick={() => setEdit(null)}>Neues Banner</Button> : can('channel.sites') && <EmptyAction to={navPath('sites')}>Website koppeln</EmptyAction>)}
+          action={can('banner.edit') && can('channel.view') && (activeSites.length ? <Button icon="Plus" onClick={() => setEdit(null)}>Neues Banner</Button> : can('channel.sites') && <EmptyAction to={'/verbindungen/websites'}>Website koppeln</EmptyAction>)}
         />
       )}
       {!!q.data?.length && !rows.length &&

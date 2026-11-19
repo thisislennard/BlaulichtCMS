@@ -31,6 +31,8 @@ export const KINDS = [
   { id: 'bluesky', dir: 'out', label: 'Bluesky-Konto', name: 'Bluesky', icon: 'Cloud', text: 'Freigegebene Beiträge mit Text, bis zu 4 Bildern samt Alternativtext und Link-Vorschaukarte – mit App-Passwort.' },
   { id: 'whatsapp', dir: 'out', label: 'WhatsApp-Kanal', name: 'WhatsApp-Kanal', icon: 'MessageCircle', text: 'Teilen von Hand: Text, Link und Bilder vorbereitet, geteilt wird in WhatsApp.' },
 ] as const;
+/** Website (WordPress) im Dialog „Neue Verbindung“: führt zum Koppeln unter Verbindungen → Websites. */
+const WEBSITE_KIND = { id: 'website', dir: 'out', label: 'Website (WordPress)', name: 'Website', icon: 'Globe', text: 'Freigegebene Beiträge, Banner und Einsatzliste auf eurer WordPress-Website – über das Plugin BlaulichtCMS Bridge.' } as const;
 const DIRS = [
   { id: 'in', title: 'Eingehend', subtitle: 'Einsätze und Warnungen, die BlaulichtCMS empfängt' },
   { id: 'out', title: 'Veröffentlichen', subtitle: 'Websites und soziale Netzwerke, an die BlaulichtCMS freigegebene Beiträge sendet' },
@@ -43,22 +45,24 @@ export default function Connections() {
   const toastError = useErrorToast();
   const { can, me } = useAuth();
   const configure = can('connection.configure');
+  const pairSites = can('channel.sites');
   // Suche, Art, Status und „Gelöschte anzeigen“ in der Adresse (#260)
   const ls = useListState({ suche: '', art: '', status: '', geloeschte: '' });
   const showDeleted = ls.values.geloeschte === '1' && can('connection.delete');
   const setShowDeleted = (v: boolean) => ls.set({ geloeschte: v ? '1' : '' });
-  const q = useQuery({ queryKey: ['connections', showDeleted], queryFn: () => get<any[]>(`/connections${showDeleted ? '?deleted=1' : ''}`) });
+  const q = useQuery({ queryKey: ['connections', showDeleted], queryFn: () => get<any[]>(`/connections${showDeleted ? '?deleted=1' : ''}`), enabled: can('connection.view') });
   const terms = searchTerms(ls.values.suche);
   const all = q.data ?? [];
   const rows = all.filter((c) => (!terms.length || rank(terms, c.name, `${c.kind_label} ${c.account?.name ?? ''} ${c.account?.username ?? ''}`) !== null) && (!ls.values.art || c.kind === ls.values.art) && (!ls.values.status || c.status === ls.values.status));
   const kinds = [...new Map(all.map((c) => [c.kind, c.kind_label] as [string, string])).entries()];
-  // Websites sind Veröffentlichungsziele mit eigener Seite (#271): hier mit Verweis aufgelistet
+  // Websites sind Veröffentlichungsziele mit eigener Unterseite (Verbindungen → Websites)
   const sitesQ = useQuery({ queryKey: ['sites'], queryFn: () => get<Site[]>('/sites'), enabled: can('channel.view') });
   const sites = (sitesQ.data ?? []).filter((s) => s.status !== 'revoked' && (!terms.length || rank(terms, s.name, 'Website WordPress') !== null) && !ls.values.art && !ls.values.status);
   // Nichts vorausgewählt; Name aus Art und Organisation vorgeschlagen, solange nichts Eigenes eingetragen ist
   const [create, setCreate] = useState<{ kind: string; name: string; touched: boolean } | null>(null);
   const org = me?.instance.organization || me?.instance.name || '';
   const suggest = (kind: string) => {
+    if (kind === 'website') return (org ? `Website ${org}` : 'Website').slice(0, 80);
     const k = KINDS.find((x) => x.id === kind);
     return k ? `${k.name}${org ? ` ${org}` : ''}`.slice(0, 100) : '';
   };
@@ -68,6 +72,7 @@ export default function Connections() {
   });
   const [token, setToken] = useState<{ id: string; token: string } | null>(null);
   const submit = async () => {
+    if (create!.kind === 'website') return nav('/verbindungen/websites', { state: { koppeln: create!.name.trim().slice(0, 80) } });
     try {
       const r = await post<{ id: string; token: string | null }>('/connections', { kind: create!.kind, name: create!.name.trim() });
       setCreate(null);
@@ -82,7 +87,7 @@ export default function Connections() {
       <PageHeader
         subtitle="Optional: Jede Verbindung durchläuft Verbinden → Testen → Vorschau → Aktivieren. BlaulichtCMS funktioniert auch ganz ohne."
         actions={
-          configure && (
+          (configure || pairSites) && (
             <Button variant="primary" icon="Plus" onClick={() => (check.reset(), setCreate({ kind: '', name: '', touched: false }))}>
               Neue Verbindung
             </Button>
@@ -103,12 +108,12 @@ export default function Connections() {
       {configure && can('connection.delete') && <Switch checked={showDeleted} onChange={setShowDeleted} label="Gelöschte anzeigen" description="Auch widerrufene und gelöschte Verbindungen – zur Nachvollziehbarkeit, ohne Zugangsdaten." />}
       {q.isLoading && <SkeletonRows rows={4} />}
       {q.error && <ErrorBox title="Verbindungen konnten nicht geladen werden">{(q.error as Error).message}</ErrorBox>}
-      {q.data?.length === 0 && (
+      {(q.data?.length ?? 0) === 0 && !q.isLoading && !sitesQ.isLoading && !sites.length && !terms.length && (
         <EmptyState
           icon="Plug"
           title="Noch keine Verbindung."
-          text={configure ? 'Facebook, Instagram, Threads, X, WhatsApp-Kanal, FE2, Feuersoftware Connect oder amtliche Warnungen lassen sich hier anbinden.' : 'Verbindungen richtet ein, wer Verbindungen verwalten darf.'}
-          action={configure && <Button icon="Plus" onClick={() => (check.reset(), setCreate({ kind: '', name: '', touched: false }))}>Neue Verbindung</Button>}
+          text={configure || pairSites ? 'Eure WordPress-Website, Facebook, Instagram, Threads, X, WhatsApp-Kanal, FE2, Feuersoftware Connect oder amtliche Warnungen lassen sich hier anbinden.' : 'Verbindungen richtet ein, wer Verbindungen verwalten darf.'}
+          action={(configure || pairSites) && <Button icon="Plus" onClick={() => (check.reset(), setCreate({ kind: '', name: '', touched: false }))}>Neue Verbindung</Button>}
         />
       )}
       {all.length > 0 && !rows.length && <FilterEmpty onReset={() => ls.reset(['geloeschte'])} />}
@@ -125,13 +130,13 @@ export default function Connections() {
                 </h2>
                 <p className="m-0 text-meta text-fg-muted">{dir.subtitle}</p>
               </div>
-              {withSites && <LinkButton to="/websites" size="sm" variant="ghost" icon="Globe">Websites verwalten</LinkButton>}
+              {withSites && <LinkButton to="/verbindungen/websites" size="sm" variant="ghost" icon="Globe">Websites verwalten</LinkButton>}
             </div>
             <div className="grid gap-3 md:grid-cols-2">
               {withSites &&
                 sites.map((s) => (
                   <Card key={`site-${s.id}`}>
-                    <Link to="/websites" className="w-full flex flex-col gap-2 no-underline !text-fg">
+                    <Link to="/verbindungen/websites" className="w-full flex flex-col gap-2 no-underline !text-fg">
                       <div className="flex items-center gap-2 flex-wrap">
                         <Icon name="Globe" size={16} />
                         <strong>{s.name}</strong>
@@ -142,7 +147,7 @@ export default function Connections() {
                         {s.last_seen_at && <span className="text-meta text-fg-muted">zuletzt gemeldet {fmtRelative(s.last_seen_at)}</span>}
                       </div>
                       <span className="text-sm text-fg-muted inline-flex items-center gap-1">
-                        Eingerichtet unter Websites <Icon name="ArrowRight" size={13} />
+                        Kopplung, Bridge und Updates <Icon name="ArrowRight" size={13} />
                       </span>
                     </Link>
                   </Card>
@@ -205,16 +210,16 @@ export default function Connections() {
                   {check.error('c-kind')}
                 </p>
               )}
-              {DIRS.map((dir) => (
+              {DIRS.filter((dir) => configure || (dir.id === 'out' && pairSites)).map((dir) => (
                 <div key={dir.id} className="flex flex-col gap-2">
                   <div>
                     <h3 id={`new-${dir.id}`} className="m-0 text-sm font-semibold">
                       {dir.title}
                     </h3>
-                    <p className="m-0 text-meta text-fg-muted">{dir.subtitle}{dir.id === 'out' ? ' – Websites koppelt man unter Websites.' : ''}</p>
+                    <p className="m-0 text-meta text-fg-muted">{dir.subtitle}</p>
                   </div>
                   <div role="radiogroup" aria-labelledby={`new-${dir.id}`} aria-required="true" className="grid gap-2 sm:grid-cols-2">
-                    {KINDS.filter((k) => k.dir === dir.id).map((k) => (
+                    {[...(dir.id === 'out' && pairSites ? [WEBSITE_KIND] : []), ...(configure ? KINDS.filter((k) => k.dir === dir.id) : [])].map((k) => (
                       <button
                         key={k.id}
                         type="button"

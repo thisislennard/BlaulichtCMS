@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { del, download, get, post } from '../../api/client';
 import type { Site } from '../../api/types';
@@ -7,7 +7,8 @@ import { put } from '../../api/client';
 import { Icon } from '../../components/ui/Icon';
 import { CopyButton, Dialog, useErrorToast, useConfirm } from '../../components/ui/overlays';
 import { HelpLink, HelpTip } from '../../components/ui/HelpTip';
-import { Link } from 'react-router';
+import { Link, useLocation, useNavigate } from 'react-router';
+import { usePageMeta } from '../../components/layout/AppShell';
 import { useAuth } from '../../lib/auth';
 import { fmtDateTime, fmtRelative } from '../../lib/format';
 import { safeHref } from '../../lib/url';
@@ -107,8 +108,17 @@ export default function Sites() {
   const toastError = useErrorToast();
   const manage = can('channel.sites');
   const q = useQuery({ queryKey: ['sites'], queryFn: () => get<Site[]>('/sites'), refetchInterval: 15_000 });
-  const [name, setName] = useState('');
-  const [adding, setAdding] = useState(false);
+  // Unterseite von Verbindungen (Einrichtung / Verbindungen / Websites)
+  usePageMeta({ title: 'Websites', help: 'wordpress' });
+  // „Neue Verbindung → Website“ öffnet hier direkt das Koppeln, mit dem dort gewählten Namen
+  const loc = useLocation();
+  const navigate = useNavigate();
+  const pairName = manage ? (loc.state as { koppeln?: string } | null)?.koppeln : undefined;
+  const [name, setName] = useState(pairName ?? '');
+  const [adding, setAdding] = useState(pairName !== undefined);
+  useEffect(() => {
+    if (pairName !== undefined) navigate(loc.pathname + loc.search, { replace: true, state: null });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const [pairing, setPairing] = useState<Pairing | null>(null);
   const refresh = () => qc.invalidateQueries({ queryKey: ['sites'] });
   return (

@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import { get } from '../../api/client';
-import { navigation, navPath } from '../../config/navigation';
+import { navigation } from '../../config/navigation';
 import { SETTINGS_INDEX } from '../../config/settingsIndex';
 import { t } from '../../i18n';
 import { useAuth } from '../../lib/auth';
@@ -94,12 +94,14 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
         if (it.adminOnly ? !isPlatformAdmin : it.perm && !canAny(...it.perm)) continue;
         pages.push({ id: `nav-${it.id}`, title: t(it.label), subtitle: t(g.group), icon: it.icon, href: it.path, group: 'Seiten', extra: t(g.group) });
       }
+    // Websites sind eine Unterseite von Verbindungen (kein eigener Menüpunkt), bleiben aber per Suche erreichbar
+    if (can('channel.view')) pages.push({ id: 'nav-sites', title: 'Websites', subtitle: 'Einrichtung · Verbindungen', icon: 'Globe', href: '/verbindungen/websites', group: 'Seiten', extra: 'WordPress Bridge Kopplung Plugin' });
     pages.push({ id: 'nav-help', title: t('nav.help'), subtitle: 'Anleitungen und Nachschlagewerk', icon: 'LifeBuoy', href: '/hilfe', group: 'Seiten', extra: 'Anleitung Handbuch' });
     pages.push({ id: 'nav-profile', title: t('nav.profile'), subtitle: 'Passwort, Zwei-Faktor, Benachrichtigungen', icon: 'User', href: '/profil', group: 'Seiten', extra: 'Profil Passwort' });
     const actions: (Entry & { extra: string })[] = [];
     if (can('post.create')) actions.push({ id: 'act-new', title: 'Neuer Beitrag', subtitle: 'Aktion', icon: 'Plus', href: '/?aktion=beitrag', group: 'Aktionen', extra: 'Beitrag schreiben' });
     if (can('media.collections')) actions.push({ id: 'act-media', title: 'Fotos sammeln', subtitle: 'Aktion · Sammlung mit Upload-Link', icon: 'Camera', href: '/?aktion=medien', group: 'Aktionen', extra: 'Upload-Link Sammlung Medien QR-Code' });
-    if (can('channel.sites')) actions.push({ id: 'act-site', title: 'Website koppeln', subtitle: 'Aktion', icon: 'Globe', href: navPath('sites'), group: 'Aktionen', extra: 'WordPress Bridge' });
+    if (can('channel.sites')) actions.push({ id: 'act-site', title: 'Website koppeln', subtitle: 'Aktion', icon: 'Globe', href: '/verbindungen/websites', group: 'Aktionen', extra: 'WordPress Bridge' });
     const local = (list: (Entry & { extra: string })[]) =>
       !terms.length
         ? list

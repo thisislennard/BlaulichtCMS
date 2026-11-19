@@ -144,7 +144,7 @@ async function bridgeAuthFailed(req: FastifyRequest, reason: string, site: { id:
   // Melden nur bei Schlüsseln im Bridge-Format (falsch/unbekannt) – nicht bei Abrufen ohne Schlüssel (Scanner) oder
   // einer widerrufenen Website, die weiter fragt (#101)
   if (reason === 'Schlüssel falsch' || reason === 'Schlüssel unbekannt') {
-    await securityAlert('bridge_auth', { title: `Bridge-Anmeldung mit ungültigem Schlüssel${site ? ` für „${site.name}“` : ''}`, body: `Von ${req.ip}: ${reason}. Ist der Schlüssel abgeflossen, die Kopplung widerrufen und neu koppeln.`, link: '/websites', throttleKey: `${site?.id ?? '-'}:${req.ip}` });
+    await securityAlert('bridge_auth', { title: `Bridge-Anmeldung mit ungültigem Schlüssel${site ? ` für „${site.name}“` : ''}`, body: `Von ${req.ip}: ${reason}. Ist der Schlüssel abgeflossen, die Kopplung widerrufen und neu koppeln.`, link: '/verbindungen/websites', throttleKey: `${site?.id ?? '-'}:${req.ip}` });
   }
   await auditThrottled(`bridge:${req.ip}:${site?.id ?? '-'}:${reason}`, 10 * 60_000, { id: null, name: 'WordPress-Bridge', type: 'system', ip: req.ip }, 'bridge.auth', { type: 'site', id: site?.id ?? null, label: site?.name ?? null }, { grund: reason, route: req.routeOptions?.url ?? null }, 'failed').catch(() => {});
 }
@@ -419,8 +419,8 @@ export async function bridgeRoutes(app: FastifyInstance) {
     );
     if (!updated) throw new AppError(409, 'pairing_used', 'Der Kopplungscode wurde bereits verwendet.');
     await audit({ id: null, name: `Website „${site.name}“ (Bridge)`, type: 'system', ip: req.ip }, 'site.paired', { type: 'site', id: site.id, label: site.name }, { url: body.site_url });
-    await notify({ kind: 'success', title: `Website „${site.name}“ gekoppelt`, body: body.site_url, link: '/websites', permission: 'channel.sites' });
-    await securityAlert('site_paired', { title: `Neue Website gekoppelt: „${site.name}“`, body: `${body.site_url} von ${req.ip}. Die Website kann ab sofort freigegebene Beiträge abholen.`, link: '/websites', kind: 'info' });
+    await notify({ kind: 'success', title: `Website „${site.name}“ gekoppelt`, body: body.site_url, link: '/verbindungen/websites', permission: 'channel.sites' });
+    await securityAlert('site_paired', { title: `Neue Website gekoppelt: „${site.name}“`, body: `${body.site_url} von ${req.ip}. Die Website kann ab sofort freigegebene Beiträge abholen.`, link: '/verbindungen/websites', kind: 'info' });
     return { key, site_id: site.id, site_name: site.name, api_version: BRIDGE_API_VERSION, poll_interval: POLL_SECONDS, blaulichtcms_url: await publicBase(req) };
   });
 
@@ -570,7 +570,7 @@ export async function bridgeRoutes(app: FastifyInstance) {
       return s;
     });
     if (s) await notifyFeedsDisabled(site.name, s.disabledFeeds);
-    await notify({ kind: 'warning', title: `Website „${site.name}“ hat die Kopplung gelöst`, link: '/websites', permission: 'channel.sites' });
+    await notify({ kind: 'warning', title: `Website „${site.name}“ hat die Kopplung gelöst`, link: '/verbindungen/websites', permission: 'channel.sites' });
     return { ok: true };
   });
 

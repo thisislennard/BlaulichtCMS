@@ -333,7 +333,7 @@ try {
   /* ------------------------------------------------------------------ WordPress koppeln */
   let pairingCode = '';
   await step('BlaulichtCMS Bridge als ZIP aus BlaulichtCMS herunterladen und in WordPress installieren', async () => {
-    await page.goto(`${BC}/websites`);
+    await page.goto(`${BC}/verbindungen/websites`);
     const [dl] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Bridge herunterladen' }).click()]);
     fs.mkdirSync(path.join(ROOT, 'test/wordpress/tmp'), { recursive: true });
     await dl.saveAs(path.join(ROOT, 'test/wordpress/tmp/blaulichtcms-bridge.zip'));

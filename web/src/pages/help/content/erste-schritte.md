@@ -35,5 +35,5 @@ Nach der Ersteinrichtung steht oben im [Dashboard](/) die Kachel **BlaulichtCMS 
 
 1. Ersteinrichtung abschließen (Organisation, öffentliche Adresse, Zeitzone) – siehe [Einrichtung](/hilfe/einrichtung).
 2. Unter [Benutzer und Rollen](/benutzer) die Redaktion einladen. Jede Person bekommt einen persönlichen, einmaligen Link; neue Konten sehen nach der Anmeldung einmal die ersten Schritte ihrer Rolle.
-3. Optional unter [Websites](/websites) die WordPress-Website koppeln – siehe [WordPress verbinden](/hilfe/wordpress).
+3. Optional unter [Verbindungen → Websites](/verbindungen/websites) die WordPress-Website koppeln – siehe [WordPress verbinden](/hilfe/wordpress).
 4. Einen Testbeitrag anlegen und den ganzen Ablauf einmal durchspielen.

@@ -518,7 +518,7 @@ export default function SystemStatus() {
         {!d ? (
           <SkeletonRows rows={3} className="px-5" />
         ) : d.sites.length === 0 ? (
-          <EmptyLine className="px-5 pb-3" action={can("channel.sites") && <EmptyAction to="/websites">Website koppeln</EmptyAction>}>
+          <EmptyLine className="px-5 pb-3" action={can("channel.sites") && <EmptyAction to="/verbindungen/websites">Website koppeln</EmptyAction>}>
             Noch keine Website gekoppelt – der interne Redaktionsablauf funktioniert auch ohne.
           </EmptyLine>
         ) : (
@@ -536,7 +536,7 @@ export default function SystemStatus() {
                 <tr key={c.id} className="hover:bg-raised transition-colors duration-fast">
                   <Td className="pl-5">
                     {can("channel.view") ? (
-                      <Link to="/websites" className="font-medium">
+                      <Link to="/verbindungen/websites" className="font-medium">
                         {c.name}
                       </Link>
                     ) : (

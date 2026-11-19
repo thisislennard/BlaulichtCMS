@@ -72,8 +72,7 @@ export const navigation: NavGroup[] = [
   {
     group: 'nav.setup',
     items: [
-      { id: 'sites', path: '/websites', label: 'nav.sites', icon: 'Globe', perm: ['channel.view'], help: 'wordpress' },
-      { id: 'connections', path: '/verbindungen', label: 'nav.connections', icon: 'Plug', perm: ['connection.configure'], help: 'verbindungen' },
+      { id: 'connections', path: '/verbindungen', label: 'nav.connections', icon: 'Plug', perm: ['connection.configure', 'channel.view'], help: 'verbindungen' },
       { id: 'automations', path: '/workflows', label: 'nav.automations', icon: 'Workflow', perm: ['automation.read'], help: 'workflows' },
       { id: 'templates', path: '/beitragsvorlagen', label: 'nav.templates', icon: 'LayoutTemplate', perm: ['post.templates'], help: 'beitraege#beitragsvorlagen' },
       { id: 'warningConfig', path: '/stichwoerter-regeln', label: 'nav.warningConfig', icon: 'ListChecks', perm: ['warning.rules', 'warning.approve', 'warning.settings'], help: 'stichwoerter-regeln' },
@@ -129,7 +128,8 @@ export const PAGE_HELP: Record<string, string> = { '/profil': 'anmeldung', '/hil
  * (siehe App.tsx).
  */
 export const LEGACY_PATHS: Record<string, string> = {
-  '/kanaele': '/websites',
+  '/kanaele': '/verbindungen/websites',
+  '/websites': '/verbindungen/websites',
   '/vorlagen': '/beitragsvorlagen',
   '/warnungen/pflege': '/stichwoerter-regeln',
   '/medien/gestaltung': '/upload-seite',

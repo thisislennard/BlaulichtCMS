@@ -96,7 +96,7 @@ try {
   for (const b of [/^Neuer Link/, /^Hochladen/, /^Neuer Ordner/, /ZIP/]) check(!(await hasButton(b)), `Sammlung: keine Schaltfläche ${b}`);
   check(await hasButton(/sichten$/i), 'Sammlung: „Sichten“ ist da (erlaubt)');
 
-  for (const route of ['/benutzer', '/einstellungen', '/medien/papierkorb', '/websites', '/banner', '/verbindungen', '/warnungen', '/protokolle', '/system', '/quellen', '/aktivitaeten', '/datenschutz-anfragen', '/upload-seite', '/medienverwaltung', '/stichwoerter-regeln', '/presse-postfach']) {
+  for (const route of ['/benutzer', '/einstellungen', '/medien/papierkorb', '/verbindungen/websites', '/banner', '/verbindungen', '/warnungen', '/protokolle', '/system', '/quellen', '/aktivitaeten', '/datenschutz-anfragen', '/upload-seite', '/medienverwaltung', '/stichwoerter-regeln', '/presse-postfach']) {
     await go(route);
     check(/Kein Zugriff/.test(await page.locator('main, body').first().innerText()), `${route}: „Kein Zugriff“`);
   }

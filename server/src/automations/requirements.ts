@@ -54,7 +54,7 @@ function evaluate(r: TemplateRequirement, f: Facts): RequirementStatus {
     }
     case 'website': {
       const active = f.sites.filter((s) => s.status === 'active');
-      const fix = { path: '/websites', label: 'Website koppeln', permission: 'channel.sites' };
+      const fix = { path: '/verbindungen/websites', label: 'Website koppeln', permission: 'channel.sites' };
       if (active.length) return { key, label: 'Website', met: true, detail: quoted(active.map((s) => s.name)), fix };
       return { key, label: 'Website', met: false, detail: f.sites.length ? 'Kopplung noch nicht abgeschlossen' : 'noch keine Website gekoppelt', fix };
     }

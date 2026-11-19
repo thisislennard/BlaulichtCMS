@@ -219,7 +219,7 @@ export async function setupChecklist(perms: ReadonlySet<string>): Promise<Checkl
       : sites.length
         ? `${sites[0].name}: Kopplung begonnen, die Website hat sich noch nicht gemeldet.`
         : 'Ohne Website funktioniert der interne Ablauf genauso; veröffentlicht wird dann nicht automatisch.',
-    href: '/websites',
+    href: '/verbindungen/websites',
     permission: 'channel.sites',
   });
 

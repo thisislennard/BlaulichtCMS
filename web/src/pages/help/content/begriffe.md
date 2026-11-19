@@ -4,7 +4,7 @@ Jedes Wort hat in BlaulichtCMS genau eine Bedeutung. So heißen die Dinge in Men
 
 | Begriff | Bedeutung |
 |---|---|
-| **Website** | Eine über die BlaulichtCMS Bridge gekoppelte WordPress-Website. Im Beitrag das Ziel „Veröffentlichen auf“. Eingerichtet unter [Einrichtung → Websites](/websites). |
+| **Website** | Eine über die BlaulichtCMS Bridge gekoppelte WordPress-Website. Im Beitrag das Ziel „Veröffentlichen auf“. Eingerichtet unter [Einrichtung → Verbindungen → Websites](/verbindungen/websites). |
 | **Soziale Netzwerke** | Facebook, Instagram, Threads, X, Mastodon, Bluesky und der WhatsApp-Kanal (so heißt der Dienst bei WhatsApp). |
 | **Veröffentlichungsziele** | Website und soziale Netzwerke zusammen. Sie sind Teil der Fassung. |
 | **Bridge** | Das WordPress-Plugin „BlaulichtCMS Bridge“, das freigegebene Aufträge abholt. |

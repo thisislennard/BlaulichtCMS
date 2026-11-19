@@ -151,7 +151,7 @@ export function WidgetBody({ id, d }: { id: string; d: any }) {
       return <ReadyPanel d={d} />;
     case 'publications':
       return !d.publications?.length ? (
-        <EmptyLine action={can('channel.sites') && !d.sites?.length ? <EmptyAction to="/websites">Website koppeln</EmptyAction> : undefined}>Noch keine Veröffentlichung.</EmptyLine>
+        <EmptyLine action={can('channel.sites') && !d.sites?.length ? <EmptyAction to="/verbindungen/websites">Website koppeln</EmptyAction> : undefined}>Noch keine Veröffentlichung.</EmptyLine>
       ) : (
         <List>
           {d.publications.map((p: any) => (
@@ -196,7 +196,7 @@ export function WidgetBody({ id, d }: { id: string; d: any }) {
       );
     case 'sites':
       return !d.sites?.length ? (
-        <EmptyLine action={can('channel.sites') ? <EmptyAction to="/websites">Website koppeln</EmptyAction> : undefined}>Noch keine Website gekoppelt – der interne Ablauf funktioniert auch ohne.</EmptyLine>
+        <EmptyLine action={can('channel.sites') ? <EmptyAction to="/verbindungen/websites">Website koppeln</EmptyAction> : undefined}>Noch keine Website gekoppelt – der interne Ablauf funktioniert auch ohne.</EmptyLine>
       ) : (
         <ul className="m-0 p-0 list-none flex flex-col gap-2 text-sm">
           {d.sites.map((s: any) => (
@@ -609,7 +609,7 @@ function FlowBoard({ d }: { d: any }) {
                 )}
               </FlowCard>
             ))}
-            <More to="/websites" n={pubs.length - 2} />
+            <More to="/verbindungen/websites" n={pubs.length - 2} />
             {!pubs.length && <p className="m-0 px-0.5 text-meta text-fg-muted">Noch nichts veröffentlicht.</p>}
           </FlowColumn>
         )}
@@ -620,7 +620,7 @@ function FlowBoard({ d }: { d: any }) {
 
 const LINKS: Record<string, [string, string]> = {
   approvals: ['/freigaben', 'Alle'],
-  sites: ['/websites', 'Verwalten'],
+  sites: ['/verbindungen/websites', 'Verwalten'],
   banners: ['/banner', 'Alle'],
   rss: ['/quellen', 'Alle'],
   uploads: ['/medien', 'Alle'],
