@@ -25,11 +25,15 @@ Log-Rotation, Limits. Bei Änderungen an Compose/Skripten den Ablauf von `instal
   signieren (`node scripts/bridge-signing.mjs sign C:/Users/thisi/Documents/VScode/BlaulichtCMS-bridge-signing.pem`,
   dann `node scripts/bridge-signing.mjs verify`, siehe `docs/bridge-signatur.md`) – sonst scheitert die CI. Der private Schlüssel gehört nie ins Repository.
 - Migrationen additiv, eine neue Datei je Änderung (`server/migrations/NNN_name.sql`).
-- **Vor jedem Release die README aktualisieren** (verbindlich): Funktionsübersicht mit allen neuen bzw. umbenannten
-  Funktionen, Versions-Badge und Hinweis, Zahlen (Rechte aus `server/src/auth/permissions.ts`, Hilfe-Kapitel unter
+- **Vor jedem Release die README aktualisieren** (verbindlich). Die README ist bewusst knapp und hat genau diese
+  Abschnitte: Projektumfang, Idee, Schnittstellen, Workflows, Technische Umsetzung. Neue Module, Schnittstellen oder
+  Workflow-Bausteine dort ergänzen (Tabelle bzw. Liste) und die Grafiken in `docs/grafik/` mitziehen: Inhalte stehen
+  oben in `scripts/readme-grafiken.mjs`, danach `node scripts/readme-grafiken.mjs` (erzeugt hell + dunkel). Dazu
+  Versions-Badge und Hinweis, Zahlen (Rechte aus `server/src/auth/permissions.ts`, Hilfe-Kapitel unter
   `web/src/pages/help/content/`), Screenshots in `docs/bilder/` neu aufnehmen, wenn sich die Oberfläche sichtbar
   geändert hat (Testinstanz mit fiktiven Daten, keine echten Namen, keine Schlüssel/Codes im Bild, heller Modus, WebP).
-  Keine sicherheitskritischen Details in die README.
+  Sicherheit und Datenschutz in der README nur als Aussage („DSGVO-konform und nach BSI IT-Grundschutz geprüft“),
+  keine Einzelheiten – die stehen in `docs/`.
 
 ## Lokal ohne Docker (Windows)
 
