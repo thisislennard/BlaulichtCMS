@@ -34,6 +34,17 @@ jobs:
           cache: npm
       - name: pdftotext für die PDF-Tests
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends poppler-utils
+      - name: Samba-Freigabe und smbclient für die Sicherung außer Haus über SMB (test/backup-offsite-smb.test.ts)
+        run: |
+          sudo apt-get install -y --no-install-recommends samba smbclient
+          sudo useradd -M -s /usr/sbin/nologin bcsmb
+          printf 'Freigabe-Test-2026\nFreigabe-Test-2026\n' | sudo smbpasswd -s -a bcsmb
+          sudo mkdir -p /srv/smbtest
+          sudo chown "$(id -un):$(id -gn)" /srv/smbtest
+          # Dateien über SMB gehören dem Testbenutzer, damit der Test sie direkt prüfen kann
+          printf '[bctest]\n  path = /srv/smbtest\n  read only = no\n  valid users = bcsmb\n  force user = %s\n  browseable = no\n' "$(id -un)" | sudo tee -a /etc/samba/smb.conf
+          sudo systemctl restart smbd
+          smbclient //127.0.0.1/bctest -U bcsmb%Freigabe-Test-2026 -c 'pwd'
       - name: PostgreSQL-18-Client (pg_dump/pg_restore passend zum Server) für Sicherungs- und Update-Tests
         run: |
           sudo apt-get install -y --no-install-recommends postgresql-common
@@ -58,6 +69,11 @@ jobs:
       - run: npm test -w server
         env:
           TEST_DATABASE_URL: postgresql://blaulichtcms:blaulichtcms@127.0.0.1:5432/blaulichtcms_test
+          # echte SMB-Freigabe statt des Stellvertreters (siehe Schritt „Samba-Freigabe“)
+          BLAULICHTCMS_SMB_TEST_SHARE: '\\127.0.0.1\bctest'
+          BLAULICHTCMS_SMB_TEST_LOCAL: /srv/smbtest
+          BLAULICHTCMS_SMB_TEST_USER: bcsmb
+          BLAULICHTCMS_SMB_TEST_PASSWORD: Freigabe-Test-2026
       - run: npm run build
 
   # Browsertests (#219): Kernabläufe mit Playwright/Chromium gegen gebaute Oberfläche, API und Worker. Playwright hat

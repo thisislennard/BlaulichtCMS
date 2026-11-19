@@ -444,28 +444,29 @@ Der Wegwerf-Test braucht vorübergehend Platz für ein zweites Volume und so vie
 VM) mit der Kopie außer Haus und dem getrennt verwahrten Sicherungsschlüssel üben und die Prüfliste unten abhaken –
 das prüft auch, ob Schlüssel und Ablauf im Ernstfall greifbar sind.
 
-### Sicherung außer Haus (WebDAV)
+### Sicherung außer Haus (SMB-Freigabe oder WebDAV)
 
 *Einstellungen → Sicherung → Sicherung außer Haus* (Recht „Sicherungen erstellen“; Ziel ändern mit Passwortbestätigung) legt jede
-Datenbanksicherung zusätzlich auf einem WebDAV-Ziel ab (z. B. Synology „WebDAV Server“, HTTPS-Port 5006). Umsetzung:
-`server/src/ops/offsite.ts`, Auftrag `backup.offsite` im Worker (4 Versuche mit Wartezeit, Meldung beim letzten).
+Datenbanksicherung zusätzlich auf einer **SMB-Freigabe** (Windows-Server, DFS, NAS; UNC-Pfad, Domäne, Konto) oder einem
+**WebDAV-Ziel** ab (z. B. Synology „WebDAV Server“, HTTPS-Port 5006). Umsetzung: `server/src/ops/offsite.ts` (Ablauf,
+WebDAV) und `server/src/ops/smb.ts` (SMB), Auftrag `backup.offsite` im Worker (4 Versuche mit Wartezeit, Meldung beim letzten).
 
 | | |
 |---|---|
-| Ablauf | PUT `<name>.part` → GET und SHA-256 mit der lokalen Prüfsumme vergleichen → MOVE auf den endgültigen Namen → Aufbewahrung |
+| Ablauf | hochladen als `<name>.part` → zurücklesen und SHA-256 mit der lokalen Prüfsumme vergleichen → auf den endgültigen Namen umbenennen → Aufbewahrung (WebDAV: PUT/GET/MOVE; SMB: `put`/`get`/`rename` mit smbclient) |
 | Aufbewahrung auf dem Ziel | je Tag/ISO-Woche/Monat die neueste Sicherung für die letzten N Tage/Wochen/Monate (Standard **7/4/3**, höchstens 90/52/24; bis 0.6.x Standard 7/4/6 – unveränderte Standardwerte stellt Migration 200 auf 7/4/3, höhere Werte auf die neuen Grenzen); die Oberfläche zeigt die resultierende Frist („gelöschte Daten bleiben bis zu rund N Monate“), mehr als rund 4 Monate nur mit Bestätigung (Audit); die neueste und die eben übertragene bleiben immer; gelöscht werden nur Dateien mit dem Namensmuster `blaulichtcms-…bcbk` bzw. im Unterordner `volume/` `blaulichtcms-…tar.gz.enc` |
 | Ausschalten, Zielwechsel | Vorher wählen: Sicherungen auf dem bisherigen Ziel **löschen** (mit Passwortbestätigung, nur Dateien nach Namensmuster samt `.part`, auch `volume/`; scheitert das, wird nichts gespeichert) oder **behalten** – dann erinnert der Systemstatus („Frühere Sicherungsziele“, gelb), bis sie über *Sicherungen auf dem Ziel löschen* entfernt sind oder der Hinweis entfernt wird (am Gerät von Hand aufgeräumt). Nach einem Zielwechsel gilt der Stand „zuletzt übertragen“ nur für das neue Ziel |
 | Übertragung | Gesamtfrist 10 Minuten plus Zuschlag nach Größe (rund 1 Mbit/s); beim Zurücklesen und Holen kommt höchstens die erwartete Größe (Ordnerliste bzw. lokale Datei), sonst Abbruch – ein fehlerhaftes Ziel füllt den Datenträger nicht |
 | Verschlüsselung | Dateien bleiben BCBK1 (AES-256-GCM, Schlüssel aus dem Master-Schlüssel) bzw. Volume-Archive mit `/etc/blaulichtcms/backup.key` – das Ziel sieht nur Chiffrat |
-| Zugangsdaten | Passwort verschlüsselt in `secrets` (Besitzer `setting`), nie in der API; das gespeicherte Passwort wird nur für denselben Host und Benutzer weiterverwendet |
-| Netz | nur `https`; SSRF-Schutz bleibt aktiv, freigegeben ist genau der eingetragene Host (auch im internen Netz), keine Weiterleitungen; selbst signierte Zertifikate nur per fest hinterlegtem SHA-256-Fingerabdruck (geprüft vor dem Senden) |
+| Zugangsdaten | Passwort verschlüsselt in `secrets` (Besitzer `setting`), nie in der API; das gespeicherte Passwort wird nur für dieselbe Art, denselben Host bzw. Server und dasselbe Konto (Benutzer, Domäne) weiterverwendet |
+| Netz (WebDAV) | nur `https`; SSRF-Schutz bleibt aktiv, freigegeben ist genau der eingetragene Host (auch im internen Netz), keine Weiterleitungen; selbst signierte Zertifikate nur per fest hinterlegtem SHA-256-Fingerabdruck (geprüft vor dem Senden) |
+| SMB | `smbclient` aus dem Image (Paket `smbclient`, nur der Client), mindestens SMB 2, Port 445, Namen nur über DNS/hosts; eigene `smb.conf` unter `/tmp` (schreibgeschütztes Dateisystem); kein Einhängen, keine Capabilities. Jeder Schritt ist ein eigener Aufruf mit genau einem Befehl, der Ordner kommt per `-D` (scheitert der Wechsel, bricht smbclient ab; `pwd` wird zusätzlich geprüft). Passwort nur über `PASSWD` in der Umgebung des Kindprozesses, nie auf der Kommandozeile. Server, Freigabe und Ordner werden beim Speichern und vor jedem Aufruf geprüft; in Befehle kommen nur Dateinamen nach dem Muster der Sicherungen (smbclient trennt Befehle an jedem „;“). Volume-Sicherungen werden für SMB kurz im Sicherungsordner zwischengespeichert (Platz wird vorher geprüft). Ohne smbclient (älteres Image) meldet der Test „smbclient fehlt“ |
 | Volume-Sicherung | `backup-cron.sh` reicht jede neue verschlüsselte Volume-Sicherung per Standardeingabe an `cli.js offsite-volume` weiter (Unterordner `volume/`, Prüfung gegen die `.sha256`-Datei); Exit 3 = kein Ziel eingeschaltet |
 | Status | Systemstatus „Sicherung außer Haus“ (rot nach Fehlschlag, gelb nach mehr als 50 Stunden ohne Erfolg), Benachrichtigung „Sicherung fehlgeschlagen“ |
 
-**Warum nicht SMB:** SMB2/3 bräuchte im Container `smbclient` (oder eine eigene Umsetzung von SMB samt NTLMv2) und
-damit ein neues Image (`MIN_IMAGE_VERSION`). WebDAV über HTTPS braucht nur Node und deckt NAS-Ziele ab. Wer unbedingt
-SMB will, kann das NAS am **Docker-Host** per CIFS einbinden und `BLAULICHTCMS_BACKUP_DIR` dorthin legen – das betrifft
-nur `backup-cron.sh`, nicht das Image.
+**Tests:** `server/test/backup-offsite.test.ts` (WebDAV-Stellvertreter mit echtem TLS) und
+`server/test/backup-offsite-smb.test.ts` – in der CI gegen einen echten Samba-Server mit echtem smbclient, lokal gegen
+einen Stellvertreter (`server/test/fixtures/fake-smbclient.mjs`).
 
 ### Probe-Wiederherstellung (Datenbanksicherung)
 
@@ -495,7 +496,7 @@ Gelöschte Daten (Medien, Konten, abgelaufene Inhalte) leben in Sicherungen weit
 | Sicherung vor Updates (`vor-update/`) | letzte **3**, höchstens **90 Tage** alt | `BLAULICHTCMS_KEEP_PRE_UPDATE`, `BLAULICHTCMS_PRE_UPDATE_MAX_DAYS` (in `/etc/cron.d/blaulichtcms` bzw. beim Aufruf von `install.sh`) |
 | Datenbanksicherung im Volume | 14 Stände | *Einstellungen → Sicherung* |
 | Kopie außer Haus (Vorschlag) | monatlich, höchstens **3 Monate** aufbewahren, dann vernichten bzw. überschreiben | Betrieb |
-| Sicherung außer Haus (WebDAV) | je Tag/Woche/Monat die neueste, Standard 7 Tage, 4 Wochen, **3 Monate** (höchstens 90 Tage, 52 Wochen, 24 Monate; mehr als rund 4 Monate nur mit Bestätigung); nach Ausschalten oder Zielwechsel alte Dateien löschen (Abschnitt oben) | *Einstellungen → Sicherung → Sicherung außer Haus* |
+| Sicherung außer Haus (SMB oder WebDAV) | je Tag/Woche/Monat die neueste, Standard 7 Tage, 4 Wochen, **3 Monate** (höchstens 90 Tage, 52 Wochen, 24 Monate; mehr als rund 4 Monate nur mit Bestätigung); nach Ausschalten oder Zielwechsel alte Dateien löschen (Abschnitt oben) | *Einstellungen → Sicherung → Sicherung außer Haus* |
 
 Damit sind gelöschte Daten mit den Standardwerten spätestens nach rund **4 Monaten** aus allen Sicherungen verschwunden
 (2 Monate wöchentliche Stände, 3 Monate außer Haus bzw. 3 Monate Kopie außer Haus plus ein Monat Kopierabstand). Wer

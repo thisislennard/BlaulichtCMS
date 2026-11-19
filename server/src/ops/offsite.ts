@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { Transform, Writable } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
 import { many, one, pool } from '../db/pool.js';
 import { classifyStatus, httpRequest, normalizeFingerprint, peekCertificate, transferAllowanceMs, type HttpRequest, type PeerCertificate } from '../lib/http.js';
 import { sha256File } from '../lib/crypto.js';
@@ -10,12 +11,14 @@ import { log } from '../lib/log.js';
 import { notify } from '../lib/notify.js';
 import { readSecret } from '../lib/secrets.js';
 import { backupDir, verifyBackup } from './backup.js';
+import { parseUnc, smbDelete, smbGet, smbList, smbMkdir, smbOpenDir, smbPut, smbRename, smbSub, type SmbTarget } from './smb.js';
 
 /**
  * Sicherung außer Haus (#212) – nach dem Vorbild von LiFeOS (helpers/backup.py: SMB-Freigabe, Aufbewahrung,
- * Wiederherstellung), aber über **WebDAV** statt SMB: WebDAV ist reines HTTPS und braucht im Container kein
- * zusätzliches Werkzeug (smbclient hieße: neues Image). Synology, QNAP, Nextcloud und viele andere NAS bieten
- * WebDAV an.
+ * Wiederherstellung). Zwei Arten von Zielen:
+ *  - **SMB-Freigabe** (Windows-Server, DFS, NAS im eigenen Netz) über smbclient im Image – ops/smb.ts,
+ *  - **WebDAV** (reines HTTPS, z. B. Synology, QNAP, Nextcloud).
+ * Ablauf, Prüfung und Aufbewahrung sind für beide gleich; nur die Übertragung unterscheidet sich.
  *
  * Ablauf nach jeder erfolgreichen Datenbanksicherung (Auftrag `backup.offsite` im Worker):
  *  1. Datei unter `<name>.part` hochladen (gestreamt, PUT),
@@ -27,9 +30,9 @@ import { backupDir, verifyBackup } from './backup.js';
  * Die Dateien bleiben mit dem Sicherungsschlüssel (aus dem Master-Schlüssel) verschlüsselt (BCBK1, AES-256-GCM) –
  * das NAS sieht nur Chiffrat. Zugangsdaten liegen verschlüsselt in `secrets` und verlassen den Server nie über die API.
  *
- * Netz: Das Ziel liegt meist im eigenen Netz. Der SSRF-Schutz (lib/http.ts) bleibt aktiv; freigegeben wird genau der
- * eingetragene Host (allowPrivateHosts + allowedHosts), keine Weiterleitungen. Selbst signierte Zertifikate werden
- * über einen fest hinterlegten Fingerabdruck angenommen, nie durch Abschalten der Prüfung.
+ * Netz (WebDAV): Das Ziel liegt meist im eigenen Netz. Der SSRF-Schutz (lib/http.ts) bleibt aktiv; freigegeben wird
+ * genau der eingetragene Host (allowPrivateHosts + allowedHosts), keine Weiterleitungen. Selbst signierte Zertifikate
+ * werden über einen fest hinterlegten Fingerabdruck angenommen, nie durch Abschalten der Prüfung.
  */
 
 export const OFFSITE_SECRET_OWNER = '00000000-0000-0000-0000-0000000b0212';
@@ -40,8 +43,11 @@ export const VOLUME_NAME = /^blaulichtcms-(\d{4})-(\d{2})-(\d{2})-(\d{2})(\d{2})
 
 export interface OffsiteRow {
   enabled: boolean;
-  kind: 'webdav';
+  kind: 'webdav' | 'smb';
+  /** WebDAV: https-Adresse; SMB: UNC-Pfad \\server\freigabe\ordner */
   url: string;
+  /** nur SMB: Domäne des Kontos (leer = ohne) */
+  domain: string;
   username: string;
   secret_id: string | null;
   tls_fingerprint: string;
@@ -111,17 +117,44 @@ export function normalizeDavUrl(raw: string): string {
 }
 
 export interface DavTarget {
+  kind: 'webdav';
   url: string;
   username: string;
   password: string;
   fingerprint: string;
 }
 
-export async function targetFromConfig(c: OffsiteRow): Promise<DavTarget> {
+export type OffsiteTarget = DavTarget | SmbTarget;
+
+export async function targetFromConfig(c: OffsiteRow): Promise<OffsiteTarget> {
   if (!c.url) throw new StepError('config', 'Kein Ziel eingetragen.');
   const password = (await readSecret(c.secret_id)) ?? '';
-  return { url: c.url, username: c.username, password, fingerprint: c.tls_fingerprint };
+  if (c.kind === 'smb') return { kind: 'smb', ...parseUnc(c.url), domain: c.domain ?? '', username: c.username, password };
+  return { kind: 'webdav', url: c.url, username: c.username, password, fingerprint: c.tls_fingerprint };
 }
+
+/** Rechnername des Ziels für Protokoll und Hinweise (WebDAV: Host mit Port, SMB: Server). */
+export function targetHost(kind: OffsiteRow['kind'], url: string): string {
+  if (kind === 'smb') return url.replace(/^\\\\/, '').split('\\')[0] || url;
+  try {
+    return new URL(url).host;
+  } catch {
+    return url;
+  }
+}
+
+/** Unterordner des Ziels (z. B. `volume`). */
+function subTarget(t: OffsiteTarget, name: string): OffsiteTarget {
+  return t.kind === 'smb' ? smbSub(t, name) : { ...t, url: new URL(`${name}/`, t.url).toString() };
+}
+
+/** Fehlt der Ordner auf dem Ziel? (WebDAV 404 bzw. SMB „Ordner nicht gefunden“) */
+function missingFolder(e: unknown): boolean {
+  return e instanceof StepError && (/404/.test(e.message) || /Ordner (oder Datei )?auf der Freigabe nicht gefunden/.test(e.message));
+}
+
+/** Gesamtfrist einer Übertragung: Grundlaufzeit plus Zuschlag nach Größe (rund 1 Mbit/s Mindestdurchsatz). */
+const transferTimeout = (bytes: number | null) => TRANSFER_BASE_MS + transferAllowanceMs(bytes ?? 0);
 
 const fileUrl = (t: DavTarget, name: string) => new URL(encodeURIComponent(name), t.url).toString();
 
@@ -182,7 +215,10 @@ export function parseMultistatus(xml: string, baseUrl: string): RemoteFile[] {
 }
 
 /** Sicherungen auf dem Ziel (nur Dateien mit dem Namensmuster), neueste zuerst. */
-export async function listRemote(t: DavTarget, pattern: RegExp = BACKUP_NAME): Promise<RemoteFile[]> {
+export async function listRemote(t: OffsiteTarget, pattern: RegExp = BACKUP_NAME): Promise<RemoteFile[]> {
+  if (t.kind === 'smb') {
+    return (await smbList(t, pattern)).map(({ name, size, modified }) => ({ name, size, modified })).sort((a, b) => b.name.localeCompare(a.name));
+  }
   const res = await davRequest(t, 'PROPFIND', t.url, {
     headers: { depth: '1', 'content-type': 'application/xml; charset=utf-8' },
     body: '<?xml version="1.0" encoding="utf-8"?><d:propfind xmlns:d="DAV:"><d:prop><d:getcontentlength/><d:getlastmodified/><d:resourcetype/></d:prop></d:propfind>',
@@ -197,7 +233,8 @@ export async function listRemote(t: DavTarget, pattern: RegExp = BACKUP_NAME): P
 const TRANSFER_BASE_MS = 600_000;
 
 /** Datei hochladen (gestreamt). */
-async function putFile(t: DavTarget, local: string, name: string) {
+async function putFile(t: OffsiteTarget, local: string, name: string) {
+  if (t.kind === 'smb') return smbPut(t, local, name, transferTimeout(fs.statSync(local).size));
   // Gesamtfrist: 10 Minuten plus Zuschlag nach Dateigröße (httpRequest, rund 1 Mbit/s Mindestdurchsatz)
   const res = await davRequest(t, 'PUT', fileUrl(t, name), { bodyFile: local, headers: { 'content-type': 'application/octet-stream' }, timeoutMs: TRANSFER_BASE_MS });
   if (res.status !== 201 && res.status !== 204 && res.status !== 200) throw davError(res, 'Hochladen');
@@ -218,13 +255,15 @@ async function downloadBudget(): Promise<number | null> {
  * (#240): Ist die Größe bekannt (lokale Datei, PROPFIND), darf genau so viel kommen; sonst höchstens der freie Platz
  * im Sicherungsordner abzüglich Reserve – ein fehlerhaftes Ziel kann den Datenträger so nicht füllen.
  */
-async function fetchFile(t: DavTarget, name: string, opts: { dest?: string; expectedSize?: number | null } = {}): Promise<{ sha256: string; size: number }> {
+async function fetchFile(t: OffsiteTarget, name: string, opts: { dest?: string; expectedSize?: number | null } = {}): Promise<{ sha256: string; size: number }> {
   const { dest } = opts;
   const expected = opts.expectedSize != null && Number.isSafeInteger(opts.expectedSize) && opts.expectedSize >= 0 ? opts.expectedSize : null;
-  const budget = dest ? await downloadBudget() : null;
-  if (dest && expected !== null && budget !== null && expected > budget) {
+  // SMB liest immer in eine Datei (smbclient „get“) – auch zum bloßen Prüfen, dann in eine kurzlebige im Sicherungsordner
+  const budget = dest || t.kind === 'smb' ? await downloadBudget() : null;
+  if ((dest || t.kind === 'smb') && expected !== null && budget !== null && expected > budget) {
     throw new StepError('config', `Zu wenig freier Speicher für ${name} (${Math.round(expected / 1024 ** 2)} MB, frei etwa ${Math.round(budget / 1024 ** 2)} MB).`);
   }
+  if (t.kind === 'smb') return fetchSmb(t, name, dest, expected, budget);
   const maxBytes = expected ?? budget ?? 8 * 1024 ** 3;
   const timeoutMs = expected !== null ? TRANSFER_BASE_MS + transferAllowanceMs(expected) : 3_600_000;
   const hash = crypto.createHash('sha256');
@@ -248,19 +287,43 @@ async function fetchFile(t: DavTarget, name: string, opts: { dest?: string; expe
   return { sha256: hash.digest('hex'), size };
 }
 
+/**
+ * SMB: Datei mit smbclient in `dest` bzw. eine kurzlebige Datei im Sicherungsordner holen und prüfen. Mehr Daten als
+ * erwartet (bzw. als Platz da ist) gelten als Fehler des Ziels (#240) – die Datei bleibt dann nicht liegen.
+ */
+async function fetchSmb(t: SmbTarget, name: string, dest: string | undefined, expected: number | null, budget: number | null) {
+  fs.mkdirSync(backupDir(), { recursive: true, mode: 0o700 });
+  const file = dest ?? path.join(backupDir(), `.ziel-lesen-${crypto.randomBytes(6).toString('hex')}.tmp`);
+  let keep = false;
+  try {
+    await smbGet(t, name, file, expected !== null ? transferTimeout(expected) : 3_600_000);
+    fs.chmodSync(file, 0o600);
+    const size = fs.statSync(file).size;
+    const max = expected ?? budget;
+    if (max !== null && size > max) throw new StepError('invalid_payload', `Das Ziel lieferte für ${name} mehr Daten als erwartet.`);
+    const sha256 = await sha256File(file);
+    keep = !!dest;
+    return { sha256, size };
+  } finally {
+    if (!keep) fs.rmSync(file, { force: true });
+  }
+}
+
 /** Größe einer Datei laut Ordnerliste des Ziels; wirft, wenn sie dort nicht liegt. */
-async function remoteSize(t: DavTarget, name: string): Promise<number | null> {
+async function remoteSize(t: OffsiteTarget, name: string): Promise<number | null> {
   const f = (await listRemote(t)).find((x) => x.name === name);
   if (!f) throw new StepError('config', `${name} liegt nicht (mehr) auf dem Ziel.`);
   return f.size;
 }
 
-async function moveFile(t: DavTarget, from: string, to: string) {
+async function moveFile(t: OffsiteTarget, from: string, to: string) {
+  if (t.kind === 'smb') return smbRename(t, from, to);
   const res = await davRequest(t, 'MOVE', fileUrl(t, from), { headers: { destination: fileUrl(t, to), overwrite: 'T' } });
   if (res.status !== 201 && res.status !== 204) throw davError(res, 'Umbenennen');
 }
 
-async function deleteFile(t: DavTarget, name: string) {
+async function deleteFile(t: OffsiteTarget, name: string) {
+  if (t.kind === 'smb') return smbDelete(t, name);
   const res = await davRequest(t, 'DELETE', fileUrl(t, name));
   if (res.status !== 204 && res.status !== 200 && res.status !== 404) throw davError(res, 'Löschen');
 }
@@ -273,10 +336,10 @@ const withPart = (re: RegExp) => new RegExp(`${re.source.slice(0, -1)}(?:[.]part
  * Datenbanksicherungen im Ordner und Volume-Sicherungen im Unterordner `volume/`, jeweils auch vorläufige `.part`.
  * Andere Dateien bleiben unberührt. Liefert gelöschte und nicht löschbare Dateien.
  */
-export async function purgeTarget(t: DavTarget): Promise<{ removed: number; failed: string[] }> {
+export async function purgeTarget(t: OffsiteTarget): Promise<{ removed: number; failed: string[] }> {
   let removed = 0;
   const failed: string[] = [];
-  const del = async (target: DavTarget, names: string[]) => {
+  const del = async (target: OffsiteTarget, names: string[]) => {
     for (const n of names) {
       try {
         await deleteFile(target, n);
@@ -288,12 +351,12 @@ export async function purgeTarget(t: DavTarget): Promise<{ removed: number; fail
     }
   };
   await del(t, (await listRemote(t, withPart(BACKUP_NAME))).map((f) => f.name));
-  const v = { ...t, url: new URL('volume/', t.url).toString() };
+  const v = subTarget(t, 'volume');
   let volumes: RemoteFile[] = [];
   try {
     volumes = await listRemote(v, withPart(VOLUME_NAME));
   } catch (e) {
-    if (!(e instanceof StepError && /404/.test(e.message))) throw e;
+    if (!missingFolder(e)) throw e;
   }
   await del(v, volumes.map((f) => f.name));
   return { removed, failed };
@@ -376,7 +439,53 @@ export interface TestResult {
  * Verbindungstest vor dem Einschalten: Zertifikat, Anmeldung und Ordner (fehlt der letzte Ordner, wird er angelegt),
  * Probedatei schreiben, zurücklesen und vergleichen, löschen. Schreibt nichts außer der kurzlebigen Probedatei.
  */
-export async function testTarget(t: DavTarget): Promise<TestResult> {
+export async function testTarget(t: OffsiteTarget): Promise<TestResult> {
+  return t.kind === 'smb' ? testSmbTarget(t) : testDavTarget(t);
+}
+
+/** Probedatei schreiben, zurücklesen und vergleichen, löschen – für beide Arten von Zielen gleich. */
+async function probeRoundtrip(t: OffsiteTarget, steps: TestResult['steps']): Promise<boolean> {
+  const probe = `.blaulichtcms-test-${crypto.randomBytes(4).toString('hex')}`;
+  const tmp = path.join(backupDir(), `${probe}.tmp`);
+  fs.mkdirSync(backupDir(), { recursive: true, mode: 0o700 });
+  const data = crypto.randomBytes(64 * 1024);
+  fs.writeFileSync(tmp, data, { mode: 0o600 });
+  try {
+    await putFile(t, tmp, probe);
+    steps.push({ step: 'Probedatei schreiben', ok: true });
+    const back = await fetchFile(t, probe, { expectedSize: data.length });
+    const same = back.sha256 === crypto.createHash('sha256').update(data).digest('hex');
+    steps.push({ step: 'Zurücklesen und Prüfsumme vergleichen', ok: same });
+    await deleteFile(t, probe);
+    steps.push({ step: 'Probedatei löschen', ok: true });
+    return same;
+  } finally {
+    fs.rmSync(tmp, { force: true });
+  }
+}
+
+/** SMB: Anmeldung, Freigabe und Ordner (fehlt der letzte Ordner, wird er angelegt), dann die Probedatei. */
+async function testSmbTarget(t: SmbTarget): Promise<TestResult> {
+  const steps: TestResult['steps'] = [];
+  try {
+    if ((await smbOpenDir(t)) === 'missing') {
+      if (!t.dir.length) throw new StepError('config', 'Die Freigabe ließ sich nicht öffnen.');
+      await smbMkdir(t, t.dir.slice(0, -1), t.dir[t.dir.length - 1]);
+      steps.push({ step: 'Ordner angelegt', ok: true });
+      if ((await smbOpenDir(t)) !== 'ok') throw new StepError('config', 'Der angelegte Ordner ließ sich nicht öffnen.');
+    }
+    steps.push({ step: 'Anmeldung, Freigabe und Ordner', ok: true });
+    if (!(await probeRoundtrip(t, steps))) return { ok: false, steps, error: 'Die zurückgelesene Probedatei weicht ab.' };
+    const files = (await listRemote(t)).length;
+    return { ok: true, steps, files };
+  } catch (e) {
+    const err = e instanceof StepError ? e : new StepError('transient', (e as Error).message);
+    steps.push({ step: 'Abbruch', ok: false, detail: err.technical?.slice(0, 200) });
+    return { ok: false, steps, error: err.message, hint: err.hint ?? (err.errorClass === 'auth' ? 'Bei Domänenkonten die Domäne eintragen (z. B. firma.local) und den Benutzernamen ohne Domäne.' : undefined) };
+  }
+}
+
+async function testDavTarget(t: DavTarget): Promise<TestResult> {
   const steps: TestResult['steps'] = [];
   let certificate: PeerCertificate | null = null;
   const u = new URL(t.url);
@@ -409,23 +518,7 @@ export async function testTarget(t: DavTarget): Promise<TestResult> {
     }
     if (res.status !== 207) throw davError(res, 'Anmelden und Ordner öffnen');
     steps.push({ step: 'Anmeldung und Ordner', ok: true });
-    const probe = `.blaulichtcms-test-${crypto.randomBytes(4).toString('hex')}`;
-    const tmp = path.join(backupDir(), `${probe}.tmp`);
-    fs.mkdirSync(backupDir(), { recursive: true, mode: 0o700 });
-    const data = crypto.randomBytes(64 * 1024);
-    fs.writeFileSync(tmp, data, { mode: 0o600 });
-    try {
-      await putFile(t, tmp, probe);
-      steps.push({ step: 'Probedatei schreiben', ok: true });
-      const back = await fetchFile(t, probe, { expectedSize: data.length });
-      const same = back.sha256 === crypto.createHash('sha256').update(data).digest('hex');
-      steps.push({ step: 'Zurücklesen und Prüfsumme vergleichen', ok: same });
-      await deleteFile(t, probe);
-      steps.push({ step: 'Probedatei löschen', ok: true });
-      if (!same) return { ok: false, steps, certificate, error: 'Die zurückgelesene Probedatei weicht ab.' };
-    } finally {
-      fs.rmSync(tmp, { force: true });
-    }
+    if (!(await probeRoundtrip(t, steps))) return { ok: false, steps, certificate, error: 'Die zurückgelesene Probedatei weicht ab.' };
     const files = (await listRemote(t)).length;
     return { ok: true, steps, certificate, files };
   } catch (e) {
@@ -436,7 +529,7 @@ export async function testTarget(t: DavTarget): Promise<TestResult> {
 }
 
 /** Alles nach einer Übertragung: Aufbewahrung auf dem Ziel. Fehler beim Aufräumen sind nicht fatal. */
-async function applyRetention(t: DavTarget, c: OffsiteRow, pattern: RegExp, justUploaded: string): Promise<number> {
+async function applyRetention(t: OffsiteTarget, c: OffsiteRow, pattern: RegExp, justUploaded: string): Promise<number> {
   const names = (await listRemote(t, pattern)).map((f) => f.name);
   const plan = retentionPlan(names, { daily: c.keep_daily, weekly: c.keep_weekly, monthly: c.keep_monthly }, [justUploaded]);
   let removed = 0;
@@ -538,7 +631,15 @@ export async function fetchRemoteBackup(name: string, userId: string | null): Pr
 }
 
 /** Unterordner für die Volume-Sicherungen; wird bei Bedarf angelegt. */
-async function volumeTarget(t: DavTarget): Promise<DavTarget> {
+async function volumeTarget(t: OffsiteTarget): Promise<OffsiteTarget> {
+  if (t.kind === 'smb') {
+    const v = smbSub(t, 'volume');
+    if ((await smbOpenDir(v)) === 'missing') {
+      await smbMkdir(t, t.dir, 'volume');
+      if ((await smbOpenDir(v)) !== 'ok') throw new StepError('config', 'Ordner „volume“ ließ sich auf der Freigabe nicht anlegen.');
+    }
+    return v;
+  }
   const v = { ...t, url: new URL('volume/', t.url).toString() };
   const res = await davRequest(v, 'PROPFIND', v.url, { headers: { depth: '0' } });
   if (res.status === 404) {
@@ -564,27 +665,30 @@ export async function uploadVolumeStream(name: string, size: number, sha256: str
   try {
     const t = await volumeTarget(await targetFromConfig(c));
     const part = `${name}.part`;
-    const hash = crypto.createHash('sha256');
-    let seen = 0;
-    // Prüfsumme beim Durchreichen bilden (Gegendruck bleibt erhalten, nichts geht verloren, bevor die Verbindung steht)
-    const tap = new Transform({
-      transform(chunk: Buffer, _e, cb) {
-        hash.update(chunk);
-        seen += chunk.length;
-        cb(null, chunk);
-      },
-    });
-    input.on('error', (e: Error) => tap.destroy(e));
-    input.pipe(tap);
-    const res = await davRequest(t, 'PUT', fileUrl(t, part), {
-      bodyStream: tap,
-      headers: { 'content-type': 'application/octet-stream', 'content-length': String(size) },
-      timeoutMs: TRANSFER_BASE_MS,
-    });
-    if (res.status !== 201 && res.status !== 204 && res.status !== 200) throw davError(res, 'Hochladen');
-    if (seen !== size || hash.digest('hex') !== sha256.toLowerCase()) {
-      await deleteFile(t, part).catch(() => {});
-      throw new StepError('invalid_payload', 'Die übergebene Datei passt nicht zu Größe bzw. Prüfsumme der Sicherung.');
+    if (t.kind === 'smb') await stageVolumeForSmb(t, part, size, sha256, input);
+    else {
+      const hash = crypto.createHash('sha256');
+      let seen = 0;
+      // Prüfsumme beim Durchreichen bilden (Gegendruck bleibt erhalten, nichts geht verloren, bevor die Verbindung steht)
+      const tap = new Transform({
+        transform(chunk: Buffer, _e, cb) {
+          hash.update(chunk);
+          seen += chunk.length;
+          cb(null, chunk);
+        },
+      });
+      input.on('error', (e: Error) => tap.destroy(e));
+      input.pipe(tap);
+      const res = await davRequest(t, 'PUT', fileUrl(t, part), {
+        bodyStream: tap,
+        headers: { 'content-type': 'application/octet-stream', 'content-length': String(size) },
+        timeoutMs: TRANSFER_BASE_MS,
+      });
+      if (res.status !== 201 && res.status !== 204 && res.status !== 200) throw davError(res, 'Hochladen');
+      if (seen !== size || hash.digest('hex') !== sha256.toLowerCase()) {
+        await deleteFile(t, part).catch(() => {});
+        throw new StepError('invalid_payload', 'Die übergebene Datei passt nicht zu Größe bzw. Prüfsumme der Sicherung.');
+      }
     }
     const back = await fetchFile(t, part, { expectedSize: size });
     if (back.sha256 !== sha256.toLowerCase()) {
@@ -605,13 +709,44 @@ export async function uploadVolumeStream(name: string, size: number, sha256: str
   }
 }
 
-/** Volume-Sicherungen auf dem Ziel (Unterordner `volume/`), neueste zuerst; leer, wenn der Ordner fehlt. */
-export async function listRemoteVolumes(t: DavTarget): Promise<RemoteFile[]> {
-  const v = { ...t, url: new URL('volume/', t.url).toString() };
+/**
+ * SMB: smbclient lädt nur aus Dateien hoch – die Volume-Sicherung von der Standardeingabe zuerst in den
+ * Sicherungsordner schreiben (Größe und Prüfsumme dabei prüfen), hochladen, die Zwischendatei sofort wieder löschen.
+ * Braucht kurzzeitig so viel freien Platz wie die Sicherung groß ist.
+ */
+async function stageVolumeForSmb(t: SmbTarget, part: string, size: number, sha256: string, input: NodeJS.ReadableStream) {
+  const budget = await downloadBudget();
+  const mb = (n: number) => Math.round(n / 1024 ** 2);
+  if (budget !== null && size > budget) {
+    throw new StepError('config', `Zu wenig freier Speicher, um die Volume-Sicherung für die SMB-Übertragung zwischenzuspeichern (${mb(size)} MB nötig, frei etwa ${mb(budget)} MB).`);
+  }
+  fs.mkdirSync(backupDir(), { recursive: true, mode: 0o700 });
+  const tmp = path.join(backupDir(), `.volume-${crypto.randomBytes(6).toString('hex')}.tmp`);
+  const hash = crypto.createHash('sha256');
+  let seen = 0;
   try {
-    return await listRemote(v, VOLUME_NAME);
+    const count = new Transform({
+      transform(chunk: Buffer, _e, cb) {
+        hash.update(chunk);
+        seen += chunk.length;
+        if (seen > size) return cb(new StepError('invalid_payload', 'Die übergebene Datei passt nicht zu Größe bzw. Prüfsumme der Sicherung.'));
+        cb(null, chunk);
+      },
+    });
+    await pipeline(input, count, fs.createWriteStream(tmp, { mode: 0o600 }));
+    if (seen !== size || hash.digest('hex') !== sha256.toLowerCase()) throw new StepError('invalid_payload', 'Die übergebene Datei passt nicht zu Größe bzw. Prüfsumme der Sicherung.');
+    await putFile(t, tmp, part);
+  } finally {
+    fs.rmSync(tmp, { force: true });
+  }
+}
+
+/** Volume-Sicherungen auf dem Ziel (Unterordner `volume/`), neueste zuerst; leer, wenn der Ordner fehlt. */
+export async function listRemoteVolumes(t: OffsiteTarget): Promise<RemoteFile[]> {
+  try {
+    return await listRemote(subTarget(t, 'volume'), VOLUME_NAME);
   } catch (e) {
-    if (e instanceof StepError && /404/.test(e.message)) return [];
+    if (missingFolder(e)) return [];
     throw e;
   }
 }

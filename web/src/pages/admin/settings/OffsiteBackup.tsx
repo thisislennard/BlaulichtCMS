@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ApiError, get, post, put } from '../../../api/client';
-import { Badge, Button, FieldWrap, Input, Notice, Select, Switch, Table, Td, Th } from '../../../components/ui/core';
+import { Badge, Button, FieldWrap, Input, Notice, SegmentedControl, Select, Switch, Table, Td, Th } from '../../../components/ui/core';
 import { useSaveSource, type SaveProblem } from '../../../components/ui/form';
 import { Icon } from '../../../components/ui/Icon';
 import { Dialog, SecretField, useConfirm, useToast } from '../../../components/ui/overlays';
@@ -12,7 +12,10 @@ import { FieldGrid } from './model';
 
 interface OffsiteConfig {
   enabled: boolean;
+  /** SMB-Freigabe (UNC-Pfad in url) oder WebDAV (https-Adresse in url) */
+  kind: 'smb' | 'webdav';
   url: string;
+  domain: string;
   username: string;
   password_set: boolean;
   tls_fingerprint: string;
@@ -62,8 +65,9 @@ interface Drill {
   };
 }
 
-type Form = { enabled: boolean; url: string; username: string; password: string; fingerprint: string; keepDaily: string; keepWeekly: string; keepMonthly: string; drillInterval: OffsiteConfig['drill_interval'] };
-const fromConfig = (c: OffsiteConfig): Form => ({ enabled: c.enabled, url: c.url, username: c.username, password: '', fingerprint: c.tls_fingerprint, keepDaily: String(c.keep_daily), keepWeekly: String(c.keep_weekly), keepMonthly: String(c.keep_monthly), drillInterval: c.drill_interval });
+type Form = { enabled: boolean; kind: OffsiteConfig['kind']; url: string; domain: string; username: string; password: string; fingerprint: string; keepDaily: string; keepWeekly: string; keepMonthly: string; drillInterval: OffsiteConfig['drill_interval'] };
+/** Ohne eingetragenes Ziel ist SMB vorgewählt (Freigabe im eigenen Netz, wie in LiFeOS). */
+const fromConfig = (c: OffsiteConfig): Form => ({ enabled: c.enabled, kind: c.url ? c.kind : 'smb', url: c.url, domain: c.domain ?? '', username: c.username, password: '', fingerprint: c.tls_fingerprint, keepDaily: String(c.keep_daily), keepWeekly: String(c.keep_weekly), keepMonthly: String(c.keep_monthly), drillInterval: c.drill_interval });
 
 /** Ganze Zahl im Bereich, sonst null (Eingabe bleibt beim Tippen unverändert, geprüft wird beim Speichern). */
 const intIn = (v: string, lo: number, hi: number) => (/^\d+$/.test(v.trim()) && Number(v) >= lo && Number(v) <= hi ? Number(v) : null);
@@ -75,15 +79,20 @@ const DOCUMENTED_RETENTION_DAYS = 124;
 /** Längste Aufbewahrung auf dem Ziel in Tagen – wie retentionDays() auf dem Server. */
 const retentionDays = (k: { daily: number; weekly: number; monthly: number }) => Math.max(k.daily, k.weekly * 7, k.monthly * 31);
 const retentionLabel = (days: number) => (days < 28 ? `${days} ${days === 1 ? 'Tag' : 'Tage'}` : days < 62 ? `rund ${Math.round(days / 7)} Wochen` : `rund ${Math.round(days / 31)} Monate`);
+/** Rechnername des Ziels: Server eines UNC-Pfads bzw. Host einer Adresse. */
 const hostOf = (u: string) => {
+  if (/^(\\\\|\/\/)/.test(u.trim())) return u.trim().replace(/^[\\/]+/, '').split(/[\\/]/)[0] || u;
   try {
     return new URL(u).host;
   } catch {
     return u;
   }
 };
-/** Adresse wie der Server vergleichen (Pfad endet auf „/“). */
-const sameUrl = (a: string, b: string) => a.trim().replace(/\/*$/, '/') === b.trim().replace(/\/*$/, '/');
+/** Ziel wie der Server vergleichen (Adresse mit „/“ am Ende, UNC-Pfad mit „\“ und ohne Trenner am Ende). */
+const sameUrl = (a: string, b: string) => {
+  const norm = (s: string) => (/^(\\\\|\/\/)/.test(s.trim()) ? s.trim().replace(/\//g, '\\').replace(/\\+$/, '') : s.trim().replace(/\/*$/, '/'));
+  return norm(a) === norm(b);
+};
 
 const DRILL_STATUS: Record<Drill['status'], { tone: 'success' | 'error' | 'primary' | 'neutral'; label: string }> = {
   queued: { tone: 'neutral', label: 'eingeplant' },
@@ -109,7 +118,7 @@ function Steps({ steps }: { steps: { step: string; ok: boolean; detail?: string 
 }
 
 /**
- * Einstellungen → Sicherung → Sicherung außer Haus (#212): Ziel per WebDAV (z. B. NAS), Verbindungstest vor dem Einschalten,
+ * Einstellungen → Sicherung → Sicherung außer Haus (#212): Ziel als SMB-Freigabe oder per WebDAV, Verbindungstest vor dem Einschalten,
  * Aufbewahrung auf dem Ziel, Sicherungen auf dem Ziel (zurückholen) und Probe-Wiederherstellung.
  */
 export function OffsiteBackupSection() {
@@ -154,7 +163,15 @@ export function OffsiteBackupSection() {
   if (!c || !form) return <SectionCard id="ausser-haus" title="Sicherung außer Haus"><p className="m-0 text-sm text-fg-muted">Wird geladen …</p></SectionCard>;
 
   const set = (p: Partial<Form>) => setForm({ ...form, ...p });
-  const target = { url: form.url.trim(), username: form.username.trim(), fingerprint: form.fingerprint.trim(), ...(form.password ? { password: form.password } : {}) };
+  const smb = form.kind === 'smb';
+  const target = {
+    kind: form.kind,
+    url: form.url.trim(),
+    domain: smb ? form.domain.trim() : '',
+    username: form.username.trim(),
+    fingerprint: smb ? '' : form.fingerprint.trim(),
+    ...(form.password ? { password: form.password } : {}),
+  };
   const keepVals = { daily: intIn(form.keepDaily, ...KEEP.daily), weekly: intIn(form.keepWeekly, ...KEEP.weekly), monthly: intIn(form.keepMonthly, ...KEEP.monthly) };
   const keepInvalid = keepVals.daily === null || keepVals.weekly === null || keepVals.monthly === null;
   const keepDays = keepInvalid ? null : retentionDays(keepVals as { daily: number; weekly: number; monthly: number });
@@ -189,7 +206,7 @@ export function OffsiteBackupSection() {
     // Ausschalten oder anderes Ziel: Was passiert mit den Sicherungen auf dem bisherigen Ziel?
     const disabling = c.enabled && !form.enabled;
     let oldTarget: 'keep' | 'delete' | undefined;
-    if (c.url && c.last_ok_at && (disabling || !sameUrl(form.url, c.url))) {
+    if (c.url && c.last_ok_at && (disabling || form.kind !== c.kind || !sameUrl(form.url, c.url))) {
       const choice = await new Promise<'keep' | 'delete' | null>((resolve) => setLeaveAsk({ host: hostOf(c.url), disabling, resolve }));
       setLeaveAsk(null);
       if (!choice) return false;
@@ -217,7 +234,7 @@ export function OffsiteBackupSection() {
     <SectionCard
       id="ausser-haus"
       title="Sicherung außer Haus"
-      description="Jede Datenbanksicherung zusätzlich verschlüsselt auf ein Ziel außerhalb dieses Servers ablegen, z. B. ein NAS per WebDAV – mit Aufbewahrung auf dem Ziel und Probe-Wiederherstellung."
+      description="Jede Datenbanksicherung zusätzlich verschlüsselt auf ein Ziel außerhalb dieses Servers ablegen – eine SMB-Freigabe (Windows-Server, NAS) oder WebDAV – mit Aufbewahrung auf dem Ziel und Probe-Wiederherstellung."
       action={c.enabled ? <Badge tone={failedLater ? 'error' : 'success'}>{failedLater ? 'Fehler' : 'eingeschaltet'}</Badge> : <Badge>aus</Badge>}
       bodyClassName="flex flex-col gap-5"
     >
@@ -241,25 +258,58 @@ export function OffsiteBackupSection() {
 
       <Switch checked={form.enabled} onChange={(v) => set({ enabled: v })} label="Nach jeder Sicherung außer Haus ablegen" description="Einschalten geht nur nach bestandenem Verbindungstest. Das Ziel ändern verlangt eine erneute Bestätigung mit deinem Passwort." />
 
+      <div>
+        <SegmentedControl<Form['kind']>
+          label="Art des Ziels"
+          value={form.kind}
+          onChange={(kind) => set({ kind })}
+          options={[
+            { value: 'smb', label: 'SMB-Freigabe' },
+            { value: 'webdav', label: 'WebDAV' },
+          ]}
+        />
+      </div>
+
       <FieldGrid className="grid-cols-[repeat(auto-fit,minmax(min(260px,100%),1fr))]">
-        <FieldWrap
-          label="WebDAV-Adresse des Ordners"
-          htmlFor="os-url"
-          help="Nur https. Ein fehlender letzter Ordner wird beim Test angelegt."
-          labelAction={
-            <HelpTip title="Warum WebDAV und nicht SMB?" more="/hilfe/sicherung#sicherung-ausser-haus">
-              <p className="m-0">WebDAV ist verschlüsseltes HTTPS und braucht auf dem Server kein Zusatzprogramm. Synology (Paket „WebDAV Server“, HTTPS-Port 5006), QNAP, Nextcloud und viele andere NAS bieten es an. Die Sicherungen sind bereits vor dem Hochladen verschlüsselt.</p>
-            </HelpTip>
-          }
-        >
-          <Input id="os-url" mono value={form.url} onChange={(e) => set({ url: e.target.value })} placeholder="https://nas.local:5006/sicherung/blaulichtcms/" maxLength={500} autoComplete="off" />
-        </FieldWrap>
-        <FieldWrap label="Benutzer am Ziel" htmlFor="os-user" help="Eigenes Konto nur für die Sicherung, mit Schreibrecht nur auf diesen Ordner.">
+        {smb ? (
+          <FieldWrap
+            label="Pfad"
+            htmlFor="os-url"
+            className="col-span-full"
+            help="Server, Freigabe und optional Unterordner als UNC-Pfad. Ein fehlender letzter Ordner wird beim Test angelegt."
+            labelAction={
+              <HelpTip title="SMB-Freigabe als Ziel" more="/hilfe/sicherung#sicherung-ausser-haus">
+                <p className="m-0">Für Windows-Server, DFS-Freigaben und NAS im eigenen Netz. BlaulichtCMS verbindet sich mit smbclient (SMB 2 oder 3) über Port 445 – nichts wird eingehängt. Die Sicherungen sind bereits vor dem Hochladen verschlüsselt.</p>
+              </HelpTip>
+            }
+          >
+            <Input id="os-url" mono value={form.url} onChange={(e) => set({ url: e.target.value })} placeholder="\\server\freigabe\sicherung\blaulichtcms" maxLength={500} autoComplete="off" />
+          </FieldWrap>
+        ) : (
+          <FieldWrap
+            label="WebDAV-Adresse des Ordners"
+            htmlFor="os-url"
+            help="Nur https. Ein fehlender letzter Ordner wird beim Test angelegt."
+            labelAction={
+              <HelpTip title="WebDAV als Ziel" more="/hilfe/sicherung#sicherung-ausser-haus">
+                <p className="m-0">WebDAV ist verschlüsseltes HTTPS. Synology (Paket „WebDAV Server“, HTTPS-Port 5006), QNAP, Nextcloud und viele andere NAS bieten es an – auch außerhalb des eigenen Netzes. Die Sicherungen sind bereits vor dem Hochladen verschlüsselt.</p>
+              </HelpTip>
+            }
+          >
+            <Input id="os-url" mono value={form.url} onChange={(e) => set({ url: e.target.value })} placeholder="https://nas.local:5006/sicherung/blaulichtcms/" maxLength={500} autoComplete="off" />
+          </FieldWrap>
+        )}
+        {smb && (
+          <FieldWrap label="Domäne (optional)" htmlFor="os-domain" help="Bei Domänenkonten, z. B. firma.local. Leer bei einem Konto direkt auf dem NAS.">
+            <Input id="os-domain" value={form.domain} onChange={(e) => set({ domain: e.target.value })} maxLength={100} autoComplete="off" />
+          </FieldWrap>
+        )}
+        <FieldWrap label={smb ? 'Benutzername' : 'Benutzer am Ziel'} htmlFor="os-user" help="Eigenes Konto nur für die Sicherung, mit Schreibrecht nur auf diesen Ordner.">
           <Input id="os-user" value={form.username} onChange={(e) => set({ username: e.target.value })} maxLength={200} autoComplete="off" />
         </FieldWrap>
         <SecretField
           id="os-pass"
-          label="Passwort am Ziel"
+          label={smb ? 'Passwort' : 'Passwort am Ziel'}
           set={c.password_set && !editingPassword}
           editing={editingPassword || !c.password_set}
           value={form.password}
@@ -269,13 +319,15 @@ export function OffsiteBackupSection() {
           }}
           help="Wird verschlüsselt gespeichert und nie wieder angezeigt. Für ein anderes Ziel oder einen anderen Benutzer neu eingeben."
         />
-        <FieldWrap
-          label="Zertifikat-Fingerabdruck (optional)"
-          htmlFor="os-fp"
-          help="Nur für selbst signierte Zertifikate im eigenen Netz: SHA-256 des NAS-Zertifikats. Leer = normale Prüfung."
-        >
-          <Input id="os-fp" mono value={form.fingerprint} onChange={(e) => set({ fingerprint: e.target.value })} placeholder="AB:CD:…" maxLength={200} autoComplete="off" />
-        </FieldWrap>
+        {!smb && (
+          <FieldWrap
+            label="Zertifikat-Fingerabdruck (optional)"
+            htmlFor="os-fp"
+            help="Nur für selbst signierte Zertifikate im eigenen Netz: SHA-256 des NAS-Zertifikats. Leer = normale Prüfung."
+          >
+            <Input id="os-fp" mono value={form.fingerprint} onChange={(e) => set({ fingerprint: e.target.value })} placeholder="AB:CD:…" maxLength={200} autoComplete="off" />
+          </FieldWrap>
+        )}
       </FieldGrid>
 
       <fieldset className="m-0 p-0 border-0 flex flex-col gap-2">
@@ -349,7 +401,7 @@ export function OffsiteBackupSection() {
         </Button>
         {!form.url.trim() && (
           <span id="os-test-why" className="text-meta text-fg-muted">
-            Erst die WebDAV-Adresse eintragen.
+            {smb ? 'Erst den Pfad der Freigabe eintragen.' : 'Erst die WebDAV-Adresse eintragen.'}
           </span>
         )}
       </div>

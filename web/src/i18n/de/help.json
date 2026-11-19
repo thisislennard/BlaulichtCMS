@@ -111,7 +111,7 @@
     },
     "sicherung": {
       "title": "Sicherung und Wiederherstellung",
-      "summary": "Was gesichert werden muss, Sicherung außer Haus (NAS per WebDAV), Wiederherstellung üben und im Notfall."
+      "summary": "Was gesichert werden muss, Sicherung außer Haus (SMB-Freigabe oder WebDAV), Wiederherstellung üben und im Notfall."
     },
     "updates": {
       "title": "Updates",

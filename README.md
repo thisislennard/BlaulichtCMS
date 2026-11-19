@@ -124,7 +124,7 @@ BlaulichtCMS verbindet sich mit den Systemen, die im Alltag schon da sind. Jede 
 | **E-Mail** | ausgehend | SMTP oder Microsoft 365: Antworten, Pressemitteilungen, Benachrichtigungen |
 | **Web Push** | ausgehend | Mitteilungen an Browser und installierte App |
 | **Warnentwurf** | ausgehend | PDF an die zuständige Stelle für die MoWaS-Auslösung |
-| **WebDAV** | ausgehend | Sicherung außer Haus, z. B. auf ein NAS |
+| **SMB-Freigabe oder WebDAV** | ausgehend | Sicherung außer Haus, z. B. auf einen Windows-Server oder ein NAS |
 
 Vorschläge für weitere Schnittstellen gern als [Issue](https://github.com/thisislennard/BlaulichtCMS/issues).
 

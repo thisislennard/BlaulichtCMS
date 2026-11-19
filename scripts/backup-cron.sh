@@ -13,7 +13,7 @@
 # sonntags), taeglich oder aus. Ergebnis und Fehler meldet das Skript an BlaulichtCMS (Systemprotokoll, Benachrichtigung
 # an „System verwalten“) und mit Exit-Code ≠ 0 an Cron (MAILTO in /etc/cron.d/blaulichtcms setzen für eine Mail).
 # Ziel möglichst auf einem anderen Datenträger oder Host (z. B. eingebundenes NAS). Ist in BlaulichtCMS unter
-# Einstellungen → Sicherung außer Haus ein Ziel (WebDAV) eingeschaltet, geht jede neue Sicherung zusätzlich dorthin
+# Einstellungen → Sicherung außer Haus ein Ziel (SMB-Freigabe oder WebDAV) eingeschaltet, geht jede neue Sicherung zusätzlich dorthin
 # (cli.js offsite-volume, Datei per Standardeingabe; Zugangsdaten bleiben im Container). Ein Fehler dabei meldet
 # BlaulichtCMS selbst; die lokale Sicherung bleibt gültig.
 set -euo pipefail

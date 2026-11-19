@@ -60,6 +60,9 @@ FROM postgres:18-trixie@sha256:2ea8630df176ad090ec92136dee850397c5af8781e4bcf2e4
 # gosu (für den Entrypoint des PostgreSQL-Images) wird nicht gebraucht und ist mit einer älteren Go-Version gebaut
 # (kritischer Befund im Imagescan, #105) – entfernen statt mitliefern
 RUN rm -f /usr/local/bin/gosu && groupadd --gid 1000 blaulichtcms && useradd --uid 1000 --gid 1000 --home-dir /data/home --no-create-home --shell /usr/sbin/nologin blaulichtcms
+# smbclient für die Sicherung außer Haus auf eine SMB-Freigabe (ops/smb.ts) – nur der Client: kein Samba-Dienst,
+# kein Einhängen (der Container hat keine Capabilities)
+RUN apt-get update && apt-get install -y --no-install-recommends smbclient && rm -rf /var/lib/apt/lists/* && smbclient --version
 COPY --from=node /usr/local/bin/node /usr/local/bin/node
 COPY --from=node /out/ /usr/local/lib/
 RUN ldconfig && node --version

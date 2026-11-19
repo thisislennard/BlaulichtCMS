@@ -24,10 +24,12 @@ import {
   retentionLabel,
   scheduleUpload,
   targetFromConfig,
+  targetHost,
   testTarget,
-  type DavTarget,
   type OffsiteRow,
+  type OffsiteTarget,
 } from '../ops/offsite.js';
+import { checkSmbAccount, parseUnc } from '../ops/smb.js';
 import { plural } from '../lib/text.js';
 
 /**
@@ -40,6 +42,7 @@ const view = (c: OffsiteRow) => ({
   enabled: c.enabled,
   kind: c.kind,
   url: c.url,
+  domain: c.domain ?? '',
   username: c.username,
   password_set: !!c.secret_id,
   tls_fingerprint: c.tls_fingerprint,
@@ -56,7 +59,11 @@ const view = (c: OffsiteRow) => ({
 });
 
 const targetInput = z.object({
+  /** SMB-Freigabe (UNC-Pfad, smbclient) oder WebDAV (https) */
+  kind: z.enum(['webdav', 'smb']).default('webdav'),
   url: z.string().trim().max(500),
+  /** nur SMB: Domäne des Kontos */
+  domain: z.string().trim().max(100).default(''),
   username: z.string().trim().max(200).default(''),
   /** leer/fehlend = gespeichertes Passwort behalten */
   password: z.string().max(500).optional(),
@@ -83,28 +90,52 @@ function cleanFingerprint(v: string): string {
 }
 
 /**
- * Ziel aus der Eingabe bilden. Das gespeicherte Passwort wird nur für denselben Host und Benutzer weiterverwendet –
- * sonst könnte jemand mit „Sicherungen erstellen“ es an einen eigenen Server schicken lassen, ohne es zu kennen.
+ * Ziel aus der Eingabe bilden. Das gespeicherte Passwort wird nur für dieselbe Art, denselben Host und dasselbe Konto
+ * weiterverwendet – sonst könnte jemand mit „Sicherungen erstellen“ es an einen eigenen Server schicken lassen, ohne
+ * es zu kennen.
  */
-async function targetFrom(b: z.infer<typeof targetInput>, c: OffsiteRow): Promise<DavTarget> {
-  let url: string;
+async function targetFrom(b: z.infer<typeof targetInput>, c: OffsiteRow): Promise<OffsiteTarget> {
+  let base: { kind: 'smb'; url: string; server: string; share: string; dir: string[] } | { kind: 'webdav'; url: string };
   try {
-    url = normalizeDavUrl(b.url);
+    if (b.kind === 'smb') {
+      base = { kind: 'smb', ...parseUnc(b.url) };
+      checkSmbAccount(b.domain, b.username);
+    } else base = { kind: 'webdav', url: normalizeDavUrl(b.url) };
   } catch (e) {
     throw badRequest((e as Error).message);
   }
+  const domain = b.kind === 'smb' ? b.domain : '';
   let password = b.password ?? '';
   if (!password) {
-    const sameTarget = !!c.url && new URL(c.url).host === new URL(url).host && c.username === b.username;
+    const sameTarget = !!c.url && c.kind === b.kind && targetHost(c.kind, c.url).toLowerCase() === targetHost(b.kind, base.url).toLowerCase() && c.username === b.username && (c.domain ?? '') === domain;
     if (c.secret_id && !sameTarget) throw badRequest('Für ein anderes Ziel oder einen anderen Benutzer bitte das Passwort neu eingeben.');
     password = (await readSecret(c.secret_id)) ?? '';
   }
-  return { url, username: b.username, password, fingerprint: cleanFingerprint(b.fingerprint) };
+  if (base.kind === 'smb') return { ...base, domain, username: b.username, password };
+  return { ...base, username: b.username, password, fingerprint: cleanFingerprint(b.fingerprint) };
 }
 
-/** Änderung am Ziel (Adresse, Konto, Passwort, Zertifikat) oder Einschalten: frische Passwortbestätigung nötig. */
-function targetChanged(b: z.infer<typeof configInput>, t: DavTarget, c: OffsiteRow) {
-  return (b.enabled && !c.enabled) || t.url !== c.url || t.username !== c.username || !!b.password || t.fingerprint !== c.tls_fingerprint;
+const domainOf = (t: OffsiteTarget) => (t.kind === 'smb' ? t.domain : '');
+const fingerprintOf = (t: OffsiteTarget) => (t.kind === 'webdav' ? t.fingerprint : '');
+
+/** Änderung am Ziel (Art, Adresse, Konto, Passwort, Zertifikat) oder Einschalten: frische Passwortbestätigung nötig. */
+function targetChanged(b: z.infer<typeof configInput>, t: OffsiteTarget, c: OffsiteRow) {
+  return (
+    (b.enabled && !c.enabled) ||
+    t.kind !== c.kind ||
+    t.url !== c.url ||
+    t.username !== c.username ||
+    domainOf(t) !== (c.domain ?? '') ||
+    !!b.password ||
+    fingerprintOf(t) !== c.tls_fingerprint
+  );
+}
+
+/** Noch kein Ziel eingetragen (nur Aufbewahrung bzw. Probe speichern). */
+function emptyTarget(b: z.infer<typeof configInput>): OffsiteTarget {
+  return b.kind === 'smb'
+    ? { kind: 'smb', url: '', server: '', share: '', dir: [], domain: b.domain, username: b.username, password: '' }
+    : { kind: 'webdav', url: '', username: b.username, password: '', fingerprint: cleanFingerprint(b.fingerprint) };
 }
 
 const stepMessage = (e: unknown) => (e instanceof StepError ? { message: e.message, hint: e.hint } : { message: (e as Error).message });
@@ -121,7 +152,7 @@ export async function backupOffsiteRoutes(app: FastifyInstance) {
     const c = await offsiteConfig();
     const t = await targetFrom(b, c);
     const r = await testTarget(t);
-    await audit(req.auth!.actor, 'backup.offsite_tested', { type: 'backup', label: new URL(t.url).host }, { ergebnis: r.ok ? 'ok' : r.error ?? 'fehler' }, r.ok ? 'ok' : 'failed');
+    await audit(req.auth!.actor, 'backup.offsite_tested', { type: 'backup', label: targetHost(t.kind, t.url) }, { art: t.kind === 'smb' ? 'SMB' : 'WebDAV', ergebnis: r.ok ? 'ok' : r.error ?? 'fehler' }, r.ok ? 'ok' : 'failed');
     return r;
   });
 
@@ -129,7 +160,7 @@ export async function backupOffsiteRoutes(app: FastifyInstance) {
     const b = configInput.parse(req.body);
     const c = await offsiteConfig();
     if (!b.url && b.enabled) throw badRequest('Bitte zuerst die Adresse des Ziels eintragen.');
-    const t = b.url ? await targetFrom(b, c) : { url: '', username: b.username, password: '', fingerprint: cleanFingerprint(b.fingerprint) };
+    const t = b.url ? await targetFrom(b, c) : emptyTarget(b);
     if (targetChanged(b, t, c)) assertRecentAuth(req);
     // Aufbewahrung über der dokumentierten Frist (#246): nur mit ausdrücklicher Bestätigung (Art. 5 Abs. 1 lit. e DSGVO)
     const keep = { daily: b.keepDaily, weekly: b.keepWeekly, monthly: b.keepMonthly };
@@ -147,7 +178,7 @@ export async function backupOffsiteRoutes(app: FastifyInstance) {
     }
     // Ausschalten oder anderes Ziel (#246): Sicherungen auf dem bisherigen Ziel löschen (vor dem Speichern, mit den
     // bisherigen Zugangsdaten) oder als „frühere Sicherungen“ vormerken – sonst lägen sie unbegrenzt dort
-    const leaving = !!c.url && (t.url !== c.url || (c.enabled && !b.enabled));
+    const leaving = !!c.url && (t.kind !== c.kind || t.url !== c.url || (c.enabled && !b.enabled));
     let purged: number | null = null;
     if (leaving && b.oldTarget === 'delete') {
       assertRecentAuth(req);
@@ -156,7 +187,7 @@ export async function backupOffsiteRoutes(app: FastifyInstance) {
         if (r.failed.length) throw new Error(`${plural(r.failed.length, 'Datei', 'Dateien')} ließen sich nicht löschen`);
         purged = r.removed;
       } catch (e) {
-        await audit(req.auth!.actor, 'backup.offsite_purged', { type: 'backup', label: new URL(c.url).host }, { fehler: stepMessage(e).message.slice(0, 300) }, 'failed');
+        await audit(req.auth!.actor, 'backup.offsite_purged', { type: 'backup', label: targetHost(c.kind, c.url) }, { fehler: stepMessage(e).message.slice(0, 300) }, 'failed');
         throw new AppError(502, 'offsite_cleanup_failed', `Sicherungen auf dem bisherigen Ziel ließen sich nicht löschen: ${stepMessage(e).message} – nichts gespeichert. Zum Speichern „Behalten“ wählen und die Dateien später entfernen.`);
       }
     }
@@ -172,8 +203,8 @@ export async function backupOffsiteRoutes(app: FastifyInstance) {
                 keep_monthly = $8, drill_interval = $9, tested_at = CASE WHEN $10 THEN now() ELSE tested_at END,
                 last_error = CASE WHEN $11 THEN NULL ELSE last_error END,
                 last_ok_at = CASE WHEN $11 THEN NULL ELSE last_ok_at END, last_ok_file = CASE WHEN $11 THEN NULL ELSE last_ok_file END,
-                updated_at = now(), updated_by = $12 WHERE id = 1`,
-        [b.enabled && !!t.url, t.url, t.username, secretId, t.fingerprint, b.keepDaily, b.keepWeekly, b.keepMonthly, b.drillInterval, tested, t.url !== c.url, req.auth!.user?.id ?? null],
+                updated_at = now(), updated_by = $12, kind = $13, domain = $14 WHERE id = 1`,
+        [b.enabled && !!t.url, t.url, t.username, secretId, fingerprintOf(t), b.keepDaily, b.keepWeekly, b.keepMonthly, b.drillInterval, tested, t.url !== c.url || t.kind !== c.kind, req.auth!.user?.id ?? null, t.kind, domainOf(t)],
       );
     });
     if (leaving) {
@@ -184,10 +215,12 @@ export async function backupOffsiteRoutes(app: FastifyInstance) {
     if (b.enabled && t.url) await removeLeftover(t.url);
     const changes: Record<string, unknown> = {};
     if (b.enabled !== c.enabled) changes.eingeschaltet = b.enabled;
+    if (t.kind !== c.kind) changes.art = t.kind === 'smb' ? 'SMB-Freigabe' : 'WebDAV';
     if (t.url !== c.url) changes.ziel = { vorher: c.url || null, nachher: t.url || null };
+    if (domainOf(t) !== (c.domain ?? '')) changes.domaene = domainOf(t) || null;
     if (t.username !== c.username) changes.benutzer = t.username;
     if (b.password) changes.passwort = 'neu gesetzt';
-    if (t.fingerprint !== c.tls_fingerprint) changes.zertifikat = t.fingerprint ? `Fingerabdruck ${t.fingerprint.slice(0, 23)}…` : 'normale Prüfung';
+    if (fingerprintOf(t) !== c.tls_fingerprint) changes.zertifikat = fingerprintOf(t) ? `Fingerabdruck ${fingerprintOf(t).slice(0, 23)}…` : 'normale Prüfung';
     if (keepChanged) changes.aufbewahrung = `${b.keepDaily}/${b.keepWeekly}/${b.keepMonthly} (bis ${retentionLabel(days)}${days > DOCUMENTED_RETENTION_DAYS ? ', über der dokumentierten Frist bestätigt' : ''})`;
     if (leaving) changes.bisheriges_ziel = purged !== null ? `${purged} Sicherung(en) gelöscht` : c.last_ok_at ? 'Sicherungen behalten (Hinweis im Systemstatus)' : 'nichts übertragen';
     if (b.drillInterval !== c.drill_interval) changes.probe = b.drillInterval;
@@ -204,7 +237,7 @@ export async function backupOffsiteRoutes(app: FastifyInstance) {
     if (!c.url) throw badRequest('Kein Ziel eingetragen.');
     if (c.enabled) throw badRequest('Die Sicherung außer Haus ist eingeschaltet – erst ausschalten, dann die Sicherungen auf dem Ziel löschen.');
     assertRecentAuth(req);
-    const host = new URL(c.url).host;
+    const host = targetHost(c.kind, c.url);
     try {
       const r = await purgeTarget(await targetFromConfig(c));
       if (!r.failed.length) await removeLeftover(c.url);

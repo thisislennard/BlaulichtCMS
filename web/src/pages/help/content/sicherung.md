@@ -23,8 +23,12 @@ Die Sicherung läuft ab der eingestellten Uhrzeit einmal am Tag. Fällt die Stun
 ## Sicherung außer Haus
 
 Unter **Einstellungen → Sicherung → Sicherung außer Haus** legt BlaulichtCMS jede Datenbanksicherung zusätzlich auf einem Ziel
-außerhalb des Servers ab – zum Beispiel auf einem NAS im eigenen Netz. Übertragen wird per **WebDAV** über HTTPS: Das
-braucht auf dem Server kein Zusatzprogramm und funktioniert mit Synology, QNAP, Nextcloud und vielen anderen Geräten.
+außerhalb des Servers ab. Zwei Arten von Zielen stehen zur Wahl:
+
+- **SMB-Freigabe** – ein Ordner auf einem Windows-Server, einer DFS-Freigabe oder einem NAS im eigenen Netz, eingetragen
+  als UNC-Pfad (z. B. `\\server\freigabe\sicherung\blaulichtcms`) mit Domäne, Benutzername und Passwort. BlaulichtCMS
+  verbindet sich mit smbclient (SMB 2 oder 3, Port 445); nichts wird eingehängt.
+- **WebDAV** – eine HTTPS-Adresse, z. B. bei Synology, QNAP oder Nextcloud; auch für Ziele außerhalb des eigenen Netzes.
 
 So läuft es ab:
 
@@ -46,16 +50,35 @@ Passwort). **Behalten** lässt sie liegen – dann räumt dort niemand mehr auf,
 sie später; bei einem früheren Ziel (Zugangsdaten nicht mehr gespeichert) die Dateien am Gerät löschen und den Hinweis
 entfernen.
 
-Die Dateien bleiben **verschlüsselt** (mit dem Sicherungsschlüssel aus dem Master-Schlüssel) – das NAS sieht nur
+Die Dateien bleiben **verschlüsselt** (mit dem Sicherungsschlüssel aus dem Master-Schlüssel) – das Ziel sieht nur
 unlesbare Daten. Benutzername und Passwort des Ziels werden verschlüsselt gespeichert und nie wieder angezeigt.
 Schlägt eine Übertragung auch nach mehreren Versuchen fehl, erhalten alle mit „Sicherungen erstellen“ eine Benachrichtigung; der Stand
 steht unter **Systemstatus** („Sicherung außer Haus“) und in der Liste der Sicherungen.
 
 Ist die tägliche **Volume-Sicherung** am Docker-Host eingerichtet (`backup-cron.sh`), geht auch sie – mit Medien und
 mit dem eigenen Sicherungsschlüssel des Hosts verschlüsselt – in den Unterordner `volume/` des Ziels, mit derselben
-Aufbewahrung.
+Aufbewahrung. Bei einer SMB-Freigabe wird die Volume-Sicherung dafür kurz im Sicherungsordner des Servers
+zwischengespeichert – dort muss so viel Platz frei sein, wie sie groß ist.
 
-## Einrichtung am NAS (Beispiel Synology)
+## Einrichtung einer SMB-Freigabe (Windows-Server, DFS, NAS)
+
+1. Auf dem Server einen Ordner anlegen, z. B. `Sicherung` in einer Freigabe, oder einen vorhandenen Ordner nutzen.
+2. Ein **eigenes Konto** nur für die Sicherung verwenden (z. B. ein Dienstkonto der Domäne) mit Lese- und Schreibrecht
+   nur auf diesen Ordner – keine Administratorrechte.
+3. Am Server bzw. in der Firewall Port **445** für die Adresse des BlaulichtCMS-Servers freigeben.
+4. In BlaulichtCMS unter **Einstellungen → Sicherung → Sicherung außer Haus** die Art **SMB-Freigabe** wählen und
+   eintragen: **Pfad** als UNC-Pfad (`\\server\freigabe\ordner`, bei DFS der Pfad im Namensraum, z. B.
+   `\\firma.local\dfs\Sicherung\BlaulichtCMS`), **Domäne** (bei Domänenkonten, z. B. `firma.local`; leer bei einem
+   Konto direkt auf dem NAS), **Benutzername** ohne Domäne und **Passwort**.
+5. **Verbindung testen.** Fehlt der letzte Ordner im Pfad, legt der Test ihn an; danach schreibt er eine Probedatei,
+   liest sie zurück und löscht sie wieder.
+6. **Nach jeder Sicherung außer Haus ablegen** einschalten und speichern (verlangt die Bestätigung mit dem eigenen
+   Passwort). Gespeichert wird nur nach bestandenem Test.
+
+SMB-Ziele brauchen das BlaulichtCMS-Image mit smbclient. Meldet der Test „smbclient fehlt“, am Docker-Host einmal
+`sudo bash install.sh` ausführen.
+
+## Einrichtung per WebDAV (Beispiel Synology)
 
 1. Im Paket-Zentrum **WebDAV Server** installieren und darin **HTTPS** einschalten (Standard-Port 5006); HTTP
    ausgeschaltet lassen.
@@ -65,16 +88,13 @@ Aufbewahrung.
    Adresse des BlaulichtCMS-Servers beschränken.
 4. Optional: Papierkorb des freigegebenen Ordners einschalten und Snapshots (Btrfs) aktivieren – so übersteht eine
    Sicherung auch ein versehentliches Löschen.
-5. In BlaulichtCMS unter **Einstellungen → Sicherung → Sicherung außer Haus** eintragen:
+5. In BlaulichtCMS unter **Einstellungen → Sicherung → Sicherung außer Haus** die Art **WebDAV** wählen und eintragen:
    Adresse `https://<nas-adresse>:5006/sicherung/blaulichtcms/`, Benutzer und Passwort.
 6. **Verbindung testen.** Hat das NAS ein selbst signiertes Zertifikat, zeigt der Test dessen Fingerabdruck. Am NAS
    unter *Systemsteuerung → Sicherheit → Zertifikat* vergleichen und erst bei Übereinstimmung **Fingerabdruck
    übernehmen** – BlaulichtCMS nimmt dann genau dieses Zertifikat an, sonst keines.
 7. **Nach jeder Sicherung außer Haus ablegen** einschalten und speichern (verlangt die Bestätigung mit dem eigenen
    Passwort). Gespeichert wird nur nach bestandenem Test.
-
-Warum nicht SMB? SMB bräuchte im Container ein zusätzliches Programm und damit ein neues Programmabbild. WebDAV über
-HTTPS deckt denselben Zweck ab und ist durchgehend verschlüsselt.
 
 ## Wiederherstellung üben
 

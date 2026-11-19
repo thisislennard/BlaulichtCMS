@@ -34,7 +34,7 @@ export const SETTINGS_INDEX: SettingsEntry[] = [
   P('e-mail', 'E-Mail & Push', 'Push E-Mail Mail Versandweg Microsoft 365 Graph SMTP Mailserver Testmail Absender Push-Schlüssel VAPID Einzelheiten Benachrichtigungen'),
   P('sicherheit', 'Sicherheit', 'Zwei-Faktor 2FA Pflicht Sitzung Leerlauf angemeldet bleiben gemerkte Geräte Kontosperre Fehlversuche Sicherheitsmeldungen interne Ziele private Adressen Passwort'),
   P('sicherung', 'Sicherung', 'Sicherung Backup Datensicherung Zeitplan Uhrzeit Wiederherstellung Wiederherstellen Restore Generalschlüssel'),
-  P('sicherung', 'Sicherung außer Haus', 'Sicherung außer Haus NAS Synology WebDAV SMB Offsite Probe-Wiederherstellung Aufbewahrung Ziel', ['backup.manage'], 'ausser-haus'),
+  P('sicherung', 'Sicherung außer Haus', 'Sicherung außer Haus NAS Synology WebDAV SMB Freigabe UNC Domäne Windows DFS Offsite Probe-Wiederherstellung Aufbewahrung Ziel', ['backup.manage'], 'ausser-haus'),
   P('updates', 'Updates & Wartung', 'Update Version aktualisieren Wartungsmodus Signatur Update-Token Update vorbereiten Release', ['update.view']),
   P('workflows', 'Workflows ausführen', 'Workflows abschalten einschalten global Läufe je Minute Schleifen Automationen'),
   P('system', 'System', 'Hintergrundaufträge parallel Version Systeminfo Datenverzeichnis Proxy Worker Warteschlange Laufzeit Datenbank Über BlaulichtCMS'),

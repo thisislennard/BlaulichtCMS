@@ -31,7 +31,7 @@ GitHub (Update-Prüfung, Updates) ◀──Abruf──────────�
                                                    │    und Pressemitteilungen, E-Mail-Benachrichtigungen
                                                    ├──▶ Push-Dienste der Browserhersteller (Ende-zu-Ende-
                                                    │    verschlüsselt; standardmäßig nur Art und Link)
-                                                   └──▶ Sicherungsziel außer Haus (WebDAV, verschlüsselt)
+                                                   └──▶ Sicherungsziel außer Haus (SMB/WebDAV, verschlüsselt)
 ```
 
 - **Upload:** Datei, Dateiname, optionaler Hinweis, Vorgangsnummer, IP-Adresse (Audit, nach 30 Tagen entfernt). Die
@@ -93,7 +93,7 @@ GitHub (Update-Prüfung, Updates) ◀──Abruf──────────�
   Installation, Update-Pakete und der Host-Update-Helfer laden Code von GitHub, der Bau des Images die Basis-Images aus
   den Container-Registries. Abschaltbar unter *Updates* (`updates.enabled`).
 - **Sicherung außer Haus und Probe-Wiederherstellung (#212):** verschlüsselte Sicherungen der Datenbank und – je nach
-  Einstellung – des Volumes mit allen Originaldateien gehen per WebDAV an ein zweites Ziel (z. B. NAS); die
+  Einstellung – des Volumes mit allen Originaldateien gehen per SMB oder WebDAV an ein zweites Ziel (z. B. Windows-Server oder NAS); die
   Probe-Wiederherstellung spielt eine Sicherung in eine vorübergehende Probedatenbank ein und löscht sie danach.
 - **Betrieb:** Konten, Sitzungen (IP, Browser), Audit, Systemprotokoll, Sicherungen.
 

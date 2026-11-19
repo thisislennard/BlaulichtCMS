@@ -272,7 +272,7 @@ nie zweimal (eindeutiger Index in `automation_runs`), ein verschobener Termin ei
 | Gestaltung der Upload-Seite | festes Bausteinschema (Server prüft Typen, Längen, genau einen Upload-Bereich), Texte nur als Text dargestellt (kein HTML), Akzentfarben nur aus einer festen Palette (Tokens, per style-Attribut im Rahmen der CSP), Bilder neu kodiert ohne Metadaten und nur über zufällige ID abrufbar; Datenschutzabschnitt nicht abschaltbar |
 | Inhaltsprüfung | Typ am Dateiinhalt, Bilder vollständig dekodiert mit Pixelgrenze, Videos: Codec-Liste, Länge, Auflösung und Dekodierprüfung (Anfang Bild für Bild, danach Schlüsselbilder) – alle Grenzen einstellbar |
 | Prüfbefunde | Dateien mit Befund werden gesperrt (Quarantäne, nie ausgeliefert, erneut prüfbar); „Trotzdem freigeben“ nur für Videos mit reinem Dekodierbefund und nur mit „Medien administrieren“, Begründung, Audit und Sicherheitsmeldung; Schadsoftware wird sofort gelöscht |
-| Sicherungen | verschlüsselt (AES-256-GCM) mit eigenem Schlüssel, regelmäßige Probe-Wiederherstellung (Volume am Host; Datenbank in eine Wegwerf-Datenbank, `ops/drill.ts`); Kopie außer Haus per WebDAV über HTTPS (`ops/offsite.ts`, Prüfsumme nach dem Hochladen, Zertifikat optional per Fingerabdruck, SSRF-Schutz nur für den eingetragenen Host gelockert) |
+| Sicherungen | verschlüsselt (AES-256-GCM) mit eigenem Schlüssel, regelmäßige Probe-Wiederherstellung (Volume am Host; Datenbank in eine Wegwerf-Datenbank, `ops/drill.ts`); Kopie außer Haus auf eine SMB-Freigabe (smbclient) oder per WebDAV über HTTPS (`ops/offsite.ts`, `ops/smb.ts`, Prüfsumme nach dem Hochladen, Zertifikat optional per Fingerabdruck, SSRF-Schutz nur für den eingetragenen Host gelockert) |
 | Updates | Releases mit Ed25519 signiert (privater Schlüssel nie auf dem Server), geprüft gegen den Schlüssel der laufenden Version; Sicherung vorab und automatischer Rückweg; Bridge-Updates ebenso signiert |
 | Container | unprivilegierter Benutzer, schreibgeschütztes Dateisystem, keine Capabilities, Grenzen für Speicher, CPU und Prozesse, Port standardmäßig nur lokal |
 
@@ -395,8 +395,8 @@ Ergebnisse je Verbindung: [docs/integrationen.md](integrationen.md).
   Seitdem läuft der vollständige Weg (Helfer unter systemd → `install.sh` → Build, Selbsttest, Sicherung, Wechsel,
   Rückweg) in der CI mit echtem Docker. Ein Image-Update aus der App auf dem echten Host steht noch aus; für 0.7.1 ist
   der Weg von Hand mit `install.sh` empfohlen, der auch den neuen Helfer mitbringt.
-- Sicherung außer Haus und Probe-Wiederherstellung (#212): gegen einen WebDAV-Stellvertreter mit echtem TLS getestet;
-  mit dem echten NAS (z. B. Synology „WebDAV Server“) und die zeitgesteuerte Probe auf dem Zielhost noch prüfen.
+- Sicherung außer Haus und Probe-Wiederherstellung (#212): gegen einen WebDAV-Stellvertreter mit echtem TLS und (SMB) in der CI gegen einen echten Samba-Server getestet;
+  mit einem echten Ziel (Windows-/DFS-Freigabe bzw. Synology „WebDAV Server“) und die zeitgesteuerte Probe auf dem Zielhost noch prüfen.
 - Freigabe aus der Push-Mitteilung (#216): Ob ein Gerät Aktionsknöpfe zeigt, entscheidet der Browser; auf echten
   Geräten (Android, iPhone, Windows, macOS) noch ansehen.
 - Gesichtsvorschläge (#214): Erkennungsrate und Rechenzeit auf echten Einsatzfotos und auf der Zielhardware (2 Kerne)
