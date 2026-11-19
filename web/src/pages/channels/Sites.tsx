@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { del, download, get, post } from '../../api/client';
 import type { Site } from '../../api/types';
-import { Badge, Button, Card, EmptyState, ErrorBox, FieldWrap, Input, Notice, PageHeader, Select, SkeletonRows, StatusBadge, Switch } from '../../components/ui/core';
+import { Badge, Button, Card, EmptyState, ErrorBox, FieldWrap, Input, Notice, PageHeader, SkeletonRows, StatusBadge, Switch } from '../../components/ui/core';
 import { put } from '../../api/client';
 import { Icon } from '../../components/ui/Icon';
 import { CopyButton, Dialog, useErrorToast, useConfirm } from '../../components/ui/overlays';
@@ -254,73 +254,42 @@ export default function Sites() {
   );
 }
 
-/** Bridge-Updates: zuerst auf einer Testwebsite, dann für alle freigeben. */
+/** Bridge-Updates: Jede gekoppelte Website erhält die Bridge-Version aus dem laufenden BlaulichtCMS. */
 function BridgeUpdates() {
-  const qc = useQueryClient();
-  const toastError = useErrorToast();
   const q = useQuery({ queryKey: ['bridge-release'], queryFn: () => get<any>('/sites/bridge-release') });
-  const [note, setNote] = useState('');
   if (!q.data) return null;
-  const { bundled, releases, sites } = q.data;
-  const released = releases.some((r: any) => r.version === bundled.version);
-  const act = async (fn: () => Promise<unknown>) => {
-    try {
-      await fn();
-    } catch (e) {
-      toastError(e);
-    }
-    qc.invalidateQueries({ queryKey: ['bridge-release'] });
-  };
+  const { bundled, sites } = q.data;
+  const badSignature = bundled.signature?.state === 'unsigned' || bundled.signature?.state === 'invalid';
   return (
-    <Card title="Bridge-Updates" subtitle="Updates kommen über den normalen WordPress-Updateweg. Websites in der Stufe „Test“ erhalten neue Versionen zuerst.">
+    <Card title="Bridge-Updates" subtitle="Ein Update von BlaulichtCMS bringt die passende Bridge mit. WordPress bietet sie über den normalen Updateweg an – mit „Automatische Updates“ installiert WordPress sie selbst.">
       <div className="flex flex-col gap-4 text-sm">
         <div className="flex flex-wrap items-center gap-2">
           Version in BlaulichtCMS: <strong>{bundled.version}</strong>
           <code className="text-meta">{bundled.sha256.slice(0, 16)}…</code>
-          {released ? <Badge tone="success">für alle freigegeben</Badge> : <Badge tone="warning">nur Stufe Test</Badge>}
           {bundled.signature?.state === 'valid' && <Badge tone="success">signiert</Badge>}
           {bundled.signature?.state === 'not_configured' && <Badge tone="neutral">ohne Signatur (nur Prüfsumme)</Badge>}
-          {(bundled.signature?.state === 'unsigned' || bundled.signature?.state === 'invalid') && <Badge tone="error">Signatur ungültig</Badge>}
+          {badSignature && <Badge tone="error">Signatur ungültig</Badge>}
         </div>
-        {(bundled.signature?.state === 'unsigned' || bundled.signature?.state === 'invalid') && (
-          <Notice tone="error">Websites mit Signaturprüfung lehnen dieses Paket ab: {bundled.signature.reason} Vor der Freigabe neu signieren.</Notice>
+        {badSignature && (
+          <Notice tone="error">Diese Bridge wird den Websites nicht angeboten, weil ihre Signatur nicht passt: {bundled.signature.reason}</Notice>
         )}
         <ul className="m-0 p-0 list-none flex flex-col gap-2">
           {sites.map((s: any) => (
             <li key={s.id} className="flex flex-wrap items-center gap-2">
               <span className="min-w-[160px] font-medium">{s.name}</span>
               <span className="text-fg-muted">Bridge {s.plugin_version ?? '–'}</span>
-              {s.plugin_version === bundled.version && <Badge tone="success">aktuell</Badge>}
-              <Select aria-label={`Update-Stufe ${s.name}`} value={s.update_channel} onChange={(e) => act(() => put(`/sites/${s.id}/update-channel`, { channel: e.target.value }))} className="max-w-[160px]">
-                <option value="stable">Stufe: Stabil</option>
-                <option value="test">Stufe: Test</option>
-              </Select>
+              {s.plugin_version === bundled.version ? (
+                <Badge tone="success">aktuell</Badge>
+              ) : (
+                !badSignature && <Badge tone="warning">Update auf {bundled.version} wird angeboten</Badge>
+              )}
             </li>
           ))}
         </ul>
-        {!released && (
-          <div className="flex flex-wrap items-end gap-2 border-t border-line pt-3">
-            <FieldWrap label="Prüfnotiz (Testwebsite, Theme, Ergebnis)" htmlFor="br-note" className="flex-1 min-w-[240px]" labelAction={
-              <HelpTip title="Bridge-Update freigeben" more="/hilfe/updates#blaulichtcms-bridge">
-                <p className="m-0">Erst eine Testwebsite in die Stufe „Test“ setzen, dort in WordPress aktualisieren und prüfen (Beitrag, Banner, Zurückziehen). Freigeben lässt sich die Version erst, wenn die Testwebsite sie meldet.</p>
-              </HelpTip>
-            }>
-              <Input id="br-note" value={note} onChange={(e) => setNote(e.target.value)} />
-            </FieldWrap>
-            {note.trim().length < 5 && <span id="br-why" className="self-center text-meta text-fg-muted">Erst eine Prüfnotiz eintragen (mindestens 5 Zeichen).</span>}
-            <Button variant="primary" icon="CheckCircle2" disabled={note.trim().length < 5} aria-describedby={note.trim().length < 5 ? 'br-why' : undefined} onClick={() => act(() => post('/sites/bridge-release', { version: bundled.version, note }))}>
-              Version {bundled.version} für alle freigeben
-            </Button>
-          </div>
-        )}
-        {releases.length > 0 && (
-          <ul className="m-0 pl-4 text-meta text-fg-muted">
-            {releases.map((r: any) => (
-              <li key={r.version}>
-                {r.version} freigegeben von {r.approved_by_name ?? '–'} am {fmtDateTime(r.approved_at)} (getestet auf {r.tested_on_name ?? '–'}): {r.note}
-              </li>
-            ))}
-          </ul>
+        {sites.some((s: any) => s.plugin_version !== bundled.version) && !badSignature && (
+          <p className="m-0 text-meta text-fg-muted">
+            Die Bridge fragt höchstens alle sechs Stunden nach – spätestens dann erscheint das Update in WordPress. Sofort geht es mit <strong>Bridge herunterladen</strong> und in WordPress <strong>Plugins → Plugin hochladen</strong> (vorhandenes ersetzen); die Kopplung bleibt erhalten.
+          </p>
         )}
       </div>
     </Card>

@@ -22,7 +22,7 @@ dem Server abgeleitet ist. Die Prüfsumme schützt also gegen Übertragungsfehle
   gleich der signierten und neuer als die installierte (kein Zurückspielen alter, verwundbarer Versionen). Sonst bricht
   WordPress das Update mit einer Meldung ab. Die Prüfsummenkontrolle bleibt zusätzlich bestehen.
 - **Prüfung in BlaulichtCMS:** Unter *Einrichtung → Websites → Bridge-Updates* zeigt BlaulichtCMS, ob das Paket im Image gültig signiert ist.
-  Ein unsigniertes oder falsch signiertes Paket lässt sich nicht für alle freigeben. Das ist nur eine Hilfe gegen
+  Ein unsigniertes oder falsch signiertes Paket wird den Websites nicht angeboten. Das ist nur eine Hilfe gegen
   Versehen – maßgeblich ist die Prüfung in der Bridge.
 - **Server-Test:** `server/test/units.test.ts` schlägt fehl, wenn Schlüssel hinterlegt sind, die Bridge aber nach dem
   Signieren geändert wurde. Lokal prüfen: `node scripts/bridge-signing.mjs verify`.
@@ -52,10 +52,10 @@ Voraussetzung: Node.js 24 und ein Klon des Repositorys.
    node scripts/bridge-signing.mjs verify
    ```
 4. `includes/signing-keys.php`, `signature.json` und die Versionsänderung committen und wie gewohnt ausliefern
-   (`install.sh`), dann über die Test-Stufe und die Freigabe verteilen.
+   (`install.sh`); die Websites erhalten die neue Bridge dann über den WordPress-Updateweg.
 
 **Bei jeder späteren Änderung an der Bridge** nach dem Erhöhen der Version Schritt 3 wiederholen. Ohne neue Signatur
-schlägt der Server-Test fehl, BlaulichtCMS zeigt „Signatur ungültig“ und verweigert die Freigabe.
+schlägt der Server-Test fehl, BlaulichtCMS zeigt „Signatur ungültig“ und bietet das Paket nicht an.
 
 Statt des Pfads kann der private Schlüssel als PEM in der Umgebungsvariable `BRIDGE_SIGNING_KEY` stehen, z. B. für
 eine Signatur in einer eigenen CI-Umgebung. Dann liegt der Schlüssel bei diesem CI-Anbieter – schwächer als offline,
@@ -85,7 +85,7 @@ Schlüssel per Hand auf allen Websites installieren.
   `signing-keys.php` ändern – er kann dann aber ohnehin beliebigen Code ausführen. Die Signatur schützt den Updateweg,
   nicht eine bereits übernommene Website.
 - **Vertrauen in den Signierenden:** Die Signatur belegt nur, dass der Inhaber des privaten Schlüssels das Paket
-  freigegeben hat. Sie ersetzt keine Durchsicht der Änderungen vor dem Signieren und nicht die Test-Stufe.
+  freigegeben hat. Sie ersetzt keine Durchsicht der Änderungen vor dem Signieren.
 - **Von Hand hochgeladene ZIP-Dateien** (Plugin installieren statt Update) prüft die Bridge nicht – das ist ein
   bewusster Schritt einer Person mit Administratorrechten in WordPress.
 - **Verfügbarkeit:** Ein übernommener Server kann Updates zurückhalten oder ein abgelehntes Paket anbieten (die

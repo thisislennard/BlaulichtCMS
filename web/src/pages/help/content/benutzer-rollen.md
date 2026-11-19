@@ -129,7 +129,7 @@ Alle Rechte, nach Bereichen. Die Tabelle entspricht dem Rollen-Editor; „Setzt 
 | Aus sozialen Netzwerken entfernen | kritisch | Veröffentlichungen in sozialen Netzwerken entfernen oder als entfernt bestätigen. | Beiträge ansehen |
 | Websites ansehen | lesen | Gekoppelte Websites und ihren Zustand sehen. | – |
 | Websites koppeln und widerrufen | kritisch | Websites mit der BlaulichtCMS Bridge koppeln, Kopplungscodes erzeugen, Schlüssel widerrufen, widerrufene Websites entfernen, Plugin laden. | Websites ansehen |
-| Bridge-Updates freigeben | kritisch | Neue Versionen der BlaulichtCMS Bridge für die Websites freigeben und die Update-Stufe je Website wählen. | Websites ansehen |
+| Bridge-Updates ansehen | lesen | Stand der BlaulichtCMS Bridge sehen: Version in BlaulichtCMS, Signatur und installierte Version je Website. | Websites ansehen |
 
 **Banner**
 

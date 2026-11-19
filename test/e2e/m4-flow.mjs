@@ -127,10 +127,6 @@ try {
     wpcli('plugin install /tmp/blaulichtcms/alt.zip --force --activate');
     expect(wpcli('plugin get blaulichtcms-bridge --field=version') === '0.3.9', 'Alte Version nicht installiert');
     wpcli('blaulichtcms-bridge poll');
-    const site = (await admin.get('/sites/bridge-release')).sites[0];
-    wpcli('transient delete blaulichtcms_bridge_update');
-    expect(!wpcli('plugin list --update=available --field=name').includes('blaulichtcms-bridge'), 'Update vor Freigabe angeboten');
-    await admin.put(`/sites/${site.id}/update-channel`, { channel: 'test' });
     wpcli('transient delete blaulichtcms_bridge_update');
     wpcli('transient delete update_plugins --network');
     const upd = wpcli('plugin update blaulichtcms-bridge');
@@ -138,8 +134,8 @@ try {
     const status = wpcli('blaulichtcms-bridge status');
     expect(/gekoppelt|BlaulichtCMS/i.test(status), `Kopplung verloren: ${status}`);
     wpcli('blaulichtcms-bridge poll');
-    await admin.post('/sites/bridge-release', { version: '0.9.1', note: 'Auf der WordPress-Testseite (Twenty Twenty-Five) geprüft.' });
-    return `0.3.9 → 0.9.1 per „wp plugin update“, Kopplung erhalten, danach für alle freigegeben`;
+    expect((await admin.get('/sites/bridge-release')).sites[0].plugin_version === '0.9.1', 'Website meldet die neue Version nicht');
+    return `0.3.9 → 0.9.1 per „wp plugin update“ ohne Freigabe, Kopplung erhalten`;
   });
 
   let archiveBeforeGood;

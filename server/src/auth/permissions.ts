@@ -95,7 +95,7 @@ export const PERMISSIONS: PermissionDef[] = [
   P('publish.social_remove', 'publishing', 'critical', 'Aus sozialen Netzwerken entfernen', 'Veröffentlichungen in sozialen Netzwerken entfernen oder als entfernt bestätigen.', ['post.view']),
   P('channel.view', 'publishing', 'read', 'Websites ansehen', 'Gekoppelte Websites und ihren Zustand sehen.'),
   P('channel.sites', 'publishing', 'critical', 'Websites koppeln und widerrufen', 'Websites mit der BlaulichtCMS Bridge koppeln, Kopplungscodes erzeugen, Schlüssel widerrufen, widerrufene Websites entfernen, Plugin laden.', ['channel.view'], true),
-  P('channel.updates', 'publishing', 'critical', 'Bridge-Updates freigeben', 'Neue Versionen der BlaulichtCMS Bridge für die Websites freigeben und die Update-Stufe je Website wählen.', ['channel.view'], true),
+  P('channel.updates', 'publishing', 'read', 'Bridge-Updates ansehen', 'Stand der BlaulichtCMS Bridge sehen: Version in BlaulichtCMS, Signatur und installierte Version je Website.', ['channel.view'], true),
 
   /* Banner */
   P('banner.view', 'banners', 'read', 'Banner ansehen', 'Banner und ihren Stand ansehen.'),

@@ -175,7 +175,6 @@ const EXCLUDED: Record<string, string> = {
   backups: 'Sicherungsläufe: Dateiname, Größe, Stand. Die Sicherungen selbst sind Kopien (Fristen in docs/datenschutz.md).',
   backup_offsite: 'Konfiguration der Sicherung außer Haus (Ziel, Benutzername; Passwort verschlüsselt).',
   restore_drills: 'Probe-Wiederherstellungen: Stand und Zähler.',
-  bridge_releases: 'Freigegebene Versionen der BlaulichtCMS Bridge.',
   import_runs: 'Importläufe: Prüfsumme und Zähler.',
   wp_sites: 'Gekoppelte Websites (Name, Adresse, Prüfsummen).',
   connections: 'Verbindungen: Konfiguration und Konto der Organisation beim Dienst; Zugangsdaten verschlüsselt.',

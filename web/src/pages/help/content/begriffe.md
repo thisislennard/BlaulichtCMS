@@ -7,7 +7,6 @@ Jedes Wort hat in BlaulichtCMS genau eine Bedeutung. So heißen die Dinge in Men
 | **Website** | Eine über die BlaulichtCMS Bridge gekoppelte WordPress-Website. Im Beitrag das Ziel „Veröffentlichen auf“. Eingerichtet unter [Einrichtung → Websites](/websites). |
 | **Soziale Netzwerke** | Facebook, Instagram, Threads, X, Mastodon, Bluesky und der WhatsApp-Kanal (so heißt der Dienst bei WhatsApp). |
 | **Veröffentlichungsziele** | Website und soziale Netzwerke zusammen. Sie sind Teil der Fassung. |
-| **Update-Stufe** | „Test“ oder „Stabil“ je Website: In der Stufe „Test“ kommen neue Bridge-Versionen zuerst an. |
 | **Bridge** | Das WordPress-Plugin „BlaulichtCMS Bridge“, das freigegebene Aufträge abholt. |
 | **Kopplungscode** | Einmaliger Code, mit dem eine Website einen eigenen Schlüssel erhält. |
 | **Veröffentlichungsauftrag** | Auftrag an eine Website für genau eine freigegebene Fassung. |
