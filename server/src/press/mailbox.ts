@@ -220,8 +220,13 @@ async function runImap(run: Run, password: string): Promise<boolean> {
 
 async function graphGet(path: string, accept: string, maxBytes: number) {
   const m = await storedM365Settings();
-  const token = await m365Token(m);
-  const res = await httpRequest({ method: 'GET', url: `${m365GraphBase()}${path}`, headers: { authorization: `Bearer ${token}`, accept }, timeoutMs: 60_000, maxResponseBytes: maxBytes, maxRedirects: 0, allowPrivateHosts: m365PrivateHosts() });
+  const get = async (fresh: boolean) => {
+    const token = await m365Token(m, { fresh });
+    return httpRequest({ method: 'GET', url: `${m365GraphBase()}${path}`, headers: { authorization: `Bearer ${token}`, accept }, timeoutMs: 60_000, maxResponseBytes: maxBytes, maxRedirects: 0, allowPrivateHosts: m365PrivateHosts() });
+  };
+  let res = await get(false);
+  // Gerade erteilte Berechtigung: das zwischengespeicherte Token kennt sie noch nicht – einmal mit frischem Token
+  if (res.status === 401 || res.status === 403) res = await get(true);
   if (res.status !== 200) {
     let detail = res.text().slice(0, 200);
     try {

@@ -10,6 +10,7 @@ import { buildApp } from '../src/app.js';
 import { getSettings, setSettings } from '../src/lib/settings.js';
 import { claimJobs, completeJob } from '../src/jobs/queue.js';
 import { notify } from '../src/lib/notify.js';
+import { m365Send } from '../src/lib/mail.js';
 import { deliverNotification } from '../src/lib/notify-channels.js';
 import { findPlaintextSecrets, migratePlaintextSecrets } from '../src/lib/secret-audit.js';
 import { connectionSecrets, loadConnection } from '../src/connections/common.js';
@@ -82,6 +83,8 @@ let server: http.Server;
 const pushes: { device: string; headers: http.IncomingHttpHeaders; body: Buffer }[] = [];
 const graphMails: { sender: string; auth: string; body: any }[] = [];
 const tokenRequests: URLSearchParams[] = [];
+/** Graph lehnt Anfragen mit diesem Token ab (Berechtigung erst nach dem Ausstellen erteilt) */
+let deniedToken = '';
 const goneDevices = new Set<string>();
 
 let admin: Client;
@@ -134,12 +137,13 @@ beforeAll(async () => {
         if (form.get('client_secret') !== SECRET || form.get('client_id') !== CLIENT) {
           return res.writeHead(401, { 'content-type': 'application/json' }).end(JSON.stringify({ error: 'invalid_client', error_description: 'AADSTS7000215: Invalid client secret provided.' }));
         }
-        return res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ token_type: 'Bearer', expires_in: 3599, access_token: 'graph-token-1' }));
+        return res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ token_type: 'Bearer', expires_in: 3599, access_token: `graph-token-${tokenRequests.length}` }));
       }
       const m = /^\/graph\/users\/([^/]+)\/sendMail$/.exec(url);
       if (m) {
         const sender = decodeURIComponent(m[1]);
         if (sender !== 'funktion@example.org') return res.writeHead(404, { 'content-type': 'application/json' }).end(JSON.stringify({ error: { code: 'ErrorInvalidUser', message: 'The requested user is invalid.' } }));
+        if (deniedToken && req.headers.authorization === `Bearer ${deniedToken}`) return res.writeHead(403, { 'content-type': 'application/json' }).end(JSON.stringify({ error: { code: 'ErrorAccessDenied', message: 'Access is denied. Check credentials and try again.' } }));
         graphMails.push({ sender, auth: String(req.headers.authorization), body: JSON.parse(body.toString()) });
         return res.writeHead(202).end();
       }
@@ -301,11 +305,19 @@ describe('E-Mail über Microsoft 365', () => {
     const ok = await admin.post('/notify/settings/test-mail', { to: 'pruefung@example.org', ...form, clientSecret: SECRET });
     expect(ok.status, JSON.stringify(ok.json)).toBe(200);
     const last = graphMails.at(-1)!;
-    expect(last.auth).toBe('Bearer graph-token-1');
+    expect(last.auth).toMatch(/^Bearer graph-token-\d+$/);
     expect(last.body.message.toRecipients).toEqual([{ emailAddress: { address: 'pruefung@example.org' } }]);
     expect(last.body.saveToSentItems).toBe(true);
     expect(tokenRequests.at(-1)!.get('scope')).toBe('https://graph.microsoft.com/.default');
     expect(tokenRequests.at(-1)!.get('grant_type')).toBe('client_credentials');
+    // Berechtigung erst nach dem Ausstellen des zwischengespeicherten Tokens erteilt: einmal mit frischem Token wiederholen
+    deniedToken = last.auth.slice('Bearer '.length);
+    const before = tokenRequests.length;
+    const again = await m365Send({ ...form, clientSecret: SECRET }, { from: form.sender, to: 'pruefung@example.org', subject: 'Erneut', text: 'Erneut' });
+    expect(again.response).toMatch(/202/);
+    expect(tokenRequests.length).toBe(before + 1);
+    expect(graphMails.at(-1)!.auth).not.toBe(`Bearer ${deniedToken}`);
+    deniedToken = '';
     // Andere Absenderadresse als getestet → erneuter Test nötig
     expect((await admin.put('/notify/settings', { transport: 'm365', pushEnabled: true, mailEnabled: true, ...form, sender: 'anders@example.org', clientSecret: SECRET })).status).toBe(409);
     // Ohne frische Bestätigung kein Umschalten

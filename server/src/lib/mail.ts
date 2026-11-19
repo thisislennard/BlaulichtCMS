@@ -207,6 +207,9 @@ export async function m365Send(c: M365Settings, m: MailOptions): Promise<{ messa
     }
     if (res.status === 202 || res.status === 200) return { messageId: undefined, response: `Microsoft Graph: ${res.status} angenommen` };
     // Drosselung bzw. vorübergehend nicht verfügbar: Microsoft hat die Nachricht nicht angenommen – kurz warten, erneut
+    // Gerade erteilte Berechtigung bzw. neues Postfach: ein zwischengespeichertes Token (bis knapp 1 Stunde) kennt sie noch
+    // nicht – einmal mit frischem Token wiederholen, statt weiter „Keine Berechtigung“ zu melden
+    if ((res.status === 401 || res.status === 403) && attempt === 1) continue;
     if (RETRY_STATUS.has(res.status) && attempt < 3) {
       const wait = Math.min(10, Math.max(1, Number(res.headers['retry-after']) || 2 ** attempt));
       await new Promise((r) => setTimeout(r, process.env.VITEST ? 10 : wait * 1000));
@@ -243,6 +246,9 @@ export async function m365SendMime(c: M365Settings, raw: Buffer): Promise<{ resp
       throw networkError(e, 'Microsoft Graph');
     }
     if (res.status === 202 || res.status === 200) return { response: `Microsoft Graph: ${res.status} angenommen` };
+    // Gerade erteilte Berechtigung bzw. neues Postfach: ein zwischengespeichertes Token (bis knapp 1 Stunde) kennt sie noch
+    // nicht – einmal mit frischem Token wiederholen, statt weiter „Keine Berechtigung“ zu melden
+    if ((res.status === 401 || res.status === 403) && attempt === 1) continue;
     if (RETRY_STATUS.has(res.status) && attempt < 3) {
       await new Promise((r) => setTimeout(r, process.env.VITEST ? 10 : Math.min(10, Math.max(1, Number(res.headers['retry-after']) || 2 ** attempt)) * 1000));
       continue;
