@@ -39,6 +39,12 @@ export const IG_SCOPES = ['instagram_business_basic', 'instagram_business_conten
  * trotzdem und zeigt nur die Zahlen, die ohne dieses Recht lesbar sind.
  */
 export const FB_INSIGHT_SCOPES = ['read_insights'];
+/**
+ * Seiten, die zu einem Business-Portfolio gehören, liefert `/me/accounts` nur mit `business_management` – sonst ist die
+ * Liste trotz aller Seitenrechte leer (im Betrieb festgestellt, 20.11.2026). Angefragt, aber nicht Voraussetzung:
+ * Seiten ohne Portfolio kommen auch ohne.
+ */
+export const FB_BUSINESS_SCOPES = ['business_management'];
 export const IG_INSIGHT_SCOPES = ['instagram_business_manage_insights'];
 
 /** Ausdrücklich per Umgebungsvariable gesetzte Endpunkte (z. B. Testdienst) dürfen privat sein. */
@@ -80,7 +86,7 @@ async function call(method: string, url: string, params: Record<string, string |
 /* ------------------------------------------------------------------ OAuth */
 
 export function facebookAuthorizeUrl(appId: string, redirectUri: string, state: string) {
-  return `${FB_DIALOG()}?${new URLSearchParams({ client_id: appId, redirect_uri: redirectUri, state, scope: [...FB_SCOPES, ...FB_INSIGHT_SCOPES].join(','), response_type: 'code' })}`;
+  return `${FB_DIALOG()}?${new URLSearchParams({ client_id: appId, redirect_uri: redirectUri, state, scope: [...FB_SCOPES, ...FB_INSIGHT_SCOPES, ...FB_BUSINESS_SCOPES].join(','), response_type: 'code' })}`;
 }
 export function instagramAuthorizeUrl(appId: string, redirectUri: string, state: string) {
   return `${IG_DIALOG()}?${new URLSearchParams({ client_id: appId, redirect_uri: redirectUri, state, scope: [...IG_SCOPES, ...IG_INSIGHT_SCOPES].join(','), response_type: 'code' })}`;

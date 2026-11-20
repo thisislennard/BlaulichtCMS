@@ -98,6 +98,7 @@ BlaulichtCMS zeigt in der Verbindung die **Weiterleitungsadresse** (`https://<ei
 | Netzwerk | Berechtigungen | Wofür |
 |---|---|---|
 | Facebook | `pages_show_list`, `pages_manage_posts`, `pages_read_engagement` | Seiten auflisten, Beiträge anlegen und löschen, Beiträge lesen (Prüfung auf Duplikate) |
+| Facebook, Seite in einem Business-Portfolio | zusätzlich `business_management` | Ohne dieses Recht liefert Meta Seiten, die zu einem Business-Portfolio gehören, bei der Anmeldung nicht – die Seitenliste bleibt leer. Für Seiten ohne Portfolio nicht nötig. |
 | Instagram | `instagram_business_basic`, `instagram_business_content_publish` | Konto lesen, Beiträge veröffentlichen |
 
 Beschreibung aller Rechte: [Berechtigungsreferenz](https://developers.facebook.com/docs/permissions/).
@@ -129,9 +130,9 @@ Statt der Anmeldung lässt sich unter **Alternativ: Token manuell hinterlegen** 
 | Meldung | Ursache und Abhilfe |
 |---|---|
 | „URL blocked“ / Weiterleitungsadresse ungültig | Weiterleitungsadresse in der App fehlt oder weicht ab (http statt https, Schrägstrich, andere Domain). |
-| „Invalid Scopes: pages_manage_posts, read_insights …“ | Die Rechte sind in der Meta-App nicht hinzugefügt. Unter **Anwendungsfälle → „Alles auf deiner Seite verwalten“ → Anpassen → Berechtigungen** (bzw. bei Unternehmens-Apps **App-Prüfung → Berechtigungen und Funktionen**) `pages_show_list`, `pages_manage_posts`, `pages_read_engagement` und `read_insights` hinzufügen; fehlt der Anwendungsfall, ihn über **Anwendungsfall hinzufügen** ergänzen. Danach erneut verbinden. |
+| „Invalid Scopes: pages_manage_posts, read_insights …“ | Die Rechte sind in der Meta-App nicht hinzugefügt. Unter **Anwendungsfälle → „Alles auf deiner Seite verwalten“ → Anpassen → Berechtigungen** (bzw. bei Unternehmens-Apps **App-Prüfung → Berechtigungen und Funktionen**) `pages_show_list`, `pages_manage_posts`, `pages_read_engagement`, `read_insights` und – für Seiten in einem Business-Portfolio – `business_management` hinzufügen; fehlt der Anwendungsfall, ihn über **Anwendungsfall hinzufügen** ergänzen. Danach erneut verbinden. |
 | „Die Domain dieser URL ist nicht in den Domains der App vorhanden“ | Unter **App-Einstellungen → Allgemein → App-Domains** die Domain von BlaulichtCMS eintragen (ohne `https://`), dort ggf. **Plattform hinzufügen → Website** mit der öffentlichen Adresse als Website-URL; speichern und erneut verbinden. |
-| „Angemeldet, aber keine verwaltbare Seite gefunden“ | Bei der Anmeldung keine Seite freigegeben oder das Konto verwaltet die Seite nicht. Erneut verbinden und die Seite auswählen. |
+| „Angemeldet, aber keine verwaltbare Seite gefunden“ | Bei der Anmeldung keine Seite freigegeben, das Konto verwaltet die Seite nicht oder die Seite gehört zu einem **Business-Portfolio** und `business_management` fehlt in der Meta-App. Recht hinzufügen, die App-Freigabe unter facebook.com/settings/?tab=business_tools entfernen, erneut verbinden und die Seite auswählen. Prüfen lässt sich das im Graph-API-Explorer mit `me/accounts`. |
 | Berechtigungen: „Es fehlen …“ | Rechte bei der Anmeldung abgewählt oder in der App nicht hinzugefügt bzw. (im Live-Modus) nicht geprüft. |
 | „ist kein professionelles Konto“ | Instagram-Konto auf Unternehmen oder Creator umstellen. |
 | Instagram: Container-Status ERROR | Meta konnte das Testbild nicht laden: Öffentliche Adresse prüfen (HTTPS, von außen erreichbar, kein Zugriffsschutz). |

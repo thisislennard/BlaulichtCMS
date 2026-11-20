@@ -2166,6 +2166,8 @@ describe('Verbindungen (M4): FE2, Facebook, Instagram, amtliche Warnfeeds', () =
     const start = await admin.post(`/connections/${c.json.id}/oauth/start`);
     const state = new URL(start.json.url).searchParams.get('state')!;
     expect(new URL(start.json.url).searchParams.get('redirect_uri')).toBe('https://blaulichtcms.example.org/api/v1/connections/oauth/callback');
+    // business_management: sonst liefert /me/accounts Seiten in einem Business-Portfolio nicht
+    expect(new URL(start.json.url).searchParams.get('scope')).toBe('pages_show_list,pages_manage_posts,pages_read_engagement,read_insights,business_management');
     // Gefälschter state wird abgewiesen
     const bad = await anonymous.raw('GET', `/connections/oauth/callback?state=${c.json.id}.falsch&code=x`);
     expect(bad.status).toBe(302);

@@ -248,7 +248,7 @@ export default function ConnectionDetail() {
               {(c.kind === 'facebook' || c.kind === 'instagram') && (
                 <>
                   <Notice>
-                    Benötigt eine eigene Meta-App mit {c.kind === 'facebook' ? 'Facebook Login und den Rechten pages_show_list, pages_manage_posts, pages_read_engagement' : 'Instagram Login und den Rechten instagram_business_basic, instagram_business_content_publish'}. Schritt für Schritt: <Link to="/hilfe/verbindungen#meta-app-anlegen">Meta-App anlegen</Link>.
+                    Benötigt eine eigene Meta-App mit {c.kind === 'facebook' ? 'Facebook Login und den Rechten pages_show_list, pages_manage_posts, pages_read_engagement (Seiten in einem Business-Portfolio zusätzlich business_management)' : 'Instagram Login und den Rechten instagram_business_basic, instagram_business_content_publish'}. Schritt für Schritt: <Link to="/hilfe/verbindungen#meta-app-anlegen">Meta-App anlegen</Link>.
                   </Notice>
                   <FieldWrap label="Weiterleitungsadresse (in der Meta-App eintragen)" labelAction={
                     <HelpTip title="Weiterleitungsadresse" more="/hilfe/verbindungen#weiterleitungsadresse-eintragen">

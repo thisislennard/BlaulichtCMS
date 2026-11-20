@@ -385,7 +385,7 @@ export async function connectionRoutes(app: FastifyInstance) {
         await updateConnectionSecrets(c, { userToken: r.userToken, pages: JSON.stringify(r.pages) }, by.id);
         await audit(actor, 'connection.oauth', { type: 'connection', id: c.id, label: c.name }, { seiten: r.pages.length });
         await invalidateTest(actor, c, 'Neu angemeldet');
-        return back(r.pages.length ? `Angemeldet – bitte ${r.pages.length === 1 ? 'die gefundene Seite' : `eine von ${r.pages.length} Seiten`} wählen.` : 'Angemeldet, aber keine verwaltbare Seite gefunden.');
+        return back(r.pages.length ? `Angemeldet – bitte ${r.pages.length === 1 ? 'die gefundene Seite' : `eine von ${r.pages.length} Seiten`} wählen.` : 'Angemeldet, aber keine verwaltbare Seite gefunden – Seite im Meta-Dialog freigeben; gehört sie zu einem Business-Portfolio, muss das Recht business_management in der Meta-App hinzugefügt sein.');
       }
       if (c.kind === 'mastodon') {
         const token = await mastodonExchange(c, String(c.config.clientId ?? ''), sec.clientSecret ?? '', redirect, q.code);
