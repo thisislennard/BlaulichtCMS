@@ -129,6 +129,7 @@ Statt der Anmeldung lässt sich unter **Alternativ: Token manuell hinterlegen** 
 | Meldung | Ursache und Abhilfe |
 |---|---|
 | „URL blocked“ / Weiterleitungsadresse ungültig | Weiterleitungsadresse in der App fehlt oder weicht ab (http statt https, Schrägstrich, andere Domain). |
+| „Die Domain dieser URL ist nicht in den Domains der App vorhanden“ | Unter **App-Einstellungen → Allgemein → App-Domains** die Domain von BlaulichtCMS eintragen (ohne `https://`), dort ggf. **Plattform hinzufügen → Website** mit der öffentlichen Adresse als Website-URL; speichern und erneut verbinden. |
 | „Angemeldet, aber keine verwaltbare Seite gefunden“ | Bei der Anmeldung keine Seite freigegeben oder das Konto verwaltet die Seite nicht. Erneut verbinden und die Seite auswählen. |
 | Berechtigungen: „Es fehlen …“ | Rechte bei der Anmeldung abgewählt oder in der App nicht hinzugefügt bzw. (im Live-Modus) nicht geprüft. |
 | „ist kein professionelles Konto“ | Instagram-Konto auf Unternehmen oder Creator umstellen. |

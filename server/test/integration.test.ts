@@ -2170,7 +2170,11 @@ describe('Verbindungen (M4): FE2, Facebook, Instagram, amtliche Warnfeeds', () =
     const bad = await anonymous.raw('GET', `/connections/oauth/callback?state=${c.json.id}.falsch&code=x`);
     expect(bad.status).toBe(302);
     expect(decodeURIComponent(bad.headers.location as string)).toContain('ungültig');
-    const s2 = await admin.post(`/connections/${c.json.id}/oauth/start`);
+    // Meta-Fehler ohne state (z. B. Domain fehlt in den App-Domains): Meldung von Meta wird angezeigt
+    const noState = await anonymous.raw('GET', `/connections/oauth/callback?error_code=1349048&error_message=${encodeURIComponent('Die Domain dieser URL ist nicht in den Domains der App vorhanden.')}`);
+    expect(noState.status).toBe(302);
+    expect(decodeURIComponent(noState.headers.location as string)).toBe('/verbindungen?meldung=Anmeldung fehlgeschlagen – Meta meldet: Die Domain dieser URL ist nicht in den Domains der App vorhanden.');
+    const s2 =await admin.post(`/connections/${c.json.id}/oauth/start`);
     const state2 = new URL(s2.json.url).searchParams.get('state')!;
     void state;
     const cb = await anonymous.raw('GET', `/connections/oauth/callback?state=${encodeURIComponent(state2)}&code=abc`);

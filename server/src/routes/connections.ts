@@ -358,7 +358,11 @@ export async function connectionRoutes(app: FastifyInstance) {
    * Tokens landen verschlüsselt auf dem Server.
    */
   app.get('/connections/oauth/callback', { config: { rateLimit: { max: 20, timeWindow: '1 minute' } } }, async (req, reply) => {
-    const q = z.object({ state: z.string().max(200), code: z.string().max(2000).optional(), error_description: z.string().max(500).optional() }).parse(req.query);
+    const q = z.object({ state: z.string().max(200).optional(), code: z.string().max(2000).optional(), error_description: z.string().max(500).optional(), error_message: z.string().max(500).optional() }).parse(req.query);
+    // Meta leitet bei App-Fehlern (z. B. Domain nicht in den App-Domains, Code 1349048) ohne state zurück – dann die
+    // Meldung von Meta zeigen statt einer nichtssagenden Eingabeprüfung. Ohne state ist die Verbindung unbekannt.
+    const metaError = (q.error_description ?? q.error_message)?.slice(0, 300);
+    if (!q.state) return reply.redirect(`/verbindungen?meldung=${encodeURIComponent(metaError ? `Anmeldung fehlgeschlagen – Meta meldet: ${metaError}` : 'Anmeldung ungültig – bitte in der Verbindung über „Verbinden“ starten.')}`);
     const [id, state] = q.state.split('.');
     const c = await loadConnection(z.uuid().parse(id));
     const st = c.config.oauthState;
@@ -372,7 +376,7 @@ export async function connectionRoutes(app: FastifyInstance) {
     const valid = !!st && !!by && st.exp >= Date.now() && safeEqual(st.hash, sha256Hex(state ?? ''));
     if (valid || (st && st.exp < Date.now())) await pool.query(`UPDATE connections SET config = config - 'oauthState' WHERE id = $1`, [c.id]);
     if (!valid) return back('Anmeldung abgelaufen oder ungültig – bitte erneut verbinden.');
-    if (!q.code) return back(`Anmeldung abgebrochen${q.error_description ? `: ${q.error_description}` : ''}.`);
+    if (!q.code) return back(`Anmeldung abgebrochen${metaError ? `: ${metaError}` : ''}.`);
     const sec = await connectionSecrets(c);
     const redirect = `${await publicBase(req)}/api/v1/connections/oauth/callback`;
     try {

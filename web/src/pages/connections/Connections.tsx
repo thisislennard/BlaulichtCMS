@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { get, post } from '../../api/client';
-import { Link, useNavigate } from 'react-router';
+import { Link, useNavigate, useSearchParams } from 'react-router';
 import type { Site } from '../../api/types';
 import { Badge, Button, Card, EmptyState, ErrorBox, FieldWrap, Input, LinkButton, Notice, PageHeader, Select, SkeletonRows, StatusBadge, Switch } from '../../components/ui/core';
 import { useAuth } from '../../lib/auth';
@@ -46,6 +46,15 @@ export default function Connections() {
   const { can, me } = useAuth();
   const configure = can('connection.configure');
   const pairSites = can('channel.sites');
+  // Meldung der OAuth-Rückleitung, wenn Meta ohne state zurückleitet (Verbindung unbekannt)
+  const toast = useToast();
+  const [params, setParams] = useSearchParams();
+  useEffect(() => {
+    const m = params.get('meldung');
+    if (!m) return;
+    toast({ tone: 'error', title: m });
+    setParams((p) => { const n = new URLSearchParams(p); n.delete('meldung'); return n; }, { replace: true });
+  }, [params, setParams, toast]);
   // Suche, Art, Status und „Gelöschte anzeigen“ in der Adresse (#260)
   const ls = useListState({ suche: '', art: '', status: '', geloeschte: '' });
   const showDeleted = ls.values.geloeschte === '1' && can('connection.delete');
