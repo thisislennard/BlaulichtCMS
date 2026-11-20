@@ -76,9 +76,16 @@ Facebook-Seite und Instagram-Konto sind **zwei getrennte Verbindungen** mit eige
 
 ### Meta-App anlegen
 
+Eine Meta-App reicht für Facebook **und** Instagram – sie liefert aber für jedes Netzwerk eigene Zugangsdaten (siehe unten).
+
 1. Unter [App erstellen](https://developers.facebook.com/docs/development/create-an-app/) eine neue App anlegen: App-Name und Kontakt-E-Mail eintragen.
-2. Als **Anwendungsfall** für Facebook „Seiten verwalten“ bzw. Facebook Login for Business, für Instagram die „Instagram API“ (API mit Instagram Login) wählen. Meta ändert die Bezeichnungen gelegentlich – maßgeblich sind die Berechtigungen unten.
-3. Die App bei Bedarf einem **Business-Portfolio** der Organisation zuordnen (für die spätere Unternehmensverifizierung und App-Prüfung).
+2. Unter **Anwendungsfälle** (bzw. **Anwendungsfälle hinzufügen**) wählen:
+   - für Facebook **„Alles auf deiner Seite verwalten“** (Pages API),
+   - für Instagram **„Messaging und Content auf Instagram verwalten“** (Instagram API mit Instagram Login).
+
+   Meta ändert die Bezeichnungen gelegentlich – maßgeblich sind die Berechtigungen unten.
+3. **App-Einstellungen → Allgemein:** unter **App-Domains** die Domain von BlaulichtCMS eintragen (nur die Domain, z. B. `presse.example.org`, ohne `https://`), unten **Plattform hinzufügen → Website** und als Website-URL die öffentliche Adresse eintragen, **Änderungen speichern**. Fehlt die Domain, bricht Meta die Anmeldung mit „Die Domain dieser URL ist nicht in den Domains der App vorhanden“ ab.
+4. Die App bei Bedarf einem **Business-Portfolio** der Organisation zuordnen (für die spätere Unternehmensverifizierung und App-Prüfung).
 
 ### App-ID und App-Geheimnis
 
@@ -90,7 +97,7 @@ Facebook-Seite und Instagram-Konto sind **zwei getrennte Verbindungen** mit eige
 
 BlaulichtCMS zeigt in der Verbindung die **Weiterleitungsadresse** (`https://<eigene Adresse>/api/v1/connections/oauth/callback`). Sie muss in der Meta-App **exakt** so eingetragen sein:
 
-- **Facebook:** Facebook Login for Business → Einstellungen → Client-OAuth-Einstellungen → **Gültige OAuth-Weiterleitungs-URIs** ([Anleitung](https://developers.facebook.com/docs/facebook-login/guides/advanced/manual-flow/)).
+- **Facebook:** im Anwendungsfall „Alles auf deiner Seite verwalten“ unter **Einstellungen** (Facebook Login for Business → Einstellungen → Client-OAuth-Einstellungen) → **Gültige OAuth-Weiterleitungs-URIs** ([Anleitung](https://developers.facebook.com/docs/facebook-login/guides/advanced/manual-flow/)).
 - **Instagram:** Instagram → API setup with Instagram login → Business login settings → **OAuth redirect URIs**.
 
 ### Berechtigungen
@@ -101,13 +108,29 @@ BlaulichtCMS zeigt in der Verbindung die **Weiterleitungsadresse** (`https://<ei
 | Facebook, Seite in einem Business-Portfolio | zusätzlich `business_management` | Ohne dieses Recht liefert Meta Seiten, die zu einem Business-Portfolio gehören, bei der Anmeldung nicht – die Seitenliste bleibt leer. Für Seiten ohne Portfolio nicht nötig. |
 | Instagram | `instagram_business_basic`, `instagram_business_content_publish` | Konto lesen, Beiträge veröffentlichen |
 
+Optional für die Reichweite: Facebook `read_insights`, Instagram `instagram_business_manage_insights` (siehe [Reichweite](#reichweite)).
+
+**Wo die Rechte hinzugefügt werden:** Die Rechte müssen in der Meta-App **hinzugefügt** sein, sonst meldet Meta „Invalid Scopes“. Unter **Anwendungsfälle → „Alles auf deiner Seite verwalten“ → Anpassen → Berechtigungen** bei jedem Recht **Hinzufügen** wählen (Instagram entsprechend unter „Messaging und Content auf Instagram verwalten“). Steht `business_management` dort nicht, liegt es meist beim Anwendungsfall „Anzeigenperformance-Daten mit Marketing API messen“. Bei älteren Unternehmens-Apps ohne Anwendungsfälle: **App-Prüfung → Berechtigungen und Funktionen**.
+
+**Gehört die Seite zu einem Business-Portfolio?** Das ist bei Organisationsseiten häufig der Fall (sichtbar unter business.facebook.com → Einstellungen → Konten → Seiten). Dann `business_management` unbedingt hinzufügen – ohne liefert Meta die Seite trotz aller übrigen Rechte nicht.
+
 Beschreibung aller Rechte: [Berechtigungsreferenz](https://developers.facebook.com/docs/permissions/).
 
 ### Facebook-Seite verbinden
 
-1. **Mit Facebook verbinden** – Meta fragt nach Konto, Seiten und Berechtigungen. Alle angefragten Rechte bestätigen.
-2. Zurück in BlaulichtCMS unter **Seite** die gewünschte Seite wählen.
+1. **Mit Facebook verbinden** – Meta fragt nach Konto, Unternehmen, Seiten und Berechtigungen. Im Seiten-Schritt **„Nur aktuelle Seiten auswählen“** und die gewünschte Seite anhaken, alle angefragten Rechte bestätigen.
+2. Zurück in BlaulichtCMS erscheint das Feld **Seite** – die gewünschte Seite wählen. Erscheint es nicht, hat Meta keine Seite geliefert (siehe unten).
 3. **Testen:** BlaulichtCMS legt einen *unveröffentlichten* Beitrag an und löscht ihn sofort wieder.
+4. **Vorschau** prüfen und **Aktivieren**.
+
+**Keine Seite zur Auswahl?** Meta merkt sich die Auswahl einer früheren Anmeldung – auch eine ohne Seite – und fragt beim erneuten Verbinden nicht noch einmal. Vorgehen:
+
+1. Prüfen, ob das eigene Profil die Seite verwalten darf: als Seite **Einstellungen → Seitenzugriff** (facebook.com/settings/?tab=profile_access) – das Profil muss unter „Personen mit Facebook-Zugriff“ mit **vollständiger Kontrolle** stehen.
+2. Gehört die Seite zu einem Business-Portfolio: `business_management` in der Meta-App hinzufügen (siehe oben).
+3. Die App-Freigabe zurücksetzen: in Facebook unter **Einstellungen → Business-Integrationen** (facebook.com/settings/?tab=business_tools) die App **entfernen**.
+4. Erneut **Mit Facebook verbinden** und die Seite auswählen.
+
+Prüfen lässt sich das im [Graph-API-Explorer](https://developers.facebook.com/tools/explorer/): eigene App wählen, Benutzer-Token mit denselben Rechten erzeugen und `me/permissions` (erteilte Rechte) sowie `me/accounts` (Seiten, die BlaulichtCMS sieht) abfragen. Liefert `me/accounts` erst mit `business_management` die Seite, fehlt dieses Recht in der App.
 
 ### Instagram-Konto verbinden
 
@@ -117,7 +140,16 @@ Beschreibung aller Rechte: [Berechtigungsreferenz](https://developers.facebook.c
 
 ### Token manuell hinterlegen
 
-Statt der Anmeldung lässt sich unter **Alternativ: Token manuell hinterlegen** ein vorhandener **Seiten-Token** (mit Seiten-ID) bzw. **Instagram-Token** eintragen, z. B. aus dem Graph-API-Explorer. Der Token braucht dieselben Berechtigungen. Kurzlebige Token laufen nach Stunden ab – die Anmeldung über **Mit Facebook/Instagram verbinden** tauscht sie automatisch gegen langlebige. Bei einem manuellen Seiten-Token kann der Test die Berechtigungen nicht abfragen.
+Statt der Anmeldung lässt sich unter **Alternativ: Token manuell hinterlegen** ein vorhandener **Seiten-Token** (mit Seiten-ID) bzw. **Instagram-Token** eintragen. Der Token braucht dieselben Berechtigungen. Bei einem manuellen Seiten-Token kann der Test die Berechtigungen nicht abfragen.
+
+**Dauerhaften Seiten-Token erzeugen (Facebook):**
+
+1. Im [Graph-API-Explorer](https://developers.facebook.com/tools/explorer/) rechts die eigene **Meta-App** und **Benutzer-Token** wählen, die Rechte `pages_show_list`, `pages_read_engagement`, `pages_manage_posts`, `read_insights` (und bei Portfolio-Seiten `business_management`) hinzufügen, **Generate Access Token** und im Dialog die Seite freigeben.
+2. Den Token im [Access-Token-Debugger](https://developers.facebook.com/tools/debug/accesstoken/) einfügen, **Debuggen** und unten **Zugriffsschlüssel verlängern** – das ergibt einen langlebigen Benutzer-Token.
+3. Mit diesem Token im Explorer `me/accounts` abfragen. Aus dem Eintrag der Seite `id` (Seiten-ID) und `access_token` (Seiten-Token) kopieren.
+4. In BlaulichtCMS Seiten-ID und Seiten-Token eintragen, **Speichern**, **Testen**.
+
+Ein so erzeugter Seiten-Token läuft nicht ab; er wird erst ungültig, wenn das Passwort des Facebook-Kontos geändert, der App die Freigabe entzogen oder die Rolle auf der Seite entfernt wird. Ein Token direkt aus dem Explorer (ohne Schritt 2) läuft nach etwa einer Stunde ab. Die Anmeldung über **Mit Facebook/Instagram verbinden** erledigt diesen Tausch automatisch.
 
 ### Entwicklungsmodus, Live-Modus und App-Prüfung
 
@@ -130,9 +162,11 @@ Statt der Anmeldung lässt sich unter **Alternativ: Token manuell hinterlegen** 
 | Meldung | Ursache und Abhilfe |
 |---|---|
 | „URL blocked“ / Weiterleitungsadresse ungültig | Weiterleitungsadresse in der App fehlt oder weicht ab (http statt https, Schrägstrich, andere Domain). |
-| „Invalid Scopes: pages_manage_posts, read_insights …“ | Die Rechte sind in der Meta-App nicht hinzugefügt. Unter **Anwendungsfälle → „Alles auf deiner Seite verwalten“ → Anpassen → Berechtigungen** (bzw. bei Unternehmens-Apps **App-Prüfung → Berechtigungen und Funktionen**) `pages_show_list`, `pages_manage_posts`, `pages_read_engagement`, `read_insights` und – für Seiten in einem Business-Portfolio – `business_management` hinzufügen; fehlt der Anwendungsfall, ihn über **Anwendungsfall hinzufügen** ergänzen. Danach erneut verbinden. |
+| „Invalid Scopes: pages_manage_posts, read_insights …“ | Die genannten Rechte sind in der Meta-App nicht hinzugefügt – siehe [Wo die Rechte hinzugefügt werden](#berechtigungen). Danach erneut verbinden. |
+| Fehlermeldung „state fehlt oder hat das falsche Format“ (ältere Versionen) | Meta hat die Anmeldung mit einem eigenen Fehler abgebrochen. Die eigentliche Meldung steht in der Adresszeile (`error_message=…`). Aktuelle Versionen zeigen sie direkt an. |
 | „Die Domain dieser URL ist nicht in den Domains der App vorhanden“ | Unter **App-Einstellungen → Allgemein → App-Domains** die Domain von BlaulichtCMS eintragen (ohne `https://`), dort ggf. **Plattform hinzufügen → Website** mit der öffentlichen Adresse als Website-URL; speichern und erneut verbinden. |
-| „Angemeldet, aber keine verwaltbare Seite gefunden“ | Bei der Anmeldung keine Seite freigegeben, das Konto verwaltet die Seite nicht oder die Seite gehört zu einem **Business-Portfolio** und `business_management` fehlt in der Meta-App. Recht hinzufügen, die App-Freigabe unter facebook.com/settings/?tab=business_tools entfernen, erneut verbinden und die Seite auswählen. Prüfen lässt sich das im Graph-API-Explorer mit `me/accounts`. |
+| „Angemeldet, aber keine verwaltbare Seite gefunden“ / kein Feld „Seite“ | Bei der Anmeldung keine Seite freigegeben, das Konto verwaltet die Seite nicht oder die Seite gehört zu einem **Business-Portfolio** und `business_management` fehlt in der Meta-App. Vorgehen unter [Keine Seite zur Auswahl?](#facebook-seite-verbinden). |
+| Test: „Noch keine Seite gewählt“ | Es ist keine Seite gespeichert – unter **Seite** eine Seite wählen; fehlt das Feld, siehe Zeile davor. |
 | Berechtigungen: „Es fehlen …“ | Rechte bei der Anmeldung abgewählt oder in der App nicht hinzugefügt bzw. (im Live-Modus) nicht geprüft. |
 | „ist kein professionelles Konto“ | Instagram-Konto auf Unternehmen oder Creator umstellen. |
 | Instagram: Container-Status ERROR | Meta konnte das Testbild nicht laden: Öffentliche Adresse prüfen (HTTPS, von außen erreichbar, kein Zugriffsschutz). |

@@ -248,13 +248,19 @@ export default function ConnectionDetail() {
               {(c.kind === 'facebook' || c.kind === 'instagram') && (
                 <>
                   <Notice>
-                    Benötigt eine eigene Meta-App mit {c.kind === 'facebook' ? 'Facebook Login und den Rechten pages_show_list, pages_manage_posts, pages_read_engagement (Seiten in einem Business-Portfolio zusätzlich business_management)' : 'Instagram Login und den Rechten instagram_business_basic, instagram_business_content_publish'}. Schritt für Schritt: <Link to="/hilfe/verbindungen#meta-app-anlegen">Meta-App anlegen</Link>.
+                    {c.kind === 'facebook'
+                      ? <>Benötigt eine eigene Meta-App mit dem Anwendungsfall „Alles auf deiner Seite verwalten“, der Domain dieser Instanz unter App-Domains und den Rechten pages_show_list, pages_manage_posts, pages_read_engagement – gehört die Seite zu einem Business-Portfolio, zusätzlich business_management. </>
+                      : <>Benötigt eine eigene Meta-App mit dem Anwendungsfall „Messaging und Content auf Instagram verwalten“ (Instagram Login) und den Rechten instagram_business_basic, instagram_business_content_publish. </>}
+                    Schritt für Schritt: <Link to="/hilfe/verbindungen#meta-app-anlegen">Meta-App anlegen</Link>.
                   </Notice>
                   <FieldWrap label="Weiterleitungsadresse (in der Meta-App eintragen)" labelAction={
                     <HelpTip title="Weiterleitungsadresse" more="/hilfe/verbindungen#weiterleitungsadresse-eintragen">
                       <p className="m-0">Diese Adresse zeigt BlaulichtCMS; sie muss in der Meta-App <strong>exakt</strong> so eingetragen sein:</p>
                       {c.kind === 'facebook' ? (
-                        <p className="m-0">Facebook Login for Business → Einstellungen → Client-OAuth-Einstellungen → <strong>Gültige OAuth-Weiterleitungs-URIs</strong> (<HelpLink href="https://developers.facebook.com/docs/facebook-login/guides/advanced/manual-flow/">Meta-Doku</HelpLink>).</p>
+                        <>
+                          <p className="m-0">Anwendungsfall „Alles auf deiner Seite verwalten“ → <strong>Einstellungen</strong> (Facebook Login for Business) → Client-OAuth-Einstellungen → <strong>Gültige OAuth-Weiterleitungs-URIs</strong> (<HelpLink href="https://developers.facebook.com/docs/facebook-login/guides/advanced/manual-flow/">Meta-Doku</HelpLink>).</p>
+                          <p className="m-0">Außerdem unter <strong>App-Einstellungen → Allgemein → App-Domains</strong> die Domain dieser Instanz eintragen (ohne https://) – sonst meldet Meta „Die Domain dieser URL ist nicht in den Domains der App vorhanden“.</p>
+                        </>
                       ) : (
                         <p className="m-0">Instagram → API setup with Instagram login → Business login settings → <strong>OAuth redirect URIs</strong> (<HelpLink href="https://developers.facebook.com/docs/instagram-platform/instagram-api-with-instagram-login/business-login">Meta-Doku</HelpLink>).</p>
                       )}
@@ -287,10 +293,15 @@ export default function ConnectionDetail() {
                       Mit {c.kind === 'facebook' ? 'Facebook' : 'Instagram'} verbinden
                     </Button>
                   </div>
+                  {c.kind === 'facebook' && c.pages.length === 0 && c.secrets_set.includes('userToken') && !c.config.pageId && (
+                    <Notice tone="warning">
+                      Angemeldet, aber Meta hat keine Seite geliefert. Häufigste Ursache: Die Seite gehört zu einem Business-Portfolio und business_management fehlt in der Meta-App – oder die Seite wurde im Meta-Dialog nicht ausgewählt. Recht hinzufügen, die App-Freigabe in Facebook unter Einstellungen → Business-Integrationen entfernen und erneut verbinden. <Link to="/hilfe/verbindungen#facebook-seite-verbinden">Keine Seite zur Auswahl?</Link>
+                    </Notice>
+                  )}
                   {c.kind === 'facebook' && c.pages.length > 0 && (
                     <FieldWrap label="Seite" htmlFor="page" labelAction={
                       <HelpTip title="Seite wählen" more="/hilfe/verbindungen#facebook-seite-verbinden">
-                        <p className="m-0">Die Liste zeigt die Seiten, die bei der Anmeldung freigegeben wurden. Fehlt eine Seite, erneut verbinden und sie im Meta-Dialog auswählen – das Konto muss die Seite verwalten dürfen.</p>
+                        <p className="m-0">Die Liste zeigt die Seiten, die bei der Anmeldung freigegeben wurden. Fehlt eine Seite: Das Konto muss sie mit vollständiger Kontrolle verwalten dürfen; gehört sie zu einem Business-Portfolio, braucht die Meta-App zusätzlich business_management. Danach die App-Freigabe in Facebook (Einstellungen → Business-Integrationen) entfernen und erneut verbinden – Meta fragt sonst nicht noch einmal nach den Seiten.</p>
                       </HelpTip>
                     }>
                       <Select id="page" value={c.config.pageId ?? ''} onChange={async (e) => { const pageId = e.target.value; if (!(await confirmRetest('Andere Seite wählen?'))) return; retestToast(await act(() => post(`/connections/${id}/page`, { pageId })), 'Seite gewählt'); }}>
@@ -309,7 +320,8 @@ export default function ConnectionDetail() {
                       }><Input id="pid" mono value={cfg.pageId ?? ''} onChange={(e) => setCfg({ ...cfg, pageId: e.target.value })} /></FieldWrap>}
                       <FieldWrap label={c.kind === 'facebook' ? 'Seiten-Token' : 'Instagram-Token'} htmlFor="tok" labelAction={
                         <HelpTip title="Token manuell hinterlegen" more="/hilfe/verbindungen#token-manuell-hinterlegen">
-                          <p className="m-0">Nur nötig, wenn die Anmeldung über „Verbinden“ nicht möglich ist. Der Token braucht dieselben Berechtigungen; kurzlebige Token laufen nach Stunden ab. Erzeugen lässt er sich z. B. mit dem <HelpLink href="https://developers.facebook.com/docs/graph-api/guides/explorer/">Graph-API-Explorer</HelpLink>.</p>
+                          <p className="m-0">Nur nötig, wenn die Anmeldung über „Verbinden“ nicht möglich ist. Der Token braucht dieselben Berechtigungen. Erzeugen lässt er sich mit dem <HelpLink href="https://developers.facebook.com/tools/explorer/">Graph-API-Explorer</HelpLink>.</p>
+                          {c.kind === 'facebook' && <p className="m-0">Dauerhaft: Benutzer-Token im Explorer erzeugen, im <HelpLink href="https://developers.facebook.com/tools/debug/accesstoken/">Access-Token-Debugger</HelpLink> mit „Zugriffsschlüssel verlängern“ langlebig machen, damit <code className="font-mono">me/accounts</code> abfragen und <code className="font-mono">id</code> und <code className="font-mono">access_token</code> der Seite übernehmen. Ein Token direkt aus dem Explorer läuft nach etwa einer Stunde ab.</p>}
                         </HelpTip>
                       }><Input id="tok" type="password" autoComplete="off" value={secret[c.kind === 'facebook' ? 'pageToken' : 'token'] ?? ''} onChange={(e) => setSecret({ ...secret, [c.kind === 'facebook' ? 'pageToken' : 'token']: e.target.value })} /></FieldWrap>
                       <div><Button onClick={async () => { if ((await saveConfig()) === null) return; if (hasSecret) await saveSecrets(); }}>Speichern</Button></div>
