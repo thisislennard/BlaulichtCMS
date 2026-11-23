@@ -6,10 +6,22 @@ Der Assistent ist für das Handy gebaut: Schritte oben, **Zurück / Speichern / 
 
 1. **Vorgang** – Erstmeldung, Aktualisierung oder Entwarnung. Jeder Vorgang hat eine eigene Vorgangs-ID (z. B. `W-2026-0001`).
 2. **Stichwort & Warnstufe** – Feuerwehrstichwort suchen, Lagefragen beantworten, Warnstufe bestätigen (siehe unten).
-3. **Gebiet & Zeitraum** – betroffenes Gebiet, Beginn, Gültigkeit und die zuständigen Stellen.
+3. **Gebiet & Zeitraum** – betroffenes Gebiet (Beschreibung, optional auf der Karte markiert), Beginn, Gültigkeit und die zuständigen Stellen.
 4. **Inhalt** – Überschrift, Lage, Verhaltensempfehlungen, Absender, Rückrufkontakt.
 5. **Prüfen & PDF** – PDF-Vorschau (mit „ENTWURF“ gekennzeichnet), einreichen, freigeben.
 6. **Versand** – Empfänger prüfen, versenden, Ergebnis und Eingangsbestätigung festhalten.
+
+## Gebiet auf der Karte
+
+Im Schritt **Gebiet & Zeitraum** lässt sich das betroffene Gebiet zusätzlich auf einer Karte markieren:
+
+1. Karte auf den Ort schieben und zoomen (die Karte merkt sich den letzten Ausschnitt).
+2. **Gebiet einzeichnen**, dann die Eckpunkte des Gebiets nacheinander in die Karte klicken (mindestens drei). **Letzten Punkt entfernen** nimmt einen Fehlklick zurück.
+3. **Fertig** – das Gebiet ist rot markiert und gehört zur Fassung (eine Änderung braucht wie jeder Inhalt eine neue Freigabe). **Gebiet bearbeiten** setzt weitere Punkte, **Gebiet entfernen** löscht die Markierung.
+
+Im **PDF** erscheint unter „Betroffenes Gebiet“ ein Kartenausschnitt mit dem markierten Gebiet. Maßgeblich bleibt die **Beschreibung** im Textfeld – die Karte ergänzt sie. Ist der Kartenserver beim Erstellen des PDF nicht erreichbar, steht dort ein Hinweis; ein einmal erstellter Ausschnitt wird gespeichert, sodass dieselbe Fassung immer dasselbe PDF ergibt.
+
+Die Karte kommt von **OpenStreetMap** (© OpenStreetMap-Mitwirkende). BlaulichtCMS lädt die Kartenkacheln über den eigenen Server und speichert sie zwischen – der Browser baut keine Verbindung zu OpenStreetMap auf. Eigener Kartenserver: Umgebungsvariable `BLAULICHTCMS_TILE_URL` (z. B. `https://karten.example.org/{z}/{x}/{y}.png`).
 
 ## Stichwort-Umrechner und Warnstufen-Assistent
 

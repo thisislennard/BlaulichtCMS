@@ -77,6 +77,9 @@ GitHub (Update-Prüfung, Updates) ◀──Abruf──────────�
   Bilder erben die Datenschutz-Markierungen ihrer Quellbilder.
 - **Reichweite (#218):** BlaulichtCMS ruft bei Meta, X, der Mastodon-Instanz und Bluesky nur Summen je eigenem Beitrag
   ab (Aufrufe, Interaktionen) – keine Personen.
+- **Karte im Warnentwurf (#277):** Kartenkacheln von OpenStreetMap lädt der Server (Absender ist der Server, nicht
+  die Person) und speichert sie 14 Tage zwischen; das markierte Gebiet ist Teil der Fassung, der Kartenausschnitt für
+  das PDF wird je Gebiet unter `<data>/map-cache/` gespeichert.
 - **Seitenabgleich und Social-Feed:** BlaulichtCMS liest bei Meta die Beiträge der eigenen Facebook-Seite bzw. des
   eigenen Instagram-Kontos (Text, Link, Vorschaubild) samt Summen je Beitrag und je Tag (Follower, Aufrufe, Reichweite).
   Kommentare, Namen und Konten derer, die reagiert haben, werden nicht abgerufen. Vorschaubilder liegen lokal (WebP);

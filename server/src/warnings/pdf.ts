@@ -12,6 +12,8 @@ export interface PdfInput {
   approval?: { decided_by_name: string; decided_at: Date | string } | null;
   draft: boolean;
   timeZone: string;
+  /** Kartenausschnitt des markierten Gebiets (#277); 'unavailable' = Gebiet markiert, Karte nicht abrufbar */
+  areaMap?: Buffer | null | 'unavailable';
 }
 
 export const KIND_LABEL = { initial: 'Erstmeldung', update: 'Aktualisierung', all_clear: 'Entwarnung' } as const;
@@ -85,7 +87,27 @@ export function renderWarningPdf(i: PdfInput): Promise<Buffer> {
   doc.x = 56;
   doc.y = y;
 
-  // Felder in Reihenfolge der Vorlage
+  // Felder in Reihenfolge der Vorlage; nach dem betroffenen Gebiet der Kartenausschnitt (#277)
+  let mapDone = false;
+  const drawMap = () => {
+    if (mapDone || !i.areaMap) return;
+    mapDone = true;
+    doc.fillColor('#44546A').font('Helvetica-Bold').fontSize(10).text('Gebiet auf der Karte', 56, doc.y, { width: W });
+    if (i.areaMap === 'unavailable') {
+      doc.fillColor('#8F4A00').font('Helvetica').fontSize(10.5).text('Kartenausschnitt nicht verfügbar (Kartenserver nicht erreichbar) – maßgeblich ist die Beschreibung des Gebiets.', 56, doc.y + 2, { width: W });
+      doc.moveDown(0.8);
+      return;
+    }
+    const h = (W * 680) / 1200;
+    if (doc.y + h + 20 > doc.page.height - 70) doc.addPage();
+    const top = doc.y + 4;
+    doc.image(i.areaMap, 56, top, { width: W });
+    doc.rect(56, top, W, h).lineWidth(0.8).strokeColor('#C7D0DB').stroke();
+    doc.x = 56;
+    doc.y = top + h + 6;
+    doc.fillColor('#44546A').font('Helvetica').fontSize(8).text('Rot markiert: betroffenes Gebiet. Kartendaten © OpenStreetMap-Mitwirkende (ODbL).', 56, doc.y, { width: W });
+    doc.moveDown(0.8);
+  };
   for (const f of i.template.fields) {
     let v = i.revision.data[f.key];
     if (v == null || v === '') v = '–';
@@ -94,7 +116,9 @@ export function renderWarningPdf(i: PdfInput): Promise<Buffer> {
     doc.fillColor('#44546A').font('Helvetica-Bold').fontSize(10).text(f.label, 56, doc.y, { width: W });
     doc.fillColor('#0B1726').font('Helvetica').fontSize(11.5).text(String(v), 56, doc.y + 2, { width: W, lineGap: 2 });
     doc.moveDown(0.8);
+    if (f.key === 'area') drawMap();
   }
+  drawMap();
 
   // Fußzeile auf jeder Seite
   const range = doc.bufferedPageRange();

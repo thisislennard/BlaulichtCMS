@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
 import { del, get, post, put } from '../../api/client';
@@ -10,6 +10,9 @@ import { useAuth } from '../../lib/auth';
 import { resolveKeyword, useKeywords } from '../../lib/keywords';
 import { fmtDateTime, fromLocalInput, toLocalInput, plural } from '../../lib/format';
 import { KIND, LevelBadge, WARN_STATE } from './Warnings';
+
+/** Karte nur laden, wenn der Schritt „Gebiet & Zeitraum“ geöffnet wird (Leaflet ist groß) */
+const AreaMap = lazy(() => import('./AreaMap'));
 
 interface Field {
   key: string;
@@ -585,6 +588,20 @@ function WarningCaseInner({ id }: { id: string }) {
             {placeFields.map((f) => (
               <TemplateField key={f.key} f={f} value={v.data[f.key]} disabled={!editable} onChange={(x) => change({ data: { ...v.data, [f.key]: x } })} />
             ))}
+            <FieldWrap label="Gebiet auf der Karte (optional)" help="Markiertes Gebiet erscheint im PDF als Kartenausschnitt. Maßgeblich bleibt die Beschreibung oben.">
+              <Suspense fallback={<SkeletonRows rows={4} />}>
+                <AreaMap
+                  value={v.data.area_geo}
+                  disabled={!editable}
+                  onChange={(g) => {
+                    const data = { ...v.data };
+                    if (g) data.area_geo = g;
+                    else delete data.area_geo;
+                    change({ data });
+                  }}
+                />
+              </Suspense>
+            </FieldWrap>
             {v.data.starts_at && v.data.valid_until && new Date(v.data.valid_until) <= new Date(v.data.starts_at) && (
               <Notice tone="error">„Gültig bis“ liegt vor dem Beginn. Bitte den Zeitraum korrigieren – so lässt sich der Entwurf nicht einreichen.</Notice>
             )}

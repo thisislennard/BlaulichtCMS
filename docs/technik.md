@@ -99,6 +99,16 @@ Beiträge (nicht Storys, nicht von Hand geteilt, nicht entfernt) 1 h, 24 h und 7
 werden beim nächsten Lauf wiederholt, Fehler je Beitrag (gelöscht, Recht fehlt) festgehalten. Nur Summen, keine
 Personen. Routen `GET /insights`, `GET /posts/:id/insights` (Recht `insights.view`), Dashboard-Kachel `insights`.
 
+## Gebiet auf der Karte (Warnentwurf, #277)
+
+`data.area_geo` der Fassung: Vieleck `{ type: 'polygon', points: [[lat, lng], …] }` (3–200 Punkte, geprüft mit
+`areaGeoSchema` beim Speichern). Oberfläche: Leaflet 1.9.4 (`web/src/pages/warnings/AreaMap.tsx`, erst beim Schritt
+„Gebiet & Zeitraum“ geladen), Kacheln über `GET /map/tiles/:z/:x/:y.png` (Recht `warning.view`), die der Server vom
+Kachelserver holt (`BLAULICHTCMS_TILE_URL`, Standard tile.openstreetmap.org, eigene Kennung, 14 Tage Zwischenspeicher
+unter `<data>/map-tiles/`). PDF: `renderAreaMap()` setzt die Kacheln mit sharp zu 1200 × 680 px zusammen (größte
+passende Zoomstufe bis 17), zeichnet das Gebiet und die Namensnennung ein und speichert das JPEG je Gebiet unter
+`<data>/map-cache/` – gleiche Fassung, gleiches PDF. Kein Kartenserver: Hinweis im PDF statt Karte.
+
 ## Instagram über Unified Login
 
 Neue Meta-Apps (etwa ab Ende Oktober 2026) bieten das Instagram-Login nicht mehr an, sondern „API setup with Unified

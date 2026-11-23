@@ -6963,6 +6963,70 @@ describe('Instagram über Facebook (Unified Login)', () => {
   });
 });
 
+describe('Warnentwurf: Gebiet auf der Karte und im PDF (#277)', () => {
+  let tiles: http.Server;
+  let tileHits = 0;
+  const prevTile = process.env.BLAULICHTCMS_TILE_URL;
+  beforeAll(async () => {
+    const tile = await sharp({ create: { width: 256, height: 256, channels: 3, background: { r: 220, g: 235, b: 220 } } }).png().toBuffer();
+    tiles = http.createServer((req, res) => {
+      tileHits++;
+      if (!/^\/t\/\d+\/\d+\/\d+\.png$/.test(req.url ?? '')) {
+        res.writeHead(404);
+        return res.end();
+      }
+      res.writeHead(200, { 'content-type': 'image/png' });
+      res.end(tile);
+    });
+    await new Promise<void>((r) => tiles.listen(0, '127.0.0.1', r));
+    process.env.BLAULICHTCMS_TILE_URL = `http://127.0.0.1:${(tiles.address() as any).port}/t/{z}/{x}/{y}.png`;
+  });
+  afterAll(() => {
+    process.env.BLAULICHTCMS_TILE_URL = prevTile;
+    tiles?.close();
+  });
+  const area = { type: 'polygon', points: [[50.1, 8.47], [50.11, 8.49], [50.095, 8.5], [50.09, 8.48]] };
+
+  it('Kacheln über BlaulichtCMS, nur mit Recht, zwischengespeichert', async () => {
+    const t = await admin.raw('GET', '/map/tiles/12/2143/1386.png');
+    expect(t.status).toBe(200);
+    expect(t.headers['content-type']).toBe('image/png');
+    const hits = tileHits;
+    expect((await admin.raw('GET', '/map/tiles/12/2143/1386.png')).status).toBe(200);
+    expect(tileHits).toBe(hits);
+    expect((await admin.raw('GET', '/map/tiles/12/99999/1386.png')).status).toBe(404);
+    expect((await admin.raw('GET', '/map/tiles/25/1/1.png')).status).toBe(404);
+    expect((await anonymous.raw('GET', '/map/tiles/12/2143/1386.png')).status).toBe(401);
+  });
+
+  it('Gebiet wird geprüft, in der Fassung gespeichert und als Kartenausschnitt ins PDF übernommen', async () => {
+    const c = await admin.post('/warnings', { kind: 'initial' });
+    expect(c.status, JSON.stringify(c.json)).toBe(200);
+    const id = c.json.id;
+    const d = (await admin.get(`/warnings/${id}`)).json;
+    const put = (data: any) => admin.put(`/warnings/${id}/revision`, { baseRevision: d.revision.number, data: { ...d.revision.data, area: 'Musterstadt, Ortsteil Nord', ...data }, responsibilityIds: [], keywordId: null, answers: {} });
+    expect((await put({ area_geo: { type: 'polygon', points: [[50, 8], [50.1, 8.1]] } })).status).toBe(400);
+    expect((await put({ area_geo: { type: 'polygon', points: [[95, 8], [50.1, 8.1], [50, 8.2]] } })).status).toBe(400);
+    const without = await admin.raw('GET', `/warnings/${id}/pdf`);
+    expect(without.status).toBe(200);
+    const ok = await put({ area_geo: area });
+    expect(ok.status, JSON.stringify(ok.json)).toBe(200);
+    expect((await admin.get(`/warnings/${id}`)).json.revision.data.area_geo).toEqual(area);
+    const withMap = await admin.raw('GET', `/warnings/${id}/pdf`);
+    expect(withMap.status).toBe(200);
+    // Kartenausschnitt als Bild eingebettet
+    expect(withMap.rawPayload.includes(Buffer.from('/Subtype /Image'))).toBe(true);
+    expect(without.rawPayload.includes(Buffer.from('/Subtype /Image'))).toBe(false);
+    // Gleiche Fassung, gleiches Kartenbild – auch ohne Kartenserver (Zwischenspeicher)
+    const { renderAreaMap } = await import('../src/lib/map-tiles.js');
+    const png = await renderAreaMap(area as any);
+    const meta = await sharp(png).metadata();
+    expect([meta.width, meta.height]).toEqual([1200, 680]);
+    tiles.close();
+    expect((await renderAreaMap(area as any)).equals(png)).toBe(true);
+  });
+});
+
 describe('In-App-Updates aus GitHub-Releases', () => {
   const work = fs.mkdtempSync(path.join(os.tmpdir(), 'bc-upd-it-'));
   const key = crypto.generateKeyPairSync('ed25519');

@@ -8,11 +8,13 @@ import { many, one, pool, tx, type Queryable } from '../db/pool.js';
 import { alsoAny, requireAuth } from '../auth/context.js';
 import { audit, settingsDiff } from '../lib/audit.js';
 import { AppError, badRequest, conflict, forbidden, notFound } from '../lib/errors.js';
+import { log } from '../lib/log.js';
 import { decidedBy, refreshApprovalNotice } from '../approvals/notices.js';
 import { getSettings, setSettings } from '../lib/settings.js';
 import { enqueue } from '../jobs/queue.js';
 import { evaluate, activeQuestions, type Suggestion } from '../warnings/levels.js';
 import { KIND_LABEL, renderWarningPdf } from '../warnings/pdf.js';
+import { areaGeoSchema, getTile, renderAreaMap, validTile } from '../lib/map-tiles.js';
 import { m365ConfigProblem, m365Fingerprint, m365Send, storedM365Settings } from '../lib/mail.js';
 import { parseMailbox } from '../lib/mail-address.js';
 import { replaceSmtpPassword, SMTP_VERIFY_MAX_AGE_MS, smtpCandidate, smtpConfigProblem, smtpFingerprint, smtpFormChanged, smtpTransport, smtpVerified, storedSmtpSettings, type SmtpForm } from '../warnings/mail.js';
@@ -100,7 +102,19 @@ async function renderFor(id: string, revNumber: number | null, draft: boolean, a
   if (!rev) throw notFound('Fassung nicht gefunden.');
   const t = await one<any>('SELECT * FROM warning_templates WHERE id = $1', [w.template_id]);
   const s = await getSettings();
+  // Kartenausschnitt des markierten Gebiets (#277); ohne erreichbaren Kartenserver Hinweis statt Karte
+  let areaMap: Buffer | null | 'unavailable' = null;
+  const geo = areaGeoSchema.safeParse(rev.data?.area_geo);
+  if (geo.success) {
+    try {
+      areaMap = await renderAreaMap(geo.data);
+    } catch (e: any) {
+      log('warn', 'warning', `Kartenausschnitt nicht erstellt: ${e?.message ?? e}`);
+      areaMap = 'unavailable';
+    }
+  }
   return renderWarningPdf({
+    areaMap,
     organization: s['general.organization'] || s['general.instance_name'],
     template: t,
     warning: { case_no: w.case_no, kind: w.kind, parent_case_no: w.parent_case_no },
@@ -145,6 +159,19 @@ const revisionBody = z.object({
 
 export async function warningRoutes(app: FastifyInstance) {
   const anyWarn = requireAuth('warning.view');
+
+  /** Kartenkacheln für die Gebietsauswahl (#277) – über den Server, damit der Browser nichts von Dritten lädt. */
+  app.get('/map/tiles/:z/:x/:y', { preHandler: anyWarn, config: { rateLimit: { max: 1200, timeWindow: '1 minute' } } }, async (req, reply) => {
+    const p = z.object({ z: z.coerce.number().int(), x: z.coerce.number().int(), y: z.string().regex(/^\d+(\.png)?$/) }).parse(req.params);
+    const y = Number(p.y.replace('.png', ''));
+    if (!validTile(p.z, p.x, y)) throw notFound();
+    try {
+      const png = await getTile(p.z, p.x, y);
+      return reply.header('content-type', 'image/png').header('cache-control', 'private, max-age=86400').header('x-content-type-options', 'nosniff').send(png);
+    } catch (e: any) {
+      throw new AppError(502, 'map_unavailable', `Kartenserver nicht erreichbar: ${String(e?.message ?? e).slice(0, 120)}`);
+    }
+  });
 
   /* ------------------------------------------------------------ Vorgänge */
 
@@ -336,6 +363,12 @@ export async function warningRoutes(app: FastifyInstance) {
   app.put('/warnings/:id/revision', { preHandler: requireAuth('warning.draft') }, async (req) => {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
     const b = revisionBody.parse(req.body);
+    // Gebiet auf der Karte (#277): nur ein gültiges Vieleck oder nichts
+    if (b.data.area_geo != null) {
+      const g = areaGeoSchema.safeParse(b.data.area_geo);
+      if (!g.success) throw badRequest(`Gebiet auf der Karte: ${g.error.issues[0]?.message ?? 'ungültig'}`);
+      b.data.area_geo = g.data;
+    } else delete b.data.area_geo;
     const userId = req.auth!.user?.id ?? null;
     let wasSubmitted = false;
     const out = await tx(async (db) => {
