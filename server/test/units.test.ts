@@ -2282,3 +2282,17 @@ describe('Bannerliste: Reiter „Aktiv und geplant“ (#274)', () => {
     expect(inBannerTab({ state: 'ended', revision: 2, live_revision: null }, 'alle')).toBe(true);
   });
 });
+
+describe('Versionshinweise im Update-Protokoll (#278)', () => {
+  it('kennt jede Datei unter release-notes/ und lässt die Anleitung zum Einspielen weg', async () => {
+    const { hasReleaseNotes, releaseNotesFor } = await import('../../web/src/pages/admin/settings/releaseNotes.js');
+    const dir = path.join(__dirname, '..', '..', 'release-notes');
+    for (const f of fs.readdirSync(dir).filter((x) => /^v\d+\.\d+\.\d+\.md$/.test(x))) expect(hasReleaseNotes(f.slice(1, -3)), f).toBe(true);
+    const md = (await releaseNotesFor('0.9.0'))!;
+    expect(md).toContain('Seitenstatistik');
+    expect(md).not.toContain('So spielst du das Update ein');
+    expect(md).not.toContain('Nach dem Update');
+    expect(md).not.toMatch(/^## BlaulichtCMS/m);
+    expect(await releaseNotesFor('99.0.0')).toBeNull();
+  });
+});

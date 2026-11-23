@@ -10,6 +10,7 @@ import { Icon } from "../../../components/ui/Icon";
 import { useAuth } from "../../../lib/auth";
 import { fmtDateTime, fmtRelative } from "../../../lib/format";
 import { Markdown } from "../../help/Markdown";
+import { hasReleaseNotes, releaseNotesFor } from "./releaseNotes";
 import { FieldGrid, LoadError, SectionCard } from "../shared";
 import { plural } from '../../../lib/format';
 
@@ -602,6 +603,30 @@ function HostUpdateProgress({ helper, current, offline, manage, onChanged }: { h
   );
 }
 
+/**
+ * Versionshinweise eines installierten Updates (#278): erster Absatz direkt sichtbar, der Rest zum Aufklappen; die
+ * technische Meldung (Migrationen) klein darunter.
+ */
+function ReleaseNotesCell({ version, technical }: { version: string; technical: string }) {
+  const q = useQuery({ queryKey: ['release-notes', version], queryFn: () => releaseNotesFor(version), staleTime: Infinity });
+  const md = q.data ?? '';
+  const parts = md.split(/\n\n/);
+  const intro = parts.find((p) => p.trim() && !p.startsWith('#')) ?? '';
+  const rest = md.replace(intro, '').trim();
+  return (
+    <div className="flex flex-col gap-1">
+      {q.isLoading ? <span className="text-fg-muted">…</span> : intro ? <Markdown source={intro} className="text-sm" /> : null}
+      {rest && (
+        <details>
+          <summary className="cursor-pointer text-meta text-fg-muted">Alle Neuerungen in {version}</summary>
+          <Markdown source={rest} className="text-sm mt-1" />
+        </details>
+      )}
+      <span className="text-[11px] text-fg-muted">{technical}</span>
+    </div>
+  );
+}
+
 function UpdateHistory({ rows }: { rows: HistoryRow[] }) {
   return (
     <div className="flex flex-col gap-2">
@@ -616,7 +641,7 @@ function UpdateHistory({ rows }: { rows: HistoryRow[] }) {
                 <Th>Zeitpunkt</Th>
                 <Th>Version</Th>
                 <Th>Ergebnis</Th>
-                <Th>Meldung</Th>
+                <Th>Was ist neu</Th>
               </tr>
             </thead>
             <tbody>
@@ -630,8 +655,12 @@ function UpdateHistory({ rows }: { rows: HistoryRow[] }) {
                     <Badge tone={STATUS_TEXT[r.status].tone}>{STATUS_TEXT[r.status].label}</Badge>
                     {r.actor_name && <span className="block text-[11px] text-fg-muted mt-0.5">{r.actor_name}</span>}
                   </Td>
-                  <Td className="text-sm max-w-[420px]">
-                    {r.message}
+                  <Td className="text-sm max-w-[560px]">
+                    {r.status === 'activated' && hasReleaseNotes(r.to_version) ? (
+                      <ReleaseNotesCell version={r.to_version} technical={r.message} />
+                    ) : (
+                      r.message
+                    )}
                     {r.restored && <span className="block text-[11px] text-fg-muted">Datenbank aus Sicherung zurückgespielt</span>}
                   </Td>
                 </tr>
