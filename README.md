@@ -7,7 +7,7 @@
 
 <br/><br/>
 
-[![Version](https://img.shields.io/badge/Version-0.8.2-D21F3C)](https://github.com/thisislennard/BlaulichtCMS/releases/latest)
+[![Version](https://img.shields.io/badge/Version-0.9.0-D21F3C)](https://github.com/thisislennard/BlaulichtCMS/releases/latest)
 [![CI](https://github.com/thisislennard/BlaulichtCMS/actions/workflows/ci.yml/badge.svg)](https://github.com/thisislennard/BlaulichtCMS/actions/workflows/ci.yml)
 [![Lizenz: GPL-3.0](https://img.shields.io/badge/Lizenz-GPL--3.0--or--later-blue)](LICENSE)
 ![DSGVO-konform](https://img.shields.io/badge/DSGVO-konform-1E7443)
@@ -59,7 +59,7 @@ Hilfe-Center mit 32 Kapiteln, heller und dunkler Modus, vollständig per Tastatu
   <tr>
     <td valign="top"><b>Presseanfragen</b><br/><sub>Status, Zuständigkeit, Frist, Verlauf</sub><br/><br/><img src="docs/bilder/presse.webp" alt="Presseanfragen"/></td>
     <td valign="top"><b>Bild aus Vorlage</b><br/><sub>ausfüllen mit Live-Vorschau</sub><br/><br/><img src="docs/bilder/bildvorlage.webp" alt="Bild aus Vorlage"/></td>
-    <td valign="top"><b>Reichweite</b><br/><sub>je Netzwerk, nur Summen</sub><br/><br/><img src="docs/bilder/reichweite.webp" alt="Reichweite"/></td>
+    <td valign="top"><b>Reichweite</b><br/><sub>Seitenstatistik und Follower-Verlauf, nur Summen</sub><br/><br/><img src="docs/bilder/reichweite.webp" alt="Reichweite"/></td>
   </tr>
 </table>
 
