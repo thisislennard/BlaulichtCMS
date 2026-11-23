@@ -7,7 +7,7 @@
 
 <br/><br/>
 
-[![Version](https://img.shields.io/badge/Version-0.9.0-D21F3C)](https://github.com/thisislennard/BlaulichtCMS/releases/latest)
+[![Version](https://img.shields.io/badge/Version-0.10.0-D21F3C)](https://github.com/thisislennard/BlaulichtCMS/releases/latest)
 [![CI](https://github.com/thisislennard/BlaulichtCMS/actions/workflows/ci.yml/badge.svg)](https://github.com/thisislennard/BlaulichtCMS/actions/workflows/ci.yml)
 [![Lizenz: GPL-3.0](https://img.shields.io/badge/Lizenz-GPL--3.0--or--later-blue)](LICENSE)
 ![DSGVO-konform](https://img.shields.io/badge/DSGVO-konform-1E7443)
@@ -41,7 +41,7 @@ alles, was dazugehört, in einer Anwendung auf dem eigenen Server.
 | **Übersicht** | Dashboard je Rolle, eine Freigaben-Liste für alle Arten, Benachrichtigungen per Glocke, Push und E-Mail, Reichweite der Social-Posts, Seitenstatistik mit Follower-Verlauf |
 | **Redaktion** | Fotos sammeln per Upload-Link, Sichtung und Medien, Beiträge mit Fassungen, Kalender, Einsatzliste, Banner, Designvorlagen, Quellen |
 | **Presse** | Presseanfragen mit Fristen, Presse-Postfach, Antworten mit Textbausteinen, Presseverteiler und Pressemitteilungen |
-| **Warnungen** | Warnentwurf für die MoWaS-Übergabe mit Warnstufen-Assistent, Stichwortverzeichnis je Bundesland, amtliche Warnungen |
+| **Warnungen** | Warnentwurf für die MoWaS-Übergabe mit Warnstufen-Assistent und Gebiet auf der Karte, Stichwortverzeichnis je Bundesland, amtliche Warnungen |
 | **Einrichtung** | Verbindungen mit Websites, Workflows, Beitragsvorlagen, Upload-Seite |
 | **Verwaltung** | Benutzer und eigene Rollen mit 103 Rechten, Einstellungen, Sicherung, Updates aus der App, Systemstatus |
 
@@ -123,7 +123,7 @@ BlaulichtCMS verbindet sich mit den Systemen, die im Alltag schon da sind. Jede 
 | **WhatsApp-Kanal** | ausgehend | Text und Bilder vorbereitet, Teilen von Hand |
 | **E-Mail** | ausgehend | SMTP oder Microsoft 365: Antworten, Pressemitteilungen, Benachrichtigungen |
 | **Web Push** | ausgehend | Mitteilungen an Browser und installierte App |
-| **Warnentwurf** | ausgehend | PDF an die zuständige Stelle für die MoWaS-Auslösung |
+| **Warnentwurf** | ausgehend | PDF mit Kartenausschnitt an die zuständige Stelle für die MoWaS-Auslösung |
 | **SMB-Freigabe oder WebDAV** | ausgehend | Sicherung außer Haus, z. B. auf einen Windows-Server oder ein NAS |
 
 Vorschläge für weitere Schnittstellen gern als [Issue](https://github.com/thisislennard/BlaulichtCMS/issues).
