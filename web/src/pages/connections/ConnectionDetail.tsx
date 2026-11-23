@@ -663,6 +663,15 @@ export default function ConnectionDetail() {
               )}
               {['facebook', 'instagram'].includes(c.kind) && (
                 <div className="flex items-start gap-1">
+                  <Switch checked={cfg.readOnly === true} onChange={(v) => setCfg({ ...cfg, readOnly: v })} label="Nur lesen (Veröffentlichen sperren)" description={`Sicherheitssperre: BlaulichtCMS veröffentlicht nichts auf ${c.kind === 'facebook' ? 'dieser Seite' : 'diesem Konto'} – keine Beiträge, keine Storys, kein Löschen, kein Testbeitrag. Reichweite, Seitenstatistik und Social-Feed laufen weiter.`} />
+                  <HelpTip title="Nur lesen" more="/hilfe/verbindungen#nur-lesen">
+                    <p className="m-0">Die Sperre gilt auf dem Server an jeder Stelle: Die Verbindung erscheint nicht mehr als Ziel im Beitrag und in Workflows, bereits geplante Veröffentlichungen werden abgewiesen.</p>
+                    <p className="m-0 text-fg-muted">Einschalten wirkt sofort und braucht keinen neuen Test. Ausschalten verlangt einen neuen Test, weil das Veröffentlichen bis dahin nicht geprüft wurde.</p>
+                  </HelpTip>
+                </div>
+              )}
+              {['facebook', 'instagram'].includes(c.kind) && (
+                <div className="flex items-start gap-1">
                   <Switch checked={cfg.pageSync !== false} onChange={(v) => setCfg({ ...cfg, pageSync: v })} label={c.kind === 'facebook' ? 'Seite abgleichen' : 'Konto abgleichen'} description={`Stündlich alle Beiträge ${c.kind === 'facebook' ? 'der Seite' : 'des Kontos'} lesen – auch die direkt bei ${c.kind === 'facebook' ? 'Facebook' : 'Instagram'} erstellten – samt Vorschaubild und Zahlen, dazu täglich Follower, Aufrufe und Reichweite. Grundlage für Seitenstatistik und Social-Feed.`} />
                   <HelpTip title="Seitenabgleich" more="/hilfe/verbindungen#seitenstatistik">
                     <p className="m-0">Gespeichert werden nur Inhalte {c.kind === 'facebook' ? 'der eigenen Seite' : 'des eigenen Kontos'} und zusammengefasste Zahlen – keine Personen, keine Kommentare. Die Tageswerte brauchen {c.kind === 'facebook' ? 'read_insights' : 'instagram_business_manage_insights'}.</p>
@@ -728,7 +737,7 @@ export default function ConnectionDetail() {
             {Object.keys(c.capabilities ?? {}).length ? (
               <div className="flex flex-wrap gap-2">
                 {Object.entries(c.capabilities).filter(([, v]) => typeof v === 'boolean').map(([k, v]) => (
-                  <Badge key={k} tone={v ? 'success' : 'neutral'}>{({ text: 'Text', photos: 'Fotos', video: 'Video', image: 'Bild', carousel: 'Karussell', reels: 'Reels', stories: 'Storys', link: 'Link', manual: 'Teilen von Hand', text_only: 'Nur Text', drafts: 'Entwürfe', read: 'Abruf', autoBanner: 'Automatische Banner', alt_text: 'Alternativtext', content_warning: 'Inhaltswarnung', link_card: 'Link-Vorschaukarte', insights: 'Reichweite' } as any)[k] ?? k}: {v ? 'ja' : 'nein'}</Badge>
+                  <Badge key={k} tone={v ? 'success' : 'neutral'}>{({ text: 'Text', photos: 'Fotos', video: 'Video', image: 'Bild', carousel: 'Karussell', reels: 'Reels', stories: 'Storys', link: 'Link', manual: 'Teilen von Hand', text_only: 'Nur Text', drafts: 'Entwürfe', read: 'Abruf', autoBanner: 'Automatische Banner', alt_text: 'Alternativtext', content_warning: 'Inhaltswarnung', link_card: 'Link-Vorschaukarte', insights: 'Reichweite', read_only: 'Nur lesen' } as any)[k] ?? k}: {v ? 'ja' : 'nein'}</Badge>
                 ))}
               </div>
             ) : (

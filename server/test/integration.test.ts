@@ -6816,6 +6816,37 @@ describe('Seitenabgleich, Seitenstatistik und Social-Feed (RSS, Bridge)', () => 
     await editor.del('/social-feed/rss');
   });
 
+  it('Nur lesen: Statistik ja, Veröffentlichen an keiner Stelle', async () => {
+    // Einschalten braucht keinen neuen Test – die Verbindung bleibt aktiv
+    expect((await admin.put(`/connections/${fbId}`, { name: 'Seite (Abgleich-Test)', config: { pageId: 'PAGE1', appId: '111', readOnly: true } })).status).toBe(200);
+    expect((await one<any>(`SELECT status FROM connections WHERE id = $1`, [fbId]))!.status).toBe('active');
+    graph.calls.length = 0;
+    // Eigene Absenderadresse: „Testen“ ist je Adresse auf 10 je Minute begrenzt und gehört auch anderen Tests
+    const other = new Client(app, '198.51.100.27');
+    other.cookie = admin.cookie;
+    const t = (await other.post(`/connections/${fbId}/test`)).json;
+    expect(t.ok, JSON.stringify(t)).toBe(true);
+    expect(t.capabilities.read_only).toBe(true);
+    expect(graph.calls.some((c) => c.startsWith('/pg/PAGE1/feed'))).toBe(false);
+    // Kein Ziel für die Redaktion, Beitrag mit diesem Ziel wird abgewiesen
+    expect((await editor.get('/connections')).json.some((c: any) => c.id === fbId)).toBe(false);
+    const pid = (await editor.post('/posts', { title: 'Nur-lesen-Test (fiktiv)' })).json.id;
+    const d = (await editor.get(`/posts/${pid}`)).json;
+    const save = await editor.put(`/posts/${pid}/revision`, { baseRevision: d.revision.number, title: d.revision.title, body: 'Text', socialTargets: [fbId] });
+    expect(save.status).toBe(400);
+    const { isReadOnly } = await import('../src/connections/common.js');
+    expect(isReadOnly((await one<any>(`SELECT kind, config FROM connections WHERE id = $1`, [fbId]))!)).toBe(true);
+    // Statistik läuft weiter
+    const { runPageSync } = await import('../src/connections/page-sync.js');
+    graph.calls.length = 0;
+    await runPageSync();
+    expect(graph.calls.some((c) => c.startsWith('/pg/PAGE1/posts'))).toBe(true);
+    // Ausschalten verlangt einen neuen Test
+    await admin.put(`/connections/${fbId}`, { name: 'Seite (Abgleich-Test)', config: { pageId: 'PAGE1', appId: '111', readOnly: false } });
+    expect((await one<any>(`SELECT status FROM connections WHERE id = $1`, [fbId]))!.status).toBe('draft');
+    await pool.query(`UPDATE connections SET status = 'active' WHERE id = $1`, [fbId]);
+  });
+
   it('auf der Seite gelöschte Beiträge werden erkannt und später samt Bild entfernt', async () => {
     const { runPageSync, cleanupPagePosts, socialImageDir } = await import('../src/connections/page-sync.js');
     graph.posts = ['P2'];

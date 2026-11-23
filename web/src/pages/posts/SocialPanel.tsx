@@ -19,6 +19,8 @@ export interface SocialTarget {
   status: string;
   manual?: boolean;
   capabilities: Record<string, any>;
+  /** nur für die Verwaltung geliefert; readOnly = „Nur lesen“ (kein Ziel zum Veröffentlichen) */
+  config?: Record<string, any>;
 }
 export interface SocialDraft {
   social: string[];
@@ -51,7 +53,7 @@ export function cleanFormats(f: Record<string, string> | null | undefined, targe
 
 export function useSocialTargets() {
   const { can } = useAuth();
-  return useQuery({ queryKey: ['social-targets'], queryFn: () => get<SocialTarget[]>('/connections').then((l) => l.filter((c) => (SOCIAL_KINDS as string[]).includes(c.kind))), enabled: can('connection.view') });
+  return useQuery({ queryKey: ['social-targets'], queryFn: () => get<SocialTarget[]>('/connections').then((l) => l.filter((c) => (SOCIAL_KINDS as string[]).includes(c.kind) && c.config?.readOnly !== true)), enabled: can('connection.view') });
 }
 
 function Counter({ n, max }: { n: number; max: number }) {

@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import { WRITABLE_SQL } from '../connections/common.js';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { many, one, pool, tx, type Queryable } from '../db/pool.js';
@@ -414,7 +415,7 @@ export async function postRoutes(app: FastifyInstance) {
       if (!site || site.status === 'revoked') throw badRequest('Die gewählte Website ist nicht verfügbar.');
     }
     if (body.socialTargets.length) {
-      const ok = await many<any>(`SELECT id, kind FROM connections WHERE id = ANY($1) AND kind IN ('facebook','instagram','threads','x','whatsapp','mastodon','bluesky') AND status IN ('tested','active')`, [body.socialTargets]);
+      const ok = await many<any>(`SELECT id, kind FROM connections WHERE id = ANY($1) AND kind IN ('facebook','instagram','threads','x','whatsapp','mastodon','bluesky') AND status IN ('tested','active') AND ${WRITABLE_SQL}`, [body.socialTargets]);
       if (ok.length !== new Set(body.socialTargets).size) throw badRequest('Mindestens ein gewähltes soziales Netzwerk ist nicht verfügbar.');
       const noStory = ok.filter((c) => !['facebook', 'instagram'].includes(c.kind) && ['story', 'both'].includes(body.socialFormats[c.id]));
       if (noStory.length) throw badRequest('Storys gibt es nur für Facebook-Seiten und Instagram-Konten.');

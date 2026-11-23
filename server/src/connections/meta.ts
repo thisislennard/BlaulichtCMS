@@ -6,7 +6,7 @@ import { sha256Hex, randomToken } from '../lib/crypto.js';
 import { publicBase } from '../lib/urls.js';
 import { publicFileFor } from '../routes/media.js';
 import type { Connection, TestStep } from './common.js';
-import { scrub } from './common.js';
+import { isReadOnly, scrub } from './common.js';
 import { markerFor, socialText } from './channels.js';
 import { effectiveAlt } from '../lib/accessibility.js';
 
@@ -211,12 +211,17 @@ export async function testFacebook(c: Connection, sec: Record<string, string>) {
     const perms = sec.userToken ? await call('GET', `${FB_GRAPH()}/me/permissions`, { access_token: sec.userToken }, sec, 'Facebook') : { data: [] };
     const granted = (perms.data ?? []).filter((p: any) => p.status === 'granted').map((p: any) => p.permission);
     account.permissions = granted;
-    const missing = FB_SCOPES.filter((s) => !granted.includes(s));
+    // Nur lesen: pages_manage_posts wird nicht gebraucht
+    const missing = FB_SCOPES.filter((s) => !granted.includes(s) && !(isReadOnly(c) && s === 'pages_manage_posts'));
     const insights = FB_INSIGHT_SCOPES.every((s) => granted.includes(s));
     caps.insights = !!sec.userToken && insights;
     steps.push({ name: 'Berechtigungen', ok: !sec.userToken || missing.length === 0, message: !sec.userToken ? 'Seiten-Token manuell hinterlegt – Berechtigungen nicht abfragbar.' : missing.length ? `Es fehlen: ${missing.join(', ')}` : `Erteilt: ${FB_SCOPES.join(', ')}${insights ? ', read_insights (Reichweite)' : ' – ohne read_insights zeigt die Reichweite nur Reaktionen, Kommentare und geteilte Beiträge'}`, kind: 'read' });
   } catch (e: any) {
     steps.push({ name: 'Berechtigungen', ok: false, message: e.message, kind: 'read' });
+  }
+  if (isReadOnly(c)) {
+    steps.push({ name: 'Nur lesen', ok: true, message: 'Veröffentlichen ist gesperrt – kein Testbeitrag. Die Verbindung liefert nur Statistik und Seitenabgleich.', kind: 'publish' });
+    return { steps, account, capabilities: { ...caps, read_only: true } };
   }
   try {
     const probe = await call('POST', `${FB_GRAPH()}/${pageId}/feed`, { message: `BlaulichtCMS-Verbindungstest ${new Date().toISOString()} (unveröffentlicht, wird sofort gelöscht)`, published: 'false', access_token: sec.pageToken }, sec, 'Facebook');
@@ -273,6 +278,10 @@ export async function testInstagram(c: Connection, sec: Record<string, string>, 
     steps.push({ name: 'Veröffentlichungskontingent', ok: true, message: `Heute genutzt: ${d.quota_usage ?? '?'} von ${d.config?.quota_total ?? '?'}`, kind: 'read' });
   } catch (e: any) {
     steps.push({ name: 'Veröffentlichungskontingent', ok: false, message: e.message, kind: 'read' });
+  }
+  if (isReadOnly(c)) {
+    steps.push({ name: 'Nur lesen', ok: true, message: 'Veröffentlichen ist gesperrt – kein Mediencontainer. Die Verbindung liefert nur Statistik und Seitenabgleich.', kind: 'publish' });
+    return { steps, account, capabilities: { ...caps, read_only: true }, userId };
   }
   if (!testImageUrl) {
     steps.push({ name: 'Veröffentlichungstest', ok: false, message: 'Für den Test ist eine öffentlich erreichbare HTTPS-Adresse von BlaulichtCMS nötig (Basisadresse in den Einstellungen).', kind: 'publish' });

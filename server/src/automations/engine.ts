@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import { WRITABLE_SQL } from '../connections/common.js';
 import { many, one, pool, tx, type Queryable } from '../db/pool.js';
 import { enqueue } from '../jobs/queue.js';
 import { audit, type Actor } from '../lib/audit.js';
@@ -664,7 +665,7 @@ async function runOutput(ctx: Ctx, node: GraphNode, data: Data, prev: StepRow | 
       // Vorausgewählte soziale Netzwerke (#188, #189): nur verfügbare (getestet/aktiv); Storys nur für Facebook/Instagram.
       // Veröffentlicht wird erst nach Freigabe durch eine Person – Automationen posten nie selbst in sozialen Netzwerken.
       const wanted = (c.socialTargets ?? []) as { connectionId: string; format: string }[];
-      const avail = wanted.length ? await many<{ id: string; kind: string; name: string }>(`SELECT id, kind, name FROM connections WHERE id = ANY($1::uuid[]) AND deleted_at IS NULL AND status IN ('tested','active') AND kind IN ('facebook','instagram','threads','x','whatsapp','mastodon','bluesky')`, [wanted.map((w) => w.connectionId)]) : [];
+      const avail = wanted.length ? await many<{ id: string; kind: string; name: string }>(`SELECT id, kind, name FROM connections WHERE id = ANY($1::uuid[]) AND deleted_at IS NULL AND status IN ('tested','active') AND kind IN ('facebook','instagram','threads','x','whatsapp','mastodon','bluesky') AND ${WRITABLE_SQL}`, [wanted.map((w) => w.connectionId)]) : [];
       const socialTargets = wanted.filter((w) => avail.some((a) => a.id === w.connectionId)).map((w) => w.connectionId);
       const socialFormats = Object.fromEntries(wanted.filter((w) => socialTargets.includes(w.connectionId) && ['facebook', 'instagram'].includes(avail.find((a) => a.id === w.connectionId)!.kind) && (w.format === 'story' || w.format === 'both')).map((w) => [w.connectionId, w.format]));
       const skippedSocial = wanted.length - socialTargets.length;

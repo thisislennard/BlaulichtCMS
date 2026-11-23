@@ -112,6 +112,18 @@ export async function updateConnectionSecrets(c: Connection, patch: Record<strin
  * eigene Voraussetzungen: dokumentierte fachliche Prüfung, gekoppelte Website, HTTPS-Quelle). Alles andere – Quelle,
  * Gebiet, Feldzuordnung, App-ID, Seite, Konto – und jede Änderung der Zugangsdaten verlangt einen neuen Test.
  */
+/**
+ * „Nur lesen“ (Sicherheitssperre) für Facebook und Instagram: Die Verbindung liefert Statistik und Seitenabgleich, aber
+ * BlaulichtCMS schreibt nie über sie – kein Veröffentlichen, keine Storys, kein Löschen, kein Testbeitrag. Geprüft wird
+ * an jeder Stelle auf dem Server (Auswahl im Beitrag und in Workflows, Start, Ausführung, Entfernen), nicht nur in der
+ * Oberfläche.
+ */
+export function isReadOnly(c: { kind: string; config?: Record<string, any> | null }): boolean {
+  return (c.kind === 'facebook' || c.kind === 'instagram') && c.config?.readOnly === true;
+}
+/** SQL-Bedingung (Tabelle connections ohne Alias): Verbindung darf schreiben. */
+export const WRITABLE_SQL = `NOT (kind IN ('facebook','instagram') AND COALESCE((config->>'readOnly')::boolean, false))`;
+
 export const RETEST_EXEMPT_KEYS = ['intervalMinutes', 'intervalSeconds', 'createDrafts', 'autoBanner', 'bannerSiteId', 'review', 'oauthState', 'tokenExpiresAt', 'clientId', 'appInstance', 'appRedirect', 'insights', 'pageSync'] as const;
 
 /** Vergleichsform einer Konfiguration für die Frage „neuer Test nötig?“ (leere Zuordnungen = Standard). */

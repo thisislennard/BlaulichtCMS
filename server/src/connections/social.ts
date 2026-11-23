@@ -3,7 +3,7 @@ import { audit } from '../lib/audit.js';
 import { StepError, toStepError } from '../lib/errors.js';
 import { log } from '../lib/log.js';
 import { notify } from '../lib/notify.js';
-import { connectionSecrets, scrub, type Connection } from './common.js';
+import { connectionSecrets, isReadOnly, scrub, type Connection } from './common.js';
 import { findExisting, findExistingStory, mediaForRevision, publishFacebook, publishFacebookStory, publishInstagram, publishInstagramStory } from './meta.js';
 import { findExistingThreads, publishThreads } from './threads.js';
 import { findExistingX, publishX } from './x.js';
@@ -35,6 +35,7 @@ export async function runSocialPublication(id: string) {
     log('warn', 'social', `${label}: ${status} – ${msg}`);
   };
   if (c.status !== 'active') return fail('failed', new StepError('config', 'Die Verbindung ist nicht aktiv.'));
+  if (isReadOnly(c)) return fail('failed', new StepError('config', 'Die Verbindung steht auf „Nur lesen“ – Veröffentlichen ist gesperrt.'));
   const sec = await connectionSecrets(c);
 
   // Unbekannter Ausgang oder unterbrochener Lauf: zuerst nachsehen statt doppelt zu veröffentlichen

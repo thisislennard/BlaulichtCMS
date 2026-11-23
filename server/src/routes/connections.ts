@@ -17,7 +17,7 @@ import { postState } from './posts.js';
 import { publicFileFor } from './media.js';
 import { sendFileResponse } from './files.js';
 import { publicFileName } from '../media/names.js';
-import { connectionSecrets, connectionUsage, KIND_LABEL, loadConnection, requireRetest, retestRelevantConfig, saveTest, scrub, updateConnectionSecrets, type Connection, type ConnectionKind } from '../connections/common.js';
+import { connectionSecrets, connectionUsage, isReadOnly, KIND_LABEL, loadConnection, requireRetest, retestRelevantConfig, saveTest, scrub, updateConnectionSecrets, type Connection, type ConnectionKind } from '../connections/common.js';
 import { FE2_ALLOWED_FIELDS, FE2_DEFAULT_MAPPING, handleFe2Event } from '../connections/fe2.js';
 import { connectionTestImage, deleteFacebookPost, facebookAuthorizeUrl, facebookExchange, igUnified, instagramAuthorizeUrl, instagramExchange, unifiedAuthorizeUrl, unifiedExchange, type IgAccount, mediaForRevision, mediaUrl, storyImage, testFacebook, testInstagram } from '../connections/meta.js';
 import { formatsFor, isManualChannel, isSocialKind, limitsFor, markerFor, postLink, shareTarget, SOCIAL_KINDS, socialText } from '../connections/channels.js';
@@ -73,8 +73,8 @@ const configSchema: Record<ConnectionKind, z.ZodType<any>> = {
     // Schlüssel in der Adresse (für Absender ohne eigene Kopfzeile); Standard aus
     keyInPath: z.boolean().default(false),
   }),
-  facebook: z.object({ appId: z.string().max(40).default(''), pageId: z.string().max(40).optional(), insights: z.boolean().optional(), pageSync: z.boolean().optional() }),
-  instagram: z.object({ appId: z.string().max(40).default(''), userId: z.string().max(40).optional(), insights: z.boolean().optional(), pageSync: z.boolean().optional(), login: z.enum(['instagram', 'unified']).optional(), configId: z.string().trim().regex(/^\d{0,30}$/, 'Die Konfigurations-ID besteht nur aus Ziffern.').optional() }),
+  facebook: z.object({ appId: z.string().max(40).default(''), pageId: z.string().max(40).optional(), insights: z.boolean().optional(), pageSync: z.boolean().optional(), readOnly: z.boolean().optional() }),
+  instagram: z.object({ appId: z.string().max(40).default(''), userId: z.string().max(40).optional(), insights: z.boolean().optional(), pageSync: z.boolean().optional(), readOnly: z.boolean().optional(), login: z.enum(['instagram', 'unified']).optional(), configId: z.string().trim().regex(/^\d{0,30}$/, 'Die Konfigurations-ID besteht nur aus Ziffern.').optional() }),
   warnfeed: z.object({
     format: z.enum(['nina', 'cap']).default('nina'),
     ars: z.string().max(12).default(''),
@@ -201,7 +201,7 @@ export async function connectionRoutes(app: FastifyInstance) {
     const rows = await many<Connection>(withDeleted ? `SELECT * FROM connections ORDER BY (deleted_at IS NOT NULL OR status = 'revoked'), kind, name` : `SELECT * FROM connections WHERE status <> 'revoked' AND deleted_at IS NULL ORDER BY kind, name`);
     if (full) return Promise.all(rows.map(view));
     // Redaktion sieht nur verfügbare soziale Netzwerke (Name, Art, Funktionen)
-    return rows.filter((c) => isSocialKind(c.kind) && ['tested', 'active'].includes(c.status)).map((c) => ({ id: c.id, kind: c.kind, kind_label: KIND_LABEL[c.kind], name: c.name, status: c.status, capabilities: c.capabilities, manual: isManualChannel(c), account: { name: c.account?.name ?? c.account?.username ?? null } }));
+    return rows.filter((c) => isSocialKind(c.kind) && ['tested', 'active'].includes(c.status) && !isReadOnly(c)).map((c) => ({ id: c.id, kind: c.kind, kind_label: KIND_LABEL[c.kind], name: c.name, status: c.status, capabilities: c.capabilities, manual: isManualChannel(c), account: { name: c.account?.name ?? c.account?.username ?? null } }));
   });
 
   app.get('/connections/:id', { preHandler: manage }, async (req) => {
@@ -261,7 +261,15 @@ export async function connectionRoutes(app: FastifyInstance) {
     // Jede für den Test relevante Änderung verlangt einen neuen Test – auch bei aktiven Verbindungen (die damit
     // anhalten, bis erneut getestet und aktiviert ist). Name, Intervall und Banner-Schalter zählen nicht dazu.
     const before = configSchema[c.kind].safeParse(c.config);
-    const retest = retestRelevantConfig(config) !== retestRelevantConfig(before.success ? before.data : c.config);
+    const prev = before.success ? before.data : c.config;
+    // „Nur lesen“: Einschalten ist nur sicherer und braucht keinen Test; Ausschalten verlangt einen neuen Test, weil das
+    // Veröffentlichen solange nicht geprüft wurde
+    const ro = (o: any) => {
+      const x = { ...(o ?? {}) };
+      if ((config as any).readOnly === true || x.readOnly !== true) delete x.readOnly;
+      return x;
+    };
+    const retest = retestRelevantConfig(ro(config)) !== retestRelevantConfig(ro(prev));
     const target = c.kind === 'warnfeed' && config.format === 'cap' ? hostOf(config.url) : null;
     // Gespeicherte Zugangsdaten gelten nur für das Ziel, für das sie eingegeben bzw. ausgestellt wurden (#234): Wechselt
     // die Mastodon-Instanz bzw. Server oder Konto bei Bluesky, werden Token, App-Geheimnis und App-Passwort verworfen
@@ -770,6 +778,10 @@ export async function connectionRoutes(app: FastifyInstance) {
           created.push({ connection_id: cid, skipped: 'Verbindung ist nicht aktiv.' });
           continue;
         }
+        if (isReadOnly(c)) {
+          created.push({ connection_id: cid, skipped: 'Verbindung steht auf „Nur lesen“ – Veröffentlichen ist gesperrt.' });
+          continue;
+        }
         const manual = isManualChannel(c);
         // Ein Auftrag je Fassung, Kanal und Format (Beitrag/Story); fehlgeschlagene werden gezielt über „Wiederholen“ angestoßen
         for (const format of formatsFor(c.kind, (st.current.social_formats ?? {})[cid])) {
@@ -905,6 +917,10 @@ export async function connectionRoutes(app: FastifyInstance) {
               ? `Storys lassen sich über die Schnittstelle nicht löschen (sie verschwinden nach 24 Stunden). Bitte die Story in ${network} löschen und hier bestätigen.`
               : `${network} erlaubt kein Löschen über die Schnittstelle. Bitte den Beitrag in ${network} löschen und hier bestätigen.`,
         );
+        continue;
+      }
+      if (c && isReadOnly(c)) {
+        await manualStep(`Die Verbindung steht auf „Nur lesen“ – BlaulichtCMS löscht nichts. Bitte in ${network} von Hand löschen und hier bestätigen.`);
         continue;
       }
       const sec: Record<string, string> = c && c.status !== 'revoked' ? await connectionSecrets(c).catch(() => ({})) : {};

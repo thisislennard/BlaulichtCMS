@@ -171,6 +171,14 @@ Ein so erzeugter Seiten-Token läuft nicht ab; er wird erst ungültig, wenn das 
 - Im **Live-Modus** sind nur Berechtigungen nutzbar, die Meta in der **App-Prüfung** freigegeben hat ([App-Modi](https://developers.facebook.com/docs/development/build-and-test/app-modes/), [Zugriffsstufen und App-Prüfung](https://developers.facebook.com/docs/graph-api/overview/access-levels/)). Dafür verlangt Meta in der Regel eine Unternehmensverifizierung.
 - Den Live-Test mit einer Testseite bzw. einem Testkonto machen, bevor die echte Seite verbunden wird.
 
+### Nur lesen
+
+Der Schalter **„Nur lesen (Veröffentlichen sperren)“** in einer Facebook- oder Instagram-Verbindung ist eine **Sicherheitssperre**: BlaulichtCMS schreibt dann nie über diese Verbindung – keine Beiträge, keine Storys, kein Löschen und beim Testen kein Testbeitrag bzw. Mediencontainer. **Reichweite, Seitenstatistik und Social-Feed laufen weiter.** Praktisch, wenn eine Seite nur ausgewertet werden soll oder BlaulichtCMS (noch) nicht posten darf.
+
+- Die Sperre gilt auf dem Server an jeder Stelle: Die Verbindung erscheint nicht als Ziel im Beitrag und in Workflows, Beiträge mit diesem Ziel lassen sich nicht speichern, bereits angestoßene Veröffentlichungen werden abgewiesen, und „Von sozialen Netzwerken entfernen“ verlangt das Löschen von Hand.
+- **Einschalten** wirkt sofort und braucht keinen neuen Test. **Ausschalten** verlangt einen neuen Test (mit Testbeitrag), weil das Veröffentlichen bis dahin nicht geprüft wurde.
+- Bei Facebook genügen dann `pages_show_list` und `pages_read_engagement` (für Zahlen zusätzlich `read_insights`); `pages_manage_posts` wird nicht geprüft.
+
 ### Typische Fehler (Meta)
 
 | Meldung | Ursache und Abhilfe |
