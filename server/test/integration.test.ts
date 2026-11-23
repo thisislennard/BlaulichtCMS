@@ -6835,6 +6835,103 @@ describe('Seitenabgleich, Seitenstatistik und Social-Feed (RSS, Bridge)', () => 
   });
 });
 
+describe('Instagram über Facebook (Unified Login)', () => {
+  let mock: http.Server;
+  let base = '';
+  const prevGraph = process.env.BLAULICHTCMS_META_GRAPH_URL;
+  const seen: string[] = [];
+  let accounts: any[] = [{ id: '17841400000000001', username: 'wehr_test' }, { id: '17841400000000002', username: 'jugend_test' }];
+  beforeAll(async () => {
+    mock = http.createServer((req, res) => {
+      const u = new URL(req.url!, 'http://x');
+      seen.push(`${req.method} ${u.pathname}`);
+      const json = (code: number, b: any) => {
+        res.writeHead(code, { 'content-type': 'application/json' });
+        res.end(JSON.stringify(b));
+      };
+      const tok = u.searchParams.get('access_token');
+      if (u.pathname === '/ug/oauth/access_token') {
+        if (u.searchParams.get('code') !== 'UCODE' || u.searchParams.get('client_id') !== '1680000000000001') return json(400, { error: { message: 'Code ungültig' } });
+        return json(200, { access_token: 'SYSTEMNUTZER-TOKEN', token_type: 'bearer' });
+      }
+      if (u.pathname === '/ug/debug_token') return json(200, { data: { type: 'SYSTEM_USER', expires_at: 0, granular_scopes: [{ scope: 'instagram_basic', target_ids: accounts.map((a) => a.id) }] } });
+      if (req.method === 'GET' && tok !== 'SYSTEMNUTZER-TOKEN') return json(401, { error: { message: 'Invalid OAuth access token', code: 190 } });
+      if (u.pathname === '/ug/me/assigned_instagram_accounts') return json(200, { data: accounts });
+      const ig = /^\/ug\/(1784\d+)$/.exec(u.pathname);
+      if (ig) return json(200, { ...(accounts.find((a) => a.id === ig[1]) ?? {}), followers_count: 512, media_count: 40 });
+      if (/^\/ug\/1784\d+\/content_publishing_limit$/.test(u.pathname)) return json(200, { data: [{ quota_usage: 1, config: { quota_total: 100 } }] });
+      if (/^\/ug\/1784\d+\/media$/.test(u.pathname) && req.method === 'POST') return json(200, { id: 'UC1' }); // Token steht im Formular
+      if (u.pathname === '/ug/UC1') return json(200, { status_code: 'FINISHED' });
+      if (/^\/ug\/1784\d+\/media$/.test(u.pathname)) return json(200, { data: [{ id: 'UM1', caption: 'Übung (fiktiv)', media_type: 'IMAGE', permalink: 'https://instagram.example/p/UM1', timestamp: new Date(Date.now() - 86_400_000).toISOString() }] });
+      if (u.pathname === '/ug/UM1') return json(200, { like_count: 9, comments_count: 1 });
+      if (u.pathname === '/ug/UM1/insights') return json(200, { data: [{ name: 'views', values: [{ value: 120 }] }, { name: 'reach', values: [{ value: 90 }] }] });
+      if (/^\/ug\/1784\d+(\/insights)?$/.test(u.pathname)) return json(200, { followers_count: 512, media_count: 40, data: [{ total_value: { value: 77 } }] });
+      json(404, { error: { message: `unbekannt ${u.pathname}` } });
+    });
+    await new Promise<void>((r) => mock.listen(0, '127.0.0.1', r));
+    base = `http://127.0.0.1:${(mock.address() as any).port}`;
+    process.env.BLAULICHTCMS_META_GRAPH_URL = `${base}/ug`;
+  });
+  afterAll(() => {
+    process.env.BLAULICHTCMS_META_GRAPH_URL = prevGraph;
+    mock?.close();
+  });
+
+  it('Anmeldung mit Facebook-App-ID und Konfiguration, Kontowahl, Test und Abgleich über graph.facebook.com', async () => {
+    const c = await admin.post('/connections', { kind: 'instagram', name: 'Instagram (Unified)', config: { appId: '1680000000000001', login: 'unified' } });
+    expect(c.status, JSON.stringify(c.json)).toBe(200);
+    const id = c.json.id;
+    await admin.put(`/connections/${id}/secrets`, { appSecret: 'unified-geheimnis' });
+    // Ohne Konfigurations-ID kein Start; nur Ziffern erlaubt
+    expect((await admin.post(`/connections/${id}/oauth/start`)).json.message).toContain('Konfigurations-ID');
+    expect((await admin.put(`/connections/${id}`, { name: 'Instagram (Unified)', config: { appId: '1680000000000001', login: 'unified', configId: 'abc' } })).status).toBe(400);
+    expect((await admin.put(`/connections/${id}`, { name: 'Instagram (Unified)', config: { appId: '1680000000000001', login: 'unified', configId: '1612394463493954' } })).status).toBe(200);
+    // Facebook-App-ID ist hier richtig – die Sperre für Instagram-Login greift nicht
+    const start = await admin.post(`/connections/${id}/oauth/start`);
+    expect(start.status, JSON.stringify(start.json)).toBe(200);
+    const url = new URL(start.json.url);
+    expect(url.searchParams.get('client_id')).toBe('1680000000000001');
+    expect(url.searchParams.get('config_id')).toBe('1612394463493954');
+    expect(url.searchParams.get('response_type')).toBe('code');
+    expect(url.searchParams.get('override_default_response_type')).toBe('true');
+    expect(url.searchParams.get('scope')).toBeNull();
+    const cb = await anonymous.raw('GET', `/connections/oauth/callback?state=${encodeURIComponent(url.searchParams.get('state')!)}&code=UCODE`);
+    expect(decodeURIComponent(cb.headers.location as string)).toContain('eines von 2 Instagram-Konten wählen');
+    const v = (await admin.get(`/connections/${id}`)).json;
+    expect(v.ig_accounts.map((a: any) => a.username)).toEqual(['wehr_test', 'jugend_test']);
+    expect(JSON.stringify(v)).not.toContain('SYSTEMNUTZER-TOKEN');
+    expect((await admin.post(`/connections/${id}/test`)).json.ok).toBe(false); // noch kein Konto gewählt
+    expect((await admin.post(`/connections/${id}/ig-account`, { userId: '99999' })).status).toBe(404);
+    expect((await admin.post(`/connections/${id}/ig-account`, { userId: '17841400000000001' })).status).toBe(200);
+    const t = (await admin.post(`/connections/${id}/test`)).json;
+    expect(t.ok, JSON.stringify(t)).toBe(true);
+    expect(seen).toContain('POST /ug/17841400000000001/media');
+    expect(seen).not.toContain('GET /ug/me');
+    // Seitenabgleich und Zahlen laufen über denselben Weg
+    await pool.query(`UPDATE connections SET status = 'active' WHERE id = $1`, [id]);
+    const { syncConnection } = await import('../src/connections/page-sync.js');
+    const { loadConnection } = await import('../src/connections/common.js');
+    await syncConnection((await loadConnection(id))!);
+    const post = await one<any>(`SELECT * FROM social_page_posts WHERE connection_id = $1`, [id]);
+    expect(post).toMatchObject({ remote_id: 'UM1', kind: 'instagram' });
+    expect(post.metrics).toMatchObject({ likes: 9, replies: 1, views: 120, reach: 90 });
+    expect((await one<any>(`SELECT metrics FROM social_page_stats WHERE connection_id = $1 AND day = current_date`, [id]))!.metrics.followers).toBe(512);
+    // Nur ein Konto: wird direkt übernommen
+    accounts = [accounts[1]];
+    const s2 = new URL((await admin.post(`/connections/${id}/oauth/start`)).json.url).searchParams.get('state')!;
+    const cb2 = await anonymous.raw('GET', `/connections/oauth/callback?state=${encodeURIComponent(s2)}&code=UCODE`);
+    expect(decodeURIComponent(cb2.headers.location as string)).toContain('mit @jugend_test verbunden');
+    expect((await one<any>(`SELECT config FROM connections WHERE id = $1`, [id]))!.config.userId).toBe('17841400000000002');
+    // Kein Konto: klare Meldung, kein leerer Wert, Speichern geht weiter
+    accounts = [];
+    const s3 = new URL((await admin.post(`/connections/${id}/oauth/start`)).json.url).searchParams.get('state')!;
+    const cb3 = await anonymous.raw('GET', `/connections/oauth/callback?state=${encodeURIComponent(s3)}&code=UCODE`);
+    expect(decodeURIComponent(cb3.headers.location as string)).toContain('business_management');
+    expect((await one<any>(`SELECT config FROM connections WHERE id = $1`, [id]))!.config.userId).toBeUndefined();
+    expect((await admin.put(`/connections/${id}`, { name: 'Instagram (Unified)', config: { appId: '1680000000000001', login: 'unified', configId: '1612394463493954' } })).status).toBe(200);
+  });
+});
+
 describe('In-App-Updates aus GitHub-Releases', () => {
   const work = fs.mkdtempSync(path.join(os.tmpdir(), 'bc-upd-it-'));
   const key = crypto.generateKeyPairSync('ed25519');

@@ -108,6 +108,82 @@ export async function instagramExchange(appId: string, appSecret: string, redire
   return { token: long.access_token as string, userId: String(short.user_id ?? ''), expiresIn: Number(long.expires_in ?? 0) };
 }
 
+/* ------------------------------------------------------------------ Instagram über Unified Login */
+
+/**
+ * Instagram-Anmeldung über Facebook („API setup with Unified login“, Facebook Login for Business mit Konfiguration).
+ * Neue Meta-Apps (etwa ab Ende Oktober 2026) bekommen das bisherige Instagram-Login nicht mehr angeboten – im Betrieb
+ * festgestellt am 23.11.2026. Dann gibt es keine eigene Instagram-App-ID: Die Anmeldung läuft mit der Facebook-App-ID
+ * und einer Konfigurations-ID (`config_id`); die Rechte stehen in der Konfiguration, nicht im Aufruf. Das Ergebnis ist
+ * meist ein Systemnutzer-Token ohne Ablauf; alle Aufrufe gehen an graph.facebook.com statt graph.instagram.com.
+ * Rechte: instagram_basic, instagram_content_publish, instagram_manage_insights, business_management (ohne
+ * business_management liefert Meta kein zugewiesenes Instagram-Konto).
+ */
+export const igUnified = (c: Pick<Connection, 'config'>) => c.config?.login === 'unified';
+/** Basisadresse der Instagram-Aufrufe je Anmeldeweg. */
+export const igBase = (c: Pick<Connection, 'config'>) => (igUnified(c) ? FB_GRAPH() : IG_GRAPH());
+
+export function unifiedAuthorizeUrl(appId: string, configId: string, redirectUri: string, state: string) {
+  return `${FB_DIALOG()}?${new URLSearchParams({ client_id: appId, config_id: configId, redirect_uri: redirectUri, state, response_type: 'code', override_default_response_type: 'true' })}`;
+}
+
+export interface IgAccount {
+  id: string;
+  username: string;
+}
+
+/**
+ * Code → Token → zugewiesene Instagram-Konten. Benutzer-Tokens (selten bei dieser Anmeldung) werden in langlebige
+ * getauscht; Systemnutzer-Tokens laufen nicht ab. Konten werden auf drei Wegen gesucht, weil Meta sie je nach
+ * Einrichtung unterschiedlich liefert: zugewiesene Instagram-Konten, Ziel-IDs der erteilten Rechte, mit einer Seite
+ * verknüpfte Konten.
+ */
+export async function unifiedExchange(appId: string, appSecret: string, redirectUri: string, code: string): Promise<{ token: string; tokenType: string; expiresAt: string | null; accounts: IgAccount[] }> {
+  const s: Record<string, string> = { appSecret, code };
+  const first = await call('GET', `${FB_GRAPH()}/oauth/access_token`, { client_id: appId, client_secret: appSecret, redirect_uri: redirectUri, code }, s, 'Instagram');
+  let token = String(first.access_token ?? '');
+  if (!token) throw new StepError('auth', 'Meta hat keinen Token geliefert.');
+  s.t = token;
+  const appToken = `${appId}|${appSecret}`;
+  const dbg = ((await call('GET', `${FB_GRAPH()}/debug_token`, { input_token: token, access_token: appToken }, { ...s, a: appToken }, 'Instagram').catch(() => ({}))) as any).data ?? {};
+  const tokenType = String(dbg.type ?? 'UNKNOWN').toUpperCase();
+  let expiresAt: string | null = Number(dbg.expires_at) > 0 ? new Date(Number(dbg.expires_at) * 1000).toISOString() : null;
+  if (tokenType === 'USER' && expiresAt) {
+    const long = await call('GET', `${FB_GRAPH()}/oauth/access_token`, { grant_type: 'fb_exchange_token', client_id: appId, client_secret: appSecret, fb_exchange_token: token }, s, 'Instagram');
+    token = String(long.access_token ?? token);
+    s.t2 = token;
+    expiresAt = Number(long.expires_in) > 0 ? new Date(Date.now() + Number(long.expires_in) * 1000).toISOString() : null;
+  }
+  const found = new Map<string, IgAccount>();
+  const add = (a: any) => {
+    if (a?.id && /^\d+$/.test(String(a.id))) found.set(String(a.id), { id: String(a.id), username: String(a.username ?? a.name ?? a.id) });
+  };
+  try {
+    for (const a of (await call('GET', `${FB_GRAPH()}/me/assigned_instagram_accounts`, { fields: 'id,username', access_token: token }, s, 'Instagram')).data ?? []) add(a);
+  } catch {
+    /* nicht für jede Token-Art verfügbar */
+  }
+  if (!found.size) {
+    const ids = new Set<string>();
+    for (const g of dbg.granular_scopes ?? []) if (String(g.scope ?? '').startsWith('instagram_')) for (const t of g.target_ids ?? []) ids.add(String(t));
+    for (const id of [...ids].slice(0, 20)) {
+      try {
+        add(await call('GET', `${FB_GRAPH()}/${encodeURIComponent(id)}`, { fields: 'id,username', access_token: token }, s, 'Instagram'));
+      } catch {
+        /* keine Instagram-ID */
+      }
+    }
+  }
+  if (!found.size) {
+    try {
+      for (const p of (await call('GET', `${FB_GRAPH()}/me/accounts`, { fields: 'instagram_business_account{id,username}', access_token: token }, s, 'Instagram')).data ?? []) add(p.instagram_business_account);
+    } catch {
+      /* kein Benutzer-Token */
+    }
+  }
+  return { token, tokenType, expiresAt, accounts: [...found.values()] };
+}
+
 /* ------------------------------------------------------------------ Test */
 
 /**
@@ -163,8 +239,22 @@ export async function testInstagram(c: Connection, sec: Record<string, string>, 
   const caps: any = { image: false, carousel: false, reels: false, stories: false, text_only: false };
   if (!sec.token) return { steps: [{ name: 'Konto verbunden', ok: false, message: 'Noch nicht mit Instagram verbunden.', kind: 'login' as const }], account, capabilities: caps };
   let userId = c.config.userId as string;
-  try {
-    const me = await call('GET', `${IG_GRAPH()}/me`, { fields: 'user_id,username,account_type', access_token: sec.token }, sec, 'Instagram');
+  if (igUnified(c)) {
+    // Über Facebook angemeldet: /me wäre die Person bzw. der Systemnutzer – das gewählte Konto direkt abfragen. Über
+    // diesen Weg erreichbare Instagram-Konten sind immer professionelle Konten.
+    if (!userId) return { steps: [{ name: 'Konto verbunden', ok: false, message: 'Noch kein Instagram-Konto gewählt (Mit Instagram verbinden, dann Konto wählen).', kind: 'login' as const }], account, capabilities: caps };
+    try {
+      const ig = await call('GET', `${igBase(c)}/${encodeURIComponent(userId)}`, { fields: 'id,username', access_token: sec.token }, sec, 'Instagram');
+      account.id = String(ig.id ?? userId);
+      account.username = ig.username;
+      account.type = 'BUSINESS';
+      steps.push({ name: 'Anmeldung und Konto', ok: true, message: `@${ig.username} über Facebook (Unified Login). (Anmeldung allein ist kein Veröffentlichungstest.)`, kind: 'login' });
+    } catch (e: any) {
+      steps.push({ name: 'Anmeldung und Konto', ok: false, message: `${e.message} – ist das Konto in der Meta-Konfiguration freigegeben und business_management erteilt?`, kind: 'login' });
+      return { steps, account, capabilities: caps };
+    }
+  } else try {
+    const me = await call('GET', `${igBase(c)}/me`, { fields: 'user_id,username,account_type', access_token: sec.token }, sec, 'Instagram');
     userId = String(me.user_id ?? me.id ?? userId);
     account.id = userId;
     account.username = me.username;
@@ -177,7 +267,7 @@ export async function testInstagram(c: Connection, sec: Record<string, string>, 
     return { steps, account, capabilities: caps };
   }
   try {
-    const lim = await call('GET', `${IG_GRAPH()}/${userId}/content_publishing_limit`, { fields: 'quota_usage,config', access_token: sec.token }, sec, 'Instagram');
+    const lim = await call('GET', `${igBase(c)}/${userId}/content_publishing_limit`, { fields: 'quota_usage,config', access_token: sec.token }, sec, 'Instagram');
     const d = lim.data?.[0] ?? {};
     account.quota = { used: d.quota_usage ?? null, total: d.config?.quota_total ?? null };
     steps.push({ name: 'Veröffentlichungskontingent', ok: true, message: `Heute genutzt: ${d.quota_usage ?? '?'} von ${d.config?.quota_total ?? '?'}`, kind: 'read' });
@@ -189,8 +279,8 @@ export async function testInstagram(c: Connection, sec: Record<string, string>, 
     return { steps, account, capabilities: caps };
   }
   try {
-    const cont = await call('POST', `${IG_GRAPH()}/${userId}/media`, { image_url: testImageUrl, caption: 'BlaulichtCMS-Verbindungstest (wird nicht veröffentlicht)', access_token: sec.token }, sec, 'Instagram');
-    const status = await waitContainer(cont.id, sec, 6, 2000);
+    const cont = await call('POST', `${igBase(c)}/${userId}/media`, { image_url: testImageUrl, caption: 'BlaulichtCMS-Verbindungstest (wird nicht veröffentlicht)', access_token: sec.token }, sec, 'Instagram');
+    const status = await waitContainer(cont.id, sec, igBase(c), 6, 2000);
     const ok = status === 'FINISHED';
     if (ok) Object.assign(caps, { image: true, carousel: true, reels: true, stories: true });
     steps.push({ name: 'Veröffentlichungstest', ok, message: ok ? 'Mediencontainer mit Testbild verarbeitet (nicht veröffentlicht) – Bilder, Karussell, Reels und Storys möglich. Reine Textbeiträge unterstützt Instagram nicht.' : `Container-Status: ${status}. Meta konnte das Testbild nicht abrufen oder verarbeiten.`, kind: 'publish' });
@@ -200,9 +290,9 @@ export async function testInstagram(c: Connection, sec: Record<string, string>, 
   return { steps, account: { ...account }, capabilities: caps, userId };
 }
 
-async function waitContainer(id: string, sec: Record<string, string>, tries = 60, delayMs = 5000): Promise<string> {
+async function waitContainer(id: string, sec: Record<string, string>, base: string, tries = 60, delayMs = 5000): Promise<string> {
   for (let i = 0; i < tries; i++) {
-    const s = await call('GET', `${IG_GRAPH()}/${id}`, { fields: 'status_code', access_token: sec.token }, sec, 'Instagram');
+    const s = await call('GET', `${base}/${id}`, { fields: 'status_code', access_token: sec.token }, sec, 'Instagram');
     if (['FINISHED', 'ERROR', 'EXPIRED', 'PUBLISHED'].includes(s.status_code)) return s.status_code;
     await new Promise((r) => setTimeout(r, delayMs));
   }
@@ -248,7 +338,7 @@ export async function findExisting(c: Connection, sec: Record<string, string>, m
     for (const p of r.data ?? []) if (p.message && markerFor(p.message) === marker && new Date(p.created_time ?? 0).getTime() >= since.getTime() - 120_000) return { id: p.id, url: p.permalink_url ?? null };
     return null;
   }
-  const r = await call('GET', `${IG_GRAPH()}/${c.config.userId}/media`, { fields: 'id,caption,permalink,timestamp', limit: '25', access_token: sec.token }, sec, 'Instagram');
+  const r = await call('GET', `${igBase(c)}/${c.config.userId}/media`, { fields: 'id,caption,permalink,timestamp', limit: '25', access_token: sec.token }, sec, 'Instagram');
   for (const p of r.data ?? []) if (p.caption && markerFor(p.caption) === marker && new Date(p.timestamp ?? 0).getTime() >= since.getTime() - 120_000) return { id: p.id, url: p.permalink ?? null };
   return null;
 }
@@ -300,7 +390,7 @@ export async function publishInstagram(c: Connection, sec: Record<string, string
   let st: string | null = null;
   if (container) {
     // Verworfene Container beantwortet Meta teils mit einem 4xx-Fehler statt mit EXPIRED – dann ebenfalls neu anlegen
-    st = await waitContainer(container, sec).catch((e) => {
+    st = await waitContainer(container, sec, igBase(c)).catch((e) => {
       if (e instanceof StepError && e.errorClass === 'invalid_payload') return 'EXPIRED';
       throw e;
     });
@@ -319,27 +409,27 @@ export async function publishInstagram(c: Connection, sec: Record<string, string
     if (items.length === 1) {
       const m = items[0];
       const p = m.kind === 'video' ? { media_type: 'REELS', video_url: await mediaUrl(m.id) } : { image_url: await mediaUrl(m.id), alt_text: altParam(m) };
-      container = (await call('POST', `${IG_GRAPH()}/${user}/media`, { ...p, caption, access_token: sec.token }, sec, 'Instagram')).id;
+      container = (await call('POST', `${igBase(c)}/${user}/media`, { ...p, caption, access_token: sec.token }, sec, 'Instagram')).id;
     } else {
       const children: string[] = [];
       for (const m of items) {
         const p = m.kind === 'video' ? { media_type: 'VIDEO', video_url: await mediaUrl(m.id) } : { image_url: await mediaUrl(m.id), alt_text: altParam(m) };
-        const child = (await call('POST', `${IG_GRAPH()}/${user}/media`, { ...p, is_carousel_item: 'true', access_token: sec.token }, sec, 'Instagram')).id;
-        const st = await waitContainer(child, sec);
+        const child = (await call('POST', `${igBase(c)}/${user}/media`, { ...p, is_carousel_item: 'true', access_token: sec.token }, sec, 'Instagram')).id;
+        const st = await waitContainer(child, sec, igBase(c));
         if (st !== 'FINISHED') throw new StepError('invalid_payload', `Instagram konnte eine Datei nicht verarbeiten (Status ${st}).`);
         children.push(child);
       }
-      container = (await call('POST', `${IG_GRAPH()}/${user}/media`, { media_type: 'CAROUSEL', children: children.join(','), caption, access_token: sec.token }, sec, 'Instagram')).id;
+      container = (await call('POST', `${igBase(c)}/${user}/media`, { media_type: 'CAROUSEL', children: children.join(','), caption, access_token: sec.token }, sec, 'Instagram')).id;
     }
     await onContainer(container!);
   }
-  st ??= await waitContainer(container!, sec);
+  st ??= await waitContainer(container!, sec, igBase(c));
   if (st !== 'FINISHED') {
     if (st === 'ERROR' || st === 'EXPIRED') await onContainer(null);
     throw new StepError('invalid_payload', `Instagram-Container nicht bereit (Status ${st}).`);
   }
-  const pub = await call('POST', `${IG_GRAPH()}/${user}/media_publish`, { creation_id: container!, access_token: sec.token }, sec, 'Instagram');
-  const info = await call('GET', `${IG_GRAPH()}/${pub.id}`, { fields: 'permalink', access_token: sec.token }, sec, 'Instagram').catch(() => ({}));
+  const pub = await call('POST', `${igBase(c)}/${user}/media_publish`, { creation_id: container!, access_token: sec.token }, sec, 'Instagram');
+  const info = await call('GET', `${igBase(c)}/${pub.id}`, { fields: 'permalink', access_token: sec.token }, sec, 'Instagram').catch(() => ({}));
   return { id: pub.id as string, url: (info as any).permalink ?? null };
 }
 
@@ -382,7 +472,7 @@ export async function publishInstagramStory(c: Connection, sec: Record<string, s
   if (!m) throw new StepError('invalid_payload', 'Eine Instagram-Story braucht ein Bild oder Video.');
   let container = sp.container_id as string | null;
   if (container) {
-    const st = await waitContainer(container, sec).catch(() => 'EXPIRED');
+    const st = await waitContainer(container, sec, igBase(c)).catch(() => 'EXPIRED');
     if (st === 'PUBLISHED') {
       const found = await findExistingStory(c, sec, sp);
       if (found) return found;
@@ -395,16 +485,16 @@ export async function publishInstagramStory(c: Connection, sec: Record<string, s
   }
   if (!container) {
     const p = m.kind === 'video' ? { video_url: await mediaUrl(m.id) } : { image_url: await mediaUrl(m.id, 24, 'story') };
-    container = String((await call('POST', `${IG_GRAPH()}/${user}/media`, { media_type: 'STORIES', ...p, access_token: sec.token }, sec, 'Instagram')).id);
+    container = String((await call('POST', `${igBase(c)}/${user}/media`, { media_type: 'STORIES', ...p, access_token: sec.token }, sec, 'Instagram')).id);
     await onContainer(container);
   }
-  const st = await waitContainer(container, sec);
+  const st = await waitContainer(container, sec, igBase(c));
   if (st !== 'FINISHED') {
     if (st === 'ERROR' || st === 'EXPIRED') await onContainer(null);
     throw new StepError('invalid_payload', `Instagram-Story nicht bereit (Status ${st}).`);
   }
-  const pub = await call('POST', `${IG_GRAPH()}/${user}/media_publish`, { creation_id: container, access_token: sec.token }, sec, 'Instagram');
-  const info = await call('GET', `${IG_GRAPH()}/${pub.id}`, { fields: 'permalink', access_token: sec.token }, sec, 'Instagram').catch(() => ({}));
+  const pub = await call('POST', `${igBase(c)}/${user}/media_publish`, { creation_id: container, access_token: sec.token }, sec, 'Instagram');
+  const info = await call('GET', `${igBase(c)}/${pub.id}`, { fields: 'permalink', access_token: sec.token }, sec, 'Instagram').catch(() => ({}));
   return { id: String(pub.id), url: (info as any).permalink ?? null };
 }
 
@@ -457,9 +547,9 @@ export async function findExistingStory(c: Connection, sec: Record<string, strin
   if (!sp.container_id) return null;
   const since = new Date(sp.created_at).getTime() - 120_000;
   if (c.kind === 'instagram') {
-    const st = await call('GET', `${IG_GRAPH()}/${sp.container_id}`, { fields: 'status_code', access_token: sec.token }, sec, 'Instagram').catch(() => ({ status_code: 'EXPIRED' }));
+    const st = await call('GET', `${igBase(c)}/${sp.container_id}`, { fields: 'status_code', access_token: sec.token }, sec, 'Instagram').catch(() => ({ status_code: 'EXPIRED' }));
     if (st.status_code !== 'PUBLISHED') return null;
-    const r = await call('GET', `${IG_GRAPH()}/${c.config.userId}/stories`, { fields: 'id,permalink,timestamp', access_token: sec.token }, sec, 'Instagram');
+    const r = await call('GET', `${igBase(c)}/${c.config.userId}/stories`, { fields: 'id,permalink,timestamp', access_token: sec.token }, sec, 'Instagram');
     const hits = (r.data ?? []).filter((s: any) => new Date(s.timestamp ?? 0).getTime() >= since).sort((a: any, b: any) => Date.parse(a.timestamp) - Date.parse(b.timestamp));
     return hits[0] ? { id: String(hits[0].id), url: hits[0].permalink ?? null } : null;
   }
@@ -564,11 +654,11 @@ export async function facebookMetrics(sec: Record<string, string>, postId: strin
  * instagram_business_manage_insights – Aufrufe, Reichweite, geteilt und gespeichert (GET /{media}/insights).
  * Meta liefert die Werte mit bis zu 48 Stunden Verzögerung.
  */
-export async function instagramMetrics(sec: Record<string, string>, mediaId: string) {
-  const p = await call('GET', `${IG_GRAPH()}/${encodeURIComponent(mediaId)}`, { fields: 'like_count,comments_count', access_token: sec.token }, sec, 'Instagram');
+export async function instagramMetrics(sec: Record<string, string>, mediaId: string, base = IG_GRAPH()) {
+  const p = await call('GET', `${base}/${encodeURIComponent(mediaId)}`, { fields: 'like_count,comments_count', access_token: sec.token }, sec, 'Instagram');
   const out: Record<string, number | null> = { likes: n(p.like_count), replies: n(p.comments_count) };
   try {
-    const i = await call('GET', `${IG_GRAPH()}/${encodeURIComponent(mediaId)}/insights`, { metric: 'views,reach,shares,saved', access_token: sec.token }, sec, 'Instagram');
+    const i = await call('GET', `${base}/${encodeURIComponent(mediaId)}/insights`, { metric: 'views,reach,shares,saved', access_token: sec.token }, sec, 'Instagram');
     Object.assign(out, { views: insightValue(i.data ?? [], 'views'), reach: insightValue(i.data ?? [], 'reach'), shares: insightValue(i.data ?? [], 'shares'), saves: insightValue(i.data ?? [], 'saved') });
   } catch {
     /* ohne instagram_business_manage_insights: nur Gefällt mir und Kommentare */
@@ -619,7 +709,7 @@ export async function facebookPagePosts(c: Connection, sec: Record<string, strin
 export async function instagramMediaList(c: Connection, sec: Record<string, string>, since: Date, max = 100): Promise<PagePost[]> {
   if (!sec.token || !c.config.userId) throw new StepError('config', 'Noch kein Konto verbunden.');
   const out: PagePost[] = [];
-  let r = await call('GET', `${IG_GRAPH()}/${encodeURIComponent(c.config.userId)}/media`, { fields: 'id,caption,media_type,media_url,thumbnail_url,permalink,timestamp', limit: '50', access_token: sec.token }, sec, 'Instagram');
+  let r = await call('GET', `${igBase(c)}/${encodeURIComponent(c.config.userId)}/media`, { fields: 'id,caption,media_type,media_url,thumbnail_url,permalink,timestamp', limit: '50', access_token: sec.token }, sec, 'Instagram');
   for (let page = 0; page < 10; page++) {
     let older = false;
     for (const p of r.data ?? []) {
@@ -634,7 +724,7 @@ export async function instagramMediaList(c: Connection, sec: Record<string, stri
       out.push({ remoteId: String(p.id), postedAt: at, message: String(p.caption ?? ''), permalink: p.permalink ?? null, mediaType: p.media_type ?? null, imageUrl: img });
     }
     if (older || out.length >= max || !r.paging?.next || !(r.data ?? []).length) break;
-    r = await nextPage(r.paging.next, IG_GRAPH(), sec, 'Instagram');
+    r = await nextPage(r.paging.next, igBase(c), sec, 'Instagram');
   }
   return out.slice(0, max);
 }
@@ -703,7 +793,7 @@ export const IG_ACCOUNT_METRICS: Record<string, string> = { views: 'views', reac
 export async function instagramAccountStats(c: Connection, sec: Record<string, string>, dayList: Date[]): Promise<PageStats> {
   if (!sec.token || !c.config.userId) throw new StepError('config', 'Noch kein Konto verbunden.');
   const userId = encodeURIComponent(c.config.userId);
-  const acc = await call('GET', `${IG_GRAPH()}/${userId}`, { fields: 'followers_count,media_count', access_token: sec.token }, sec, 'Instagram');
+  const acc = await call('GET', `${igBase(c)}/${userId}`, { fields: 'followers_count,media_count', access_token: sec.token }, sec, 'Instagram');
   const current: Record<string, number> = {};
   if (n(acc.followers_count) != null) current.followers = acc.followers_count;
   if (n(acc.media_count) != null) current.posts = acc.media_count;
@@ -714,7 +804,7 @@ export async function instagramAccountStats(c: Connection, sec: Record<string, s
     for (const [key, metric] of Object.entries(IG_ACCOUNT_METRICS)) {
       if (failed.has(key)) continue;
       try {
-        const r = await call('GET', `${IG_GRAPH()}/${userId}/insights`, { metric, period: 'day', metric_type: 'total_value', since: String(since), until: String(since + 86_400), access_token: sec.token }, sec, 'Instagram');
+        const r = await call('GET', `${igBase(c)}/${userId}/insights`, { metric, period: 'day', metric_type: 'total_value', since: String(since), until: String(since + 86_400), access_token: sec.token }, sec, 'Instagram');
         const v = n(r.data?.[0]?.total_value?.value ?? r.data?.[0]?.values?.[0]?.value);
         if (v != null) (days[dayKey(day)] ??= {})[key] = v;
       } catch (e: any) {

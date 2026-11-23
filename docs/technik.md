@@ -99,6 +99,18 @@ Beiträge (nicht Storys, nicht von Hand geteilt, nicht entfernt) 1 h, 24 h und 7
 werden beim nächsten Lauf wiederholt, Fehler je Beitrag (gelöscht, Recht fehlt) festgehalten. Nur Summen, keine
 Personen. Routen `GET /insights`, `GET /posts/:id/insights` (Recht `insights.view`), Dashboard-Kachel `insights`.
 
+## Instagram über Unified Login
+
+Neue Meta-Apps (etwa ab Ende Oktober 2026) bieten das Instagram-Login nicht mehr an, sondern „API setup with Unified
+login“ (Facebook Login for Business mit Konfiguration). Instagram-Verbindungen mit `config.login = 'unified'`
+melden sich deshalb über `facebook.com/dialog/oauth` mit Facebook-App-ID und `config_id` an
+(`override_default_response_type=true`, keine `scope`). Der Code wird an `graph.facebook.com/oauth/access_token`
+getauscht; `debug_token` zeigt die Token-Art (meist Systemnutzer ohne Ablauf, Benutzer-Tokens werden langlebig
+getauscht). Konten: `/me/assigned_instagram_accounts`, sonst Ziel-IDs der `granular_scopes`, sonst
+`/me/accounts{instagram_business_account}`; bei mehreren wählt die Person (`POST /connections/:id/ig-account`).
+Alle übrigen Instagram-Aufrufe (Test, Veröffentlichen, Storys, Reichweite, Seitenabgleich) laufen über `igBase(c)`
+gegen `graph.facebook.com` statt `graph.instagram.com`. Mit Stellvertreter getestet; am echten Konto noch prüfen.
+
 ## Seitenabgleich, Seitenstatistik und Social-Feed
 
 Worker-Aufgabe stündlich (`server/src/connections/page-sync.ts`, läuft nie doppelt) je aktiver Facebook- bzw.

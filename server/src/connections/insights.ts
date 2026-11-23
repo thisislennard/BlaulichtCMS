@@ -1,7 +1,7 @@
 import { many, pool } from '../db/pool.js';
 import { log } from '../lib/log.js';
 import { connectionSecrets, scrub, type Connection } from './common.js';
-import { facebookMetrics, instagramMetrics } from './meta.js';
+import { facebookMetrics, igBase, instagramMetrics } from './meta.js';
 import { threadsMetrics } from './threads.js';
 import { xMetrics } from './x.js';
 import { mastodonMetrics } from './mastodon.js';
@@ -138,7 +138,7 @@ async function fetchFor(c: Connection, sec: Record<string, string>, ids: string[
     try {
       const m =
         c.kind === 'facebook' ? await facebookMetrics(sec, id)
-        : c.kind === 'instagram' ? await instagramMetrics(sec, id)
+        : c.kind === 'instagram' ? await instagramMetrics(sec, id, igBase(c))
         : c.kind === 'threads' ? await threadsMetrics(sec, id)
         : c.kind === 'mastodon' ? await mastodonMetrics(c, sec, id)
         : null;

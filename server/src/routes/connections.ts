@@ -19,7 +19,7 @@ import { sendFileResponse } from './files.js';
 import { publicFileName } from '../media/names.js';
 import { connectionSecrets, connectionUsage, KIND_LABEL, loadConnection, requireRetest, retestRelevantConfig, saveTest, scrub, updateConnectionSecrets, type Connection, type ConnectionKind } from '../connections/common.js';
 import { FE2_ALLOWED_FIELDS, FE2_DEFAULT_MAPPING, handleFe2Event } from '../connections/fe2.js';
-import { connectionTestImage, deleteFacebookPost, facebookAuthorizeUrl, facebookExchange, instagramAuthorizeUrl, instagramExchange, mediaForRevision, mediaUrl, storyImage, testFacebook, testInstagram } from '../connections/meta.js';
+import { connectionTestImage, deleteFacebookPost, facebookAuthorizeUrl, facebookExchange, igUnified, instagramAuthorizeUrl, instagramExchange, unifiedAuthorizeUrl, unifiedExchange, type IgAccount, mediaForRevision, mediaUrl, storyImage, testFacebook, testInstagram } from '../connections/meta.js';
 import { formatsFor, isManualChannel, isSocialKind, limitsFor, markerFor, postLink, shareTarget, SOCIAL_KINDS, socialText } from '../connections/channels.js';
 import { testThreads, threadsAuthorizeUrl, threadsExchange } from '../connections/threads.js';
 import { deleteXPost, testX, X_SECRET_KEYS } from '../connections/x.js';
@@ -62,6 +62,7 @@ async function view(c: Connection) {
     insecure_source: c.kind === 'warnfeed' ? insecureFeed(c.config) : undefined,
     manual: isSocialKind(c.kind) ? isManualChannel(c) : undefined,
     pages: sec.pages ? (JSON.parse(sec.pages) as any[]).map((p) => ({ id: p.id, name: p.name })) : [],
+    ig_accounts: sec.igAccounts ? (JSON.parse(sec.igAccounts) as IgAccount[]).map((a) => ({ id: a.id, username: a.username })) : [],
   };
 }
 
@@ -73,7 +74,7 @@ const configSchema: Record<ConnectionKind, z.ZodType<any>> = {
     keyInPath: z.boolean().default(false),
   }),
   facebook: z.object({ appId: z.string().max(40).default(''), pageId: z.string().max(40).optional(), insights: z.boolean().optional(), pageSync: z.boolean().optional() }),
-  instagram: z.object({ appId: z.string().max(40).default(''), userId: z.string().max(40).optional(), insights: z.boolean().optional(), pageSync: z.boolean().optional() }),
+  instagram: z.object({ appId: z.string().max(40).default(''), userId: z.string().max(40).optional(), insights: z.boolean().optional(), pageSync: z.boolean().optional(), login: z.enum(['instagram', 'unified']).optional(), configId: z.string().trim().regex(/^\d{0,30}$/, 'Die Konfigurations-ID besteht nur aus Ziffern.').optional() }),
   warnfeed: z.object({
     format: z.enum(['nina', 'cap']).default('nina'),
     ars: z.string().max(12).default(''),
@@ -347,14 +348,18 @@ export async function connectionRoutes(app: FastifyInstance) {
     if (!c.config.appId || !sec.appSecret) throw badRequest(c.kind === 'threads' ? 'Bitte zuerst Threads-App-ID und Threads-App-Geheimnis hinterlegen.' : 'Bitte zuerst App-ID und App-Geheimnis der Meta-App hinterlegen.');
     // Häufigster Fehler: Facebook-App-ID bei Instagram bzw. Threads eingetragen – Meta antwortet dann nur mit
     // „Invalid platform app“ auf der eigenen Seite (im Betrieb festgestellt, 23.11.2026)
-    if (c.kind !== 'facebook' && (await one(`SELECT 1 FROM connections WHERE kind = 'facebook' AND deleted_at IS NULL AND config->>'appId' = $1`, [String(c.config.appId)]))) {
+    if (c.kind !== 'facebook' && !igUnified(c) && (await one(`SELECT 1 FROM connections WHERE kind = 'facebook' AND deleted_at IS NULL AND config->>'appId' = $1`, [String(c.config.appId)]))) {
       const label = c.kind === 'threads' ? 'Threads' : 'Instagram';
-      throw badRequest(`Hier steht die App-ID der Facebook-Verbindung. ${label} braucht die eigene ${label}-App-ID und das ${label}-App-Geheimnis aus dem Anwendungsfall der Meta-App (${c.kind === 'threads' ? 'Threads-API → Einstellungen' : 'API-Einrichtung mit Instagram-Login → Business-Login-Einstellungen'}).`);
+      throw badRequest(`Hier steht die App-ID der Facebook-Verbindung. ${label} braucht die eigene ${label}-App-ID und das ${label}-App-Geheimnis aus dem Anwendungsfall der Meta-App (${c.kind === 'threads' ? 'Threads-API → Einstellungen' : 'API-Einrichtung mit Instagram-Login → Business-Login-Einstellungen'}).${c.kind === 'instagram' ? ' Bietet die Meta-App nur „API setup with Unified login“ an: unter Anmeldung „Über Facebook (Unified Login)“ wählen und die Konfigurations-ID eintragen.' : ''}`);
     }
     const state = randomToken(24);
     await pool.query(`UPDATE connections SET config = config || $2 WHERE id = $1`, [id, JSON.stringify({ oauthState: { hash: sha256Hex(state), exp: Date.now() + 10 * 60_000, by: req.auth!.user?.id } })]);
     const redirect = `${await publicBase(req)}/api/v1/connections/oauth/callback`;
     const s = `${c.id}.${state}`;
+    if (c.kind === 'instagram' && igUnified(c)) {
+      if (!c.config.configId) throw badRequest('Bitte zuerst die Konfigurations-ID aus der Meta-App eintragen (API setup with Unified login → Konfiguration; steht auch in der Anmelde-URL als config_id).');
+      return { url: unifiedAuthorizeUrl(c.config.appId, c.config.configId, redirect, s) };
+    }
     return { url: c.kind === 'facebook' ? facebookAuthorizeUrl(c.config.appId, redirect, s) : c.kind === 'threads' ? threadsAuthorizeUrl(c.config.appId, redirect, s) : instagramAuthorizeUrl(c.config.appId, redirect, s) };
   });
 
@@ -408,6 +413,25 @@ export async function connectionRoutes(app: FastifyInstance) {
         await invalidateTest(actor, c, 'Neu angemeldet');
         return back('Mit Threads verbunden – jetzt testen.');
       }
+      if (igUnified(c)) {
+        const u = await unifiedExchange(c.config.appId, sec.appSecret, redirect, q.code);
+        const only = u.accounts.length === 1 ? u.accounts[0] : null;
+        await updateConnectionSecrets(c, { token: u.token, igAccounts: JSON.stringify(u.accounts) }, by.id);
+        // Ein einziges Konto direkt übernehmen; bei mehreren wählt die Person in der Verbindung
+        const keep = u.accounts.some((a) => a.id === c.config.userId) ? c.config.userId : null;
+        const userId = only?.id ?? keep;
+        await pool.query(`UPDATE connections SET config = (config - 'userId') || $2 WHERE id = $1`, [c.id, JSON.stringify({ ...(userId ? { userId } : {}), tokenExpiresAt: u.expiresAt })]);
+        if (only) await pool.query(`UPDATE connections SET account = $2 WHERE id = $1`, [c.id, JSON.stringify({ id: only.id, username: only.username })]);
+        await audit(actor, 'connection.oauth', { type: 'connection', id: c.id, label: c.name }, { weg: 'unified', token: u.tokenType, konten: u.accounts.length });
+        await invalidateTest(actor, c, 'Neu angemeldet');
+        return back(
+          only
+            ? `Über Facebook mit @${only.username} verbunden – jetzt testen.`
+            : u.accounts.length
+              ? `Angemeldet – bitte eines von ${u.accounts.length} Instagram-Konten wählen.`
+              : 'Angemeldet, aber Meta hat kein Instagram-Konto geliefert. In der Konfiguration der Meta-App das Recht business_management ergänzen und das Instagram-Konto im Dialog freigeben, dann erneut verbinden.',
+        );
+      }
       const r = await instagramExchange(c.config.appId, sec.appSecret, redirect, q.code);
       await updateConnectionSecrets(c, { token: r.token }, by.id);
       await pool.query(`UPDATE connections SET config = config || $2 WHERE id = $1`, [c.id, JSON.stringify({ userId: r.userId, tokenExpiresAt: r.expiresIn ? new Date(Date.now() + r.expiresIn * 1000).toISOString() : null })]);
@@ -417,6 +441,21 @@ export async function connectionRoutes(app: FastifyInstance) {
     } catch (e: any) {
       return back(`Anmeldung fehlgeschlagen: ${scrub(e?.message ?? String(e), sec)}`);
     }
+  });
+
+  /** Instagram über Unified Login: eines der bei der Anmeldung gelieferten Konten wählen. */
+  app.post('/connections/:id/ig-account', { preHandler: manage }, async (req) => {
+    const { id } = z.object({ id: z.uuid() }).parse(req.params);
+    const { userId } = z.object({ userId: z.string().regex(/^\d{1,40}$/) }).parse(req.body);
+    const c = await loadConnection(id);
+    if (c.kind !== 'instagram') throw badRequest('Nur für Instagram.');
+    const sec = await connectionSecrets(c);
+    const acc = (JSON.parse(sec.igAccounts ?? '[]') as IgAccount[]).find((a) => a.id === userId);
+    if (!acc) throw notFound('Konto nicht gefunden.');
+    await pool.query(`UPDATE connections SET config = config || $2, account = $3 WHERE id = $1`, [id, JSON.stringify({ userId }), JSON.stringify({ id: acc.id, username: acc.username })]);
+    await audit(req.auth!.actor, 'connection.page_selected', { type: 'connection', id, label: c.name }, { konto: acc.username });
+    const was = await invalidateTest(req.auth!.actor, c, 'Konto gewählt');
+    return { ok: true, retest: true, deactivated: was === 'active' };
   });
 
   app.post('/connections/:id/page', { preHandler: manage }, async (req) => {

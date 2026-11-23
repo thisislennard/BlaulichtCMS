@@ -138,6 +138,20 @@ Prüfen lässt sich das im [Graph-API-Explorer](https://developers.facebook.com/
 2. **Mit Instagram verbinden** und mit dem Instagram-Konto anmelden.
 3. **Testen:** BlaulichtCMS legt einen Mediencontainer mit einem fest eingebauten, neutralen Testbild (graue Fläche) an und prüft die Verarbeitung – ohne zu veröffentlichen. Fotos aus Uploads werden für den Test nie verwendet. Meta muss das Bild über die öffentliche HTTPS-Adresse abrufen können ([Content Publishing](https://developers.facebook.com/docs/instagram-platform/content-publishing/)).
 
+### Instagram über Facebook (Unified Login)
+
+Neue Meta-Apps (etwa ab Ende Oktober 2026) bieten unter „Messaging und Content auf Instagram verwalten“ kein **Instagram-Login** mehr an, sondern nur noch **„API setup with Unified login“** (daneben „API-Einrichtung mit Facebook-Login“). Dann gibt es **keine eigene Instagram-App-ID** – wer trotzdem die Facebook-App-ID beim Instagram-Login einträgt, bekommt von Instagram „Invalid platform app“. In diesem Fall in der Instagram-Verbindung unter **Anmeldung** die Variante **„Über Facebook (Unified Login)“** wählen:
+
+1. In der Meta-App → **Anwendungsfälle → „Messaging und Content auf Instagram verwalten“ → Anpassen → API setup with Unified login**.
+2. Unter **„1. Deine App konfigurieren“** eine Konfiguration anlegen bzw. die vorhandene nutzen. Rechte: `instagram_basic`, `instagram_content_publish`, `instagram_manage_insights` (Reichweite, Seitenstatistik) und **`business_management`** – ohne letzteres liefert Meta kein Instagram-Konto. Fehlt `business_management` in der Auswahl, das Produkt **Facebook Login for Business** hinzufügen und dort unter **Konfigurationen** dieselbe Konfiguration bearbeiten.
+3. Auf derselben Seite unter **Weiterleitungs-URL** die Adresse aus BlaulichtCMS registrieren und auswählen.
+4. Die **Konfigurations-ID** übernehmen – sie steht bei der Konfiguration und in der angezeigten Anmelde-URL als `config_id=…`.
+5. In BlaulichtCMS: **Anmeldung** „Über Facebook (Unified Login)“, **App-ID** der Facebook-App (wie bei der Facebook-Verbindung), **App-Geheimnis** (App-Einstellungen → Allgemein) und **Konfigurations-ID** eintragen, speichern.
+6. **Mit Instagram verbinden** – Meta zeigt einen Facebook-Dialog; dort das Business-Portfolio und das **Instagram-Konto freigeben**. Liefert Meta mehrere Konten, in der Verbindung unter **Instagram-Konto** das richtige wählen.
+7. **Testen** und **Aktivieren** wie beim Instagram-Login.
+
+Meta stellt dabei meist einen **Systemnutzer-Token** aus, der **nicht abläuft**; alle Aufrufe gehen an `graph.facebook.com`. Veröffentlichen, Storys, Reichweite und Seitenabgleich funktionieren wie beim Instagram-Login. Solange die App im Entwicklungsmodus ist, braucht das Instagram-Konto die Rolle **Instagram-Tester** (App-Rollen → Rollen) oder die anmeldende Person eine Rolle in der App.
+
 ### Token manuell hinterlegen
 
 Statt der Anmeldung lässt sich unter **Alternativ: Token manuell hinterlegen** ein vorhandener **Seiten-Token** (mit Seiten-ID) bzw. **Instagram-Token** eintragen. Der Token braucht dieselben Berechtigungen. Bei einem manuellen Seiten-Token kann der Test die Berechtigungen nicht abfragen.
@@ -168,7 +182,8 @@ Ein so erzeugter Seiten-Token läuft nicht ab; er wird erst ungültig, wenn das 
 | „Angemeldet, aber keine verwaltbare Seite gefunden“ / kein Feld „Seite“ | Bei der Anmeldung keine Seite freigegeben, das Konto verwaltet die Seite nicht oder die Seite gehört zu einem **Business-Portfolio** und `business_management` fehlt in der Meta-App. Vorgehen unter [Keine Seite zur Auswahl?](#facebook-seite-verbinden). |
 | Test: „Noch keine Seite gewählt“ | Es ist keine Seite gespeichert – unter **Seite** eine Seite wählen; fehlt das Feld, siehe Zeile davor. |
 | Berechtigungen: „Es fehlen …“ | Rechte bei der Anmeldung abgewählt oder in der App nicht hinzugefügt bzw. (im Live-Modus) nicht geprüft. |
-| Instagram: „Invalid platform app“ (auf instagram.com) | In der Instagram-Verbindung steht die **Facebook-App-ID**. Instagram braucht die eigene **Instagram-App-ID** und das **Instagram-App-Geheimnis** – siehe [App-ID und App-Geheimnis](#app-id-und-app-geheimnis). Bei der Instagram-App auch die Weiterleitungsadresse eintragen (Business-Login-Einstellungen). |
+| Instagram: „Invalid platform app“ (auf instagram.com) | In der Instagram-Verbindung steht beim Instagram-Login die **Facebook-App-ID**. Instagram-Login braucht die eigene **Instagram-App-ID** und das **Instagram-App-Geheimnis** – siehe [App-ID und App-Geheimnis](#app-id-und-app-geheimnis). Bietet die Meta-App nur „API setup with Unified login“ an: [Instagram über Facebook](#instagram-ueber-facebook-unified-login). Bei der Instagram-App auch die Weiterleitungsadresse eintragen (Business-Login-Einstellungen). |
+| Instagram über Unified Login: „Angemeldet, aber Meta hat kein Instagram-Konto geliefert“ | `business_management` fehlt in der Konfiguration oder das Konto wurde im Dialog nicht freigegeben – siehe [Instagram über Facebook](#instagram-ueber-facebook-unified-login). |
 | „ist kein professionelles Konto“ | Instagram-Konto auf Unternehmen oder Creator umstellen. |
 | Instagram: Container-Status ERROR | Meta konnte das Testbild nicht laden: Öffentliche Adresse prüfen (HTTPS, von außen erreichbar, kein Zugriffsschutz). |
 | Später „Token abgelaufen“ | Passwort geändert, App-Rechte entzogen oder Token abgelaufen: **Mit Facebook/Instagram verbinden** erneut ausführen, testen, aktivieren. |

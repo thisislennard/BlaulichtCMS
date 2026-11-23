@@ -9,7 +9,7 @@ import { stripControlChars } from '../lib/text.js';
 import { markerFor } from './channels.js';
 import { connectionSecrets, scrub, type Connection } from './common.js';
 import { cleanMetrics } from './insights.js';
-import { dayKey, facebookMetrics, facebookPagePosts, facebookPageStats, instagramAccountStats, instagramMediaList, instagramMetrics, privateHosts, type PagePost, type PageStats } from './meta.js';
+import { dayKey, facebookMetrics, facebookPagePosts, facebookPageStats, igBase, instagramAccountStats, instagramMediaList, instagramMetrics, privateHosts, type PagePost, type PageStats } from './meta.js';
 
 /**
  * Seitenabgleich: BlaulichtCMS liest alle Beiträge der verbundenen Facebook-Seite bzw. des Instagram-Kontos – auch die
@@ -120,7 +120,7 @@ async function refreshPostMetrics(c: Connection, sec: Record<string, string>): P
   );
   for (const r of due) {
     try {
-      const m = c.kind === 'facebook' ? await facebookMetrics(sec, r.remote_id) : await instagramMetrics(sec, r.remote_id);
+      const m = c.kind === 'facebook' ? await facebookMetrics(sec, r.remote_id) : await instagramMetrics(sec, r.remote_id, igBase(c));
       await pool.query(`UPDATE social_page_posts SET metrics = $2, metrics_at = now(), metrics_error = NULL WHERE id = $1`, [r.id, JSON.stringify(cleanMetrics(m))]);
     } catch (e: any) {
       if (['auth', 'transient', 'rate_limit'].includes(e?.errorClass)) throw e;

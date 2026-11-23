@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
 import { del, get, post, put } from '../../api/client';
-import { Badge, Button, Card, cx, ErrorBox, FieldWrap, Input, joinMeta, KeyValue, Notice, PageHeader, Select, SkeletonRows, StatusBadge, Switch, Textarea } from '../../components/ui/core';
+import { Badge, Button, Card, cx, ErrorBox, FieldWrap, Input, joinMeta, KeyValue, Notice, PageHeader, SegmentedControl, Select, SkeletonRows, StatusBadge, Switch, Textarea } from '../../components/ui/core';
 import { usePageMeta } from '../../components/layout/AppShell';
 import { Icon } from '../../components/ui/Icon';
 import { HelpLink, HelpTip } from '../../components/ui/HelpTip';
@@ -61,6 +61,8 @@ export default function ConnectionDetail() {
     setParams(s === 'empfang' ? { ansicht: 'empfangsprotokoll' } : {}, { replace: true });
   };
   const [cfg, setCfg] = useState<any>(null);
+  /** Instagram über Facebook (Unified Login) statt Instagram-Login */
+  const unified = c?.kind === 'instagram' && cfg?.login === 'unified';
   const [secret, setSecret] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const [newToken, setNewToken] = useState<string | null>(null);
@@ -250,9 +252,25 @@ export default function ConnectionDetail() {
                   <Notice>
                     {c.kind === 'facebook'
                       ? <>Benötigt eine eigene Meta-App mit dem Anwendungsfall „Alles auf deiner Seite verwalten“, der Domain dieser Instanz unter App-Domains und den Rechten pages_show_list, pages_manage_posts, pages_read_engagement – gehört die Seite zu einem Business-Portfolio, zusätzlich business_management. </>
-                      : <>Benötigt eine eigene Meta-App mit dem Anwendungsfall „Messaging und Content auf Instagram verwalten“ (Instagram Login) und den Rechten instagram_business_basic, instagram_business_content_publish. </>}
-                    Schritt für Schritt: <Link to="/hilfe/verbindungen#meta-app-anlegen">Meta-App anlegen</Link>.
+                      : unified
+                        ? <>Anmeldung über Facebook (Unified Login): Meta-App mit dem Anwendungsfall „Messaging und Content auf Instagram verwalten“ → „API setup with Unified login“, einer Konfiguration mit den Rechten instagram_basic, instagram_content_publish, instagram_manage_insights und business_management sowie der Facebook-App-ID. </>
+                        : <>Benötigt eine eigene Meta-App mit dem Anwendungsfall „Messaging und Content auf Instagram verwalten“ (Instagram Login) und den Rechten instagram_business_basic, instagram_business_content_publish. </>}
+                    Schritt für Schritt: <Link to={unified ? '/hilfe/verbindungen#instagram-ueber-facebook-unified-login' : '/hilfe/verbindungen#meta-app-anlegen'}>{unified ? 'Instagram über Facebook' : 'Meta-App anlegen'}</Link>.
                   </Notice>
+                  {c.kind === 'instagram' && (
+                    <div className="flex items-start gap-1">
+                      <SegmentedControl
+                        label="Anmeldung"
+                        value={unified ? 'unified' : 'instagram'}
+                        onChange={(v) => setCfg({ ...cfg, login: v })}
+                        options={[{ value: 'instagram', label: 'Instagram-Login' }, { value: 'unified', label: 'Über Facebook (Unified Login)' }]}
+                      />
+                      <HelpTip title="Welche Anmeldung?" more="/hilfe/verbindungen#instagram-ueber-facebook-unified-login">
+                        <p className="m-0">Neue Meta-Apps (etwa ab Ende Oktober 2026) bieten unter „Messaging und Content auf Instagram verwalten“ nur noch <strong>„API setup with Unified login“</strong> an – dann „Über Facebook (Unified Login)“ wählen. Ältere Apps mit „API-Einrichtung mit Instagram-Login“ und eigener Instagram-App-ID nutzen „Instagram-Login“.</p>
+                        <p className="m-0 text-fg-muted">Ein Wechsel verlangt eine neue Anmeldung und einen neuen Test.</p>
+                      </HelpTip>
+                    </div>
+                  )}
                   <FieldWrap label="Weiterleitungsadresse (in der Meta-App eintragen)" labelAction={
                     <HelpTip title="Weiterleitungsadresse" more="/hilfe/verbindungen#weiterleitungsadresse-eintragen">
                       <p className="m-0">Diese Adresse zeigt BlaulichtCMS; sie muss in der Meta-App <strong>exakt</strong> so eingetragen sein:</p>
@@ -261,6 +279,8 @@ export default function ConnectionDetail() {
                           <p className="m-0">Anwendungsfall „Alles auf deiner Seite verwalten“ → <strong>Einstellungen</strong> (Facebook Login for Business) → Client-OAuth-Einstellungen → <strong>Gültige OAuth-Weiterleitungs-URIs</strong> (<HelpLink href="https://developers.facebook.com/docs/facebook-login/guides/advanced/manual-flow/">Meta-Doku</HelpLink>).</p>
                           <p className="m-0">Außerdem unter <strong>App-Einstellungen → Allgemein → App-Domains</strong> die Domain dieser Instanz eintragen (ohne https://) – sonst meldet Meta „Die Domain dieser URL ist nicht in den Domains der App vorhanden“.</p>
                         </>
+                      ) : unified ? (
+                        <p className="m-0">Anwendungsfall „Messaging und Content auf Instagram verwalten“ → <strong>API setup with Unified login</strong> → „Neue Weiterleitungs-URL registrieren“, speichern und darüber auswählen. Außerdem unter <strong>App-Einstellungen → Allgemein → App-Domains</strong> die Domain dieser Instanz.</p>
                       ) : (
                         <p className="m-0">Instagram → API setup with Instagram login → Business login settings → <strong>OAuth redirect URIs</strong> (<HelpLink href="https://developers.facebook.com/docs/instagram-platform/instagram-api-with-instagram-login/business-login">Meta-Doku</HelpLink>).</p>
                       )}
@@ -269,9 +289,9 @@ export default function ConnectionDetail() {
                   }>
                     <div className="flex gap-2 items-center"><code className="break-all text-meta">{c.oauth_redirect}</code><CopyButton value={c.oauth_redirect} size="sm" /></div>
                   </FieldWrap>
-                  <FieldWrap label={c.kind === 'facebook' ? 'App-ID' : 'Instagram-App-ID'} htmlFor="appid" labelAction={
-                    <HelpTip title={c.kind === 'facebook' ? 'App-ID finden' : 'Instagram-App-ID finden'} more="/hilfe/verbindungen#app-id-und-app-geheimnis">
-                      {c.kind === 'facebook' ? (
+                  <FieldWrap label={c.kind === 'facebook' ? 'App-ID' : unified ? 'App-ID (Facebook-App)' : 'Instagram-App-ID'} htmlFor="appid" labelAction={
+                    <HelpTip title={c.kind === 'facebook' || unified ? 'App-ID finden' : 'Instagram-App-ID finden'} more="/hilfe/verbindungen#app-id-und-app-geheimnis">
+                      {c.kind === 'facebook' || unified ? (
                         <p className="m-0">Im App-Dashboard auf developers.facebook.com die App öffnen: <strong>App-Einstellungen → Allgemein</strong> zeigt App-ID und App-Geheimnis (<HelpLink href="https://developers.facebook.com/docs/development/create-an-app/app-dashboard/basic-settings/">Meta-Doku</HelpLink>).</p>
                       ) : (
                         <p className="m-0">Im App-Dashboard unter <strong>Instagram → API setup with Instagram login → Business login settings</strong> stehen Instagram-App-ID und Instagram-App-Geheimnis – nicht die Facebook-App-ID verwenden (<HelpLink href="https://developers.facebook.com/docs/instagram-platform/instagram-api-with-instagram-login/business-login">Meta-Doku</HelpLink>).</p>
@@ -279,9 +299,16 @@ export default function ConnectionDetail() {
                       <p className="m-0 text-fg-muted">Noch keine App? Anlegen unter developers.facebook.com – Anleitung in der Hilfe.</p>
                     </HelpTip>
                   }><Input id="appid" mono value={cfg.appId ?? ''} onChange={(e) => setCfg({ ...cfg, appId: e.target.value })} /></FieldWrap>
+                  {unified && (
+                    <FieldWrap label="Konfigurations-ID" htmlFor="cfgid" labelAction={
+                      <HelpTip title="Konfigurations-ID" more="/hilfe/verbindungen#instagram-ueber-facebook-unified-login">
+                        <p className="m-0">Meta-App → „Messaging und Content auf Instagram verwalten“ → <strong>API setup with Unified login</strong> → „1. Deine App konfigurieren“: die Konfigurations-ID der gewählten Konfiguration. Sie steht auch in der dort angezeigten Anmelde-URL als <code className="font-mono">config_id=…</code>.</p>
+                      </HelpTip>
+                    }><Input id="cfgid" mono inputMode="numeric" value={cfg.configId ?? ''} onChange={(e) => setCfg({ ...cfg, configId: e.target.value.replace(/\D/g, '') })} /></FieldWrap>
+                  )}
                   <FieldWrap label={c.secrets_set.includes('appSecret') ? 'App-Geheimnis (gespeichert – nur zum Ersetzen)' : 'App-Geheimnis'} htmlFor="appsec" labelAction={
                     <HelpTip title="App-Geheimnis" more="/hilfe/verbindungen#app-id-und-app-geheimnis">
-                      <p className="m-0">Steht neben der App-ID ({c.kind === 'facebook' ? 'App-Einstellungen → Allgemein, „Anzeigen“' : 'Business login settings → Instagram app secret'}). BlaulichtCMS speichert es verschlüsselt und zeigt es nie wieder an.</p>
+                      <p className="m-0">Steht neben der App-ID ({c.kind === 'facebook' || unified ? 'App-Einstellungen → Allgemein, „Anzeigen“' : 'Business login settings → Instagram app secret'}). BlaulichtCMS speichert es verschlüsselt und zeigt es nie wieder an.</p>
                       <p className="m-0 text-fg-muted">Ein neues Geheimnis verlangt einen neuen Test; eine aktive Verbindung hält bis dahin an.</p>
                     </HelpTip>
                   }>
@@ -289,7 +316,7 @@ export default function ConnectionDetail() {
                   </FieldWrap>
                   <div className="flex flex-wrap gap-2">
                     <Button disabled={!secret.appSecret} onClick={saveSecrets}>Geheimnis speichern</Button>
-                    <Button variant="primary" icon="ExternalLink" disabled={!cfg.appId || !c.secrets_set.includes('appSecret')} onClick={async () => { if (!(await confirmRetest(`Erneut mit ${c.kind === 'facebook' ? 'Facebook' : 'Instagram'} verbinden?`))) return; if ((await saveConfig()) === null) return; const r: any = await act(() => post(`/connections/${id}/oauth/start`)); if (r?.url) window.location.href = r.url; }}>
+                    <Button variant="primary" icon="ExternalLink" disabled={!cfg.appId || !c.secrets_set.includes('appSecret') || (unified && !cfg.configId)} onClick={async () => { if (!(await confirmRetest(`Erneut mit ${c.kind === 'facebook' ? 'Facebook' : 'Instagram'} verbinden?`))) return; if ((await saveConfig()) === null) return; const r: any = await act(() => post(`/connections/${id}/oauth/start`)); if (r?.url) window.location.href = r.url; }}>
                       Mit {c.kind === 'facebook' ? 'Facebook' : 'Instagram'} verbinden
                     </Button>
                   </div>
@@ -297,6 +324,19 @@ export default function ConnectionDetail() {
                     <Notice tone="warning">
                       Angemeldet, aber Meta hat keine Seite geliefert. Häufigste Ursache: Die Seite gehört zu einem Business-Portfolio und business_management fehlt in der Meta-App – oder die Seite wurde im Meta-Dialog nicht ausgewählt. Recht hinzufügen, die App-Freigabe in Facebook unter Einstellungen → Business-Integrationen entfernen und erneut verbinden. <Link to="/hilfe/verbindungen#facebook-seite-verbinden">Keine Seite zur Auswahl?</Link>
                     </Notice>
+                  )}
+                  {unified && c.secrets_set.includes('token') && c.ig_accounts.length === 0 && (
+                    <Notice tone="warning">
+                      Angemeldet, aber Meta hat kein Instagram-Konto geliefert. In der Konfiguration der Meta-App das Recht business_management ergänzen (ggf. über Facebook Login for Business → Konfigurationen → Bearbeiten) und das Instagram-Konto im Anmeldedialog freigeben, dann erneut verbinden.
+                    </Notice>
+                  )}
+                  {unified && c.ig_accounts.length > 0 && (
+                    <FieldWrap label="Instagram-Konto" htmlFor="igacc">
+                      <Select id="igacc" value={c.config.userId ?? ''} onChange={async (e) => { const userId = e.target.value; if (!(await confirmRetest('Anderes Konto wählen?'))) return; retestToast(await act(() => post(`/connections/${id}/ig-account`, { userId })), 'Konto gewählt'); }}>
+                        <option value="">– Konto wählen –</option>
+                        {c.ig_accounts.map((a: any) => <option key={a.id} value={a.id}>@{a.username}</option>)}
+                      </Select>
+                    </FieldWrap>
                   )}
                   {c.kind === 'facebook' && c.pages.length > 0 && (
                     <FieldWrap label="Seite" htmlFor="page" labelAction={
