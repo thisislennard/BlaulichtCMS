@@ -36,6 +36,9 @@ export const PUBLIC_ROUTES: string[] = [
   'POST /bridge/report',
   'POST /bridge/jobs/:id/result',
   'GET /bridge/media/:id',
+  // Social-Feed für das Website-Widget (Bridge-Schlüssel)
+  'GET /bridge/social-feed',
+  'GET /bridge/social-images/:file',
   // Verbindungen: Rückkehr von der Meta-Anmeldung (Zustand im Vorgang), FE2-Eingang (Zugangsschlüssel),
   // befristete Medienadressen für den Abruf durch Meta, Testbild
   'GET /connections/oauth/callback',
@@ -56,6 +59,9 @@ export const PUBLIC_ROUTES: string[] = [
   'GET /public/legal/:kind',
   // iCal-Abo des Kalenders (#202): geheimer Link je Person, Drosselung
   'GET /public/calendar/:token',
+  // Social-Feed als RSS (geheime Adresse, nur bei freigegebenem Feed) samt Bildern
+  'GET /public/social/:token',
+  'GET /public/social/:token/images/:file',
   // Abmeldung vom Presseverteiler (#207, signierter Link je Kontakt)
   'GET /public/press/unsubscribe/:token',
   'POST /public/press/unsubscribe/:token',
