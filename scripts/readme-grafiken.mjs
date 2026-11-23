@@ -308,8 +308,8 @@ const EINGEHEND = [
 ];
 
 const AUSGEHEND = [
-  ['globe', 'WordPress (Bridge)', 'Beiträge, Banner, Einsatzliste'],
-  ['share-2', 'Facebook · Instagram · Threads', 'Beiträge und Stories'],
+  ['globe', 'WordPress (Bridge)', 'Beiträge, Einsatzliste, Social-Feed'],
+  ['share-2', 'Facebook · Instagram · Threads', 'Beiträge, Stories, Statistik'],
   ['message-circle', 'X · Mastodon · Bluesky', 'offizielle Schnittstellen'],
   ['send', 'WhatsApp-Kanal', 'vorbereitet, geteilt von Hand'],
   ['mail', 'E-Mail', 'SMTP oder Microsoft 365'],

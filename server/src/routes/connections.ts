@@ -72,8 +72,8 @@ const configSchema: Record<ConnectionKind, z.ZodType<any>> = {
     // Schlüssel in der Adresse (für Absender ohne eigene Kopfzeile); Standard aus
     keyInPath: z.boolean().default(false),
   }),
-  facebook: z.object({ appId: z.string().max(40).default(''), pageId: z.string().max(40).optional(), insights: z.boolean().optional() }),
-  instagram: z.object({ appId: z.string().max(40).default(''), userId: z.string().max(40).optional(), insights: z.boolean().optional() }),
+  facebook: z.object({ appId: z.string().max(40).default(''), pageId: z.string().max(40).optional(), insights: z.boolean().optional(), pageSync: z.boolean().optional() }),
+  instagram: z.object({ appId: z.string().max(40).default(''), userId: z.string().max(40).optional(), insights: z.boolean().optional(), pageSync: z.boolean().optional() }),
   warnfeed: z.object({
     format: z.enum(['nina', 'cap']).default('nina'),
     ars: z.string().max(12).default(''),
@@ -345,6 +345,12 @@ export async function connectionRoutes(app: FastifyInstance) {
       return { url: mastodonAuthorizeUrl(c, clientId!, redirect, `${c.id}.${state}`) };
     }
     if (!c.config.appId || !sec.appSecret) throw badRequest(c.kind === 'threads' ? 'Bitte zuerst Threads-App-ID und Threads-App-Geheimnis hinterlegen.' : 'Bitte zuerst App-ID und App-Geheimnis der Meta-App hinterlegen.');
+    // Häufigster Fehler: Facebook-App-ID bei Instagram bzw. Threads eingetragen – Meta antwortet dann nur mit
+    // „Invalid platform app“ auf der eigenen Seite (im Betrieb festgestellt, 23.11.2026)
+    if (c.kind !== 'facebook' && (await one(`SELECT 1 FROM connections WHERE kind = 'facebook' AND deleted_at IS NULL AND config->>'appId' = $1`, [String(c.config.appId)]))) {
+      const label = c.kind === 'threads' ? 'Threads' : 'Instagram';
+      throw badRequest(`Hier steht die App-ID der Facebook-Verbindung. ${label} braucht die eigene ${label}-App-ID und das ${label}-App-Geheimnis aus dem Anwendungsfall der Meta-App (${c.kind === 'threads' ? 'Threads-API → Einstellungen' : 'API-Einrichtung mit Instagram-Login → Business-Login-Einstellungen'}).`);
+    }
     const state = randomToken(24);
     await pool.query(`UPDATE connections SET config = config || $2 WHERE id = $1`, [id, JSON.stringify({ oauthState: { hash: sha256Hex(state), exp: Date.now() + 10 * 60_000, by: req.auth!.user?.id } })]);
     const redirect = `${await publicBase(req)}/api/v1/connections/oauth/callback`;

@@ -48,7 +48,7 @@ export const FB_BUSINESS_SCOPES = ['business_management'];
 export const IG_INSIGHT_SCOPES = ['instagram_business_manage_insights'];
 
 /** Ausdrücklich per Umgebungsvariable gesetzte Endpunkte (z. B. Testdienst) dürfen privat sein. */
-function privateHosts(): string[] {
+export function privateHosts(): string[] {
   return ['BLAULICHTCMS_META_GRAPH_URL', 'BLAULICHTCMS_IG_GRAPH_URL', 'BLAULICHTCMS_IG_API_URL']
     .map((k) => process.env[k])
     .filter(Boolean)
@@ -538,11 +538,23 @@ const insightValue = (data: any[], name: string) => n(data.find((x: any) => x.na
 export async function facebookMetrics(sec: Record<string, string>, postId: string) {
   const p = await call('GET', `${FB_GRAPH()}/${encodeURIComponent(postId)}`, { fields: 'shares,comments.summary(true).limit(0),reactions.summary(true).limit(0)', access_token: sec.pageToken }, sec, 'Facebook');
   const out: Record<string, number | null> = { likes: n(p.reactions?.summary?.total_count), replies: n(p.comments?.summary?.total_count), shares: n(p.shares?.count) ?? 0 };
+  const metrics: Record<string, string> = { views: 'post_media_view', reach: 'post_total_media_view_unique', clicks: 'post_clicks' };
+  const url = `${FB_GRAPH()}/${encodeURIComponent(postId)}/insights`;
   try {
-    const i = await call('GET', `${FB_GRAPH()}/${encodeURIComponent(postId)}/insights`, { metric: 'post_media_view,post_total_media_view_unique,post_clicks', access_token: sec.pageToken }, sec, 'Facebook');
-    Object.assign(out, { views: insightValue(i.data ?? [], 'post_media_view'), reach: insightValue(i.data ?? [], 'post_total_media_view_unique'), clicks: insightValue(i.data ?? [], 'post_clicks') });
-  } catch {
-    /* ohne read_insights bzw. Seite unter 100 „Gefällt mir“: nur die Interaktionen */
+    const i = await call('GET', url, { metric: Object.values(metrics).join(','), access_token: sec.pageToken }, sec, 'Facebook');
+    for (const [k, m] of Object.entries(metrics)) out[k] = insightValue(i.data ?? [], m);
+  } catch (e: any) {
+    if (channelError(e)) return out;
+    /* Meta lehnt die ganze Abfrage ab, wenn eine Kennzahl entfallen ist – dann einzeln versuchen. Ohne read_insights
+       bzw. bei einer Seite unter 100 „Gefällt mir“ scheitern alle: dann bleiben nur die Interaktionen. */
+    for (const [k, m] of Object.entries(metrics)) {
+      try {
+        const i = await call('GET', url, { metric: m, access_token: sec.pageToken }, sec, 'Facebook');
+        out[k] = insightValue(i.data ?? [], m);
+      } catch (e2: any) {
+        if (channelError(e2) || e2?.errorClass === 'permission') break;
+      }
+    }
   }
   return out;
 }
@@ -562,4 +574,154 @@ export async function instagramMetrics(sec: Record<string, string>, mediaId: str
     /* ohne instagram_business_manage_insights: nur Gefällt mir und Kommentare */
   }
   return out;
+}
+
+/* ------------------------------------------------------------------ Seitenabgleich */
+
+/** Ein Beitrag der Seite bzw. des Kontos, wie ihn der Abgleich liest. */
+export interface PagePost {
+  remoteId: string;
+  postedAt: Date;
+  message: string;
+  permalink: string | null;
+  mediaType: string | null;
+  imageUrl: string | null;
+}
+
+/** Folgeseite einer Meta-Liste (`paging.next`) abrufen – nur vom selben Host wie die erste Abfrage. */
+async function nextPage(next: string, base: string, sec: Record<string, string>, what: string) {
+  const u = new URL(next);
+  if (u.host !== new URL(base).host) return { data: [] };
+  return call('GET', `${u.origin}${u.pathname}`, Object.fromEntries(u.searchParams), sec, what);
+}
+
+/**
+ * Beiträge der Facebook-Seite (auch direkt auf Facebook erstellte), neueste zuerst. Recht: pages_read_engagement.
+ * Nur Beiträge ab `since`, höchstens `max`.
+ */
+export async function facebookPagePosts(c: Connection, sec: Record<string, string>, since: Date, max = 100): Promise<PagePost[]> {
+  if (!sec.pageToken || !c.config.pageId) throw new StepError('config', 'Noch keine Seite gewählt.');
+  const out: PagePost[] = [];
+  let r = await call('GET', `${FB_GRAPH()}/${encodeURIComponent(c.config.pageId)}/posts`, { fields: 'id,message,created_time,permalink_url,full_picture,status_type', since: String(Math.floor(since.getTime() / 1000)), limit: '50', access_token: sec.pageToken }, sec, 'Facebook');
+  for (let page = 0; page < 10; page++) {
+    for (const p of r.data ?? []) {
+      const at = new Date(p.created_time ?? 0);
+      if (!p.id || Number.isNaN(at.getTime()) || at < since) continue;
+      out.push({ remoteId: String(p.id), postedAt: at, message: String(p.message ?? ''), permalink: p.permalink_url ?? null, mediaType: p.status_type ?? null, imageUrl: p.full_picture ?? null });
+    }
+    if (out.length >= max || !r.paging?.next || !(r.data ?? []).length) break;
+    r = await nextPage(r.paging.next, FB_GRAPH(), sec, 'Facebook');
+  }
+  return out.slice(0, max);
+}
+
+/** Beiträge des Instagram-Kontos (Fotos, Videos, Karussells, Reels), neueste zuerst. Recht: instagram_business_basic. */
+export async function instagramMediaList(c: Connection, sec: Record<string, string>, since: Date, max = 100): Promise<PagePost[]> {
+  if (!sec.token || !c.config.userId) throw new StepError('config', 'Noch kein Konto verbunden.');
+  const out: PagePost[] = [];
+  let r = await call('GET', `${IG_GRAPH()}/${encodeURIComponent(c.config.userId)}/media`, { fields: 'id,caption,media_type,media_url,thumbnail_url,permalink,timestamp', limit: '50', access_token: sec.token }, sec, 'Instagram');
+  for (let page = 0; page < 10; page++) {
+    let older = false;
+    for (const p of r.data ?? []) {
+      const at = new Date(p.timestamp ?? 0);
+      if (!p.id || Number.isNaN(at.getTime())) continue;
+      if (at < since) {
+        older = true;
+        continue;
+      }
+      // Video/Reel: Vorschaubild statt Videodatei
+      const img = p.media_type === 'VIDEO' ? (p.thumbnail_url ?? null) : (p.media_url ?? p.thumbnail_url ?? null);
+      out.push({ remoteId: String(p.id), postedAt: at, message: String(p.caption ?? ''), permalink: p.permalink ?? null, mediaType: p.media_type ?? null, imageUrl: img });
+    }
+    if (older || out.length >= max || !r.paging?.next || !(r.data ?? []).length) break;
+    r = await nextPage(r.paging.next, IG_GRAPH(), sec, 'Instagram');
+  }
+  return out.slice(0, max);
+}
+
+/** UTC-Tag als 'YYYY-MM-DD'. */
+export const dayKey = (d: Date) => d.toISOString().slice(0, 10);
+
+export interface PageStats {
+  /** Aktueller Stand (Follower …) – gehört zum Abruftag */
+  current: Record<string, number>;
+  /** Werte je Tag ('YYYY-MM-DD' → Kennzahl → Wert) */
+  days: Record<string, Record<string, number>>;
+  /** Kennzahlen, die Meta nicht geliefert hat (Recht fehlt, Seite zu klein oder Kennzahl entfallen) */
+  missing: string[];
+}
+
+/** Kanalweite Störungen weiterreichen, alles andere gilt als „Kennzahl nicht verfügbar“. */
+const channelError = (e: any) => ['auth', 'transient', 'rate_limit'].includes(e?.errorClass);
+
+/**
+ * Kennzahlen der Facebook-Seite je Tag (Recht read_insights). Jede Kennzahl einzeln abgefragt: Meta lehnt eine
+ * Abfrage mit einer einzigen unbekannten oder entfernten Kennzahl ganz ab, und die Seiten-Kennzahlen werden laufend
+ * umgestellt (geprüft 23.11.2026: `page_impressions*` entfallen zugunsten von `page_media_view` und
+ * `page_total_media_view_unique`). Was nicht geht, fehlt einfach. Follower und „Gefällt mir“ sind der aktuelle Stand.
+ */
+export const FB_PAGE_METRICS: Record<string, string> = {
+  views: 'page_media_view',
+  reach: 'page_total_media_view_unique',
+  interactions: 'page_post_engagements',
+  new_followers: 'page_daily_follows_unique',
+  page_views: 'page_views_total',
+};
+export async function facebookPageStats(c: Connection, sec: Record<string, string>, since: Date, until: Date): Promise<PageStats> {
+  if (!sec.pageToken || !c.config.pageId) throw new StepError('config', 'Noch keine Seite gewählt.');
+  const pageId = encodeURIComponent(c.config.pageId);
+  const page = await call('GET', `${FB_GRAPH()}/${pageId}`, { fields: 'followers_count,fan_count', access_token: sec.pageToken }, sec, 'Facebook');
+  const current: Record<string, number> = {};
+  if (n(page.followers_count) != null) current.followers = page.followers_count;
+  if (n(page.fan_count) != null) current.fans = page.fan_count;
+  const days: Record<string, Record<string, number>> = {};
+  const missing: string[] = [];
+  for (const [key, metric] of Object.entries(FB_PAGE_METRICS)) {
+    try {
+      const r = await call('GET', `${FB_GRAPH()}/${pageId}/insights`, { metric, period: 'day', since: String(Math.floor(since.getTime() / 1000)), until: String(Math.floor(until.getTime() / 1000)), access_token: sec.pageToken }, sec, 'Facebook');
+      const values = r.data?.[0]?.values ?? [];
+      if (!values.length) missing.push(key);
+      for (const v of values) {
+        const at = new Date(v.end_time ?? 0);
+        if (Number.isNaN(at.getTime()) || n(v.value) == null) continue;
+        // end_time ist das Ende des Tages (Mitternacht US-Pazifikzeit) – der Wert gehört zum Tag davor
+        (days[dayKey(new Date(at.getTime() - 12 * 3600_000))] ??= {})[key] = v.value;
+      }
+    } catch (e: any) {
+      if (channelError(e)) throw e;
+      missing.push(key);
+    }
+  }
+  return { current, days, missing };
+}
+
+/**
+ * Kennzahlen des Instagram-Kontos je Tag (Recht instagram_business_manage_insights; Werte bis zu 48 Stunden
+ * verzögert). `metric_type=total_value` liefert eine Summe je Abfrage, daher je Tag und Kennzahl eine Abfrage.
+ */
+export const IG_ACCOUNT_METRICS: Record<string, string> = { views: 'views', reach: 'reach', interactions: 'total_interactions', engaged: 'accounts_engaged' };
+export async function instagramAccountStats(c: Connection, sec: Record<string, string>, dayList: Date[]): Promise<PageStats> {
+  if (!sec.token || !c.config.userId) throw new StepError('config', 'Noch kein Konto verbunden.');
+  const userId = encodeURIComponent(c.config.userId);
+  const acc = await call('GET', `${IG_GRAPH()}/${userId}`, { fields: 'followers_count,media_count', access_token: sec.token }, sec, 'Instagram');
+  const current: Record<string, number> = {};
+  if (n(acc.followers_count) != null) current.followers = acc.followers_count;
+  if (n(acc.media_count) != null) current.posts = acc.media_count;
+  const days: Record<string, Record<string, number>> = {};
+  const failed = new Set<string>();
+  for (const day of dayList) {
+    const since = Math.floor(day.getTime() / 1000);
+    for (const [key, metric] of Object.entries(IG_ACCOUNT_METRICS)) {
+      if (failed.has(key)) continue;
+      try {
+        const r = await call('GET', `${IG_GRAPH()}/${userId}/insights`, { metric, period: 'day', metric_type: 'total_value', since: String(since), until: String(since + 86_400), access_token: sec.token }, sec, 'Instagram');
+        const v = n(r.data?.[0]?.total_value?.value ?? r.data?.[0]?.values?.[0]?.value);
+        if (v != null) (days[dayKey(day)] ??= {})[key] = v;
+      } catch (e: any) {
+        if (channelError(e)) throw e;
+        failed.add(key);
+      }
+    }
+  }
+  return { current, days, missing: [...failed] };
 }

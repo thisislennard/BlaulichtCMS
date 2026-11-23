@@ -8,6 +8,7 @@ import { HelpTip } from '../../components/ui/HelpTip';
 import { fmtDateTime } from '../../lib/format';
 import { SOCIAL_KINDS, SOCIAL_LABEL, type SocialKind } from '../../lib/social';
 import { safeHref } from '../../lib/url';
+import { InsightsNav } from './InsightsNav';
 
 /** Kennzahlen der Reichweite (#218) – nur zusammengefasste Zahlen, keine Personen. */
 export const METRIC_LABEL: Record<string, string> = { views: 'Aufrufe', reach: 'Erreicht', likes: 'Gefällt mir', replies: 'Antworten', reposts: 'Reposts', quotes: 'Zitate', shares: 'Geteilt', saves: 'Gespeichert', clicks: 'Klicks' };
@@ -40,18 +41,21 @@ interface Overview {
   totals: Record<string, number>;
   interactions: number;
   channels: { kind: SocialKind; publications: number; measured: number; totals: Record<string, number>; interactions: number }[];
-  top: { post_id: string; title: string; interactions: number; views: number | null; published_at: string; channels: { kind: SocialKind; name: string; url: string | null; insights: Record<string, number> | null }[] }[];
+  top: { post_id: string | null; page_post_id?: string; title: string; interactions: number; views: number | null; published_at: string; channels: { kind: SocialKind; name: string; url: string | null; insights: Record<string, number> | null }[] }[];
 }
 
 export default function Insights() {
   const [days, setDays] = useState<'7' | '30' | '90' | '365'>('30');
   const [kind, setKind] = useState('');
-  const q = useQuery({ queryKey: ['insights', days, kind], queryFn: () => get<Overview>(`/insights?days=${days}${kind ? `&kind=${kind}` : ''}`) });
+  const [source, setSource] = useState<'blaulichtcms' | 'all'>('blaulichtcms');
+  const q = useQuery({ queryKey: ['insights', days, kind, source], queryFn: () => get<Overview>(`/insights?days=${days}&source=${source}${kind ? `&kind=${kind}` : ''}`) });
   const d = q.data;
   return (
     <div className="flex flex-col gap-5">
       <PageHeader subtitle="Aufrufe und Interaktionen veröffentlichter Social-Posts – nur Summen, keine Personen." />
+      <InsightsNav />
       <div className="flex flex-wrap items-end gap-3">
+        <SegmentedControl label="Beiträge" value={source} onChange={setSource} options={[{ value: 'blaulichtcms', label: 'Aus BlaulichtCMS' }, { value: 'all', label: 'Alle Seitenbeiträge' }]} />
         <SegmentedControl label="Zeitraum" value={days} onChange={setDays} options={[{ value: '7', label: '7 Tage' }, { value: '30', label: '30 Tage' }, { value: '90', label: '90 Tage' }, { value: '365', label: '1 Jahr' }]} />
         <FieldWrap label="Netzwerk" htmlFor="ins-kind" className="min-w-[200px]">
           <Select id="ins-kind" value={kind} onChange={(e) => setKind(e.target.value)}>
@@ -65,12 +69,13 @@ export default function Insights() {
         </FieldWrap>
         <HelpTip title="Woher die Zahlen kommen" more="/hilfe/verbindungen#reichweite">
           <p className="m-0">BlaulichtCMS fragt die offiziellen Statistik-Schnittstellen 1 Stunde, 24 Stunden und 7 Tage nach der Veröffentlichung ab. Gezählt werden nur Beiträge über eine Schnittstelle – keine Storys und nichts, was von Hand geteilt wurde.</p>
+          <p className="m-0">„Alle Seitenbeiträge“ nimmt die direkt bei Facebook und Instagram erstellten Beiträge aus dem Seitenabgleich dazu (Zahlen bis 30 Tage nach dem Erscheinen).</p>
           <p className="m-0">Welche Zahlen ein Netzwerk liefert, ist verschieden; „–“ heißt: liefert das Netzwerk nicht oder fehlt das Recht.</p>
         </HelpTip>
       </div>
       {q.isLoading && <SkeletonRows rows={6} />}
       {q.error && <ErrorBox title="Reichweite konnte nicht geladen werden">{(q.error as Error).message}</ErrorBox>}
-      {d && d.publications === 0 && <EmptyState icon="ChartColumn" title="Keine Veröffentlichungen im Zeitraum" text="Sobald Beiträge über Facebook, Instagram, Threads, X (API), Mastodon oder Bluesky veröffentlicht sind, erscheinen hier ihre Zahlen." />}
+      {d && d.publications === 0 && <EmptyState icon="ChartColumn" title="Keine Veröffentlichungen im Zeitraum" text={source === 'all' ? 'Weder Veröffentlichungen aus BlaulichtCMS noch abgeglichene Seitenbeiträge im Zeitraum. Der Seitenabgleich läuft stündlich (Reiter Seitenstatistik).' : 'Hier stehen nur Beiträge, die über BlaulichtCMS auf Facebook, Instagram, Threads, X (API), Mastodon oder Bluesky veröffentlicht wurden. Direkt auf der Plattform erstellte Beiträge zeigt „Alle Seitenbeiträge“.'} />}
       {d && d.publications > 0 && (
         <>
           <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
@@ -118,12 +123,18 @@ export default function Insights() {
             ) : (
               <ol className="m-0 p-0 list-none flex flex-col gap-4 text-sm">
                 {d.top.map((t, i) => (
-                  <li key={t.post_id} className="flex flex-col gap-1">
+                  <li key={t.post_id ?? t.page_post_id} className="flex flex-col gap-1">
                     <div className="flex flex-wrap items-baseline gap-2">
                       <span className="font-mono tabular text-fg-muted w-6">{i + 1}.</span>
-                      <Link to={`/beitraege/${t.post_id}`} className="font-medium">
-                        {t.title}
-                      </Link>
+                      {t.post_id ? (
+                        <Link to={`/beitraege/${t.post_id}`} className="font-medium">
+                          {t.title}
+                        </Link>
+                      ) : (
+                        <span className="font-medium">
+                          {t.title} <Chip>direkt erstellt</Chip>
+                        </span>
+                      )}
                       <span className="text-meta text-fg-muted">{fmtDateTime(t.published_at)}</span>
                       <span className="ml-auto font-mono tabular">{fmtNum(t.interactions)} Interaktionen</span>
                     </div>

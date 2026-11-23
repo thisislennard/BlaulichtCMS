@@ -93,6 +93,7 @@ export const PERMISSIONS: PermissionDef[] = [
   P('publish.unpublish', 'publishing', 'critical', 'Von Website zurückziehen', 'Veröffentlichte Beiträge von der Website zurückziehen.', ['post.view']),
   P('publish.social', 'publishing', 'critical', 'In sozialen Netzwerken veröffentlichen', 'Freigegebene Fassungen auf Facebook, Instagram (auch als Story), Threads, X, Mastodon und Bluesky veröffentlichen, Teilen von Hand vorbereiten und als geteilt markieren oder als Paket exportieren.', ['post.view', 'connection.view']),
   P('insights.view', 'publishing', 'read', 'Reichweite ansehen', 'Aufrufe und Interaktionen veröffentlichter Social-Posts sehen (nur zusammengefasste Zahlen, keine Personen): je Beitrag, Übersicht und Dashboard-Kachel.', ['post.view']),
+  P('insights.feed', 'publishing', 'write', 'Social-Feed verwalten', 'Seitenabgleich sofort anstoßen, den Social-Feed (RSS-Adresse, Website-Widget) ein- und ausschalten, Verbindungen und Anzahl wählen, einzelne Seitenbeiträge ausblenden.', ['insights.view']),
   P('publish.social_remove', 'publishing', 'critical', 'Aus sozialen Netzwerken entfernen', 'Veröffentlichungen in sozialen Netzwerken entfernen oder als entfernt bestätigen.', ['post.view']),
   P('channel.view', 'publishing', 'read', 'Websites ansehen', 'Gekoppelte Websites und ihren Zustand sehen.'),
   P('channel.sites', 'publishing', 'critical', 'Websites koppeln und widerrufen', 'Websites mit der BlaulichtCMS Bridge koppeln, Kopplungscodes erzeugen, Schlüssel widerrufen, widerrufene Websites entfernen, Plugin laden.', ['channel.view'], true),
@@ -277,7 +278,7 @@ export const LEGACY_ROLE_PERMISSIONS: Record<string, string[]> = {
  */
 export const ROLE_DEFAULT_ADDITIONS: Record<string, string[]> = {
   media_manager: ['templates.view', 'templates.use', 'templates.manage', 'calendar.view', 'calendar.subscribe'],
-  editor: ['templates.view', 'templates.use', 'templates.manage', 'calendar.view', 'calendar.manage', 'calendar.sources', 'calendar.subscribe', 'insights.view', 'post.delete'],
+  editor: ['templates.view', 'templates.use', 'templates.manage', 'calendar.view', 'calendar.manage', 'calendar.sources', 'calendar.subscribe', 'insights.view', 'insights.feed', 'post.delete'],
   approver: ['templates.view', 'calendar.view', 'calendar.subscribe', 'insights.view'],
   publisher: ['templates.view', 'calendar.view', 'calendar.subscribe', 'insights.view'],
   viewer: ['templates.view', 'calendar.view', 'calendar.subscribe', 'insights.view'],

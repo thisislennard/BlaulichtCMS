@@ -4,7 +4,7 @@ Tags: blaulichtcms, redaktion, veröffentlichung
 Requires at least: 6.4
 Tested up to: 6.9
 Requires PHP: 8.1
-Stable tag: 0.9.2
+Stable tag: 0.10.0
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -22,6 +22,7 @@ BlaulichtCMS ist ein eigenständiges CMS für Öffentlichkeitsarbeit und Krisenk
 * Idempotent: Erneutes Abholen oder Bestätigen desselben Auftrags erzeugt keinen zweiten Beitrag – der Beitrag wird über die BlaulichtCMS-ID wiedergefunden und aktualisiert.
 * Medien kommen als geprüfte, öffentliche Fassung ohne Standortdaten und werden in der Mediathek wiederverwendet.
 * Einsatzliste mit Jahresstatistik: freigegebene Einsätze aus BlaulichtCMS als Liste (Tabelle oder Karten, Filter nach Jahr und Kategorie, Jahresabschnitte), Statistik je Jahr, Monat und Kategorie mit Diagramm, Detailseite je Einsatz. Shortcodes `[blaulichtcms_einsatzliste]` und `[blaulichtcms_einsatzstatistik]`, gleichnamige Blöcke.
+* Social-Feed: freigegebene Beiträge der Facebook-Seite und des Instagram-Kontos aus BlaulichtCMS als Kacheln oder Liste (Shortcode `[blaulichtcms_social]`, Block „BlaulichtCMS: Social-Feed“). Die Bilder liegen auf der Website – Besucher laden nichts von Facebook oder Instagram nach.
 
 == Installation ==
 
@@ -57,6 +58,10 @@ Nur im Testbetrieb: `define( 'BLAULICHTCMS_BRIDGE_ALLOW_HTTP', true );` in der w
 Neue Versionen bietet die gekoppelte BlaulichtCMS-Instanz über den normalen WordPress-Updateweg an (Dashboard → Aktualisierungen bzw. `wp plugin update blaulichtcms-bridge`). In der Plugin-Liste lässt sich „Automatische Updates aktivieren“ einschalten; WordPress installiert neue Versionen dann selbst (mit derselben Prüfung von Prüfsumme und Signatur). Ist WP-Cron abgeschaltet, holt die Bridge ihr automatisches Update selbst nach. Jedes Update von BlaulichtCMS bringt die passende Bridge mit; die Bridge fragt höchstens alle sechs Stunden nach. Vor der Installation prüft die Bridge das Paket gegen die SHA-256-Prüfsumme aus BlaulichtCMS. Ist in der Bridge ein Signaturschlüssel hinterlegt (includes/signing-keys.php), installiert sie zusätzlich nur Pakete mit gültiger Ed25519-Signatur des Betreibers; der private Schlüssel liegt nicht auf dem BlaulichtCMS-Server. Die Kopplung bleibt beim Update erhalten.
 
 == Changelog ==
+
+= 0.10.0 =
+* Social-Feed: Shortcode `[blaulichtcms_social]` und Block „BlaulichtCMS: Social-Feed“ zeigen die in BlaulichtCMS freigegebenen Beiträge von Facebook und Instagram (Kacheln oder Liste, Anzahl, Netzwerk, Text an/aus). Die Bridge holt den Feed nur bei Änderungen und legt die Bilder unter wp-content/uploads/blaulichtcms-social/ ab; keine eingebetteten Skripte, kein Tracking.
+* Beim Entkoppeln, Widerruf und Deinstallieren entfernt die Bridge den Social-Feed samt Bildern.
 
 = 0.9.2 =
 * Plugin-Details: Das Fenster „Details ansehen“ zeigt Titelbild, Beschreibung, Installation, häufige Fragen und die Änderungen der letzten Versionen. Bei einem angebotenen Update beschreibt es die neue Version.

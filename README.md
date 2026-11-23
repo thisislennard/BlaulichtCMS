@@ -38,12 +38,12 @@ alles, was dazugehört, in einer Anwendung auf dem eigenen Server.
 
 | Bereich | Umfang |
 |---|---|
-| **Übersicht** | Dashboard je Rolle, eine Freigaben-Liste für alle Arten, Benachrichtigungen per Glocke, Push und E-Mail, Reichweite der Social-Posts |
+| **Übersicht** | Dashboard je Rolle, eine Freigaben-Liste für alle Arten, Benachrichtigungen per Glocke, Push und E-Mail, Reichweite der Social-Posts, Seitenstatistik mit Follower-Verlauf |
 | **Redaktion** | Fotos sammeln per Upload-Link, Sichtung und Medien, Beiträge mit Fassungen, Kalender, Einsatzliste, Banner, Designvorlagen, Quellen |
 | **Presse** | Presseanfragen mit Fristen, Presse-Postfach, Antworten mit Textbausteinen, Presseverteiler und Pressemitteilungen |
 | **Warnungen** | Warnentwurf für die MoWaS-Übergabe mit Warnstufen-Assistent, Stichwortverzeichnis je Bundesland, amtliche Warnungen |
 | **Einrichtung** | Verbindungen mit Websites, Workflows, Beitragsvorlagen, Upload-Seite |
-| **Verwaltung** | Benutzer und eigene Rollen mit 102 Rechten, Einstellungen, Sicherung, Updates aus der App, Systemstatus |
+| **Verwaltung** | Benutzer und eigene Rollen mit 103 Rechten, Einstellungen, Sicherung, Updates aus der App, Systemstatus |
 
 Dazu: installierbare App für Handy und Computer, Suche über alle Bereiche mit <kbd>Strg</kbd> + <kbd>K</kbd>,
 Hilfe-Center mit 32 Kapiteln, heller und dunkler Modus, vollständig per Tastatur bedienbar.
@@ -116,9 +116,9 @@ BlaulichtCMS verbindet sich mit den Systemen, die im Alltag schon da sind. Jede 
 | **Amtliche Warnungen** | eingehend | Warn-App-Schnittstelle des Bundes (NINA) nach Regionalschlüssel oder CAP-Feeds |
 | **Presse-Postfach** | eingehend | IMAP oder Microsoft 365 – neue Mails werden Presseanfragen |
 | **Kalender** | ein- und ausgehend | iCal-Quellen einlesen, persönliches iCal-Abo für Outlook, Google und iPhone |
-| **RSS- und Atom-Feeds** | eingehend | Anregungen für Beiträge und Auslöser für Workflows |
-| **WordPress** | ausgehend | Plugin BlaulichtCMS Bridge: Beiträge, Banner, Einsatzliste mit Jahresstatistik |
-| **Facebook, Instagram, Threads** | ausgehend | Beiträge und Stories über die offiziellen Schnittstellen, Reichweite |
+| **RSS- und Atom-Feeds** | ein- und ausgehend | Anregungen für Beiträge und Auslöser für Workflows; Social-Feed der eigenen Seiten als RSS |
+| **WordPress** | ausgehend | Plugin BlaulichtCMS Bridge: Beiträge, Banner, Einsatzliste mit Jahresstatistik, Social-Feed |
+| **Facebook, Instagram, Threads** | ein- und ausgehend | Beiträge und Stories über die offiziellen Schnittstellen, Reichweite; Abgleich aller Seitenbeiträge und Tageswerte (Facebook, Instagram) |
 | **X, Mastodon, Bluesky** | ausgehend | über die offiziellen Schnittstellen, X wahlweise von Hand |
 | **WhatsApp-Kanal** | ausgehend | Text und Bilder vorbereitet, Teilen von Hand |
 | **E-Mail** | ausgehend | SMTP oder Microsoft 365: Antworten, Pressemitteilungen, Benachrichtigungen |
@@ -180,7 +180,7 @@ sich als ein Satz:
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-18-4169E1?logo=postgresql&logoColor=white)
 ![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)
 ![Docker](https://img.shields.io/badge/Docker-ein_Container-2496ED?logo=docker&logoColor=white)
-![WordPress](https://img.shields.io/badge/BlaulichtCMS_Bridge-0.9.2-21759B?logo=wordpress&logoColor=white)
+![WordPress](https://img.shields.io/badge/BlaulichtCMS_Bridge-0.10.0-21759B?logo=wordpress&logoColor=white)
 
 | Baustein | Technik |
 |---|---|

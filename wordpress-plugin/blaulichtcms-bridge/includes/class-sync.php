@@ -340,6 +340,7 @@ final class BlaulichtCMS_Bridge_Sync {
 						$msg .= ' Hinweis-Banner wurden entfernt.';
 					}
 					BlaulichtCMS_Bridge_Banners::clear();
+					BlaulichtCMS_Bridge_Social::clear();
 				}
 				BlaulichtCMS_Bridge_Settings::status( array( 'last_error' => $msg ) );
 				return $res;
@@ -412,6 +413,17 @@ final class BlaulichtCMS_Bridge_Sync {
 			}
 			if ( isset( $res['banner_ids'] ) && is_array( $res['banner_ids'] ) ) {
 				BlaulichtCMS_Bridge_Banners::reconcile( array_map( 'strval', $res['banner_ids'] ) );
+			}
+			// Social-Feed (ab 0.10.0): nur abholen, wenn sich der Stand geändert hat; ein Fehler hält den Abruf nicht auf
+			if ( isset( $res['social_feed'] ) && is_string( $res['social_feed'] ) && time() - $started < self::MAX_RUN_SECONDS ) {
+				try {
+					$social = BlaulichtCMS_Bridge_Social::sync( $res['social_feed'] );
+					if ( is_wp_error( $social ) && '' === $ack_error ) {
+						$ack_error = 'Social-Feed: ' . $social->get_error_message();
+					}
+				} catch ( \Throwable $e ) {
+					$ack_error = 'Social-Feed: ' . substr( $e->getMessage(), 0, 300 );
+				}
 			}
 			BlaulichtCMS_Bridge_Settings::status(
 				array(

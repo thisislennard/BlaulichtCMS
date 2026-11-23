@@ -458,6 +458,17 @@
       "maintenance_on": "Wartungsmodus eingeschaltet",
       "maintenance_off": "Wartungsmodus beendet",
       "master_key_rotated": "Master-Schlüssel erneuert"
+    },
+    "social_page": {
+      "sync_started": "Seitenabgleich gestartet"
+    },
+    "social_feed": {
+      "updated": "Social-Feed geändert",
+      "post_hidden": "Beitrag im Social-Feed ausgeblendet",
+      "post_shown": "Beitrag im Social-Feed eingeblendet",
+      "rss_created": "RSS-Adresse des Social-Feeds erstellt",
+      "rss_renewed": "RSS-Adresse des Social-Feeds erneuert",
+      "rss_revoked": "RSS-Adresse des Social-Feeds widerrufen"
     }
   },
   "sentences": {
@@ -885,6 +896,17 @@
       "maintenance_on": "hat den Wartungsmodus eingeschaltet",
       "maintenance_off": "hat den Wartungsmodus beendet",
       "master_key_rotated": "hat den Master-Schlüssel erneuert"
+    },
+    "social_page": {
+      "sync_started": "hat den Seitenabgleich gestartet"
+    },
+    "social_feed": {
+      "updated": "hat die Freigabe des Social-Feeds geändert",
+      "post_hidden": "hat den Beitrag „{o}“ im Social-Feed ausgeblendet",
+      "post_shown": "hat den Beitrag „{o}“ im Social-Feed wieder eingeblendet",
+      "rss_created": "hat eine RSS-Adresse für den Social-Feed erstellt",
+      "rss_renewed": "hat die RSS-Adresse des Social-Feeds erneuert",
+      "rss_revoked": "hat die RSS-Adresse des Social-Feeds widerrufen"
     }
   },
   "notifications": {

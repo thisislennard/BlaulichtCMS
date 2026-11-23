@@ -99,6 +99,27 @@ Beiträge (nicht Storys, nicht von Hand geteilt, nicht entfernt) 1 h, 24 h und 7
 werden beim nächsten Lauf wiederholt, Fehler je Beitrag (gelöscht, Recht fehlt) festgehalten. Nur Summen, keine
 Personen. Routen `GET /insights`, `GET /posts/:id/insights` (Recht `insights.view`), Dashboard-Kachel `insights`.
 
+## Seitenabgleich, Seitenstatistik und Social-Feed
+
+Worker-Aufgabe stündlich (`server/src/connections/page-sync.ts`, läuft nie doppelt) je aktiver Facebook- bzw.
+Instagram-Verbindung mit `config.pageSync !== false`: Beiträge der Seite (`/{page}/posts` bzw. `/{user}/media`; beim
+ersten Lauf 90 Tage, danach 14 Tage zum Erkennen von Änderungen und Löschungen) in `social_page_posts` (Migration 235),
+Vorschaubild einmalig als WebP (≤ 1080 px) unter `<data>/social/`. Beiträge aus BlaulichtCMS werden über
+`remote_id` bzw. `marker` mit `social_publications` verknüpft und nicht doppelt gezählt; für die übrigen Zahlen je
+Beitrag bis 30 Tage (erste 2 Tage alle 6 h, danach täglich). Einmal je Tag Kennzahlen der Seite in `social_page_stats`
+(Facebook: `followers_count`, `fan_count`, Insights `page_media_view`, `page_total_media_view_unique`,
+`page_post_engagements`, `page_daily_follows_unique`, `page_views_total`; Instagram: `followers_count`, `media_count`,
+Insights `views`, `reach`, `total_interactions`, `accounts_engaged` mit `metric_type=total_value`). Jede Kennzahl wird
+einzeln abgefragt, weil Meta eine Abfrage mit einer entfallenen Kennzahl ganz ablehnt; fehlende stehen in
+`social_page_sync.message`. Auch die Beitrags-Insights fallen bei einer Ablehnung auf Einzelabfragen zurück.
+
+Routen: `GET /insights/pages`, `GET /social-images/:file` (`insights.view`); `GET /insights?source=all`;
+`POST /insights/pages/sync`, `GET|PUT /social-feed`, `PUT /social-feed/posts/:id`, `POST|DELETE /social-feed/rss`
+(`insights.feed`); öffentlich mit geheimer Adresse `GET /public/social/:token.rss` und
+`/public/social/:token/images/:file` (`social_feed_config.rss_token_hash`, SHA-256). Bridge: `social_feed` (Prüfsumme)
+in `GET /bridge/jobs`, `GET /bridge/social-feed`, `GET /bridge/social-images/:file`; die Bridge (ab 0.10.0,
+`includes/class-social.php`) holt bei geänderter Prüfsumme und legt die Bilder unter `uploads/blaulichtcms-social/` ab.
+
 ## Barrierefreiheit (#217)
 
 - Alternativtext je Bild: `media.alt_text` (Medienverwaltung, wiederverwendbar) und `post_revisions.media_alt`
@@ -386,6 +407,8 @@ Ergebnisse je Verbindung: [docs/integrationen.md](integrationen.md).
   Wehr-Kalender) einlesen und das Abo in Outlook, Google und am iPhone noch prüfen.
 - Reichweite (#218): gegen Mastodon- und Bluesky-Stellvertreter getestet; Statistik-Rechte und Zahlen mit echten
   Konten (Meta ggf. erst nach App-Prüfung, X nur mit eigener API) noch prüfen.
+- Seitenabgleich und Social-Feed: gegen einen Graph-API-Stellvertreter getestet (Beiträge, Bild, entfallene
+  Kennzahlen, Löschungen, RSS, Bridge-Endpunkte); Kennzahlen am echten Konto und Shortcode in WordPress noch prüfen.
 - Update-Helfer für Image-Updates aus der App (#226): Anfrage, Statusauswertung, Rate-Limit und Protokoll mit Tests
   (`server/test/host-update.test.ts`); Helfer und `install.sh --unattended` mit Docker-Stellvertreter trocken getestet
   (Erfolg, Rückweg, Abbruch vor dem Wechsel, abgelehnte Anfragen, falsche Signatur, Neustart mit neuer `install.sh`).

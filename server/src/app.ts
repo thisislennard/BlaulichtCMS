@@ -93,6 +93,7 @@ import { backupOffsiteRoutes } from './routes/backup-offsite.js';
 import { pressReplyRoutes } from './routes/press-replies.js';
 import { pressDistributionRoutes } from './routes/press-distribution.js';
 import { insightRoutes } from './routes/insights.js';
+import { socialPageRoutes } from './routes/social-page.js';
 import { observeProxy } from './lib/proxy-check.js';
 import { healthStatus, isLocalHealthRequest, publicHealth } from './routes/health.js';
 
@@ -276,6 +277,7 @@ export async function buildApp(): Promise<FastifyInstance> {
       await api.register(warningRoutes);
       await api.register(connectionRoutes);
       await api.register(insightRoutes);
+      await api.register(socialPageRoutes);
       await api.register(privacyRoutes);
       await api.register(updateRoutes);
       await api.register(automationRoutes);

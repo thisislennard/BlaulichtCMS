@@ -75,7 +75,7 @@ final class BlaulichtCMS_Bridge_Shortcodes_Help {
 		?>
 		<div class="bcl-sc">
 			<p>Shortcodes setzen Inhalte der Bridge an eine beliebige Stelle einer Seite oder eines Beitrags – im Block-Editor über den Block „Shortcode“, im klassischen Editor direkt im Text, in Elementor über das Widget „Shortcode“. Attribute stehen in Anführungszeichen hinter dem Namen, z. B. <code>[blaulichtcms_einsatzstatistik ansicht="summe"]</code>. Fehlt ein Attribut, gilt die Vorgabe; unbekannte Werte werden ignoriert.</p>
-			<div class="notice notice-info inline"><p><strong>Alternative: Blöcke.</strong> Im Block-Editor gibt es dieselben Inhalte als Blöcke „BlaulichtCMS: Einsatzliste“, „BlaulichtCMS: Einsatzstatistik“, „BlaulichtCMS: Hinweise“ und „BlaulichtCMS: Einsatzübersicht“. Die Attribute stehen dort als Felder in der Seitenleiste; ein leeres Feld bedeutet „Vorgabe der Einstellungen“.</p></div>
+			<div class="notice notice-info inline"><p><strong>Alternative: Blöcke.</strong> Im Block-Editor gibt es dieselben Inhalte als Blöcke „BlaulichtCMS: Einsatzliste“, „BlaulichtCMS: Einsatzstatistik“, „BlaulichtCMS: Hinweise“, „BlaulichtCMS: Einsatzübersicht“ und „BlaulichtCMS: Social-Feed“. Die Attribute stehen dort als Felder in der Seitenleiste; ein leeres Feld bedeutet „Vorgabe der Einstellungen“.</p></div>
 
 			<h2 id="bcl-sc-overview">Übersicht</h2>
 			<?php echo self::open_scroll( 'Shortcodes der BlaulichtCMS Bridge' ); ?>
@@ -86,6 +86,7 @@ final class BlaulichtCMS_Bridge_Shortcodes_Help {
 					<tr><th scope="row"><code>[blaulichtcms_einsatzstatistik]</code></th><td>Jahresstatistik: große Zahl, je Monat, je Kategorie, je Jahr – einzeln oder zusammen</td><td>BlaulichtCMS: Einsatzstatistik</td><td><a href="#bcl-sc-statistik">5 Attribute</a></td></tr>
 					<tr><th scope="row"><code>[blaulichtcms_banner]</code></th><td>Aktive Hinweise aus BlaulichtCMS als Banner an dieser Stelle</td><td>BlaulichtCMS: Hinweise</td><td><a href="#bcl-sc-weitere">keine</a></td></tr>
 					<tr><th scope="row"><code>[blaulichtcms_einsaetze]</code></th><td>Kurze Liste der letzten Einsatzberichte (Beiträge aus BlaulichtCMS) mit Datum und Link</td><td>BlaulichtCMS: Einsatzübersicht</td><td><a href="#bcl-sc-weitere">1 Attribut</a></td></tr>
+					<tr><th scope="row"><code>[blaulichtcms_social]</code></th><td>Freigegebene Beiträge von Facebook und Instagram aus BlaulichtCMS als Kacheln oder Liste</td><td>BlaulichtCMS: Social-Feed</td><td><a href="#bcl-sc-social">5 Attribute</a></td></tr>
 				</tbody>
 			</table></div>
 
@@ -186,6 +187,28 @@ final class BlaulichtCMS_Bridge_Shortcodes_Help {
 				array(
 					array( 'Hinweise an einer festen Stelle', '[blaulichtcms_banner]', '' ),
 					array( 'Die letzten 5 Einsatzberichte', '[blaulichtcms_einsaetze anzahl="5"]', '' ),
+				)
+			);
+			?>
+			<h2 id="bcl-sc-social">Social-Feed: <code>[blaulichtcms_social]</code></h2>
+			<p>Zeigt die Beiträge, die in BlaulichtCMS unter <strong>Reichweite → Social-Feed</strong> freigegeben sind – neueste zuerst, mit Bild, Datum, Text und Link zum Original. Die Bilder liegen auf dieser Website; Besucher laden nichts von Facebook oder Instagram nach (keine eingebetteten Skripte, kein Tracking). Neue Beiträge erscheinen mit dem nächsten Abruf.</p>
+			<?php
+			echo self::attr_table(
+				'Attribute von blaulichtcms_social',
+				array(
+					array( 'anzahl', 'Zahl von `1` bis `50`', '`6`', 'So viele der neuesten freigegebenen Beiträge erscheinen (höchstens so viele, wie in BlaulichtCMS freigegeben sind).' ),
+					array( 'darstellung', '`kacheln` oder `liste`', '`kacheln`', '`kacheln`: quadratische Bilder im Raster, `liste`: Bild links, Text rechts (auf schmalen Bildschirmen untereinander).' ),
+					array( 'netzwerk', '`facebook` oder `instagram`', 'leer (beide)', 'Nur Beiträge dieses Netzwerks.' ),
+					array( 'text', '`ja` oder `nein`', '`ja`', 'Text der Beiträge (gekürzt) anzeigen. ' . $bool ),
+					array( 'titel', 'beliebiger Text', 'leer (keine Überschrift)', 'Überschrift über dem Feed.' ),
+				)
+			);
+			echo self::examples(
+				'Beispiele für blaulichtcms_social',
+				array(
+					array( 'Die neuesten 6 Beiträge als Kacheln', '[blaulichtcms_social]', '' ),
+					array( 'Nur Instagram, nur Bilder', '[blaulichtcms_social netzwerk="instagram" text="nein" anzahl="9"]', '' ),
+					array( 'Liste mit Überschrift', '[blaulichtcms_social darstellung="liste" anzahl="5" titel="Aktuelles aus den sozialen Netzwerken"]', '' ),
 				)
 			);
 			?>

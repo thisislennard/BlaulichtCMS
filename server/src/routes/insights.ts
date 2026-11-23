@@ -5,6 +5,7 @@ import { requireAuth } from '../auth/context.js';
 import { notFound } from '../lib/errors.js';
 import { SOCIAL_KINDS } from '../connections/channels.js';
 import { interactions, METRIC_KEYS, type Metrics } from '../connections/insights.js';
+import { itemTitle } from './social-page.js';
 
 /** Summen je Kennzahl (null, wenn kein Beitrag den Wert liefert). */
 function sum(list: (Metrics | null | undefined)[]): Metrics {
@@ -20,7 +21,7 @@ function sum(list: (Metrics | null | undefined)[]): Metrics {
  * Reichweite (#218): Übersicht über einen Zeitraum (nach Veröffentlichung), je Netzwerk und Top-Beiträge, sowie die
  * Zahlen eines Beitrags. Nur zusammengefasste Zahlen – keine Personen. Recht: „Reichweite ansehen“.
  */
-export async function insightsOverview(days: number, kind: string | null, limit = 10) {
+export async function insightsOverview(days: number, kind: string | null, limit = 10, source: 'blaulichtcms' | 'all' = 'blaulichtcms') {
   const rows = await many<any>(
     `SELECT sp.id, sp.post_id, sp.insights, sp.insights_at, sp.insights_stage, sp.insights_error, sp.published_at, sp.remote_url,
             c.kind, CASE WHEN c.deleted_at IS NOT NULL THEN 'Verbindung gelöscht' ELSE c.name END AS connection_name, p.title
@@ -30,6 +31,20 @@ export async function insightsOverview(days: number, kind: string | null, limit 
       ORDER BY sp.published_at DESC LIMIT 2000`,
     [days, kind],
   );
+  // „Alle Seitenbeiträge“: dazu die direkt auf der Plattform erstellten Beiträge aus dem Seitenabgleich (Beiträge aus
+  // BlaulichtCMS sind dort mit ihrer Veröffentlichung verknüpft und werden nicht doppelt gezählt)
+  if (source === 'all') {
+    const page = await many<any>(
+      `SELECT p.id, p.message, p.metrics, p.metrics_at, p.metrics_error, p.posted_at, p.permalink, c.kind, c.name AS connection_name
+         FROM social_page_posts p JOIN connections c ON c.id = p.connection_id
+        WHERE p.publication_id IS NULL AND p.removed_at IS NULL AND c.deleted_at IS NULL AND p.posted_at >= now() - make_interval(days => $1)
+          AND ($2::text IS NULL OR c.kind = $2)
+        ORDER BY p.posted_at DESC LIMIT 2000`,
+      [days, kind],
+    );
+    for (const p of page)
+      rows.push({ id: p.id, post_id: null, page_post_id: p.id, insights: p.metrics, insights_at: p.metrics_at, insights_stage: null, insights_error: p.metrics_error, published_at: p.posted_at, remote_url: p.permalink, kind: p.kind, connection_name: p.connection_name, title: itemTitle({ message: p.message ?? '', kind: p.kind }) });
+  }
   const withData = rows.filter((r) => r.insights);
   const channels = SOCIAL_KINDS.map((k) => {
     const list = rows.filter((r) => r.kind === k);
@@ -37,14 +52,15 @@ export async function insightsOverview(days: number, kind: string | null, limit 
     return { kind: k, publications: list.length, measured: data.length, totals: sum(data.map((r) => r.insights)), interactions: data.reduce((a, r) => a + interactions(r.insights), 0) };
   }).filter((c) => c.publications > 0);
   // Top-Beiträge: Interaktionen über alle Netzwerke eines Beitrags zusammen
-  const byPost = new Map<string, { post_id: string; title: string; channels: { kind: string; name: string; url: string | null; insights: Metrics | null }[]; interactions: number; views: number | null; published_at: string }>();
+  const byPost = new Map<string, { post_id: string | null; page_post_id?: string; title: string; channels: { kind: string; name: string; url: string | null; insights: Metrics | null }[]; interactions: number; views: number | null; published_at: string }>();
   for (const r of rows) {
-    const e = byPost.get(r.post_id) ?? { post_id: r.post_id, title: r.title, channels: [] as { kind: string; name: string; url: string | null; insights: Metrics | null }[], interactions: 0, views: null as number | null, published_at: r.published_at };
+    const key = r.post_id ?? `page:${r.page_post_id}`;
+    const e = byPost.get(key) ?? { post_id: r.post_id, page_post_id: r.page_post_id, title: r.title, channels: [] as { kind: string; name: string; url: string | null; insights: Metrics | null }[], interactions: 0, views: null as number | null, published_at: r.published_at };
     e.channels.push({ kind: r.kind, name: r.connection_name, url: r.remote_url, insights: r.insights });
     e.interactions += interactions(r.insights);
     if (typeof r.insights?.views === 'number') e.views = (e.views ?? 0) + r.insights.views;
     if (r.published_at < e.published_at) e.published_at = r.published_at;
-    byPost.set(r.post_id, e);
+    byPost.set(key, e);
   }
   const top = [...byPost.values()].filter((p) => p.channels.some((c) => c.insights)).sort((a, b) => b.interactions - a.interactions || (b.views ?? 0) - (a.views ?? 0)).slice(0, limit);
   return {
@@ -62,8 +78,8 @@ export async function insightsOverview(days: number, kind: string | null, limit 
 
 export async function insightRoutes(app: FastifyInstance) {
   app.get('/insights', { preHandler: requireAuth('insights.view') }, async (req) => {
-    const q = z.object({ days: z.coerce.number().int().min(1).max(365).default(30), kind: z.enum(SOCIAL_KINDS as [string, ...string[]]).optional() }).parse(req.query ?? {});
-    return insightsOverview(q.days, q.kind ?? null, 20);
+    const q = z.object({ days: z.coerce.number().int().min(1).max(365).default(30), kind: z.enum(SOCIAL_KINDS as [string, ...string[]]).optional(), source: z.enum(['blaulichtcms', 'all']).default('blaulichtcms') }).parse(req.query ?? {});
+    return insightsOverview(q.days, q.kind ?? null, 20, q.source);
   });
 
   /** Zahlen je Netzwerk eines Beitrags samt Verlauf (nach 1 h, 24 h, 7 Tagen). */

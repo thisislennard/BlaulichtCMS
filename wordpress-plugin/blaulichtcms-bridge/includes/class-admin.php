@@ -107,6 +107,7 @@ final class BlaulichtCMS_Bridge_Admin {
 		BlaulichtCMS_Bridge_Settings::unpair();
 		wp_clear_scheduled_hook( BlaulichtCMS_Bridge_Sync::HOOK );
 		BlaulichtCMS_Bridge_Banners::clear();
+		BlaulichtCMS_Bridge_Social::clear();
 		if ( is_wp_error( $revoked ) ) {
 			self::back( 'Kopplung auf dieser Website gelöst, Hinweis-Banner entfernt. BlaulichtCMS war nicht erreichbar – bitte den Schlüssel dort zusätzlich widerrufen.', 'warning' );
 		}

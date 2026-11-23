@@ -117,12 +117,12 @@ try {
   });
 
   await step('Bridge-Update über WordPress: Test-Kanal, Prüfsumme, Kopplung bleibt erhalten', async () => {
-    // Ältere Bridge (0.3.9) installieren – BlaulichtCMS enthält 0.9.2
+    // Ältere Bridge (0.3.9) installieren – BlaulichtCMS enthält 0.10.0
     const tmp = path.join(ROOT, 'test/wordpress/tmp/old');
     fs.rmSync(tmp, { recursive: true, force: true });
     fs.cpSync(path.join(ROOT, 'wordpress-plugin/blaulichtcms-bridge'), path.join(tmp, 'blaulichtcms-bridge'), { recursive: true });
     const main = path.join(tmp, 'blaulichtcms-bridge/blaulichtcms-bridge.php');
-    fs.writeFileSync(main, fs.readFileSync(main, 'utf8').replace(/Version:(\s+)0.9.2/, 'Version:$10.3.9').replace("'BLAULICHTCMS_BRIDGE_VERSION', '0.9.2'", "'BLAULICHTCMS_BRIDGE_VERSION', '0.3.9'"));
+    fs.writeFileSync(main, fs.readFileSync(main, 'utf8').replace(/Version:(\s+)0.10.0/, 'Version:$10.3.9').replace("'BLAULICHTCMS_BRIDGE_VERSION', '0.10.0'", "'BLAULICHTCMS_BRIDGE_VERSION', '0.3.9'"));
     sh(`cd ${tmp} && rm -f ../alt.zip && zip -qr ../alt.zip blaulichtcms-bridge`);
     wpcli('plugin install /tmp/blaulichtcms/alt.zip --force --activate');
     expect(wpcli('plugin get blaulichtcms-bridge --field=version') === '0.3.9', 'Alte Version nicht installiert');
@@ -130,12 +130,12 @@ try {
     wpcli('transient delete blaulichtcms_bridge_update');
     wpcli('transient delete update_plugins --network');
     const upd = wpcli('plugin update blaulichtcms-bridge');
-    expect(wpcli('plugin get blaulichtcms-bridge --field=version') === '0.9.2', `Update nicht installiert: ${upd}`);
+    expect(wpcli('plugin get blaulichtcms-bridge --field=version') === '0.10.0', `Update nicht installiert: ${upd}`);
     const status = wpcli('blaulichtcms-bridge status');
     expect(/gekoppelt|BlaulichtCMS/i.test(status), `Kopplung verloren: ${status}`);
     wpcli('blaulichtcms-bridge poll');
-    expect((await admin.get('/sites/bridge-release')).sites[0].plugin_version === '0.9.2', 'Website meldet die neue Version nicht');
-    return `0.3.9 → 0.9.2 per „wp plugin update“ ohne Freigabe, Kopplung erhalten`;
+    expect((await admin.get('/sites/bridge-release')).sites[0].plugin_version === '0.10.0', 'Website meldet die neue Version nicht');
+    return `0.3.9 → 0.10.0 per „wp plugin update“ ohne Freigabe, Kopplung erhalten`;
   });
 
   let archiveBeforeGood;

@@ -20,6 +20,7 @@ import { sendFileResponse } from './files.js';
 import { approvalStillValid } from '../lib/approval.js';
 import { EXCLUDE_RE, verifyBridgeSignature, type SignatureState } from '../lib/bridge-signature.js';
 import { bridgeSupportsIncidents } from './incidents.js';
+import { feedItems, feedRevision, sendSocialImage } from './social-page.js';
 
 export const BRIDGE_API_VERSION = 1;
 
@@ -537,7 +538,9 @@ export async function bridgeRoutes(app: FastifyInstance) {
           AND EXISTS (SELECT 1 FROM banner_jobs j WHERE j.banner_id = b.id AND j.action = 'upsert' AND j.status IN ('sent','done'))`,
       [site.id],
     );
-    if (!rows.length) return { jobs, banner_ids: active.map((b) => b.id), poll_interval: POLL_SECONDS };
+    // Social-Feed für das Website-Widget: nur der Stand – die Bridge holt den Feed, wenn er sich geändert hat
+    const social_feed = feedRevision(await feedItems());
+    if (!rows.length) return { jobs, banner_ids: active.map((b) => b.id), social_feed, poll_interval: POLL_SECONDS };
     const base = await publicBase(req);
     const sendAuthor = !!(await one<any>(`SELECT send_author FROM wp_sites WHERE id = $1`, [site.id]))?.send_author;
     for (const r of rows) {
@@ -561,7 +564,26 @@ export async function bridgeRoutes(app: FastifyInstance) {
       jobs.push(jobPayload(p, ordered, base, author));
     }
     await audit(bridgeActor(site, req), 'publication.fetched', { type: 'site', id: site.id, label: site.name }, { auftraege: rows.map((r) => r.id) });
-    return { jobs, banner_ids: active.map((b) => b.id), poll_interval: POLL_SECONDS };
+    return { jobs, banner_ids: active.map((b) => b.id), social_feed, poll_interval: POLL_SECONDS };
+  });
+
+  /**
+   * Social-Feed für das Website-Widget (Bridge ab 0.10.0): freigegebene Seitenbeiträge mit Text, Link und Bild. Die
+   * Bridge legt die Bilder auf der Website ab – Besucher laden nichts von Meta oder BlaulichtCMS nach.
+   */
+  app.get('/bridge/social-feed', bridgeLimit, async (req) => {
+    await bridgeAuth(req);
+    const items = await feedItems();
+    return {
+      revision: feedRevision(items),
+      items: items.map((i) => ({ id: i.id, network: i.kind, account: i.connection, posted_at: i.posted_at, text: i.message, permalink: i.permalink, image: i.image })),
+    };
+  });
+
+  app.get('/bridge/social-images/:file', bridgeLimit, async (req, reply) => {
+    await bridgeAuth(req);
+    const { file } = z.object({ file: z.string().max(60) }).parse(req.params);
+    return sendSocialImage(reply, file, true);
   });
 
   /** Ergebnis melden. Wiederholte Meldungen desselben Ergebnisses ändern nichts. */

@@ -111,4 +111,36 @@
       return null;
     },
   });
+
+  // Social-Feed (ab 0.10.0): freigegebene Beiträge von Facebook und Instagram aus BlaulichtCMS
+  var STD6 = { label: 'Vorgabe', value: '' };
+  wp.blocks.registerBlockType('blaulichtcms/social', {
+    title: 'BlaulichtCMS: Social-Feed',
+    icon: 'share',
+    category: 'widgets',
+    attributes: attrs(['anzahl', 'darstellung', 'netzwerk', 'text', 'titel']),
+    edit: function (props) {
+      return el(
+        'div',
+        useBlockProps(),
+        el(
+          Inspector,
+          null,
+          el(
+            C.PanelBody,
+            { title: 'Social-Feed' },
+            field(props, 'titel', 'Überschrift (optional)'),
+            field(props, 'anzahl', 'Anzahl', '1 bis 50, Vorgabe 6'),
+            field(props, 'darstellung', 'Darstellung', null, [STD6, { label: 'Kacheln', value: 'kacheln' }, { label: 'Liste', value: 'liste' }]),
+            field(props, 'netzwerk', 'Netzwerk', null, [{ label: 'Alle', value: '' }, { label: 'Facebook', value: 'facebook' }, { label: 'Instagram', value: 'instagram' }]),
+            field(props, 'text', 'Text anzeigen', null, [STD6, { label: 'Ja', value: 'ja' }, { label: 'Nein', value: 'nein' }])
+          )
+        ),
+        el(SSR, { block: 'blaulichtcms/social', attributes: props.attributes })
+      );
+    },
+    save: function () {
+      return null;
+    },
+  });
 })(window.wp);

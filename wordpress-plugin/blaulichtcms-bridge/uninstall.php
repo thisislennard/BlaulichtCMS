@@ -35,6 +35,14 @@ function blaulichtcms_bridge_uninstall_site(): void {
 	delete_option( 'blaulichtcms_bridge_settings' );
 	delete_option( 'blaulichtcms_bridge_status' );
 	delete_option( 'blaulichtcms_bridge_banners' );
+	delete_option( 'blaulichtcms_bridge_social' ); // Social-Feed (ab 0.10.0) samt abgelegter Bilder
+	$u = wp_upload_dir( null, false );
+	foreach ( (array) glob( trailingslashit( $u['basedir'] ) . 'blaulichtcms-social/*.webp' ) as $f ) {
+		wp_delete_file( (string) $f );
+	}
+	if ( is_dir( trailingslashit( $u['basedir'] ) . 'blaulichtcms-social' ) ) {
+		@rmdir( trailingslashit( $u['basedir'] ) . 'blaulichtcms-social' ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged,WordPress.WP.AlternativeFunctions.file_system_operations_rmdir
+	}
 	delete_option( 'blaulichtcms_bridge_incidents' ); // Einsatzliste: Einstellungen (Einträge bleiben wie Beiträge erhalten)
 	delete_option( 'blaulichtcms_bridge_incidents_rev' );
 	delete_option( 'blaulichtcms_bridge_incidents_rewrite' );

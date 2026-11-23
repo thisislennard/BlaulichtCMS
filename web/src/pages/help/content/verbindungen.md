@@ -168,6 +168,7 @@ Ein so erzeugter Seiten-Token läuft nicht ab; er wird erst ungültig, wenn das 
 | „Angemeldet, aber keine verwaltbare Seite gefunden“ / kein Feld „Seite“ | Bei der Anmeldung keine Seite freigegeben, das Konto verwaltet die Seite nicht oder die Seite gehört zu einem **Business-Portfolio** und `business_management` fehlt in der Meta-App. Vorgehen unter [Keine Seite zur Auswahl?](#facebook-seite-verbinden). |
 | Test: „Noch keine Seite gewählt“ | Es ist keine Seite gespeichert – unter **Seite** eine Seite wählen; fehlt das Feld, siehe Zeile davor. |
 | Berechtigungen: „Es fehlen …“ | Rechte bei der Anmeldung abgewählt oder in der App nicht hinzugefügt bzw. (im Live-Modus) nicht geprüft. |
+| Instagram: „Invalid platform app“ (auf instagram.com) | In der Instagram-Verbindung steht die **Facebook-App-ID**. Instagram braucht die eigene **Instagram-App-ID** und das **Instagram-App-Geheimnis** – siehe [App-ID und App-Geheimnis](#app-id-und-app-geheimnis). Bei der Instagram-App auch die Weiterleitungsadresse eintragen (Business-Login-Einstellungen). |
 | „ist kein professionelles Konto“ | Instagram-Konto auf Unternehmen oder Creator umstellen. |
 | Instagram: Container-Status ERROR | Meta konnte das Testbild nicht laden: Öffentliche Adresse prüfen (HTTPS, von außen erreichbar, kein Zugriffsschutz). |
 | Später „Token abgelaufen“ | Passwort geändert, App-Rechte entzogen oder Token abgelaufen: **Mit Facebook/Instagram verbinden** erneut ausführen, testen, aktivieren. |
@@ -318,6 +319,35 @@ Gespeichert werden **nur zusammengefasste Zahlen** je Beitrag – nie, wer reagi
 Ältere Verbindungen haben die Statistik-Rechte noch nicht: Dann zeigt BlaulichtCMS die Zahlen, die ohne sie lesbar sind (Facebook, Instagram) bzw. einen Hinweis im Beitrag (Threads); **erneut verbinden** und testen ergänzt das Recht. Je Verbindung lässt sich der Abruf mit **Reichweite abrufen** ausschalten (ohne neuen Test). Nicht gezählt werden Storys (verschwinden nach 24 Stunden), von Hand Geteiltes (WhatsApp-Kanal, X von Hand) und entfernte Beiträge.
 
 **Website:** Aufrufe der WordPress-Seite zeigt BlaulichtCMS nicht. WordPress selbst zählt keine Aufrufe, und die Bridge baut bewusst keine Zählung ein – das ginge nur mit einem Statistik-Dienst bzw. -Plugin auf der Website, dessen Einsatz die Website selbst datenschutzrechtlich bewerten muss.
+
+## Seitenstatistik
+
+Die Reichweite oben zählt nur Beiträge, die **über BlaulichtCMS** veröffentlicht wurden. Für die ganze Facebook-Seite bzw. das ganze Instagram-Konto gibt es den **Seitenabgleich**: BlaulichtCMS liest **stündlich alle Beiträge** der Seite – auch die direkt bei Facebook oder Instagram erstellten – samt Vorschaubild und Zahlen und holt **einmal am Tag** die Kennzahlen der Seite. Zu finden unter **Reichweite → Seitenstatistik**:
+
+- **Follower** (aktueller Stand und Veränderung im Zeitraum), bei Facebook zusätzlich „Gefällt mir“. Follower lassen sich nicht rückwirkend abrufen; der Verlauf beginnt mit dem ersten Abgleich.
+- **Tageswerte** als Diagramm (jeweils aufklappbar als Tabelle): Aufrufe, erreichte Personen, Interaktionen, neue Follower und Seitenbesuche (Facebook) bzw. Aufrufe, Reichweite, Interaktionen und interagierende Konten (Instagram). Beim ersten Abgleich holt BlaulichtCMS bei Facebook die letzten 28 Tage, bei Instagram die letzten 7 Tage nach.
+- **Top-Beiträge** im Zeitraum nach Interaktionen, mit Link zum Original und – falls aus BlaulichtCMS – zum Beitrag.
+
+Unter **Reichweite → Beiträge** nimmt der Schalter **Alle Seitenbeiträge** die direkt erstellten Beiträge in Übersicht und Top-Beiträge auf. Ihre Zahlen ruft BlaulichtCMS bis 30 Tage nach dem Erscheinen ab (in den ersten zwei Tagen alle 6 Stunden, danach täglich). Beiträge aus BlaulichtCMS erkennt der Abgleich an ID bzw. Text und zählt sie nicht doppelt.
+
+**Voraussetzungen:** aktive Verbindung, Schalter **Seite abgleichen** bzw. **Konto abgleichen** in der Verbindung (Standard an, ohne neuen Test änderbar). Beiträge lesen geht mit den vorhandenen Rechten; die Tageswerte brauchen `read_insights` (Facebook) bzw. `instagram_business_manage_insights` (Instagram). Meta stellt die Seiten-Kennzahlen laufend um – BlaulichtCMS fragt jede Kennzahl einzeln ab, was Meta nicht (mehr) liefert, fehlt einfach und steht als Hinweis über der Statistik. Instagram liefert Werte mit bis zu 48 Stunden Verzögerung, manche erst ab 100 Followern.
+
+**Jetzt abgleichen** (Recht **Social-Feed verwalten**) startet den Abgleich sofort. Auf der Seite gelöschte Beiträge erkennt der Abgleich in den letzten 14 Tagen; sie verschwinden aus Statistik und Feed und werden nach 30 Tagen samt Bild gelöscht.
+
+**Datenschutz:** Gespeichert werden nur Inhalte der eigenen Seite (Text, Link, Vorschaubild) und zusammengefasste Zahlen – keine Kommentare, keine Namen oder Konten derer, die reagiert haben.
+
+## Social-Feed
+
+Unter **Reichweite → Social-Feed** (Recht **Social-Feed verwalten**, Vorgabe für die Redaktion) lassen sich die abgeglichenen Beiträge öffentlich weitergeben – **auf der Website** und als **RSS-Feed**, ähnlich wie Feed-Dienste es anbieten, aber ohne Drittanbieter:
+
+1. **Social-Feed freigeben**, die **Quellen** (Facebook-Seiten, Instagram-Konten) und die **Anzahl** (1–50) wählen, speichern.
+2. Einzelne Beiträge bei Bedarf **ausblenden** – sie erscheinen dann weder auf der Website noch im RSS-Feed.
+
+**Website:** Mit der BlaulichtCMS Bridge ab 0.10.0 zeigt der Shortcode `[blaulichtcms_social]` (oder der Block „BlaulichtCMS: Social-Feed“) die freigegebenen Beiträge als Kacheln oder Liste. Optionen: `anzahl`, `darstellung="kacheln|liste"`, `netzwerk="facebook|instagram"`, `text="ja|nein"`, `titel`; alle Einzelheiten in WordPress unter **Einstellungen → BlaulichtCMS Einsatzliste → Shortcodes**. Die Bridge holt den Feed nur, wenn er sich geändert hat, und legt die Bilder auf der Website ab. Besucher laden **nichts von Facebook, Instagram oder BlaulichtCMS** nach – keine eingebetteten Skripte, keine Iframes, kein Tracking; die Beiträge verlinken nur auf das Original.
+
+**RSS:** **RSS-Adresse erstellen** erzeugt eine geheime Adresse (wird nur einmal angezeigt), z. B. für einen Feedreader oder ein Info-Display. Wer sie kennt, sieht die freigegebenen Beiträge – mehr nicht. **Erneuern** macht die alte Adresse ungültig, **Widerrufen** schaltet RSS ab; ist der Feed ausgeschaltet, liefert auch die Adresse nichts.
+
+**Nutzungsbedingungen:** Gezeigt werden nur Inhalte der eigenen Seite bzw. des eigenen Kontos, abgerufen über die offizielle Schnittstelle, mit Link zum Original. Inhalte Dritter (z. B. geteilte Beiträge mit fremden Bildern) vor der Freigabe prüfen und bei Bedarf ausblenden.
 
 ## Teilen von Hand
 

@@ -6647,6 +6647,194 @@ describe('Medien wie LiFeOS 10: Gestaltung der Upload-Seite', () => {
   });
 });
 
+describe('Seitenabgleich, Seitenstatistik und Social-Feed (RSS, Bridge)', () => {
+  let mock: http.Server;
+  let base = '';
+  let fbId = '';
+  const prevGraph = process.env.BLAULICHTCMS_META_GRAPH_URL;
+  const graph = { posts: ['P1', 'P2'] as string[], calls: [] as string[] };
+  beforeAll(async () => {
+    const img = await sharp({ create: { width: 1600, height: 900, channels: 3, background: { r: 30, g: 90, b: 200 } } }).jpeg().toBuffer();
+    mock = http.createServer((req, res) => {
+      const u = new URL(req.url!, 'http://x');
+      const json = (code: number, b: any) => {
+        res.writeHead(code, { 'content-type': 'application/json' });
+        res.end(JSON.stringify(b));
+      };
+      graph.calls.push(`${u.pathname}?${u.searchParams.get('metric') ?? u.searchParams.get('fields') ?? ''}`);
+      if (u.pathname === '/img/1.jpg') {
+        res.writeHead(200, { 'content-type': 'image/jpeg' });
+        return res.end(img);
+      }
+      if (u.pathname === '/pg/PAGE1/posts') {
+        const all: Record<string, any> = {
+          P1: { id: 'PAGE1_P1', message: 'Übung an der Grundschule <mit> & ohne Rauch\nZweite Zeile', created_time: new Date(Date.now() - 3 * 86_400_000).toISOString(), permalink_url: 'https://facebook.example/PAGE1_P1', full_picture: `${base}/img/1.jpg`, status_type: 'added_photos' },
+          P2: { id: 'PAGE1_P2', message: 'Nur Text', created_time: new Date(Date.now() - 86_400_000).toISOString(), permalink_url: 'https://facebook.example/PAGE1_P2', status_type: 'mobile_status_update' },
+        };
+        return json(200, { data: graph.posts.map((p) => all[p]) });
+      }
+      if (u.pathname === '/pg/PAGE1') return json(200, { followers_count: 1200, fan_count: 1100 });
+      if (u.pathname === '/pg/PAGE1/insights') {
+        const m = u.searchParams.get('metric');
+        if (m === 'page_views_total') return json(400, { error: { message: '(#100) The value must be a valid insights metric', code: 100 } });
+        const end = (d: number) => new Date(Date.now() - d * 86_400_000).toISOString().slice(0, 10) + 'T08:00:00+0000';
+        return json(200, { data: [{ name: m, period: 'day', values: [{ value: 40, end_time: end(2) }, { value: 55, end_time: end(1) }] }] });
+      }
+      if (/^\/pg\/PAGE1_P\d$/.test(u.pathname)) return json(200, { reactions: { summary: { total_count: 5 } }, comments: { summary: { total_count: 2 } }, shares: { count: 1 } });
+      if (/^\/pg\/PAGE1_P\d\/insights$/.test(u.pathname)) {
+        const m = u.searchParams.get('metric') ?? '';
+        // Eine entfallene Kennzahl lässt die gemeinsame Abfrage scheitern – einzeln gehen die übrigen
+        if (m.includes(',') || m === 'post_total_media_view_unique') return json(400, { error: { message: '(#100) The value must be a valid insights metric', code: 100 } });
+        return json(200, { data: [{ name: m, values: [{ value: m === 'post_media_view' ? 300 : 12 }] }] });
+      }
+      json(404, { error: { message: `unbekannt ${u.pathname}` } });
+    });
+    await new Promise<void>((r) => mock.listen(0, '127.0.0.1', r));
+    base = `http://127.0.0.1:${(mock.address() as any).port}`;
+    process.env.BLAULICHTCMS_META_GRAPH_URL = `${base}/pg`;
+    const c = await admin.post('/connections', { kind: 'facebook', name: 'Seite (Abgleich-Test)' });
+    expect(c.status, JSON.stringify(c.json)).toBe(200);
+    fbId = c.json.id;
+    const { loadConnection, updateConnectionSecrets } = await import('../src/connections/common.js');
+    await pool.query(`UPDATE connections SET status = 'active', config = config || '{"pageId":"PAGE1","appId":"111"}' WHERE id = $1`, [fbId]);
+    await updateConnectionSecrets((await loadConnection(fbId))!, { pageToken: 'SEITENTOKEN-geheim' }, null);
+  });
+  afterAll(() => {
+    process.env.BLAULICHTCMS_META_GRAPH_URL = prevGraph;
+    mock?.close();
+  });
+
+  it('gleicht Beiträge samt Bild, Zahlen und Tageswerten ab – entfallene Kennzahlen fehlen nur', async () => {
+    const { runPageSync, socialImageDir } = await import('../src/connections/page-sync.js');
+    // Andere Facebook-/Instagram-Verbindungen dieser Suite scheitern am Teststand – geprüft wird nur diese
+    const r = await runPageSync();
+    expect(r.synced).toBeGreaterThanOrEqual(1);
+    expect((await one<any>(`SELECT ok, message FROM social_page_sync WHERE connection_id = $1`, [fbId]))!.ok).toBe(true);
+    const posts = await many<any>(`SELECT * FROM social_page_posts WHERE connection_id = $1 ORDER BY posted_at`, [fbId]);
+    expect(posts.map((p) => p.remote_id)).toEqual(['PAGE1_P1', 'PAGE1_P2']);
+    const p1 = posts[0];
+    expect(p1.message).toContain('Übung an der Grundschule');
+    expect(p1.image_file).toMatch(/^[0-9a-f-]{36}\.webp$/);
+    expect(p1.image_width).toBe(1080);
+    expect(fs.existsSync(path.join(socialImageDir(), p1.image_file))).toBe(true);
+    expect(posts[1].image_file).toBeNull();
+    // Zahlen je Beitrag: Interaktionen und die einzeln abgefragten Kennzahlen, Reichweite fehlt
+    expect(p1.metrics).toMatchObject({ likes: 5, replies: 2, shares: 1, views: 300, clicks: 12 });
+    expect(p1.metrics.reach).toBeUndefined();
+    // Seite: Follower heute, Tageswerte, nicht gelieferte Kennzahl im Abgleichsstand
+    const today = new Date().toISOString().slice(0, 10);
+    const stats = await many<any>(`SELECT day::text AS day, metrics FROM social_page_stats WHERE connection_id = $1 ORDER BY day`, [fbId]);
+    expect(stats.find((s) => s.day === today)!.metrics).toMatchObject({ followers: 1200, fans: 1100 });
+    expect(stats.some((s) => s.metrics.views === 55)).toBe(true);
+    const st = await one<any>(`SELECT * FROM social_page_sync WHERE connection_id = $1`, [fbId]);
+    expect(st.ok).toBe(true);
+    expect(st.message).toContain('page_views');
+    // Zweiter Lauf am selben Tag: Tageswerte nicht erneut abfragen, kein zweites Bild laden
+    graph.calls.length = 0;
+    await runPageSync();
+    expect(graph.calls.some((c) => c.startsWith('/pg/PAGE1/posts'))).toBe(true);
+    expect(graph.calls.some((c) => c.startsWith('/pg/PAGE1/insights'))).toBe(false);
+    expect(graph.calls.some((c) => c.startsWith('/img/'))).toBe(false);
+    // Kein Zugangsdatum in gespeicherten Daten
+    expect(JSON.stringify(await many(`SELECT * FROM social_page_posts`))).not.toContain('SEITENTOKEN');
+  });
+
+  it('Seitenstatistik und Reichweite „alle Seitenbeiträge“ mit Recht „Reichweite ansehen“', async () => {
+    const o = (await publisher.get('/insights/pages?days=30')).json;
+    const c = o.connections.find((x: any) => x.id === fbId);
+    expect(c.current.followers).toBe(1200);
+    expect(c.posts).toBe(2);
+    expect(c.top[0].metrics.views).toBe(300);
+    expect(c.series.length).toBeGreaterThan(1);
+    const withImage = c.top.find((t: any) => t.image);
+    const img = await publisher.get(`/social-images/${withImage.image}`);
+    expect(img.status).toBe(200);
+    expect(img.headers['content-type']).toBe('image/webp');
+    expect((await publisher.get('/social-images/..%2F..%2Fsecrets%2Fmaster.key')).status).toBe(404);
+    const only = (await publisher.get('/insights?days=30')).json;
+    expect(only.top.some((t: any) => t.post_id === null)).toBe(false);
+    const all = (await publisher.get('/insights?days=30&source=all')).json;
+    expect(all.top.filter((t: any) => t.post_id === null).map((t: any) => t.title).sort()).toEqual(['Nur Text', 'Übung an der Grundschule <mit> & ohne Rauch']);
+    expect(all.publications).toBe(only.publications + 2);
+    // Abgleich anstoßen und Feed verwalten nur mit „Social-Feed verwalten“
+    expect((await publisher.post('/insights/pages/sync')).status).toBe(403);
+    expect((await publisher.get('/social-feed')).status).toBe(403);
+    expect((await anonymous.get('/insights/pages')).status).toBe(401);
+  });
+
+  it('Social-Feed: Freigabe, Ausblenden, geheime RSS-Adresse und Bridge', async () => {
+    const { feedItems, feedRevision } = await import('../src/routes/social-page.js');
+    expect(await feedItems()).toEqual([]);
+    const f0 = (await editor.get('/social-feed')).json;
+    expect(f0.enabled).toBe(false);
+    expect(f0.connections.some((c: any) => c.id === fbId)).toBe(true);
+    expect((await editor.put('/social-feed', { enabled: true, connection_ids: [crypto.randomUUID()], max_items: 10 })).status).toBe(400);
+    expect((await editor.put('/social-feed', { enabled: true, connection_ids: [fbId], max_items: 10 })).status).toBe(200);
+    const before = feedRevision(await feedItems());
+    const p2 = await one<any>(`SELECT id FROM social_page_posts WHERE remote_id = 'PAGE1_P2'`);
+    expect((await editor.put(`/social-feed/posts/${p2.id}`, { hidden: true })).status).toBe(200);
+    const items = await feedItems();
+    expect(items.map((i) => i.message.slice(0, 5))).toEqual(['Übung']);
+    expect(feedRevision(items)).not.toBe(before);
+    // RSS: Adresse nur einmal, ohne gültige Adresse 404, Inhalte escaped, Bild öffentlich ladbar
+    const { url } = (await editor.post('/social-feed/rss')).json;
+    expect(url).toMatch(/\/api\/v1\/public\/social\/bsf_[A-Za-z0-9_-]{40,}\.rss$/);
+    expect(JSON.stringify((await editor.get('/social-feed')).json)).not.toContain(url.split('/').pop().replace('.rss', ''));
+    const path0 = new URL(url).pathname;
+    const rss = await anonymous.get(path0);
+    expect(rss.status).toBe(200);
+    expect(rss.headers['content-type']).toContain('application/rss+xml');
+    expect(rss.json).toContain('<title>Übung an der Grundschule &lt;mit&gt; &amp; ohne Rauch</title>');
+    expect(rss.json).not.toContain('Nur Text');
+    const enc = /<enclosure url="([^"]+)"/.exec(rss.json)![1];
+    const pic = await anonymous.get(new URL(enc).pathname);
+    expect(pic.status).toBe(200);
+    expect(pic.headers['cross-origin-resource-policy']).toBe('cross-origin');
+    expect((await anonymous.get(path0.replace('bsf_', 'bsf_x'))).status).toBe(404);
+    // Erneuern: alte Adresse ungültig
+    const { url: url2 } = (await editor.post('/social-feed/rss')).json;
+    expect((await anonymous.get(path0)).status).toBe(404);
+    expect((await anonymous.get(new URL(url2).pathname)).status).toBe(200);
+    // Bridge: Stand bei jedem Abruf, Feed und Bilder nur mit Schlüssel
+    const s = await admin.post('/sites', { name: 'Social-Feed-Testseite' });
+    const prefix = crypto.randomBytes(6).toString('hex');
+    const key = `bcb_${prefix}_${crypto.randomBytes(24).toString('base64url')}`;
+    await pool.query(`UPDATE wp_sites SET status = 'active', key_prefix = $2, key_hash = $3, pairing_code_hash = NULL, site_url = 'https://social.example.org', paired_at = now() WHERE id = $1`, [s.json.site.id, prefix, crypto.createHash('sha256').update(key).digest('hex')]);
+    const auth = { authorization: `Bearer ${key}` };
+    const jobs = (await anonymous.get('/bridge/jobs', auth)).json;
+    expect(jobs.social_feed).toBe(feedRevision(items));
+    const feed = (await anonymous.get('/bridge/social-feed', auth)).json;
+    expect(feed.revision).toBe(jobs.social_feed);
+    expect(feed.items).toHaveLength(1);
+    expect(feed.items[0]).toMatchObject({ network: 'facebook', permalink: 'https://facebook.example/PAGE1_P1' });
+    expect((await anonymous.get(`/bridge/social-images/${feed.items[0].image.file}`, auth)).status).toBe(200);
+    expect((await anonymous.get('/bridge/social-feed')).status).toBe(401);
+    // Ausgeschaltet: nichts mehr öffentlich
+    await editor.put('/social-feed', { enabled: false, connection_ids: [fbId], max_items: 10 });
+    expect((await anonymous.get(new URL(url2).pathname)).status).toBe(404);
+    expect((await anonymous.get('/bridge/social-feed', auth)).json.items).toEqual([]);
+    await editor.del('/social-feed/rss');
+  });
+
+  it('auf der Seite gelöschte Beiträge werden erkannt und später samt Bild entfernt', async () => {
+    const { runPageSync, cleanupPagePosts, socialImageDir } = await import('../src/connections/page-sync.js');
+    graph.posts = ['P2'];
+    await runPageSync();
+    const p1 = await one<any>(`SELECT * FROM social_page_posts WHERE remote_id = 'PAGE1_P1'`);
+    expect(p1.removed_at).not.toBeNull();
+    await pool.query(`UPDATE social_page_posts SET removed_at = now() - interval '40 days' WHERE id = $1`, [p1.id]);
+    await cleanupPagePosts();
+    expect(await one(`SELECT 1 FROM social_page_posts WHERE id = $1`, [p1.id])).toBeNull();
+    expect(fs.existsSync(path.join(socialImageDir(), p1.image_file))).toBe(false);
+    // Abgleich ausgeschaltet (ohne neuen Test): Verbindung wird übersprungen und bleibt aktiv
+    await admin.put(`/connections/${fbId}`, { name: 'Seite (Abgleich-Test)', config: { pageId: 'PAGE1', appId: '111', pageSync: false } });
+    expect((await one<any>(`SELECT status FROM connections WHERE id = $1`, [fbId]))!.status).toBe('active');
+    graph.calls.length = 0;
+    await runPageSync();
+    expect(graph.calls.filter((c) => c.startsWith('/pg/PAGE1'))).toEqual([]);
+  });
+});
+
 describe('In-App-Updates aus GitHub-Releases', () => {
   const work = fs.mkdtempSync(path.join(os.tmpdir(), 'bc-upd-it-'));
   const key = crypto.generateKeyPairSync('ed25519');

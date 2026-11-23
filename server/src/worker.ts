@@ -25,6 +25,7 @@ import { deliverWarningSend } from './warnings/mail.js';
 import { runSocialPublication } from './connections/social.js';
 import { refreshThreadsTokens } from './connections/threads.js';
 import { runDueInsights } from './connections/insights.js';
+import { runPageSync } from './connections/page-sync.js';
 import { redactAnonymousIps } from './lib/audit.js';
 import { sealAudit, verifyAudit } from './lib/audit-chain.js';
 import { cleanupMediaTokens } from './connections/meta.js';
@@ -303,6 +304,8 @@ async function maintenance(isLeader: boolean) {
   if (due('threads-token', 24 * 60 * 60_000)) await refreshThreadsTokens().catch((e) => log('warn', 'threads', e.message));
   // Reichweite der Social-Posts (#218): nach 1 h, 24 h und 7 Tagen; läuft im Hintergrund und nie doppelt
   if (due('social-insights', 15 * 60_000)) void runDueInsights().catch((e) => log('warn', 'insights', e.message));
+  // Seitenabgleich: alle Beiträge und Tageswerte der Facebook-Seite bzw. des Instagram-Kontos (stündlich, im Hintergrund)
+  if (due('social-page-sync', 60 * 60_000)) void runPageSync().catch((e) => log('warn', 'page-sync', e.message));
   if (due('automations', 30_000)) await automationTick().catch((e) => log('warn', 'automation', e.message));
   // Freigabe-Anfragen (#253): erledigte als erledigt markieren (abgelaufene Banner, Fristen, Wege ohne eigenen Abgleich)
   if (due('approval-notices', 60_000)) await sweepApprovalNotices().catch((e) => log('warn', 'notify', `Freigabe-Benachrichtigungen: ${e.message}`));

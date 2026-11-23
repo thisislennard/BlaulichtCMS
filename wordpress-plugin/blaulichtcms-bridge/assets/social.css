@@ -1,0 +1,23 @@
+/*
+ * BlaulichtCMS Bridge – Social-Feed (ab 0.10.0). Schrift und Textfarbe kommen vom Theme; Bilder liegen auf der Website.
+ */
+.bcl-social{--bcl-accent:var(--wp--preset--color--primary,#a72920);--bcl-line:color-mix(in srgb,currentColor 18%,transparent);--bcl-radius:10px;font:inherit;color:inherit;margin:0 0 1.5em}
+.bcl-social *,.bcl-social *::before,.bcl-social *::after{box-sizing:border-box}
+.bcl-social-heading{margin:0 0 .6em}
+.bcl-social-empty{opacity:.8}
+.bcl-social-list{list-style:none;margin:0;padding:0;display:grid;gap:1.25em}
+.bcl-social--kacheln .bcl-social-list{grid-template-columns:repeat(auto-fill,minmax(min(100%,240px),1fr))}
+.bcl-social-item{display:flex;flex-direction:column;border:1px solid var(--bcl-line);border-radius:var(--bcl-radius);overflow:hidden;min-width:0}
+.bcl-social--liste .bcl-social-item{flex-direction:row;align-items:flex-start}
+.bcl-social-media{display:block;background:color-mix(in srgb,currentColor 5%,transparent)}
+.bcl-social--kacheln .bcl-social-media{aspect-ratio:1/1}
+.bcl-social--liste .bcl-social-media{flex:0 0 clamp(96px,28%,200px);aspect-ratio:1/1}
+.bcl-social-img{display:block;width:100%;height:100%;object-fit:cover}
+.bcl-social-body{display:flex;flex-direction:column;gap:.5em;padding:.9em 1em 1em;min-width:0;flex:1}
+.bcl-social-meta{margin:0;font-size:.85em;opacity:.8}
+.bcl-social-net{font-weight:600}
+.bcl-social-text{margin:0;overflow-wrap:anywhere}
+.bcl-social-link{margin-top:auto;font-weight:600;color:inherit;text-decoration:underline;text-underline-offset:2px}
+.bcl-social a:focus-visible{outline:3px solid var(--bcl-accent);outline-offset:2px}
+.bcl-social .bcl-sr{position:absolute!important;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+@media (max-width:480px){.bcl-social--liste .bcl-social-item{flex-direction:column}.bcl-social--liste .bcl-social-media{flex-basis:auto;width:100%}}

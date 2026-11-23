@@ -26,7 +26,7 @@ const STEP_KIND: Record<string, string> = { login: 'Anmeldung', publish: 'Veröf
  * Wie der Server (connections/common.ts, retestRelevantConfig): Name, Abrufintervall, „Beitragsentwürfe anlegen“ und
  * die Banner-Schalter verlangen keinen neuen Test, alles andere schon.
  */
-const RETEST_EXEMPT = ['name', 'intervalMinutes', 'intervalSeconds', 'createDrafts', 'autoBanner', 'bannerSiteId', 'review', 'oauthState', 'tokenExpiresAt', 'clientId', 'appInstance', 'appRedirect', 'insights'];
+const RETEST_EXEMPT = ['name', 'intervalMinutes', 'intervalSeconds', 'createDrafts', 'autoBanner', 'bannerSiteId', 'review', 'oauthState', 'tokenExpiresAt', 'clientId', 'appInstance', 'appRedirect', 'insights', 'pageSync'];
 function relevantConfig(cfg: Record<string, any>) {
   const out: Record<string, unknown> = {};
   for (const k of Object.keys(cfg ?? {}).sort()) {
@@ -621,12 +621,21 @@ export default function ConnectionDetail() {
                   </HelpTip>
                 </div>
               )}
+              {['facebook', 'instagram'].includes(c.kind) && (
+                <div className="flex items-start gap-1">
+                  <Switch checked={cfg.pageSync !== false} onChange={(v) => setCfg({ ...cfg, pageSync: v })} label={c.kind === 'facebook' ? 'Seite abgleichen' : 'Konto abgleichen'} description={`Stündlich alle Beiträge ${c.kind === 'facebook' ? 'der Seite' : 'des Kontos'} lesen – auch die direkt bei ${c.kind === 'facebook' ? 'Facebook' : 'Instagram'} erstellten – samt Vorschaubild und Zahlen, dazu täglich Follower, Aufrufe und Reichweite. Grundlage für Seitenstatistik und Social-Feed.`} />
+                  <HelpTip title="Seitenabgleich" more="/hilfe/verbindungen#seitenstatistik">
+                    <p className="m-0">Gespeichert werden nur Inhalte {c.kind === 'facebook' ? 'der eigenen Seite' : 'des eigenen Kontos'} und zusammengefasste Zahlen – keine Personen, keine Kommentare. Die Tageswerte brauchen {c.kind === 'facebook' ? 'read_insights' : 'instagram_business_manage_insights'}.</p>
+                    <p className="m-0 text-fg-muted">Der Schalter lässt sich ohne neuen Test ändern.</p>
+                  </HelpTip>
+                </div>
+              )}
               {c.kind === 'x' && cfg.mode === 'api' && (
                 <Switch checked={cfg.insights === true} onChange={(v) => setCfg({ ...cfg, insights: v })} label="Reichweite abrufen (kostet Guthaben)" description="Aufrufe, Gefällt mir, Antworten, Reposts, Zitate und Lesezeichen nach 1 Stunde, 24 Stunden und 7 Tagen. Jeder Abruf wird von X über das Guthaben abgerechnet. Standard aus." />
               )}
               <div className="flex flex-col gap-1.5 items-start">
                 <Button variant="primary" icon="Save" disabled={busy} onClick={saveConfig}>Einstellungen speichern</Button>
-                <p className="m-0 text-meta text-fg-muted">Geänderte Einstellungen oder Zugangsdaten verlangen einen neuen Test; eine aktive Verbindung hält bis dahin an. Nur der Name{c.kind === 'warnfeed' ? ' und das Abrufintervall' : c.kind === 'fe2' ? ' und „Beitragsentwürfe anlegen“' : c.kind === 'feuersoftware' ? ', der Abrufabstand und „Beitragsentwürfe anlegen“' : ['facebook', 'instagram', 'threads', 'x', 'mastodon', 'bluesky'].includes(c.kind) ? ' und „Reichweite abrufen“' : ''} lassen sich ohne neuen Test ändern.</p>
+                <p className="m-0 text-meta text-fg-muted">Geänderte Einstellungen oder Zugangsdaten verlangen einen neuen Test; eine aktive Verbindung hält bis dahin an. Nur der Name{c.kind === 'warnfeed' ? ' und das Abrufintervall' : c.kind === 'fe2' ? ' und „Beitragsentwürfe anlegen“' : c.kind === 'feuersoftware' ? ', der Abrufabstand und „Beitragsentwürfe anlegen“' : ['facebook', 'instagram'].includes(c.kind) ? ', „Reichweite abrufen“ und der Abgleich' : ['threads', 'x', 'mastodon', 'bluesky'].includes(c.kind) ? ' und „Reichweite abrufen“' : ''} lassen sich ohne neuen Test ändern.</p>
               </div>
             </div>
           </Card>

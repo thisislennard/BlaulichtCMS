@@ -39,6 +39,8 @@ const PostEditor = lazy(() => import('./pages/posts/PostEditor'));
 const ReviewView = lazy(() => import('./pages/posts/ReviewView'));
 const Templates = lazy(() => import('./pages/posts/Templates'));
 const Insights = lazy(() => import('./pages/posts/Insights'));
+const PageStats = lazy(() => import('./pages/posts/PageStats'));
+const SocialFeed = lazy(() => import('./pages/posts/SocialFeed'));
 const Banners = lazy(() => import('./pages/banners/Banners'));
 const IncidentList = lazy(() => import('./pages/incidents/IncidentList'));
 const Sources = lazy(() => import('./pages/sources/Sources'));
@@ -193,6 +195,8 @@ const router = createBrowserRouter(withErrors([
       { path: 'kalender', element: <Page perm={['calendar.view']}><CalendarPage /></Page> },
       { path: 'designvorlagen/:id/editor', element: <Page perm={['templates.manage']}><ImageTemplateEditor /></Page> },
       { path: 'reichweite', element: <Page perm={['insights.view']}><Insights /></Page> },
+      { path: 'reichweite/seiten', element: <Page perm={['insights.view']}><PageStats /></Page> },
+      { path: 'reichweite/feed', element: <Page perm={['insights.feed']}><SocialFeed /></Page> },
       { path: 'quellen', element: <Page perm={['source.view']}><Sources /></Page> },
       { path: 'banner', element: <Page perm={['banner.view']}><Banners /></Page> },
       { path: 'einsatzliste', element: <Page perm={['incident.view']}><IncidentList /></Page> },

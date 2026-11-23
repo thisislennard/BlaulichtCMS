@@ -77,6 +77,13 @@ GitHub (Update-Prüfung, Updates) ◀──Abruf──────────�
   Bilder erben die Datenschutz-Markierungen ihrer Quellbilder.
 - **Reichweite (#218):** BlaulichtCMS ruft bei Meta, X, der Mastodon-Instanz und Bluesky nur Summen je eigenem Beitrag
   ab (Aufrufe, Interaktionen) – keine Personen.
+- **Seitenabgleich und Social-Feed:** BlaulichtCMS liest bei Meta die Beiträge der eigenen Facebook-Seite bzw. des
+  eigenen Instagram-Kontos (Text, Link, Vorschaubild) samt Summen je Beitrag und je Tag (Follower, Aufrufe, Reichweite).
+  Kommentare, Namen und Konten derer, die reagiert haben, werden nicht abgerufen. Vorschaubilder liegen lokal (WebP);
+  auf der Seite gelöschte Beiträge werden nach 30 Tagen samt Bild entfernt. Der freigegebene Social-Feed ist öffentlich
+  (geheime RSS-Adresse, Website über die Bridge); die Bridge legt die Bilder auf der Website ab, Besucher laden nichts
+  von Meta oder BlaulichtCMS nach – keine eingebetteten Skripte, keine Iframes, kein Tracking. Fremde Inhalte in
+  geteilten Beiträgen vor der Freigabe prüfen (Ausblenden je Beitrag).
 - **Benachrichtigungen:** In der Glocke steht die ganze Benachrichtigung, je nach Art z. B. **Stichwort und
   Gemeinde/Ortsteil** eines Einsatzes, der **Betreff** einer Mail an das Presse-Postfach, der Titel eines Beitrags oder
   der Text eines Workflows (bis 1 000 Zeichen). Per Push und E-Mail (Wahl jeder Person) gehen **standardmäßig nur die
@@ -117,6 +124,7 @@ GitHub (Update-Prüfung, Updates) ◀──Abruf──────────�
 | Designvorlagen (`design_templates`, `design_template_versions`, `design_template_files`, `design_template_assets`, `design_fonts`, `template_categories`) | ggf. auf Bildern Abgebildete; Redaktion | Vorlagendateien, hochgeladene Bilder und Schriften, Titel, Beschreibung, Hinweise, Versionen, Downloadzähler, wer hochgeladen/geändert hat | bis zum Löschen | – |
 | Beitragsvorlagen und Textbausteine (`post_templates`, `press_snippets`) | ggf. im Text genannte Personen (z. B. Ansprechperson) | Texte der Redaktion | bis zum Löschen | – |
 | Reichweite (`social_publications.insights`, `social_insights`) | – | **keine personenbezogenen Daten:** nur Summen je eigenem Beitrag (Aufrufe, Interaktionen) | mit dem Beitrag | – |
+| Seitenabgleich (`social_page_posts`, `social_page_stats`, Bilder unter `<data>/social/`) | – | Inhalte der eigenen Seite (Text, Link, Vorschaubild) und Summen; Personen nur, wenn sie im eigenen Beitrag genannt oder abgebildet sind | auf der Seite gelöscht: nach 30 Tagen; sonst mit der Verbindung | Ausblenden im Social-Feed |
 | Warnvorgänge (`warnings`, `warning_revisions`, `warning_approvals`, `warning_sends`) | Rückrufkontakte, Redaktion, Empfänger | Name, Telefon, E-Mail-Adressen, PDF, SMTP-Antworten | **365 Tage** nach dem letzten Bearbeitungsschritt | `privacy.warning_days` |
 | Zuständigkeiten (`responsibilities`) | Ansprechstellen | Funktionsadressen | solange gepflegt | – |
 | Einsatzmeldungen aus FE2 und Feuersoftware Connect (`fe2_events`, Spalte `source`) | ggf. Betroffene eines Einsatzes (indirekt über Ort/Zeit) | Stichwort, Einsatzart, Ort bzw. Ort mit Ortsteil, Zeit, Einheiten (Allowlist; keine Alarmtexte, kein Sachverhalt, keine Straße/Hausnummer, keine meldende Person, keine Telefonnummern, keine Lagemeldungen) | **90 Tage** | `privacy.fe2_event_days` |

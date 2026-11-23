@@ -127,6 +127,7 @@ Alle Rechte, nach Bereichen. Die Tabelle entspricht dem Rollen-Editor; „Setzt 
 | Von Website zurückziehen | kritisch | Veröffentlichte Beiträge von der Website zurückziehen. | Beiträge ansehen |
 | In sozialen Netzwerken veröffentlichen | kritisch | Freigegebene Fassungen auf Facebook, Instagram (auch als Story), Threads, X, Mastodon und Bluesky veröffentlichen, Teilen von Hand vorbereiten und als geteilt markieren oder als Paket exportieren. | Beiträge ansehen, Verbindungen ansehen |
 | Reichweite ansehen | lesen | Aufrufe und Interaktionen veröffentlichter Social-Posts sehen (nur zusammengefasste Zahlen, keine Personen): je Beitrag, Übersicht und Dashboard-Kachel. | Beiträge ansehen |
+| Social-Feed verwalten | ändern | Seitenabgleich sofort anstoßen, den Social-Feed (RSS-Adresse, Website-Widget) ein- und ausschalten, Verbindungen und Anzahl wählen, einzelne Seitenbeiträge ausblenden. | Reichweite ansehen |
 | Aus sozialen Netzwerken entfernen | kritisch | Veröffentlichungen in sozialen Netzwerken entfernen oder als entfernt bestätigen. | Beiträge ansehen |
 | Websites ansehen | lesen | Gekoppelte Websites und ihren Zustand sehen. | – |
 | Websites koppeln und widerrufen | kritisch | Websites mit der BlaulichtCMS Bridge koppeln, Kopplungscodes erzeugen, Schlüssel widerrufen, widerrufene Websites entfernen, Plugin laden. | Websites ansehen |

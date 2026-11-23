@@ -15,6 +15,8 @@ export const AUDIT_AREA_BY_PREFIX: Record<string, AuditArea> = {
   publication: 'editorial',
   template: 'editorial',
   social: 'editorial',
+  social_page: 'editorial',
+  social_feed: 'editorial',
   rss: 'editorial',
   import: 'editorial',
   calendar: 'calendar',

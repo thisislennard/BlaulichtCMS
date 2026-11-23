@@ -236,6 +236,60 @@ final class BlaulichtCMS_Bridge_Client {
 		);
 	}
 
+	/** Freigegebener Social-Feed (ab BlaulichtCMS mit Seitenabgleich). Antwort: { revision, items }. */
+	public static function social_feed() {
+		$bad = self::guard();
+		if ( $bad ) {
+			return $bad;
+		}
+		return self::decode(
+			wp_remote_get(
+				self::base() . '/api/v1/bridge/social-feed',
+				array(
+					'timeout' => 20,
+					'headers' => self::headers( false ),
+				)
+			)
+		);
+	}
+
+	/**
+	 * Vorschaubild des Social-Feeds an den Zielpfad laden (nur Dateinamen im Format <uuid>.webp).
+	 *
+	 * @return true|WP_Error
+	 */
+	public static function download_social_image( string $file, string $dest ) {
+		if ( ! preg_match( '/^[0-9a-f-]{36}\.webp$/', $file ) ) {
+			return new WP_Error( 'blaulichtcms_media_url', 'Unerwarteter Bildname.' );
+		}
+		$bad = self::guard();
+		if ( $bad ) {
+			return $bad;
+		}
+		$tmp = $dest . '.tmp';
+		$res = wp_remote_get(
+			self::base() . '/api/v1/bridge/social-images/' . $file,
+			array(
+				'timeout'  => 30,
+				'stream'   => true,
+				'filename' => $tmp,
+				'headers'  => self::headers( false ),
+			)
+		);
+		if ( is_wp_error( $res ) || 200 !== (int) wp_remote_retrieve_response_code( $res ) ) {
+			wp_delete_file( $tmp );
+			return new WP_Error( 'blaulichtcms_media', 'Bild des Social-Feeds konnte nicht geladen werden.' );
+		}
+		// Nur echte WebP-Dateien übernehmen
+		$head = (string) file_get_contents( $tmp, false, null, 0, 12 ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents
+		if ( 'RIFF' !== substr( $head, 0, 4 ) || 'WEBP' !== substr( $head, 8, 4 ) ) {
+			wp_delete_file( $tmp );
+			return new WP_Error( 'blaulichtcms_media', 'Bild des Social-Feeds hat ein unerwartetes Format.' );
+		}
+		rename( $tmp, $dest ); // phpcs:ignore WordPress.WP.AlternativeFunctions.rename_rename
+		return true;
+	}
+
 	/**
 	 * Medienfassung in eine temporäre Datei laden.
 	 *
